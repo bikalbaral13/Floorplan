@@ -1,0 +1,49 @@
+BIM Module Developer Guide
+==========================
+
+HOW TO ACCESS THE BIM VIEWER
+----------------------------
+You can access the end-to-end BIM implementation by navigating to the `/bim` route in your browser (e.g., `http://localhost:5173/bim`).
+
+ARCHITECTURE OVERVIEW
+---------------------
+The module is tightly coupled to the ThatOpen v3.2 API (`@thatopen/components`, `@thatopen/fragments`, etc.) and uses a strict layered architecture:
+
+- React TSX (UI Layer) -> `src/bim/viewer/BIMViewer.tsx` and `src/pages/BimViewerPage.tsx`
+  - React NEVER directly touches Three.js objects. It only uses lightweight state (strings, numbers, IDs).
+  
+- BIM Engine Layer -> `src/bim/core/BIMEngine.ts`
+  - Central orchestrator that initialises the sub-managers and handles lifecycle.
+  
+- Manager Layer -> `src/bim/*/`
+  - Each feature has its own manager: 
+    - `IFCManager`: Handles `.ifc` files (with high-performance Fragments model)
+    - `FormatManager`: Handles `.gltf`, `.glb`, `.obj`, `.fbx`.
+    - `SelectionManager`: Raycasting & highlights.
+    - `MeasurementManager`: Distance, Area, Volume.
+    - `AnnotationManager`: 3D pinned annotations with CSS2D labels and camera state.
+    - `SectionManager`: Clipping planes and section boxes.
+    - `GISManager`: Geolocation syncing with CesiumJS.
+    - `IntegrationManager`: Service endpoints for SharePoint, Google Drive, PowerBI.
+
+ADDING NEW FEATURES
+-------------------
+1. Write the core logic in a new Manager or extend an existing one inside `src/bim/`.
+2. Add the manager to `BIMEngine.ts` and expose it.
+3. Hook into the event bus (`EventBus.ts`) to tell the UI layer about state changes.
+4. Add the button to your React wrapper (`BIMViewer.tsx`) which calls `engine.yourManager.action()`.
+
+IMPORTANT THATOPEN v3.2 CONCEPTS
+--------------------------------
+- Instead of standard Three.js meshes, IFC models are loaded as `FragmentsModel` which uses highly instanced geometries.
+- Extracting parameters is done using `FragmentsModel.getItemsData([expressId])`.
+- Changing visibility or highlighting involves manipulating the `FragmentsModel` rather than typical Scene graph modifications whenever dealing with IFC models.
+
+TESTING
+-------
+A starting point for unit testing the logic is included in `src/bim/core/__tests__/`. We use Vitest to verify core managers without needing the DOM.
+
+NOTE ON TS LINTS
+----------------
+If you see lints complaining about `vitest`, install the dev dependency: 
+`npm install -D vitest` or ignore it if running natively.

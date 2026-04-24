@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="aiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="url(#aiGradient)"/>
+  
+  <!-- AI Brain/Neural Network Symbol -->
+  <g fill="white" opacity="0.95">
+    <!-- Central node -->
+    <circle cx="32" cy="28" r="4"/>
+    
+    <!-- Top nodes -->
+    <circle cx="20" cy="18" r="2.5"/>
+    <circle cx="32" cy="14" r="2.5"/>
+    <circle cx="44" cy="18" r="2.5"/>
+    
+    <!-- Middle nodes -->
+    <circle cx="18" cy="28" r="2.5"/>
+    <circle cx="46" cy="28" r="2.5"/>
+    
+    <!-- Bottom nodes -->
+    <circle cx="22" cy="38" r="2.5"/>
+    <circle cx="32" cy="42" r="2.5"/>
+    <circle cx="42" cy="38" r="2.5"/>
+    
+    <!-- Connection lines (neural network) -->
+    <line x1="32" y1="28" x2="20" y2="18" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="32" y1="28" x2="32" y2="14" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="32" y1="28" x2="44" y2="18" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="32" y1="28" x2="18" y2="28" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="32" y1="28" x2="46" y2="28" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="32" y1="28" x2="22" y2="38" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="32" y1="28" x2="32" y2="42" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="32" y1="28" x2="42" y2="38" stroke="white" stroke-width="1.5" opacity="0.6"/>
+  </g>
+  
+  <!-- Sparkle effect -->
+  <g fill="white" opacity="0.8">
+    <path d="M12 12 L13 15 L16 14 L13 13 Z" transform="rotate(45 14 14)"/>
+    <path d="M52 12 L53 15 L56 14 L53 13 Z" transform="rotate(45 54 14)"/>
+    <path d="M12 52 L13 55 L16 54 L13 53 Z" transform="rotate(45 14 54)"/>
+    <path d="M52 52 L53 55 L56 54 L53 53 Z" transform="rotate(45 54 54)"/>
+  </g>
+</svg>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

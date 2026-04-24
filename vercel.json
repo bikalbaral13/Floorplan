@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/meshy-assets/:match*",
+      "destination": "https://assets.meshy.ai/:match*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ]
+}

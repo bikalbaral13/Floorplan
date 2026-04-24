@@ -1,0 +1,45 @@
+{
+  "projectName": "",
+  "projectId": "",
+  "location": "",
+  "createdBy": "",
+  "date": "",
+  "rooms": [
+    {
+      "roomName": "Meeting Room / Cabin / Reception / Pantry / etc",
+      "area": "",
+      "planImage": "",
+      "flooring": {
+        "type": "",
+        "size": "",
+        "finish": "",
+        "color": "",
+        "pattern": "",
+        "edgeDetails": "",
+        "skirtingTypeAndHeight": ""
+      },
+      "ceiling": {
+        "type": "",
+        "heightFromFFL": "",
+        "coveDetails": "",
+        "lightFixtures": "",
+        "patternOrShape": "",
+        "color": ""
+      },
+      "walls": [
+        {
+          "wallName": "Wall 1 / Wall 2 / Wall 3 / etc",
+          "material": "",
+          "colorCode": "",
+          "panelSizeOrArrangement": "",
+          "texture": "",
+          "specialFeatures": "",
+          "artworkOrSignage": "" 
+        }
+      ]
+    
+    }
+  ]
+}
+
+
