@@ -10733,8 +10733,26 @@ User request: ${aiPrompt.trim()}`;
                   </div>
                 </PopoverContent>
               </Popover>
-       
-     
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Furniture library" aria-label="Furniture library">
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-3 shadow-xl" side="bottom" sideOffset={10}>
+              <h4 className="mb-2 text-xs font-semibold uppercase text-slate-500">Library</h4>
+              <div className="grid grid-cols-3 gap-2">
+                <ToolButton active={false} icon={<Bed className="h-4 w-4" />} label="Bed" onClick={() => addFurniture("bed")} />
+                <ToolButton active={false} icon={<Sofa className="h-4 w-4" />} label="Sofa" onClick={() => addFurniture("sofa")} />
+                <ToolButton active={false} icon={<Table2 className="h-4 w-4" />} label="Table" onClick={() => addFurniture("table")} />
+                <ToolButton active={false} icon={<Armchair className="h-4 w-4" />} label="Chair" onClick={() => addFurniture("chair")} />
+                <ToolButton active={false} icon={<DoorOpen className="h-4 w-4" />} label="Door" onClick={() => addWallOpeningFromLibrary("door")} />
+                <ToolButton active={false} icon={<AppWindow className="h-4 w-4" />} label="Window" onClick={() => addWallOpeningFromLibrary("window")} />
+              </div>
+            </PopoverContent>
+          </Popover>
+
           {layersPopover}
           {viewModePopover}
          
@@ -10769,24 +10787,7 @@ User request: ${aiPrompt.trim()}`;
                 label="Wall"
                 onClick={() => setTool("wall")}
               />
-                 <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Furniture library" aria-label="Furniture library">
-                    <LayoutGrid className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-56 p-3 shadow-xl" side="right" sideOffset={10}>
-                  <h4 className="mb-2 text-xs font-semibold uppercase text-slate-500">Library</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    <ToolButton active={false} icon={<Bed className="h-4 w-4" />} label="Bed" onClick={() => addFurniture("bed")} />
-                    <ToolButton active={false} icon={<Sofa className="h-4 w-4" />} label="Sofa" onClick={() => addFurniture("sofa")} />
-                    <ToolButton active={false} icon={<Table2 className="h-4 w-4" />} label="Table" onClick={() => addFurniture("table")} />
-                    <ToolButton active={false} icon={<Armchair className="h-4 w-4" />} label="Chair" onClick={() => addFurniture("chair")} />
-                    <ToolButton active={false} icon={<DoorOpen className="h-4 w-4" />} label="Door" onClick={() => addWallOpeningFromLibrary("door")} />
-                    <ToolButton active={false} icon={<AppWindow className="h-4 w-4" />} label="Window" onClick={() => addWallOpeningFromLibrary("window")} />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              {/* Furniture library moved to top-right toolbar (between File/Export and Layers). */}
 
               {/* <ToolButton active={tool === "room"} icon={<LandPlot className="h-6 w-6" />} label="Room" onClick={() => setTool("room")} /> */}
               <Popover open={shapesPopoverOpen} onOpenChange={setShapesPopoverOpen}>
