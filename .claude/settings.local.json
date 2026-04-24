@@ -38,7 +38,12 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/floorplan-editor)",
       "Bash(curl -s http://localhost:3000/src/floorplan/FloorPlanEditor.tsx)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/src/floorplan/FloorPlanEditor.tsx?t=$\\(date +%s\\)\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/src/floorplan/FloorPlanEditor.tsx?t=$\\(date +%s%N\\)\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:3000/src/floorplan/FloorPlanEditor.tsx?t=$\\(date +%s%N\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Move furniture library button from left sidebar to top-right toolbar *)",
+      "Bash(git push *)",
+      "Bash(npx --yes tsx scripts/test-rulebook.ts)",
+      "Bash(git commit -m 'Add Compute Semantics to Tools, Rule Book converter, set-label tool, and validation script *)"
     ]
   }
 }

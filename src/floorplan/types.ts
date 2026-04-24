@@ -262,7 +262,7 @@ export interface Room {
   /** Area type: room (default), floorplate boundary, or plot boundary. */
   roomType?: RoomType;
   /** Region classification for rooms (only meaningful when roomType === "room"). */
-  region?: "Core" | "Staircase" | "AHU" | "Electrical Room" | "Service" | "Lift" | "Toilet";
+  region?: "Core" | "Staircase" | "AHU" | "Electrical Room" | "Service" | "Lift" | "Toilet" | "Corridor";
   /** When true, render a clockwise/anticlockwise direction icon at the room's centroid. */
   showDirection?: boolean;
   // ── Site plan properties (plot-boundary rooms only) ──

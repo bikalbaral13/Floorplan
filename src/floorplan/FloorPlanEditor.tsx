@@ -421,15 +421,17 @@ const computeRegionSemantics = (
   const cx = pts.reduce((s, p) => s + p.x, 0) / Math.max(1, N);
   const cy = pts.reduce((s, p) => s + p.y, 0) / Math.max(1, N);
 
-  // ── facades: edges within 0.5 m of a "facade" wall (plot-boundary or category === "Facade") ──
+  // ── facades: edges whose MIDPOINT is within 0.5 m of a facade wall ──
+  // Using the midpoint (not segToSegMinDist) prevents perpendicular room edges from being flagged as
+  // "facade" just because one of their endpoints touches a facade wall at a corner.
   const TOL_FACADE_PX = mToPx(0.5);
   const facadeWalls = walls.filter((w) => w.segmentType === "plot-boundary" || w.category === "Facade");
   const facadeSet = new Set<"N" | "E" | "S" | "W">();
   for (let i = 0; i < N; i++) {
     const a = pts[i], b = pts[(i + 1) % N];
-    // Is this edge close to any facade wall?
+    const edgeMid: Point = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     const nearFacade = facadeWalls.some((w) =>
-      segToSegMinDistPx(a, b, w.start, w.end) < TOL_FACADE_PX
+      pointToSegDistPx(edgeMid, w.start, w.end) < TOL_FACADE_PX
     );
     if (!nearFacade) continue;
     // Outward normal of edge a→b: perpendicular pointing away from centroid.
@@ -450,17 +452,22 @@ const computeRegionSemantics = (
   const isCorner = facadeCount >= 2;
 
   // ── nearCore / nearStair / nearCorridor: proximity to other rooms by region/label ──
+  // If this room IS one of the reference regions, skip the corresponding "near" flag — a Core room
+  // isn't meaningfully "near a Core" (it is the Core), same for Staircase / Corridor.
   const TOL_CORE_PX = mToPx(1.5);
   const TOL_STAIR_PX = mToPx(2.0);
   const TOL_CORRIDOR_PX = mToPx(0.5);
+  const selfIsCore = room.region === "Core";
+  const selfIsStair = room.region === "Staircase";
+  const selfIsCorridor = room.region === "Corridor" || room.label === "Corridor";
   let nearCore = false, nearStair = false, nearCorridor = false;
   for (const r of rooms) {
     if (r.points === pts) continue;
     const d = polygonToPolygonDistPx(pts, r.points);
-    if (!nearCore && r.region === "Core" && d < TOL_CORE_PX) nearCore = true;
-    if (!nearStair && r.region === "Staircase" && d < TOL_STAIR_PX) nearStair = true;
-    if (!nearCorridor && r.label === "Corridor" && d < TOL_CORRIDOR_PX) nearCorridor = true;
-    if (nearCore && nearStair && nearCorridor) break;
+    if (!selfIsCore && !nearCore && r.region === "Core" && d < TOL_CORE_PX) nearCore = true;
+    if (!selfIsStair && !nearStair && r.region === "Staircase" && d < TOL_STAIR_PX) nearStair = true;
+    if (!selfIsCorridor && !nearCorridor && (r.region === "Corridor" || r.label === "Corridor") && d < TOL_CORRIDOR_PX) nearCorridor = true;
+    if ((selfIsCore || nearCore) && (selfIsStair || nearStair) && (selfIsCorridor || nearCorridor)) break;
   }
 
   // ── nearEntry: within 3 m of any door segment's midpoint ──
@@ -497,29 +504,31 @@ const computeRegionSemantics = (
   const dimB = Math.min(bestW, bestH) / ppm;
   const aspectRatio = dimB > 1e-6 ? dimA / dimB : Infinity;
 
-  // Depth: for every facade edge, project polygon vertices onto the inward normal and take the extent.
-  // Report the minimum across all facade edges (the "daylight depth" that matters for zoning).
-  let minDepthM = Infinity;
-  for (let i = 0; i < N; i++) {
-    const a = pts[i], b = pts[(i + 1) % N];
-    const nearFacade = facadeWalls.some((w) =>
-      segToSegMinDistPx(a, b, w.start, w.end) < TOL_FACADE_PX
-    );
-    if (!nearFacade) continue;
-    const ex = b.x - a.x, ey = b.y - a.y;
-    const L = Math.hypot(ex, ey) || 1;
-    let nx = -ey / L, ny = ex / L;
-    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    if ((cx - mx) * nx + (cy - my) * ny > 0) { nx = -nx; ny = -ny; } // outward
-    // Inward normal is (-nx, -ny). Project every vertex onto inward direction from (mx,my).
-    let maxProj = 0;
+  // Depth: building-wide "daylight depth" — distance from this room's deepest point to the nearest
+  // facade wall anywhere in the building. Works for interior rooms too, not just ones whose own edge
+  // lies on a facade. Formula: for each vertex of the room, take the distance to the nearest facade
+  // wall; report the maximum ("how deep into the building does this room reach").
+  const pointToSegDist = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-9) return Math.hypot(px - ax, py - ay);
+    let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    const qx = ax + t * dx, qy = ay + t * dy;
+    return Math.hypot(px - qx, py - qy);
+  };
+  let maxDepthPx = 0;
+  if (facadeWalls.length > 0) {
     for (const p of pts) {
-      const proj = (p.x - mx) * (-nx) + (p.y - my) * (-ny);
-      if (proj > maxProj) maxProj = proj;
+      let minDist = Infinity;
+      for (const w of facadeWalls) {
+        const d = pointToSegDist(p.x, p.y, w.start.x, w.start.y, w.end.x, w.end.y);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist > maxDepthPx) maxDepthPx = minDist;
     }
-    minDepthM = Math.min(minDepthM, maxProj / ppm);
   }
-  const depthM = isFinite(minDepthM) ? minDepthM : 0;
+  const depthM = maxDepthPx / ppm;
 
   return {
     facades,
@@ -1243,6 +1252,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [nodeInputsExpanded, setNodeInputsExpanded] = useState<boolean>(false);
   /** Room properties Inputs foldable. */
   const [roomInputsExpanded, setRoomInputsExpanded] = useState<boolean>(true);
+  /** Room properties Outputs foldable. */
+  const [roomOutputsExpanded, setRoomOutputsExpanded] = useState<boolean>(true);
   const [nodeOutputsExpanded, setNodeOutputsExpanded] = useState<boolean>(false);
   useEffect(() => {
     const need = Math.max(1, Math.min(19, Math.round(wallSplitCount) - 1));
@@ -15747,6 +15758,7 @@ User request: ${aiPrompt.trim()}`;
                             <option value="Service">Service</option>
                             <option value="Lift">Lift</option>
                             <option value="Toilet">Toilet</option>
+                            <option value="Corridor">Corridor</option>
                           </select>
                         </div>
                       )}
@@ -15828,7 +15840,15 @@ User request: ${aiPrompt.trim()}`;
                       const aspectWarning = aspectRatio > 4;
                       return (
                         <div className="rounded border border-slate-200 bg-white p-2">
-                          <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Outputs</span>
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between text-left"
+                            onClick={() => setRoomOutputsExpanded((v) => !v)}
+                          >
+                            <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Outputs</span>
+                            <span className="text-[11px] text-slate-400">{roomOutputsExpanded ? "▼" : "▶"}</span>
+                          </button>
+                          {roomOutputsExpanded && (
                           <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
                             <div>
                               <span className="text-[9px] text-slate-400">Area</span>
@@ -15894,7 +15914,68 @@ User request: ${aiPrompt.trim()}`;
                                 {dimA.toFixed(2)} × {dimB.toFixed(2)} {unit} <span className="text-slate-400">({isFinite(aspectRatio) ? aspectRatio.toFixed(2) : "∞"})</span>
                               </p>
                             </div>
+
+                            {/* Region Semantics — populated after running Compute Semantics in the Tools tab. */}
+                            {(() => {
+                              const sem = regionSemanticsById[selectedRoom.id];
+                              if (!sem) {
+                                return (
+                                  <div className="col-span-2 mt-1 border-t border-slate-100 pt-2">
+                                    <span className="text-[9px] text-slate-400">Region Semantics</span>
+                                    <p className="text-[9px] italic text-slate-400">Run Compute Semantics in the Tools tab to populate.</p>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="col-span-2 mt-1 border-t border-slate-100 pt-2 space-y-1.5">
+                                  <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Region Semantics</span>
+                                  <div>
+                                    <span className="text-[9px] text-slate-400">facades ({sem.facadeCount})</span>
+                                    <div className="mt-0.5 flex flex-wrap gap-1">
+                                      {sem.facades.length === 0 ? (
+                                        <span className="text-[10px] text-slate-400">none</span>
+                                      ) : sem.facades.map((d) => (
+                                        <span key={d} className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-medium text-blue-700">{d}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {[
+                                      { k: "isPerimeter", v: sem.isPerimeter, on: "bg-blue-100 text-blue-700", hide: false },
+                                      { k: "isInterior", v: sem.isInterior, on: "bg-purple-100 text-purple-700", hide: false },
+                                      { k: "isCorner", v: sem.isCorner, on: "bg-pink-100 text-pink-700", hide: false },
+                                      { k: "nearCore", v: sem.nearCore, on: "bg-amber-100 text-amber-700", hide: selectedRoom.region === "Core" },
+                                      { k: "nearEntry", v: sem.nearEntry, on: "bg-emerald-100 text-emerald-700", hide: false },
+                                      { k: "nearStair", v: sem.nearStair, on: "bg-sky-100 text-sky-700", hide: selectedRoom.region === "Staircase" },
+                                      { k: "nearCorridor", v: sem.nearCorridor, on: "bg-slate-100 text-slate-700", hide: selectedRoom.region === "Corridor" || selectedRoom.label === "Corridor" },
+                                    ].filter((x) => !x.hide).map(({ k, v, on }) => (
+                                      <span
+                                        key={k}
+                                        className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${v ? on : "bg-slate-100 text-slate-400"}`}
+                                      >
+                                        {k}: {v ? "true" : "false"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                    <div>
+                                      <span className="text-[9px] text-slate-400">area</span>
+                                      <p className="font-mono text-slate-700">{sem.areaM2.toFixed(2)} m²</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-[9px] text-slate-400">depth</span>
+                                      <p className="font-mono text-slate-700">{sem.depthM.toFixed(2)} m</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <span className="text-[9px] text-slate-400">aspectRatio</span>
+                                      <p className="font-mono text-slate-700">{isFinite(sem.aspectRatio) ? sem.aspectRatio.toFixed(2) : "∞"}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -16272,98 +16353,7 @@ User request: ${aiPrompt.trim()}`;
                       })()}
                     </div>
 
-                    {/* Region Semantics — computed from geometry via a dedicated compute pass. */}
-                    <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-left"
-                        onClick={() => setAreaSemanticsExpanded((v) => !v)}
-                      >
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Region Semantics</span>
-                        <span className="text-[11px] text-slate-400">{areaSemanticsExpanded ? "▼" : "▶"}</span>
-                      </button>
-                      {areaSemanticsExpanded && (() => {
-                        const semantics = regionSemanticsById[selectedRoom.id];
-                        return (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full text-[11px]"
-                              onClick={() => {
-                                const result = computeRegionSemantics(
-                                  selectedRoom,
-                                  history.state.walls,
-                                  visibleRooms,
-                                  pixelsPerMeter,
-                                );
-                                setRegionSemanticsById((prev) => ({ ...prev, [selectedRoom.id]: result }));
-                                toast.success("Region semantics computed");
-                              }}
-                            >
-                              Compute Semantics
-                            </Button>
-                            {!semantics ? (
-                              <p className="text-[9px] text-slate-400">Click "Compute Semantics" to derive facades, proximity flags, area, depth and aspect ratio from the current geometry.</p>
-                            ) : (
-                              <div className="space-y-2">
-                                <div>
-                                  <span className="text-[9px] text-slate-400">Facades ({semantics.facadeCount})</span>
-                                  <div className="mt-0.5 flex flex-wrap gap-1">
-                                    {semantics.facades.length === 0 ? (
-                                      <span className="text-[10px] text-slate-400">none</span>
-                                    ) : semantics.facades.map((d) => (
-                                      <span key={d} className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-medium text-blue-700">{d}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap gap-1">
-                                  {[
-                                    { k: "isPerimeter", v: semantics.isPerimeter, color: "blue" },
-                                    { k: "isInterior", v: semantics.isInterior, color: "purple" },
-                                    { k: "isCorner", v: semantics.isCorner, color: "pink" },
-                                    { k: "nearCore", v: semantics.nearCore, color: "amber" },
-                                    { k: "nearEntry", v: semantics.nearEntry, color: "emerald" },
-                                    { k: "nearStair", v: semantics.nearStair, color: "sky" },
-                                    { k: "nearCorridor", v: semantics.nearCorridor, color: "slate" },
-                                  ].map(({ k, v, color }) => (
-                                    <span
-                                      key={k}
-                                      className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${v
-                                        ? color === "blue"   ? "bg-blue-100 text-blue-700"
-                                        : color === "purple" ? "bg-purple-100 text-purple-700"
-                                        : color === "pink"   ? "bg-pink-100 text-pink-700"
-                                        : color === "amber"  ? "bg-amber-100 text-amber-700"
-                                        : color === "emerald"? "bg-emerald-100 text-emerald-700"
-                                        : color === "sky"    ? "bg-sky-100 text-sky-700"
-                                        :                       "bg-slate-100 text-slate-700"
-                                        : "bg-slate-100 text-slate-400"}`}
-                                    >
-                                      {k}: {v ? "true" : "false"}
-                                    </span>
-                                  ))}
-                                </div>
-                                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                  <div>
-                                    <span className="text-[9px] text-slate-400">Area</span>
-                                    <p className="font-mono text-slate-700">{semantics.areaM2.toFixed(2)} m²</p>
-                                  </div>
-                                  <div>
-                                    <span className="text-[9px] text-slate-400">Depth</span>
-                                    <p className="font-mono text-slate-700">{semantics.depthM.toFixed(2)} m</p>
-                                  </div>
-                                  <div className="col-span-2">
-                                    <span className="text-[9px] text-slate-400">Aspect Ratio</span>
-                                    <p className="font-mono text-slate-700">{isFinite(semantics.aspectRatio) ? semantics.aspectRatio.toFixed(2) : "∞"}</p>
-                                  </div>
-                                </div>
-                                <p className="text-[9px] text-slate-400">Thresholds (hardcoded): facade 0.5 m, Core 1.5 m, Stair 2 m, Corridor 0.5 m, Entry 3 m.</p>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
+                    {/* Region Semantics moved to the Tools panel — runs globally for every room. */}
 
                     {/* Box 3: Optimise Rectangle */}
                     <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
@@ -19187,6 +19177,58 @@ User request: ${aiPrompt.trim()}`;
               <ScrollArea className="h-full max-h-[45vh]">
                 <div className="space-y-2 p-3">
                   <p className="sticky top-0 z-10 -mx-3 -mt-3 mb-1 border-b border-slate-200 bg-slate-50 px-3 pt-3 pb-2 text-sm font-semibold">Tools</p>
+
+                  {/* Compute Semantics — global pass: derive facades, proximity flags, area, depth, aspect for every room. */}
+                  <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between text-left"
+                      onClick={() => setAreaSemanticsExpanded((v) => !v)}
+                    >
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Compute Semantics</span>
+                      <span className="text-[11px] text-slate-400">{areaSemanticsExpanded ? "▼" : "▶"}</span>
+                    </button>
+                    {areaSemanticsExpanded && <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-[11px]"
+                        onClick={() => {
+                          const roomsToCompute = visibleRoomsRef.current.filter((r) => (r.roomType ?? "room") === "room");
+                          if (roomsToCompute.length === 0) { toast.error("No rooms to compute"); return; }
+                          const walls = historyRef.current.state.walls;
+                          const next: Record<string, RegionSemantics> = {};
+                          for (const r of roomsToCompute) {
+                            next[r.id] = computeRegionSemantics(r, walls, roomsToCompute, pixelsPerMeter);
+                          }
+                          setRegionSemanticsById(next);
+                          toast.success(`Computed semantics for ${roomsToCompute.length} room${roomsToCompute.length === 1 ? "" : "s"}`);
+                        }}
+                      >
+                        Compute Semantics for all rooms
+                      </Button>
+                      {Object.keys(regionSemanticsById).length === 0 ? (
+                        <p className="text-[9px] text-slate-400">Click to derive facades, proximity flags, area, depth and aspect ratio for every room. Results are cached and used by Rule Book and other tools.</p>
+                      ) : (
+                        <div className="max-h-40 overflow-y-auto rounded border border-slate-100 bg-slate-50 p-1 text-[9px] leading-[1.4] text-slate-700 font-mono">
+                          {visibleRoomsRef.current.filter((r) => regionSemanticsById[r.id]).map((r, i) => {
+                            const s = regionSemanticsById[r.id];
+                            const displayId = `Room${String(visibleRoomsRef.current.indexOf(r) + 1).padStart(3, "0")}`;
+                            return (
+                              <div key={r.id} className="flex justify-between gap-2">
+                                <span className="text-slate-400">{displayId}</span>
+                                <span>f={s.facadeCount} a={s.areaM2.toFixed(1)}m² d={s.depthM.toFixed(1)}m{s.nearCore ? " core" : ""}{s.isCorner ? " cnr" : s.isInterior ? " int" : ""}</span>
+                              </div>
+                            );
+                          })}
+                          <div className="mt-1 border-t border-slate-200 pt-1 text-slate-400">
+                            {Object.keys(regionSemanticsById).length} / {visibleRoomsRef.current.length} rooms cached
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[9px] text-slate-400">Thresholds: facade 0.5 m, Core 1.5 m, Stair 2 m, Corridor 0.5 m, Entry 3 m.</p>
+                    </>}
+                  </div>
 
                   {/* Apply JSON — paste a recipe or generate one with AI, then Apply. */}
                   <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
