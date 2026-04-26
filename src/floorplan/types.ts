@@ -191,6 +191,10 @@ export interface Wall {
   doorHinge?: "left" | "right";
   /** Door only: which side the door swings into. "left" = perpendicular left, "right" = perpendicular right. */
   doorPlacement?: "left" | "right";
+  /** Door / Window: height from floor to top of opening, in meters. */
+  lintelHeightM?: number;
+  /** Window only: height from floor to bottom of opening, in meters. */
+  sillHeightM?: number;
   /** Plot boundary only: sub-type. */
   plotBoundaryType?: "road" | "plot" | "open" | "reservation" | "water" | "row";
   /** Plot boundary only: computed setback in meters. */

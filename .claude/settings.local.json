@@ -43,7 +43,14 @@
       "Bash(git commit -m 'Move furniture library button from left sidebar to top-right toolbar *)",
       "Bash(git push *)",
       "Bash(npx --yes tsx scripts/test-rulebook.ts)",
-      "Bash(git commit -m 'Add Compute Semantics to Tools, Rule Book converter, set-label tool, and validation script *)"
+      "Bash(git commit -m 'Add Compute Semantics to Tools, Rule Book converter, set-label tool, and validation script *)",
+      "Bash(awk 'NR>=19519 && NR<=19714' \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")",
+      "Bash(awk 'NR==2225,NR==2295' \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")",
+      "Bash(grep -n '\\\\${')",
+      "Bash(awk 'NR==2200,NR==2310' \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")",
+      "Bash(grep -n '`')",
+      "Bash(python \"D:/MAIN/monica_recent/check_template.py\")",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

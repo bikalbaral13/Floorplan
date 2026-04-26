@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+const FloorPlan3DCanvas = lazy(() => import("./three/FloorPlan3DCanvas"));
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -1199,6 +1201,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     placementRenderedSymbol: false,
   });
   const [pixelsPerMeter, setPixelsPerMeter] = useState(50);
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [measureDraft, setMeasureDraft] = useState<Point | null>(null);
   const [measurePreviewPoint, setMeasurePreviewPoint] = useState<Point | null>(null);
   const [measureSegments, setMeasureSegments] = useState<{ id: string; start: Point; end: Point }[]>([]);
@@ -1507,10 +1510,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
 
   /** AI Chat block state. */
   const [aiChatExpanded, setAiChatExpanded] = useState<boolean>(false);
-  /** Rule Book → JSON sub-block inside Apply JSON. */
-  const [ruleBookExpanded, setRuleBookExpanded] = useState<boolean>(false);
-  const [ruleBookText, setRuleBookText] = useState<string>("");
-  const [ruleBookDragOver, setRuleBookDragOver] = useState<boolean>(false);
   const [aiPrompt, setAiPrompt] = useState<string>("");
   const [aiApiKey, setAiApiKey] = useState<string>("");
   const [aiModel, setAiModel] = useState<string>("gemini-3-flash-preview");
@@ -1739,6 +1738,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     smoothing: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
     mesh: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
     convexDecomp: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
+    inCircles: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
+    circumcircle: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
+    ellipse: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
+    nGon: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
+    principalAxes: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
+    contour: (room: { id: string; points: Point[] } | null, silent: boolean) => boolean;
   };
   const runnersRef = useRef<RunnersBundle | null>(null);
 
@@ -1846,6 +1851,44 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         }
         if (typeof m.minVertices === "number") filtered = filtered.filter((r) => r.points.length >= (m.minVertices as number));
         if (typeof m.maxVertices === "number") filtered = filtered.filter((r) => r.points.length <= (m.maxVertices as number));
+
+        // ── Semantic match keys: booleans + numeric (scalar or {lt,lte,gt,gte}) ──
+        const SEM_BOOL_KEYS = ["nearCore", "nearStair", "nearCorridor", "nearEntry", "isCorner", "isInterior", "isPerimeter"] as const;
+        const SEM_NUM_KEYS = ["areaM2", "depthM", "facadeCount", "aspectRatio"] as const;
+        const usesSemantics =
+          SEM_BOOL_KEYS.some((k) => typeof m[k] === "boolean") ||
+          SEM_NUM_KEYS.some((k) => k in m);
+        if (usesSemantics) {
+          const numCmp = (actual: number, expected: unknown): boolean => {
+            if (typeof expected === "number") return actual === expected;
+            if (expected && typeof expected === "object" && !Array.isArray(expected)) {
+              const cmp = expected as Record<string, unknown>;
+              if (typeof cmp.lt === "number" && !(actual < cmp.lt)) return false;
+              if (typeof cmp.lte === "number" && !(actual <= cmp.lte)) return false;
+              if (typeof cmp.gt === "number" && !(actual > cmp.gt)) return false;
+              if (typeof cmp.gte === "number" && !(actual >= cmp.gte)) return false;
+              if (typeof cmp.eq === "number" && actual !== cmp.eq) return false;
+              if (typeof cmp.ne === "number" && actual === cmp.ne) return false;
+              return true;
+            }
+            return false;
+          };
+          const wallsForSem = historyRef.current.state.walls;
+          const roomsForSem = filtered.map((r) => ({ id: r.id, points: r.points, region: r.region, label: r.label }));
+          filtered = filtered.filter((r) => {
+            const sem = computeRegionSemantics(r, wallsForSem, roomsForSem, pixelsPerMeter);
+            for (const k of SEM_BOOL_KEYS) {
+              if (typeof m[k] === "boolean" && (sem as unknown as Record<string, boolean>)[k] !== m[k]) return false;
+            }
+            for (const k of SEM_NUM_KEYS) {
+              if (k in m) {
+                const actual = (sem as unknown as Record<string, number>)[k];
+                if (typeof actual !== "number" || !numCmp(actual, m[k])) return false;
+              }
+            }
+            return true;
+          });
+        }
         return filtered;
       }
       // Flat shortcuts: entry.id or entry.label (used in the user's v2 sample).
@@ -1869,6 +1912,24 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         return allRooms.filter((r) => r.zone === entry.zone);
       }
       return [];
+    };
+
+    // Seed coordinate convention for voronoi/cvt/delaunay: world-pixel coords (same system as room.points).
+    // To make recipes portable across rooms, also accept normalised [0..1] seeds — when every seed has
+    // |x|<=1 and |y|<=1, treat them as bbox-relative and rescale to the room's polygon bounding box.
+    const rescaleSeedsToRoom = (seeds: Array<{ x: number; y: number }>, polygon: Point[]): Array<{ x: number; y: number }> => {
+      if (!Array.isArray(seeds) || seeds.length === 0 || polygon.length === 0) return seeds;
+      const isNormalised = seeds.every((s) => typeof s.x === "number" && typeof s.y === "number" && s.x >= 0 && s.x <= 1 && s.y >= 0 && s.y <= 1);
+      if (!isNormalised) return seeds;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const pt of polygon) {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y > maxY) maxY = pt.y;
+      }
+      const w = maxX - minX, h = maxY - minY;
+      return seeds.map((s) => ({ x: minX + s.x * w, y: minY + s.y * h }));
     };
 
     // Core per-room op runner — contains the big switch that dispatches to each tool's runner.
@@ -1912,7 +1973,38 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           await tick();
           runnersRef.current!.split(currentRoom, opSilent);
         } else if (tool === "optimise-rect") {
-          if (typeof p.mode === "string") setMaxRectMode(p.mode as "normal" | "axis-aligned" | "edge-sitting");
+          if (typeof p.shape === "string" && (p.shape === "rectangle" || p.shape === "square" || p.shape === "hexagon")) {
+            setMaxRectShape(p.shape as "rectangle" | "square" | "hexagon");
+          }
+          if (p.reference === "none" || p.reference === "custom") {
+            setMaxRectReference(p.reference as "none" | "custom");
+          } else if (typeof p.reference === "number" && p.reference >= 0) {
+            setMaxRectReference(Math.floor(p.reference as number));
+          }
+          if (typeof p.axisAngle === "number") {
+            const a = ((p.axisAngle as number) % 180 + 180) % 180;
+            setMaxRectAxisAngle(a);
+          }
+          if (typeof p.count === "number") {
+            setMaxRectCount(Math.max(1, Math.min(20, Math.round(p.count as number))));
+          }
+          if (typeof p.minArea === "number") {
+            setMaxRectMinArea(Math.max(0, p.minArea as number));
+          }
+          if (typeof p.union === "boolean") {
+            setMaxRectUnion(p.union as boolean);
+          }
+          // Backward-compat: legacy "mode" string maps to (reference, axisAngle) combos.
+          if (typeof p.mode === "string") {
+            if (p.mode === "normal") {
+              setMaxRectReference("none");
+            } else if (p.mode === "axis-aligned") {
+              setMaxRectReference("custom");
+              setMaxRectAxisAngle(0);
+            } else if (p.mode === "edge-sitting") {
+              setMaxRectReference(0);
+            }
+          }
           await tick();
           runnersRef.current!.optimiseRect(currentRoom, opSilent);
         } else if (tool === "place-object") {
@@ -1923,11 +2015,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           runnersRef.current!.placement(currentRoom, opSilent);
         } else if (tool === "voronoi") {
           if (typeof p.metric === "string") setVoronoiMetric(p.metric as "euclidean" | "manhattan" | "chebyshev");
-          if (Array.isArray(p.seeds)) setVoronoiSeedsByRoom((prev) => ({ ...prev, [roomId]: p.seeds as Array<{ x: number; y: number }> }));
+          if (Array.isArray(p.seeds)) setVoronoiSeedsByRoom((prev) => ({ ...prev, [roomId]: rescaleSeedsToRoom(p.seeds as Array<{ x: number; y: number }>, currentRoom.points) }));
           await tick();
           runnersRef.current!.voronoi(currentRoom, opSilent);
         } else if (tool === "cvt") {
-          if (Array.isArray(p.seeds)) setVoronoiSeedsByRoom((prev) => ({ ...prev, [roomId]: p.seeds as Array<{ x: number; y: number }> }));
+          if (Array.isArray(p.seeds)) setVoronoiSeedsByRoom((prev) => ({ ...prev, [roomId]: rescaleSeedsToRoom(p.seeds as Array<{ x: number; y: number }>, currentRoom.points) }));
           if (typeof p.iterations === "number") setCvtIterations(p.iterations as number);
           if (typeof p.tolerance === "number") setCvtTolerance(p.tolerance as number);
           await tick();
@@ -1969,7 +2061,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           await tick();
           runnersRef.current!.bsp(currentRoom, opSilent);
         } else if (tool === "delaunay") {
-          if (Array.isArray(p.seeds)) setDelaunaySeedsByRoom((prev) => ({ ...prev, [roomId]: p.seeds as Array<{ x: number; y: number }> }));
+          if (Array.isArray(p.seeds)) setDelaunaySeedsByRoom((prev) => ({ ...prev, [roomId]: rescaleSeedsToRoom(p.seeds as Array<{ x: number; y: number }>, currentRoom.points) }));
           await tick();
           runnersRef.current!.delaunay(currentRoom, opSilent);
         } else if (tool === "skeleton") {
@@ -2000,6 +2092,34 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           if (typeof p.tolerance === "number") setDecompTolerance(p.tolerance as number);
           await tick();
           runnersRef.current!.convexDecomp(currentRoom, opSilent);
+        } else if (tool === "in-circles") {
+          if (typeof p.count === "number") setInCirclesCount(Math.max(1, Math.min(50, Math.round(p.count as number))));
+          if (typeof p.minRadius === "number") setInCirclesMinRadius(Math.max(0, p.minRadius as number));
+          if (typeof p.sides === "number") setInCirclesSides(Math.max(3, Math.min(30, Math.round(p.sides as number))));
+          if (typeof p.rotation === "number") setInCirclesRotation(((p.rotation as number) % 360 + 360) % 360);
+          if (typeof p.optimizeRotation === "boolean") setInCirclesOptimizeRotation(p.optimizeRotation as boolean);
+          await tick();
+          runnersRef.current!.inCircles(currentRoom, opSilent);
+        } else if (tool === "bounding-shape") {
+          const kind = (p.kind === "circle" || p.kind === "ellipse" || p.kind === "ngon") ? p.kind : null;
+          if (kind) setBoundingShapeKind(kind as "circle" | "ellipse" | "ngon");
+          if (typeof p.obbAngle === "number") setObbAngle(((p.obbAngle as number) % 180 + 180) % 180);
+          if (typeof p.sides === "number") setNGonSides(Math.max(3, Math.min(20, Math.round(p.sides as number))));
+          if (typeof p.angle === "number") setNGonAngle(((p.angle as number) % 360 + 360) % 360);
+          if (typeof p.optimize === "boolean") setNGonOptimize(p.optimize as boolean);
+          await tick();
+          const k = kind ?? boundingShapeKind;
+          if (k === "circle") runnersRef.current!.circumcircle(currentRoom, opSilent);
+          else if (k === "ellipse") runnersRef.current!.ellipse(currentRoom, opSilent);
+          else runnersRef.current!.nGon(currentRoom, opSilent);
+        } else if (tool === "principal-axes") {
+          await tick();
+          runnersRef.current!.principalAxes(currentRoom, opSilent);
+        } else if (tool === "contour") {
+          if (typeof p.interval === "number") setContourInterval(Math.max(0.05, p.interval as number));
+          if (typeof p.maxLevels === "number") setContourMaxLevels(Math.max(1, Math.min(50, Math.round(p.maxLevels as number))));
+          await tick();
+          runnersRef.current!.contour(currentRoom, opSilent);
         } else if (tool === "set-label") {
           // Assign the room's zone label. Auto-detected rooms get promoted into history.state.rooms
           // with a fresh id (same pattern as the manual Label dropdown in the properties panel).
@@ -2095,22 +2215,61 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     if (!aiPrompt.trim()) { toast.error("Prompt is empty"); return; }
     const room = selectedRoom;
 
-    // Build a compact room inventory the model can select by (id, label, region, zone).
+    // Build a compact room inventory the model can select by (id, label, region, zone) plus
+    // computed semantic flags (facades, isCorner, nearCore/Stair/Corridor/Entry, depth, aspect).
+    // We compute semantics on-the-fly here so the model has them even if the user never clicked
+    // the "Compute Semantics" button.
     const rooms = visibleRoomsRef.current;
+    const wallsForSem = history.state.walls;
+    const roomsForSem = rooms.map((r) => ({ id: r.id, points: r.points, region: r.region, label: r.label }));
     const roomInventory = rooms.map((r, i) => {
       const displayId = `Room${String(i + 1).padStart(3, "0")}`;
       const areaM2 = polygonArea(r.points) / (pixelsPerMeter * pixelsPerMeter);
-      return `- ${displayId} (id: ${r.id})${r.label ? ` label="${r.label}"` : ""}${r.region ? ` region="${r.region}"` : ""}${r.zone ? ` zone="${r.zone}"` : ""} roomType=${r.roomType ?? "room"} area≈${areaM2.toFixed(1)}m² verts=${r.points.length}`;
+      let sem: RegionSemantics | null = null;
+      try {
+        sem = computeRegionSemantics(r, wallsForSem, roomsForSem, pixelsPerMeter);
+      } catch { /* ignore — fall back to no flags */ }
+      const flags: string[] = [];
+      if (sem) {
+        if (sem.facadeCount > 0) flags.push(`facades=[${sem.facades.join(",")}]`);
+        if (sem.isCorner) flags.push("isCorner=true");
+        if (sem.isInterior) flags.push("isInterior=true");
+        if (sem.isPerimeter && !sem.isCorner) flags.push("isPerimeter=true");
+        if (sem.nearCore) flags.push("nearCore=true");
+        if (sem.nearStair) flags.push("nearStair=true");
+        if (sem.nearCorridor) flags.push("nearCorridor=true");
+        if (sem.nearEntry) flags.push("nearEntry=true");
+        flags.push(`depthM=${sem.depthM.toFixed(1)}`);
+        flags.push(`aspect=${isFinite(sem.aspectRatio) ? sem.aspectRatio.toFixed(2) : "inf"}`);
+      }
+      const flagsStr = flags.length ? ` [${flags.join(" ")}]` : "";
+      return `- ${displayId} (id: ${r.id})${r.label ? ` label="${r.label}"` : ""}${r.region ? ` region="${r.region}"` : ""}${r.zone ? ` zone="${r.zone}"` : ""} roomType=${r.roomType ?? "room"} area≈${areaM2.toFixed(1)}m² verts=${r.points.length}${flagsStr}`;
     }).join("\n");
 
     const systemInstruction = `You are a floorplan operations generator for an architectural editor.
 Output ONLY a single JSON object. No markdown, no commentary, no code fences — just valid JSON.
 
-Schema — multi-room recipe:
+Schema — multi-rule recipe (top-level key is "rooms" for backward-compat; each entry is really a *rule* = match → operations):
 {
   "rooms": [
     {
-      "match": { "region"?: string|string[], "label"?: string|string[], "zone"?: string|string[], "id"?: string, "roomType"?: "room"|"floorplate-boundary"|"plot-boundary", "minAreaM2"?: number, "maxAreaM2"?: number, "selected"?: true, "default"?: true },
+      "id"?: string,                  // optional rule id (e.g. "RZ-01") for traceability — ignored by the engine
+      "note"?: string,                // optional free-text comment — ignored by the engine
+      "match": {
+        // Classification selectors (existing):
+        "region"?: string|string[], "label"?: string|string[], "zone"?: string|string[],
+        "id"?: string, "roomType"?: "room"|"floorplate-boundary"|"plot-boundary",
+        "minAreaM2"?: number, "maxAreaM2"?: number,
+        "selected"?: true, "default"?: true,
+        // Semantic boolean flags (computed live from geometry — pass true or false):
+        "nearCore"?: boolean, "nearStair"?: boolean, "nearCorridor"?: boolean, "nearEntry"?: boolean,
+        "isCorner"?: boolean, "isInterior"?: boolean, "isPerimeter"?: boolean,
+        // Semantic numeric properties — accept either a scalar (equality) or { "lt"|"lte"|"gt"|"gte"|"eq"|"ne": number }:
+        "areaM2"?: number | { "lt"?: number, "lte"?: number, "gt"?: number, "gte"?: number },
+        "depthM"?: number | { "lt"?: number, "lte"?: number, "gt"?: number, "gte"?: number },
+        "facadeCount"?: number | { "lt"?: number, "lte"?: number, "gt"?: number, "gte"?: number },
+        "aspectRatio"?: number | { "lt"?: number, "lte"?: number, "gt"?: number, "gte"?: number }
+      },
       "operations": [
         { "tool": "<name>", "params": { ... }, "commit"?: boolean }
       ]
@@ -2126,26 +2285,200 @@ Schema — multi-room recipe:
 
 Legacy single-room schema also accepted: { "operations": [ ... ] } (targets the selected room).
 
-Available tools (each is { "tool": <name>, "params": {...}, "commit"?: boolean }):
-- "inset": { "setbacks": number[] (one per edge, metres) } OR { "uniformSetback": number (metres) }
-- "split": { "count": 2-6, "angle": 0-179, "mode": "equal"|"ratio"|"target"|"length", "ratios"?: number[], "target"?: number (m²), "lengths"?: number[] (m), "edge"?: number|null, "edgeFlip"?: boolean }
-- "optimise-rect": { "mode": "normal"|"axis-aligned"|"edge-sitting" }
-- "place-object": { "objects": [{ "length": number (m), "breadth": number (m), "position": 0-100 }] }
-- "voronoi": { "metric": "euclidean"|"manhattan"|"chebyshev", "seeds": [{"x": number, "y": number}] }
-- "cvt": { "seeds": [{"x", "y"}], "iterations": 1-50, "tolerance": 0.1-5, "mode": "relax"|"cells"|"preview" }
-- "bsp": { "seeds": [{"x", "y", "weight": 0-100}], "useAreaPercent": boolean, "tiltAngle": 0-179 }
-- "delaunay": { "seeds": [{"x", "y"}] }
-- "skeleton": { "type": "sampled-voronoi"|"segment-sweepline"|"straight-skeleton", "samples"?: 2-20, "pruneEnds"?: boolean }
-- "convex-hull": {}
-- "rect-decomp": { "orient": "horizontal"|"vertical", "bands": 1-20, "minArea": 0-5 }
-- "smoothing": { "type": "chaikin"|"bezier", "level": 0-1 }
-- "mesh": { "type": "ear-clipping"|"cdt" }
-- "convex-decomp": { "type": "hertel-mehlhorn"|"bayazit"|"acd", "tolerance"?: 0-40 }
+Available tools — every supported tool name and its full parameter schema. Anything not listed here is unsupported and will be skipped silently. All lengths / setbacks / tolerances are in METRES unless explicitly noted. Coordinate convention: seeds for voronoi/cvt/delaunay accept either world-px (same axes as room.points) OR normalised [0..1] bbox-relative — prefer normalised for portable recipes; the engine auto-rescales.
 
-All lengths / setbacks / tolerances are in metres. Position for place-object is a percentage along the polygon's perimeter.
+[1] "inset" — shrink the room polygon edge-by-edge.
+    params: { "setbacks": number[] }       // length must equal polygon edge count, each value ≥ 0 m
+         OR { "uniformSetback": number }   // single value applied to every edge
+    Use when: the user says "shrink", "pull in", "setback", "leave a circulation strip".
+
+[2] "split" — divide the room into N pieces.
+    params: {
+      "count":  2-6,
+      "mode":   "equal" | "ratio" | "target" | "length",
+      "angle":  0-179,                          // degrees, optional; runner picks if omitted
+      "ratios"?:  number[],                     // mode="ratio"; lengths arbitrary, will be normalised
+      "target"?:  number,                       // mode="target"; target area per piece in m²
+      "lengths"?: number[],                     // mode="length"; piece lengths in metres along chosen edge
+      "edge"?:    number | null,                // index of polygon edge to split along (null = auto)
+      "edgeFlip"?: boolean                      // reverse split direction along edge
+    }
+    Use when: "divide", "split", "halve", "cut into N", "60/40 split".
+
+[3] "optimise-rect" — fit the largest inscribed rectangle(s) inside the room polygon.
+    params: {
+      "shape":     "rectangle" | "square" | "hexagon",     // default "rectangle"
+      "reference": "none" | "custom" | number,             // edge selection for the rect's long axis:
+                                                           //   "none"   → search all angles 0–180° (best fit)
+                                                           //   "custom" → use the explicit "axisAngle" below
+                                                           //   <number> → polygon edge index; rect aligns to that edge
+      "axisAngle": number,                                  // degrees in [0, 180); only used when reference="custom"
+      "count":     1-20,                                    // how many disjoint rectangles to pack
+      "minArea":   number,                                  // m²; when count>1, drop rectangles smaller than this
+      "union":     boolean                                  // when count>1 AND reference!="none", merge rects into a single polygon
+    }
+    Backward-compat shorthand (still accepted, maps to the above):
+      "mode": "normal"        → reference="none"
+      "mode": "axis-aligned"  → reference="custom", axisAngle=0
+      "mode": "edge-sitting"  → reference=0 (first polygon edge)
+    Use when: "rectangularise", "snap to rectangle", "fit a square inside", "pack N rects", "biggest inscribed rectangle".
+    Tips: For a single best-fit rectangle, use { "shape": "rectangle", "reference": "none", "count": 1 }. For
+    axis-aligned packing along a chosen room edge: { "reference": <edge-index>, "count": 4, "minArea": 2 }. To
+    keep rectangles snapped to the building's main axis: { "reference": "custom", "axisAngle": 90 }.
+
+[4] "place-object" — drop sub-rectangles onto the polygon perimeter (e.g. service blocks, fixtures).
+    params: { "objects": [ { "length": number_m, "breadth": number_m, "position": 0-100 } ] }
+            position is a PERCENT of polygon perimeter (0 = first vertex, 100 = back to start).
+
+[5] "voronoi" — Voronoi-cell partition, one cell per seed.
+    params: { "metric": "euclidean" | "manhattan" | "chebyshev",
+              "seeds":  [ { "x": number, "y": number } ] }
+    Need at least 2 seeds. Manhattan = orthogonal cells (best for floorplans), Euclidean = exact bisectors,
+    Chebyshev = square cells. Prefer normalised seed coords in [0,1].
+
+[6] "cvt" — Centroidal Voronoi Tessellation; relaxes seeds toward centroids for even cells.
+    params: { "seeds":      [ { "x": number, "y": number } ],
+              "iterations": 1-50,
+              "tolerance":  0.1-5,                       // metres of seed movement to declare convergence
+              "mode":       "relax" | "cells" | "preview" }
+    "relax" mutates seeds (updates state); "cells" emits the current Voronoi partition; "preview" no-commit.
+
+[7] "bsp" — Binary Space Partition with weighted seeds (area share = weight%).
+    params: { "seeds":          [ { "x": number, "y": number, "weight": 0-100 } ],
+              "useAreaPercent": boolean,                  // true = weights are area% targets
+              "tiltAngle":      0-179 }                   // bias for first cut direction (degrees)
+    Weights should sum to ≈100 when useAreaPercent=true; engine renormalises if not. If every seed has
+    |x|<10 and |y|<1 the engine treats them as placeholders and spreads them along the longer bbox axis.
+
+[8] "delaunay" — Delaunay triangulation over user seeds.
+    params: { "seeds": [ { "x": number, "y": number } ] }
+    Need at least 3 seeds. Triangulates the convex hull of the seeds, clipped to the room polygon.
+
+[9] "skeleton" — medial-axis / centerline extraction.
+    params: { "type":      "sampled-voronoi" | "segment-sweepline" | "straight-skeleton",
+              "samples"?:   2-20,                          // sampled-voronoi only; higher = denser
+              "pruneEnds"?: boolean }                      // drop short spurs near vertices
+    Use for: corridor centerline, room "spine", access path analysis.
+
+[10] "convex-hull" — replace polygon with its convex hull. No params.
+     params: {}
+     Use when: "envelope", "wrap in convex", "outermost boundary".
+
+[11] "rect-decomp" — slice the polygon into axis-aligned rectangle bands.
+     params: { "orient":  "horizontal" | "vertical",
+               "bands":   1-20,
+               "minArea": 0-5 }                            // m²; bands smaller than this are dropped
+
+[12] "smoothing" — corner-rounding / curve fitting.
+     params: { "type":  "chaikin" | "bezier",
+               "level": 0-1 }                              // 0 = none, 1 = maximum smoothing
+     Note: "smoothing" mutates polygon shape — most downstream tools expect rectilinear input. Use late.
+
+[13] "mesh" — triangulation for downstream geometry analysis.
+     params: { "type": "ear-clipping" | "cdt" | "blossom-quad" }
+     ear-clipping = fast, simple polygons. cdt (Constrained Delaunay) = better quality, slower.
+     blossom-quad = quad-dominant mesh via blossom matching (use only when downstream needs quads).
+
+[14] "convex-decomp" — split a concave polygon into convex pieces.
+     params: { "type":      "hertel-mehlhorn" | "bayazit" | "acd",
+               "tolerance"?: 0-40 }                         // ACD only: concavity tolerance in degrees
+     hertel-mehlhorn = exact, polynomial. bayazit = exact, simpler. acd = approximate, faster.
+
+[15] "in-circles" — pack N largest inscribed circles (or N-sided regular polygons approximating circles).
+     params: {
+       "count":            1-50,                  // how many circles to pack
+       "minRadius":        number,                // metres; drop circles below this radius
+       "sides":            3-30,                  // facets used to render each circle (higher = smoother)
+       "rotation":         0-360,                 // degrees; orientation of the polygon facets, ignored when optimizeRotation=true
+       "optimizeRotation": boolean                // true = auto-pick rotation per circle for max packing
+     }
+     Use when: "pack circles", "max inscribed circles", "fit columns", "circle packing".
+
+[16] "bounding-shape" — wrap the polygon in a minimum-area enclosing shape.
+     params: {
+       "kind":     "circle" | "ellipse" | "ngon",  // required; chooses one of three runners
+       "obbAngle": number,                          // ellipse only: orientation override in degrees [0, 180)
+       "sides":    3-20,                            // ngon only: number of sides
+       "angle":    0-360,                           // ngon only: rotation override
+       "optimize": boolean                          // ngon only: auto-pick rotation for tightest fit
+     }
+     Use when: "minimum bounding circle", "min enclosing ellipse", "wrap in hexagon", "MEC", "bounding shape".
+
+[17] "principal-axes" — overlay the major + minor axes (PCA on polygon vertices). No params.
+     params: {}
+     Use when: "PCA axes", "principal axes", "major/minor axes", "shape orientation".
+
+[18] "contour" — draw evenly-spaced contour lines (offset polygons) inward from the boundary.
+     params: {
+       "interval":  number,                         // metres between successive contours; default 0.5
+       "maxLevels": 1-50                            // hard cap on the number of contour rings; default 12
+     }
+     Use when: "contour lines", "isolines", "concentric setbacks", "ripple offsets".
+
+[19] "set-label" — write the room's label/zone field. Always commits.
+     params: { "label": string }                            // prefer one of the valid label values listed below
+     Use whenever the user says "classify", "tag", "zone", "label", "mark as".
 
 Valid region values: "Core", "Staircase", "AHU", "Electrical Room", "Service", "Lift", "Toilet".
 Valid label values: "Large Facade", "Medium Facade", "Small Facade", "Large Interior", "Medium Interior", "Small Interior", "Service", "Corridor".
+The label field doubles as the zone tag in this app — when the user says "zone label" or "zone", set "label".
+
+── Room semantic flags (precomputed, shown per room in the inventory) ──
+Each room line ends with [ ... ] listing its semantic profile. Use these when the user describes rooms by *meaning* rather than by id:
+- facades=[N|E|S|W,...]   — cardinal sides where the room touches a facade / plot boundary
+- facadeCount             — number of cardinal facades touched (0 = interior, ≥2 = corner)
+- isPerimeter / isInterior / isCorner — derived booleans (perimeter = facadeCount≥1, corner = facadeCount≥2)
+- nearCore                — within 1.5 m of any room with region="Core"
+- nearStair               — within 2.0 m of any room with region="Staircase"
+- nearCorridor            — within 0.5 m of any room with region="Corridor" or label="Corridor"
+- nearEntry               — within 3.0 m of any door segment
+- depthM                  — daylight depth: distance from the room's deepest vertex to the nearest facade wall
+- aspect                  — OBB aspect ratio (long/short)
+
+── Classification operation ──
+- "set-label": { "label": "<string>" } — writes the room's label/zone field. Prefer the valid label values listed above; free-form strings are also accepted. This is the canonical way to set a room's "zone".
+
+── Semantic-driven workflow (IMPORTANT) ──
+The dispatcher now natively evaluates semantic flags inside "match", so DO NOT expand a predicate into
+one-per-id entries. Instead, write ONE rule entry whose "match" filters by the semantic flags directly,
+combined with AND. Each entry is a (match → operations) pair; the engine applies those operations to
+every room that satisfies match. Numeric properties accept either a scalar (equality) or a range object
+{ "lt", "lte", "gt", "gte" }. Booleans pass through as true/false.
+
+When the user gives multiple "if X then Y" clauses (a rulebook), emit one entry per clause, in priority order
+(top wins for any room — earlier rules implicitly take precedence when predicates overlap; if you want
+strictness, add explicit guard predicates such as "nearCore": false on later rules).
+
+Worked example — "If a room is near the core, set its zone label to Service":
+  {"rooms":[
+    {"id":"R1","note":"Core adjacency overrides everything",
+     "match":{"nearCore":true},
+     "operations":[{"tool":"set-label","params":{"label":"Service"},"commit":true}]}
+  ]}
+
+Worked example — "Interior rooms smaller than 15 m² → Service; 15–60 m² → Medium Interior; ≥60 m² → split":
+  {"rooms":[
+    {"id":"R2","match":{"nearCore":false,"isInterior":true,"areaM2":{"lt":15}},
+     "operations":[{"tool":"set-label","params":{"label":"Service"},"commit":true}]},
+    {"id":"R3","match":{"nearCore":false,"isInterior":true,"areaM2":{"gte":15,"lt":60}},
+     "operations":[{"tool":"set-label","params":{"label":"Medium Interior"},"commit":true}]},
+    {"id":"R4","match":{"nearCore":false,"isInterior":true,"areaM2":{"gte":60}},
+     "operations":[
+       {"tool":"split","params":{"count":2,"mode":"ratio","ratios":[50,50],"angle":90},"commit":true},
+       {"tool":"set-label","params":{"label":"Medium Interior"},"commit":true}
+     ]}
+  ]}
+
+Worked example — "Label every corner room as 'Large Facade'":
+  {"rooms":[{"match":{"isCorner":true},"operations":[{"tool":"set-label","params":{"label":"Large Facade"},"commit":true}]}]}
+
+Notes:
+- "id" and "note" on a rule entry are purely for traceability; the engine ignores them. Include them when
+  the user gives rule ids (e.g. RZ-01) or when a clause has a clear comment.
+- For split rules, after the split commits the new pieces inherit no labels; the user can re-run the
+  recipe to classify the children, or you can attach a follow-up set-label op for the parent only.
+- Never invent operation keys not in the tools list above. If unsure, prefer "set-label" with a
+  free-form label string.
 
 Currently loaded rooms:
 ${roomInventory || "(none)"}
@@ -8031,6 +8364,12 @@ User request: ${aiPrompt.trim()}`;
     smoothing: runRoomSmoothing,
     mesh: runRoomMesh,
     convexDecomp: runRoomConvexDecomp,
+    inCircles: runRoomInCircle,
+    circumcircle: runRoomCircumcircle,
+    ellipse: runRoomEllipse,
+    nGon: runRoomNGon,
+    principalAxes: runRoomPrincipalAxes,
+    contour: runRoomContour,
   };
 
   /** Get setback for a plot-boundary wall segment (just reads the stored value). */
@@ -11348,6 +11687,34 @@ User request: ${aiPrompt.trim()}`;
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
+          {/* 2D/3D toggle (top-left corner) */}
+          <div className="absolute left-3 top-3 z-30 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-md backdrop-blur">
+            <div className="flex overflow-hidden rounded-md border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setViewMode("2d")}
+                className={`px-2.5 py-1 text-xs font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                aria-pressed={viewMode === "2d"}
+              >
+                2D
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("3d")}
+                className={`px-2.5 py-1 text-xs font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                aria-pressed={viewMode === "3d"}
+              >
+                3D
+              </button>
+            </div>
+          </div>
+          {viewMode === "3d" ? (
+            <div className="absolute inset-0 z-20">
+              <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-slate-500">Loading 3D…</div>}>
+                <FloorPlan3DCanvas model={history.state} pixelsPerMeter={pixelsPerMeter} />
+              </Suspense>
+            </div>
+          ) : null}
           <Stage
             ref={stageRef}
             width={size.width}
@@ -15046,6 +15413,54 @@ User request: ${aiPrompt.trim()}`;
                           </div>
                           <p className="mt-0.5 text-[9px] text-slate-400">Press Tab while drawing to cycle.</p>
                         </div>
+                        {(selectedWall.segmentType === "door" || selectedWall.segmentType === "window") && (
+                          <div>
+                            <span className="text-[10px] text-slate-400">Lintel Height (m)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                              value={selectedWall.lintelHeightM ?? ""}
+                              placeholder={selectedWall.segmentType === "door" ? "2.10" : "2.10"}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const v = raw === "" ? undefined : parseFloat(raw);
+                                if (raw !== "" && (!isFinite(v as number) || (v as number) < 0)) return;
+                                history.set({
+                                  ...history.state,
+                                  walls: history.state.walls.map((w) =>
+                                    w.id === selectedWall.id ? { ...w, lintelHeightM: v } : w
+                                  ),
+                                });
+                              }}
+                            />
+                          </div>
+                        )}
+                        {selectedWall.segmentType === "window" && (
+                          <div>
+                            <span className="text-[10px] text-slate-400">Sill Height (m)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                              value={selectedWall.sillHeightM ?? ""}
+                              placeholder="0.90"
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const v = raw === "" ? undefined : parseFloat(raw);
+                                if (raw !== "" && (!isFinite(v as number) || (v as number) < 0)) return;
+                                history.set({
+                                  ...history.state,
+                                  walls: history.state.walls.map((w) =>
+                                    w.id === selectedWall.id ? { ...w, sillHeightM: v } : w
+                                  ),
+                                });
+                              }}
+                            />
+                          </div>
+                        )}
                       </>}
                     </div>
 
@@ -19298,202 +19713,6 @@ User request: ${aiPrompt.trim()}`;
                             title="Generate JSON into the textarea below. Review, then press Apply JSON."
                           >
                             {aiBusy ? "Generating…" : "Generate → fill JSON below"}
-                          </Button>
-                        </>}
-                      </div>
-
-                      {/* Rule Book → JSON — upload a rule tree or paste it, then convert to a recipe. */}
-                      <div className="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between text-left"
-                          onClick={() => setRuleBookExpanded((v) => !v)}
-                        >
-                          <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Rule Book to JSON</span>
-                          <span className="text-[11px] text-slate-400">{ruleBookExpanded ? "▼" : "▶"}</span>
-                        </button>
-                        {ruleBookExpanded && <>
-                          <div
-                            className={`rounded border-2 border-dashed p-2 text-center text-[10px] transition-colors ${ruleBookDragOver ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}
-                            onDragOver={(e) => { e.preventDefault(); setRuleBookDragOver(true); }}
-                            onDragLeave={() => setRuleBookDragOver(false)}
-                            onDrop={async (e) => {
-                              e.preventDefault();
-                              setRuleBookDragOver(false);
-                              const file = e.dataTransfer.files?.[0];
-                              if (!file) return;
-                              try {
-                                const text = await file.text();
-                                setRuleBookText(text);
-                                toast.success(`Loaded ${file.name}`);
-                              } catch (err) {
-                                const msg = err instanceof Error ? err.message : String(err);
-                                toast.error(`Read failed: ${msg}`);
-                              }
-                            }}
-                          >
-                            <span className="text-slate-500">Drop a rule-book file here, or </span>
-                            <label className="cursor-pointer text-sky-600 underline">
-                              browse
-                              <input
-                                type="file"
-                                accept=".txt,.md,.rules,text/plain,text/markdown"
-                                className="hidden"
-                                onChange={async (e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  try {
-                                    const text = await file.text();
-                                    setRuleBookText(text);
-                                    toast.success(`Loaded ${file.name}`);
-                                  } catch (err) {
-                                    const msg = err instanceof Error ? err.message : String(err);
-                                    toast.error(`Read failed: ${msg}`);
-                                  }
-                                  e.target.value = "";
-                                }}
-                              />
-                            </label>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-slate-500">Rule Book</span>
-                              {ruleBookText && (
-                                <button
-                                  type="button"
-                                  className="text-[9px] text-red-500 hover:underline"
-                                  onClick={() => setRuleBookText("")}
-                                >
-                                  clear
-                                </button>
-                              )}
-                            </div>
-                            <textarea
-                              className="mt-0.5 h-28 w-full resize-y rounded-md border border-slate-200 bg-white px-1.5 py-1 font-mono text-[10px]"
-                              placeholder={"Is region nearCore?\n├── YES → RZ-01: service\n└── NO → ..."}
-                              value={ruleBookText}
-                              onChange={(e) => setRuleBookText(e.target.value)}
-                              spellCheck={false}
-                            />
-                          </div>
-
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full text-[11px]"
-                            disabled={!ruleBookText.trim()}
-                            onClick={() => {
-                              // Evaluate each room against the rulebook rules, emit a recipe that
-                              // assigns the matching rule's label (or splits, for split rules).
-                              try {
-                                const rb = JSON.parse(ruleBookText) as {
-                                  rules?: Array<{
-                                    id?: string;
-                                    label?: string;
-                                    action?: string;
-                                    labels?: string[];
-                                    when?: Record<string, unknown>;
-                                  }>;
-                                };
-                                const rules = Array.isArray(rb.rules) ? rb.rules : [];
-                                if (rules.length === 0) { toast.error("No rules[] in rule book"); return; }
-
-                                // Evaluate a single when-clause: scalar = equality, object with lt/lte/gt/gte = range.
-                                const matchesWhen = (when: Record<string, unknown> | undefined, facts: Record<string, unknown>): boolean => {
-                                  if (!when) return true;
-                                  for (const [key, expected] of Object.entries(when)) {
-                                    const actual = facts[key];
-                                    if (expected !== null && typeof expected === "object" && !Array.isArray(expected)) {
-                                      const cmp = expected as Record<string, unknown>;
-                                      if (typeof actual !== "number") return false;
-                                      if (typeof cmp.lt === "number" && !(actual < cmp.lt)) return false;
-                                      if (typeof cmp.lte === "number" && !(actual <= cmp.lte)) return false;
-                                      if (typeof cmp.gt === "number" && !(actual > cmp.gt)) return false;
-                                      if (typeof cmp.gte === "number" && !(actual >= cmp.gte)) return false;
-                                      if (typeof cmp.eq === "number" && actual !== cmp.eq) return false;
-                                      if (typeof cmp.ne === "number" && actual === cmp.ne) return false;
-                                    } else if (actual !== expected) {
-                                      return false;
-                                    }
-                                  }
-                                  return true;
-                                };
-
-                                const rooms = visibleRoomsRef.current.filter((r) => (r.roomType ?? "room") === "room");
-                                const walls = historyRef.current.state.walls;
-                                const entries: Array<Record<string, unknown>> = [];
-                                const perRule: Record<string, number> = {};
-                                let unmatched = 0;
-
-                                for (const room of rooms) {
-                                  const sem = computeRegionSemantics(room, walls, rooms, pixelsPerMeter);
-                                  const facts: Record<string, unknown> = {
-                                    nearCore: sem.nearCore,
-                                    nearEntry: sem.nearEntry,
-                                    nearStair: sem.nearStair,
-                                    nearCorridor: sem.nearCorridor,
-                                    facadeCount: sem.facadeCount,
-                                    isPerimeter: sem.isPerimeter,
-                                    isInterior: sem.isInterior,
-                                    isCorner: sem.isCorner,
-                                    areaM2: sem.areaM2,
-                                    depthM: sem.depthM,
-                                    aspectRatio: sem.aspectRatio,
-                                  };
-                                  const matched = rules.find((r) => matchesWhen(r.when, facts));
-                                  if (!matched) { unmatched += 1; continue; }
-                                  const ruleId = matched.id ?? "?";
-                                  perRule[ruleId] = (perRule[ruleId] ?? 0) + 1;
-
-                                  const ops: Array<Record<string, unknown>> = [];
-                                  if (matched.action === "split" && Array.isArray(matched.labels) && matched.labels.length >= 2) {
-                                    // Split 50:50 by default; first piece gets labels[0], second gets labels[1].
-                                    // Piece-specific labels can't be assigned here (new ids unknown until split
-                                    // commits) — user can re-run Rule Book after split to classify the pieces.
-                                    ops.push({
-                                      tool: "split",
-                                      params: { count: 2, mode: "ratio", ratios: [50, 50] },
-                                      commit: true,
-                                    });
-                                    // Tag the parent with the first label as a placeholder so traceability is preserved.
-                                    ops.push({
-                                      tool: "set-label",
-                                      params: { label: matched.labels[0] },
-                                      commit: true,
-                                    });
-                                  } else if (typeof matched.label === "string") {
-                                    ops.push({
-                                      tool: "set-label",
-                                      params: { label: matched.label },
-                                      commit: true,
-                                    });
-                                  } else {
-                                    continue;
-                                  }
-
-                                  entries.push({
-                                    match: { id: room.id },
-                                    operations: ops,
-                                  });
-                                }
-
-                                if (entries.length === 0) {
-                                  toast.error(`No rooms matched any rule (${unmatched} unmatched)`);
-                                  return;
-                                }
-                                const result = { rooms: entries };
-                                setJsonText(JSON.stringify(result, null, 2));
-                                const summary = Object.entries(perRule).map(([id, n]) => `${id}×${n}`).join(", ");
-                                toast.success(`Classified ${entries.length}/${rooms.length} rooms (${summary})${unmatched ? `, ${unmatched} unmatched` : ""}`);
-                              } catch (err) {
-                                const msg = err instanceof Error ? err.message : String(err);
-                                toast.error(`Rule Book parse error: ${msg}`);
-                              }
-                            }}
-                            title="Evaluate each room against the rules and generate a recipe that assigns Zone Labels accordingly."
-                          >
-                            Generate JSON from Rule Book
                           </Button>
                         </>}
                       </div>
