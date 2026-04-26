@@ -329,6 +329,64 @@ const polygonCentroid = (points: Point[]): Point => {
   return { x: cx * factor, y: cy * factor };
 };
 
+/**
+ * Area-weighted PCA of a polygon. Single source of truth for the principal-axis math —
+ * shared by the Principal Axes runner and any tool that needs the major/minor axis directions
+ * (e.g. `splitAlongMinorPrincipalAxis`).
+ *
+ * Convention matches `runRoomPrincipalAxes`:
+ *   matrix M = [[Ixx, Ixy], [Ixy, Iyy]] with Ixx = ∫∫y², Iyy = ∫∫x², Ixy = ∫∫xy (centred at centroid)
+ *   λ1 = larger eigenvalue → eigenvector v1 is the MINOR axis (perpendicular to elongation)
+ *   λ2 = smaller eigenvalue → eigenvector v2 is the MAJOR axis (along elongation)
+ *
+ * Returns the angles in degrees ∈ [0, 180), the three moment components, and an anisotropy
+ * scalar = (λ1 - λ2) / λ1 ∈ [0, 1). 0 = perfectly isotropic (square / circle).
+ */
+const computePolygonPrincipalAxes = (points: Point[]): {
+  majorAngleDeg: number;
+  minorAngleDeg: number;
+  anisotropy: number;
+  Ixx: number; Iyy: number; Ixy: number;
+} => {
+  const N = points.length;
+  if (N < 3) return { majorAngleDeg: 0, minorAngleDeg: 90, anisotropy: 0, Ixx: 0, Iyy: 0, Ixy: 0 };
+  const c = polygonCentroid(points);
+  const q: Point[] = points.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
+  // Triangle-fan integration from the origin: triangles (0, q[i], q[i+1]).
+  let Ixx = 0, Iyy = 0, Ixy = 0, area2 = 0;
+  for (let i = 0; i < N; i++) {
+    const a = q[i].x, b = q[i].y;
+    const cc = q[(i + 1) % N].x, d = q[(i + 1) % N].y;
+    const s = a * d - cc * b;
+    area2 += s;
+    Iyy += (a * a + a * cc + cc * cc) * s / 12;
+    Ixx += (b * b + b * d + d * d) * s / 12;
+    Ixy += (2 * a * b + a * d + cc * b + 2 * cc * d) * s / 24;
+  }
+  if (area2 < 0) { Ixx = -Ixx; Iyy = -Iyy; Ixy = -Ixy; }
+  if (Math.abs(area2) < 1e-9) return { majorAngleDeg: 0, minorAngleDeg: 90, anisotropy: 0, Ixx, Iyy, Ixy };
+  // Eigenvalues of [[Ixx, Ixy], [Ixy, Iyy]].
+  const trace = Ixx + Iyy;
+  const disc = Math.sqrt(Math.max(0, (Ixx - Iyy) * (Ixx - Iyy) / 4 + Ixy * Ixy));
+  const lam1 = trace / 2 + disc;
+  const lam2 = trace / 2 - disc;
+  // Eigenvector for λ1 (the MINOR axis).
+  let v1x: number, v1y: number;
+  if (Math.abs(Ixy) > 1e-9) {
+    v1x = lam1 - Iyy;
+    v1y = Ixy;
+  } else {
+    if (Ixx >= Iyy) { v1x = 0; v1y = 1; } else { v1x = 1; v1y = 0; }
+  }
+  const minorAngleRad = Math.atan2(v1y, v1x);
+  const majorAngleRad = minorAngleRad + Math.PI / 2;
+  const wrap180 = (deg: number) => ((deg % 180) + 180) % 180;
+  const minorAngleDeg = wrap180((minorAngleRad * 180) / Math.PI);
+  const majorAngleDeg = wrap180((majorAngleRad * 180) / Math.PI);
+  const anisotropy = lam1 > 1e-9 ? (lam1 - lam2) / lam1 : 0;
+  return { majorAngleDeg, minorAngleDeg, anisotropy, Ixx, Iyy, Ixy };
+};
+
 // ── Region-semantics helpers (module-level, pure) ───────────────────────────────
 /** Minimum distance from point p to segment a→b. */
 const pointToSegDistPx = (p: Point, a: Point, b: Point): number => {
@@ -398,11 +456,15 @@ interface RegionSemantics {
   areaM2: number;
   depthM: number;
   aspectRatio: number;
+  /** True iff the room's areaM2 lies in [minArea, maxArea]. `null` if either bound isn't set. */
+  isAreaWithinRange: boolean | null;
+  /** True iff the room's aspectRatio < maxRatio. `null` if maxRatio isn't set. */
+  isRatioOk: boolean | null;
 }
 
 /** Pure compute of the region-semantics table for one room. Thresholds are hardcoded. */
 const computeRegionSemantics = (
-  room: { points: Point[]; region?: string; label?: string },
+  room: { points: Point[]; region?: string; label?: string; minArea?: number; maxArea?: number; maxRatio?: number },
   walls: Wall[],
   rooms: Array<{ id: string; points: Point[]; region?: string; label?: string }>,
   pixelsPerMeter: number,
@@ -545,6 +607,14 @@ const computeRegionSemantics = (
     areaM2,
     depthM,
     aspectRatio,
+    isAreaWithinRange:
+      typeof room.minArea === "number" && typeof room.maxArea === "number"
+        ? areaM2 >= room.minArea && areaM2 <= room.maxArea
+        : null,
+    isRatioOk:
+      typeof room.maxRatio === "number" && isFinite(aspectRatio)
+        ? aspectRatio < room.maxRatio
+        : null,
   };
 };
 
@@ -1348,6 +1418,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Per-piece lengths in metres (used when splitMode === "length"). */
   const [splitLengths, setSplitLengths] = useState<number[]>([2]);
   const [splitLive, setSplitLive] = useState<boolean>(false);
+  /** When true, the split runner sets its stacking axis to the polygon's MAJOR principal axis,
+   *  so cut lines run along the MINOR principal axis. Result: long rooms become a row of normal-aspect
+   *  children (no long thin slices). Falls back to the manual splitAngle when the polygon is near-isotropic. */
+  const [splitAlongMinorPrincipalAxis, setSplitAlongMinorPrincipalAxis] = useState<boolean>(false);
   const selectedRoomIdRef = useRef<string | null>(null);
   const visibleRoomsRef = useRef<Room[]>([]);
 
@@ -1387,7 +1461,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [maxRectShape, setMaxRectShape] = useState<"rectangle" | "square" | "hexagon">("rectangle");
 
   /** Place Object Along Boundary — multi-object state, keyed per room. */
-  type PlacedObject = { id: string; length: number; breadth: number; position: number };
+  type PlacedObject = { id: string; length: number; breadth: number; position: number; setback?: number };
   const [placedObjectsByRoom, setPlacedObjectsByRoom] = useState<Record<string, PlacedObject[]>>({});
   const [placeLive, setPlaceLive] = useState<boolean>(false);
   const [placeExpanded, setPlaceExpanded] = useState<boolean>(false);
@@ -1970,6 +2044,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           if (Array.isArray(p.lengths)) setSplitLengths(p.lengths as number[]);
           if (typeof p.edge === "number" || p.edge === null) setSplitEdge(p.edge as number | null);
           if (typeof p.edgeFlip === "boolean") setSplitEdgeFlip(p.edgeFlip as boolean);
+          if (typeof p.splitAlongMinorPrincipalAxis === "boolean") {
+            setSplitAlongMinorPrincipalAxis(p.splitAlongMinorPrincipalAxis as boolean);
+          } else if (typeof p.splitAcrossLongerSide === "boolean") {
+            // Backward-compat: legacy param name from earlier prompt versions.
+            setSplitAlongMinorPrincipalAxis(p.splitAcrossLongerSide as boolean);
+          }
           await tick();
           runnersRef.current!.split(currentRoom, opSilent);
         } else if (tool === "optimise-rect") {
@@ -2008,8 +2088,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           await tick();
           runnersRef.current!.optimiseRect(currentRoom, opSilent);
         } else if (tool === "place-object") {
-          const objs = Array.isArray(p.objects) ? (p.objects as Array<{ length: number; breadth: number; position: number }>) : [];
-          const withIds = objs.map((o) => ({ id: createId(), length: o.length, breadth: o.breadth, position: o.position }));
+          const objs = Array.isArray(p.objects) ? (p.objects as Array<{ length: number; breadth: number; position: number; setback?: number }>) : [];
+          const withIds = objs.map((o) => ({
+            id: createId(),
+            length: o.length,
+            breadth: o.breadth,
+            position: o.position,
+            setback: typeof o.setback === "number" ? Math.max(0, o.setback) : 0,
+          }));
           setPlacedObjectsByRoom((prev) => ({ ...prev, [roomId]: withIds }));
           await tick();
           runnersRef.current!.placement(currentRoom, opSilent);
@@ -2301,9 +2387,20 @@ Available tools — every supported tool name and its full parameter schema. Any
       "target"?:  number,                       // mode="target"; target area per piece in m²
       "lengths"?: number[],                     // mode="length"; piece lengths in metres along chosen edge
       "edge"?:    number | null,                // index of polygon edge to split along (null = auto)
-      "edgeFlip"?: boolean                      // reverse split direction along edge
+      "edgeFlip"?: boolean,                     // reverse split direction along edge
+      "splitAlongMinorPrincipalAxis"?: boolean  // when true, override "angle" with the polygon's major
+                                                // principal-axis angle (area-weighted PCA, shared with the
+                                                // Principal Axes block). Cut lines then run along the MINOR
+                                                // principal axis; pieces stack along the major axis. A
+                                                // 10 m × 2 m room becomes a row of normal-aspect children,
+                                                // not long thin slices. Near-isotropic polygons fall back
+                                                // to the supplied "angle". Prefer this over a hand-picked
+                                                // "angle" when the user says "split along the minor axis",
+                                                // "split along the longer side", "stack rooms along the
+                                                // long dimension". The legacy alias "splitAcrossLongerSide"
+                                                // is still accepted for backward compatibility.
     }
-    Use when: "divide", "split", "halve", "cut into N", "60/40 split".
+    Use when: "divide", "split", "halve", "cut into N", "60/40 split", "split along the longer side".
 
 [3] "optimise-rect" — fit the largest inscribed rectangle(s) inside the room polygon.
     params: {
@@ -2326,9 +2423,15 @@ Available tools — every supported tool name and its full parameter schema. Any
     axis-aligned packing along a chosen room edge: { "reference": <edge-index>, "count": 4, "minArea": 2 }. To
     keep rectangles snapped to the building's main axis: { "reference": "custom", "axisAngle": 90 }.
 
-[4] "place-object" — drop sub-rectangles onto the polygon perimeter (e.g. service blocks, fixtures).
-    params: { "objects": [ { "length": number_m, "breadth": number_m, "position": 0-100 } ] }
-            position is a PERCENT of polygon perimeter (0 = first vertex, 100 = back to start).
+[4] "place-object" — drop sub-rectangles onto (or near) the polygon perimeter (e.g. service blocks, fixtures, columns).
+    params: { "objects": [ {
+        "length":   number_m,        // dimension parallel to the boundary edge
+        "breadth":  number_m,        // dimension perpendicular to the boundary (depth into the room)
+        "position": 0-100,           // PERCENT along polygon perimeter (0 = first vertex, 100 = back to start)
+        "setback"?: number_m         // optional inward offset from the boundary, in metres. 0 = flush against boundary
+                                     // (default). Positive = pushed inward into the room. Negative values are clamped to 0.
+    } ] }
+    Use when: "place columns along facade", "fixtures 0.3 m off the wall", "setback the chairs 0.5 m from boundary".
 
 [5] "voronoi" — Voronoi-cell partition, one cell per seed.
     params: { "metric": "euclidean" | "manhattan" | "chebyshev",
@@ -3738,7 +3841,20 @@ User request: ${aiPrompt.trim()}`;
 
     const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
     const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    const rad = (splitAngle * Math.PI) / 180;
+    // When splitAlongMinorPrincipalAxis is on, set the runner's stacking direction to the
+    // MAJOR principal axis (computed via area-weighted PCA, shared with the Principal Axes block).
+    // Cut lines then run along the MINOR principal axis — the long dimension gets sliced into
+    // normal-aspect children. Near-isotropic polygons (anisotropy < 0.05) fall back to manual.
+    let effectiveAngle = splitAngle;
+    if (splitAlongMinorPrincipalAxis) {
+      const { majorAngleDeg, anisotropy } = computePolygonPrincipalAxes(pts);
+      if (anisotropy >= 0.05) {
+        effectiveAngle = majorAngleDeg;
+      } else if (!silent) {
+        toast.message("Polygon is nearly isotropic — using manual angle");
+      }
+    }
+    const rad = (effectiveAngle * Math.PI) / 180;
     const cosA = Math.cos(rad), sinA = Math.sin(rad);
     const rotated = pts.map((p) => ({
       x: (p.x - cx) * cosA + (p.y - cy) * sinA,
@@ -3859,7 +3975,7 @@ User request: ${aiPrompt.trim()}`;
     else h.set(nextState);
     if (!silent) toast.success(`Split into ${splitCount} piece${splitCount > 1 ? "s" : ""} (${splitAngle}°, ${splitMode})`);
     return true;
-  }, [splitAngle, splitMode, splitCount, splitRatios, splitTarget, splitLengths, splitEdge, splitEdgeFlip, pixelsPerMeter, getCurrentWallStyle]);
+  }, [splitAngle, splitMode, splitCount, splitRatios, splitTarget, splitLengths, splitEdge, splitEdgeFlip, splitAlongMinorPrincipalAxis, pixelsPerMeter, getCurrentWallStyle]);
 
   /** Compute & apply inset polygon walls for a room. Each segment can have its own setback (in metres).
    *  Silent = preview (isInsetWall flag, excluded from room detection). Commit = real walls + delete original. */
@@ -4010,7 +4126,7 @@ User request: ${aiPrompt.trim()}`;
     if (!room) return;
     if ((room.roomType ?? "room") !== "room") return;
     runRoomSplit(room, true);
-  }, [splitLive, splitAngle, splitMode, splitCount, splitRatios, splitTarget, splitLengths, splitEdge, splitEdgeFlip, runRoomSplit]);
+  }, [splitLive, splitAngle, splitMode, splitCount, splitRatios, splitTarget, splitLengths, splitEdge, splitEdgeFlip, splitAlongMinorPrincipalAxis, runRoomSplit]);
 
   /** Live inset: re-run inset whenever any setback slider changes while Live is on. */
   useEffect(() => {
@@ -4740,45 +4856,173 @@ User request: ${aiPrompt.trim()}`;
     const palette = ["#0891b2", "#f59e0b", "#16a34a", "#dc2626", "#8b5cf6", "#db2777"];
     const paletteCommit = ["#0f172a", "#92400e", "#14532d", "#7f1d1d", "#4c1d95", "#831843"];
 
+    // Validation helpers ── ensure every object's footprint stays inside the polygon AND doesn't
+    // overlap any earlier-placed object's footprint. Slide along the same edge toward its midpoint
+    // when the requested position is invalid; drop with a toast if no valid spot is reachable.
+    const pointInPolygon = (p: Point, poly: Point[]): boolean => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i].x, yi = poly[i].y;
+        const xj = poly[j].x, yj = poly[j].y;
+        const intersect = ((yi > p.y) !== (yj > p.y)) &&
+          (p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    };
+    // SAT for two convex quads: rectangles overlap iff projections overlap on every edge normal.
+    const rectsOverlap = (rA: Point[], rB: Point[]): boolean => {
+      for (const poly of [rA, rB]) {
+        for (let i = 0; i < poly.length; i++) {
+          const p1 = poly[i], p2 = poly[(i + 1) % poly.length];
+          const nx = -(p2.y - p1.y), ny = p2.x - p1.x;
+          let aMin = Infinity, aMax = -Infinity, bMin = Infinity, bMax = -Infinity;
+          for (const p of rA) { const d = p.x * nx + p.y * ny; if (d < aMin) aMin = d; if (d > aMax) aMax = d; }
+          for (const p of rB) { const d = p.x * nx + p.y * ny; if (d < bMin) bMin = d; if (d > bMax) bMax = d; }
+          if (aMax < bMin || bMax < aMin) return false;
+        }
+      }
+      return true;
+    };
+    const placedFootprints: Point[][] = [];
+    const skippedObjectIndices: number[] = [];
+
+    // ── L1 valid-placement domain ─────────────────────────────────────────────
+    // Per-vertex interior angle, used to compute corner-aware end-strips. For each polygon edge,
+    // a valid centre on that edge (at offset breadth/2 + setback inward) requires the nearest
+    // rectangle corner to clear the adjacent polygon edge as well as not overshooting the current
+    // edge's endpoints. End-strip width per endpoint:
+    //   strip = max(L/2, L/2 + d / tan(θ))   — with d = breadth + setback (inward-far depth)
+    // For θ ≥ 90° the second term ≤ 0, so the base L/2 dominates.
+    // For θ < 90° (acute internal corner) the strip grows so the rectangle's far back corner
+    // doesn't cross the adjacent edge. Reflex (θ > 180°) is handled conservatively: base L/2.
+    const interiorAngles: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const pPrev = pts[(i - 1 + N) % N];
+      const pCurr = pts[i];
+      const pNext = pts[(i + 1) % N];
+      const v1x = pPrev.x - pCurr.x, v1y = pPrev.y - pCurr.y;
+      const v2x = pNext.x - pCurr.x, v2y = pNext.y - pCurr.y;
+      const dotV = v1x * v2x + v1y * v2y;
+      const crossV = v1x * v2y - v1y * v2x;
+      let ang = Math.atan2(Math.abs(crossV), dotV); // in [0, π]
+      // Convex corner: cross sign matches the polygon's winding (insideSign).
+      const convex = insideSign === 1 ? crossV >= 0 : crossV <= 0;
+      if (!convex) ang = 2 * Math.PI - ang;
+      interiorAngles[i] = ang;
+    }
+    const cornerStrip = (L: number, d: number, theta: number): number => {
+      if (theta < Math.PI / 2 - 1e-6) {
+        // Far back corner of rect must clear adjacent edge: d / tan(θ) extra setback in.
+        return L / 2 + d / Math.tan(theta);
+      }
+      return L / 2;
+    };
+
     for (let oi = 0; oi < objects.length; oi++) {
       const obj = objects[oi];
-      // Walk edges to the target position.
-      const target = (obj.position / 100) * perim;
-      let acc = 0;
-      let edgeIdx = 0;
-      let tLocal = 0;
-      for (let i = 0; i < N; i++) {
-        if (acc + edgeLens[i] >= target || i === N - 1) {
-          edgeIdx = i;
-          tLocal = edgeLens[i] > 0 ? (target - acc) / edgeLens[i] : 0;
-          break;
-        }
-        acc += edgeLens[i];
-      }
-
-      const a = pts[edgeIdx], b = pts[(edgeIdx + 1) % N];
-      const ex = b.x - a.x, ey = b.y - a.y;
-      const eLen = Math.hypot(ex, ey) || 1;
-      const ux = ex / eLen, uy = ey / eLen;
-      const nx = -uy * insideSign, ny = ux * insideSign;
-
       const lengthPx = obj.length * pixelsPerMeter;
       const breadthPx = obj.breadth * pixelsPerMeter;
-      const minT = Math.min(0.5, (lengthPx / 2) / eLen);
-      const maxT = 1 - minT;
-      const tClamped = Math.min(maxT, Math.max(minT, tLocal));
-      const ax = a.x + tClamped * ex;
-      const ay = a.y + tClamped * ey;
-      const cx = ax + nx * (breadthPx / 2);
-      const cy = ay + ny * (breadthPx / 2);
-      const hx = (lengthPx / 2) * ux, hy = (lengthPx / 2) * uy;
-      const kx = (breadthPx / 2) * nx, ky = (breadthPx / 2) * ny;
-      const corners = [
-        { x: cx - hx - kx, y: cy - hy - ky },
-        { x: cx + hx - kx, y: cy + hy - ky },
-        { x: cx + hx + kx, y: cy + hy + ky },
-        { x: cx - hx + kx, y: cy - hy + ky },
-      ];
+      const setbackPx = Math.max(0, (obj.setback ?? 0)) * pixelsPerMeter;
+      const dInwardPx = breadthPx + setbackPx;
+
+      // Build the union of valid sub-arcs for THIS object across all polygon edges.
+      // Each interval is (edgeIdx, arcStart, arcEnd) in arc-length along the original perimeter.
+      const valid: Array<{ edgeIdx: number; arcStart: number; arcEnd: number }> = [];
+      const edgeArcStart: number[] = [];
+      let arcAcc = 0;
+      for (let i = 0; i < N; i++) {
+        edgeArcStart[i] = arcAcc;
+        const eLen = edgeLens[i];
+        const sStart = cornerStrip(lengthPx, dInwardPx, interiorAngles[i]);
+        const sEnd = cornerStrip(lengthPx, dInwardPx, interiorAngles[(i + 1) % N]);
+        const lo = sStart;
+        const hi = eLen - sEnd;
+        if (hi > lo + 1e-3) {
+          valid.push({ edgeIdx: i, arcStart: arcAcc + lo, arcEnd: arcAcc + hi });
+        }
+        arcAcc += eLen;
+      }
+
+      if (valid.length === 0) {
+        skippedObjectIndices.push(oi + 1);
+        continue;
+      }
+
+      // Build rectangle corners at (edgeIdx, t).
+      const buildCornersAtEdge = (edgeIdx: number, t: number): Point[] => {
+        const a = pts[edgeIdx], b = pts[(edgeIdx + 1) % N];
+        const ex = b.x - a.x, ey = b.y - a.y;
+        const eLenLocal = Math.hypot(ex, ey) || 1;
+        const ux = ex / eLenLocal, uy = ey / eLenLocal;
+        const nx = -uy * insideSign, ny = ux * insideSign;
+        const ax = a.x + t * ex;
+        const ay = a.y + t * ey;
+        const cx = ax + nx * (breadthPx / 2 + setbackPx);
+        const cy = ay + ny * (breadthPx / 2 + setbackPx);
+        const hx = (lengthPx / 2) * ux, hy = (lengthPx / 2) * uy;
+        const kx = (breadthPx / 2) * nx, ky = (breadthPx / 2) * ny;
+        return [
+          { x: cx - hx - kx, y: cy - hy - ky },
+          { x: cx + hx - kx, y: cy + hy - ky },
+          { x: cx + hx + kx, y: cy + hy + ky },
+          { x: cx - hx + kx, y: cy - hy + ky },
+        ];
+      };
+
+      // Map slider position% to a target arc-length on the original perimeter, then find the
+      // nearest valid arc point (modular distance). User intent → snapped placement.
+      const targetArc = (obj.position / 100) * perim;
+      const arcMod = (a: number) => ((a % perim) + perim) % perim;
+      const arcDist = (a: number, b: number): number => {
+        let d = Math.abs(arcMod(a) - arcMod(b));
+        if (d > perim / 2) d = perim - d;
+        return d;
+      };
+      type Candidate = { arcAt: number; iv: { edgeIdx: number; arcStart: number; arcEnd: number }; dist: number };
+      const candidates: Candidate[] = valid.map((iv) => {
+        const clamped = Math.max(iv.arcStart, Math.min(iv.arcEnd, targetArc));
+        return { arcAt: clamped, iv, dist: arcDist(targetArc, clamped) };
+      }).sort((a, b) => a.dist - b.dist);
+
+      // For each candidate (in nearest-first order): place; if it overlaps a prior footprint,
+      // search inside this same valid sub-arc for the closest non-overlapping position before
+      // moving on to the next valid sub-arc.
+      let chosen: Point[] | null = null;
+      for (const cand of candidates) {
+        const eLen = edgeLens[cand.iv.edgeIdx];
+        const localArc = cand.arcAt - edgeArcStart[cand.iv.edgeIdx];
+        const tCand = localArc / eLen;
+        const corners = buildCornersAtEdge(cand.iv.edgeIdx, tCand);
+        let overlaps = false;
+        for (const placed of placedFootprints) if (rectsOverlap(corners, placed)) { overlaps = true; break; }
+        if (!overlaps) { chosen = corners; break; }
+
+        // Slide within this valid sub-arc, alternating ± from the snapped point.
+        const span = cand.iv.arcEnd - cand.iv.arcStart;
+        const STEPS = 16;
+        for (let k = 1; k <= STEPS; k++) {
+          for (const sign of [1, -1]) {
+            const altArc = cand.arcAt + sign * (k / STEPS) * (span / 2);
+            if (altArc < cand.iv.arcStart || altArc > cand.iv.arcEnd) continue;
+            const altT = (altArc - edgeArcStart[cand.iv.edgeIdx]) / eLen;
+            const altCorners = buildCornersAtEdge(cand.iv.edgeIdx, altT);
+            let ovl = false;
+            for (const placed of placedFootprints) if (rectsOverlap(altCorners, placed)) { ovl = true; break; }
+            if (!ovl) { chosen = altCorners; break; }
+          }
+          if (chosen) break;
+        }
+        if (chosen) break;
+      }
+
+      if (!chosen) {
+        skippedObjectIndices.push(oi + 1);
+        continue;
+      }
+
+      placedFootprints.push(chosen);
+      const corners = chosen;
       const color = silent ? palette[oi % palette.length] : paletteCommit[oi % paletteCommit.length];
       for (let i = 0; i < 4; i++) {
         allWalls.push({
@@ -4795,6 +5039,10 @@ User request: ${aiPrompt.trim()}`;
           placementSourceRoomId: room.id,
         });
       }
+    }
+
+    if (skippedObjectIndices.length > 0 && !silent) {
+      toast.error(`Couldn't place object${skippedObjectIndices.length > 1 ? "s" : ""} ${skippedObjectIndices.join(", ")} — no valid spot on the chosen edge`);
     }
 
     const h = historyRef.current;
@@ -6083,50 +6331,16 @@ User request: ${aiPrompt.trim()}`;
     const N = pts.length;
     if (N < 3) { if (!silent) toast.error("Need at least 3 vertices"); return false; }
 
-    // Centroid (area-weighted).
     const c = polygonCentroid(pts);
-    // Shift polygon so centroid is at origin — this is required for the moments about the centroid.
     const q: Point[] = pts.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
+    const { minorAngleDeg, majorAngleDeg } = computePolygonPrincipalAxes(pts);
+    if (polygonArea(pts) < 0.5) { if (!silent) toast.error("Polygon has zero area"); return false; }
 
-    // Second moments of area computed by triangle fan from origin (each triangle is (0, q[i], q[i+1])).
-    // For a triangle (0, (a,b), (cc,d)):
-    //   signed_area_2  = a*d - cc*b
-    //   ∫∫ x² dA       = (a² + a*cc + cc²) * signed_area_2 / 12
-    //   ∫∫ y² dA       = (b² + b*d  + d²)  * signed_area_2 / 12
-    //   ∫∫ x*y dA      = (2*a*b + a*d + cc*b + 2*cc*d) * signed_area_2 / 24
-    let Ixx = 0, Iyy = 0, Ixy = 0, area2 = 0;
-    for (let i = 0; i < N; i++) {
-      const a = q[i].x, b = q[i].y;
-      const cc = q[(i + 1) % N].x, d = q[(i + 1) % N].y;
-      const s = a * d - cc * b;
-      area2 += s;
-      Iyy += (a * a + a * cc + cc * cc) * s / 12;     // ∫∫ x² dA  → contributes to I_yy (moment about y-axis)
-      Ixx += (b * b + b * d + d * d)     * s / 12;     // ∫∫ y² dA  → contributes to I_xx
-      Ixy += (2 * a * b + a * d + cc * b + 2 * cc * d) * s / 24;
-    }
-    // Sign-correct: if polygon is CW in math terms, area2 < 0 and all integrals are signed inversely.
-    if (area2 < 0) { Ixx = -Ixx; Iyy = -Iyy; Ixy = -Ixy; }
-
-    if (Math.abs(area2) < 1e-3) { if (!silent) toast.error("Polygon has zero area"); return false; }
-
-    // Eigendecompose the 2×2 symmetric matrix [[Ixx, Ixy], [Ixy, Iyy]].
-    const trace = Ixx + Iyy;
-    const disc = Math.sqrt(Math.max(0, (Ixx - Iyy) * (Ixx - Iyy) / 4 + Ixy * Ixy));
-    const lam1 = trace / 2 + disc;  // larger — axis perpendicular to the shape's elongation
-    const lam2 = trace / 2 - disc;  // smaller — axis along the shape's elongation (major axis visually)
-    // Eigenvector for lam1.
-    let v1x: number, v1y: number;
-    if (Math.abs(Ixy) > 1e-9) {
-      v1x = lam1 - Iyy;
-      v1y = Ixy;
-    } else {
-      // Diagonal matrix — axes are horizontal and vertical.
-      if (Ixx >= Iyy) { v1x = 0; v1y = 1; } else { v1x = 1; v1y = 0; }
-    }
-    const v1Len = Math.hypot(v1x, v1y) || 1;
-    v1x /= v1Len; v1y /= v1Len;
-    // v2 perpendicular to v1.
-    const v2x = -v1y, v2y = v1x;
+    // Eigenvector directions from the shared helper's angle output.
+    const v1x = Math.cos((minorAngleDeg * Math.PI) / 180);
+    const v1y = Math.sin((minorAngleDeg * Math.PI) / 180);
+    const v2x = Math.cos((majorAngleDeg * Math.PI) / 180);
+    const v2y = Math.sin((majorAngleDeg * Math.PI) / 180);
 
     // Project all vertices onto each axis (centroid-relative) to find the polygon's extent along the axis.
     const extent = (vx: number, vy: number) => {
@@ -6138,7 +6352,7 @@ User request: ${aiPrompt.trim()}`;
       }
       return { tMin, tMax };
     };
-    const ex1 = extent(v1x, v1y);   // minor axis (perpendicular to elongation) — note naming: "v1" is the eigenvector for lam1 (the larger eigenvalue)
+    const ex1 = extent(v1x, v1y);   // minor axis (perpendicular to elongation)
     const ex2 = extent(v2x, v2y);   // major axis
 
     // Axis endpoints in world coords.
@@ -16177,6 +16391,66 @@ User request: ${aiPrompt.trim()}`;
                           </select>
                         </div>
                       )}
+                      {(selectedRoom.roomType ?? "room") === "room" && (() => {
+                        const updateRoomNumber = (key: "minArea" | "maxArea" | "maxRatio", raw: string) => {
+                          const v = raw === "" ? undefined : parseFloat(raw);
+                          if (raw !== "" && (!isFinite(v as number) || (v as number) < 0)) return;
+                          const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                          if (isAuto) {
+                            const newId = createId();
+                            history.set({
+                              ...history.state,
+                              rooms: [...history.state.rooms, { ...selectedRoom, id: newId, [key]: v }],
+                            });
+                            selection.selectOne(newId);
+                          } else {
+                            history.set({
+                              ...history.state,
+                              rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, [key]: v } : r),
+                            });
+                          }
+                        };
+                        return (
+                          <div className="mt-2 grid grid-cols-3 gap-1.5">
+                            <div>
+                              <span className="text-[10px] text-slate-400">Min area (m²)</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                                value={selectedRoom.minArea ?? ""}
+                                placeholder="—"
+                                onChange={(e) => updateRoomNumber("minArea", e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400">Max area (m²)</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                                value={selectedRoom.maxArea ?? ""}
+                                placeholder="—"
+                                onChange={(e) => updateRoomNumber("maxArea", e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400">Max ratio</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                                value={selectedRoom.maxRatio ?? ""}
+                                placeholder="—"
+                                onChange={(e) => updateRoomNumber("maxRatio", e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })()}
                       </div>)}
                     </div>
 
@@ -16218,31 +16492,6 @@ User request: ${aiPrompt.trim()}`;
                           connectedIds.push(`Room${String(i + 1).padStart(3, "0")}`);
                         }
                       }
-                      // Edge-sharing classification: facadeCount = edges not shared with any other room.
-                      // Detection: an edge is "shared" if its midpoint coincides (within tolerance) with
-                      // the midpoint of another room's edge.
-                      const MID_TOL = 3;
-                      let facadeCount = 0;
-                      for (let ei = 0; ei < selectedRoom.points.length; ei++) {
-                        const a = selectedRoom.points[ei];
-                        const b = selectedRoom.points[(ei + 1) % selectedRoom.points.length];
-                        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-                        let isShared = false;
-                        for (let ri = 0; ri < visibleRooms.length && !isShared; ri++) {
-                          const other = visibleRooms[ri];
-                          if (other.id === selectedRoom.id) continue;
-                          for (let oj = 0; oj < other.points.length; oj++) {
-                            const oa = other.points[oj];
-                            const ob = other.points[(oj + 1) % other.points.length];
-                            const omx = (oa.x + ob.x) / 2, omy = (oa.y + ob.y) / 2;
-                            if (Math.hypot(omx - mx, omy - my) < MID_TOL) { isShared = true; break; }
-                          }
-                        }
-                        if (!isShared) facadeCount += 1;
-                      }
-                      const isPerimeter = facadeCount >= 1;
-                      const isInterior = facadeCount === 0;
-                      const isCorner = facadeCount >= 2;
                       // Axis-aligned bounding box → dimensions in selected unit + aspect ratio.
                       const xs = selectedRoom.points.map((p) => p.x);
                       const ys = selectedRoom.points.map((p) => p.y);
@@ -16303,25 +16552,6 @@ User request: ${aiPrompt.trim()}`;
                                   ))}
                                 </div>
                               )}
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">Facade edges</span>
-                              <p className="font-mono text-slate-700">{facadeCount}</p>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">Location</span>
-                              <p className="font-mono text-slate-700">{isInterior ? "Interior" : isCorner ? "Corner (perimeter)" : "Perimeter"}</p>
-                            </div>
-                            <div className="col-span-2 flex gap-1 flex-wrap">
-                              <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${isPerimeter ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-400"}`}>
-                                isPerimeter: {isPerimeter ? "true" : "false"}
-                              </span>
-                              <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${isInterior ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-400"}`}>
-                                isInterior: {isInterior ? "true" : "false"}
-                              </span>
-                              <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${isCorner ? "bg-pink-100 text-pink-700" : "bg-slate-100 text-slate-400"}`}>
-                                isCorner: {isCorner ? "true" : "false"}
-                              </span>
                             </div>
                             <div className="col-span-2" title={aspectWarning ? "Aspect ratio > 4 — too narrow for multi-zone split (VAL-01)" : undefined}>
                               <span className="text-[9px] text-slate-400">Aspect</span>
@@ -16385,6 +16615,37 @@ User request: ${aiPrompt.trim()}`;
                                       <span className="text-[9px] text-slate-400">aspectRatio</span>
                                       <p className="font-mono text-slate-700">{isFinite(sem.aspectRatio) ? sem.aspectRatio.toFixed(2) : "∞"}</p>
                                     </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1 pt-1">
+                                    {(() => {
+                                      const flag = (k: string, v: boolean | null, okClass: string) => {
+                                        if (v === null) {
+                                          return (
+                                            <span
+                                              key={k}
+                                              className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-400"
+                                              title={k === "isAreaWithinRange"
+                                                ? "Set min area + max area in INPUTS to enable this check."
+                                                : "Set max ratio in INPUTS to enable this check."}
+                                            >
+                                              {k}: —
+                                            </span>
+                                          );
+                                        }
+                                        return (
+                                          <span
+                                            key={k}
+                                            className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${v ? okClass : "bg-red-100 text-red-700"}`}
+                                          >
+                                            {k}: {v ? "true" : "false"}
+                                          </span>
+                                        );
+                                      };
+                                      return [
+                                        flag("isAreaWithinRange", sem.isAreaWithinRange, "bg-emerald-100 text-emerald-700"),
+                                        flag("isRatioOk", sem.isRatioOk, "bg-emerald-100 text-emerald-700"),
+                                      ];
+                                    })()}
                                   </div>
                                 </div>
                               );
@@ -16966,10 +17227,33 @@ User request: ${aiPrompt.trim()}`;
                           )}
                         </div>
 
+                        <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={splitAlongMinorPrincipalAxis}
+                            onChange={(e) => setSplitAlongMinorPrincipalAxis(e.target.checked)}
+                          />
+                          Split along minor principal axis
+                          <span
+                            className="text-[9px] text-slate-400"
+                            title="Cut lines run along the minor principal axis (the polygon's short direction). Pieces stack along the major axis — the long dimension is sliced into normal-aspect children. Falls back to the manual angle for near-isotropic polygons."
+                          >
+                            (auto angle)
+                          </span>
+                        </label>
+
                         <div>
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] text-slate-500">Splitting angle</span>
-                            <span className="font-mono text-[10px] text-slate-700">{splitAngle}°{splitEdge !== null ? " (derived)" : ""}</span>
+                            <span className="font-mono text-[10px] text-slate-700">
+                              {splitAlongMinorPrincipalAxis
+                                ? (() => {
+                                    const { majorAngleDeg, anisotropy } = computePolygonPrincipalAxes(selectedRoom.points);
+                                    if (anisotropy < 0.05) return `${splitAngle}° (isotropic — manual)`;
+                                    return `${majorAngleDeg.toFixed(1)}° (major principal)`;
+                                  })()
+                                : `${splitAngle}°${splitEdge !== null ? " (derived)" : ""}`}
+                            </span>
                           </div>
                           <input
                             type="range"
@@ -16978,6 +17262,7 @@ User request: ${aiPrompt.trim()}`;
                             max={179}
                             step={1}
                             value={splitAngle}
+                            disabled={splitAlongMinorPrincipalAxis}
                             onChange={(e) => { setSplitEdge(null); setSplitAngle(+e.target.value); }}
                           />
                         </div>
@@ -17255,7 +17540,7 @@ User request: ${aiPrompt.trim()}`;
                                   // Default position: next free slot after the last object.
                                   const last = objs[objs.length - 1];
                                   const nextPos = last ? Math.min(95, last.position + 5) : 10;
-                                  const newObj: PlacedObject = { id: createId(), length: 1, breadth: 0.6, position: nextPos };
+                                  const newObj: PlacedObject = { id: createId(), length: 1, breadth: 0.6, position: nextPos, setback: 0 };
                                   setPlacedObjectsByRoom((prev) => ({ ...prev, [rid]: [...(prev[rid] ?? []), newObj] }));
                                 }}
                               >
@@ -17324,6 +17609,15 @@ User request: ${aiPrompt.trim()}`;
                                     <input type="range" className="w-full" min={0} max={100} step={0.5}
                                       value={o.position}
                                       onChange={(e) => updatePos(i, +e.target.value)} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] text-slate-500">Setback</span>
+                                      <span className="font-mono text-[10px] text-slate-700">{(o.setback ?? 0).toFixed(2)} m</span>
+                                    </div>
+                                    <input type="range" className="w-full" min={0} max={5} step={0.05}
+                                      value={o.setback ?? 0}
+                                      onChange={(e) => updateObj(i, { setback: +e.target.value })} />
                                   </div>
                                 </div>
                               ))}

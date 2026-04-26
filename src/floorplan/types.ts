@@ -267,6 +267,10 @@ export interface Room {
   roomType?: RoomType;
   /** Region classification for rooms (only meaningful when roomType === "room"). */
   region?: "Core" | "Staircase" | "AHU" | "Electrical Room" | "Service" | "Lift" | "Toilet" | "Corridor";
+  /** Zone-type sizing constraints used by the ZR pipeline. All optional, in metres² / dimensionless. */
+  minArea?: number;
+  maxArea?: number;
+  maxRatio?: number;
   /** When true, render a clockwise/anticlockwise direction icon at the room's centroid. */
   showDirection?: boolean;
   // ── Site plan properties (plot-boundary rooms only) ──
