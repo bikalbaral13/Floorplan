@@ -52,7 +52,8 @@
       "Bash(python \"D:/MAIN/monica_recent/check_template.py\")",
       "Bash(git commit -m ' *)",
       "Bash(grep -nE \"Region$|Region:|selectedRoom\\\\.region|regionInputs\" \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")",
-      "Bash(grep -n \"  aspectRatio$\\\\|aspectRatio,\\\\|return {\" \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")"
+      "Bash(grep -n \"  aspectRatio$\\\\|aspectRatio,\\\\|return {\" \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")",
+      "Bash(git fetch *)"
     ]
   }
 }

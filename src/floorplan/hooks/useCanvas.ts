@@ -35,7 +35,7 @@ export const useCanvas = () => {
 
   const zoomAtCenter = (delta: number) => {
     setScale((prev) => {
-      const next = Math.min(4, Math.max(0.25, prev + delta));
+      const next = Math.min(16, Math.max(0.05, prev + delta));
       return Number(next.toFixed(2));
     });
   };

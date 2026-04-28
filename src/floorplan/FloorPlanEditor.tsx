@@ -45,6 +45,7 @@ import {
   LandPlot,
   LayoutGrid,
   Layers,
+  Maximize,
   MousePointer2,
   Pencil,
   Play,
@@ -134,6 +135,266 @@ const GRID_SIZE = 24;
 const MOVE_SNAP_SIZE = 2;
 
 const createId = () => Math.random().toString(36).slice(2, 10);
+
+/**
+ * Project a world-space point to the closest point on a polygon's perimeter.
+ * Returns the perimeter parameter as a percent (0..100). Used when the user drags a
+ * boundary-placed object — the rectangle's centre is projected back onto the perimeter
+ * to derive the new position% slider value.
+ */
+function projectPointToPolygonPerimeter(point: { x: number; y: number }, polygon: Array<{ x: number; y: number }>): number {
+  const N = polygon.length;
+  if (N < 2) return 0;
+  let perim = 0;
+  for (let i = 0; i < N; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % N];
+    perim += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  if (perim < 1e-6) return 0;
+  let bestDist2 = Infinity;
+  let bestArc = 0;
+  let arcAcc = 0;
+  for (let i = 0; i < N; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % N];
+    const ex = b.x - a.x, ey = b.y - a.y;
+    const elen2 = ex * ex + ey * ey;
+    if (elen2 < 1e-12) continue;
+    const elen = Math.sqrt(elen2);
+    let t = ((point.x - a.x) * ex + (point.y - a.y) * ey) / elen2;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    const cx = a.x + t * ex, cy = a.y + t * ey;
+    const dx = point.x - cx, dy = point.y - cy;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestDist2) {
+      bestDist2 = d2;
+      bestArc = arcAcc + t * elen;
+    }
+    arcAcc += elen;
+  }
+  return (bestArc / perim) * 100;
+}
+
+/**
+ * Monte Carlo light tracing from a point source inside a polygon.
+ * Each ray starts with energy=1 and reflects specularly off polygon walls; on every bounce
+ * the energy is multiplied by the reflectivity coefficient. Returns the list of straight
+ * segments traversed by every ray, tagged with the ray's energy when it travelled that
+ * segment so the renderer can fade alpha as light decays.
+ *
+ * Use stratified random direction sampling (one ray per uniform angular bin + jitter) so
+ * the rendered fan looks even at low ray counts.
+ */
+function monteCarloLightSegments(
+  source: { x: number; y: number },
+  polygon: Array<{ x: number; y: number }>,
+  options: { rayCount: number; maxBounces: number; reflectivity: number },
+): Array<{ x1: number; y1: number; x2: number; y2: number; energy: number }> {
+  const N = polygon.length;
+  if (N < 3) return [];
+  const segs: Array<{ x1: number; y1: number; x2: number; y2: number; energy: number }> = [];
+  const { rayCount, maxBounces, reflectivity } = options;
+  const ENERGY_MIN = 0.01;
+  for (let r = 0; r < rayCount; r++) {
+    const angle = ((r + Math.random()) / rayCount) * 2 * Math.PI;
+    let pos = { x: source.x, y: source.y };
+    let dir = { x: Math.cos(angle), y: Math.sin(angle) };
+    let energy = 1;
+    for (let b = 0; b <= maxBounces; b++) {
+      let bestT = Infinity;
+      let bestEdge = -1;
+      for (let i = 0; i < N; i++) {
+        const a = polygon[i], q = polygon[(i + 1) % N];
+        const sdx = q.x - a.x, sdy = q.y - a.y;
+        const denom = dir.x * sdy - dir.y * sdx;
+        if (Math.abs(denom) < 1e-12) continue;
+        const t = ((a.x - pos.x) * sdy - (a.y - pos.y) * sdx) / denom;
+        const u = ((a.x - pos.x) * dir.y - (a.y - pos.y) * dir.x) / denom;
+        if (t > 1e-6 && u >= -1e-9 && u <= 1 + 1e-9 && t < bestT) {
+          bestT = t; bestEdge = i;
+        }
+      }
+      if (bestEdge < 0 || !Number.isFinite(bestT)) break;
+      const hit = { x: pos.x + dir.x * bestT, y: pos.y + dir.y * bestT };
+      segs.push({ x1: pos.x, y1: pos.y, x2: hit.x, y2: hit.y, energy });
+      if (b >= maxBounces) break;
+      // Reflect direction across wall normal.
+      const a = polygon[bestEdge], q = polygon[(bestEdge + 1) % N];
+      const ex = q.x - a.x, ey = q.y - a.y;
+      const elen = Math.hypot(ex, ey);
+      if (elen < 1e-9) break;
+      const nx = -ey / elen, ny = ex / elen;
+      const dot = dir.x * nx + dir.y * ny;
+      dir = { x: dir.x - 2 * dot * nx, y: dir.y - 2 * dot * ny };
+      // Nudge off the wall to avoid self-hit.
+      pos = { x: hit.x + dir.x * 1e-3, y: hit.y + dir.y * 1e-3 };
+      energy *= reflectivity;
+      if (energy < ENERGY_MIN) break;
+    }
+  }
+  return segs;
+}
+
+/**
+ * Sample N points slightly inside the polygon along a given edge, suitable as visibility-source
+ * points for a "segment source" (e.g. a window or an open wall span). Each sample is nudged
+ * inward by a tiny fraction of the polygon's bbox so rays don't immediately hit the edge they
+ * came from.
+ */
+function sampleSegmentInside(polygon: Array<{ x: number; y: number }>, edgeIdx: number, count: number): Array<{ x: number; y: number }> {
+  const N = polygon.length;
+  if (N < 3 || edgeIdx < 0 || edgeIdx >= N || count < 1) return [];
+  const a = polygon[edgeIdx];
+  const b = polygon[(edgeIdx + 1) % N];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  let len = Math.hypot(dx, dy);
+  if (len < 1e-6) return [];
+  // Inward normal direction. Decide sign by checking which side the polygon centroid lies on.
+  let nx = -dy / len, ny = dx / len;
+  let cx = 0, cy = 0;
+  for (const p of polygon) { cx += p.x; cy += p.y; }
+  cx /= N; cy /= N;
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  if ((cx - mx) * nx + (cy - my) * ny < 0) { nx = -nx; ny = -ny; }
+  // Compute polygon bbox to scale the inward nudge to something tiny but positive.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of polygon) {
+    if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
+  }
+  const eps = Math.max(0.5, Math.min(maxX - minX, maxY - minY) * 0.005);
+  const out: Array<{ x: number; y: number }> = [];
+  // Skip the very ends to avoid sample points landing exactly on adjacent polygon vertices.
+  for (let i = 0; i < count; i++) {
+    const t = (i + 0.5) / count;
+    out.push({ x: a.x + dx * t + nx * eps, y: a.y + dy * t + ny * eps });
+  }
+  return out;
+}
+
+/**
+ * Visibility polygon from a viewer point inside a simple polygon.
+ * For each polygon vertex we cast three rays (angle ± ε and exact), find the nearest edge
+ * intersection, then sort by angle. Naive O(n²) — fine for room polygons under ~100 vertices.
+ *
+ *   Returns the closed visibility region, oriented so it can be drawn directly.
+ */
+function computeVisibilityPolygon(viewer: { x: number; y: number }, polygon: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  const N = polygon.length;
+  if (N < 3) return [];
+  type Seg = { a: { x: number; y: number }; b: { x: number; y: number } };
+  const segments: Seg[] = [];
+  for (let i = 0; i < N; i++) segments.push({ a: polygon[i], b: polygon[(i + 1) % N] });
+
+  const EPS = 1e-5;
+  const angles: number[] = [];
+  for (const v of polygon) {
+    const a = Math.atan2(v.y - viewer.y, v.x - viewer.x);
+    angles.push(a - EPS, a, a + EPS);
+  }
+
+  const raySeg = (rdx: number, rdy: number, sa: { x: number; y: number }, sb: { x: number; y: number }): number | null => {
+    const sdx = sb.x - sa.x, sdy = sb.y - sa.y;
+    const denom = rdx * sdy - rdy * sdx;
+    if (Math.abs(denom) < 1e-12) return null;
+    const t = ((sa.x - viewer.x) * sdy - (sa.y - viewer.y) * sdx) / denom;
+    const u = ((sa.x - viewer.x) * rdy - (sa.y - viewer.y) * rdx) / denom;
+    if (t > 1e-9 && u >= -1e-9 && u <= 1 + 1e-9) return t;
+    return null;
+  };
+
+  type Hit = { angle: number; x: number; y: number };
+  const hits: Hit[] = [];
+  for (const angle of angles) {
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    let bestT = Infinity;
+    for (const s of segments) {
+      const t = raySeg(dx, dy, s.a, s.b);
+      if (t !== null && t < bestT) bestT = t;
+    }
+    if (Number.isFinite(bestT)) hits.push({ angle, x: viewer.x + dx * bestT, y: viewer.y + dy * bestT });
+  }
+  hits.sort((a, b) => a.angle - b.angle);
+  return hits.map((h) => ({ x: h.x, y: h.y }));
+}
+
+/**
+ * Corner-aware valid placement arcs along a polygon perimeter, expressed in percent of perimeter.
+ * Returns the intervals where the centre of a length×breadth rectangle (with given setback) can sit
+ * without any of the four rectangle corners crossing the polygon at acute interior angles.
+ *
+ *   strip = max(L/2, L/2 + d / tan(θ))   where d = breadth + setback (the far-back inward depth)
+ *
+ * Applied to both endpoints of every edge. Returns intervals in cumulative arc-length percent [0, 100].
+ */
+function validPlacementArcsPct(
+  points: Point[],
+  obj: { length: number; breadth: number; setback?: number },
+  pixelsPerMeter: number,
+): Array<{ start: number; end: number }> {
+  const N = points.length;
+  if (N < 3) return [];
+  const lengthPx = obj.length * pixelsPerMeter;
+  const breadthPx = obj.breadth * pixelsPerMeter;
+  const setbackPx = Math.max(0, obj.setback ?? 0) * pixelsPerMeter;
+  const dInwardPx = breadthPx + setbackPx;
+  const halfL = lengthPx / 2;
+
+  // Edge lengths + cumulative perimeter.
+  const edgeLens: number[] = new Array(N);
+  let perim = 0;
+  for (let i = 0; i < N; i++) {
+    const a = points[i], b = points[(i + 1) % N];
+    edgeLens[i] = Math.hypot(b.x - a.x, b.y - a.y);
+    perim += edgeLens[i];
+  }
+  if (perim < 1) return [];
+
+  // Polygon winding sign (used to detect convex vs reflex corners).
+  let signedArea = 0;
+  for (let i = 0; i < N; i++) {
+    const a = points[i], b = points[(i + 1) % N];
+    signedArea += a.x * b.y - b.x * a.y;
+  }
+  const insideSign = signedArea > 0 ? 1 : -1;
+
+  // Interior angle at each vertex (in [0, 2π)).
+  const interiorAngles: number[] = new Array(N);
+  for (let i = 0; i < N; i++) {
+    const pPrev = points[(i - 1 + N) % N];
+    const pCurr = points[i];
+    const pNext = points[(i + 1) % N];
+    const v1x = pPrev.x - pCurr.x, v1y = pPrev.y - pCurr.y;
+    const v2x = pNext.x - pCurr.x, v2y = pNext.y - pCurr.y;
+    const dotV = v1x * v2x + v1y * v2y;
+    const crossV = v1x * v2y - v1y * v2x;
+    let ang = Math.atan2(Math.abs(crossV), dotV);
+    // Convex test: turn at pCurr is from (-v1) to v2; cross = -(v1×v2). For CCW (insideSign=1) convex
+    // means LEFT turn (-(v1×v2) > 0 ⇒ crossV < 0). For CW (insideSign=-1) convex means RIGHT turn.
+    const convex = insideSign === 1 ? crossV <= 0 : crossV >= 0;
+    if (!convex) ang = 2 * Math.PI - ang;
+    interiorAngles[i] = ang;
+  }
+  const cornerStrip = (theta: number): number => {
+    if (theta < Math.PI / 2 - 1e-6) return halfL + dInwardPx / Math.tan(theta);
+    return halfL;
+  };
+
+  // Build valid sub-arcs per edge, in arc-length px.
+  const arcs: Array<{ start: number; end: number }> = [];
+  let arcAcc = 0;
+  for (let i = 0; i < N; i++) {
+    const eLen = edgeLens[i];
+    const sStart = cornerStrip(interiorAngles[i]);
+    const sEnd = cornerStrip(interiorAngles[(i + 1) % N]);
+    const lo = sStart;
+    const hi = eLen - sEnd;
+    if (hi > lo + 1e-3) {
+      arcs.push({ start: ((arcAcc + lo) / perim) * 100, end: ((arcAcc + hi) / perim) * 100 });
+    }
+    arcAcc += eLen;
+  }
+  return arcs;
+}
 const WALL_SPLINE_TENSION = 1;
 
 const initialModel: FloorPlanModel = {
@@ -1291,9 +1552,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const spaceHeldRef = useRef(false);
   toolRef.current = tool;
   spaceHeldRef.current = spaceHeld;
-  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(true);
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   /** Wall tool settings: floating overlay (does not expand the top toolbar). */
   const [wallOptionsOverlayOpen, setWallOptionsOverlayOpen] = useState(false);
+
+  /** Outliner (Properties panel when nothing is selected): which group is expanded. */
+  const [outlinerOpenGroup, setOutlinerOpenGroup] = useState<"nodes" | "edges" | "areas" | null>(null);
 
   /** Selected-wall properties: Inputs/Outputs foldables. */
   const [wallInputsExpanded, setWallInputsExpanded] = useState<boolean>(false);
@@ -1461,10 +1725,32 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [maxRectShape, setMaxRectShape] = useState<"rectangle" | "square" | "hexagon">("rectangle");
 
   /** Place Object Along Boundary — multi-object state, keyed per room. */
-  type PlacedObject = { id: string; length: number; breadth: number; position: number; setback?: number };
+  type PlacedObjectKind =
+    | "bed" | "table" | "chair" | "sofa"
+    | "desk" | "wardrobe" | "bookshelf" | "bench"
+    | "piano" | "tv-unit" | "fridge" | "toilet" | "bathtub"
+    | "guitar" | "whiteboard" | "flute" | "clock" | "mirror";
+  type PlacedObject = { id: string; length: number; breadth: number; height: number; position: number; setback?: number; clearance?: number; kind?: PlacedObjectKind; locked?: boolean };
   const [placedObjectsByRoom, setPlacedObjectsByRoom] = useState<Record<string, PlacedObject[]>>({});
+  /** Seed per room driving deterministic random positions for unlocked objects. */
+  const [placementSeedByRoom, setPlacementSeedByRoom] = useState<Record<string, number>>({});
   const [placeLive, setPlaceLive] = useState<boolean>(false);
   const [placeExpanded, setPlaceExpanded] = useState<boolean>(false);
+  /** Object id of the currently-dragged placement rectangle — drives the panel-row highlight + scroll-into-view. */
+  const [highlightedPlacementObjectId, setHighlightedPlacementObjectId] = useState<string | null>(null);
+
+  /** Visibility Polygon state — mode, viewer point, edge index, computed polygons cache, expand/live. */
+  const [visibilityModeByRoom, setVisibilityModeByRoom] = useState<Record<string, "point" | "segment">>({});
+  const [visibilityViewerByRoom, setVisibilityViewerByRoom] = useState<Record<string, Point>>({});
+  const [visibilityEdgeIndexByRoom, setVisibilityEdgeIndexByRoom] = useState<Record<string, number>>({});
+  const [visibilityPolygonsByRoom, setVisibilityPolygonsByRoom] = useState<Record<string, Point[][]>>({});
+  const [visibilityExpanded, setVisibilityExpanded] = useState<boolean>(false);
+  const [visibilityLive, setVisibilityLive] = useState<boolean>(false);
+  /** Monte-Carlo light-tracing parameters (point mode only). Bounces=0 means "off" (just direct visibility). */
+  const [visibilityBouncesByRoom, setVisibilityBouncesByRoom] = useState<Record<string, number>>({});
+  const [visibilityRayCountByRoom, setVisibilityRayCountByRoom] = useState<Record<string, number>>({});
+  const [visibilityReflectivityByRoom, setVisibilityReflectivityByRoom] = useState<Record<string, number>>({});
+  const [visibilityRaysByRoom, setVisibilityRaysByRoom] = useState<Record<string, Array<{ x1: number; y1: number; x2: number; y2: number; energy: number }>>>({});
 
   /** Voronoi Seeds state. Seeds keyed by room id so selection can restore. */
   const [voronoiSeedsByRoom, setVoronoiSeedsByRoom] = useState<Record<string, Point[]>>({});
@@ -2088,13 +2374,23 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           await tick();
           runnersRef.current!.optimiseRect(currentRoom, opSilent);
         } else if (tool === "place-object") {
-          const objs = Array.isArray(p.objects) ? (p.objects as Array<{ length: number; breadth: number; position: number; setback?: number }>) : [];
+          const ALLOWED_KINDS = new Set([
+            "bed","table","chair","sofa",
+            "desk","wardrobe","bookshelf","bench",
+            "piano","tv-unit","fridge","toilet","bathtub",
+            "guitar","whiteboard","flute","clock","mirror",
+          ]);
+          type RawObj = { length: number; breadth: number; position: number; setback?: number; height?: number; clearance?: number; kind?: string };
+          const objs = Array.isArray(p.objects) ? (p.objects as RawObj[]) : [];
           const withIds = objs.map((o) => ({
             id: createId(),
             length: o.length,
             breadth: o.breadth,
+            height: typeof o.height === "number" ? Math.max(0.05, o.height) : 1,
             position: o.position,
             setback: typeof o.setback === "number" ? Math.max(0, o.setback) : 0,
+            clearance: typeof o.clearance === "number" ? Math.max(0, o.clearance) : 0,
+            kind: typeof o.kind === "string" && ALLOWED_KINDS.has(o.kind) ? (o.kind as PlacedObjectKind) : undefined,
           }));
           setPlacedObjectsByRoom((prev) => ({ ...prev, [roomId]: withIds }));
           await tick();
@@ -2423,15 +2719,31 @@ Available tools — every supported tool name and its full parameter schema. Any
     axis-aligned packing along a chosen room edge: { "reference": <edge-index>, "count": 4, "minArea": 2 }. To
     keep rectangles snapped to the building's main axis: { "reference": "custom", "axisAngle": 90 }.
 
-[4] "place-object" — drop sub-rectangles onto (or near) the polygon perimeter (e.g. service blocks, fixtures, columns).
+[4] "place-object" — drop sub-rectangles onto (or near) the polygon perimeter (e.g. furniture, fixtures, columns).
     params: { "objects": [ {
-        "length":   number_m,        // dimension parallel to the boundary edge
-        "breadth":  number_m,        // dimension perpendicular to the boundary (depth into the room)
-        "position": 0-100,           // PERCENT along polygon perimeter (0 = first vertex, 100 = back to start)
-        "setback"?: number_m         // optional inward offset from the boundary, in metres. 0 = flush against boundary
-                                     // (default). Positive = pushed inward into the room. Negative values are clamped to 0.
+        "length":     number_m,        // dimension parallel to the boundary edge
+        "breadth":    number_m,        // dimension perpendicular to the boundary (depth into the room)
+        "height"?:    number_m,        // vertical extent in metres; default 1 (drives the 3D primitive in 2D-Symbol mode)
+        "position":   0-100,           // PERCENT along polygon perimeter (0 = first vertex, 100 = back to start)
+        "setback"?:   number_m,        // optional inward offset from the boundary; 0 = flush (default). Negative clamped to 0.
+        "clearance"?: number_m,        // optional lift above the floor, in metres. 0 = floor-standing (default).
+                                       // Use this for wall-hung items (mirror, clock, whiteboard, guitar, flute) — typical 1.0–2.0 m.
+        "kind"?: "bed" | "table" | "chair" | "sofa"
+              | "desk" | "wardrobe" | "bookshelf" | "bench"
+              | "piano" | "tv-unit" | "fridge" | "toilet" | "bathtub"
+              | "guitar" | "whiteboard" | "flute" | "clock" | "mirror"
+              // Drives the 2D symbol motif and the 3D primitive when Placement Mode is "2D Symbol".
+              // Pick the kind that best matches what the user described; the engine renders a recognisable
+              // schematic for each. Omit only for generic blocks that don't fit any kind.
     } ] }
-    Use when: "place columns along facade", "fixtures 0.3 m off the wall", "setback the chairs 0.5 m from boundary".
+    Typical default sizes (length × breadth × height in m, clearance):
+      bed 2.0×1.6×0.5(0)         sofa 2.0×0.9×0.8(0)        chair 0.5×0.5×0.5(0)        table 1.4×0.8×0.75(0)
+      desk 1.4×0.7×0.75(0)       wardrobe 1.5×0.6×2.1(0)    bookshelf 1.0×0.35×1.8(0)   bench 1.5×0.45×0.45(0)
+      piano 1.5×0.6×1.2(0)       tv-unit 1.6×0.45×0.5(0)    fridge 0.7×0.7×1.8(0)       toilet 0.5×0.7×0.8(0)
+      bathtub 1.7×0.75×0.55(0)   guitar 0.4×0.1×1.0(1.0)    whiteboard 1.5×0.05×1.0(1.0)
+      flute 0.7×0.05×0.05(1.2)   clock 0.4×0.05×0.4(1.8)    mirror 0.6×0.05×1.4(0.6)
+    Use when: "place a bed against the north wall", "wardrobes along facade", "mount a TV unit", "hang a clock 2 m up",
+    "fixtures 0.3 m off the wall", "setback the chairs 0.5 m from boundary".
 
 [5] "voronoi" — Voronoi-cell partition, one cell per seed.
     params: { "metric": "euclidean" | "manhattan" | "chebyshev",
@@ -4906,8 +5218,9 @@ User request: ${aiPrompt.trim()}`;
       const dotV = v1x * v2x + v1y * v2y;
       const crossV = v1x * v2y - v1y * v2x;
       let ang = Math.atan2(Math.abs(crossV), dotV); // in [0, π]
-      // Convex corner: cross sign matches the polygon's winding (insideSign).
-      const convex = insideSign === 1 ? crossV >= 0 : crossV <= 0;
+      // Convex test: turn at pCurr is from (-v1) to v2; cross = -(v1×v2). For CCW (insideSign=1)
+      // convex means LEFT turn (-(v1×v2) > 0 ⇒ crossV < 0). For CW (insideSign=-1) convex means RIGHT turn.
+      const convex = insideSign === 1 ? crossV <= 0 : crossV >= 0;
       if (!convex) ang = 2 * Math.PI - ang;
       interiorAngles[i] = ang;
     }
@@ -4919,7 +5232,9 @@ User request: ${aiPrompt.trim()}`;
       return L / 2;
     };
 
-    for (let oi = 0; oi < objects.length; oi++) {
+    // Process locked objects first so they act as anchors; unlocked ones slide around them.
+    const processingOrder = objects.map((_, i) => i).sort((a, b) => Number(!!objects[b].locked) - Number(!!objects[a].locked));
+    for (const oi of processingOrder) {
       const obj = objects[oi];
       const lengthPx = obj.length * pixelsPerMeter;
       const breadthPx = obj.breadth * pixelsPerMeter;
@@ -5037,6 +5352,10 @@ User request: ${aiPrompt.trim()}`;
           isPlacementWall: !silent,
           isPlacementPreview: silent,
           placementSourceRoomId: room.id,
+          placementObjectId: obj.id,
+          placementKind: obj.kind,
+          placementHeightM: obj.height,
+          placementClearanceM: obj.clearance,
         });
       }
     }
@@ -5072,9 +5391,16 @@ User request: ${aiPrompt.trim()}`;
   const clampPlacementPosition = useCallback((roomId: string, roomPerimM: number, idx: number, desiredPos: number): number => {
     const all = placedObjectsByRoom[roomId] ?? [];
     const target = all[idx];
-    if (!target || all.length <= 1 || roomPerimM < 0.01) return Math.max(0, Math.min(100, desiredPos));
+    if (!target || roomPerimM < 0.01) return Math.max(0, Math.min(100, desiredPos));
+
+    // Corner-aware valid arcs (percent of perimeter) for THIS object's geometry.
+    const room = visibleRoomsRef.current.find((r) => r.id === roomId);
+    const validArcs = room
+      ? validPlacementArcsPct(room.points, { length: target.length, breadth: target.breadth, setback: target.setback }, pixelsPerMeter)
+      : [{ start: 0, end: 100 }];
+
+    // Object-overlap forbidden zones (centre-vs-centre distance ≥ halfSelf + halfOther in percent).
     const halfSelfPct = (target.length / 2) / roomPerimM * 100;
-    // Forbidden zones (in percent) = other object intervals expanded by half-self so centre-vs-centre distance ≥ halfSelf + halfOther.
     const forbidden: Array<{ start: number; end: number }> = [];
     for (let i = 0; i < all.length; i++) {
       if (i === idx) continue;
@@ -5083,16 +5409,56 @@ User request: ${aiPrompt.trim()}`;
       const pad = halfSelfPct + halfOtherPct;
       forbidden.push({ start: other.position - pad, end: other.position + pad });
     }
-    let p = Math.max(0, Math.min(100, desiredPos));
+
+    // Subtract forbidden zones from valid arcs to get the allowed intervals.
+    let allowed: Array<{ start: number; end: number }> = validArcs.map((a) => ({ ...a }));
     for (const fz of forbidden) {
-      if (p > fz.start && p < fz.end) {
-        const leftOk = fz.start - 0.001;
-        const rightOk = fz.end + 0.001;
-        p = Math.abs(p - leftOk) < Math.abs(p - rightOk) ? leftOk : rightOk;
+      const next: typeof allowed = [];
+      for (const a of allowed) {
+        // Handle modular wrap: forbidden zone may span 0/100 boundary.
+        const splitFz = fz.start < 0
+          ? [{ start: 0, end: fz.end }, { start: fz.start + 100, end: 100 }]
+          : fz.end > 100
+            ? [{ start: fz.start, end: 100 }, { start: 0, end: fz.end - 100 }]
+            : [fz];
+        let pieces: typeof allowed = [a];
+        for (const f of splitFz) {
+          const out: typeof allowed = [];
+          for (const piece of pieces) {
+            if (f.end <= piece.start || f.start >= piece.end) { out.push(piece); continue; }
+            if (f.start > piece.start) out.push({ start: piece.start, end: f.start });
+            if (f.end < piece.end) out.push({ start: f.end, end: piece.end });
+          }
+          pieces = out;
+        }
+        next.push(...pieces);
+      }
+      allowed = next.filter((p) => p.end > p.start + 1e-6);
+    }
+
+    if (allowed.length === 0) return Math.max(0, Math.min(100, desiredPos));
+
+    const p = Math.max(0, Math.min(100, desiredPos));
+    // Already inside an allowed interval?
+    for (const a of allowed) {
+      if (p >= a.start && p <= a.end) return p;
+    }
+    // Snap to the nearest allowed-interval endpoint, using modular distance along the perimeter.
+    const arcDist = (x: number, y: number) => {
+      let d = Math.abs(x - y);
+      if (d > 50) d = 100 - d;
+      return d;
+    };
+    let best = allowed[0].start;
+    let bestDist = Infinity;
+    for (const a of allowed) {
+      for (const candidate of [a.start, a.end]) {
+        const d = arcDist(p, candidate);
+        if (d < bestDist) { bestDist = d; best = candidate; }
       }
     }
-    return Math.max(0, Math.min(100, p));
-  }, [placedObjectsByRoom]);
+    return Math.max(0, Math.min(100, best));
+  }, [placedObjectsByRoom, pixelsPerMeter]);
 
   /** Compute Voronoi partition walls for a room from its stored seeds. Supports Euclidean, Manhattan, Chebyshev metrics. */
   const runRoomVoronoi = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
@@ -9831,8 +10197,8 @@ User request: ${aiPrompt.trim()}`;
       return;
     }
     const oldScale = scale;
-    const delta = event.evt.deltaY > 0 ? -0.08 : 0.08;
-    const newScale = Math.min(4, Math.max(0.25, oldScale + delta));
+    const scaleFactor = event.evt.deltaY > 0 ? 1 / 1.08 : 1.08;
+    const newScale = Math.min(16, Math.max(0.05, oldScale * scaleFactor));
     const mousePointTo = {
       x: (pointer.x - position.x) / oldScale,
       y: (pointer.y - position.y) / oldScale,
@@ -11275,6 +11641,34 @@ User request: ${aiPrompt.trim()}`;
                   setPosition({ x: 0, y: 0 });
                 }}
               />
+              <ToolButton
+                active={false}
+                icon={<Maximize className="h-4 w-4" />}
+                label="Zoom extents"
+                onClick={() => {
+                  const pts: { x: number; y: number }[] = [];
+                  for (const w of history.state.walls) { pts.push(w.start, w.end); }
+                  for (const r of history.state.rooms) { for (const p of r.points) pts.push(p); }
+                  for (const o of history.state.objects) { pts.push({ x: o.x, y: o.y }); }
+                  for (const f of history.state.furniture) { pts.push({ x: f.x, y: f.y }); }
+                  if (pts.length === 0 || size.width <= 0 || size.height <= 0) return;
+                  const minX = Math.min(...pts.map((p) => p.x));
+                  const maxX = Math.max(...pts.map((p) => p.x));
+                  const minY = Math.min(...pts.map((p) => p.y));
+                  const maxY = Math.max(...pts.map((p) => p.y));
+                  const w = Math.max(1, maxX - minX);
+                  const h = Math.max(1, maxY - minY);
+                  const margin = 0.9;
+                  const newScale = Math.min(size.width / w, size.height / h) * margin;
+                  const cx = (minX + maxX) / 2;
+                  const cy = (minY + maxY) / 2;
+                  setScale(Number(newScale.toFixed(3)));
+                  setPosition({
+                    x: size.width / 2 - cx * newScale,
+                    y: size.height / 2 - cy * newScale,
+                  });
+                }}
+              />
         <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} /></div>
         
         <div className="flex shrink-0 items-center gap-1">
@@ -11342,6 +11736,28 @@ User request: ${aiPrompt.trim()}`;
         >
           <ScrollArea className="h-full min-h-0 w-full">
             <div className="flex flex-col items-center gap-2 px-1 pb-2">
+              {/* 2D/3D view toggle */}
+              <div className="flex w-9 flex-col overflow-hidden rounded-md border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("2d")}
+                  className={`px-1 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                  aria-pressed={viewMode === "2d"}
+                  title="2D view"
+                >
+                  2D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("3d")}
+                  className={`border-t border-slate-200 px-1 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                  aria-pressed={viewMode === "3d"}
+                  title="3D view"
+                >
+                  3D
+                </button>
+              </div>
+              <div className="my-1 h-px w-7 bg-slate-200" />
               <ToolButton active={tool === "select"} icon={<MousePointer2 className="h-6 w-6" />} label="Select" onClick={() => setTool("select")} />
               <ToolButton active={tool === "pan"} icon={<Hand className="h-6 w-6" />} label="Pan" onClick={() => setTool("pan")} />
 
@@ -11350,6 +11766,42 @@ User request: ${aiPrompt.trim()}`;
                 icon={<BrickWall className="h-6 w-6" />}
                 label="Wall"
                 onClick={() => setTool("wall")}
+              />
+              <ToolButton
+                active={addDoorMode}
+                icon={<DoorOpen className="h-6 w-6" />}
+                label="Door"
+                onClick={() => {
+                  if (addDoorMode) {
+                    setAddDoorMode(false);
+                  } else {
+                    setAddDoorMode(true);
+                    setAddWindowMode(false);
+                    setAddEdgeMode(null);
+                    setAddEdgeFirstRoom(null);
+                    setAddRoomMode(false);
+                    setSelectedGenElement(null);
+                    toast.info("Click a wall segment to place a door — press Esc to exit");
+                  }
+                }}
+              />
+              <ToolButton
+                active={addWindowMode}
+                icon={<AppWindow className="h-6 w-6" />}
+                label="Window"
+                onClick={() => {
+                  if (addWindowMode) {
+                    setAddWindowMode(false);
+                  } else {
+                    setAddWindowMode(true);
+                    setAddDoorMode(false);
+                    setAddEdgeMode(null);
+                    setAddEdgeFirstRoom(null);
+                    setAddRoomMode(false);
+                    setSelectedGenElement(null);
+                    toast.info("Click a wall segment to place a window — press Esc to exit");
+                  }
+                }}
               />
               {/* Furniture library moved to top-right toolbar (between File/Export and Layers). */}
 
@@ -11487,34 +11939,6 @@ User request: ${aiPrompt.trim()}`;
                     }}
                   >
                     <X className="h-4 w-4 text-blue-500" /> Repulsion
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-slate-100"
-                    onClick={() => {
-                      setAddDoorMode(true);
-                      setAddWindowMode(false);
-                      setAddEdgeMode(null);
-                      setAddEdgeFirstRoom(null);
-                      setAddRoomMode(false);
-                      setSelectedGenElement(null);
-                      toast.info("Click a wall segment to place a door — press Esc to exit");
-                    }}
-                  >
-                    <DoorOpen className="h-4 w-4 text-amber-600" /> Door
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-slate-100"
-                    onClick={() => {
-                      setAddWindowMode(true);
-                      setAddDoorMode(false);
-                      setAddEdgeMode(null);
-                      setAddEdgeFirstRoom(null);
-                      setAddRoomMode(false);
-                      setSelectedGenElement(null);
-                      toast.info("Click a wall segment to place a window");
-                    }}
-                  >
-                    <AppWindow className="h-4 w-4 text-sky-500" /> Window
                   </button>
                 </PopoverContent>
               </Popover>
@@ -11901,31 +12325,14 @@ User request: ${aiPrompt.trim()}`;
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
-          {/* 2D/3D toggle (top-left corner) */}
-          <div className="absolute left-3 top-3 z-30 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-md backdrop-blur">
-            <div className="flex overflow-hidden rounded-md border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setViewMode("2d")}
-                className={`px-2.5 py-1 text-xs font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                aria-pressed={viewMode === "2d"}
-              >
-                2D
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("3d")}
-                className={`px-2.5 py-1 text-xs font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                aria-pressed={viewMode === "3d"}
-              >
-                3D
-              </button>
-            </div>
-          </div>
           {viewMode === "3d" ? (
             <div className="absolute inset-0 z-20">
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-slate-500">Loading 3D…</div>}>
-                <FloorPlan3DCanvas model={history.state} pixelsPerMeter={pixelsPerMeter} />
+                <FloorPlan3DCanvas
+                  model={history.state}
+                  pixelsPerMeter={pixelsPerMeter}
+                  placementMode={layerVisibility.placement2dSymbol ? "2dSymbol" : layerVisibility.placementRenderedSymbol ? "rendered" : "polygon"}
+                />
               </Suspense>
             </div>
           ) : null}
@@ -11962,25 +12369,39 @@ User request: ${aiPrompt.trim()}`;
                     : "default",
             }}
           >
-            {layerVisibility.grid ? (
-              <Layer listening={false}>
-                <WorldViewport x={position.x} y={position.y} scale={scale}>
-                  <Rect x={-5000} y={-5000} width={10000} height={10000} fill="#F8FAFC" />
-                  {/* Grid Lines Centered Around (0,0) */}
-                  {Array.from({ length: 400 }).map((_, index) => {
-                    const x = (index - 200) * GRID_SIZE;
-                    return <Line key={`v-${index}`} points={[x, -5000, x, 5000]} stroke="#E2E8F0" strokeWidth={1 / scale} />;
-                  })}
-                  {Array.from({ length: 400 }).map((_, index) => {
-                    const y = (index - 200) * GRID_SIZE;
-                    return <Line key={`h-${index}`} points={[-5000, y, 5000, y]} stroke="#E2E8F0" strokeWidth={1 / scale} />;
-                  })}
-                  {/* Axis lines */}
-                  {/* <Line points={[-5000, 0, 5000, 0]} stroke="#CBD5E1" strokeWidth={2 / scale} />
-                  <Line points={[0, -5000, 0, 5000]} stroke="#CBD5E1" strokeWidth={2 / scale} /> */}
-                </WorldViewport>
-              </Layer>
-            ) : null}
+            {layerVisibility.grid ? (() => {
+              // Dynamic grid: covers exactly the visible viewport (plus a small padding)
+              // so it works at any zoom level without huge upfront line counts.
+              const padPx = 200;
+              const worldMinX = (-position.x - padPx) / scale;
+              const worldMaxX = (size.width - position.x + padPx) / scale;
+              const worldMinY = (-position.y - padPx) / scale;
+              const worldMaxY = (size.height - position.y + padPx) / scale;
+              // Adaptive step: keep on-screen spacing >= 8px to avoid moiré at extreme zoom-out.
+              let step = GRID_SIZE;
+              while (step * scale < 8) step *= 4;
+              const startX = Math.floor(worldMinX / step) * step;
+              const endX = Math.ceil(worldMaxX / step) * step;
+              const startY = Math.floor(worldMinY / step) * step;
+              const endY = Math.ceil(worldMaxY / step) * step;
+              const verticals: number[] = [];
+              for (let x = startX; x <= endX; x += step) verticals.push(x);
+              const horizontals: number[] = [];
+              for (let y = startY; y <= endY; y += step) horizontals.push(y);
+              return (
+                <Layer listening={false}>
+                  <WorldViewport x={position.x} y={position.y} scale={scale}>
+                    <Rect x={worldMinX} y={worldMinY} width={worldMaxX - worldMinX} height={worldMaxY - worldMinY} fill="#F8FAFC" />
+                    {verticals.map((x) => (
+                      <Line key={`v-${x}`} points={[x, worldMinY, x, worldMaxY]} stroke="#E2E8F0" strokeWidth={1 / scale} />
+                    ))}
+                    {horizontals.map((y) => (
+                      <Line key={`h-${y}`} points={[worldMinX, y, worldMaxX, y]} stroke="#E2E8F0" strokeWidth={1 / scale} />
+                    ))}
+                  </WorldViewport>
+                </Layer>
+              );
+            })() : null}
 
             <Layer>
               <WorldViewport x={position.x} y={position.y} scale={scale}>
@@ -13091,6 +13512,107 @@ User request: ${aiPrompt.trim()}`;
                     })
                   }
 
+                  {/* Visibility polygon overlay — supports point mode (single polygon + draggable handle)
+                      and segment mode (multiple stacked polygons sampled along the chosen edge). */}
+                  {selectedRoom && (selectedRoom.roomType ?? "room") === "room" && (() => {
+                    const rid = selectedRoom.id;
+                    const mode = visibilityModeByRoom[rid] ?? "point";
+                    const polys = visibilityPolygonsByRoom[rid] ?? [];
+                    const viewer = visibilityViewerByRoom[rid];
+                    const edgeIdx = visibilityEdgeIndexByRoom[rid] ?? 0;
+                    const showOverlay = (mode === "point" && viewer) || mode === "segment";
+                    if (!showOverlay) return null;
+                    const polyAlpha = mode === "segment" ? 0.06 : 0.28;
+                    return (
+                      <>
+                        {polys.map((poly, i) => poly.length >= 3 && (
+                          <Line
+                            key={`vis-${rid}-${i}`}
+                            points={poly.flatMap((p) => [p.x, p.y])}
+                            closed
+                            fill={`rgba(250, 204, 21, ${polyAlpha})`}
+                            stroke={i === 0 ? "#f59e0b" : "transparent"}
+                            strokeWidth={i === 0 && mode === "point" ? 1.2 / scale : 0}
+                            listening={false}
+                          />
+                        ))}
+                        {/* Monte-Carlo light rays — alpha encodes remaining energy after each bounce. */}
+                        {mode === "point" && (visibilityRaysByRoom[rid] ?? []).map((s, i) => (
+                          <Line
+                            key={`vray-${rid}-${i}`}
+                            points={[s.x1, s.y1, s.x2, s.y2]}
+                            stroke={`rgba(251, 191, 36, ${Math.min(1, s.energy * 0.55)})`}
+                            strokeWidth={1 / scale}
+                            listening={false}
+                          />
+                        ))}
+                        {mode === "segment" && (() => {
+                          const pts = selectedRoom.points;
+                          if (edgeIdx < 0 || edgeIdx >= pts.length) return null;
+                          const a = pts[edgeIdx], b = pts[(edgeIdx + 1) % pts.length];
+                          return (
+                            <Line
+                              points={[a.x, a.y, b.x, b.y]}
+                              stroke="#f97316"
+                              strokeWidth={4 / scale}
+                              listening={false}
+                            />
+                          );
+                        })()}
+                        {mode === "point" && viewer && (
+                          <Circle
+                            x={viewer.x}
+                            y={viewer.y}
+                            radius={7 / scale}
+                            fill="#f97316"
+                            stroke="#9a3412"
+                            strokeWidth={1.5 / scale}
+                            draggable
+                            onMouseEnter={(e) => {
+                              const c = e.target.getStage()?.container();
+                              if (c) c.style.cursor = "grab";
+                            }}
+                            onMouseLeave={(e) => {
+                              const c = e.target.getStage()?.container();
+                              if (c) c.style.cursor = "default";
+                            }}
+                            onDragMove={(e) => {
+                              const nx = e.target.x(), ny = e.target.y();
+                              const newViewer = { x: nx, y: ny };
+                              setVisibilityViewerByRoom((prev) => ({ ...prev, [rid]: newViewer }));
+                              if (visibilityLive) {
+                                setVisibilityPolygonsByRoom((prev) => ({ ...prev, [rid]: [computeVisibilityPolygon(newViewer, selectedRoom.points)] }));
+                                const bnc = visibilityBouncesByRoom[rid] ?? 0;
+                                if (bnc > 0) {
+                                  const segs = monteCarloLightSegments(newViewer, selectedRoom.points, {
+                                    rayCount: visibilityRayCountByRoom[rid] ?? 200,
+                                    maxBounces: bnc,
+                                    reflectivity: visibilityReflectivityByRoom[rid] ?? 0.7,
+                                  });
+                                  setVisibilityRaysByRoom((prev) => ({ ...prev, [rid]: segs }));
+                                }
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              const nx = e.target.x(), ny = e.target.y();
+                              const newViewer = { x: nx, y: ny };
+                              setVisibilityPolygonsByRoom((prev) => ({ ...prev, [rid]: [computeVisibilityPolygon(newViewer, selectedRoom.points)] }));
+                              const bnc = visibilityBouncesByRoom[rid] ?? 0;
+                              if (bnc > 0) {
+                                const segs = monteCarloLightSegments(newViewer, selectedRoom.points, {
+                                  rayCount: visibilityRayCountByRoom[rid] ?? 200,
+                                  maxBounces: bnc,
+                                  reflectivity: visibilityReflectivityByRoom[rid] ?? 0.7,
+                                });
+                                setVisibilityRaysByRoom((prev) => ({ ...prev, [rid]: segs }));
+                              }
+                            }}
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
+
                   {/* Voronoi seed markers — draggable. Rendered for the currently selected room. */}
                   {selectedRoom && (selectedRoom.roomType ?? "room") === "room" &&
                     (voronoiSeedsByRoom[selectedRoom.id] ?? []).map((seed, i) => (
@@ -13339,6 +13861,13 @@ User request: ${aiPrompt.trim()}`;
                     // In graph mode, hide door/window segments when Doors layer is off
                     if (layerVisibility.viewGraph && !layerVisibility.doors && wall.segmentType === "door") return null;
                     if (layerVisibility.viewGraph && !layerVisibility.windows && wall.segmentType === "window") return null;
+
+                    // Placement 2D Symbol mode: hide rectangle sides for objects whose kind has a symbol;
+                    // the symbol is rendered separately below.
+                    if (layerVisibility.placement2dSymbol && (wall.isPlacementWall || wall.isPlacementPreview)
+                        && wall.placementObjectId && wall.placementKind) {
+                      return null;
+                    }
 
                     // Shared drag props for door/window segment sliding
                     const isDoorOrWindow = wall.segmentType === "door" || wall.segmentType === "window";
@@ -14414,6 +14943,486 @@ User request: ${aiPrompt.trim()}`;
                     );
                   })}
 
+                  {/* Placement labels — kind name at the centroid of each placed object (always shown). */}
+                  {(() => {
+                    const groups = new Map<string, { walls: typeof history.state.walls; kind: string }>();
+                    for (const w of history.state.walls) {
+                      if ((w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) {
+                        const g = groups.get(w.placementObjectId) ?? { walls: [], kind: w.placementKind };
+                        g.walls.push(w);
+                        groups.set(w.placementObjectId, g);
+                      }
+                    }
+                    return Array.from(groups.entries()).map(([gid, group]) => {
+                      if (group.walls.length < 4) return null;
+                      let cx = 0, cy = 0;
+                      for (const w of group.walls) { cx += w.start.x + w.end.x; cy += w.start.y + w.end.y; }
+                      cx /= 8; cy /= 8;
+                      let lenLong = 0, lenShort = Infinity, longest = group.walls[0];
+                      for (const w of group.walls) {
+                        const L = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
+                        if (L > lenLong) { lenLong = L; longest = w; }
+                        if (L < lenShort) lenShort = L;
+                      }
+                      const angle = Math.atan2(longest.end.y - longest.start.y, longest.end.x - longest.start.x) * 180 / Math.PI;
+                      // Keep text upright: flip if it would read upside-down.
+                      const displayAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
+                      const fontSize = Math.max(8, Math.min(16, lenShort * 0.35));
+                      const label = group.kind.replace("-", " ");
+                      const approxW = label.length * fontSize * 0.55;
+                      return (
+                        <Text
+                          key={`plabel-${gid}`}
+                          x={cx}
+                          y={cy}
+                          offsetX={approxW / 2}
+                          offsetY={fontSize / 2}
+                          rotation={displayAngle}
+                          text={label}
+                          fontSize={fontSize}
+                          fontStyle="bold"
+                          fill="#0f172a"
+                          align="center"
+                          listening={false}
+                        />
+                      );
+                    });
+                  })()}
+
+                  {/* Placement drag handles — transparent Rect over each placed object's footprint.
+                      Dragging projects the new centre to the polygon perimeter and updates the
+                      object's position%; the placement engine then re-renders the rectangle. */}
+                  {(() => {
+                    const groups = new Map<string, { walls: typeof history.state.walls; roomId: string }>();
+                    for (const w of history.state.walls) {
+                      if ((w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementSourceRoomId) {
+                        const g = groups.get(w.placementObjectId) ?? { walls: [], roomId: w.placementSourceRoomId };
+                        g.walls.push(w);
+                        groups.set(w.placementObjectId, g);
+                      }
+                    }
+                    return Array.from(groups.entries()).map(([gid, group]) => {
+                      if (group.walls.length < 4) return null;
+                      let cx = 0, cy = 0;
+                      for (const w of group.walls) { cx += w.start.x + w.end.x; cy += w.start.y + w.end.y; }
+                      cx /= 8; cy /= 8;
+                      let lenLong = 0, lenShort = Infinity, longest = group.walls[0];
+                      for (const w of group.walls) {
+                        const L = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
+                        if (L > lenLong) { lenLong = L; longest = w; }
+                        if (L < lenShort) lenShort = L;
+                      }
+                      const angleDeg = Math.atan2(longest.end.y - longest.start.y, longest.end.x - longest.start.x) * 180 / Math.PI;
+                      return (
+                        <Rect
+                          key={`pdrag-${gid}`}
+                          x={cx}
+                          y={cy}
+                          width={lenLong}
+                          height={lenShort}
+                          rotation={angleDeg}
+                          offsetX={lenLong / 2}
+                          offsetY={lenShort / 2}
+                          fill="rgba(0,0,0,0.001)"
+                          draggable
+                          onMouseEnter={(e) => {
+                            const c = e.target.getStage()?.container();
+                            if (c) c.style.cursor = "grab";
+                          }}
+                          onMouseLeave={(e) => {
+                            const c = e.target.getStage()?.container();
+                            if (c) c.style.cursor = "default";
+                          }}
+                          onDragStart={() => {
+                            // Surface the dragged object in the panel: select the room, expand the
+                            // Place-Object block, and mark this row for scroll-into-view + highlight.
+                            selection.selectOne(group.roomId);
+                            setPlaceExpanded(true);
+                            setHighlightedPlacementObjectId(gid);
+                          }}
+                          onDragMove={(e) => {
+                            const room = visibleRoomsRef.current.find((r) => r.id === group.roomId);
+                            if (!room) return;
+                            let perimPx = 0;
+                            for (let i = 0; i < room.points.length; i++) {
+                              const a = room.points[i], b = room.points[(i + 1) % room.points.length];
+                              perimPx += Math.hypot(b.x - a.x, b.y - a.y);
+                            }
+                            const perimM = perimPx / pixelsPerMeter;
+                            const desiredPct = projectPointToPolygonPerimeter({ x: e.target.x(), y: e.target.y() }, room.points);
+                            setPlacedObjectsByRoom((prev) => {
+                              const arr = [...(prev[group.roomId] ?? [])];
+                              const idx = arr.findIndex((o) => o.id === gid);
+                              if (idx < 0) return prev;
+                              const clamped = clampPlacementPosition(group.roomId, perimM, idx, desiredPct);
+                              arr[idx] = { ...arr[idx], position: clamped };
+                              return { ...prev, [group.roomId]: arr };
+                            });
+                            // Snap node back; the placement engine re-renders the actual rectangle at the new spot.
+                            e.target.x(cx);
+                            e.target.y(cy);
+                            if (!placeLive) runRoomPlacement(room, true);
+                          }}
+                          onDragEnd={(e) => {
+                            e.target.x(cx);
+                            e.target.y(cy);
+                          }}
+                        />
+                      );
+                    });
+                  })()}
+
+                  {/* Placement 2D Symbol overlay — one symbol per placed object (Bed/Table/Chair/Sofa). */}
+                  {layerVisibility.placement2dSymbol && (() => {
+                    type SymKind =
+                      | "bed" | "table" | "chair" | "sofa"
+                      | "desk" | "wardrobe" | "bookshelf" | "bench"
+                      | "piano" | "tv-unit" | "fridge" | "toilet" | "bathtub"
+                      | "guitar" | "whiteboard" | "flute" | "clock" | "mirror";
+                    const groups = new Map<string, { walls: typeof history.state.walls; kind: SymKind; roomId: string | undefined }>();
+                    for (const w of history.state.walls) {
+                      if ((w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) {
+                        const g = groups.get(w.placementObjectId) ?? { walls: [], kind: w.placementKind, roomId: w.placementSourceRoomId };
+                        g.walls.push(w);
+                        groups.set(w.placementObjectId, g);
+                      }
+                    }
+                    const colorByKind: Record<SymKind, string> = {
+                      bed: "#64748b", table: "#a16207", chair: "#2563eb", sofa: "#16a34a",
+                      desk: "#7c3aed", wardrobe: "#0f766e", bookshelf: "#9a3412", bench: "#6b7280",
+                      piano: "#1f2937", "tv-unit": "#0369a1", fridge: "#475569", toilet: "#6366f1", bathtub: "#0891b2",
+                      guitar: "#b45309", whiteboard: "#0ea5e9", flute: "#a855f7", clock: "#dc2626", mirror: "#0d9488",
+                    };
+                    const fillByKind: Record<SymKind, string> = {
+                      bed: "rgba(148,163,184,0.22)", table: "rgba(161,98,7,0.22)", chair: "rgba(37,99,235,0.22)", sofa: "rgba(22,163,74,0.22)",
+                      desk: "rgba(124,58,237,0.18)", wardrobe: "rgba(15,118,110,0.22)", bookshelf: "rgba(154,52,18,0.22)", bench: "rgba(107,114,128,0.22)",
+                      piano: "rgba(31,41,55,0.28)", "tv-unit": "rgba(3,105,161,0.20)", fridge: "rgba(71,85,105,0.22)", toilet: "rgba(99,102,241,0.18)", bathtub: "rgba(8,145,178,0.18)",
+                      guitar: "rgba(180,83,9,0.18)", whiteboard: "rgba(14,165,233,0.18)", flute: "rgba(168,85,247,0.18)", clock: "rgba(220,38,38,0.18)", mirror: "rgba(13,148,136,0.18)",
+                    };
+                    return Array.from(groups.entries()).map(([gid, group]) => {
+                      if (group.walls.length < 4) return null;
+                      let cx = 0, cy = 0;
+                      for (const w of group.walls) { cx += w.start.x + w.end.x; cy += w.start.y + w.end.y; }
+                      cx /= 8; cy /= 8;
+                      let longest = group.walls[0], shortest = group.walls[0];
+                      let lenLong = 0, lenShort = Infinity;
+                      for (const w of group.walls) {
+                        const L = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
+                        if (L > lenLong) { lenLong = L; longest = w; }
+                        if (L < lenShort) { lenShort = L; shortest = w; }
+                      }
+                      // walls[0] is the long edge ALONG the polygon boundary (length = the placement
+                      // object's length, regardless of whether breadth > length). walls[1] is the
+                      // perpendicular short edge (= breadth). Use those directly for the local frame
+                      // and dimensions so the symbol orientation is correct in every aspect-ratio case.
+                      const wall0 = group.walls[0];
+                      const wall1 = group.walls[1];
+                      const w0Len = Math.hypot(wall0.end.x - wall0.start.x, wall0.end.y - wall0.start.y);
+                      const w1Len = Math.hypot(wall1.end.x - wall1.start.x, wall1.end.y - wall1.start.y);
+                      let ux: number, uy: number, nx: number, ny: number;
+                      if (w0Len > 1e-6) {
+                        ux = (wall0.end.x - wall0.start.x) / w0Len;
+                        uy = (wall0.end.y - wall0.start.y) / w0Len;
+                        const m0x = (wall0.start.x + wall0.end.x) / 2;
+                        const m0y = (wall0.start.y + wall0.end.y) / 2;
+                        let inX = cx - m0x, inY = cy - m0y;
+                        const ilen = Math.hypot(inX, inY);
+                        if (ilen > 1e-6) { nx = inX / ilen; ny = inY / ilen; }
+                        else { nx = -uy; ny = ux; }
+                      } else {
+                        const dx = longest.end.x - longest.start.x;
+                        const dy = longest.end.y - longest.start.y;
+                        ux = dx / lenLong; uy = dy / lenLong; nx = -uy; ny = ux;
+                      }
+                      const halfL = w0Len / 2, halfB = w1Len / 2;
+                      void shortest; void lenShort;
+                      const corner = (sl: number, sb: number) => ({
+                        x: cx + ux * halfL * sl + nx * halfB * sb,
+                        y: cy + uy * halfL * sl + ny * halfB * sb,
+                      });
+                      const c00 = corner(-1, -1), c10 = corner(1, -1), c11 = corner(1, 1), c01 = corner(-1, 1);
+                      const stroke = colorByKind[group.kind];
+                      const fill = fillByKind[group.kind];
+                      const motif = (() => {
+                        if (group.kind === "bed") {
+                          const pH = halfB * 0.28;
+                          const a = corner(-0.85, -1), b = corner(0.85, -1);
+                          const c = { x: b.x + nx * pH, y: b.y + ny * pH };
+                          const d = { x: a.x + nx * pH, y: a.y + ny * pH };
+                          const mx = (a.x + b.x) / 2 + nx * pH * 0.5;
+                          const my = (a.y + b.y) / 2 + ny * pH * 0.5;
+                          return (
+                            <>
+                              <Line points={[a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y]} closed stroke={stroke} strokeWidth={0.8} fill="rgba(255,255,255,0.4)" />
+                              <Line points={[mx - ux * halfL * 0.85, my - uy * halfL * 0.85, mx + ux * halfL * 0.85, my + uy * halfL * 0.85]} stroke={stroke} strokeWidth={0.5} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "chair") {
+                          const tH = halfB * 0.25;
+                          const a = corner(-1, -1), b = corner(1, -1);
+                          const c = { x: b.x + nx * tH, y: b.y + ny * tH };
+                          const d = { x: a.x + nx * tH, y: a.y + ny * tH };
+                          return <Line points={[a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y]} closed fill={stroke} stroke={stroke} strokeWidth={0.6} />;
+                        }
+                        if (group.kind === "sofa") {
+                          const tBack = halfB * 0.25;
+                          const tArm = halfL * 0.18;
+                          // Back
+                          const ba = corner(-1, -1), bb = corner(1, -1);
+                          const bc = { x: bb.x + nx * tBack, y: bb.y + ny * tBack };
+                          const bd = { x: ba.x + nx * tBack, y: ba.y + ny * tBack };
+                          // Left arm
+                          const la = corner(-1, -1);
+                          const lb = { x: la.x + ux * tArm, y: la.y + uy * tArm };
+                          const lc = { x: lb.x + nx * halfB * 2, y: lb.y + ny * halfB * 2 };
+                          const ld = { x: la.x + nx * halfB * 2, y: la.y + ny * halfB * 2 };
+                          // Right arm
+                          const ra = { x: corner(1, -1).x - ux * tArm, y: corner(1, -1).y - uy * tArm };
+                          const rb = corner(1, -1);
+                          const rc = { x: rb.x + nx * halfB * 2, y: rb.y + ny * halfB * 2 };
+                          const rd = { x: ra.x + nx * halfB * 2, y: ra.y + ny * halfB * 2 };
+                          return (
+                            <>
+                              <Line points={[ba.x, ba.y, bb.x, bb.y, bc.x, bc.y, bd.x, bd.y]} closed fill={stroke} stroke={stroke} strokeWidth={0.4} />
+                              <Line points={[la.x, la.y, lb.x, lb.y, lc.x, lc.y, ld.x, ld.y]} closed fill={stroke} stroke={stroke} strokeWidth={0.4} />
+                              <Line points={[ra.x, ra.y, rb.x, rb.y, rc.x, rc.y, rd.x, rd.y]} closed fill={stroke} stroke={stroke} strokeWidth={0.4} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "table") {
+                          const inset = Math.min(halfL, halfB) * 0.18;
+                          const sL = (halfL - inset) / halfL, sB = (halfB - inset) / halfB;
+                          const i00 = corner(-sL, -sB), i10 = corner(sL, -sB), i11 = corner(sL, sB), i01 = corner(-sL, sB);
+                          return <Line points={[i00.x, i00.y, i10.x, i10.y, i11.x, i11.y, i01.x, i01.y]} closed stroke={stroke} strokeWidth={0.6} dash={[3, 2]} />;
+                        }
+                        if (group.kind === "desk") {
+                          // Knee well — a recessed inner rectangle on the user (inner) side.
+                          const a = corner(-0.6, 0.0), b = corner(0.6, 0.0);
+                          const c = corner(0.6, 0.85), d = corner(-0.6, 0.85);
+                          return <Line points={[a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y]} closed stroke={stroke} strokeWidth={0.6} dash={[2, 2]} />;
+                        }
+                        if (group.kind === "wardrobe") {
+                          // Center divider line + door-arc hint on each half.
+                          const a = corner(0, -1), b = corner(0, 1);
+                          const arcPts1: number[] = [];
+                          const arcPts2: number[] = [];
+                          const STEPS = 14;
+                          for (let s = 0; s <= STEPS; s++) {
+                            const t = s / STEPS;
+                            // Door 1: hinge at corner(-1,-1), opens toward inside corner(0,-1->0,0 sweep)
+                            const a1 = (Math.PI / 2) * t;
+                            const r1 = halfL;
+                            const h1 = corner(-1, -1);
+                            arcPts1.push(h1.x + Math.cos(a1) * ux * r1 + Math.sin(a1) * nx * r1);
+                            arcPts1.push(h1.y + Math.cos(a1) * uy * r1 + Math.sin(a1) * ny * r1);
+                            // Door 2: hinge at corner(1,-1)
+                            const h2 = corner(1, -1);
+                            arcPts2.push(h2.x - Math.cos(a1) * ux * r1 + Math.sin(a1) * nx * r1);
+                            arcPts2.push(h2.y - Math.cos(a1) * uy * r1 + Math.sin(a1) * ny * r1);
+                          }
+                          return (
+                            <>
+                              <Line points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={0.8} />
+                              <Line points={arcPts1} stroke={stroke} strokeWidth={0.5} dash={[2, 2]} />
+                              <Line points={arcPts2} stroke={stroke} strokeWidth={0.5} dash={[2, 2]} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "bookshelf") {
+                          // Multiple shelves — parallel lines along length axis.
+                          const SHELVES = 4;
+                          const lines: ReactNode[] = [];
+                          for (let s = 1; s < SHELVES; s++) {
+                            const sb = -1 + (2 * s) / SHELVES;
+                            const a = corner(-1, sb), b = corner(1, sb);
+                            lines.push(<Line key={`bs-${s}`} points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={0.5} />);
+                          }
+                          return <>{lines}</>;
+                        }
+                        if (group.kind === "bench") {
+                          // Plank seam + thinner inner outline (cushion).
+                          const inset = Math.min(halfL, halfB) * 0.15;
+                          const sL = (halfL - inset) / halfL, sB = (halfB - inset) / halfB;
+                          const i00 = corner(-sL, -sB), i10 = corner(sL, -sB), i11 = corner(sL, sB), i01 = corner(-sL, sB);
+                          const ma = corner(-1, 0), mb = corner(1, 0);
+                          return (
+                            <>
+                              <Line points={[i00.x, i00.y, i10.x, i10.y, i11.x, i11.y, i01.x, i01.y]} closed stroke={stroke} strokeWidth={0.5} />
+                              <Line points={[ma.x, ma.y, mb.x, mb.y]} stroke={stroke} strokeWidth={0.4} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "piano") {
+                          // Row of small "key" lines on the inner side.
+                          const KEYS = Math.max(8, Math.round((halfL * 2) / Math.max(1, halfB) * 4));
+                          const keys: ReactNode[] = [];
+                          for (let k = 0; k <= KEYS; k++) {
+                            const sl = -1 + (2 * k) / KEYS;
+                            const a = corner(sl, 0.2), b = corner(sl, 1);
+                            keys.push(<Line key={`pk-${k}`} points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={0.4} />);
+                          }
+                          // Body/keyboard divider
+                          const da = corner(-1, 0.2), db = corner(1, 0.2);
+                          keys.push(<Line key="pdiv" points={[da.x, da.y, db.x, db.y]} stroke={stroke} strokeWidth={0.7} />);
+                          return <>{keys}</>;
+                        }
+                        if (group.kind === "tv-unit") {
+                          // Cabinet front split into 3 doors + a thin TV strip on the inner side suggesting the screen above.
+                          const lines: ReactNode[] = [];
+                          for (let s = 1; s < 3; s++) {
+                            const sl = -1 + (2 * s) / 3;
+                            const a = corner(sl, -1), b = corner(sl, 1);
+                            lines.push(<Line key={`tv-d-${s}`} points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={0.5} />);
+                          }
+                          // TV "screen" — thin filled strip near the inner edge, centered
+                          const ta = corner(-0.7, 0.65), tb = corner(0.7, 0.65), tc = corner(0.7, 0.95), td = corner(-0.7, 0.95);
+                          lines.push(<Line key="tv-scr" points={[ta.x, ta.y, tb.x, tb.y, tc.x, tc.y, td.x, td.y]} closed fill={stroke} stroke={stroke} strokeWidth={0.4} />);
+                          return <>{lines}</>;
+                        }
+                        if (group.kind === "fridge") {
+                          // Door split (perpendicular line at mid-length) + small handle dot.
+                          const a = corner(0, -1), b = corner(0, 1);
+                          const ha = corner(0.05, 0.2), hb = corner(0.05, -0.2);
+                          return (
+                            <>
+                              <Line points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={0.8} />
+                              <Line points={[ha.x, ha.y, hb.x, hb.y]} stroke={stroke} strokeWidth={1.2} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "toilet") {
+                          // Tank as small filled strip on the outer (wall) side; bowl as ellipse on the inner side.
+                          const ta = corner(-0.5, -1), tb = corner(0.5, -1), tc = corner(0.5, -0.5), td = corner(-0.5, -0.5);
+                          // Bowl ellipse centered at corner(0, 0.4) with radii halfL*0.5 and halfB*0.55
+                          const ELLIPSE_PTS = 28;
+                          const ec = corner(0, 0.4);
+                          const ePts: number[] = [];
+                          for (let i = 0; i <= ELLIPSE_PTS; i++) {
+                            const a = (i / ELLIPSE_PTS) * Math.PI * 2;
+                            const ex = ec.x + Math.cos(a) * ux * halfL * 0.45 + Math.sin(a) * nx * halfB * 0.55;
+                            const ey = ec.y + Math.cos(a) * uy * halfL * 0.45 + Math.sin(a) * ny * halfB * 0.55;
+                            ePts.push(ex, ey);
+                          }
+                          return (
+                            <>
+                              <Line points={[ta.x, ta.y, tb.x, tb.y, tc.x, tc.y, td.x, td.y]} closed fill={stroke} stroke={stroke} strokeWidth={0.4} />
+                              <Line points={ePts} closed fill="rgba(255,255,255,0.6)" stroke={stroke} strokeWidth={0.7} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "bathtub") {
+                          // Inner inset rectangle (tub interior) + small circle (drain).
+                          const inset = Math.min(halfL, halfB) * 0.18;
+                          const sL = (halfL - inset) / halfL, sB = (halfB - inset) / halfB;
+                          const i00 = corner(-sL, -sB), i10 = corner(sL, -sB), i11 = corner(sL, sB), i01 = corner(-sL, sB);
+                          const drain = corner(-0.7, 0);
+                          return (
+                            <>
+                              <Line points={[i00.x, i00.y, i10.x, i10.y, i11.x, i11.y, i01.x, i01.y]} closed fill="rgba(255,255,255,0.5)" stroke={stroke} strokeWidth={0.6} />
+                              <Circle x={drain.x} y={drain.y} radius={Math.min(halfL, halfB) * 0.08} stroke={stroke} strokeWidth={0.6} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "guitar") {
+                          // Body (lower bout) + waist + upper bout — three overlapping circles + neck line
+                          const bodyR = Math.min(halfL * 0.4, halfB * 0.9);
+                          const bodyC = corner(-0.5, 0);
+                          const waistR = bodyR * 0.7;
+                          const waistC = corner(0, 0);
+                          const upperR = bodyR * 0.85;
+                          const upperC = corner(0.4, 0);
+                          const neckA = corner(0.7, 0), neckB = corner(1, 0);
+                          return (
+                            <>
+                              <Circle x={bodyC.x} y={bodyC.y} radius={bodyR} stroke={stroke} strokeWidth={0.7} fill="rgba(255,255,255,0.3)" />
+                              <Circle x={waistC.x} y={waistC.y} radius={waistR} stroke={stroke} strokeWidth={0.5} />
+                              <Circle x={upperC.x} y={upperC.y} radius={upperR} stroke={stroke} strokeWidth={0.6} fill="rgba(255,255,255,0.3)" />
+                              <Line points={[neckA.x, neckA.y, neckB.x, neckB.y]} stroke={stroke} strokeWidth={1.2} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "whiteboard") {
+                          // Inner inset (writing surface) + a corner marker tray
+                          const inset = Math.min(halfL, halfB) * 0.12;
+                          const sL = (halfL - inset) / halfL, sB = (halfB - inset) / halfB;
+                          const i00 = corner(-sL, -sB), i10 = corner(sL, -sB), i11 = corner(sL, sB), i01 = corner(-sL, sB);
+                          const ta = corner(-0.85, 0.6), tb = corner(0.85, 0.6), tc = corner(0.85, 0.85), td = corner(-0.85, 0.85);
+                          return (
+                            <>
+                              <Line points={[i00.x, i00.y, i10.x, i10.y, i11.x, i11.y, i01.x, i01.y]} closed fill="rgba(255,255,255,0.7)" stroke={stroke} strokeWidth={0.6} />
+                              <Line points={[ta.x, ta.y, tb.x, tb.y, tc.x, tc.y, td.x, td.y]} closed fill={stroke} stroke={stroke} strokeWidth={0.4} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "flute") {
+                          // Center line along length axis + tone holes (small dots)
+                          const a = corner(-1, 0), b = corner(1, 0);
+                          const HOLES = 6;
+                          const dots: ReactNode[] = [];
+                          for (let k = 0; k < HOLES; k++) {
+                            const sl = -0.7 + (1.4 * k) / (HOLES - 1);
+                            const c = corner(sl, 0.05);
+                            dots.push(<Circle key={`fh-${k}`} x={c.x} y={c.y} radius={Math.min(halfL, halfB) * 0.08} fill={stroke} />);
+                          }
+                          return (
+                            <>
+                              <Line points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={1.5} />
+                              {dots}
+                            </>
+                          );
+                        }
+                        if (group.kind === "clock") {
+                          // Round face + 12/3/6/9 ticks + two hands
+                          const r = Math.min(halfL, halfB) * 0.85;
+                          const ticks: ReactNode[] = [];
+                          for (let q = 0; q < 4; q++) {
+                            const a = (q / 4) * Math.PI * 2;
+                            const x1 = cx + Math.cos(a) * ux * r * 0.85 + Math.sin(a) * nx * r * 0.85;
+                            const y1 = cy + Math.cos(a) * uy * r * 0.85 + Math.sin(a) * ny * r * 0.85;
+                            const x2 = cx + Math.cos(a) * ux * r + Math.sin(a) * nx * r;
+                            const y2 = cy + Math.cos(a) * uy * r + Math.sin(a) * ny * r;
+                            ticks.push(<Line key={`ct-${q}`} points={[x1, y1, x2, y2]} stroke={stroke} strokeWidth={0.7} />);
+                          }
+                          // Hour hand (-y direction in local)
+                          const hour = corner(0, -0.4);
+                          const min = corner(0.5, 0);
+                          return (
+                            <>
+                              <Circle x={cx} y={cy} radius={r} fill="rgba(255,255,255,0.7)" stroke={stroke} strokeWidth={0.8} />
+                              {ticks}
+                              <Line points={[cx, cy, hour.x, hour.y]} stroke={stroke} strokeWidth={1.2} />
+                              <Line points={[cx, cy, min.x, min.y]} stroke={stroke} strokeWidth={0.8} />
+                              <Circle x={cx} y={cy} radius={Math.min(halfL, halfB) * 0.08} fill={stroke} />
+                            </>
+                          );
+                        }
+                        if (group.kind === "mirror") {
+                          // Inner inset rectangle (reflective surface) + diagonal hatching
+                          const inset = Math.min(halfL, halfB) * 0.12;
+                          const sL = (halfL - inset) / halfL, sB = (halfB - inset) / halfB;
+                          const i00 = corner(-sL, -sB), i10 = corner(sL, -sB), i11 = corner(sL, sB), i01 = corner(-sL, sB);
+                          const da = corner(-sL * 0.6, -sB * 0.6), db = corner(sL * 0.6, sB * 0.6);
+                          const ea = corner(-sL * 0.3, -sB * 0.6), eb = corner(sL * 0.9, sB * 0.6);
+                          return (
+                            <>
+                              <Line points={[i00.x, i00.y, i10.x, i10.y, i11.x, i11.y, i01.x, i01.y]} closed fill="rgba(255,255,255,0.6)" stroke={stroke} strokeWidth={0.6} />
+                              <Line points={[da.x, da.y, db.x, db.y]} stroke={stroke} strokeWidth={0.4} dash={[2, 2]} />
+                              <Line points={[ea.x, ea.y, eb.x, eb.y]} stroke={stroke} strokeWidth={0.4} dash={[2, 2]} />
+                            </>
+                          );
+                        }
+                        return null;
+                      })();
+                      return (
+                        <Group key={`psym-${gid}`} listening={false}>
+                          <Line points={[c00.x, c00.y, c10.x, c10.y, c11.x, c11.y, c01.x, c01.y]} closed fill={fill} stroke={stroke} strokeWidth={1.2} />
+                          {motif}
+                        </Group>
+                      );
+                    });
+                  })()}
+
                   {currentWallStart ? (
                     <Circle x={currentWallStart.x} y={currentWallStart.y} radius={6} fill="#0EA5E9" />
                   ) : null}
@@ -15451,19 +16460,6 @@ User request: ${aiPrompt.trim()}`;
             <span className="font-medium text-slate-800">{(scale * 100).toFixed(0)}%</span>
             <span className="hidden sm:inline">Scroll zoom · Middle-click or Pan tool or Space+drag to pan</span>
           </div>
-          {isRightPanelCollapsed ? (
-            <Button
-              variant="outline"
-              size="icon"
-              className="absolute right-2 top-2 z-20 h-8 w-8 shrink-0 shadow-md"
-              title="Show properties panel"
-              aria-label="Show properties panel"
-              aria-expanded={false}
-              onClick={() => setIsRightPanelCollapsed(false)}
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden />
-            </Button>
-          ) : null}
         </div>
 
         <div
@@ -15475,17 +16471,6 @@ User request: ${aiPrompt.trim()}`;
         >
           {!isRightPanelCollapsed ? (
             <>
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute left-2 top-2 z-10 h-8 w-8 shrink-0 shadow-md"
-                title="Hide properties panel"
-                aria-label="Hide properties panel"
-                aria-expanded
-                onClick={() => setIsRightPanelCollapsed(true)}
-              >
-                <ChevronRight className="h-4 w-4" aria-hidden />
-              </Button>
               <div className="flex h-full flex-col min-h-0">
               <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-4 p-3 pr-4 pb-6 pt-12">
@@ -16019,6 +17004,97 @@ User request: ${aiPrompt.trim()}`;
                   <>
                     <p className="text-xs text-slate-500">Tool: {tool}</p>
                     <p className="text-xs text-slate-500">Zoom: {(scale * 100).toFixed(0)}%</p>
+
+                    {/* Outliner — shown when nothing is selected. Hierarchical browser of model elements. */}
+                    <div className="mt-3 space-y-1.5">
+                      {([
+                        { key: "nodes" as const, label: "Nodes", count: wallNodes.length },
+                        { key: "edges" as const, label: "Edges", count: history.state.walls.length },
+                        { key: "areas" as const, label: "Areas", count: visibleRooms.length },
+                      ]).map((group) => {
+                        const open = outlinerOpenGroup === group.key;
+                        return (
+                          <div key={group.key} className="rounded border border-slate-200 bg-white">
+                            <button
+                              type="button"
+                              className="flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-slate-50"
+                              onClick={() => setOutlinerOpenGroup(open ? null : group.key)}
+                            >
+                              <span className="text-xs font-semibold text-slate-700">
+                                {group.label} <span className="ml-1 text-[10px] font-normal text-slate-400">({group.count})</span>
+                              </span>
+                              <span className="text-[11px] text-slate-400">{open ? "▼" : "▶"}</span>
+                            </button>
+                            {open && (
+                              <div className="max-h-56 overflow-y-auto border-t border-slate-100 px-1 py-1">
+                                {group.key === "nodes" && (
+                                  wallNodes.length === 0 ? (
+                                    <p className="px-1.5 py-1 text-[11px] text-slate-400">No nodes</p>
+                                  ) : wallNodes.map((node, idx) => (
+                                    <button
+                                      key={node.stableKey}
+                                      type="button"
+                                      className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left text-[11px] hover:bg-blue-50"
+                                      onClick={() => {
+                                        selection.clearSelection();
+                                        setSelectedNodeKey(node.stableKey);
+                                      }}
+                                    >
+                                      <span className="font-mono text-slate-700">Node{String(idx + 1).padStart(3, "0")}</span>
+                                      <span className="text-slate-400">deg {node.degree}</span>
+                                    </button>
+                                  ))
+                                )}
+                                {group.key === "edges" && (
+                                  history.state.walls.length === 0 ? (
+                                    <p className="px-1.5 py-1 text-[11px] text-slate-400">No edges</p>
+                                  ) : history.state.walls.map((wall, idx) => (
+                                    <button
+                                      key={wall.id}
+                                      type="button"
+                                      className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left text-[11px] hover:bg-blue-50"
+                                      onClick={() => {
+                                        setSelectedNodeKey(null);
+                                        selection.selectOne(wall.id);
+                                      }}
+                                    >
+                                      <span className="font-mono text-slate-700">
+                                        Wall{String(idx + 1).padStart(3, "0")}
+                                        {wall.label ? <span className="ml-1 font-sans text-slate-500">— {wall.label}</span> : null}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400">{wall.segmentType ?? "wall"}</span>
+                                    </button>
+                                  ))
+                                )}
+                                {group.key === "areas" && (
+                                  visibleRooms.length === 0 ? (
+                                    <p className="px-1.5 py-1 text-[11px] text-slate-400">No areas</p>
+                                  ) : visibleRooms.map((room, idx) => (
+                                    <button
+                                      key={room.id}
+                                      type="button"
+                                      className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left text-[11px] hover:bg-blue-50"
+                                      onClick={() => {
+                                        setSelectedNodeKey(null);
+                                        selection.selectOne(room.id);
+                                      }}
+                                    >
+                                      <span className="font-mono text-slate-700">
+                                        Room{String(idx + 1).padStart(3, "0")}
+                                        {room.label ? <span className="ml-1 font-sans text-slate-500">— {room.label}</span> : null}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400">
+                                        {areaInSquareUnit(room.netArea ?? polygonArea(room.points), unit, pixelsPerMeter).toFixed(2)} {unit}²
+                                      </span>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </>
                 )}
 
@@ -16054,73 +17130,7 @@ User request: ${aiPrompt.trim()}`;
                 {/* Hide wall styling when any gen element, node, or room is selected */}
                 {!(selectedGenElement && generatedLayout) && !selectedNodeKey && !selectedRoom && (
                 <>
-                {!selectedRoom && tool !== "wall" ? (
-                  <>
-                    {!selectedWall && (
-                      <>
-                        <p className="mt-2 text-xs text-slate-500">
-                          Thickness (new walls): {unitValueFromPixels(uiWallThickness, unit, pixelsPerMeter).toFixed(2)} {unit}
-                        </p>
-                        <p className="text-[11px] text-slate-400">({uiWallThickness.toFixed(0)} px)</p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min={0.01}
-                            step={unit === "cm" ? 1 : 0.01}
-                            value={wallThicknessInput}
-                            onChange={(event) => setWallThicknessInput(event.target.value)}
-                            onBlur={applyWallThicknessInput}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                applyWallThicknessInput();
-                              }
-                            }}
-                          />
-                          <span className="text-xs text-slate-500">{unit}</span>
-                        </div>
-                        {uiWallMode === "line" ? (
-                          <Button
-                            className="mt-2"
-                            variant="outline"
-                            onClick={() => {
-                              setLineThicknessInput(unitValueFromPixels(uiWallThickness, unit, pixelsPerMeter).toFixed(2));
-                              setLineThicknessDialogOpen(true);
-                            }}
-                          >
-                            Set line thickness
-                          </Button>
-                        ) : (
-                          <Slider
-                            min={2}
-                            max={80}
-                            step={1}
-                            value={[uiWallThickness]}
-                            onValueChange={(values) => setWallThicknessForUi(values[0])}
-                          />
-                        )}
-                      </>
-                    )}
-                    {!selectedWall && (
-                      <>
-                        <p className="mt-3 text-xs text-slate-500">
-                          Justification (new walls)
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-slate-400">Press Tab while drawing to cycle: left, center, or right</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <Button size="sm" variant={uiWallMethod === "left" ? "default" : "outline"} onClick={() => setWallMethodForUi("left")}>
-                            Left
-                          </Button>
-                          <Button size="sm" variant={uiWallMethod === "center" ? "default" : "outline"} onClick={() => setWallMethodForUi("center")}>
-                            Center
-                          </Button>
-                          <Button size="sm" variant={uiWallMethod === "right" ? "default" : "outline"} onClick={() => setWallMethodForUi("right")}>
-                            Right
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : !selectedRoom ? (
+                {!selectedRoom && tool !== "wall" ? null : !selectedRoom ? (
                   <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">
                     Wall draw mode: click the <span className="font-medium text-slate-800">Wall</span> tool again to open the options overlay, or use <span className="font-medium text-slate-800">Done</span> / <span className="font-medium text-slate-800">Cancel</span> there to hide it.
                   </p>
@@ -16132,33 +17142,6 @@ User request: ${aiPrompt.trim()}`;
                 {/* Hide area stats, room props, constraints when wall, node, or any gen element is selected */}
                 {!selectedWall && !(selectedGenElement && generatedLayout) && !selectedNodeKey && (
                 <>
-                {!selectedRoom && (
-                <div className="mt-6 border-t pt-4">
-                  <p className="text-sm font-semibold">Area Statistics</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-slate-600 font-medium">Total Areas: {visibleRooms.length}</p>
-                    <div className="max-h-40 overflow-y-auto pr-1">
-                      {visibleRooms.map((room, idx) => (
-                        <div key={room.id} className="flex justify-between items-center text-[11px] py-1 border-b border-slate-100 last:border-0">
-                          <span className="text-slate-500">Room {idx + 1}</span>
-                          <span className="font-mono text-slate-700">
-                            {areaInSquareUnit(room.netArea ?? polygonArea(room.points), unit, pixelsPerMeter).toFixed(2)} {unit}²
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {visibleRooms.length > 0 && (
-                      <div className="flex justify-between items-center text-xs font-bold pt-2 mt-1 border-t-2 border-slate-200">
-                        <span>Total Net Area</span>
-                        <span>
-                          {visibleRooms.reduce((sum, r) => sum + areaInSquareUnit(r.netArea ?? polygonArea(r.points), unit, pixelsPerMeter), 0).toFixed(2)} {unit}²
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                )}
-
                 {selectedObject ? (
                   <div className="mt-4 rounded border p-2 text-xs">
                     <p className="font-medium">Selected object: {selectedObject.kind}</p>
@@ -17540,7 +18523,7 @@ User request: ${aiPrompt.trim()}`;
                                   // Default position: next free slot after the last object.
                                   const last = objs[objs.length - 1];
                                   const nextPos = last ? Math.min(95, last.position + 5) : 10;
-                                  const newObj: PlacedObject = { id: createId(), length: 1, breadth: 0.6, position: nextPos, setback: 0 };
+                                  const newObj: PlacedObject = { id: createId(), length: 1, breadth: 0.6, height: 1, position: nextPos, setback: 0, clearance: 0, kind: "bed" };
                                   setPlacedObjectsByRoom((prev) => ({ ...prev, [rid]: [...(prev[rid] ?? []), newObj] }));
                                 }}
                               >
@@ -17562,26 +18545,177 @@ User request: ${aiPrompt.trim()}`;
                               )}
                             </div>
 
-                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                              {objs.map((o, i) => (
-                                <div key={o.id} className="rounded border border-slate-100 bg-slate-50 p-1.5 space-y-1">
+                            {/* Seed-driven layout browser — deterministic positions for unlocked objects. */}
+                            {objs.some((o) => !o.locked) && (() => {
+                              const mulberry32 = (s: number) => {
+                                let t = s >>> 0;
+                                return () => {
+                                  t = (t + 0x6D2B79F5) >>> 0;
+                                  let r = t;
+                                  r = Math.imul(r ^ (r >>> 15), r | 1);
+                                  r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+                                  return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+                                };
+                              };
+                              const positionsForSeed = (arr: PlacedObject[], seed: number): number[] => {
+                                const rng = mulberry32(seed);
+                                return arr.map((o) => (o.locked ? o.position : rng() * 100));
+                              };
+                              const applySeed = (seed: number) => {
+                                setPlacementSeedByRoom((prev) => ({ ...prev, [rid]: seed }));
+                                setPlacedObjectsByRoom((prev) => {
+                                  const arr = prev[rid] ?? [];
+                                  const positions = positionsForSeed(arr, seed);
+                                  return { ...prev, [rid]: arr.map((o, i) => (o.locked ? o : { ...o, position: positions[i] })) };
+                                });
+                                if (!placeLive) runRoomPlacement(selectedRoom, true);
+                              };
+                              const currentSeed = placementSeedByRoom[rid] ?? 1;
+                              return (
+                                <div className="space-y-1 rounded border border-slate-100 bg-slate-50 p-1.5">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-semibold text-slate-700">Object {i + 1}</span>
+                                    <span className="text-[10px] text-slate-500">Layout seed</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={9999}
+                                      step={1}
+                                      className="h-5 w-14 rounded border border-slate-200 bg-white px-1 text-right text-[10px] font-mono"
+                                      value={currentSeed}
+                                      onChange={(e) => {
+                                        const v = Math.max(1, Math.min(9999, Math.round(+e.target.value || 1)));
+                                        applySeed(v);
+                                      }}
+                                    />
+                                  </div>
+                                  <input
+                                    type="range"
+                                    className="w-full"
+                                    min={1}
+                                    max={1000}
+                                    step={1}
+                                    value={Math.min(1000, currentSeed)}
+                                    onChange={(e) => applySeed(+e.target.value)}
+                                  />
+                                  <div className="flex gap-1">
                                     <Button
-                                      variant="ghost"
+                                      variant="outline"
                                       size="sm"
-                                      className="h-5 w-5 p-0 text-[11px] text-red-500"
-                                      title="Delete"
+                                      className="h-6 flex-1 text-[10px]"
+                                      title="Random seed"
+                                      onClick={() => applySeed(1 + Math.floor(Math.random() * 9999))}
+                                    >
+                                      🎲 Random
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-6 flex-1 text-[10px]"
+                                      title="Next seed whose layout differs noticeably from this one"
                                       onClick={() => {
-                                        setPlacedObjectsByRoom((prev) => {
-                                          const arr = [...(prev[rid] ?? [])];
-                                          arr.splice(i, 1);
-                                          return { ...prev, [rid]: arr };
-                                        });
+                                        const arr = placedObjectsByRoom[rid] ?? [];
+                                        const unlockedIdx = arr.map((o, i) => (!o.locked ? i : -1)).filter((i) => i >= 0);
+                                        if (unlockedIdx.length === 0) return;
+                                        const cur = positionsForSeed(arr, currentSeed);
+                                        const arcDist = (a: number, b: number) => {
+                                          let d = Math.abs(a - b);
+                                          if (d > 50) d = 100 - d;
+                                          return d;
+                                        };
+                                        const THRESHOLD = 10; // avg %-perimeter difference per unlocked object
+                                        const MAX_TRIES = 200;
+                                        let next = currentSeed;
+                                        for (let k = 1; k <= MAX_TRIES; k++) {
+                                          const candidate = currentSeed + k > 9999 ? 1 + ((currentSeed + k) % 9999) : currentSeed + k;
+                                          const cand = positionsForSeed(arr, candidate);
+                                          let total = 0;
+                                          for (const i of unlockedIdx) total += arcDist(cur[i], cand[i]);
+                                          if (total / unlockedIdx.length >= THRESHOLD) { next = candidate; break; }
+                                        }
+                                        applySeed(next);
                                       }}
                                     >
-                                      ×
+                                      ⏭ Next distinct
                                     </Button>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              {objs.map((o, i) => (
+                                <div
+                                  key={o.id}
+                                  ref={(el) => {
+                                    if (el && o.id === highlightedPlacementObjectId) {
+                                      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                                    }
+                                  }}
+                                  className={`rounded border p-1.5 space-y-1 transition-colors ${
+                                    o.id === highlightedPlacementObjectId
+                                      ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
+                                      : "border-slate-100 bg-slate-50"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-semibold text-slate-700">
+                                      Object {i + 1} · <span className="capitalize text-slate-900">{(o.kind ?? "bed").replace("-", " ")}</span>
+                                      {o.locked ? <span className="ml-1 text-amber-600">· locked</span> : null}
+                                    </span>
+                                    <div className="flex items-center gap-0.5">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className={`h-5 w-5 p-0 text-[11px] ${o.locked ? "text-amber-600" : "text-slate-400 hover:text-slate-700"}`}
+                                        title={o.locked ? "Unlock — Roll will randomize this object" : "Lock — Roll will keep this object's position"}
+                                        aria-pressed={!!o.locked}
+                                        onClick={() => updateObj(i, { locked: !o.locked })}
+                                      >
+                                        {o.locked ? "🔒" : "🔓"}
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-5 w-5 p-0 text-[11px] text-red-500"
+                                        title="Delete"
+                                        onClick={() => {
+                                          setPlacedObjectsByRoom((prev) => {
+                                            const arr = [...(prev[rid] ?? [])];
+                                            arr.splice(i, 1);
+                                            return { ...prev, [rid]: arr };
+                                          });
+                                        }}
+                                      >
+                                        ×
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-slate-500">Type</span>
+                                    <select
+                                      className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-[11px]"
+                                      value={o.kind ?? "bed"}
+                                      onChange={(e) => updateObj(i, { kind: e.target.value as PlacedObjectKind })}
+                                    >
+                                      <option value="bed">Bed</option>
+                                      <option value="table">Table</option>
+                                      <option value="chair">Chair</option>
+                                      <option value="sofa">Sofa</option>
+                                      <option value="desk">Desk</option>
+                                      <option value="wardrobe">Wardrobe</option>
+                                      <option value="bookshelf">Bookshelf</option>
+                                      <option value="bench">Bench</option>
+                                      <option value="piano">Piano</option>
+                                      <option value="tv-unit">TV Unit</option>
+                                      <option value="fridge">Fridge</option>
+                                      <option value="toilet">Toilet</option>
+                                      <option value="bathtub">Bathtub</option>
+                                      <option value="guitar">Guitar</option>
+                                      <option value="whiteboard">Whiteboard</option>
+                                      <option value="flute">Flute</option>
+                                      <option value="clock">Clock</option>
+                                      <option value="mirror">Mirror</option>
+                                    </select>
                                   </div>
                                   <div>
                                     <div className="flex items-center justify-between">
@@ -17603,6 +18737,15 @@ User request: ${aiPrompt.trim()}`;
                                   </div>
                                   <div>
                                     <div className="flex items-center justify-between">
+                                      <span className="text-[10px] text-slate-500">Height</span>
+                                      <span className="font-mono text-[10px] text-slate-700">{(o.height ?? 1).toFixed(2)} m</span>
+                                    </div>
+                                    <input type="range" className="w-full" min={0.1} max={3} step={0.05}
+                                      value={o.height ?? 1}
+                                      onChange={(e) => updateObj(i, { height: +e.target.value })} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-between">
                                       <span className="text-[10px] text-slate-500">Position</span>
                                       <span className="font-mono text-[10px] text-slate-700">{o.position.toFixed(1)} %</span>
                                     </div>
@@ -17618,6 +18761,15 @@ User request: ${aiPrompt.trim()}`;
                                     <input type="range" className="w-full" min={0} max={5} step={0.05}
                                       value={o.setback ?? 0}
                                       onChange={(e) => updateObj(i, { setback: +e.target.value })} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] text-slate-500">Clearance</span>
+                                      <span className="font-mono text-[10px] text-slate-700">{(o.clearance ?? 0).toFixed(2)} m</span>
+                                    </div>
+                                    <input type="range" className="w-full" min={0} max={3} step={0.05}
+                                      value={o.clearance ?? 0}
+                                      onChange={(e) => updateObj(i, { clearance: +e.target.value })} />
                                   </div>
                                 </div>
                               ))}
@@ -17655,6 +18807,240 @@ User request: ${aiPrompt.trim()}`;
                         })()}
                       </div>
                     )}
+
+                    {/* Visibility Polygon — only for Room type */}
+                    {(selectedRoom.roomType ?? "room") === "room" && (() => {
+                      const rid = selectedRoom.id;
+                      const mode = visibilityModeByRoom[rid] ?? "point";
+                      const viewer = visibilityViewerByRoom[rid];
+                      const edgeIdx = visibilityEdgeIndexByRoom[rid] ?? 0;
+                      const polyHasViewer = !!viewer;
+                      const SEGMENT_SAMPLES = 16;
+                      const bounces = visibilityBouncesByRoom[rid] ?? 0;
+                      const rayCount = visibilityRayCountByRoom[rid] ?? 200;
+                      const reflectivity = visibilityReflectivityByRoom[rid] ?? 0.7;
+                      const compute = () => {
+                        const pts = selectedRoom.points;
+                        if (mode === "point") {
+                          if (!viewer) return;
+                          setVisibilityPolygonsByRoom((prev) => ({ ...prev, [rid]: [computeVisibilityPolygon(viewer, pts)] }));
+                          if (bounces > 0) {
+                            const segs = monteCarloLightSegments(viewer, pts, { rayCount, maxBounces: bounces, reflectivity });
+                            setVisibilityRaysByRoom((prev) => ({ ...prev, [rid]: segs }));
+                          } else {
+                            setVisibilityRaysByRoom((prev) => { const n = { ...prev }; delete n[rid]; return n; });
+                          }
+                        } else {
+                          const samples = sampleSegmentInside(pts, edgeIdx, SEGMENT_SAMPLES);
+                          const polys = samples.map((s) => computeVisibilityPolygon(s, pts)).filter((p) => p.length >= 3);
+                          setVisibilityPolygonsByRoom((prev) => ({ ...prev, [rid]: polys }));
+                          setVisibilityRaysByRoom((prev) => { const n = { ...prev }; delete n[rid]; return n; });
+                        }
+                      };
+                      return (
+                        <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between text-left"
+                            onClick={() => setVisibilityExpanded((v) => !v)}
+                          >
+                            <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Visibility Polygon</span>
+                            <span className="text-[11px] text-slate-400">{visibilityExpanded ? "▼" : "▶"}</span>
+                          </button>
+                          {visibilityExpanded && (
+                            <>
+                              <div>
+                                <span className="text-[10px] text-slate-500">Type</span>
+                                <div className="mt-0.5 flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant={mode === "point" ? "default" : "outline"}
+                                    className="h-6 flex-1 text-[10px]"
+                                    onClick={() => setVisibilityModeByRoom((prev) => ({ ...prev, [rid]: "point" }))}
+                                  >
+                                    Point
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={mode === "segment" ? "default" : "outline"}
+                                    className="h-6 flex-1 text-[10px]"
+                                    onClick={() => setVisibilityModeByRoom((prev) => ({ ...prev, [rid]: "segment" }))}
+                                  >
+                                    Segment
+                                  </Button>
+                                </div>
+                              </div>
+                              {mode === "point" ? (
+                                <>
+                                  <p className="text-[10px] text-slate-500">
+                                    Drag the orange handle on the canvas to move the viewer.
+                                  </p>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-slate-500">Viewer</span>
+                                    <span className="font-mono text-[10px] text-slate-700">
+                                      {polyHasViewer ? `(${viewer.x.toFixed(0)}, ${viewer.y.toFixed(0)})` : "—"}
+                                    </span>
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-6 flex-1 text-[10px]"
+                                      onClick={() => {
+                                        const pts = selectedRoom.points;
+                                        let cx = 0, cy = 0;
+                                        for (const p of pts) { cx += p.x; cy += p.y; }
+                                        cx /= pts.length; cy /= pts.length;
+                                        const c = { x: cx, y: cy };
+                                        setVisibilityViewerByRoom((prev) => ({ ...prev, [rid]: c }));
+                                        setVisibilityPolygonsByRoom((prev) => ({ ...prev, [rid]: [computeVisibilityPolygon(c, pts)] }));
+                                      }}
+                                    >
+                                      {polyHasViewer ? "Reset to centroid" : "Place at centroid"}
+                                    </Button>
+                                    {polyHasViewer && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 flex-1 text-[10px]"
+                                        onClick={() => {
+                                          setVisibilityViewerByRoom((prev) => { const n = { ...prev }; delete n[rid]; return n; });
+                                          setVisibilityPolygonsByRoom((prev) => { const n = { ...prev }; delete n[rid]; return n; });
+                                          setVisibilityRaysByRoom((prev) => { const n = { ...prev }; delete n[rid]; return n; });
+                                        }}
+                                      >
+                                        Clear
+                                      </Button>
+                                    )}
+                                  </div>
+
+                                  {/* Monte-Carlo light tracing controls. Bounces=0 disables MC; only direct visibility shown. */}
+                                  <div className="rounded border border-slate-100 bg-slate-50 p-1.5 space-y-1.5">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Monte-Carlo light</div>
+                                    <div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-500">Bounces</span>
+                                        <span className="font-mono text-[10px] text-slate-700">{bounces}</span>
+                                      </div>
+                                      <input
+                                        type="range" className="w-full" min={0} max={6} step={1}
+                                        value={bounces}
+                                        onChange={(e) => {
+                                          const v = +e.target.value;
+                                          setVisibilityBouncesByRoom((prev) => ({ ...prev, [rid]: v }));
+                                          if (visibilityLive && polyHasViewer) {
+                                            if (v > 0) {
+                                              const segs = monteCarloLightSegments(viewer!, selectedRoom.points, { rayCount, maxBounces: v, reflectivity });
+                                              setVisibilityRaysByRoom((prev) => ({ ...prev, [rid]: segs }));
+                                            } else {
+                                              setVisibilityRaysByRoom((prev) => { const n = { ...prev }; delete n[rid]; return n; });
+                                            }
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-500">Rays</span>
+                                        <span className="font-mono text-[10px] text-slate-700">{rayCount}</span>
+                                      </div>
+                                      <input
+                                        type="range" className="w-full" min={50} max={1000} step={25}
+                                        value={rayCount}
+                                        onChange={(e) => {
+                                          const v = +e.target.value;
+                                          setVisibilityRayCountByRoom((prev) => ({ ...prev, [rid]: v }));
+                                          if (visibilityLive && bounces > 0 && polyHasViewer) {
+                                            const segs = monteCarloLightSegments(viewer!, selectedRoom.points, { rayCount: v, maxBounces: bounces, reflectivity });
+                                            setVisibilityRaysByRoom((prev) => ({ ...prev, [rid]: segs }));
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-500">Reflectivity</span>
+                                        <span className="font-mono text-[10px] text-slate-700">{reflectivity.toFixed(2)}</span>
+                                      </div>
+                                      <input
+                                        type="range" className="w-full" min={0.1} max={0.95} step={0.05}
+                                        value={reflectivity}
+                                        onChange={(e) => {
+                                          const v = +e.target.value;
+                                          setVisibilityReflectivityByRoom((prev) => ({ ...prev, [rid]: v }));
+                                          if (visibilityLive && bounces > 0 && polyHasViewer) {
+                                            const segs = monteCarloLightSegments(viewer!, selectedRoom.points, { rayCount, maxBounces: bounces, reflectivity: v });
+                                            setVisibilityRaysByRoom((prev) => ({ ...prev, [rid]: segs }));
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-slate-500">
+                                    Pick a polygon edge — the visibility region is the union of viewpoints sampled along it (e.g. a window or open wall span).
+                                  </p>
+                                  <div>
+                                    <span className="text-[10px] text-slate-500">Edge</span>
+                                    <select
+                                      className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-[11px]"
+                                      value={edgeIdx}
+                                      onChange={(e) => {
+                                        const v = +e.target.value;
+                                        setVisibilityEdgeIndexByRoom((prev) => ({ ...prev, [rid]: v }));
+                                        if (visibilityLive) {
+                                          const pts = selectedRoom.points;
+                                          const samples = sampleSegmentInside(pts, v, SEGMENT_SAMPLES);
+                                          const polys = samples.map((s) => computeVisibilityPolygon(s, pts)).filter((p) => p.length >= 3);
+                                          setVisibilityPolygonsByRoom((prev) => ({ ...prev, [rid]: polys }));
+                                        }
+                                      }}
+                                    >
+                                      {selectedRoom.points.map((_, i) => {
+                                        const a = selectedRoom.points[i];
+                                        const b = selectedRoom.points[(i + 1) % selectedRoom.points.length];
+                                        const len = Math.hypot(b.x - a.x, b.y - a.y) / pixelsPerMeter;
+                                        return (
+                                          <option key={i} value={i}>
+                                            Edge {i} (V{i}→V{(i + 1) % selectedRoom.points.length}) — {len.toFixed(2)} {unit}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  </div>
+                                </>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center gap-1 text-[10px] text-slate-600">
+                                  <input
+                                    type="checkbox"
+                                    checked={visibilityLive}
+                                    onChange={(e) => {
+                                      const on = e.target.checked;
+                                      setVisibilityLive(on);
+                                      if (on) compute();
+                                    }}
+                                  />
+                                  Live
+                                </label>
+                                <span className="text-[9px] text-slate-400">{visibilityLive ? "auto-updates on drag / edge change" : "click Compute"}</span>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-[11px]"
+                                disabled={mode === "point" && !polyHasViewer}
+                                onClick={compute}
+                              >
+                                Compute Visibility
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Voronoi Seeds — only for Room type */}
                     {(selectedRoom.roomType ?? "room") === "room" && (() => {

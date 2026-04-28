@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Funnel Algorithm — interactive walkthrough</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+    display: flex;
+    min-height: 100vh;
+  }
+  .stage {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  svg { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.04); }
+  .panel {
+    width: 380px;
+    background: #fff;
+    border-left: 1px solid #e2e8f0;
+    padding: 24px;
+    overflow-y: auto;
+  }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .controls { display: flex; gap: 6px; margin: 12px 0 16px; flex-wrap: wrap; }
+  button {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button:hover { background: #f1f5f9; }
+  button.primary { background: #0f172a; color: #fff; border-color: #0f172a; }
+  button.primary:hover { background: #1e293b; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .step-count { font-size: 12px; color: #64748b; margin-left: auto; align-self: center; }
+  .status {
+    background: #f1f5f9;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 80px;
+  }
+  .status .what { font-weight: 600; margin-bottom: 4px; color: #0f172a; }
+  .status .why { color: #475569; }
+  .legend {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 6px 10px;
+    font-size: 12px;
+    align-items: center;
+  }
+  .legend .swatch { width: 18px; height: 4px; border-radius: 2px; }
+  .legend .dot    { width: 12px; height: 12px; border-radius: 50%; justify-self: center; }
+  .narrate {
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.5;
+    margin-top: 18px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 14px;
+  }
+  .key { font-family: ui-monospace, monospace; background: #e2e8f0; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <svg id="svg" width="500" height="450" viewBox="0 0 500 450"></svg>
+</div>
+
+<div class="panel">
+  <h1>Funnel algorithm — walkthrough</h1>
+  <div style="font-size: 13px; color: #475569; line-height: 1.5;">
+    Find the shortest path from <b>S</b> to <b>G</b> through a corridor of triangles.
+    Click <span class="key">Step</span> to advance.
+  </div>
+
+  <div class="controls">
+    <button id="btnStep" class="primary">Step ▶</button>
+    <button id="btnReset">Reset</button>
+    <button id="btnAuto">Auto-play</button>
+    <div class="step-count" id="stepCount">step 0</div>
+  </div>
+
+  <div class="status">
+    <div class="what" id="statusWhat">Initialised.</div>
+    <div class="why" id="statusWhy">Apex starts at S. Left feeler points to F, right feeler to B (the endpoints of portal 1).</div>
+  </div>
+
+  <div class="legend">
+    <div class="swatch" style="background:#cbd5e1"></div><div>Polygon edges</div>
+    <div class="swatch" style="background:#e2e8f0"></div><div>Triangulation (dashed)</div>
+    <div class="swatch" style="background:#f59e0b"></div><div>Portals (with L / R labels)</div>
+    <div class="dot"    style="background:#0f172a"></div><div>Apex (current path tip)</div>
+    <div class="swatch" style="background:#2563eb"></div><div>Left feeler ray</div>
+    <div class="swatch" style="background:#dc2626"></div><div>Right feeler ray</div>
+    <div class="swatch" style="background:#16a34a; height:6px"></div><div>Path so far</div>
+    <div class="dot"    style="background:#9333ea"></div><div>Currently inspected vertex</div>
+  </div>
+
+  <div class="narrate">
+    <div style="font-weight:600; color:#0f172a; margin-bottom:6px;">What it does each step</div>
+    On every portal, the algorithm asks: does the new <i>left</i> or <i>right</i> vertex
+    <i>tighten</i> the funnel, lie <i>outside</i> on its own side (ignore), or <i>cross</i>
+    the opposite feeler (<b>bend!</b>)?
+    Bending: the opposite feeler's endpoint becomes the new apex; restart the funnel from
+    the portal that produced it.
+  </div>
+</div>
+
+<script>
+// ───────────────────────────────────────────────────────────────────────────────
+// Geometry: an L-shaped corridor.
+// ───────────────────────────────────────────────────────────────────────────────
+// Polygon (CCW in screen coords with y-down):
+//   A=(50,400)  B=(450,400)  C=(450,40)  D=(330,40)  E=(330,290)  F=(50,290)
+// Inside corner is at E. The straight line S→G crosses outside the polygon, so
+// the path must bend at E.
+const A = {x: 50,  y: 400};
+const B = {x: 450, y: 400};
+const C = {x: 450, y: 40};
+const D = {x: 330, y: 40};
+const E = {x: 330, y: 290};
+const F = {x: 50,  y: 290};
+const S = {x: 90,  y: 380};
+const G = {x: 400, y: 70};
+
+const polygon = [A, B, C, D, E, F];
+
+// Triangulation (ear-clip on this concave hexagon):
+//   ABF, BEF, BDE, BCD
+// Channel from S to G: ABF → BEF → BDE → BCD
+// Portals (shared edges) with L/R relative to direction of travel S→G:
+const portals = [
+  // Portal 0 is the "start gate" — both ends are S.
+  { left: S, right: S, label: 'S' },
+  // Portal 1: between ABF and BEF (shared edge BF)
+  { left: F, right: B, label: '1', leftName: 'F', rightName: 'B' },
+  // Portal 2: between BEF and BDE (shared edge BE)
+  { left: E, right: B, label: '2', leftName: 'E', rightName: 'B' },
+  // Portal 3: between BDE and BCD (shared edge BD)
+  { left: D, right: B, label: '3', leftName: 'D', rightName: 'B' },
+  // Portal 4: the "goal gate" — both ends are G.
+  { left: G, right: G, label: 'G' },
+];
+const triangles = [[A,B,F], [B,E,F], [B,D,E], [B,C,D]];
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Funnel algorithm — generator that yields each meaningful step.
+// triarea2 in screen coords (y-down): positive = c is RIGHT of vector ab.
+// ───────────────────────────────────────────────────────────────────────────────
+function triarea2(a, b, c) {
+  return (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+}
+function vEqual(a, b) { return a.x === b.x && a.y === b.y; }
+
+function* funnelSteps() {
+  let apex = S;
+  let left = portals[1].left;
+  let right = portals[1].right;
+  let apexIdx = 0, leftIdx = 1, rightIdx = 1;
+  const path = [S];
+
+  yield {
+    apex, left, right, path: [...path], inspecting: null, portalIdx: 1,
+    what: 'Initialised',
+    why: `Apex = S. Left feeler points to ${portals[1].leftName} (portal 1 left), right feeler points to ${portals[1].rightName} (portal 1 right).`,
+  };
+
+  let i = 2;
+  while (i < portals.length) {
+    const portal = portals[i];
+    const newLeft = portal.left;
+    const newRight = portal.right;
+    const isGoal = i === portals.length - 1;
+
+    // ── Update right side ──
+    yield {
+      apex, left, right, path: [...path], inspecting: newRight, portalIdx: i,
+      what: `Inspecting portal ${isGoal ? 'G' : i} — RIGHT vertex` + (isGoal ? ' (goal G)' : ` (${portal.rightName})`),
+      why: `Test: does ${isGoal ? 'G' : portal.rightName} tighten the right feeler, or cross past the left?`,
+    };
+
+    if (vEqual(newRight, right) || triarea2(apex, right, newRight) <= 0) {
+      if (vEqual(apex, right) || triarea2(apex, left, newRight) > 0) {
+        // Tighten right
+        right = newRight;
+        rightIdx = i;
+        yield {
+          apex, left, right, path: [...path], inspecting: null, portalIdx: i,
+          what: `Tighten RIGHT feeler` + (isGoal ? '' : ` to ${portal.rightName}`),
+          why: `${isGoal ? 'G' : portal.rightName} sits inside the funnel (right of left feeler, on/left of right feeler). The right feeler narrows.`,
+        };
+      } else {
+        // Right crossed past left — left becomes new apex
+        const oldApex = apex;
+        apex = left; apexIdx = leftIdx;
+        path.push(apex);
+        yield {
+          apex: oldApex, left, right, path: [...path.slice(0, -1)], inspecting: newRight, portalIdx: i,
+          what: `BEND! Right vertex crossed past LEFT feeler.`,
+          why: `${isGoal ? 'G' : portal.rightName} would push the right feeler past the left feeler — the funnel would invert. The LEFT feeler's endpoint becomes the new apex.`,
+        };
+        left = apex; right = apex;
+        leftIdx = apexIdx; rightIdx = apexIdx;
+        i = apexIdx + 1;
+        yield {
+          apex, left, right, path: [...path], inspecting: null, portalIdx: i,
+          what: `New apex; funnel reset`,
+          why: `Apex moved to the bend. Funnel collapses to a point at the new apex; we restart from the portal after the one that produced the bend.`,
+        };
+        continue;
+      }
+    } else {
+      yield {
+        apex, left, right, path: [...path], inspecting: null, portalIdx: i,
+        what: `RIGHT side: no change`,
+        why: `${isGoal ? 'G' : portal.rightName} is outside the funnel on the RIGHT — the current right feeler is already tighter. Skip.`,
+      };
+    }
+
+    // ── Update left side ──
+    yield {
+      apex, left, right, path: [...path], inspecting: newLeft, portalIdx: i,
+      what: `Inspecting portal ${isGoal ? 'G' : i} — LEFT vertex` + (isGoal ? ' (goal G)' : ` (${portal.leftName})`),
+      why: `Test: does ${isGoal ? 'G' : portal.leftName} tighten the left feeler, or cross past the right?`,
+    };
+
+    if (vEqual(newLeft, left) || triarea2(apex, left, newLeft) >= 0) {
+      if (vEqual(apex, left) || triarea2(apex, right, newLeft) < 0) {
+        left = newLeft;
+        leftIdx = i;
+        yield {
+          apex, left, right, path: [...path], inspecting: null, portalIdx: i,
+          what: `Tighten LEFT feeler` + (isGoal ? '' : ` to ${portal.leftName}`),
+          why: `${isGoal ? 'G' : portal.leftName} sits inside the funnel. The left feeler narrows.`,
+        };
+      } else {
+        const oldApex = apex;
+        apex = right; apexIdx = rightIdx;
+        path.push(apex);
+        yield {
+          apex: oldApex, left, right, path: [...path.slice(0, -1)], inspecting: newLeft, portalIdx: i,
+          what: `BEND! Left vertex crossed past RIGHT feeler.`,
+          why: `${isGoal ? 'G' : portal.leftName} would push the left feeler past the right feeler — the funnel would invert. The RIGHT feeler's endpoint becomes the new apex.`,
+        };
+        left = apex; right = apex;
+        leftIdx = apexIdx; rightIdx = apexIdx;
+        i = apexIdx + 1;
+        yield {
+          apex, left, right, path: [...path], inspecting: null, portalIdx: i,
+          what: `New apex; funnel reset`,
+          why: `Apex moved to the bend. Restart from the portal after the one that produced it.`,
+        };
+        continue;
+      }
+    } else {
+      yield {
+        apex, left, right, path: [...path], inspecting: null, portalIdx: i,
+        what: `LEFT side: no change`,
+        why: `${isGoal ? 'G' : portal.leftName} is outside the funnel on the LEFT — the current left feeler is already tighter. Skip.`,
+      };
+    }
+
+    i++;
+  }
+
+  if (path[path.length - 1] !== G) path.push(G);
+  yield {
+    apex: G, left: G, right: G, path: [...path], inspecting: null, portalIdx: portals.length - 1,
+    what: 'Done.',
+    why: `Final path: ${path.map((p,k) =>
+      vEqual(p,S)?'S':vEqual(p,G)?'G':vEqual(p,E)?'E':vEqual(p,F)?'F':vEqual(p,B)?'B':vEqual(p,D)?'D':vEqual(p,A)?'A':vEqual(p,C)?'C':`(${p.x},${p.y})`
+    ).join(' → ')}.`,
+  };
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Render
+// ───────────────────────────────────────────────────────────────────────────────
+const svg = document.getElementById('svg');
+const NS = 'http://www.w3.org/2000/svg';
+function el(name, attrs = {}, parent = svg) {
+  const node = document.createElementNS(NS, name);
+  for (const k of Object.keys(attrs)) node.setAttribute(k, attrs[k]);
+  parent.appendChild(node);
+  return node;
+}
+function clearSvg() { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+function vertexLabel(v) {
+  if (vEqual(v, S)) return 'S'; if (vEqual(v, G)) return 'G';
+  if (vEqual(v, A)) return 'A'; if (vEqual(v, B)) return 'B';
+  if (vEqual(v, C)) return 'C'; if (vEqual(v, D)) return 'D';
+  if (vEqual(v, E)) return 'E'; if (vEqual(v, F)) return 'F';
+  return '';
+}
+
+function render(state) {
+  clearSvg();
+
+  // Polygon
+  el('polygon', {
+    points: polygon.map(p => `${p.x},${p.y}`).join(' '),
+    fill: '#fef3c7', stroke: '#cbd5e1', 'stroke-width': '1.5',
+  });
+  // Triangulation diagonals (dashed)
+  for (const tri of triangles) {
+    el('polygon', {
+      points: tri.map(p => `${p.x},${p.y}`).join(' '),
+      fill: 'none', stroke: '#e2e8f0', 'stroke-width': '0.8', 'stroke-dasharray': '3 3',
+    });
+  }
+
+  // Portals
+  for (let i = 1; i < portals.length - 1; i++) {
+    const p = portals[i];
+    const isCurrent = i === state.portalIdx;
+    el('line', {
+      x1: p.left.x, y1: p.left.y, x2: p.right.x, y2: p.right.y,
+      stroke: isCurrent ? '#f59e0b' : '#fbbf24',
+      'stroke-width': isCurrent ? 2.5 : 1.5,
+      'stroke-dasharray': isCurrent ? '' : '4 3',
+    });
+  }
+
+  // Path so far (green)
+  if (state.path.length >= 2) {
+    el('polyline', {
+      points: state.path.map(p => `${p.x},${p.y}`).join(' '),
+      fill: 'none', stroke: '#16a34a', 'stroke-width': 4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    });
+  }
+
+  // Funnel feelers
+  if (!vEqual(state.apex, state.left)) {
+    el('line', {
+      x1: state.apex.x, y1: state.apex.y, x2: state.left.x, y2: state.left.y,
+      stroke: '#2563eb', 'stroke-width': 2.5,
+    });
+  }
+  if (!vEqual(state.apex, state.right)) {
+    el('line', {
+      x1: state.apex.x, y1: state.apex.y, x2: state.right.x, y2: state.right.y,
+      stroke: '#dc2626', 'stroke-width': 2.5,
+    });
+  }
+
+  // Inspected vertex
+  if (state.inspecting) {
+    el('circle', {
+      cx: state.inspecting.x, cy: state.inspecting.y, r: 9,
+      fill: 'none', stroke: '#9333ea', 'stroke-width': 2,
+    });
+  }
+
+  // Apex
+  el('circle', { cx: state.apex.x, cy: state.apex.y, r: 6, fill: '#0f172a' });
+
+  // Polygon vertex labels
+  for (const v of polygon) {
+    const lbl = vertexLabel(v);
+    if (!lbl) continue;
+    const dx = v.x < 250 ? -14 : 8;
+    const dy = v.y < 250 ? -8 : 18;
+    el('text', {
+      x: v.x + dx, y: v.y + dy, 'font-size': 13, 'font-weight': 600, fill: '#475569',
+    }).textContent = lbl;
+  }
+
+  // S and G labels
+  el('circle', { cx: S.x, cy: S.y, r: 5, fill: '#16a34a' });
+  el('circle', { cx: G.x, cy: G.y, r: 5, fill: '#16a34a' });
+  el('text', { x: S.x - 18, y: S.y + 6, 'font-size': 14, 'font-weight': 700, fill: '#16a34a' }).textContent = 'S';
+  el('text', { x: G.x + 10, y: G.y + 6, 'font-size': 14, 'font-weight': 700, fill: '#16a34a' }).textContent = 'G';
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Controls
+// ───────────────────────────────────────────────────────────────────────────────
+let gen, currentState, stepIdx, autoTimer;
+
+function reset() {
+  gen = funnelSteps();
+  stepIdx = 0;
+  const first = gen.next();
+  currentState = first.value;
+  document.getElementById('statusWhat').textContent = currentState.what;
+  document.getElementById('statusWhy').textContent = currentState.why;
+  document.getElementById('stepCount').textContent = `step ${stepIdx}`;
+  document.getElementById('btnStep').disabled = false;
+  render(currentState);
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; document.getElementById('btnAuto').textContent = 'Auto-play'; }
+}
+
+function step() {
+  const r = gen.next();
+  if (r.done) {
+    document.getElementById('btnStep').disabled = true;
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; document.getElementById('btnAuto').textContent = 'Auto-play'; }
+    return;
+  }
+  currentState = r.value;
+  stepIdx++;
+  document.getElementById('statusWhat').textContent = currentState.what;
+  document.getElementById('statusWhy').textContent = currentState.why;
+  document.getElementById('stepCount').textContent = `step ${stepIdx}`;
+  render(currentState);
+}
+
+document.getElementById('btnStep').addEventListener('click', step);
+document.getElementById('btnReset').addEventListener('click', reset);
+document.getElementById('btnAuto').addEventListener('click', () => {
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    document.getElementById('btnAuto').textContent = 'Auto-play';
+  } else {
+    document.getElementById('btnAuto').textContent = 'Pause';
+    autoTimer = setInterval(() => {
+      step();
+      if (document.getElementById('btnStep').disabled) {
+        clearInterval(autoTimer); autoTimer = null;
+        document.getElementById('btnAuto').textContent = 'Auto-play';
+      }
+    }, 1100);
+  }
+});
+
+reset();
+</script>
+</body>
+</html>

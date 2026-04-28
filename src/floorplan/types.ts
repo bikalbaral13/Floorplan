@@ -53,6 +53,18 @@ export interface Wall {
   isPlacementPreview?: boolean;
   /** Source room id for placement walls. */
   placementSourceRoomId?: string;
+  /** Stable id of the PlacedObject this placement-wall belongs to (groups the 4 sides). */
+  placementObjectId?: string;
+  /** Kind of placed object — drives 2D-symbol rendering in 2D Symbol placement mode. */
+  placementKind?:
+    | "bed" | "table" | "chair" | "sofa"
+    | "desk" | "wardrobe" | "bookshelf" | "bench"
+    | "piano" | "tv-unit" | "fridge" | "toilet" | "bathtub"
+    | "guitar" | "whiteboard" | "flute" | "clock" | "mirror";
+  /** Height in metres of the placed object (used by 3D primitive in 2D Symbol mode). */
+  placementHeightM?: number;
+  /** Clearance from floor in metres (lift wall-hung objects above floor). */
+  placementClearanceM?: number;
   /** Wall belongs to a committed Voronoi partition. */
   isVoronoiWall?: boolean;
   /** Live-preview variant of Voronoi partition — excluded from room detection. */
