@@ -2,8 +2,9 @@ import { useMemo, type ComponentProps, type ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import type { FloorPlanModel, FurnitureItem, Wall } from "../types";
-import { computeMiteredWallPolygons } from "../wallGeometry";
+import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
+import { computeMiteredUnion, computeMiteredWallPolygons } from "../wallGeometry";
+import type { Point } from "../types";
 
 /** A `<mesh>` that automatically adds dark edge lines to any geometry it contains.
  *  Drop-in replacement for `<mesh>`. Improves visual separation between adjacent meshes. */
@@ -20,6 +21,13 @@ interface Props {
   model: FloorPlanModel;
   pixelsPerMeter: number;
   placementMode?: "polygon" | "2dSymbol" | "rendered";
+  /** Visible rooms (manual + auto-detected). When present, each is extruded as a thin floor slab
+   *  and click-selectable. Falls back to model.rooms (manual only) if not provided. */
+  rooms?: Room[];
+  /** IDs of walls or rooms currently selected in the parent (selection state shared with 2D). */
+  selectedWallIds?: string[];
+  /** Click handler — id may be a wall id or a room id. additive=true on shift-click for multi-select. */
+  onSelectWall?: (id: string | null, additive: boolean) => void;
 }
 
 type PlacementKind =
@@ -88,13 +96,113 @@ const wallBands = (w: Wall): Array<{ yMin: number; yMax: number }> => {
   return [{ yMin: 0, yMax: WALL_HEIGHT_M }];
 };
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon" }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   const useSymbol = placementMode === "2dSymbol";
+  const selectedSet = useMemo(() => new Set(selectedWallIds ?? []), [selectedWallIds]);
+  const slabRooms = rooms ?? model.rooms ?? [];
+  const ROOM_SLAB_THICKNESS_M = 0.2;
+  /** Click handler for a wall mesh. Stops propagation so OrbitControls doesn't claim the gesture
+   *  and so background clicks (which clear selection) don't fire on the same pointer event. */
+  const handleWallClick = (wallId: string) => (ev: { stopPropagation: () => void; nativeEvent?: { shiftKey?: boolean } }) => {
+    ev.stopPropagation();
+    onSelectWall?.(wallId, !!ev.nativeEvent?.shiftKey);
+  };
+  /** Material colour for a wall. Selected walls get a vivid highlight; the rest stay grey. */
+  const wallColor = (wallId: string): string => selectedSet.has(wallId) ? "#f97316" : GREY;
 
   // Per-wall mitered polygon footprints (plan coords). Used in 3D for seamless-corner extrusion
   // when the wall's mode is "mitered" or "mitered-union" (i.e. when 2D Sharp view is on).
   const miteredPolygons = useMemo(() => computeMiteredWallPolygons(model.walls), [model.walls]);
+
+  // For each wall in mitered/mitered-union mode, identify which of its mitered-polygon edges are
+  // SHARED with another wall's polygon (i.e., junction edges where two walls meet). When rendering
+  // door/window lintel/sill bands in union mode, the side faces at these shared edges butt against
+  // adjacent walls — we hide their wireframe edges so the band reads as part of one continuous mass.
+  const sharedPolyEdgesByWall = useMemo<Map<string, Set<number>>>(() => {
+    const result = new Map<string, Set<number>>();
+    const all = new Map<string, Point[]>();
+    for (const w of model.walls) {
+      if (w.mode !== "mitered" && w.mode !== "mitered-union") continue;
+      if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) continue;
+      const poly = miteredPolygons.get(w.id);
+      if (poly && poly.length >= 3) all.set(w.id, poly);
+    }
+    if (all.size === 0) return result;
+    const { outerEdges } = computeMiteredUnion(all);
+    const TOL = 1.5;
+    // outerEdges = edges NOT shared. Mark each polygon's outer-edge indices, then `shared = total \ outer`.
+    for (const [wallId, poly] of all) {
+      const outerIdx = new Set<number>();
+      for (const oe of outerEdges) {
+        if (oe.wallId !== wallId) continue;
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i], b = poly[(i + 1) % poly.length];
+          const fwd = Math.hypot(a.x - oe.a.x, a.y - oe.a.y) < TOL && Math.hypot(b.x - oe.b.x, b.y - oe.b.y) < TOL;
+          const rev = Math.hypot(a.x - oe.b.x, a.y - oe.b.y) < TOL && Math.hypot(b.x - oe.a.x, b.y - oe.a.y) < TOL;
+          if (fwd || rev) { outerIdx.add(i); break; }
+        }
+      }
+      const shared = new Set<number>();
+      for (let i = 0; i < poly.length; i++) if (!outerIdx.has(i)) shared.add(i);
+      if (shared.size > 0) result.set(wallId, shared);
+    }
+    return result;
+  }, [model.walls, miteredPolygons, useSymbol]);
+
+  // Union-mode extrusion: when walls share mode "mitered-union", their per-wall mitered footprints
+  // butt seamlessly. Computing the union outerEdges (boundary edges not shared with another wall) and
+  // chaining them into closed loops gives one polygon per connected wall network — extruded as a single
+  // Shape, the result has no internal seams between adjacent walls (matches the 2D Sharp+Union look).
+  // Only plain "wall" segments are unified; doors/windows still extrude per-wall bands so openings show.
+  const unionLoops = useMemo<Point[][]>(() => {
+    const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+    // Mitered polygons restricted to plain walls in union mode. Placement walls (the 4-side polygon
+     // markers around a placed object) are excluded when 2dSymbol mode is on — those objects are rendered
+     // only as 3D primitives, so their outline shouldn't fold into the wall union mass either.
+    const filtered = new Map<string, Point[]>();
+    for (const w of model.walls) {
+      if (w.mode !== "mitered-union") continue;
+      if ((w.segmentType ?? "wall") !== "wall") continue;
+      if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) continue;
+      const poly = miteredPolygons.get(w.id);
+      if (poly && poly.length >= 3) filtered.set(w.id, poly);
+    }
+    if (filtered.size === 0) return [];
+    const { outerEdges } = computeMiteredUnion(filtered);
+    if (outerEdges.length === 0) return [];
+
+    // Walk edges into closed loops by chaining endpoint matches.
+    const used = new Array<boolean>(outerEdges.length).fill(false);
+    const loops: Point[][] = [];
+    for (let start = 0; start < outerEdges.length; start++) {
+      if (used[start]) continue;
+      used[start] = true;
+      const seed = outerEdges[start];
+      const loop: Point[] = [seed.a, seed.b];
+      let endKey = KEY(seed.b);
+      const startKey = KEY(seed.a);
+      // Cap chain length defensively to avoid pathological infinite walks.
+      for (let safety = 0; safety < outerEdges.length + 1; safety++) {
+        if (endKey === startKey) break;
+        let nextIdx = -1, reversed = false;
+        for (let i = 0; i < outerEdges.length; i++) {
+          if (used[i]) continue;
+          if (KEY(outerEdges[i].a) === endKey) { nextIdx = i; reversed = false; break; }
+          if (KEY(outerEdges[i].b) === endKey) { nextIdx = i; reversed = true; break; }
+        }
+        if (nextIdx === -1) break;
+        used[nextIdx] = true;
+        const ne = outerEdges[nextIdx];
+        const np = reversed ? ne.a : ne.b;
+        if (KEY(np) === startKey) break; // closed
+        loop.push(np);
+        endKey = KEY(np);
+      }
+      if (loop.length >= 3) loops.push(loop);
+    }
+    return loops;
+  }, [model.walls, miteredPolygons, useSymbol]);
 
   const placementGroups = useMemo(() => {
     if (!useSymbol) return [];
@@ -181,15 +289,108 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     <Canvas
       camera={{ position: [camDist, camDist * 0.8, camDist], fov: 45, near: 0.1, far: 1000 }}
       style={{ width: "100%", height: "100%", background: "#eef2f7" }}
+      onPointerMissed={() => onSelectWall?.(null, false)}
     >
       <ambientLight intensity={1.1} />
       <directionalLight position={[20, 30, 15]} intensity={0.5} />
       <directionalLight position={[-15, 20, -10]} intensity={0.35} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[0, 1, 0]} />
 
+      {/* Room slabs — extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
+           selection list is shared with walls (a single id list keyed by room.id or wall.id). */}
+      {slabRooms.filter((r) => Array.isArray(r.points) && r.points.length >= 3).map((r) => {
+        const shape = new THREE.Shape(
+          r.points.map((p) => {
+            const [sx, sz] = toScene(p.x, p.y);
+            return new THREE.Vector2(sx, -sz);
+          })
+        );
+        const isSelected = selectedSet.has(r.id);
+        const baseColor = (typeof r.fill === "string" && r.fill.startsWith("#")) ? r.fill : "#cbd5e1";
+        const color = isSelected ? "#f97316" : baseColor;
+        return (
+          <EdgedMesh
+            key={`room-${r.id}`}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, isSelected ? 0.001 : 0, 0]}
+            onClick={handleWallClick(r.id)}
+          >
+            <extrudeGeometry args={[shape, { depth: ROOM_SLAB_THICKNESS_M, bevelEnabled: false, steps: 1 }]} />
+            <meshStandardMaterial color={color} />
+          </EdgedMesh>
+        );
+      })}
+
+      {/* Union extrusion: one continuous mass per connected wall network in mitered-union mode.
+           For a closed room the loop walker emits both an outer perimeter and an inner perimeter
+           (the room interior); the inner one must be added as a Shape hole, otherwise the room's
+           floor area would be extruded as a solid block. */}
+      {(() => {
+        const signedArea = (loop: Point[]): number => {
+          let a = 0;
+          for (let i = 0; i < loop.length; i++) {
+            const p1 = loop[i], p2 = loop[(i + 1) % loop.length];
+            a += p1.x * p2.y - p2.x * p1.y;
+          }
+          return a / 2;
+        };
+        const pointInPoly = (px: number, py: number, poly: Point[]): boolean => {
+          let inside = false;
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const a = poly[i], b = poly[j];
+            if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+          }
+          return inside;
+        };
+        // Larger absolute area first → outer rings before holes.
+        const ranked = unionLoops
+          .map((loop) => ({ loop, area: signedArea(loop) }))
+          .sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+        const outerSign = ranked.length > 0 ? Math.sign(ranked[0].area) : 1;
+        const outers: Array<{ loop: Point[]; holes: Point[][] }> = [];
+        for (const { loop, area } of ranked) {
+          if (Math.sign(area) === outerSign) {
+            outers.push({ loop, holes: [] });
+          } else {
+            // Hole: assign to the smallest enclosing outer ring.
+            let host: { loop: Point[]; holes: Point[][] } | null = null;
+            let hostAbsArea = Infinity;
+            const hx = loop[0].x, hy = loop[0].y;
+            for (const o of outers) {
+              const oa = Math.abs(signedArea(o.loop));
+              if (oa < hostAbsArea && pointInPoly(hx, hy, o.loop)) { host = o; hostAbsArea = oa; }
+            }
+            if (host) host.holes.push(loop);
+          }
+        }
+        return outers.map(({ loop, holes }, li) => {
+          const shape = new THREE.Shape(
+            loop.map((p) => {
+              const [sx, sz] = toScene(p.x, p.y);
+              return new THREE.Vector2(sx, -sz);
+            })
+          );
+          for (const h of holes) {
+            shape.holes.push(new THREE.Path(h.map((p) => {
+              const [sx, sz] = toScene(p.x, p.y);
+              return new THREE.Vector2(sx, -sz);
+            })));
+          }
+          return (
+            <EdgedMesh key={`union-${li}`} rotation={[-Math.PI / 2, 0, 0]}>
+              <extrudeGeometry args={[shape, { depth: WALL_HEIGHT_M, bevelEnabled: false, steps: 1 }]} />
+              <meshStandardMaterial color={GREY} />
+            </EdgedMesh>
+          );
+        });
+      })()}
+
       {model.walls.filter((w) => {
         if (!isExtrudableWall(w)) return false;
         if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) return false;
+        // Union mode: plain walls are absorbed into the union extrusion above. Doors/windows still
+        // need per-wall band extrusion so the lintel/sill show.
+        if (w.mode === "mitered-union" && (w.segmentType ?? "wall") === "wall") return false;
         return true;
       }).flatMap((w) => {
         const dx = w.end.x - w.start.x;
@@ -214,11 +415,88 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
             })
           );
           return [
-            <EdgedMesh key={`${w.id}:sharp`} rotation={[-Math.PI / 2, 0, 0]}>
+            <EdgedMesh key={`${w.id}:sharp`} rotation={[-Math.PI / 2, 0, 0]} onClick={handleWallClick(w.id)}>
               <extrudeGeometry args={[shape, { depth: WALL_HEIGHT_M, bevelEnabled: false, steps: 1 }]} />
-              <meshStandardMaterial color={GREY} />
+              <meshStandardMaterial color={wallColor(w.id)} />
             </EdgedMesh>,
           ];
+        }
+
+        // Sharp-mode lintel/sill bands for doors/windows: extrude the mitered footprint polygon
+        // for each above/below band. The mitered polygon shares vertices with adjacent plain walls'
+        // mitered polygons, so the lintel band visually merges with the surrounding union mass —
+        // no boxy seam where door/window meets the rest of the wall.
+        if (isSharp && (segType === "door" || segType === "window") && polyPlan && polyPlan.length >= 3) {
+          const shape = new THREE.Shape(
+            polyPlan.map((p) => {
+              const [sx, sz] = toScene(p.x, p.y);
+              return new THREE.Vector2(sx, -sz);
+            })
+          );
+          // In mitered-union mode, render the band as a plain mesh and draw ONLY the wireframe edges
+          // for non-shared polygon edges (and the verticals at vertices whose neighbours are also
+          // non-shared). Edges of side faces touching an adjacent wall — i.e. shared polygon edges —
+          // are dropped, so the band visually merges with the union mass with no seams.
+          const isUnionBand = w.mode === "mitered-union";
+          const sharedSet = isUnionBand ? (sharedPolyEdgesByWall.get(w.id) ?? new Set<number>()) : new Set<number>();
+          const N = polyPlan.length;
+          const isEdgeShared = (ei: number) => sharedSet.has(ei);
+          const isVertHidden = (vi: number) => sharedSet.has((vi - 1 + N) % N) || sharedSet.has(vi);
+
+          return wallBands(w).map((band, i) => {
+            const h = band.yMax - band.yMin;
+            if (h <= 0) return null;
+            const key = `${w.id}:band-sharp:${i}`;
+            if (isUnionBand) {
+              const positions: number[] = [];
+              for (let ei = 0; ei < N; ei++) {
+                if (isEdgeShared(ei)) continue;
+                const a = polyPlan[ei], b = polyPlan[(ei + 1) % N];
+                const [ax, az] = toScene(a.x, a.y);
+                const [bx, bz] = toScene(b.x, b.y);
+                // Bottom horizontal (band.yMin) and top horizontal (band.yMax). Note: Z in scene
+                // coords maps from (planY - cy)/ppm; toScene returns (sx, sz) → world (sx, _, sz).
+                positions.push(ax, band.yMin, az, bx, band.yMin, bz);
+                positions.push(ax, band.yMax, az, bx, band.yMax, bz);
+              }
+              for (let vi = 0; vi < N; vi++) {
+                if (isVertHidden(vi)) continue;
+                const p = polyPlan[vi];
+                const [px, pz] = toScene(p.x, p.y);
+                positions.push(px, band.yMin, pz, px, band.yMax, pz);
+              }
+              const lineGeom = new THREE.BufferGeometry();
+              lineGeom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+              return (
+                <group key={key}>
+                  <mesh
+                    rotation={[-Math.PI / 2, 0, 0]}
+                    position={[0, band.yMin, 0]}
+                    onClick={handleWallClick(w.id)}
+                  >
+                    <extrudeGeometry args={[shape, { depth: h, bevelEnabled: false, steps: 1 }]} />
+                    <meshStandardMaterial color={wallColor(w.id)} />
+                  </mesh>
+                  {positions.length > 0 && (
+                    <lineSegments geometry={lineGeom}>
+                      <lineBasicMaterial color="#0f172a" />
+                    </lineSegments>
+                  )}
+                </group>
+              );
+            }
+            return (
+              <EdgedMesh
+                key={key}
+                rotation={[-Math.PI / 2, 0, 0]}
+                position={[0, band.yMin, 0]}
+                onClick={handleWallClick(w.id)}
+              >
+                <extrudeGeometry args={[shape, { depth: h, bevelEnabled: false, steps: 1 }]} />
+                <meshStandardMaterial color={wallColor(w.id)} />
+              </EdgedMesh>
+            );
+          });
         }
 
         // Default per-wall axis-aligned box (or band) extrusion.
@@ -233,9 +511,9 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           if (h <= 0) return null;
           const yCenter = (band.yMin + band.yMax) / 2;
           return (
-            <EdgedMesh key={`${w.id}:${i}`} position={[sx, yCenter, sz]} rotation={[0, rotY, 0]}>
+            <EdgedMesh key={`${w.id}:${i}`} position={[sx, yCenter, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
               <boxGeometry args={[lenM, h, thicknessM]} />
-              <meshStandardMaterial color={GREY} />
+              <meshStandardMaterial color={wallColor(w.id)} />
             </EdgedMesh>
           );
         });
@@ -266,8 +544,24 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           const woodLight = "#b45309";
           const handleColor = "#fbbf24";
           const innerLen = Math.max(0.1, lenM - frameW * 2);
+
+          // Hinge end: "left" = wall start (-x), "right" = wall end (+x). The slab pivots around
+          // its hinge edge, so we position a sub-group AT the hinge and let it rotate around Y.
+          // Swing side: doorPlacement "left" = perpendicular -z half, "right" = +z half. The open
+          // angle's direction depends on both hinge end and swing side (open into the requested side).
+          const hingeSign = w.doorHinge === "right" ? -1 : 1; // +1 → slab extends in +x from hinge; -1 → in -x
+          const placementSign = w.doorPlacement === "right" ? 1 : -1; // +1 → swings into +z half
+          const OPEN_ANGLE = (Math.PI / 180) * 75; // visual open angle (75°)
+          const swingAngle = -hingeSign * placementSign * OPEN_ANGLE;
+          const hingeX = hingeSign * (lenM / 2 - frameW);
+          // Slab body's centre, in the hinge-group's local frame, before rotation: half its length
+          // away from the hinge along the wall.
+          const slabCx = hingeSign * innerLen / 2;
+          const handleX = hingeSign * (innerLen - 0.08);
+
           return (
             <group key={`door-prim-${w.id}`} position={[sx, 0, sz]} rotation={[0, rotY, 0]}>
+              {/* Lintel + side jambs stay in the wall plane */}
               <EdgedMesh position={[0, lintel + frameW / 2, 0]}>
                 <boxGeometry args={[lenM, frameW, frameT]} />
                 <meshStandardMaterial color={woodLight} />
@@ -280,14 +574,20 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
                 <boxGeometry args={[frameW, slabH, frameT]} />
                 <meshStandardMaterial color={woodLight} />
               </EdgedMesh>
-              <EdgedMesh position={[0, slabH / 2, 0]}>
-                <boxGeometry args={[innerLen, slabH - 0.02, slabD]} />
-                <meshStandardMaterial color={wood} />
-              </EdgedMesh>
-              <EdgedMesh position={[innerLen * 0.4, slabH * 0.5, slabD / 2 + 0.005]}>
-                <boxGeometry args={[0.04, 0.06, 0.04]} />
-                <meshStandardMaterial color={handleColor} metalness={0.7} roughness={0.3} />
-              </EdgedMesh>
+
+              {/* Hinge group: pivots the slab around the hinge edge by `swingAngle` so the door
+                   visibly opens toward `doorPlacement` from `doorHinge`. */}
+              <group position={[hingeX, 0, 0]} rotation={[0, swingAngle, 0]}>
+                <EdgedMesh position={[slabCx, slabH / 2, 0]}>
+                  <boxGeometry args={[innerLen, slabH - 0.02, slabD]} />
+                  <meshStandardMaterial color={wood} />
+                </EdgedMesh>
+                {/* Handle sits near the latch end (opposite the hinge) on the swing-side face */}
+                <EdgedMesh position={[handleX, slabH * 0.5, placementSign * (slabD / 2 + 0.005)]}>
+                  <boxGeometry args={[0.04, 0.06, 0.04]} />
+                  <meshStandardMaterial color={handleColor} metalness={0.7} roughness={0.3} />
+                </EdgedMesh>
+              </group>
             </group>
           );
         }
@@ -330,11 +630,35 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               <boxGeometry args={[frameW * 0.55, innerH, frameT * 0.7]} />
               <meshStandardMaterial color={wood} />
             </EdgedMesh>
-            {/* Glass pane */}
-            <EdgedMesh position={[0, cy, 0]}>
-              <boxGeometry args={[innerW, innerH, glassT]} />
-              <meshStandardMaterial color="#7dd3fc" transparent opacity={0.35} metalness={0.15} roughness={0.05} />
-            </EdgedMesh>
+            {/* Two casement sashes. Each pivots around its outer vertical jamb when `isOpen`,
+                 swinging outward (into +Z half-space). When closed both sashes lie flat in the
+                 wall plane and visually behave like the old single glass pane. */}
+            {(() => {
+              const isOpen = !!w.isOpen;
+              const OPEN_ANGLE = (Math.PI / 180) * 60;
+              const sashLen = innerW / 2;
+              const leftHingeX = -lenM / 2 + frameW;
+              const rightHingeX = lenM / 2 - frameW;
+              const glassMat = (
+                <meshStandardMaterial color="#7dd3fc" transparent opacity={0.35} metalness={0.15} roughness={0.05} />
+              );
+              return (
+                <>
+                  <group position={[leftHingeX, cy, 0]} rotation={[0, isOpen ? -OPEN_ANGLE : 0, 0]}>
+                    <EdgedMesh position={[sashLen / 2, 0, 0]}>
+                      <boxGeometry args={[sashLen, innerH, glassT]} />
+                      {glassMat}
+                    </EdgedMesh>
+                  </group>
+                  <group position={[rightHingeX, cy, 0]} rotation={[0, isOpen ? OPEN_ANGLE : 0, 0]}>
+                    <EdgedMesh position={[-sashLen / 2, 0, 0]}>
+                      <boxGeometry args={[sashLen, innerH, glassT]} />
+                      {glassMat}
+                    </EdgedMesh>
+                  </group>
+                </>
+              );
+            })()}
           </group>
         );
       })}
