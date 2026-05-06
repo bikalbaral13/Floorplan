@@ -298,7 +298,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
 
       {/* Room slabs — extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
            selection list is shared with walls (a single id list keyed by room.id or wall.id). */}
-      {slabRooms.filter((r) => Array.isArray(r.points) && r.points.length >= 3).map((r) => {
+      {slabRooms.filter((r) => Array.isArray(r.points) && r.points.length >= 3).flatMap((r) => {
         const shape = new THREE.Shape(
           r.points.map((p) => {
             const [sx, sz] = toScene(p.x, p.y);
@@ -306,26 +306,50 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           })
         );
         const isSelected = selectedSet.has(r.id);
+
+        // Site Boundary: one flat green ground plate at y=0, no extrusion / no massing.
+        if (r.roomType === "plot-boundary") {
+          const groundColor = isSelected ? "#f97316" : "#86efac";
+          return [
+            <EdgedMesh
+              key={`site-${r.id}`}
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, isSelected ? 0.0005 : -0.001, 0]}
+              onClick={handleWallClick(r.id)}
+            >
+              <extrudeGeometry args={[shape, { depth: 0.001, bevelEnabled: false, steps: 1 }]} />
+              <meshStandardMaterial color={groundColor} />
+            </EdgedMesh>,
+          ];
+        }
+
         const baseColor = (typeof r.fill === "string" && r.fill.startsWith("#")) ? r.fill : "#cbd5e1";
         const color = isSelected ? "#f97316" : baseColor;
-        return (
+        const floors = Math.max(1, Math.floor(r.floorsCount ?? 1));
+        const floorH = WALL_HEIGHT_M;
+        const slabBumpY = isSelected ? 0.001 : 0;
+        // n floors → n+1 slabs (one per floor base + a roof slab capping the top floor).
+        return Array.from({ length: floors + 1 }, (_, i) => (
           <EdgedMesh
-            key={`room-${r.id}`}
+            key={`room-${r.id}-f${i}`}
             rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, isSelected ? 0.001 : 0, 0]}
+            position={[0, slabBumpY + i * floorH, 0]}
             onClick={handleWallClick(r.id)}
           >
             <extrudeGeometry args={[shape, { depth: ROOM_SLAB_THICKNESS_M, bevelEnabled: false, steps: 1 }]} />
             <meshStandardMaterial color={color} />
           </EdgedMesh>
-        );
+        ));
       })}
 
       {/* Union extrusion: one continuous mass per connected wall network in mitered-union mode.
-           For a closed room the loop walker emits both an outer perimeter and an inner perimeter
-           (the room interior); the inner one must be added as a Shape hole, otherwise the room's
-           floor area would be extruded as a solid block. */}
+           Replicated per floor (max floorsCount across rooms). */}
       {(() => {
+        const globalFloors = Math.max(1, ...slabRooms.filter((r) => r.roomType !== "plot-boundary").map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
+        const floorH = WALL_HEIGHT_M;
+        return Array.from({ length: globalFloors }, (_, fi) => (
+          <group key={`mass-floor-${fi}`} position={[0, fi * floorH, 0]}>
+            {(() => {
         const signedArea = (loop: Point[]): number => {
           let a = 0;
           for (let i = 0; i < loop.length; i++) {
@@ -384,7 +408,15 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           );
         });
       })()}
+          </group>
+        ));
+      })()}
 
+      {(() => {
+        const globalFloors = Math.max(1, ...slabRooms.filter((r) => r.roomType !== "plot-boundary").map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
+        const floorH = WALL_HEIGHT_M;
+        return Array.from({ length: globalFloors }, (_, fi) => (
+          <group key={`walls-floor-${fi}`} position={[0, fi * floorH, 0]}>
       {model.walls.filter((w) => {
         if (!isExtrudableWall(w)) return false;
         if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) return false;
@@ -518,10 +550,19 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           );
         });
       })}
+          </group>
+        ));
+      })()}
 
       {/* Door / Window primitives — only in 2D-Symbol placement mode. Sit inside the wall opening
-          (lintel / sill bands are still drawn by the wall extrusion above). */}
-      {useSymbol && model.walls.map((w) => {
+          (lintel / sill bands are still drawn by the wall extrusion above). Replicated per floor. */}
+      {(() => {
+        if (!useSymbol) return null;
+        const globalFloors = Math.max(1, ...slabRooms.filter((r) => r.roomType !== "plot-boundary").map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
+        const floorH = WALL_HEIGHT_M;
+        return Array.from({ length: globalFloors }, (_, fi) => (
+          <group key={`dw-floor-${fi}`} position={[0, fi * floorH, 0]}>
+      {model.walls.map((w) => {
         if (w.segmentType !== "door" && w.segmentType !== "window") return null;
         const dx = w.end.x - w.start.x;
         const dy = w.end.y - w.start.y;
@@ -661,6 +702,174 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
             })()}
           </group>
         );
+      })}
+          </group>
+        ));
+      })()}
+
+      {/* Site Boundary segments — render per boundaryTreatment (fence / railing / open / solid). */}
+      {model.walls.flatMap((w) => {
+        if (w.segmentType !== "plot-boundary") return [];
+        const treatment = w.boundaryTreatment ?? "solid";
+        if (treatment === "open") return [];
+        const dx = w.end.x - w.start.x;
+        const dy = w.end.y - w.start.y;
+        const lenPx = Math.hypot(dx, dy);
+        if (lenPx < 1) return [];
+        const lenM = lenPx / ppm;
+        const thicknessM = Math.max(0.05, (w.thickness ?? 0) / ppm || DEFAULT_WALL_THICKNESS_M);
+        const midX = (w.start.x + w.end.x) / 2;
+        const midY = (w.start.y + w.end.y) / 2;
+        const [sx, sz] = toScene(midX, midY);
+        const rotY = -Math.atan2(dy, dx);
+        const heightM = Math.max(0.1, w.heightM ?? (treatment === "fence" ? 1.2 : treatment === "railing" ? 0.9 : treatment === "gate" ? 2.0 : 1.8));
+        const baseColor = (typeof w.color === "string" && w.color.startsWith("#")) ? w.color : "#475569";
+
+        if (treatment === "solid") {
+          return [
+            <EdgedMesh key={`sb-solid-${w.id}`} position={[sx, heightM / 2, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
+              <boxGeometry args={[lenM, heightM, thicknessM]} />
+              <meshStandardMaterial color={baseColor} />
+            </EdgedMesh>,
+          ];
+        }
+
+        if (treatment === "fence") {
+          // Low solid base (10cm) + vertical pickets at ~0.15m spacing.
+          const baseH = 0.1;
+          const pickW = 0.04;
+          const pickT = Math.min(thicknessM, 0.04);
+          const spacing = 0.18;
+          const nPicks = Math.max(1, Math.floor(lenM / spacing));
+          const stride = lenM / nPicks;
+          const pickH = Math.max(0.1, heightM - baseH);
+          const wood = "#92400e";
+          return [
+            <group key={`sb-fence-${w.id}`} position={[sx, 0, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
+              <EdgedMesh position={[0, baseH / 2, 0]}>
+                <boxGeometry args={[lenM, baseH, thicknessM]} />
+                <meshStandardMaterial color={baseColor} />
+              </EdgedMesh>
+              {Array.from({ length: nPicks }, (_, i) => {
+                const cx = -lenM / 2 + (i + 0.5) * stride;
+                return (
+                  <EdgedMesh key={`p${i}`} position={[cx, baseH + pickH / 2, 0]}>
+                    <boxGeometry args={[pickW, pickH, pickT]} />
+                    <meshStandardMaterial color={wood} />
+                  </EdgedMesh>
+                );
+              })}
+              {/* Top horizontal rail */}
+              <EdgedMesh position={[0, baseH + pickH - 0.04, 0]}>
+                <boxGeometry args={[lenM, 0.04, pickT]} />
+                <meshStandardMaterial color={wood} />
+              </EdgedMesh>
+            </group>,
+          ];
+        }
+
+        if (treatment === "gate") {
+          // Two thicker side posts + horizontal top arch + two leaf panels swung 30° outward.
+          const postW = Math.max(0.12, thicknessM * 1.5);
+          const postH = heightM;
+          const archH = 0.12;
+          const archT = Math.max(thicknessM, 0.08);
+          const innerLen = Math.max(0.2, lenM - postW * 2);
+          const leafLen = innerLen / 2;
+          const leafH = Math.max(0.1, heightM - archH - 0.15);
+          const leafT = Math.max(0.03, thicknessM * 0.4);
+          const OPEN = (Math.PI / 180) * 30; // both leaves swing outward (into +z half)
+          const post = "#1f2937";
+          const leaf = "#4b5563";
+          const accent = "#fbbf24";
+          return [
+            <group key={`sb-gate-${w.id}`} position={[sx, 0, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
+              {/* Left post */}
+              <EdgedMesh position={[-lenM / 2 + postW / 2, postH / 2, 0]}>
+                <boxGeometry args={[postW, postH, postW]} />
+                <meshStandardMaterial color={post} metalness={0.3} roughness={0.6} />
+              </EdgedMesh>
+              {/* Right post */}
+              <EdgedMesh position={[lenM / 2 - postW / 2, postH / 2, 0]}>
+                <boxGeometry args={[postW, postH, postW]} />
+                <meshStandardMaterial color={post} metalness={0.3} roughness={0.6} />
+              </EdgedMesh>
+              {/* Top arch / lintel beam between the posts */}
+              <EdgedMesh position={[0, heightM - archH / 2, 0]}>
+                <boxGeometry args={[lenM - postW, archH, archT]} />
+                <meshStandardMaterial color={post} metalness={0.3} roughness={0.6} />
+              </EdgedMesh>
+              {/* Decorative finials on top of each post */}
+              <EdgedMesh position={[-lenM / 2 + postW / 2, heightM + 0.06, 0]}>
+                <boxGeometry args={[postW * 0.6, 0.12, postW * 0.6]} />
+                <meshStandardMaterial color={accent} metalness={0.7} roughness={0.3} />
+              </EdgedMesh>
+              <EdgedMesh position={[lenM / 2 - postW / 2, heightM + 0.06, 0]}>
+                <boxGeometry args={[postW * 0.6, 0.12, postW * 0.6]} />
+                <meshStandardMaterial color={accent} metalness={0.7} roughness={0.3} />
+              </EdgedMesh>
+              {/* Left leaf — hinge at the left post, swings outward (into +z) */}
+              <group position={[-lenM / 2 + postW, 0, 0]} rotation={[0, -OPEN, 0]}>
+                <EdgedMesh position={[leafLen / 2, leafH / 2 + 0.05, 0]}>
+                  <boxGeometry args={[leafLen, leafH, leafT]} />
+                  <meshStandardMaterial color={leaf} metalness={0.4} roughness={0.5} />
+                </EdgedMesh>
+                {/* Vertical bars (4 thin strips) for an ornamental look */}
+                {Array.from({ length: 4 }, (_, i) => (
+                  <EdgedMesh key={`lb${i}`} position={[(i + 1) * (leafLen / 5), leafH / 2 + 0.05, leafT / 2 + 0.005]}>
+                    <boxGeometry args={[0.02, leafH * 0.85, 0.01]} />
+                    <meshStandardMaterial color={accent} metalness={0.6} roughness={0.4} />
+                  </EdgedMesh>
+                ))}
+              </group>
+              {/* Right leaf — hinge at the right post, swings outward (into +z) */}
+              <group position={[lenM / 2 - postW, 0, 0]} rotation={[0, OPEN, 0]}>
+                <EdgedMesh position={[-leafLen / 2, leafH / 2 + 0.05, 0]}>
+                  <boxGeometry args={[leafLen, leafH, leafT]} />
+                  <meshStandardMaterial color={leaf} metalness={0.4} roughness={0.5} />
+                </EdgedMesh>
+                {Array.from({ length: 4 }, (_, i) => (
+                  <EdgedMesh key={`rb${i}`} position={[-(i + 1) * (leafLen / 5), leafH / 2 + 0.05, leafT / 2 + 0.005]}>
+                    <boxGeometry args={[0.02, leafH * 0.85, 0.01]} />
+                    <meshStandardMaterial color={accent} metalness={0.6} roughness={0.4} />
+                  </EdgedMesh>
+                ))}
+              </group>
+            </group>,
+          ];
+        }
+
+        // Railing: top rail + bottom rail + thin vertical balusters.
+        const railT = Math.min(thicknessM, 0.05);
+        const balW = 0.025;
+        const balSpacing = 0.12;
+        const nBal = Math.max(1, Math.floor(lenM / balSpacing));
+        const balStride = lenM / nBal;
+        const topY = heightM;
+        const botY = 0.05;
+        const balH = Math.max(0.1, topY - botY - 0.05);
+        const metal = "#94a3b8";
+        return [
+          <group key={`sb-rail-${w.id}`} position={[sx, 0, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
+            <EdgedMesh position={[0, topY - 0.025, 0]}>
+              <boxGeometry args={[lenM, 0.05, railT]} />
+              <meshStandardMaterial color={metal} metalness={0.4} roughness={0.5} />
+            </EdgedMesh>
+            <EdgedMesh position={[0, botY, 0]}>
+              <boxGeometry args={[lenM, 0.04, railT]} />
+              <meshStandardMaterial color={metal} metalness={0.4} roughness={0.5} />
+            </EdgedMesh>
+            {Array.from({ length: nBal }, (_, i) => {
+              const cx = -lenM / 2 + (i + 0.5) * balStride;
+              return (
+                <EdgedMesh key={`b${i}`} position={[cx, botY + balH / 2, 0]}>
+                  <boxGeometry args={[balW, balH, balW]} />
+                  <meshStandardMaterial color={metal} metalness={0.4} roughness={0.5} />
+                </EdgedMesh>
+              );
+            })}
+          </group>,
+        ];
       })}
 
       {placementGroups.map((g) => {

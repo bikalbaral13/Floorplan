@@ -1,5 +1,5 @@
 import type { FloorObject, FurnitureItem, Point, Room, Wall } from "./types";
-import { getWallPolygonGeometry } from "./wallGeometry";
+import { getWallPolygonGeometry } from "./algorithms/walls/wallCorners";
 
 /** One clearance line from an edge midpoint to wall inner face or to another item's edge midpoint. */
 export type MoveMeasureSegment = {
