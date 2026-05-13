@@ -1,0 +1,11 @@
+﻿
+> src\floorplan\FloorPlanEditor.tsx:22220:                      setLevel={setSmoothingLevel}
+  src\floorplan\FloorPlanEditor.tsx:22221:                      runRoomSmoothing={runRoomSmoothing}
+  src\floorplan\FloorPlanEditor.tsx:22222:                      onClearAllPreview={() => {
+  src\floorplan\FloorPlanEditor.tsx:22223:                        const h = historyRef.current;
+  src\floorplan\FloorPlanEditor.tsx:22224:                        h.replace({ ...h.state, walls: 
+h.state.walls.filter((w) => !w.isSmoothingPreview) });
+  src\floorplan\FloorPlanEditor.tsx:22225:                      }}
+
+
+
