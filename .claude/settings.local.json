@@ -53,7 +53,10 @@
       "Bash(git commit -m ' *)",
       "Bash(grep -nE \"Region$|Region:|selectedRoom\\\\.region|regionInputs\" \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")",
       "Bash(grep -n \"  aspectRatio$\\\\|aspectRatio,\\\\|return {\" \"D:/MAIN/monica_recent/src/floorplan/FloorPlanEditor.tsx\")",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(cd \"/d/MAIN/monica_recent/src/floorplan\" && grep -nE \"DEFAULT_SA_PARAMS|interface .* {$|type .* =\" simulatedAnnealing.ts | head -10)",
+      "Bash(awk '/^const FloorPlanEditor|^export.*FloorPlanEditor/{print NR\": \"$0}' FloorPlanEditor.tsx)",
+      "Bash(powershell -Command \"Select-String -Path 'D:\\\\MAIN\\\\monica_recent\\\\src\\\\floorplan\\\\FloorPlanEditor.tsx' -Pattern '<DifferentPointsBlock' | Select-Object LineNumber\")"
     ]
   }
 }

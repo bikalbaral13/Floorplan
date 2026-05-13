@@ -1,4 +1,4 @@
-import { useMemo, type ComponentProps, type ReactNode } from "react";
+﻿import { useMemo, type ComponentProps, type ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -26,8 +26,15 @@ interface Props {
   rooms?: Room[];
   /** IDs of walls or rooms currently selected in the parent (selection state shared with 2D). */
   selectedWallIds?: string[];
-  /** Click handler — id may be a wall id or a room id. additive=true on shift-click for multi-select. */
+  /** Click handler â€” id may be a wall id or a room id. additive=true on shift-click for multi-select. */
   onSelectWall?: (id: string | null, additive: boolean) => void;
+  /** Low-poly schematic mode (driven by 2D Graph view). Walls / openings / floors render as single
+   *  planes instead of extruded volumes â€” massive triangle-count reduction at the cost of visual
+   *  thickness. Doors and windows are flat wood-coloured planes; floors are flat polygons (no slab). */
+  lowPoly?: boolean;
+  /** Floor-to-floor height in metres. Drives the per-floor stack offset and the wall-plane
+   *  height so the 3D view matches the Massing block's regulatory floor-height parameter. */
+  floorHeightM?: number;
 }
 
 type PlacementKind =
@@ -76,28 +83,31 @@ const FURNITURE_DIMS: Record<FurnitureItem["type"], { w: number; d: number; h: n
 
 const isExtrudableWall = (w: Wall) => {
   const t = w.segmentType ?? "wall";
-  return t === "wall" || t === "door" || t === "window";
+  return t === "wall" || t === "door" || t === "window" || t === "footprint-boundary";
 };
 
-const wallBands = (w: Wall): Array<{ yMin: number; yMax: number }> => {
+const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }> => {
   const t = w.segmentType ?? "wall";
   if (t === "door") {
-    const lintel = Math.min(WALL_HEIGHT_M, Math.max(0, w.lintelHeightM ?? DEFAULT_DOOR_LINTEL_M));
-    return lintel < WALL_HEIGHT_M ? [{ yMin: lintel, yMax: WALL_HEIGHT_M }] : [];
+    const lintel = Math.min(fullH, Math.max(0, w.lintelHeightM ?? DEFAULT_DOOR_LINTEL_M));
+    return lintel < fullH ? [{ yMin: lintel, yMax: fullH }] : [];
   }
   if (t === "window") {
-    const sill = Math.max(0, Math.min(WALL_HEIGHT_M, w.sillHeightM ?? DEFAULT_WINDOW_SILL_M));
-    const lintel = Math.max(sill, Math.min(WALL_HEIGHT_M, w.lintelHeightM ?? DEFAULT_WINDOW_LINTEL_M));
+    const sill = Math.max(0, Math.min(fullH, w.sillHeightM ?? DEFAULT_WINDOW_SILL_M));
+    const lintel = Math.max(sill, Math.min(fullH, w.lintelHeightM ?? DEFAULT_WINDOW_LINTEL_M));
     const bands: Array<{ yMin: number; yMax: number }> = [];
     if (sill > 0) bands.push({ yMin: 0, yMax: sill });
-    if (lintel < WALL_HEIGHT_M) bands.push({ yMin: lintel, yMax: WALL_HEIGHT_M });
+    if (lintel < fullH) bands.push({ yMin: lintel, yMax: fullH });
     return bands;
   }
-  return [{ yMin: 0, yMax: WALL_HEIGHT_M }];
+  return [{ yMin: 0, yMax: fullH }];
 };
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
+  // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
+  // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
+  const FLOOR_H = floorHeightM && floorHeightM > 0 ? floorHeightM : WALL_HEIGHT_M;
   const useSymbol = placementMode === "2dSymbol";
   const selectedSet = useMemo(() => new Set(selectedWallIds ?? []), [selectedWallIds]);
   const slabRooms = rooms ?? model.rooms ?? [];
@@ -118,7 +128,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
   // For each wall in mitered/mitered-union mode, identify which of its mitered-polygon edges are
   // SHARED with another wall's polygon (i.e., junction edges where two walls meet). When rendering
   // door/window lintel/sill bands in union mode, the side faces at these shared edges butt against
-  // adjacent walls — we hide their wireframe edges so the band reads as part of one continuous mass.
+  // adjacent walls â€” we hide their wireframe edges so the band reads as part of one continuous mass.
   const sharedPolyEdgesByWall = useMemo<Map<string, Set<number>>>(() => {
     const result = new Map<string, Set<number>>();
     const all = new Map<string, Point[]>();
@@ -152,13 +162,13 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
 
   // Union-mode extrusion: when walls share mode "mitered-union", their per-wall mitered footprints
   // butt seamlessly. Computing the union outerEdges (boundary edges not shared with another wall) and
-  // chaining them into closed loops gives one polygon per connected wall network — extruded as a single
+  // chaining them into closed loops gives one polygon per connected wall network â€” extruded as a single
   // Shape, the result has no internal seams between adjacent walls (matches the 2D Sharp+Union look).
   // Only plain "wall" segments are unified; doors/windows still extrude per-wall bands so openings show.
   const unionLoops = useMemo<Point[][]>(() => {
     const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
     // Mitered polygons restricted to plain walls in union mode. Placement walls (the 4-side polygon
-     // markers around a placed object) are excluded when 2dSymbol mode is on — those objects are rendered
+     // markers around a placed object) are excluded when 2dSymbol mode is on â€” those objects are rendered
      // only as 3D primitives, so their outline shouldn't fold into the wall union mass either.
     const filtered = new Map<string, Point[]>();
     for (const w of model.walls) {
@@ -241,7 +251,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
       const ux_plan = w0Len > 1e-6 ? (wall0.end.x - wall0.start.x) / w0Len : (longest.end.x - longest.start.x) / lenLong;
       const uy_plan = w0Len > 1e-6 ? (wall0.end.y - wall0.start.y) / w0Len : (longest.end.y - longest.start.y) / lenLong;
       let rotY = -Math.atan2(uy_plan, ux_plan);
-      // Make local −z point at the wall (toward walls[0]'s midpoint).
+      // Make local âˆ’z point at the wall (toward walls[0]'s midpoint).
       const m0x = (wall0.start.x + wall0.end.x) / 2;
       const m0y = (wall0.start.y + wall0.end.y) / 2;
       const wallDirX = m0x - cx;
@@ -296,8 +306,10 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
       <directionalLight position={[-15, 20, -10]} intensity={0.35} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[0, 1, 0]} />
 
-      {/* Room slabs — extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
-           selection list is shared with walls (a single id list keyed by room.id or wall.id). */}
+      {/* Room slabs â€” extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
+           selection list is shared with walls (a single id list keyed by room.id or wall.id).
+           Low-poly mode: each room becomes a single flat ShapeGeometry plane (no extrusion, no
+           per-floor stacking) for the schematic Graph view. */}
       {slabRooms.filter((r) => Array.isArray(r.points) && r.points.length >= 3).flatMap((r) => {
         const shape = new THREE.Shape(
           r.points.map((p) => {
@@ -306,6 +318,25 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           })
         );
         const isSelected = selectedSet.has(r.id);
+
+        if (lowPoly) {
+          const baseColor =
+            r.roomType === "plot-boundary" ? "#86efac" :
+            r.roomType === "buildable-area" ? "#16a34a" :
+            (typeof r.fill === "string" && r.fill.startsWith("#") ? r.fill : "#cbd5e1");
+          const color = isSelected ? "#f97316" : baseColor;
+          return [
+            <EdgedMesh
+              key={`lowpoly-room-${r.id}`}
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, isSelected ? 0.002 : 0.001, 0]}
+              onClick={handleWallClick(r.id)}
+            >
+              <shapeGeometry args={[shape]} />
+              <meshStandardMaterial color={color} side={THREE.DoubleSide} />
+            </EdgedMesh>,
+          ];
+        }
 
         // Site Boundary: one flat green ground plate at y=0, no extrusion / no massing.
         if (r.roomType === "plot-boundary") {
@@ -323,12 +354,30 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           ];
         }
 
+        // Buildable Area: a single thin green slab at ground level — represents the buildable extent
+        // inside the setbacks. No extrusion / no per-floor replication; the actual building (Footprint
+        // Area) sits inside it and gets extruded with floors instead.
+        if (r.roomType === "buildable-area") {
+          const buildableColor = isSelected ? "#f97316" : "#16a34a";
+          return [
+            <EdgedMesh
+              key={`buildable-${r.id}`}
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, isSelected ? 0.0008 : 0.0002, 0]}
+              onClick={handleWallClick(r.id)}
+            >
+              <extrudeGeometry args={[shape, { depth: 0.001, bevelEnabled: false, steps: 1 }]} />
+              <meshStandardMaterial color={buildableColor} transparent opacity={0.65} />
+            </EdgedMesh>,
+          ];
+        }
+
         const baseColor = (typeof r.fill === "string" && r.fill.startsWith("#")) ? r.fill : "#cbd5e1";
         const color = isSelected ? "#f97316" : baseColor;
         const floors = Math.max(1, Math.floor(r.floorsCount ?? 1));
-        const floorH = WALL_HEIGHT_M;
+        const floorH = FLOOR_H;
         const slabBumpY = isSelected ? 0.001 : 0;
-        // n floors → n+1 slabs (one per floor base + a roof slab capping the top floor).
+        // n floors â†’ n+1 slabs (one per floor base + a roof slab capping the top floor).
         return Array.from({ length: floors + 1 }, (_, i) => (
           <EdgedMesh
             key={`room-${r.id}-f${i}`}
@@ -343,10 +392,10 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
       })}
 
       {/* Union extrusion: one continuous mass per connected wall network in mitered-union mode.
-           Replicated per floor (max floorsCount across rooms). */}
-      {(() => {
-        const globalFloors = Math.max(1, ...slabRooms.filter((r) => r.roomType !== "plot-boundary").map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
-        const floorH = WALL_HEIGHT_M;
+           Replicated per floor (max floorsCount across rooms). Skipped in low-poly mode. */}
+      {!lowPoly && (() => {
+        const globalFloors = Math.max(1, ...slabRooms.map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
+        const floorH = FLOOR_H;
         return Array.from({ length: globalFloors }, (_, fi) => (
           <group key={`mass-floor-${fi}`} position={[0, fi * floorH, 0]}>
             {(() => {
@@ -366,7 +415,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           }
           return inside;
         };
-        // Larger absolute area first → outer rings before holes.
+        // Larger absolute area first â†’ outer rings before holes.
         const ranked = unionLoops
           .map((loop) => ({ loop, area: signedArea(loop) }))
           .sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
@@ -402,7 +451,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           }
           return (
             <EdgedMesh key={`union-${li}`} rotation={[-Math.PI / 2, 0, 0]}>
-              <extrudeGeometry args={[shape, { depth: WALL_HEIGHT_M, bevelEnabled: false, steps: 1 }]} />
+              <extrudeGeometry args={[shape, { depth: FLOOR_H, bevelEnabled: false, steps: 1 }]} />
               <meshStandardMaterial color={GREY} />
             </EdgedMesh>
           );
@@ -412,9 +461,136 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         ));
       })()}
 
-      {(() => {
-        const globalFloors = Math.max(1, ...slabRooms.filter((r) => r.roomType !== "plot-boundary").map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
-        const floorH = WALL_HEIGHT_M;
+      {/* Low-poly wall planes: one vertical PlaneGeometry per wall, no extrusion. Doors/windows
+           render as wood-coloured planes spanning the full segment height. */}
+      {lowPoly && (() => {
+        const globalFloors = Math.max(1, ...slabRooms.map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
+        const floorH = FLOOR_H;
+        const WOOD = "#a16207";
+        // When Massing has emitted preview walls, those walls already trace the Optimise-Rectangle
+        // boundary (Massing reads optimiseUnionPolygonRef). The OptRect preview walls and the
+        // Massing preview walls are coincident in graph mode (both full-height planes at the same
+        // location) → z-fight → visible flicker, especially on doors/windows where the wood plane
+        // fights a grey OptRect plane. Suppress OptRect previews whenever ANY Massing preview is
+        // present (Massing runs on a single selected room at a time, so a global flag is fine).
+        const hasMassingPreview = model.walls.some((w) => w.isMassingPreview);
+        return Array.from({ length: globalFloors }, (_, fi) => (
+          <group key={`lowpoly-walls-floor-${fi}`} position={[0, fi * floorH, 0]}>
+            {model.walls.filter((w) => {
+              const t = w.segmentType ?? "wall";
+              // Plot-boundary segments are rendered ONCE outside this per-floor stack (single
+              // 2 m fence plane at ground level — see the dedicated low-poly block below).
+              if (t === "plot-boundary") return false;
+              if (!isExtrudableWall(w)) return false;
+              if ((w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId) return false;
+              // Drop OptRect preview walls coincident with any Massing preview run.
+              if (w.isMaxRectPreview && hasMassingPreview) return false;
+              if (w.isInsetWall || w.isSplitWall || w.isBspPreview || w.isVoronoiPreview ||
+                  w.isCvtPreview || w.isDelaunayPreview || w.isSkeletonPreview || w.isConvexHullPreview ||
+                  w.isRectDecompPreview || w.isSmoothingPreview || w.isMeshPreview ||
+                  w.isConvexDecompPreview || w.isCircumcirclePreview || w.isEllipsePreview ||
+                  w.isObbPreview || w.isNGonPreview || w.isUnrollPreview ||
+                  w.isPrincipalAxisPreview || w.isContourPreview || w.isStreamlinePreview ||
+                  w.isNoiseTexturePreview || w.isInCirclePreview || w.isTilingPreview) return false;
+              return true;
+            }).flatMap((w) => {
+              const dx = w.end.x - w.start.x;
+              const dy = w.end.y - w.start.y;
+              const lenPx = Math.hypot(dx, dy);
+              if (lenPx < 1) return [];
+              const lenM = lenPx / ppm;
+              const midX = (w.start.x + w.end.x) / 2;
+              const midY = (w.start.y + w.end.y) / 2;
+              const [sx, sz] = toScene(midX, midY);
+              const rotY = -Math.atan2(dy, dx);
+              const segType = w.segmentType ?? "wall";
+              const isSelected = selectedSet.has(w.id);
+              const wallC = isSelected ? "#f97316" : GREY;
+              const woodC = isSelected ? "#f97316" : WOOD;
+              // Massing preview walls live ON TOP of the room's pre-existing perimeter walls (in
+              // silent mode runRoomMassing keeps the user's original walls so toggling Live off is
+              // non-destructive). In graph mode both render as coplanar zero-thickness planes →
+              // z-fight → flicker, especially on doors/windows where wood vs grey makes it loud.
+              // Bias massing planes forward in the depth buffer so they always win the depth test.
+              const isMassing = !!w.isMassingPreview || !!w.isMassingWall;
+
+              // Helper: vertical sub-plane covering [yMin, yMax] of this wall segment. Plain `<mesh>`
+              // (no `<Edges>`) — wireframe overlap at adjacent-wall junctions was causing the flicker.
+              const subPlane = (key: string, yMin: number, yMax: number, color: string) => {
+                const h = yMax - yMin;
+                if (h <= 1e-4) return null;
+                return (
+                  <mesh
+                    key={key}
+                    position={[sx, (yMin + yMax) / 2, sz]}
+                    rotation={[0, rotY, 0]}
+                    onClick={handleWallClick(w.id)}
+                  >
+                    <planeGeometry args={[lenM, h]} />
+                    <meshStandardMaterial
+                      color={color}
+                      side={THREE.DoubleSide}
+                      polygonOffset={isMassing}
+                      polygonOffsetFactor={isMassing ? -2 : 0}
+                      polygonOffsetUnits={isMassing ? -2 : 0}
+                    />
+                  </mesh>
+                );
+              };
+
+              if (segType === "window") {
+                // Three stacked planes: wall below the sill, wood window between sill and lintel,
+                // wall above the lintel. Each is a separate flat plane (still 2 tris each) so the
+                // glazing reads as a distinct band without any extruded frame.
+                const sill = Math.max(0, Math.min(FLOOR_H, w.sillHeightM ?? DEFAULT_WINDOW_SILL_M));
+                const lintel = Math.max(sill, Math.min(FLOOR_H, w.lintelHeightM ?? DEFAULT_WINDOW_LINTEL_M));
+                return [
+                  subPlane(`lowpoly-win-below-${w.id}`, 0, sill, wallC),
+                  subPlane(`lowpoly-win-glass-${w.id}`, sill, lintel, woodC),
+                  subPlane(`lowpoly-win-above-${w.id}`, lintel, FLOOR_H, wallC),
+                ];
+              }
+
+              // Door: single full-height wood plane (the lintel band could be split similarly, but
+              // the user asked for windows only). Plain wall: single grey plane.
+              const isDoor = segType === "door";
+              return [subPlane(`lowpoly-wall-${w.id}`, 0, FLOOR_H, isDoor ? woodC : wallC)];
+            })}
+          </group>
+        ));
+      })()}
+
+      {/* Low-poly plot-boundary fence: single 2 m vertical plane per segment at ground level
+           (NOT replicated per floor, NOT split by boundaryTreatment — minimum-poly schematic). */}
+      {lowPoly && model.walls.flatMap((w) => {
+        if ((w.segmentType ?? "wall") !== "plot-boundary") return [];
+        const dx = w.end.x - w.start.x;
+        const dy = w.end.y - w.start.y;
+        const lenPx = Math.hypot(dx, dy);
+        if (lenPx < 1) return [];
+        const lenM = lenPx / ppm;
+        const midX = (w.start.x + w.end.x) / 2;
+        const midY = (w.start.y + w.end.y) / 2;
+        const [sx, sz] = toScene(midX, midY);
+        const rotY = -Math.atan2(dy, dx);
+        const fenceH = Math.max(0.05, w.heightM ?? 2);
+        const color = selectedSet.has(w.id) ? "#f97316" : "#64748b";
+        return [
+          <mesh
+            key={`lowpoly-plot-${w.id}`}
+            position={[sx, fenceH / 2, sz]}
+            rotation={[0, rotY, 0]}
+            onClick={handleWallClick(w.id)}
+          >
+            <planeGeometry args={[lenM, fenceH]} />
+            <meshStandardMaterial color={color} side={THREE.DoubleSide} />
+          </mesh>,
+        ];
+      })}
+
+      {!lowPoly && (() => {
+        const globalFloors = Math.max(1, ...slabRooms.map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
+        const floorH = FLOOR_H;
         return Array.from({ length: globalFloors }, (_, fi) => (
           <group key={`walls-floor-${fi}`} position={[0, fi * floorH, 0]}>
       {model.walls.filter((w) => {
@@ -423,6 +599,16 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         // Union mode: plain walls are absorbed into the union extrusion above. Doors/windows still
         // need per-wall band extrusion so the lintel/sill show.
         if (w.mode === "mitered-union" && (w.segmentType ?? "wall") === "wall") return false;
+        // Hide upstream-cascade preview walls in 3D — only the Optimise Rectangle output (and Massing
+        // walls placed along it) should extrude as "the building". Inset / split / BSP / etc. previews
+        // are 2D-only guides; rendering them in 3D adds confusing duplicate walls.
+        if (w.isInsetWall || w.isSplitWall || w.isBspPreview || w.isRfpPreview || w.isVoronoiPreview ||
+            w.isCvtPreview || w.isDelaunayPreview || w.isSkeletonPreview || w.isConvexHullPreview ||
+            w.isRectDecompPreview || w.isSmoothingPreview || w.isMeshPreview ||
+            w.isConvexDecompPreview || w.isCircumcirclePreview || w.isEllipsePreview ||
+            w.isObbPreview || w.isNGonPreview || w.isUnrollPreview ||
+            w.isPrincipalAxisPreview || w.isContourPreview || w.isStreamlinePreview ||
+            w.isNoiseTexturePreview || w.isInCirclePreview || w.isTilingPreview) return false;
         return true;
       }).flatMap((w) => {
         const dx = w.end.x - w.start.x;
@@ -433,14 +619,14 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const isSharp = (w.mode === "mitered" || w.mode === "mitered-union");
         const polyPlan = miteredPolygons.get(w.id);
 
-        // Sharp-mode extrusion using the mitered footprint polygon — corners join seamlessly
+        // Sharp-mode extrusion using the mitered footprint polygon â€” corners join seamlessly
         // because adjacent walls share the same vertex coordinates at junctions. Only available
         // for plain walls (door/window walls still use the band approach below to keep openings).
         if (isSharp && segType === "wall" && polyPlan && polyPlan.length >= 3) {
           const shape = new THREE.Shape(
             polyPlan.map((p) => {
               const [sx, sz] = toScene(p.x, p.y);
-              // Build the 2D shape in (X, -Z) so that after rotating −π/2 around X the polygon
+              // Build the 2D shape in (X, -Z) so that after rotating âˆ’Ï€/2 around X the polygon
               // lands on the world XZ plane with correct orientation, and ExtrudeGeometry's +Z
               // extrude direction maps to world +Y.
               return new THREE.Vector2(sx, -sz);
@@ -448,7 +634,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           );
           return [
             <EdgedMesh key={`${w.id}:sharp`} rotation={[-Math.PI / 2, 0, 0]} onClick={handleWallClick(w.id)}>
-              <extrudeGeometry args={[shape, { depth: WALL_HEIGHT_M, bevelEnabled: false, steps: 1 }]} />
+              <extrudeGeometry args={[shape, { depth: FLOOR_H, bevelEnabled: false, steps: 1 }]} />
               <meshStandardMaterial color={wallColor(w.id)} />
             </EdgedMesh>,
           ];
@@ -456,7 +642,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
 
         // Sharp-mode lintel/sill bands for doors/windows: extrude the mitered footprint polygon
         // for each above/below band. The mitered polygon shares vertices with adjacent plain walls'
-        // mitered polygons, so the lintel band visually merges with the surrounding union mass —
+        // mitered polygons, so the lintel band visually merges with the surrounding union mass â€”
         // no boxy seam where door/window meets the rest of the wall.
         if (isSharp && (segType === "door" || segType === "window") && polyPlan && polyPlan.length >= 3) {
           const shape = new THREE.Shape(
@@ -467,7 +653,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           );
           // In mitered-union mode, render the band as a plain mesh and draw ONLY the wireframe edges
           // for non-shared polygon edges (and the verticals at vertices whose neighbours are also
-          // non-shared). Edges of side faces touching an adjacent wall — i.e. shared polygon edges —
+          // non-shared). Edges of side faces touching an adjacent wall â€” i.e. shared polygon edges â€”
           // are dropped, so the band visually merges with the union mass with no seams.
           const isUnionBand = w.mode === "mitered-union";
           const sharedSet = isUnionBand ? (sharedPolyEdgesByWall.get(w.id) ?? new Set<number>()) : new Set<number>();
@@ -475,7 +661,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           const isEdgeShared = (ei: number) => sharedSet.has(ei);
           const isVertHidden = (vi: number) => sharedSet.has((vi - 1 + N) % N) || sharedSet.has(vi);
 
-          return wallBands(w).map((band, i) => {
+          return wallBands(w, FLOOR_H).map((band, i) => {
             const h = band.yMax - band.yMin;
             if (h <= 0) return null;
             const key = `${w.id}:band-sharp:${i}`;
@@ -487,7 +673,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
                 const [ax, az] = toScene(a.x, a.y);
                 const [bx, bz] = toScene(b.x, b.y);
                 // Bottom horizontal (band.yMin) and top horizontal (band.yMax). Note: Z in scene
-                // coords maps from (planY - cy)/ppm; toScene returns (sx, sz) → world (sx, _, sz).
+                // coords maps from (planY - cy)/ppm; toScene returns (sx, sz) â†’ world (sx, _, sz).
                 positions.push(ax, band.yMin, az, bx, band.yMin, bz);
                 positions.push(ax, band.yMax, az, bx, band.yMax, bz);
               }
@@ -538,7 +724,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const midY = (w.start.y + w.end.y) / 2;
         const [sx, sz] = toScene(midX, midY);
         const rotY = -Math.atan2(dy, dx);
-        return wallBands(w).map((band, i) => {
+        return wallBands(w, FLOOR_H).map((band, i) => {
           const h = band.yMax - band.yMin;
           if (h <= 0) return null;
           const yCenter = (band.yMin + band.yMax) / 2;
@@ -554,12 +740,14 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         ));
       })()}
 
-      {/* Door / Window primitives — only in 2D-Symbol placement mode. Sit inside the wall opening
-          (lintel / sill bands are still drawn by the wall extrusion above). Replicated per floor. */}
+      {/* Door / Window primitives â€” only in 2D-Symbol placement mode. Sit inside the wall opening
+          (lintel / sill bands are still drawn by the wall extrusion above). Replicated per floor.
+          Skipped in low-poly mode (the wall plane itself carries the wood colour). */}
       {(() => {
+        if (lowPoly) return null;
         if (!useSymbol) return null;
-        const globalFloors = Math.max(1, ...slabRooms.filter((r) => r.roomType !== "plot-boundary").map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
-        const floorH = WALL_HEIGHT_M;
+        const globalFloors = Math.max(1, ...slabRooms.map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
+        const floorH = FLOOR_H;
         return Array.from({ length: globalFloors }, (_, fi) => (
           <group key={`dw-floor-${fi}`} position={[0, fi * floorH, 0]}>
       {model.walls.map((w) => {
@@ -576,7 +764,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const rotY = -Math.atan2(dy, dx);
 
         if (w.segmentType === "door") {
-          const lintel = Math.min(WALL_HEIGHT_M, Math.max(0.1, w.lintelHeightM ?? DEFAULT_DOOR_LINTEL_M));
+          const lintel = Math.min(FLOOR_H, Math.max(0.1, w.lintelHeightM ?? DEFAULT_DOOR_LINTEL_M));
           const slabH = Math.max(0.1, lintel - 0.02);
           const frameW = 0.05;
           const frameT = Math.max(thicknessM * 1.05, 0.06);
@@ -590,9 +778,9 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           // its hinge edge, so we position a sub-group AT the hinge and let it rotate around Y.
           // Swing side: doorPlacement "left" = perpendicular -z half, "right" = +z half. The open
           // angle's direction depends on both hinge end and swing side (open into the requested side).
-          const hingeSign = w.doorHinge === "right" ? -1 : 1; // +1 → slab extends in +x from hinge; -1 → in -x
-          const placementSign = w.doorPlacement === "right" ? 1 : -1; // +1 → swings into +z half
-          const OPEN_ANGLE = (Math.PI / 180) * 75; // visual open angle (75°)
+          const hingeSign = w.doorHinge === "right" ? -1 : 1; // +1 â†’ slab extends in +x from hinge; -1 â†’ in -x
+          const placementSign = w.doorPlacement === "right" ? 1 : -1; // +1 â†’ swings into +z half
+          const OPEN_ANGLE = (Math.PI / 180) * 75; // visual open angle (75Â°)
           const swingAngle = -hingeSign * placementSign * OPEN_ANGLE;
           const hingeX = hingeSign * (lenM / 2 - frameW);
           // Slab body's centre, in the hinge-group's local frame, before rotation: half its length
@@ -634,8 +822,8 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         }
 
         // Window
-        const sill = Math.max(0, Math.min(WALL_HEIGHT_M, w.sillHeightM ?? DEFAULT_WINDOW_SILL_M));
-        const lintel = Math.max(sill + 0.1, Math.min(WALL_HEIGHT_M, w.lintelHeightM ?? DEFAULT_WINDOW_LINTEL_M));
+        const sill = Math.max(0, Math.min(FLOOR_H, w.sillHeightM ?? DEFAULT_WINDOW_SILL_M));
+        const lintel = Math.max(sill + 0.1, Math.min(FLOOR_H, w.lintelHeightM ?? DEFAULT_WINDOW_LINTEL_M));
         const winH = lintel - sill;
         const cy = sill + winH / 2;
         const frameW = 0.06;
@@ -707,8 +895,9 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         ));
       })()}
 
-      {/* Site Boundary segments — render per boundaryTreatment (fence / railing / open / solid). */}
-      {model.walls.flatMap((w) => {
+      {/* Site Boundary segments â€” render per boundaryTreatment (fence / railing / open / solid).
+          Skipped in low-poly mode (a single 2 m fence plane is rendered above instead). */}
+      {!lowPoly && model.walls.flatMap((w) => {
         if (w.segmentType !== "plot-boundary") return [];
         const treatment = w.boundaryTreatment ?? "solid";
         if (treatment === "open") return [];
@@ -769,7 +958,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         }
 
         if (treatment === "gate") {
-          // Two thicker side posts + horizontal top arch + two leaf panels swung 30° outward.
+          // Two thicker side posts + horizontal top arch + two leaf panels swung 30Â° outward.
           const postW = Math.max(0.12, thicknessM * 1.5);
           const postH = heightM;
           const archH = 0.12;
@@ -808,7 +997,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
                 <boxGeometry args={[postW * 0.6, 0.12, postW * 0.6]} />
                 <meshStandardMaterial color={accent} metalness={0.7} roughness={0.3} />
               </EdgedMesh>
-              {/* Left leaf — hinge at the left post, swings outward (into +z) */}
+              {/* Left leaf â€” hinge at the left post, swings outward (into +z) */}
               <group position={[-lenM / 2 + postW, 0, 0]} rotation={[0, -OPEN, 0]}>
                 <EdgedMesh position={[leafLen / 2, leafH / 2 + 0.05, 0]}>
                   <boxGeometry args={[leafLen, leafH, leafT]} />
@@ -822,7 +1011,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
                   </EdgedMesh>
                 ))}
               </group>
-              {/* Right leaf — hinge at the right post, swings outward (into +z) */}
+              {/* Right leaf â€” hinge at the right post, swings outward (into +z) */}
               <group position={[lenM / 2 - postW, 0, 0]} rotation={[0, OPEN, 0]}>
                 <EdgedMesh position={[-leafLen / 2, leafH / 2 + 0.05, 0]}>
                   <boxGeometry args={[leafLen, leafH, leafT]} />
@@ -869,6 +1058,30 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               );
             })}
           </group>,
+        ];
+      })}
+
+      {/* Buildable Boundary segments — render as a low green curb at ground level so the buildable
+          extent is legible in 3D without competing with the actual building extrusion. */}
+      {model.walls.flatMap((w) => {
+        if (w.segmentType !== "buildable-boundary") return [];
+        const dx = w.end.x - w.start.x;
+        const dy = w.end.y - w.start.y;
+        const lenPx = Math.hypot(dx, dy);
+        if (lenPx < 1) return [];
+        const lenM = lenPx / ppm;
+        const thicknessM = Math.max(0.05, (w.thickness ?? 0) / ppm || 0.1);
+        const heightM = 0.35;
+        const midX = (w.start.x + w.end.x) / 2;
+        const midY = (w.start.y + w.end.y) / 2;
+        const [sx, sz] = toScene(midX, midY);
+        const rotY = -Math.atan2(dy, dx);
+        const baseColor = (typeof w.color === "string" && w.color.startsWith("#")) ? w.color : "#16a34a";
+        return [
+          <EdgedMesh key={`bb-${w.id}`} position={[sx, heightM / 2, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
+            <boxGeometry args={[lenM, heightM, Math.max(0.08, thicknessM)]} />
+            <meshStandardMaterial color={baseColor} />
+          </EdgedMesh>,
         ];
       })}
 
@@ -1633,3 +1846,4 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     </Canvas>
   );
 }
+

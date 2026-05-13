@@ -1,296 +1,5 @@
-import type { Point, Wall, WallMethod, WallMode, WallPolygonGeometry } from "./types";
-
-/** Line–line intersection; point must lie on both segments (endpoints allowed). */
-const lineSegmentsIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
-  const x1 = p1.x,
-    y1 = p1.y,
-    x2 = p2.x,
-    y2 = p2.y;
-  const x3 = p3.x,
-    y3 = p3.y,
-    x4 = p4.x,
-    y4 = p4.y;
-  const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-  if (denom === 0) return null;
-  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
-  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
-  if (ua >= -0.001 && ua <= 1.001 && ub >= -0.001 && ub <= 1.001) {
-    return { x: x1 + ua * (x2 - x1), y: y1 + ua * (y2 - y1) };
-  }
-  return null;
-};
-
-const isPointStrictlyBetweenSegment = (p: Point, a: Point, b: Point) => {
-  const d = Math.hypot(b.x - a.x, b.y - a.y);
-  if (d < 0.1) return false;
-  const d1 = Math.hypot(p.x - a.x, p.y - a.y);
-  const d2 = Math.hypot(p.x - b.x, p.y - b.y);
-  if (d1 < 0.1 || d2 < 0.1) return false;
-  return Math.abs(d - (d1 + d2)) < 0.1;
-};
-
-/**
- * Split wall spines at every T-junction / crossing / endpoint-on-edge, matching the planar graph
- * used for auto room detection. Preserves wall styling; first sub-segment keeps the original id.
- */
-export const splitWallsAtIntersections = (walls: Wall[]): Wall[] => {
-  if (walls.length === 0) return walls;
-  const connectionWalls = walls.filter((w) => w.segmentType === "connection");
-  const splittable = walls.filter((w) => w.segmentType !== "connection");
-  const curvedWalls = splittable.filter((w) => Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4);
-  const straightWalls = splittable.filter((w) => !(Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4));
-
-  if (straightWalls.length === 0) {
-    return walls;
-  }
-  // (connectionWalls passed through unchanged below)
-
-  const segments = straightWalls.map((w) => ({
-    wall: w,
-    start: { ...w.start },
-    end: { ...w.end },
-  }));
-
-  const intersectionPoints: Point[] = [];
-  for (let i = 0; i < segments.length; i++) {
-    for (let j = i + 1; j < segments.length; j++) {
-      let p = lineSegmentsIntersection(
-        segments[i].start,
-        segments[i].end,
-        segments[j].start,
-        segments[j].end
-      );
-      if (p) {
-        for (const seg of segments) {
-          if (Math.hypot(p.x - seg.start.x, p.y - seg.start.y) < 1.0) {
-            p = seg.start;
-            break;
-          }
-          if (Math.hypot(p.x - seg.end.x, p.y - seg.end.y) < 1.0) {
-            p = seg.end;
-            break;
-          }
-        }
-        intersectionPoints.push(p);
-      }
-    }
-  }
-
-  const allSnapPoints: Point[] = [...segments.flatMap((s) => [s.start, s.end]), ...intersectionPoints];
-
-  const out: Wall[] = [];
-
-  for (const { wall, start, end } of segments) {
-    let splitPoints: Point[] = [start, end];
-    allSnapPoints.forEach((p) => {
-      if (isPointStrictlyBetweenSegment(p, start, end)) {
-        splitPoints.push(p);
-      }
-    });
-
-    splitPoints.sort(
-      (a, b) =>
-        Math.hypot(a.x - start.x, a.y - start.y) - Math.hypot(b.x - start.x, b.y - start.y)
-    );
-
-    const unique: Point[] = [];
-    splitPoints.forEach((p) => {
-      if (
-        unique.length === 0 ||
-        Math.hypot(p.x - unique[unique.length - 1].x, p.y - unique[unique.length - 1].y) > 0.5
-      ) {
-        unique.push(p);
-      }
-    });
-
-    if (unique.length <= 2) {
-      if (Math.hypot(end.x - start.x, end.y - start.y) > 0.1) {
-        out.push(wall);
-      }
-      continue;
-    }
-
-    for (let i = 0; i < unique.length - 1; i++) {
-      const s = unique[i];
-      const e = unique[i + 1];
-      if (Math.hypot(e.x - s.x, e.y - s.y) <= 0.1) continue;
-      const pieceId =
-        i === 0
-          ? wall.id
-          : `${wall.id}~${Math.round(s.x)},${Math.round(s.y)}_${Math.round(e.x)},${Math.round(e.y)}`;
-      out.push({
-        ...wall,
-        id: pieceId,
-        start: s,
-        end: e,
-      });
-    }
-  }
-
-  return [...out, ...curvedWalls, ...connectionWalls];
-};
-
-export const wallWithDefaults = (
-  wall: Wall
-): Wall & { mode: WallMode; method: WallMethod; thickness: number } => ({
-  ...wall,
-  thickness: wall.thickness ?? 10,
-  mode: wall.mode ?? "fill",
-  method: wall.method ?? "center",
-});
-
-/** Rectangle corners for wall as polygon (spine = start→end, thickness perpendicular). */
-export const getWallCorners = (wall: Wall): Point[] => {
-  const { start, end, thickness, method } = wallWithDefaults(wall);
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 1e-9) {
-    return [start, start, start, start];
-  }
-  const nx = -dy / len;
-  const ny = dx / len;
-  const T = thickness;
-
-  if (method === "center") {
-    const h = T / 2;
-    return [
-      { x: start.x + nx * h, y: start.y + ny * h },
-      { x: end.x + nx * h, y: end.y + ny * h },
-      { x: end.x - nx * h, y: end.y - ny * h },
-      { x: start.x - nx * h, y: start.y - ny * h },
-    ];
-  }
-  if (method === "left") {
-    return [
-      { x: start.x, y: start.y },
-      { x: end.x, y: end.y },
-      { x: end.x + nx * T, y: end.y + ny * T },
-      { x: start.x + nx * T, y: start.y + ny * T },
-    ];
-  }
-  return [
-    { x: start.x - nx * T, y: start.y - ny * T },
-    { x: end.x - nx * T, y: end.y - ny * T },
-    { x: end.x, y: end.y },
-    { x: start.x, y: start.y },
-  ];
-};
-
-/**
- * Full polygonal-rectangle description: four boundary edges, spine (center line), and corners.
- * Use for snapping, exports, and invisible interaction geometry (not meant as separate visible strokes).
- */
-export const getWallPolygonGeometry = (wall: Wall): WallPolygonGeometry => {
-  const corners = getWallCorners(wall);
-  const edges: [Point, Point][] = [];
-  for (let i = 0; i < 4; i++) {
-    edges.push([corners[i], corners[(i + 1) % 4]]);
-  }
-  return {
-    corners,
-    edges,
-    spine: { start: wall.start, end: wall.end },
-  };
-};
-
-export const wallPolygonPoints = (wall: Wall) => getWallCorners(wall).flatMap((p) => [p.x, p.y]);
-
-export const clampWallThicknessPx = (t: number) => Math.max(2, Math.min(5000, t));
-
-/** Dotted-line segment for thickness preview (world px); length equals thickness. */
-export const getWallThicknessPreviewSegment = (
-  spine: { start: Point; end: Point; method?: WallMethod },
-  thicknessPx: number
-): { a: Point; b: Point } => {
-  const { start, end } = spine;
-  const method = spine.method ?? "center";
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 1e-9) {
-    return { a: start, b: start };
-  }
-  const nx = -dy / len;
-  const ny = dx / len;
-  const mx = (start.x + end.x) / 2;
-  const my = (start.y + end.y) / 2;
-  const T = thicknessPx;
-
-  if (method === "center") {
-    const h = T / 2;
-    return { a: { x: mx + nx * h, y: my + ny * h }, b: { x: mx - nx * h, y: my - ny * h } };
-  }
-  if (method === "left") {
-    return { a: { x: mx, y: my }, b: { x: mx + nx * T, y: my + ny * T } };
-  }
-  return { a: { x: mx, y: my }, b: { x: mx - nx * T, y: my - ny * T } };
-};
-
-export type WallThicknessHandleLayout = {
-  key: string;
-  /** Outward normal for this handle (drag positive along this increases thickness). */
-  normal: Point;
-  x: number;
-  y: number;
-  /** center -> 2, left/right single handle -> 1 */
-  thicknessFactor: number;
-};
-
-export const getWallThicknessHandleLayouts = (wall: Wall, thicknessPx: number): WallThicknessHandleLayout[] => {
-  const { start, end, method } = wallWithDefaults(wall);
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const len = Math.hypot(dx, dy);
-  const nx = len < 1e-9 ? 0 : -dy / len;
-  const ny = len < 1e-9 ? 0 : dx / len;
-  const mx = (start.x + end.x) / 2;
-  const my = (start.y + end.y) / 2;
-  const T = thicknessPx;
-
-  if (method === "center") {
-    const h = T / 2;
-    return [
-      { key: `${wall.id}-th-a`, normal: { x: nx, y: ny }, x: mx + nx * h, y: my + ny * h, thicknessFactor: 2 },
-      { key: `${wall.id}-th-b`, normal: { x: -nx, y: -ny }, x: mx - nx * h, y: my - ny * h, thicknessFactor: 2 },
-    ];
-  }
-  if (method === "left") {
-    return [{ key: `${wall.id}-th-o`, normal: { x: nx, y: ny }, x: mx + nx * T, y: my + ny * T, thicknessFactor: 1 }];
-  }
-  return [{ key: `${wall.id}-th-o`, normal: { x: -nx, y: -ny }, x: mx - nx * T, y: my - ny * T, thicknessFactor: 1 }];
-};
-export const getWallJustifiedSpine = (wall: Wall): { start: Point; end: Point } => {
-  const { start, end, thickness, method } = wallWithDefaults(wall);
-  if (method === "center") {
-    return { start, end };
-  }
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 1e-9) {
-    return { start, end };
-  }
-  const nx = -dy / len;
-  const ny = dx / len;
-  const h = thickness / 2;
-
-  // For "left", we want the line to be in the middle of the "left" volume.
-  // Wait, if "left" means the spine (clicks) is the "Left" edge (0 to +T), the center of the wall is at +T/2.
-  // If we draw it as a single line, do we want it at the edge or the center of that volume?
-  // Usually, a "justified line" should represent the wall's location. 
-  // If the user picked "Left" justification, it means their clicks define the "left" boundary.
-  // If they are in "Line" mode, they probably want to see the line at that boundary.
-
-  if (method === "left") {
-    // Edge (no offset from clicks)
-    return { start, end };
-  }
-  // For "right", the volume is from -T to 0. The edge is at 0 (the clicks).
-  return { start, end };
-};
-
-// ── Mitered Wall Polygon Computation ─────────────────────────────────────────
+import type { Point, Wall, WallMethod } from "../../types";
+import { getWallCorners, wallWithDefaults } from "./wallCorners";
 
 const PT_TOL = 0.5;
 const MAX_MITRE = 20.0;
@@ -336,13 +45,9 @@ interface Spoke {
   ra: number[];
 }
 
-/**
- * Compute mitered wall polygons for all walls.
- * Returns a Map from wall.id to the polygon points.
- * Handles center/left/right justification.
- */
+/** Compute mitered wall polygons for all walls. Returns a Map from wall.id to polygon points.
+ *  Handles center / left / right justification. */
 export function computeMiteredWallPolygons(walls: Wall[]): Map<string, Point[]> {
-  // Build graph: nodes at endpoints, edges from walls
   const nodeMap = new Map<string, MitreNode>();
   let nIdx = 0;
   function getNode(x: number, y: number): MitreNode {
@@ -353,38 +58,29 @@ export function computeMiteredWallPolygons(walls: Wall[]): Map<string, Point[]> 
 
   const edges: (MitreEdge & { wallId: string })[] = [];
   for (const w of walls) {
-    if (w.segmentType === "connection") continue;
     const ww = wallWithDefaults(w);
     const nA = getNode(ww.start.x, ww.start.y);
     const nB = getNode(ww.end.x, ww.end.y);
     if (nA.id === nB.id) continue;
     const T = ww.thickness;
     const method = ww.method;
-    // Compute half-widths for left and right sides based on justification
     let hwL: number, hwR: number;
-    if (method === "center") {
-      hwL = T / 2; hwR = T / 2;
-    } else if (method === "left") {
-      // Spine is at left edge; wall extends to right (perpR direction)
-      hwL = 0; hwR = T;
-    } else {
-      // "right": spine at right edge; wall extends to left (perpL direction)
-      hwL = T; hwR = 0;
-    }
+    if (method === "center") { hwL = T / 2; hwR = T / 2; }
+    else if (method === "left") { hwL = 0; hwR = T; }
+    else { hwL = T; hwR = 0; }
     edges.push({ id: w.id, wallId: w.id, source: nA.id, target: nB.id, hwL, hwR, method });
   }
 
   const nc = new Map<string, number[]>();
   for (const n of nodeMap.values()) { nc.set(n.id, [n.x, n.y]); }
 
-  // Precompute directions for each edge endpoint
   const link = new Map<string, { ux: number; uy: number; hwL: number; hwR: number }>();
   for (const e of edges) {
     const [px, py] = nc.get(e.source)!;
     const [qx, qy] = nc.get(e.target)!;
     const [ux, uy] = norm(qx - px, qy - py);
     link.set(`${e.source}|${e.target}`, { ux, uy, hwL: e.hwL, hwR: e.hwR });
-    link.set(`${e.target}|${e.source}`, { ux: -ux, uy: -uy, hwL: e.hwR, hwR: e.hwL }); // Flip L/R when reversed
+    link.set(`${e.target}|${e.source}`, { ux: -ux, uy: -uy, hwL: e.hwR, hwR: e.hwL });
   }
 
   function sortedSpokes(nid: string): Spoke[] {
@@ -463,7 +159,6 @@ export function computeMiteredWallPolygons(walls: Wall[]): Map<string, Point[]> 
     if (cTgt) poly.push({ x: cTgt.p[0], y: cTgt.p[1] });
     for (const p of right) poly.push({ x: p.p[0], y: p.p[1] });
 
-    // Fallback: if polygon has < 3 points, use simple rectangle
     if (poly.length < 3) {
       const corners = getWallCorners(walls.find((w) => w.id === e.wallId)!);
       result.set(e.wallId, corners);
@@ -519,14 +214,10 @@ function polylineMidpoint(pts: Point[]): { x: number; y: number; angle: number }
   return { x: last.x, y: last.y, angle: Math.atan2(last.y - prev.y, last.x - prev.x) * 180 / Math.PI };
 }
 
-/**
- * Compute inner/outer edge dimensions for all mitered walls.
- * Uses the mitered polygon's left/right side classification.
- */
+/** Compute inner/outer edge dimensions for all mitered walls. */
 export function computeMiteredWallDimensions(walls: Wall[]): MiteredWallDimensions[] {
   const dims: MiteredWallDimensions[] = [];
 
-  // Rebuild the same graph as computeMiteredWallPolygons to get left/right classification
   const nodeMap = new Map<string, { id: string; x: number; y: number }>();
   let nIdx = 0;
   function getNode(x: number, y: number) {
@@ -638,17 +329,13 @@ export function computeMiteredWallDimensions(walls: Wall[]): MiteredWallDimensio
   return dims;
 }
 
-/**
- * From a set of mitered wall polygons, find edges that are NOT shared between
- * any two polygons — these are the outer boundary edges.
- * Returns: { fills: Point[][] (all polygons for filling), outerEdges: [Point, Point][] }
- */
+/** From a set of mitered wall polygons, find edges that are NOT shared between any two polygons —
+ *  these are the outer boundary edges. */
 export function computeMiteredUnion(
   miteredPolygons: Map<string, Point[]>
 ): { fills: Point[][]; outerEdges: { a: Point; b: Point; wallId: string }[] } {
   const EDGE_TOL = 1.5;
   const fills: Point[][] = [];
-  // Collect all edges from all polygons
   const allEdges: { a: Point; b: Point; wallId: string; idx: number }[] = [];
   for (const [wallId, poly] of miteredPolygons) {
     if (poly.length < 3) continue;
@@ -659,7 +346,6 @@ export function computeMiteredUnion(
       allEdges.push({ a, b, wallId, idx: allEdges.length });
     }
   }
-  // An edge is "shared" if another polygon has an edge with the same endpoints (possibly reversed)
   const shared = new Set<number>();
   for (let i = 0; i < allEdges.length; i++) {
     if (shared.has(i)) continue;
@@ -667,10 +353,8 @@ export function computeMiteredUnion(
       if (shared.has(j)) continue;
       if (allEdges[i].wallId === allEdges[j].wallId) continue;
       const ei = allEdges[i], ej = allEdges[j];
-      // Check forward match
       const fwd = Math.hypot(ei.a.x - ej.a.x, ei.a.y - ej.a.y) < EDGE_TOL &&
                   Math.hypot(ei.b.x - ej.b.x, ei.b.y - ej.b.y) < EDGE_TOL;
-      // Check reverse match
       const rev = Math.hypot(ei.a.x - ej.b.x, ei.a.y - ej.b.y) < EDGE_TOL &&
                   Math.hypot(ei.b.x - ej.a.x, ei.b.y - ej.a.y) < EDGE_TOL;
       if (fwd || rev) {
