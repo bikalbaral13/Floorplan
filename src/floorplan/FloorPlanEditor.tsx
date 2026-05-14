@@ -8,7 +8,7 @@ import {
   isProjectsApiConfigured,
   saveProjectFloorPlanStudioViaApi,
 } from "@/api/projectsApi";
-import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
+import { Arrow, Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { Button } from "@/components/ui/button";
 import {
@@ -369,6 +369,62 @@ function validPlacementArcsPct(
 }
 const WALL_SPLINE_TENSION = 1;
 
+// Cubic NURBS curve evaluator (clamped uniform knots, weights = 1).
+// Reduces to a B-spline because weights are uniform, but the form is
+// rational so weights can be made non-uniform later without changing callers.
+function evaluateNurbsCurve(controls: Point[], samplesPerSegment = 16): Point[] {
+  const n = controls.length;
+  if (n < 2) return controls.slice();
+  if (n === 2) return controls.slice();
+  const p = Math.min(3, n - 1);
+  const m = n + p;
+  const knots: number[] = new Array(m + 1);
+  for (let i = 0; i <= p; i++) knots[i] = 0;
+  for (let i = m - p; i <= m; i++) knots[i] = 1;
+  const interior = n - p - 1;
+  for (let i = 1; i <= interior; i++) knots[p + i] = i / (interior + 1);
+  const weights = new Array<number>(n).fill(1);
+
+  const basis = (i: number, k: number, u: number): number => {
+    if (k === 0) {
+      if (i === n - 1 && u >= knots[i] && u <= knots[i + 1]) return 1;
+      return u >= knots[i] && u < knots[i + 1] ? 1 : 0;
+    }
+    let left = 0;
+    const d1 = knots[i + k] - knots[i];
+    if (d1 !== 0) left = ((u - knots[i]) / d1) * basis(i, k - 1, u);
+    let right = 0;
+    const d2 = knots[i + k + 1] - knots[i + 1];
+    if (d2 !== 0) right = ((knots[i + k + 1] - u) / d2) * basis(i + 1, k - 1, u);
+    return left + right;
+  };
+
+  const totalSamples = Math.max(2, samplesPerSegment * Math.max(1, n - p));
+  const out: Point[] = [];
+  for (let s = 0; s <= totalSamples; s++) {
+    const u = s / totalSamples;
+    let x = 0;
+    let y = 0;
+    let wsum = 0;
+    for (let i = 0; i < n; i++) {
+      const b = basis(i, p, u) * weights[i];
+      x += controls[i].x * b;
+      y += controls[i].y * b;
+      wsum += b;
+    }
+    if (wsum > 1e-9) {
+      x /= wsum;
+      y /= wsum;
+    }
+    out.push({ x, y });
+  }
+  // Snap endpoints exactly (clamped knot vector should already do this, but
+  // guards against floating drift so adjacency tests match wall.start / end).
+  out[0] = { ...controls[0] };
+  out[out.length - 1] = { ...controls[n - 1] };
+  return out;
+}
+
 const initialModel: FloorPlanModel = {
   walls: [],
   rooms: [],
@@ -394,12 +450,18 @@ interface LayerVisibility {
   objects: boolean;
   guides: boolean;
   measure: boolean;
+  /** When true (and `measure` is true), measure segments render with arrow heads at both ends. */
+  measureArrows: boolean;
   text: boolean;
   underlay: boolean;
   adjacencies: boolean;
   rooms: boolean;
   doors: boolean;
   windows: boolean;
+  /** Show every per-room reference marker on the canvas: room centroid handles,
+   *  BSP / RFP / Voronoi / Delaunay seed dots, and any other algorithmic seed markers.
+   *  Turning this off declutters the view for screenshots / measurement work. */
+  seeds: boolean;
   /** View mode: exactly one of curved/sharp/graph must be true */
   viewCurved: boolean;
   viewSharp: boolean;
@@ -740,7 +802,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // shows only as ephemeral cut strokes during Live, never as real auto-rooms. The cells become
     // real rooms only after Apply BSP commits (which removes the source room and converts the cuts
     // to non-preview walls).
-    () => detectAutoRoomsFromWalls(history.state.walls.filter((w) => !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview)),
+    () => detectAutoRoomsFromWalls(history.state.walls.filter((w) => !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview)),
     [history.state.walls]
   );
   const manualRooms = useMemo(
@@ -1027,17 +1089,19 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     wallSpineRadius: 14,
   });
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
-    grid: true,
+    grid: false,
     drawing: true,
     objects: true,
     guides: true,
     measure: true,
-    text: true,
+    measureArrows: false,
+    text: false,
     underlay: true,
     adjacencies: true,
     rooms: true,
     doors: true,
     windows: true,
+    seeds: false,
     viewCurved: false,
     viewSharp: false,
     viewGraph: true,
@@ -1292,14 +1356,19 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Shrink-to-target: when enabled, the runner clips the room polygon with a half-plane perpendicular
    *  to `maxRectShrinkAngle` and binary-searches the cut distance until the largest inscribed rect's
    *  area matches `maxRectTargetArea`. Preview-only — original room polygon stays intact on commit. */
-  const [maxRectShrinkEnabled, setMaxRectShrinkEnabled] = useState<boolean>(false);
+  const [maxRectShrinkEnabled, setMaxRectShrinkEnabled] = useState<boolean>(true);
   const [maxRectShrinkAngle, setMaxRectShrinkAngle] = useState<number>(0);
   /** Manual shrink-slide position (0–100): percentage along the shrink-angle direction at which the
    *  cut line sits. 0 = no clip, 100 = fully clipped away. Always drives the cut when shrink is on. */
   const [maxRectShrinkSlide, setMaxRectShrinkSlide] = useState<number>(0);
   /** Optimise-shrink: when ticked, the runner overrides the manual slide and binary-searches the cut
    *  position along `shrinkAngle` until the multi-rect total (packing area) is ≤ targetArea. */
-  const [maxRectOptimiseShrinkEnabled, setMaxRectOptimiseShrinkEnabled] = useState<boolean>(false);
+  const [maxRectOptimiseShrinkEnabled, setMaxRectOptimiseShrinkEnabled] = useState<boolean>(true);
+  /** Post-scale placed rectangle(s) about their union centroid so the total area
+   *  exactly matches `maxRectTargetArea`. Off by default — preserves the strict
+   *  inscribed-rectangle behaviour. When on, the rectangles may protrude past the
+   *  shrunk polygon by a small percentage of their dimensions. */
+  const [maxRectExactArea, setMaxRectExactArea] = useState<boolean>(false);
   /** Auto-found slide percentage written by Optimise-shrink's search. Surfaced in the UI as a
    *  read-only display so the user sees the converged shrink amount. */
   const [maxRectSolvedShrinkSlide, setMaxRectSolvedShrinkSlide] = useState<number>(0);
@@ -1527,6 +1596,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** RFP state — rectangular floor plan (slicing tree guided by adjacency matrix). */
   const [rfpSeedsByRoom, setRfpSeedsByRoom] = useState<Record<string, RfpSeed[]>>({});
   const [rfpSeedMetricsByRoom, setRfpSeedMetricsByRoom] = useState<Record<string, RfpSeedMetric[]>>({});
+  /** Per-seed leaf rectangle from the most recent runRoomRfp pass. Used to draw the seed
+   *  marker at the centroid of its assigned cell (the algorithm groups seeds by adjacency,
+   *  not by coordinate, so showing the marker where the user dropped it is misleading). */
+  const [rfpLeafRectsByRoom, setRfpLeafRectsByRoom] = useState<Record<string, Record<string, { x0: number; y0: number; x1: number; y1: number }>>>({});
   const [rfpConnectionsByRoom, setRfpConnectionsByRoom] = useState<Record<string, Array<{ aSeedId: string; bSeedId: string }>>>({});
   const [rfpExpanded, setRfpExpanded] = useState<boolean>(false);
   const [rfpLive, setRfpLive] = useState<boolean>(false);
@@ -1786,6 +1859,114 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const selectedRoom = visibleRooms.find((r) => r.id === selectedSingleId) ?? null;
   selectedRoomIdRef.current = selectedRoom?.id ?? null;
 
+  // OptRect defaults: auto-enable Union whenever the rectangle count is ≥ 2.
+  useEffect(() => {
+    if (maxRectCount >= 2 && !maxRectUnion) setMaxRectUnion(true);
+  }, [maxRectCount, maxRectUnion]);
+
+  // Per-room persistence of Inset / OptRect / Massing tool settings. Switching the
+  // selection between rooms saves the current values to the *previous* room's slot
+  // and restores any cached values for the *new* room. In-session only — values
+  // don't survive a page reload (the same lifetime as maxRectTargetByRoom).
+  type RoomToolSettings = {
+    insetLive?: boolean;
+    maxRectShape?: "rectangle" | "square" | "hexagon" | "lshape";
+    maxRectCount?: number;
+    maxRectMinArea?: number;
+    maxRectUnion?: boolean;
+    maxRectAxisAngle?: number;
+    maxRectReference?: "none" | "custom" | number;
+    maxRectTargetArea?: number;
+    maxRectTargetTilt?: number;
+    maxRectTargetFromGcr?: boolean;
+    maxRectTargetLive?: boolean;
+    maxRectShrinkEnabled?: boolean;
+    maxRectShrinkAngle?: number;
+    maxRectShrinkSlide?: number;
+    maxRectOptimiseShrinkEnabled?: boolean;
+    optimiseLive?: boolean;
+    massingAvgWidth?: number;
+    massingLive?: boolean;
+    massingFloorsFromFsi?: boolean;
+  };
+  const [roomToolSettings, setRoomToolSettings] = useState<Record<string, RoomToolSettings>>({});
+  const prevToolSettingsRoomIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const newId = selectedRoom?.id ?? null;
+    const prevId = prevToolSettingsRoomIdRef.current;
+    if (prevId === newId) return;
+
+    // Save current values to the previously-selected room.
+    if (prevId) {
+      const snapshot: RoomToolSettings = {
+        insetLive,
+        maxRectShape, maxRectCount, maxRectMinArea, maxRectUnion,
+        maxRectAxisAngle, maxRectReference,
+        maxRectTargetArea, maxRectTargetTilt, maxRectTargetFromGcr, maxRectTargetLive,
+        maxRectShrinkEnabled, maxRectShrinkAngle, maxRectShrinkSlide,
+        maxRectOptimiseShrinkEnabled,
+        optimiseLive,
+        massingAvgWidth, massingLive, massingFloorsFromFsi,
+      };
+      setRoomToolSettings((prev) => ({ ...prev, [prevId]: { ...prev[prevId], ...snapshot } }));
+    }
+
+    // Restore the new room's saved values, if any. When the room has never been
+    // configured (no entry in the map yet), reset to the block defaults — all Live
+    // toggles off — so a freshly-drawn polygon doesn't inherit the previous room's
+    // in-flight live previews.
+    if (newId) {
+      const s = roomToolSettings[newId];
+      if (s) {
+        if (s.insetLive !== undefined) setInsetLive(s.insetLive);
+        if (s.maxRectShape !== undefined) setMaxRectShape(s.maxRectShape);
+        if (s.maxRectCount !== undefined) setMaxRectCount(s.maxRectCount);
+        if (s.maxRectMinArea !== undefined) setMaxRectMinArea(s.maxRectMinArea);
+        if (s.maxRectUnion !== undefined) setMaxRectUnion(s.maxRectUnion);
+        if (s.maxRectAxisAngle !== undefined) setMaxRectAxisAngle(s.maxRectAxisAngle);
+        if (s.maxRectReference !== undefined) setMaxRectReference(s.maxRectReference);
+        if (s.maxRectTargetArea !== undefined) setMaxRectTargetArea(s.maxRectTargetArea);
+        if (s.maxRectTargetTilt !== undefined) setMaxRectTargetTilt(s.maxRectTargetTilt);
+        if (s.maxRectTargetFromGcr !== undefined) setMaxRectTargetFromGcr(s.maxRectTargetFromGcr);
+        if (s.maxRectTargetLive !== undefined) setMaxRectTargetLive(s.maxRectTargetLive);
+        if (s.maxRectShrinkEnabled !== undefined) setMaxRectShrinkEnabled(s.maxRectShrinkEnabled);
+        if (s.maxRectShrinkAngle !== undefined) setMaxRectShrinkAngle(s.maxRectShrinkAngle);
+        if (s.maxRectShrinkSlide !== undefined) setMaxRectShrinkSlide(s.maxRectShrinkSlide);
+        if (s.maxRectOptimiseShrinkEnabled !== undefined) setMaxRectOptimiseShrinkEnabled(s.maxRectOptimiseShrinkEnabled);
+        if (s.optimiseLive !== undefined) setOptimiseLive(s.optimiseLive);
+        if (s.massingAvgWidth !== undefined) setMassingAvgWidth(s.massingAvgWidth);
+        if (s.massingLive !== undefined) setMassingLive(s.massingLive);
+        if (s.massingFloorsFromFsi !== undefined) setMassingFloorsFromFsi(s.massingFloorsFromFsi);
+      } else {
+        // Fresh room — reset to block defaults.
+        setInsetLive(false);
+        setOptimiseLive(false);
+        setMassingLive(false);
+        setMaxRectTargetLive(false);
+        setMaxRectTargetFromGcr(false);
+        setMassingFloorsFromFsi(false);
+      }
+    }
+    prevToolSettingsRoomIdRef.current = newId;
+    // Intentionally only depend on the selected room's id so changing the tool
+    // values themselves doesn't re-run this save/restore cycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRoom?.id]);
+
+  // OptRect defaults: when a new room becomes selected, seed the target area at
+  // 40% of that room's polygon area. Skipped when the GCR-driven override is on
+  // (target is then derived from plot-boundary INPUTS instead).
+  useEffect(() => {
+    if (!selectedRoom || selectedRoom.points.length < 3) return;
+    if (maxRectTargetFromGcr) return;
+    const areaM2 = Math.abs(polygonArea(selectedRoom.points)) / (pixelsPerMeter * pixelsPerMeter);
+    const target = areaM2 * 0.4;
+    setMaxRectTargetArea(Math.round(target * 10) / 10);
+    // Intentionally depend only on the selected room's id so manual edits to the
+    // target slider persist until the user picks a different room.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRoom?.id]);
+
   // Derived views of the per-room Inset state. Existing readers (renderers, runners, slider props)
   // continue to consume these as if they were the global arrays they used to be.
   const insetSetbacks: number[] = (selectedRoom ? insetSetbacksByRoom[selectedRoom.id] : null) ?? [];
@@ -1852,7 +2033,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const h = historyRef.current;
       h.replace({ ...h.state, walls: h.state.walls.filter((w) =>
         !w.isInsetWall && !w.isSplitWall && !w.isMaxRectPreview && !w.isPlacementPreview &&
-        !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview &&
+        !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview &&
         !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview &&
         !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview &&
         !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview &&
@@ -5378,7 +5559,7 @@ User request: ${aiPrompt.trim()}`;
       // can coexist with massing during a Site Tools live cascade. The on-boundary filter
       // below is meant for the user's pre-existing perimeter walls only.
       if (w.isInsetWall || w.isMaxRectPreview || w.isMaxRectComputed || w.isSplitWall ||
-          w.isBspPreview || w.isPlacementPreview || w.isVoronoiPreview ||
+          w.isBspPreview || w.isRfpPreview || w.isPlacementPreview || w.isVoronoiPreview ||
           w.isSkeletonPreview || w.isConvexHullPreview || w.isRectDecompPreview ||
           w.isDelaunayPreview || w.isSmoothingPreview || w.isMeshPreview ||
           w.isCvtPreview || w.isConvexDecompPreview || w.isCircumcirclePreview ||
@@ -6122,6 +6303,55 @@ User request: ${aiPrompt.trim()}`;
       }
     }
 
+    // L1 "Exact area" post-scale: scale every placed rectangle about the union
+    // centroid by sqrt(target / totalFound) so the total area lands exactly on the
+    // target. Only triggers when shrink-to-target is on (otherwise there's no
+    // target semantic to honour). Rebuilds the per-rectangle wall emission so the
+    // canvas walls match the scaled corners.
+    if (maxRectExactArea && maxRectShrinkEnabled && placed.length > 0) {
+      const targetPx2 = maxRectTargetArea * pixelsPerMeter * pixelsPerMeter;
+      let totalAreaPx2 = 0;
+      for (const c of placed) {
+        let s = 0;
+        for (let i = 0; i < c.length; i++) {
+          const p = c[i], q = c[(i + 1) % c.length];
+          s += p.x * q.y - q.x * p.y;
+        }
+        totalAreaPx2 += Math.abs(s) / 2;
+      }
+      if (totalAreaPx2 > 1e-6 && targetPx2 > 1e-6) {
+        const scaleF = Math.sqrt(targetPx2 / totalAreaPx2);
+        let cx = 0, cy = 0, n = 0;
+        for (const c of placed) for (const p of c) { cx += p.x; cy += p.y; n++; }
+        cx /= n; cy /= n;
+        for (let k = 0; k < placed.length; k++) {
+          placed[k] = placed[k].map((p) => ({
+            x: cx + (p.x - cx) * scaleF,
+            y: cy + (p.y - cy) * scaleF,
+          }));
+        }
+        if (!useUnion) {
+          // Drop the per-rect walls emitted inside the placement loop and re-emit
+          // from the scaled corners. Union mode rebuilds walls from `placed` later.
+          allNewWalls = allNewWalls.filter((w) => !w.isMaxRectComputed && !w.isMaxRectPreview);
+          for (let k = 0; k < placed.length; k++) {
+            const color = silent ? palette[k % palette.length] : paletteCommit[k % paletteCommit.length];
+            for (let i = 0; i < 4; i++) {
+              allNewWalls.push({
+                id: createId(),
+                start: placed[k][i], end: placed[k][(i + 1) % 4],
+                thickness: style.thickness, color,
+                mode: style.mode, method: "center",
+                segmentType: "wall",
+                isMaxRectComputed: !silent,
+                isMaxRectPreview: silent,
+              });
+            }
+          }
+        }
+      }
+    }
+
     // Union boundary (axis-aligned only). Rectangles may be tilted by maxRectAxisAngle; rotate them
     // into the tilt frame so they're AABBs, rasterise, extract boundary, then unrotate the walls back.
     // Run this block whenever rectangles were placed — even when `useUnion` is off — because we
@@ -6502,7 +6732,7 @@ User request: ${aiPrompt.trim()}`;
       const thicknesses: number[] = [];
       for (const ww of sceneWalls) {
         if ((ww.segmentType ?? "wall") === "plot-boundary") continue;
-        if (ww.isInsetWall || ww.isMaxRectPreview || ww.isPlacementPreview || ww.isBspPreview || ww.isTreemapPreview) continue;
+        if (ww.isInsetWall || ww.isMaxRectPreview || ww.isPlacementPreview || ww.isBspPreview || ww.isRfpPreview || ww.isTreemapPreview) continue;
         const mx = (ww.start.x + ww.end.x) / 2;
         const my = (ww.start.y + ww.end.y) / 2;
         const dPerp = Math.abs((mx - a.x) * nx + (my - a.y) * ny);
@@ -10661,6 +10891,12 @@ User request: ${aiPrompt.trim()}`;
       return { area: areaM2, aspectRatio: longer / shorter };
     });
     setRfpSeedMetricsByRoom((prev) => ({ ...prev, [room.id]: metrics }));
+    // Record per-seed leaf rect so the canvas marker can be drawn at the cell centroid.
+    {
+      const map: Record<string, { x0: number; y0: number; x1: number; y1: number }> = {};
+      for (const l of result.leaves) map[l.seedId] = { x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1 };
+      setRfpLeafRectsByRoom((prev) => ({ ...prev, [room.id]: map }));
+    }
 
     // Clip cut segments to the room polygon (so concave rooms don't get walls running outside).
     const pip = (px: number, py: number): boolean => {
@@ -10760,9 +10996,19 @@ User request: ${aiPrompt.trim()}`;
     return true;
   }, [rfpSeedsByRoom, rfpConnectionsByRoom, rfpUseAreaPercent, getCurrentWallStyle, logOp, pixelsPerMeter, layerVisibility]);
 
-  /** RFP Live: re-renders the partition whenever seeds, connections, or live toggle change. */
+  /** RFP Live: shows draggable seed markers, adjacency lines, AND a non-committing partition
+   *  preview (isRfpPreview walls) that updates as seeds move or connections change. Same model
+   *  as BSP Live — the preview uses h.replace so it never enters undo history and the source
+   *  room stays intact. Only "Apply RFP" commits and consumes the source room. Flipping Live
+   *  off drops the preview walls. */
   useEffect(() => {
-    if (!rfpLive) return;
+    if (!rfpLive) {
+      const h = historyRef.current;
+      if (h.state.walls.some((w) => w.isRfpPreview)) {
+        h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isRfpPreview) });
+      }
+      return;
+    }
     const id = selectedRoomIdRef.current;
     if (!id) return;
     const room = visibleRoomsRef.current.find((r) => r.id === id);
@@ -11747,7 +11993,8 @@ User request: ${aiPrompt.trim()}`;
       setCurrentWallSplinePoints([]);
       return;
     }
-    const spinePoints = currentWallSplinePoints.flatMap((point) => [point.x, point.y]);
+    const tessellated = evaluateNurbsCurve(currentWallSplinePoints);
+    const spinePoints = tessellated.flatMap((point) => [point.x, point.y]);
     const start = currentWallSplinePoints[0];
     const end = currentWallSplinePoints[currentWallSplinePoints.length - 1];
     history.set({
@@ -11759,7 +12006,7 @@ User request: ${aiPrompt.trim()}`;
           start,
           end,
           spinePoints,
-          splineTension: WALL_SPLINE_TENSION,
+          splineTension: 0,
           thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
           color: wallColor,
           dashed: lineTypeDashed,
@@ -12259,14 +12506,51 @@ User request: ${aiPrompt.trim()}`;
     if (selection.selectedIds.length === 0) {
       return;
     }
+    const selectedIds = selection.selectedIds;
+    // Auto-detected rooms live in `visibleRooms` (not `history.state.rooms`), so
+    // checking only the persisted rooms here would miss any room the user clicked
+    // that the editor auto-detected from the walls. Use `visibleRooms` instead.
+    const deletedRooms = visibleRooms.filter((r) => selectedIds.includes(r.id));
+    const survivingRooms = visibleRooms.filter((r) => !selectedIds.includes(r.id));
+
+    // Tolerance-based test: is `w` collinear with and within edge `[a,b]`?
+    const TOL = 2;
+    const onEdge = (p: Point, a: Point, b: Point): boolean => {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const L2 = dx * dx + dy * dy;
+      if (L2 < 1e-6) return false;
+      const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2;
+      if (t < -0.001 || t > 1.001) return false;
+      const cx = a.x + t * dx, cy = a.y + t * dy;
+      return Math.hypot(p.x - cx, p.y - cy) <= TOL;
+    };
+    const wallOnRoomPerimeter = (w: Wall, room: Room): boolean => {
+      const pts = room.points;
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        if (onEdge(w.start, a, b) && onEdge(w.end, a, b)) return true;
+      }
+      return false;
+    };
+
+    const removeWallIds = new Set<string>();
+    for (const w of history.state.walls) {
+      if (selectedIds.includes(w.id)) { removeWallIds.add(w.id); continue; }
+      if (deletedRooms.length === 0) continue;
+      const onDeleted = deletedRooms.some((r) => wallOnRoomPerimeter(w, r));
+      if (!onDeleted) continue;
+      const onSurviving = survivingRooms.some((r) => wallOnRoomPerimeter(w, r));
+      if (!onSurviving) removeWallIds.add(w.id);
+    }
+
     history.set({
       ...history.state,
-      objects: history.state.objects.filter((entry) => !selection.selectedIds.includes(entry.id)),
-      furniture: history.state.furniture.filter((entry) => !selection.selectedIds.includes(entry.id)),
+      objects: history.state.objects.filter((entry) => !selectedIds.includes(entry.id)),
+      furniture: history.state.furniture.filter((entry) => !selectedIds.includes(entry.id)),
       walls: splitWallsAtIntersections(
-        history.state.walls.filter((entry) => !selection.selectedIds.includes(entry.id))
+        history.state.walls.filter((entry) => !removeWallIds.has(entry.id))
       ),
-      rooms: history.state.rooms.filter((entry) => !selection.selectedIds.includes(entry.id)),
+      rooms: history.state.rooms.filter((entry) => !selectedIds.includes(entry.id)),
     });
     selection.clearSelection();
   };
@@ -12718,6 +13002,47 @@ User request: ${aiPrompt.trim()}`;
         const ax = segmentDraft[segmentDraft.length - 2];
         const ay = segmentDraft[segmentDraft.length - 1];
         pt = axisLockToAnchor({ x: ax, y: ay }, snapped);
+      }
+      // Close-the-polygon: clicking near the first vertex with ≥3 prior points commits
+      // the segment as a closed polygon and drops back to the select tool.
+      if (segmentDraft.length >= 6) {
+        const fx = segmentDraft[0];
+        const fy = segmentDraft[1];
+        const closeTol = 10 / Math.max(1, scale);
+        if (Math.hypot(pt.x - fx, pt.y - fy) <= closeTol) {
+          const closed = [...segmentDraft, fx, fy];
+          const measurements: string[] = [];
+          let totalVal = 0;
+          for (let i = 0; i < closed.length - 2; i += 2) {
+            const a = { x: closed[i], y: closed[i + 1] };
+            const b = { x: closed[i + 2], y: closed[i + 3] };
+            const val = distanceInUnit(a, b, unit, pixelsPerMeter);
+            measurements.push(`${val.toFixed(2)} ${unit}`);
+            totalVal += val;
+          }
+          history.set({
+            ...history.state,
+            objects: [
+              ...history.state.objects,
+              {
+                id: createId(),
+                kind: "segment",
+                x: 0,
+                y: 0,
+                rotation: 0,
+                points: closed,
+                stroke: "#0F766E",
+                fill: "transparent",
+                measurements,
+                totalText: `${totalVal.toFixed(2)} ${unit}`,
+              },
+            ],
+          });
+          setSegmentDraft([]);
+          setSegmentPreviewPoint(null);
+          setTool("select");
+          return;
+        }
       }
       setSegmentDraft((prev) => [...prev, pt.x, pt.y]);
       return;
@@ -13534,8 +13859,27 @@ User request: ${aiPrompt.trim()}`;
           <Button size="sm" variant={layerVisibility.guides ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, guides: !prev.guides }))}>
             Guides
           </Button>
-          <Button size="sm" variant={layerVisibility.measure ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, measure: !prev.measure }))}>
-            Measure
+          <Button
+            size="sm"
+            variant={layerVisibility.measure && !layerVisibility.measureArrows ? "default" : "outline"}
+            onClick={() => setLayerVisibility((prev) => (
+              prev.measure && !prev.measureArrows
+                ? { ...prev, measure: false, measureArrows: false }
+                : { ...prev, measure: true, measureArrows: false }
+            ))}
+          >
+            Measure only
+          </Button>
+          <Button
+            size="sm"
+            variant={layerVisibility.measure && layerVisibility.measureArrows ? "default" : "outline"}
+            onClick={() => setLayerVisibility((prev) => (
+              prev.measure && prev.measureArrows
+                ? { ...prev, measure: false, measureArrows: false }
+                : { ...prev, measure: true, measureArrows: true }
+            ))}
+          >
+            Measure with arrows
           </Button>
           <Button size="sm" variant={layerVisibility.text ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, text: !prev.text }))}>
             Text
@@ -13554,6 +13898,9 @@ User request: ${aiPrompt.trim()}`;
           </Button>
           <Button size="sm" variant={layerVisibility.windows ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, windows: !prev.windows }))}>
             Windows
+          </Button>
+          <Button size="sm" variant={layerVisibility.seeds ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, seeds: !prev.seeds }))}>
+            Seeds
           </Button>
         </div>
       </PopoverContent>
@@ -13780,7 +14127,7 @@ User request: ${aiPrompt.trim()}`;
                 Single
               </Button>
               <Button size="sm" variant={wallDrawType === "spline" ? "default" : "outline"} onClick={() => setWallDrawType("spline")}>
-                Spline
+                NURBS
               </Button>
               <Button size="sm" variant={wallDrawType === "rect" ? "default" : "outline"} onClick={() => setWallDrawType("rect")}>
                 Rect
@@ -14052,7 +14399,7 @@ User request: ${aiPrompt.trim()}`;
             </label>
           </div>
           {wallDrawType === "spline" ? (
-            <p className="text-xs text-slate-500">Spline: add points with click; double-click or Enter to finish.</p>
+            <p className="text-xs text-slate-500">NURBS: add control points with click; double-click or Enter to finish.</p>
           ) : null}
         </div>
       </PopoverContent>
@@ -15056,7 +15403,7 @@ User request: ${aiPrompt.trim()}`;
                     const rotDelta = rotDragging ? (roomRotationDrag!.currentAngle - roomRotationDrag!.startAngle) : 0;
                     return (
                       <Group key={roomReactKey}>
-                        {isRoomSelected && (
+                        {isRoomSelected && layerVisibility.seeds && (
                           <>
                             <Circle
                               x={center.x}
@@ -15085,10 +15432,18 @@ User request: ${aiPrompt.trim()}`;
                           fill={isRoomSelected ? "rgba(245, 158, 11, 0.25)" : room.fill}
                           stroke={isRoomSelected ? "#f59e0b" : room.stroke}
                           strokeWidth={isRoomSelected ? 2 / scale : 1}
-                          listening={room.roomType !== "plot-boundary" && room.roomType !== "floorplate-boundary"}
-                          onClick={(event) => onObjectSelect(event.target.id(), event.evt.shiftKey)}
+                          onClick={(event) => {
+                            onObjectSelect(event.target.id(), event.evt.shiftKey);
+                            // If this is a floorplate-boundary, make it the active target
+                            // (formerly handled by the F reference circle).
+                            if (room.roomType === "floorplate-boundary") {
+                              setActiveFloorplateId(room.id);
+                              const stored = floorplateLayouts[room.id];
+                              if (stored) setGeneratedLayout(stored);
+                            }
+                          }}
                         />
-                        {isRoomSelected && (() => {
+                        {isRoomSelected && layerVisibility.seeds && (() => {
                           const offset = 36 / scale;
                           const handleX = center.x;
                           const handleY = center.y - offset;
@@ -15183,138 +15538,9 @@ User request: ${aiPrompt.trim()}`;
                             </>
                           );
                         })()}
-                        {/* Reference circle near first edge for plot-boundary / floorplate-boundary rooms — click to select, drag to translate */}
-                        {(room.roomType === "plot-boundary" || room.roomType === "floorplate-boundary") && room.points.length >= 2 && (() => {
-                          const v0 = room.points[0];
-                          // Offset slightly inward toward centroid from first vertex
-                          const dx = center.x - v0.x, dy = center.y - v0.y;
-                          const dist = Math.hypot(dx, dy);
-                          const offset = Math.min(12 / scale, dist * 0.15);
-                          const rx = dist > 0 ? v0.x + (dx / dist) * offset : v0.x;
-                          const ry = dist > 0 ? v0.y + (dy / dist) * offset : v0.y;
-                          const color = room.roomType === "plot-boundary" ? "#dc2626" : "#2563eb";
-                          const label = room.roomType === "plot-boundary" ? "S" : "F";
-                          return (
-                            <Group x={rx} y={ry}
-                              draggable={!freezeWorldManipulators}
-                              onClick={(e) => {
-                                onObjectSelect(room.id, e.evt.shiftKey);
-                                // If floorplate-boundary, make it the active target for "+ Room"
-                                if (room.roomType === "floorplate-boundary") {
-                                  setActiveFloorplateId(room.id);
-                                  const stored = floorplateLayouts[room.id];
-                                  if (stored) setGeneratedLayout(stored);
-                                }
-                              }}
-                              onMouseEnter={(e) => { (e.target.getStage()!.container().style.cursor = "move"); }}
-                              onMouseLeave={(e) => { (e.target.getStage()!.container().style.cursor = "default"); }}
-                              onDragStart={(e) => {
-                                // Select the room when drag starts
-                                if (!selection.selectedIds.includes(room.id)) onObjectSelect(room.id, false);
-                                // Snapshot initial state for live dragging
-                                const h = historyRef.current;
-                                const tolerance = 3;
-                                const roomPts = room.points;
-                                const wallSnaps = new Map<string, { start: Point; end: Point }>();
-                                h.state.walls.forEach((w) => {
-                                  // Match walls belonging to this room (both endpoints touch room polygon)
-                                  const startMatch = roomPts.some((p) => Math.hypot(p.x - w.start.x, p.y - w.start.y) < tolerance);
-                                  const endMatch = roomPts.some((p) => Math.hypot(p.x - w.end.x, p.y - w.end.y) < tolerance);
-                                  // Also include computed walls (floorplate, GCR, maxRect) that are inside the room
-                                  const isComputed = w.isFloorplateComputed || w.isGcrComputed || w.isMaxRectComputed;
-                                  if ((startMatch && endMatch) || isComputed) {
-                                    wallSnaps.set(w.id, { start: { ...w.start }, end: { ...w.end } });
-                                  }
-                                });
-                                const dimSnaps = setbackDimensions.map((d) => ({ fromX: d.fromX, fromY: d.fromY, toX: d.toX, toY: d.toY }));
-                                roomBoundaryDragRef.current = {
-                                  startX: e.target.x(), startY: e.target.y(),
-                                  roomId: room.id,
-                                  roomPoints: roomPts.map((p) => ({ ...p })),
-                                  wallSnapshots: wallSnaps,
-                                  dimSnapshots: dimSnaps,
-                                };
-                              }}
-                              onDragMove={(e) => {
-                                const drag = roomBoundaryDragRef.current;
-                                if (!drag) return;
-                                const ddx = e.target.x() - drag.startX;
-                                const ddy = e.target.y() - drag.startY;
-                                const h = historyRef.current;
-                                // Live-translate room points
-                                const newRooms = h.state.rooms.map((r) =>
-                                  r.id === drag.roomId
-                                    ? { ...r, points: drag.roomPoints.map((p) => ({ x: p.x + ddx, y: p.y + ddy })) }
-                                    : r
-                                );
-                                // Live-translate all snapshotted walls
-                                const newWalls = h.state.walls.map((w) => {
-                                  const snap = drag.wallSnapshots.get(w.id);
-                                  if (snap) {
-                                    return { ...w, start: { x: snap.start.x + ddx, y: snap.start.y + ddy }, end: { x: snap.end.x + ddx, y: snap.end.y + ddy } };
-                                  }
-                                  return w;
-                                });
-                                // Live-translate setback dimensions
-                                const newDims = setbackDimensions.map((d, i) => {
-                                  const snap = drag.dimSnapshots[i];
-                                  if (snap) {
-                                    return { ...d, fromX: snap.fromX + ddx, fromY: snap.fromY + ddy, toX: snap.toX + ddx, toY: snap.toY + ddy };
-                                  }
-                                  return d;
-                                });
-                                setSetbackDimensions(newDims);
-                                h.set({ ...h.state, rooms: newRooms, walls: newWalls });
-                              }}
-                              onDragEnd={(e) => {
-                                const drag = roomBoundaryDragRef.current;
-                                if (!drag) return;
-                                const ddx = e.target.x() - drag.startX;
-                                const ddy = e.target.y() - drag.startY;
-                                // Reset node position
-                                e.target.x(rx); e.target.y(ry);
-                                roomBoundaryDragRef.current = null;
-                                if (Math.abs(ddx) < 0.5 && Math.abs(ddy) < 0.5) return;
-                                // Final commit (already applied live, just clean up)
-                                const h = historyRef.current;
-                                const newRooms = h.state.rooms.map((r) =>
-                                  r.id === drag.roomId
-                                    ? { ...r, points: drag.roomPoints.map((p) => ({ x: p.x + ddx, y: p.y + ddy })) }
-                                    : r
-                                );
-                                const newWalls = h.state.walls.map((w) => {
-                                  const snap = drag.wallSnapshots.get(w.id);
-                                  if (snap) {
-                                    return { ...w, start: { x: snap.start.x + ddx, y: snap.start.y + ddy }, end: { x: snap.end.x + ddx, y: snap.end.y + ddy } };
-                                  }
-                                  return w;
-                                });
-                                const newDims = setbackDimensions.map((d, i) => {
-                                  const snap = drag.dimSnapshots[i];
-                                  if (snap) {
-                                    return { ...d, fromX: snap.fromX + ddx, fromY: snap.fromY + ddy, toX: snap.toX + ddx, toY: snap.toY + ddy };
-                                  }
-                                  return d;
-                                });
-                                setSetbackDimensions(newDims);
-                                h.set({ ...h.state, rooms: newRooms, walls: newWalls });
-                              }}
-                            >
-                              <Circle radius={8 / scale}
-                                fill={isRoomSelected ? "#f59e0b" : color}
-                                stroke={activeFloorplateId === room.id && room.roomType === "floorplate-boundary" ? "#f59e0b" : "white"}
-                                strokeWidth={(activeFloorplateId === room.id && room.roomType === "floorplate-boundary" ? 2.5 : 1.5) / scale}
-                                opacity={0.9}
-                              />
-                              <Text text={label} fontSize={9 / scale} fill="white" fontStyle="bold"
-                                offsetX={2.5 / scale} offsetY={4.5 / scale} listening={false}
-                              />
-                            </Group>
-                          );
-                        })()}
                         {/* Centroid crosshair + dot. For a selected regular room, it doubles as a drag handle
                          *  (double cross-arrow cursor) to translate the whole room + its walls, like the wall's center handle. */}
-                        {(() => {
+                        {layerVisibility.seeds && (() => {
                           const isRegularRoom = (room.roomType ?? "room") === "room";
                           // Match the room-being-dragged either by its current id (manual rooms: stable) or by
                           // the visibleRooms index we used for the React key (auto rooms: id changes per frame).
@@ -15871,14 +16097,18 @@ User request: ${aiPrompt.trim()}`;
 
                         return (
                           <Group key={keyPrefix} listening={false}>
-                            {/* Extension lines */}
-                            <Line points={[ext0Start.x, ext0Start.y, ext0End.x, ext0End.y]} stroke={color} strokeWidth={0.5 / scale} />
-                            <Line points={[ext1Start.x, ext1Start.y, ext1End.x, ext1End.y]} stroke={color} strokeWidth={0.5 / scale} />
-                            {/* Dimension line */}
-                            <Line points={[d0x, d0y, d1x, d1y]} stroke={color} strokeWidth={0.5 / scale} />
-                            {/* Arrowheads */}
-                            <Line points={arr0} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
-                            <Line points={arr1} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
+                            {layerVisibility.measureArrows ? (
+                              <>
+                                {/* Extension lines */}
+                                <Line points={[ext0Start.x, ext0Start.y, ext0End.x, ext0End.y]} stroke={color} strokeWidth={0.5 / scale} />
+                                <Line points={[ext1Start.x, ext1Start.y, ext1End.x, ext1End.y]} stroke={color} strokeWidth={0.5 / scale} />
+                                {/* Dimension line */}
+                                <Line points={[d0x, d0y, d1x, d1y]} stroke={color} strokeWidth={0.5 / scale} />
+                                {/* Arrowheads */}
+                                <Line points={arr0} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
+                                <Line points={arr1} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
+                              </>
+                            ) : null}
                             {/* Measurement text */}
                             <Text
                               x={mx} y={my}
@@ -16009,11 +16239,15 @@ User request: ${aiPrompt.trim()}`;
 
                     return (
                       <Group key={`gdim-${wall.id}`} listening={false}>
-                        <Line points={[ext0S.x, ext0S.y, ext0E.x, ext0E.y]} stroke={color} strokeWidth={0.5 / scale} />
-                        <Line points={[ext1S.x, ext1S.y, ext1E.x, ext1E.y]} stroke={color} strokeWidth={0.5 / scale} />
-                        <Line points={[d0x, d0y, d1x, d1y]} stroke={color} strokeWidth={0.5 / scale} />
-                        <Line points={arr0} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
-                        <Line points={arr1} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
+                        {layerVisibility.measureArrows ? (
+                          <>
+                            <Line points={[ext0S.x, ext0S.y, ext0E.x, ext0E.y]} stroke={color} strokeWidth={0.5 / scale} />
+                            <Line points={[ext1S.x, ext1S.y, ext1E.x, ext1E.y]} stroke={color} strokeWidth={0.5 / scale} />
+                            <Line points={[d0x, d0y, d1x, d1y]} stroke={color} strokeWidth={0.5 / scale} />
+                            <Line points={arr0} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
+                            <Line points={arr1} closed fill={color} stroke={color} strokeWidth={0.3 / scale} />
+                          </>
+                        ) : null}
                         <Text
                           x={mx} y={my}
                           offsetX={22} offsetY={4}
@@ -16073,7 +16307,7 @@ User request: ${aiPrompt.trim()}`;
                   }
 
                   {/* Delaunay seed markers — draggable, pink. */}
-                  {selectedRoom && (selectedRoom.roomType ?? "room") === "room" &&
+                  {selectedRoom && layerVisibility.seeds && (selectedRoom.roomType ?? "room") === "room" &&
                     (delaunaySeedsByRoom[selectedRoom.id] ?? []).map((seed, i) => (
                       <Circle
                         key={`delaunay-seed-${selectedRoom.id}-${i}`}
@@ -16213,7 +16447,7 @@ User request: ${aiPrompt.trim()}`;
                   })}
 
                   {/* BSP seed connection lines (stored per BSP, not in walls). */}
-                  {selectedRoom && bspLive && (bspConnectionsByRoom[selectedRoom.id] ?? []).map((cn, ci) => {
+                  {selectedRoom && bspLive && layerVisibility.seeds && (bspConnectionsByRoom[selectedRoom.id] ?? []).map((cn, ci) => {
                     const arr = bspSeedsByRoom[selectedRoom.id] ?? [];
                     const a = arr.find((s) => s.id === cn.aSeedId);
                     const b = arr.find((s) => s.id === cn.bSeedId);
@@ -16232,7 +16466,7 @@ User request: ${aiPrompt.trim()}`;
 
                   {/* BSP seed markers — draggable, green. Fixed-size dot with label.
                       In addEdgeMode === "connection" + bspLive, clicks pick seed pairs instead of dragging. */}
-                  {selectedRoom && ((selectedRoom.roomType ?? "room") === "room" || selectedRoom.roomType === "floorplate-boundary") &&
+                  {selectedRoom && layerVisibility.seeds && ((selectedRoom.roomType ?? "room") === "room" || selectedRoom.roomType === "floorplate-boundary") &&
                     (bspSeedsByRoom[selectedRoom.id] ?? []).map((seed, i) => {
                       const r = 3.5 / scale;
                       const label = seed.label ?? `Seed${i + 1}`;
@@ -16303,9 +16537,100 @@ User request: ${aiPrompt.trim()}`;
                     })
                   }
 
+                  {/* RFP seed markers + adjacency lines. Marker position = centroid of the leaf
+                      rectangle the algorithm assigned to this seed (when a partition exists),
+                      otherwise fall back to the seed's stored input coord. The leaf-centroid
+                      placement reflects what the algorithm actually produced: in RFP a seed's
+                      input position barely matters; the matrix + weights determine the cell. */}
+                  {(() => {
+                    if (!selectedRoom || !rfpLive || !layerVisibility.seeds) return null;
+                    const rid = selectedRoom.id;
+                    const seeds = rfpSeedsByRoom[rid] ?? [];
+                    const leafMap = rfpLeafRectsByRoom[rid] ?? {};
+                    const posOf = (s: { id?: string; x: number; y: number }): { x: number; y: number } => {
+                      const id = s.id ?? "";
+                      const l = id ? leafMap[id] : undefined;
+                      if (!l) return { x: s.x, y: s.y };
+                      return { x: (l.x0 + l.x1) / 2, y: (l.y0 + l.y1) / 2 };
+                    };
+                    const rt = selectedRoom.roomType ?? "room";
+                    if (rt !== "room" && rt !== "floorplate-boundary") return null;
+                    const conns = rfpConnectionsByRoom[rid] ?? [];
+                    return (
+                      <>
+                        {conns.map((cn, ci) => {
+                          const a = seeds.find((s) => s.id === cn.aSeedId);
+                          const b = seeds.find((s) => s.id === cn.bSeedId);
+                          if (!a || !b) return null;
+                          const pa = posOf(a);
+                          const pb = posOf(b);
+                          return (
+                            <Line
+                              key={`rfp-conn-${rid}-${ci}`}
+                              points={[pa.x, pa.y, pb.x, pb.y]}
+                              stroke="#2563eb"
+                              strokeWidth={1.5 / scale}
+                              dash={[6 / scale, 4 / scale]}
+                              listening={false}
+                            />
+                          );
+                        })}
+                        {seeds.map((seed, i) => {
+                          const r = 3.5 / scale;
+                          const label = seed.label ?? `Seed${i + 1}`;
+                          const pos = posOf(seed);
+                          const hasLeaf = !!(seed.id && leafMap[seed.id]);
+                          return (
+                            <Group
+                              key={`rfp-seed-${rid}-${i}`}
+                              x={pos.x}
+                              y={pos.y}
+                              draggable={!hasLeaf}
+                              onMouseEnter={(e) => {
+                                const c = e.target.getStage()?.container();
+                                if (c) c.style.cursor = hasLeaf ? "default" : "grab";
+                              }}
+                              onMouseLeave={(e) => {
+                                const c = e.target.getStage()?.container();
+                                if (c) c.style.cursor = "default";
+                              }}
+                              onDragMove={(e) => {
+                                if (hasLeaf) return;
+                                const nx = e.target.x(), ny = e.target.y();
+                                setRfpSeedsByRoom((prev) => {
+                                  const arr = [...(prev[rid] ?? [])];
+                                  arr[i] = { ...arr[i], x: nx, y: ny };
+                                  return { ...prev, [rid]: arr };
+                                });
+                              }}
+                            >
+                              <Circle
+                                radius={r}
+                                fill="#3b82f6"
+                                stroke="#1d4ed8"
+                                strokeWidth={1 / scale}
+                              />
+                              <Text
+                                x={r + 2 / scale}
+                                y={-6 / scale}
+                                text={label}
+                                fontSize={11 / scale}
+                                fill="#1d4ed8"
+                                listening={false}
+                              />
+                            </Group>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+
                   {/* Visibility polygon overlay — supports point mode (single polygon + draggable handle)
-                      and segment mode (multiple stacked polygons sampled along the chosen edge). */}
-                  {selectedRoom && (selectedRoom.roomType ?? "room") === "room" && (() => {
+                      and segment mode (multiple stacked polygons sampled along the chosen edge).
+                      Gated by `visibilityExpanded` so the yellow fan only shows while the Visibility
+                      Polygon block is open in the right rail. Otherwise the cached polys would bleed
+                      through after the user moves on to other tools (e.g. Optimise Rectangle). */}
+                  {visibilityExpanded && selectedRoom && (selectedRoom.roomType ?? "room") === "room" && (() => {
                     const rid = selectedRoom.id;
                     const mode = visibilityModeByRoom[rid] ?? "point";
                     const polys = visibilityPolygonsByRoom[rid] ?? [];
@@ -16469,7 +16794,7 @@ User request: ${aiPrompt.trim()}`;
                   })()}
 
                   {/* Voronoi seed markers — draggable. Rendered for the currently selected room. */}
-                  {selectedRoom && (selectedRoom.roomType ?? "room") === "room" &&
+                  {selectedRoom && layerVisibility.seeds && (selectedRoom.roomType ?? "room") === "room" &&
                     (voronoiSeedsByRoom[selectedRoom.id] ?? []).map((seed, i) => (
                       <Circle
                         key={`voronoi-seed-${selectedRoom.id}-${i}`}
@@ -19605,7 +19930,9 @@ User request: ${aiPrompt.trim()}`;
                       }
 
                       if (wallDrawType === "spline") {
-                        const splinePoints = [...currentWallSplinePoints, end].flatMap((point) => [point.x, point.y]);
+                        const controlPts = [...currentWallSplinePoints, end];
+                        const tessellated = evaluateNurbsCurve(controlPts);
+                        const splinePoints = tessellated.flatMap((point) => [point.x, point.y]);
                         const drawLength =
                           splinePoints.length >= 4
                             ? polylineDistanceInUnit(splinePoints, unit, pixelsPerMeter)
@@ -19619,7 +19946,7 @@ User request: ${aiPrompt.trim()}`;
                               dash={[6, 4]}
                               lineCap="round"
                               lineJoin="round"
-                              tension={WALL_SPLINE_TENSION}
+                              tension={0}
                             />
                             <Text
                               x={mid.x + nx * offset}
@@ -19800,14 +20127,30 @@ User request: ${aiPrompt.trim()}`;
                         stroke="#FFFFFF"
                         strokeWidth={1}
                       />
-                      <Line
-                        points={[measureDraft.x, measureDraft.y, measurePreviewPoint.x, measurePreviewPoint.y]}
-                        stroke="#14B8A6"
-                        opacity={0.85}
-                        strokeWidth={Math.max(2, 2 / Math.max(1, scale))}
-                        dash={[5, 5]}
-                        lineCap="round"
-                      />
+                      {layerVisibility.measureArrows ? (
+                        <Arrow
+                          points={[measureDraft.x, measureDraft.y, measurePreviewPoint.x, measurePreviewPoint.y]}
+                          stroke="#14B8A6"
+                          fill="#14B8A6"
+                          opacity={0.85}
+                          strokeWidth={Math.max(2, 2 / Math.max(1, scale))}
+                          dash={[5, 5]}
+                          lineCap="round"
+                          pointerAtBeginning
+                          pointerAtEnding
+                          pointerLength={Math.max(6, 8 / Math.max(1, scale))}
+                          pointerWidth={Math.max(6, 8 / Math.max(1, scale))}
+                        />
+                      ) : (
+                        <Line
+                          points={[measureDraft.x, measureDraft.y, measurePreviewPoint.x, measurePreviewPoint.y]}
+                          stroke="#14B8A6"
+                          opacity={0.85}
+                          strokeWidth={Math.max(2, 2 / Math.max(1, scale))}
+                          dash={[5, 5]}
+                          lineCap="round"
+                        />
+                      )}
                       <Text
                         x={(measureDraft.x + measurePreviewPoint.x) / 2 + 8}
                         y={(measureDraft.y + measurePreviewPoint.y) / 2 + 8}
@@ -19835,12 +20178,26 @@ User request: ${aiPrompt.trim()}`;
                         stroke="#FFFFFF"
                         strokeWidth={1}
                       />
-                      <Line
-                        points={[seg.start.x, seg.start.y, seg.end.x, seg.end.y]}
-                        stroke="#14B8A6"
-                        strokeWidth={Math.max(2, 2 / Math.max(1, scale))}
-                        lineCap="round"
-                      />
+                      {layerVisibility.measureArrows ? (
+                        <Arrow
+                          points={[seg.start.x, seg.start.y, seg.end.x, seg.end.y]}
+                          stroke="#14B8A6"
+                          fill="#14B8A6"
+                          strokeWidth={Math.max(2, 2 / Math.max(1, scale))}
+                          lineCap="round"
+                          pointerAtBeginning
+                          pointerAtEnding
+                          pointerLength={Math.max(6, 8 / Math.max(1, scale))}
+                          pointerWidth={Math.max(6, 8 / Math.max(1, scale))}
+                        />
+                      ) : (
+                        <Line
+                          points={[seg.start.x, seg.start.y, seg.end.x, seg.end.y]}
+                          stroke="#14B8A6"
+                          strokeWidth={Math.max(2, 2 / Math.max(1, scale))}
+                          lineCap="round"
+                        />
+                      )}
                       <Text
                         x={(seg.start.x + seg.end.x) / 2 + 8}
                         y={(seg.start.y + seg.end.y) / 2 + 8}
@@ -22409,6 +22766,8 @@ User request: ${aiPrompt.trim()}`;
                       setShrinkSlide={setMaxRectShrinkSlide}
                       optimiseShrinkEnabled={maxRectOptimiseShrinkEnabled}
                       setOptimiseShrinkEnabled={setMaxRectOptimiseShrinkEnabled}
+                      exactArea={maxRectExactArea}
+                      setExactArea={setMaxRectExactArea}
                       solvedShrinkSlide={maxRectSolvedShrinkSlide}
                       targetFromGcr={maxRectTargetFromGcr}
                       setTargetFromGcr={setMaxRectTargetFromGcr}
@@ -22426,10 +22785,39 @@ User request: ${aiPrompt.trim()}`;
                         return (gcrPct / 100) * siteAreaSqm;
                       })()}
                       onTargetApply={() => {
-                        setMaxRectTargetByRoom((prev) => ({
-                          ...prev,
-                          [selectedRoom.id]: { target: maxRectTargetArea, tilt: maxRectTargetTilt },
-                        }));
+                        // Drop any prior target-area split overlay for this room — the
+                        // optimised polygon is the actual outcome of Apply, and leaving
+                        // the green/red bisect on top creates stray streaks.
+                        setMaxRectTargetByRoom((prev) => {
+                          const next = { ...prev };
+                          delete next[selectedRoom.id];
+                          return next;
+                        });
+                        setMaxRectTargetLive(false);
+                        // Commit the optimised polygon to the canvas: emit footprint walls
+                        // along its boundary and materialise a floorplate-boundary room so
+                        // the user can click into the footprint area to select it.
+                        const committed = runRoomOptimiseRect(selectedRoom, false);
+                        if (committed) {
+                          const h = historyRef.current;
+                          const hasFootprintRoom = h.state.rooms.some(
+                            (r) => r.roomType === "floorplate-boundary"
+                          );
+                          if (!hasFootprintRoom) {
+                            const poly = optimiseUnionPolygonRef.current[selectedRoom.id];
+                            if (poly && poly.length >= 3) {
+                              const fpRoom: Room = {
+                                id: createId(),
+                                points: poly.map((p) => ({ x: p.x, y: p.y })),
+                                fill: "rgba(254, 226, 226, 0.55)",
+                                stroke: "#7f1d1d",
+                                label: "Footprint Area",
+                                roomType: "floorplate-boundary",
+                              };
+                              h.set({ ...h.state, rooms: [...h.state.rooms, fpRoom] });
+                            }
+                          }
+                        }
                         toast.success(`OptRect target committed (${maxRectTargetArea.toFixed(1)} m² @ ${maxRectTargetTilt}°)`);
                       }}
                       onTargetClear={() => {
@@ -23839,7 +24227,7 @@ User request: ${aiPrompt.trim()}`;
                     Single
                   </Button>
                   <Button size="sm" variant={wallDrawType === "spline" ? "default" : "outline"} onClick={() => setWallDrawType("spline")}>
-                    Spline
+                    NURBS
                   </Button>
                   <Button size="sm" variant={wallDrawType === "rect" ? "default" : "outline"} onClick={() => setWallDrawType("rect")}>
                     Rect
@@ -23937,7 +24325,7 @@ User request: ${aiPrompt.trim()}`;
                 <input type="color" value={wallColor} onChange={(event) => setWallColor(event.target.value)} className="h-9 w-12 cursor-pointer rounded border p-0" />
               </label>
               {wallDrawType === "spline" ? (
-                <p className="text-xs text-slate-500">Spline: add points with click; double-click or Enter to finish.</p>
+                <p className="text-xs text-slate-500">NURBS: add control points with click; double-click or Enter to finish.</p>
               ) : null}
             </div>
 

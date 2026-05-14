@@ -191,6 +191,12 @@ export interface OptimiseRectangleBlockProps {
   setOptimiseShrinkEnabled: (v: boolean) => void;
   /** Auto-found slide percentage (read-only display when optimiseShrinkEnabled). */
   solvedShrinkSlide: number;
+  /** Post-scale the placed rectangle(s) about their union centroid so the total area
+   *  matches `targetArea` exactly. Trades the "strictly inscribed" guarantee for an
+   *  exact area readout — the rectangle may protrude past the shrunk polygon by ≤ a
+   *  few percent of its dimensions. Only meaningful when shrink-to-target is on. */
+  exactArea: boolean;
+  setExactArea: (v: boolean) => void;
   // ── Target area auto-derive from GCR ──────────────────────────────────────
   /** When on, target area is auto-set to (GCR % × site area) from the INPUTS block;
    *  the manual target-area slider is hidden. */
@@ -424,7 +430,6 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
           </div>
           <input type="range" className="w-full" min={0} max={90} step={0.1}
             value={p.axisAngle} onChange={(e) => p.setAxisAngle(+e.target.value)} />
-          <span className="text-[9px] text-slate-400">Rotates the axis frame — rectangles align with this tilted axis.</span>
           {p.shape === "lshape" && unionShapeLabel && (
             <div className="mt-1 flex items-center gap-1">
               <span className="text-[10px] text-slate-500">Union shape:</span>
@@ -448,11 +453,9 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
           value={p.count}
           disabled={p.shape === "lshape"}
           onChange={(e) => p.setCount(+e.target.value)} />
-        <span className="text-[9px] text-slate-400">
-          {p.shape === "lshape"
-            ? "L-shape mode places exactly 2 rectangles."
-            : "1 = classic max rectangle. >1 = greedy iterative packing."}
-        </span>
+        {p.shape === "lshape" && (
+          <span className="text-[9px] text-slate-400">L-shape mode places exactly 2 rectangles.</span>
+        )}
       </div>
       {p.count > 1 && p.reference !== "none" && (
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
@@ -522,10 +525,10 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-500">Shrink slide{p.optimiseShrinkEnabled ? " (auto)" : ""}</span>
                 <span className="font-mono text-[10px] text-slate-700">
-                  {p.optimiseShrinkEnabled ? p.solvedShrinkSlide.toFixed(1) : p.shrinkSlide}%
+                  {(p.optimiseShrinkEnabled ? p.solvedShrinkSlide : p.shrinkSlide).toFixed(1)}%
                 </span>
               </div>
-              <input type="range" className="w-full" min={0} max={100} step={1}
+              <input type="range" className="w-full" min={0} max={100} step={0.1}
                 value={p.optimiseShrinkEnabled ? p.solvedShrinkSlide : p.shrinkSlide}
                 onChange={(e) => p.setShrinkSlide(+e.target.value)}
                 disabled={p.optimiseShrinkEnabled}
@@ -535,6 +538,10 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
             <label className="flex items-center gap-1 text-[10px] text-slate-600">
               <input type="checkbox" checked={p.optimiseShrinkEnabled} onChange={(e) => p.setOptimiseShrinkEnabled(e.target.checked)} />
               Optimise shrink (auto-fit slide to target area)
+            </label>
+            <label className="flex items-center gap-1 text-[10px] text-slate-600">
+              <input type="checkbox" checked={p.exactArea} onChange={(e) => p.setExactArea(e.target.checked)} />
+              Exact area (post-scale to match target — may protrude slightly)
             </label>
             <Button
               variant="outline"
@@ -573,15 +580,6 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
         </label>
         <span className="text-[9px] text-slate-400">{p.live ? "auto-updates on type change" : "click Optimise"}</span>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-full text-[11px]"
-        onClick={() => { p.runRoomOptimiseRect(p.selectedRoom, false); }}
-      >
-        Optimise Rectangle Area
-      </Button>
-
       {/* Layout-seed variation trigger — opens a modal with bigger side-by-side thumbnails. */}
       <Button
         variant="outline"

@@ -391,6 +391,85 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         ));
       })}
 
+      {/* Massing slabs — fill the massing footprint with n+1 horizontal floor plates
+           (one per floor base + a roof slab capping the top floor). The footprint is reconstructed
+           from the chain of massing walls so it always matches the optimised polygon, even when
+           Inset / Optimise-Rectangle has reshaped the source room. Skipped in low-poly mode. */}
+      {!lowPoly && (() => {
+        const wallsByRoom = new Map<string, Wall[]>();
+        for (const w of model.walls) {
+          if ((w.isMassingPreview || w.isMassingWall) && w.massingSourceRoomId) {
+            const arr = wallsByRoom.get(w.massingSourceRoomId) ?? [];
+            arr.push(w);
+            wallsByRoom.set(w.massingSourceRoomId, arr);
+          }
+        }
+        if (wallsByRoom.size === 0) return null;
+
+        const TOL = 1.5;
+        const kf = (p: Point) => `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+        const reconstruct = (walls: Wall[]): Point[] => {
+          if (walls.length < 3) return [];
+          const startMap = new Map<string, Wall>();
+          walls.forEach((w) => { if (!startMap.has(kf(w.start))) startMap.set(kf(w.start), w); });
+          const visited = new Set<string>();
+          const pts: Point[] = [];
+          let cur: Wall | undefined = walls[0];
+          const firstId = walls[0].id;
+          while (cur && !visited.has(cur.id)) {
+            visited.add(cur.id);
+            pts.push(cur.start);
+            const next = startMap.get(kf(cur.end));
+            if (!next || next.id === firstId) break;
+            cur = next;
+          }
+          return pts;
+        };
+
+        return Array.from(wallsByRoom.entries()).flatMap(([roomId, walls]) => {
+          const poly = reconstruct(walls);
+          if (poly.length < 3) return [];
+          const sourceRoom = slabRooms.find((r) => r.id === roomId);
+          const floors = Math.max(1, Math.floor(sourceRoom?.floorsCount ?? 1));
+          // Expand the footprint outward from its centroid so each slab protrudes ~25 cm
+          // beyond the wall outer face — otherwise intermediate slabs sit INSIDE the
+          // stacked wall planes and are invisible from outside.
+          const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+          const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+          const overhangPx = 0.25 * ppm;
+          const expandedPoly = poly.map((p) => {
+            const dx = p.x - cx, dy = p.y - cy;
+            const d = Math.hypot(dx, dy);
+            if (d < 1e-6) return p;
+            return { x: p.x + (dx / d) * overhangPx, y: p.y + (dy / d) * overhangPx };
+          });
+          const shape = new THREE.Shape(expandedPoly.map((p) => {
+            const [sx, sz] = toScene(p.x, p.y);
+            return new THREE.Vector2(sx, -sz);
+          }));
+          // n floors → n+1 slabs. Slabs straddle the floor seam (half above, half below the
+          // floor's base level) so the visible band reads as a continuous floor plate.
+          // Floor 0 slab sits at ground (no descent below y=0); roof slab caps the top floor.
+          return Array.from({ length: floors + 1 }, (_, i) => {
+            const y = i === 0
+              ? 0.001
+              : i === floors
+                ? floors * FLOOR_H
+                : i * FLOOR_H - ROOM_SLAB_THICKNESS_M / 2;
+            return (
+              <EdgedMesh
+                key={`massing-slab-${roomId}-${i}`}
+                rotation={[-Math.PI / 2, 0, 0]}
+                position={[0, y, 0]}
+              >
+                <extrudeGeometry args={[shape, { depth: ROOM_SLAB_THICKNESS_M, bevelEnabled: false, steps: 1 }]} />
+                <meshStandardMaterial color="#94a3b8" />
+              </EdgedMesh>
+            );
+          });
+        });
+      })()}
+
       {/* Union extrusion: one continuous mass per connected wall network in mitered-union mode.
            Replicated per floor (max floorsCount across rooms). Skipped in low-poly mode. */}
       {!lowPoly && (() => {
@@ -551,10 +630,18 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
                 ];
               }
 
-              // Door: single full-height wood plane (the lintel band could be split similarly, but
-              // the user asked for windows only). Plain wall: single grey plane.
-              const isDoor = segType === "door";
-              return [subPlane(`lowpoly-wall-${w.id}`, 0, FLOOR_H, isDoor ? woodC : wallC)];
+              if (segType === "door") {
+                // Two stacked planes: wood door from floor to lintel, wall band above the lintel.
+                // Mirrors the window split (sans the sill band) so doors don't render full-height.
+                const lintel = Math.max(0, Math.min(FLOOR_H, w.lintelHeightM ?? DEFAULT_DOOR_LINTEL_M));
+                return [
+                  subPlane(`lowpoly-door-leaf-${w.id}`, 0, lintel, woodC),
+                  subPlane(`lowpoly-door-above-${w.id}`, lintel, FLOOR_H, wallC),
+                ];
+              }
+
+              // Plain wall: single grey plane.
+              return [subPlane(`lowpoly-wall-${w.id}`, 0, FLOOR_H, wallC)];
             })}
           </group>
         ));
