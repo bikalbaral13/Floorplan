@@ -35,6 +35,9 @@ interface Props {
   /** Floor-to-floor height in metres. Drives the per-floor stack offset and the wall-plane
    *  height so the 3D view matches the Massing block's regulatory floor-height parameter. */
   floorHeightM?: number;
+  /** Massing "Show Blocks" mode: render each floor as a discrete prism with a visible gap
+   *  between adjacent floors so the stack reads as stacked blocks rather than one tall mass. */
+  massingShowBlocks?: boolean;
 }
 
 type PlacementKind =
@@ -103,7 +106,7 @@ const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }
   return [{ yMin: 0, yMax: fullH }];
 };
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM, massingShowBlocks = false }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -395,7 +398,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
            (one per floor base + a roof slab capping the top floor). The footprint is reconstructed
            from the chain of massing walls so it always matches the optimised polygon, even when
            Inset / Optimise-Rectangle has reshaped the source room. Skipped in low-poly mode. */}
-      {!lowPoly && (() => {
+      {!lowPoly && !massingShowBlocks && (() => {
         const wallsByRoom = new Map<string, Wall[]>();
         for (const w of model.walls) {
           if ((w.isMassingPreview || w.isMassingWall) && w.massingSourceRoomId) {
@@ -436,7 +439,11 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           // stacked wall planes and are invisible from outside.
           const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
           const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
-          const overhangPx = 0.25 * ppm;
+          // Show-Blocks: thicker slabs + larger overhang so each floor seam reads as a
+          // pronounced horizontal band (the stacked-prism look the user asked for).
+          const overhangPx = (massingShowBlocks ? 0.6 : 0.25) * ppm;
+          const slabThickness = massingShowBlocks ? 0.35 : ROOM_SLAB_THICKNESS_M;
+          const slabColor = massingShowBlocks ? "#475569" : "#94a3b8";
           const expandedPoly = poly.map((p) => {
             const dx = p.x - cx, dy = p.y - cy;
             const d = Math.hypot(dx, dy);
@@ -455,28 +462,90 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               ? 0.001
               : i === floors
                 ? floors * FLOOR_H
-                : i * FLOOR_H - ROOM_SLAB_THICKNESS_M / 2;
+                : i * FLOOR_H - slabThickness / 2;
             return (
               <EdgedMesh
                 key={`massing-slab-${roomId}-${i}`}
                 rotation={[-Math.PI / 2, 0, 0]}
                 position={[0, y, 0]}
               >
-                <extrudeGeometry args={[shape, { depth: ROOM_SLAB_THICKNESS_M, bevelEnabled: false, steps: 1 }]} />
-                <meshStandardMaterial color="#94a3b8" />
+                <extrudeGeometry args={[shape, { depth: slabThickness, bevelEnabled: false, steps: 1 }]} />
+                <meshStandardMaterial color={slabColor} />
               </EdgedMesh>
             );
           });
         });
       })()}
 
+      {/* Massing Show-Blocks: per-room filled prisms stacked N high. Renders in BOTH sharp and
+           low-poly modes — replaces the perimeter wall geometry with one extruded volume per
+           floor of the room's footprint, with a visible vertical gap between adjacent floors. */}
+      {massingShowBlocks && (() => {
+        const wallsByRoom = new Map<string, Wall[]>();
+        for (const w of model.walls) {
+          if ((w.isMassingPreview || w.isMassingWall) && w.massingSourceRoomId) {
+            const arr = wallsByRoom.get(w.massingSourceRoomId) ?? [];
+            arr.push(w);
+            wallsByRoom.set(w.massingSourceRoomId, arr);
+          }
+        }
+        if (wallsByRoom.size === 0) return null;
+
+        const TOL = 1.5;
+        const kf = (p: Point) => `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+        const reconstruct = (walls: Wall[]): Point[] => {
+          if (walls.length < 3) return [];
+          const startMap = new Map<string, Wall>();
+          walls.forEach((w) => { if (!startMap.has(kf(w.start))) startMap.set(kf(w.start), w); });
+          const visited = new Set<string>();
+          const pts: Point[] = [];
+          let cur: Wall | undefined = walls[0];
+          const firstId = walls[0].id;
+          while (cur && !visited.has(cur.id)) {
+            visited.add(cur.id);
+            pts.push(cur.start);
+            const next = startMap.get(kf(cur.end));
+            if (!next || next.id === firstId) break;
+            cur = next;
+          }
+          return pts;
+        };
+
+        const floorH = FLOOR_H;
+        const blockGap = Math.min(0.4, floorH * 0.15);
+        const prismH = floorH - blockGap;
+
+        return Array.from(wallsByRoom.entries()).flatMap(([roomId, walls]) => {
+          const poly = reconstruct(walls);
+          if (poly.length < 3) return [];
+          const sourceRoom = slabRooms.find((r) => r.id === roomId);
+          const floors = Math.max(1, Math.floor(sourceRoom?.floorsCount ?? 1));
+          const shape = new THREE.Shape(poly.map((p) => {
+            const [sx, sz] = toScene(p.x, p.y);
+            return new THREE.Vector2(sx, -sz);
+          }));
+          return Array.from({ length: floors }, (_, fi) => (
+            <EdgedMesh
+              key={`mass-block-${roomId}-${fi}`}
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, fi * floorH + blockGap / 2, 0]}
+            >
+              <extrudeGeometry args={[shape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
+              <meshStandardMaterial color="#cbd5e1" />
+            </EdgedMesh>
+          ));
+        });
+      })()}
+
       {/* Union extrusion: one continuous mass per connected wall network in mitered-union mode.
            Replicated per floor (max floorsCount across rooms). Skipped in low-poly mode. */}
-      {!lowPoly && (() => {
+      {!lowPoly && !massingShowBlocks && (() => {
         const globalFloors = Math.max(1, ...slabRooms.map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
         const floorH = FLOOR_H;
+        const blockGap = 0;
+        const prismH = floorH - blockGap;
         return Array.from({ length: globalFloors }, (_, fi) => (
-          <group key={`mass-floor-${fi}`} position={[0, fi * floorH, 0]}>
+          <group key={`mass-floor-${fi}`} position={[0, fi * floorH + blockGap / 2, 0]}>
             {(() => {
         const signedArea = (loop: Point[]): number => {
           let a = 0;
@@ -530,7 +599,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           }
           return (
             <EdgedMesh key={`union-${li}`} rotation={[-Math.PI / 2, 0, 0]}>
-              <extrudeGeometry args={[shape, { depth: FLOOR_H, bevelEnabled: false, steps: 1 }]} />
+              <extrudeGeometry args={[shape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
               <meshStandardMaterial color={GREY} />
             </EdgedMesh>
           );
@@ -564,6 +633,9 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               if ((w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId) return false;
               // Drop OptRect preview walls coincident with any Massing preview run.
               if (w.isMaxRectPreview && hasMassingPreview) return false;
+              // Show-Blocks: massing walls are replaced by stacked filled prisms (rendered
+              // in a dedicated block below), so suppress their thin wall planes here.
+              if (massingShowBlocks && (w.isMassingPreview || w.isMassingWall)) return false;
               if (w.isInsetWall || w.isSplitWall || w.isBspPreview || w.isVoronoiPreview ||
                   w.isCvtPreview || w.isDelaunayPreview || w.isSkeletonPreview || w.isConvexHullPreview ||
                   w.isRectDecompPreview || w.isSmoothingPreview || w.isMeshPreview ||

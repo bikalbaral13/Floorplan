@@ -54,6 +54,14 @@ export interface BspBlockProps {
   useAreaPercent: boolean;
   setUseAreaPercent: (v: boolean) => void;
   runRoomBsp: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
+  /** Connection-mode runner: solves a slicing tree from the adjacency matrix on the
+   *  same seeds. Optional — if omitted, Connection / Area+Connection modes hide. */
+  runRoomBspConnection?: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
+  /** Per-room BSP mode (single dropdown). "normal" = equal-split BSP;
+   *  "area-percent" = weighted BSP; "connection" = adjacency-only RFP; and
+   *  "area-and-connection" = adjacency topology with weighted cut positions. */
+  mode?: "normal" | "area-percent" | "connection" | "area-and-connection";
+  setMode?: (m: "normal" | "area-percent" | "connection" | "area-and-connection") => void;
   onClearAllPreview: () => void;
   onClearRoomPreview: (roomId: string) => void;
 }
@@ -61,6 +69,28 @@ export interface BspBlockProps {
 export const BspBlock = (p: BspBlockProps) => {
   const rid = p.selectedRoom.id;
   const seeds = p.seedsByRoom[rid] ?? [];
+  const mode = p.mode ?? "normal";
+  const isConnectionMode = mode === "connection" || mode === "area-and-connection";
+  const conns = p.connectionsByRoom?.[rid] ?? [];
+  const connSet = new Set(
+    conns.map((c) => (c.aSeedId < c.bSeedId ? `${c.aSeedId}|${c.bSeedId}` : `${c.bSeedId}|${c.aSeedId}`))
+  );
+  const toggleConn = (aId: string, bId: string) => {
+    if (!p.setConnectionsByRoom) return;
+    const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
+    p.setConnectionsByRoom((prev) => {
+      const list = prev[rid] ?? [];
+      const has = list.some(
+        (c) => (c.aSeedId < c.bSeedId ? `${c.aSeedId}|${c.bSeedId}` : `${c.bSeedId}|${c.aSeedId}`) === key
+      );
+      const next = has
+        ? list.filter(
+            (c) => (c.aSeedId < c.bSeedId ? `${c.aSeedId}|${c.bSeedId}` : `${c.bSeedId}|${c.aSeedId}`) !== key
+          )
+        : [...list, { aSeedId: aId, bSeedId: bId }];
+      return { ...prev, [rid]: next };
+    });
+  };
   return (
     <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
       <button
@@ -72,6 +102,21 @@ export const BspBlock = (p: BspBlockProps) => {
         <span className="text-[11px] text-slate-400">{p.expanded ? "▼" : "▶"}</span>
       </button>
       {p.expanded && <>
+        {p.setMode && (
+          <div>
+            <span className="text-[10px] text-slate-500">Mode</span>
+            <select
+              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+              value={mode}
+              onChange={(e) => p.setMode?.(e.target.value as typeof mode)}
+            >
+              <option value="normal">Normal (equal split)</option>
+              <option value="area-percent">Area Percent (weighted)</option>
+              <option value="connection">Connection (adjacency only)</option>
+              <option value="area-and-connection">Area + Connection</option>
+            </select>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-slate-500">Seeds</span>
           <span className="font-mono text-[10px] text-slate-700">{seeds.length}</span>
@@ -276,10 +321,14 @@ export const BspBlock = (p: BspBlockProps) => {
             value={p.tiltAngle} onChange={(e) => p.setTiltAngle(+e.target.value)} />
         </div>
 
-        <label className="flex items-center gap-1 text-[10px] text-slate-600">
-          <input type="checkbox" checked={p.useAreaPercent} onChange={(e) => p.setUseAreaPercent(e.target.checked)} />
-          Use Area Percent
-        </label>
+        {/* "Use Area Percent" is now derived from the Mode dropdown above. Hidden
+            when the Mode prop is wired so the two controls don't conflict. */}
+        {!p.setMode && (
+          <label className="flex items-center gap-1 text-[10px] text-slate-600">
+            <input type="checkbox" checked={p.useAreaPercent} onChange={(e) => p.setUseAreaPercent(e.target.checked)} />
+            Use Area Percent
+          </label>
+        )}
 
         {seeds.length > 0 && (() => {
           const totalW = seeds.reduce((sum, s) => sum + Math.max(0.01, s.weight ?? 1), 0) || 1;
@@ -425,62 +474,64 @@ export const BspBlock = (p: BspBlockProps) => {
           );
         })()}
 
-        {(() => {
-          const conns = p.connectionsByRoom?.[rid] ?? [];
-          const labelFor = (sid: string) => {
-            const idx = seeds.findIndex((s) => s.id === sid);
-            if (idx < 0) return sid.slice(0, 6);
-            return seeds[idx].label ?? `Seed${idx + 1}`;
-          };
-          return (
-            <div className="rounded border border-slate-200 bg-slate-50 p-1.5 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Connections</span>
-                <span className="font-mono text-[10px] text-slate-700">{conns.length}</span>
-              </div>
-              {conns.length === 0 ? (
-                <p className="text-[9px] text-slate-400">
-                  Turn on Live, then use the left toolbar's “Add Connection” tool and click two seeds.
-                </p>
-              ) : (
-                <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
-                  {conns.map((c, i) => (
-                    <div key={`bsp-conn-${i}`} className="flex items-center gap-1 text-[10px] text-slate-700">
-                      <span className="font-mono text-[9px] text-slate-500 w-4">{i + 1}</span>
-                      <span className="flex-1 truncate">{labelFor(c.aSeedId)} ↔ {labelFor(c.bSeedId)}</span>
-                      <button
-                        type="button"
-                        className="text-[10px] text-slate-400 hover:text-red-600"
-                        title="Remove connection"
-                        onClick={() => {
-                          if (!p.setConnectionsByRoom) return;
-                          p.setConnectionsByRoom((prev) => {
-                            const list = (prev[rid] ?? []).filter((_, idx) => idx !== i);
-                            return { ...prev, [rid]: list };
-                          });
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {conns.length > 0 && (
-                <button
-                  type="button"
-                  className="text-[10px] text-slate-500 hover:text-red-600 underline"
-                  onClick={() => {
-                    if (!p.setConnectionsByRoom) return;
-                    p.setConnectionsByRoom((prev) => ({ ...prev, [rid]: [] }));
-                  }}
-                >
-                  Clear all connections
-                </button>
-              )}
+        {seeds.length >= 2 && isConnectionMode && (
+          <div className="rounded border border-slate-200 bg-slate-50 p-1.5 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Adjacency Matrix</span>
+              <span className="font-mono text-[10px] text-slate-700">{conns.length}</span>
             </div>
-          );
-        })()}
+            <p className="text-[9px] text-slate-400 leading-tight">
+              Tick a cell to require that pair of seeds to share a wall.
+            </p>
+            <div className="overflow-auto">
+              <table className="text-[9px] border-collapse">
+                <thead>
+                  <tr>
+                    <th className="w-8" />
+                    {seeds.slice(0, -1).map((s, j) => (
+                      <th
+                        key={`bsp-col-${j}`}
+                        className="w-6 text-center font-mono text-slate-500"
+                        title={s.label ?? `Seed${j + 1}`}
+                      >
+                        {j + 1}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {seeds.slice(1).map((row, ri) => {
+                    const i = ri + 1;
+                    return (
+                      <tr key={`bsp-row-${i}`}>
+                        <td className="w-8 pr-1 text-right font-mono text-slate-500" title={row.label ?? `Seed${i + 1}`}>
+                          {i + 1}
+                        </td>
+                        {seeds.slice(0, -1).map((col, j) => {
+                          if (j >= i) return <td key={`bsp-cell-${i}-${j}`} className="w-6" />;
+                          const aId = row.id ?? "";
+                          const bId = col.id ?? "";
+                          const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
+                          const checked = connSet.has(key);
+                          return (
+                            <td key={`bsp-cell-${i}-${j}`} className="w-6 text-center">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={!aId || !bId}
+                                onChange={() => toggleConn(aId, bId)}
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-1 text-[10px] text-slate-600">
@@ -490,22 +541,35 @@ export const BspBlock = (p: BspBlockProps) => {
               onChange={(e) => {
                 const on = e.target.checked;
                 p.setLive(on);
-                if (on) p.runRoomBsp(p.selectedRoom, true);
-                else p.onClearAllPreview();
+                if (on) {
+                  if (isConnectionMode && p.runRoomBspConnection) {
+                    p.runRoomBspConnection(p.selectedRoom, true);
+                  } else {
+                    p.runRoomBsp(p.selectedRoom, true);
+                  }
+                } else {
+                  p.onClearAllPreview();
+                }
               }}
             />
             Live
           </label>
-          <span className="text-[9px] text-slate-400">{p.live ? "auto-updates on drag" : "click Apply BSP"}</span>
+          <span className="text-[9px] text-slate-400">{p.live ? "auto-updates on drag" : `click Apply ${isConnectionMode ? "(Connection)" : "BSP"}`}</span>
         </div>
 
         <Button
           variant="outline"
           size="sm"
           className="w-full text-[11px]"
-          onClick={() => { p.runRoomBsp(p.selectedRoom, false); }}
+          onClick={() => {
+            if (isConnectionMode && p.runRoomBspConnection) {
+              p.runRoomBspConnection(p.selectedRoom, false);
+            } else {
+              p.runRoomBsp(p.selectedRoom, false);
+            }
+          }}
         >
-          Apply BSP
+          {isConnectionMode ? "Apply BSP (Connection)" : "Apply BSP"}
         </Button>
       </>}
     </div>

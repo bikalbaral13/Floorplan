@@ -33,9 +33,9 @@ type EdgeMode = "connection" | null;
 interface LeftToolbarProps {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
-  /** Sticky segment-type override applied to walls drawn with the Wall tool ("wall" or "connection"). */
-  nextWallSegmentType: "wall" | "connection";
-  onNextWallSegmentTypeChange: (value: "wall" | "connection") => void;
+  /** Sticky segment-type override applied to walls drawn with the Wall tool ("wall", "connection", or "path"). */
+  nextWallSegmentType: "wall" | "connection" | "path";
+  onNextWallSegmentTypeChange: (value: "wall" | "connection" | "path") => void;
 
   addDoorMode: boolean;
   onAddDoorModeChange: (value: boolean) => void;

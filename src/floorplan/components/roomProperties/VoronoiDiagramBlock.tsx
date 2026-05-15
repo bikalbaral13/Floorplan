@@ -16,6 +16,11 @@ export interface VoronoiDiagramBlockProps {
 
   metric: VoronoiMetric;
   setMetric: (v: VoronoiMetric) => void;
+  /** Filter the Voronoi internal-edge graph down to its diameter — the longest
+   *  path through the cell-boundary network. Acts as a polygon centerline /
+   *  medial-axis backbone. */
+  filterLongestPath?: boolean;
+  setFilterLongestPath?: (v: boolean) => void;
   seedsByRoom: Record<string, Point[]>;
   setSeedsByRoom: (updater: (prev: Record<string, Point[]>) => Record<string, Point[]>) => void;
   /** When true, seeds are slaved to the polygon's vertices — toggling on snapshots them,
@@ -58,6 +63,16 @@ export const VoronoiDiagramBlock = (p: VoronoiDiagramBlockProps) => {
             <option value="chebyshev">Chebyshev Voronoi</option>
           </select>
         </div>
+        {p.setFilterLongestPath && (
+          <label className="flex items-center gap-1 text-[10px] text-slate-600">
+            <input
+              type="checkbox"
+              checked={!!p.filterLongestPath}
+              onChange={(e) => p.setFilterLongestPath?.(e.target.checked)}
+            />
+            Filter Longest Path (centerline)
+          </label>
+        )}
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
           <input
             type="checkbox"

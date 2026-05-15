@@ -165,6 +165,7 @@ import { ClassifyPolygonBlock } from "./components/roomProperties/ClassifyPolygo
 import { InCirclesBlock } from "./components/roomProperties/InCirclesBlock";
 import { BoundingShapesBlock } from "./components/roomProperties/BoundingShapesBlock";
 import { MassingBlock } from "./components/roomProperties/MassingBlock";
+import { PathSetterBlock } from "./components/roomProperties/PathSetterBlock";
 import { SplittingActionsBlock } from "./components/roomProperties/SplittingActionsBlock";
 import { NoiseTextureBlock } from "./components/roomProperties/NoiseTextureBlock";
 import { BspBlock, type BspSeed, type BspSeedMetric, type BspCorridor } from "./components/roomProperties/BspBlock";
@@ -802,7 +803,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // shows only as ephemeral cut strokes during Live, never as real auto-rooms. The cells become
     // real rooms only after Apply BSP commits (which removes the source room and converts the cuts
     // to non-preview walls).
-    () => detectAutoRoomsFromWalls(history.state.walls.filter((w) => !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview)),
+    () => detectAutoRoomsFromWalls(history.state.walls.filter((w) => w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview)),
     [history.state.walls]
   );
   const manualRooms = useMemo(
@@ -825,6 +826,115 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Mitered wall polygons — computed once when walls change, shared across all mitered wall renders. */
   const miteredPolygons = useMemo(() => computeMiteredWallPolygons(history.state.walls), [history.state.walls]);
   const miteredUnion = useMemo(() => computeMiteredUnion(miteredPolygons), [miteredPolygons]);
+
+  /** Path-only mitered union — used to render path corridors as a continuous offset
+   *  band (filled + outlined) regardless of the current view mode. Restricting the
+   *  union to path walls keeps the result independent of any neighbouring regular
+   *  walls so the corridor reads cleanly even in Graph view. */
+  const pathMiteredUnion = useMemo(() => {
+    const pathPolys = new Map<string, Point[]>();
+    for (const w of history.state.walls) {
+      if (w.segmentType !== "path") continue;
+      // NURBS paths are rendered as a separate smooth ribbon below — exclude them
+      // from the mitered-union so the two render paths don't overlap.
+      if (w.pathJoin === "nurbs") continue;
+      const poly = miteredPolygons.get(w.id);
+      if (poly && poly.length >= 3) pathPolys.set(w.id, poly);
+    }
+    return computeMiteredUnion(pathPolys);
+  }, [history.state.walls, miteredPolygons]);
+
+  /** NURBS-pathJoin path ribbons. Chains of connected `segmentType:"path"` walls
+   *  with `pathJoin:"nurbs"` are tessellated into a single smooth cubic NURBS
+   *  centerline (via the existing `evaluateNurbsCurve` helper), then offset by
+   *  thickness/2 on each side to produce a closed ribbon polygon. Width is read
+   *  from the maximum thickness of the chain's walls (paths in a chain are
+   *  expected to share a width). */
+  const nurbsPathRibbons = useMemo(() => {
+    const TOL = 1.5;
+    const kk = (p: Point) => `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+    type W = { id: string; start: Point; end: Point; thickness: number };
+    const nurbsWalls: W[] = [];
+    for (const w of history.state.walls) {
+      if (w.segmentType !== "path" || w.pathJoin !== "nurbs") continue;
+      nurbsWalls.push({ id: w.id, start: w.start, end: w.end, thickness: w.thickness ?? 10 });
+    }
+    if (nurbsWalls.length === 0) return [] as Array<{ polygon: Point[]; centerline: Point[] }>;
+
+    // Index walls by endpoint and walk chains.
+    const byEndpoint = new Map<string, W[]>();
+    for (const w of nurbsWalls) {
+      const ka = kk(w.start), kb = kk(w.end);
+      if (!byEndpoint.has(ka)) byEndpoint.set(ka, []);
+      if (!byEndpoint.has(kb)) byEndpoint.set(kb, []);
+      byEndpoint.get(ka)!.push(w);
+      byEndpoint.get(kb)!.push(w);
+    }
+    const visited = new Set<string>();
+    const chains: { vertices: Point[]; thickness: number }[] = [];
+    const pickTerminal = (): W | null => {
+      // Prefer a wall whose endpoint has degree 1 (open chain start).
+      for (const [, arr] of byEndpoint) {
+        if (arr.length === 1 && !visited.has(arr[0].id)) return arr[0];
+      }
+      // Closed loop / no terminals: just pick the next unvisited wall.
+      for (const w of nurbsWalls) if (!visited.has(w.id)) return w;
+      return null;
+    };
+    while (true) {
+      const seedWall = pickTerminal();
+      if (!seedWall) break;
+      // Choose the starting endpoint: a degree-1 end if seedWall has one, else start.
+      const ka = kk(seedWall.start), kb = kk(seedWall.end);
+      let startKey = ka;
+      if ((byEndpoint.get(kb)?.length ?? 0) === 1) startKey = kb;
+      const verts: Point[] = [];
+      let curWall: W | undefined = seedWall;
+      let curKey = startKey;
+      let chainThickness = seedWall.thickness;
+      while (curWall && !visited.has(curWall.id)) {
+        visited.add(curWall.id);
+        chainThickness = Math.max(chainThickness, curWall.thickness);
+        const curPt = kk(curWall.start) === curKey ? curWall.start : curWall.end;
+        const nextPt = kk(curWall.start) === curKey ? curWall.end : curWall.start;
+        verts.push(curPt);
+        curKey = kk(nextPt);
+        const nbrs = byEndpoint.get(curKey) ?? [];
+        const nextWall = nbrs.find((w) => !visited.has(w.id));
+        if (!nextWall) {
+          verts.push(nextPt);
+          break;
+        }
+        curWall = nextWall;
+      }
+      if (verts.length >= 2) chains.push({ vertices: verts, thickness: chainThickness });
+    }
+
+    // Tessellate each chain into a NURBS curve and offset both sides into a ribbon.
+    const ribbons: Array<{ polygon: Point[]; centerline: Point[] }> = [];
+    for (const { vertices, thickness } of chains) {
+      if (vertices.length < 2) continue;
+      const sampled = evaluateNurbsCurve(vertices);
+      if (sampled.length < 2) continue;
+      const half = thickness / 2;
+      const left: Point[] = [];
+      const right: Point[] = [];
+      for (let i = 0; i < sampled.length; i++) {
+        const prev = sampled[Math.max(0, i - 1)];
+        const next = sampled[Math.min(sampled.length - 1, i + 1)];
+        const tx = next.x - prev.x, ty = next.y - prev.y;
+        const L = Math.hypot(tx, ty) || 1;
+        const nx = -ty / L, ny = tx / L;
+        const p = sampled[i];
+        left.push({ x: p.x + nx * half, y: p.y + ny * half });
+        right.push({ x: p.x - nx * half, y: p.y - ny * half });
+      }
+      // Closed polygon: left forward, right reversed.
+      const polygon = [...left, ...right.reverse()];
+      ribbons.push({ polygon, centerline: sampled });
+    }
+    return ribbons;
+  }, [history.state.walls]);
 
   /** Compute capsule polygons (line buffered by thickness/2 with semicircular caps) for all walls. */
   const capsulePolygons = useMemo(() => {
@@ -1072,7 +1182,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [rectBreInput, setRectBreInput] = useState<string>("");
   /** Sticky segment-type override applied to walls created via the Wall tool.
    *  Used by the "Add Connection" entry point to draw segments as connection edges. */
-  const [nextWallSegmentType, setNextWallSegmentType] = useState<"wall" | "connection">("wall");
+  const [nextWallSegmentType, setNextWallSegmentType] = useState<"wall" | "connection" | "path">("wall");
   const [wallExtendMode, setWallExtendMode] = useState<WallExtendMode>("with-area");
   const [lineThicknessDialogOpen, setLineThicknessDialogOpen] = useState(false);
   const [lineThicknessInput, setLineThicknessInput] = useState("0.2");
@@ -1317,6 +1427,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [massingAvgWidth, setMassingAvgWidth] = useState<number>(3.5);
   const [massingLive, setMassingLive] = useState<boolean>(false);
   const [massingFloorsFromFsi, setMassingFloorsFromFsi] = useState<boolean>(false);
+  const [massingShowBlocks, setMassingShowBlocks] = useState<boolean>(false);
+  const [pathSetterExpanded, setPathSetterExpanded] = useState<boolean>(false);
   const [openingExpanded, setOpeningExpanded] = useState<boolean>(false);
   const [openingLength, setOpeningLength] = useState<number>(1.0);
   const [openingPos, setOpeningPos] = useState<number>(50);
@@ -1428,6 +1540,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [voronoiLive, setVoronoiLive] = useState<boolean>(false);
   const [voronoiExpanded, setVoronoiExpanded] = useState<boolean>(false);
   const [voronoiMetric, setVoronoiMetric] = useState<"euclidean" | "manhattan" | "chebyshev">("euclidean");
+  /** When true, runRoomVoronoi keeps only the edges along the longest path in the
+   *  internal-edge graph of the Voronoi partition — i.e. the medial-axis backbone /
+   *  centerline of the polygon. The rest of the cell boundaries are discarded. */
+  const [voronoiFilterLongestPath, setVoronoiFilterLongestPath] = useState<boolean>(false);
 
   /** Delaunay Triangulation state. */
   const [delaunaySeedsByRoom, setDelaunaySeedsByRoom] = useState<Record<string, Point[]>>({});
@@ -1440,6 +1556,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [skeletonSamples, setSkeletonSamples] = useState<number>(8);
   const [skeletonType, setSkeletonType] = useState<"sampled-voronoi" | "segment-sweepline" | "straight-skeleton">("sampled-voronoi");
   const [skeletonPruneEnds, setSkeletonPruneEnds] = useState<boolean>(false);
+  /** When true (and Prune Ends is on with Straight Skeleton): after pruning, reduce
+   *  the skeleton to its longest path (diameter) and extend both endpoints out to
+   *  the polygon boundary as blue "completion" segments — produces a single
+   *  centerline that spans the full polygon from one boundary to the other. */
+  const [skeletonLongestBranch, setSkeletonLongestBranch] = useState<boolean>(false);
   /** InCircles (iterated inscribed circles / circle packing) state. */
   const [inCirclesExpanded, setInCirclesExpanded] = useState<boolean>(false);
   const [inCirclesLive, setInCirclesLive] = useState<boolean>(false);
@@ -1592,6 +1713,21 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [bspLive, setBspLive] = useState<boolean>(false);
   const [bspUseAreaPercent, setBspUseAreaPercent] = useState<boolean>(true);
   const [bspTiltAngle, setBspTiltAngle] = useState<number>(0);
+  /** Per-room mode for the BSP block. Four values:
+   *   - "normal"              : recursive BSP with equal-split positions (no weights).
+   *   - "area-percent"        : recursive BSP with area-weighted cut positions.
+   *   - "connection"          : RFP slicing-tree solver, equal-area cells.
+   *   - "area-and-connection" : RFP topology with area-weighted cut positions.
+   *  The mode is selected via the dropdown in the BSP block UI; it also drives the
+   *  global `bspUseAreaPercent` flag so the same area-weighting code path is reused
+   *  across runners. */
+  type BspMode = "normal" | "area-percent" | "connection" | "area-and-connection";
+  const [bspModeByRoom, setBspModeByRoom] = useState<Record<string, BspMode>>({});
+  /** Per-seed leaf rectangle from the most recent Connection-mode run. Used to render
+   *  the BSP seed marker at the cell centroid (mirrors RFP behaviour) so the markers
+   *  reflect what the adjacency solver actually placed, not where the user dropped
+   *  the seed. */
+  const [bspLeafRectsByRoom, setBspLeafRectsByRoom] = useState<Record<string, Record<string, { x0: number; y0: number; x1: number; y1: number }>>>({});
 
   /** RFP state — rectangular floor plan (slicing tree guided by adjacency matrix). */
   const [rfpSeedsByRoom, setRfpSeedsByRoom] = useState<Record<string, RfpSeed[]>>({});
@@ -5505,6 +5641,13 @@ User request: ${aiPrompt.trim()}`;
       const a = pts[i], b = pts[(i + 1) % pts.length];
       const lenPx = dist(a, b);
       const lenM = lenPx / pixelsPerMeter;
+      // Show-Blocks mode: emit one plain wall per polygon edge — no door/window bays.
+      // The 3D layer still stacks floor slabs and renders the extruded mass per floor,
+      // producing the "extruded block per floor" look the user asked for.
+      if (massingShowBlocks) {
+        newWalls.push(makeSeg(a, b, "wall"));
+        continue;
+      }
       if (lenM < minEdgeM) {
         newWalls.push(makeSeg(a, b, "wall"));
         continue;
@@ -5578,7 +5721,112 @@ User request: ${aiPrompt.trim()}`;
     if (silent) h.replace({ ...h.state, walls: [...cleaned, ...newWalls] });
     else h.set({ ...h.state, walls: [...cleaned, ...newWalls] });
     return true;
-  }, [massingAvgWidth, pixelsPerMeter, getCurrentWallStyle]);
+  }, [massingAvgWidth, massingShowBlocks, pixelsPerMeter, getCurrentWallStyle]);
+
+  /** Path Setter runner: finds segmentType="path" walls whose midpoint sits inside the
+   *  selected room, computes the mitered offset polygon (the existing path-ribbon shape),
+   *  and materialises each closed loop as a new Room. Silent=preview (isPathSpacePreview
+   *  walls + ephemeral preview room), commit=adds permanent walls + Room to history. */
+  const runRoomPathSpace = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
+    if (!room) return false;
+    const polygon = room.points;
+    if (polygon.length < 3) return false;
+    const pointInPoly = (px: number, py: number): boolean => {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const a = polygon[i], b = polygon[j];
+        if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+      }
+      return inside;
+    };
+    // Collect miter-joined path walls whose midpoint lies inside the host room.
+    const pathPolys = new Map<string, Point[]>();
+    for (const w of historyRef.current.state.walls) {
+      if (w.segmentType !== "path") continue;
+      if ((w.pathJoin ?? "miter") !== "miter") continue;
+      if (w.isPathSpacePreview || w.isPathSpaceWall) continue;
+      const mx = (w.start.x + w.end.x) / 2, my = (w.start.y + w.end.y) / 2;
+      if (!pointInPoly(mx, my)) continue;
+      const poly = miteredPolygons.get(w.id);
+      if (poly && poly.length >= 3) pathPolys.set(w.id, poly);
+    }
+    if (pathPolys.size === 0) {
+      if (!silent) toast.error("No miter-joined path segments inside this room");
+      return false;
+    }
+    const { outerEdges } = computeMiteredUnion(pathPolys);
+    if (outerEdges.length === 0) {
+      if (!silent) toast.error("Path has no outer boundary");
+      return false;
+    }
+    const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+    const used = new Array<boolean>(outerEdges.length).fill(false);
+    const loops: Point[][] = [];
+    for (let start = 0; start < outerEdges.length; start++) {
+      if (used[start]) continue;
+      used[start] = true;
+      const seed = outerEdges[start];
+      const loop: Point[] = [seed.a, seed.b];
+      let endKey = KEY(seed.b);
+      const startKey = KEY(seed.a);
+      for (let safety = 0; safety < outerEdges.length + 1; safety++) {
+        if (endKey === startKey) break;
+        let nextIdx = -1, reversed = false;
+        for (let i = 0; i < outerEdges.length; i++) {
+          if (used[i]) continue;
+          if (KEY(outerEdges[i].a) === endKey) { nextIdx = i; reversed = false; break; }
+          if (KEY(outerEdges[i].b) === endKey) { nextIdx = i; reversed = true; break; }
+        }
+        if (nextIdx === -1) break;
+        used[nextIdx] = true;
+        const ne = outerEdges[nextIdx];
+        const np = reversed ? ne.a : ne.b;
+        if (KEY(np) === startKey) break;
+        loop.push(np);
+        endKey = KEY(np);
+      }
+      if (loop.length >= 3) loops.push(loop);
+    }
+    if (loops.length === 0) {
+      if (!silent) toast.error("Could not close path boundary");
+      return false;
+    }
+    const style = getCurrentWallStyle();
+    const newWalls = outerEdges.map((e) => ({
+      id: createId(),
+      start: e.a,
+      end: e.b,
+      thickness: 1,
+      color: silent ? "#0ea5e9" : style.color,
+      mode: "fill" as const,
+      method: "center" as const,
+      segmentType: "wall" as const,
+      isPathSpaceWall: !silent,
+      isPathSpacePreview: silent,
+      pathSpaceSourceRoomId: room.id,
+    }));
+    const newRooms = loops.map((points, i) => ({
+      id: createId(),
+      points,
+      fill: silent ? "rgba(14, 165, 233, 0.18)" : "rgba(14, 165, 233, 0.35)",
+      stroke: "#0369a1",
+      roomType: "room" as const,
+      label: loops.length > 1 ? `Path Space ${i + 1}` : "Path Space",
+      isPathSpacePreview: silent,
+      pathSpaceSourceRoomId: room.id,
+    }));
+    const h = historyRef.current;
+    const cleanedWalls = h.state.walls.filter((w) => !(w.isPathSpacePreview && w.pathSpaceSourceRoomId === room.id));
+    const cleanedRooms = h.state.rooms.filter((r) => !((r as { isPathSpacePreview?: boolean }).isPathSpacePreview && (r as { pathSpaceSourceRoomId?: string }).pathSpaceSourceRoomId === room.id));
+    const nextState = {
+      ...h.state,
+      walls: [...cleanedWalls, ...newWalls],
+      rooms: [...cleanedRooms, ...newRooms],
+    };
+    if (silent) h.replace(nextState);
+    else { h.set(nextState); toast.success(`Created ${newRooms.length} space${newRooms.length > 1 ? "s" : ""} from path`); }
+    return true;
+  }, [miteredPolygons, getCurrentWallStyle]);
 
   /** Add Openings: split a wall/site-boundary segment into pre / opening / post sub-segments.
    *  centerT (m from start) = lenOverride/2 + (posOverride/100) * (segLen - lenOverride),
@@ -6677,7 +6925,8 @@ User request: ${aiPrompt.trim()}`;
     const room = visibleRoomsRef.current.find((r) => r.id === id);
     if (!room) return;
     runRoomMassing(room, true);
-  }, [massingLive, massingAvgWidth, livePreviewTick, runRoomMassing]);
+  }, [massingLive, massingAvgWidth, massingShowBlocks, livePreviewTick, runRoomMassing]);
+
 
   /** Publish runRoomOptimiseRect into optimiseRectRunnerRef so the upstream inset live useEffect
    *  (declared earlier in this function and would TDZ on a direct reference) can call it after each
@@ -7182,6 +7431,82 @@ User request: ${aiPrompt.trim()}`;
 
     if (edges.length === 0) { if (!silent) toast.error("No Voronoi cuts produced (seeds coincident?)"); return false; }
 
+    // Filter Longest Path: reduce the Voronoi internal-edge graph to just its
+    // diameter — the medial-axis centerline. Two-pass Dijkstra from an arbitrary
+    // node finds one endpoint of the longest path; a second pass from there
+    // finds the other end and reconstructs the edge list along the way. Repeats
+    // per connected component and keeps the globally longest path.
+    if (voronoiFilterLongestPath && edges.length > 0) {
+      const TOL = 0.5;
+      const key = (p: Point) => `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+      const nodes = new Map<string, Point>();
+      const adj = new Map<string, { nbr: string; edgeIdx: number; w: number }[]>();
+      for (let i = 0; i < edges.length; i++) {
+        const e = edges[i];
+        const ka = key(e.p1), kb = key(e.p2);
+        if (ka === kb) continue;
+        if (!nodes.has(ka)) nodes.set(ka, e.p1);
+        if (!nodes.has(kb)) nodes.set(kb, e.p2);
+        const w = Math.hypot(e.p2.x - e.p1.x, e.p2.y - e.p1.y);
+        if (!adj.has(ka)) adj.set(ka, []);
+        if (!adj.has(kb)) adj.set(kb, []);
+        adj.get(ka)!.push({ nbr: kb, edgeIdx: i, w });
+        adj.get(kb)!.push({ nbr: ka, edgeIdx: i, w });
+      }
+      const dijkstra = (src: string) => {
+        const dist = new Map<string, number>([[src, 0]]);
+        const prev = new Map<string, string>();
+        const prevEdge = new Map<string, number>();
+        const done = new Set<string>();
+        // Linear-scan PQ — fine for the node counts a Voronoi cell graph produces.
+        while (done.size < nodes.size) {
+          let cur: string | null = null;
+          let curD = Infinity;
+          for (const [k, d] of dist) {
+            if (!done.has(k) && d < curD) { curD = d; cur = k; }
+          }
+          if (cur == null) break;
+          done.add(cur);
+          for (const { nbr, edgeIdx, w } of adj.get(cur) ?? []) {
+            const nd = curD + w;
+            if (nd < (dist.get(nbr) ?? Infinity)) {
+              dist.set(nbr, nd);
+              prev.set(nbr, cur);
+              prevEdge.set(nbr, edgeIdx);
+            }
+          }
+        }
+        let farthest = src, fd = 0;
+        for (const [k, d] of dist) if (d > fd) { fd = d; farthest = k; }
+        return { dist, prev, prevEdge, farthest, fd };
+      };
+      const visited = new Set<string>();
+      let bestEdges = new Set<number>();
+      let bestLen = 0;
+      for (const startNode of nodes.keys()) {
+        if (visited.has(startNode)) continue;
+        const r1 = dijkstra(startNode);
+        for (const k of r1.dist.keys()) visited.add(k);
+        const r2 = dijkstra(r1.farthest);
+        if (r2.fd > bestLen) {
+          bestLen = r2.fd;
+          bestEdges = new Set<number>();
+          let cur: string | undefined = r2.farthest;
+          while (cur && r2.prevEdge.has(cur)) {
+            bestEdges.add(r2.prevEdge.get(cur)!);
+            cur = r2.prev.get(cur);
+          }
+        }
+      }
+      const filtered = edges.filter((_, i) => bestEdges.has(i));
+      edges.length = 0;
+      for (const e of filtered) edges.push(e);
+      if (edges.length === 0) {
+        if (!silent) toast.error("Longest-path filter produced no edges");
+        return false;
+      }
+    }
+
     const style = getCurrentWallStyle();
     const newWalls: Wall[] = edges.map((e) => ({
       id: createId(),
@@ -7207,7 +7532,7 @@ User request: ${aiPrompt.trim()}`;
     else h.set(nextState);
     if (!silent) toast.success(`Voronoi partition committed (${voronoiMetric}, ${edges.length} edges)`);
     return true;
-  }, [voronoiSeedsByRoom, voronoiMetric, getCurrentWallStyle]);
+  }, [voronoiSeedsByRoom, voronoiMetric, voronoiFilterLongestPath, getCurrentWallStyle]);
 
   /** Live voronoi: re-run whenever seeds or metric change for the selected room while Live is on. */
   useEffect(() => {
@@ -7564,22 +7889,150 @@ User request: ${aiPrompt.trim()}`;
         finalEdges = skeletonEdges.filter((e) => !nearVertex(e.p1) && !nearVertex(e.p2));
       }
 
-      if (finalEdges.length === 0) { if (!silent) toast.error("Straight skeleton produced nothing"); return false; }
+      // Longest Branch: reduce the pruned skeleton to its diameter (longest path
+      // by edge length) and extend both endpoints out to the polygon boundary
+      // along the path's tangent direction. The two extension segments are
+      // returned separately so they can render in a different colour.
+      let extensionEdges: { p1: Point; p2: Point }[] = [];
+      if (skeletonPruneEnds && skeletonLongestBranch && finalEdges.length > 0) {
+        const TOL = 0.5;
+        const kk = (p: Point) => `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+        const nodes = new Map<string, Point>();
+        const adj = new Map<string, { nbr: string; edgeIdx: number; w: number }[]>();
+        for (let i = 0; i < finalEdges.length; i++) {
+          const e = finalEdges[i];
+          const ka = kk(e.p1), kb = kk(e.p2);
+          if (ka === kb) continue;
+          if (!nodes.has(ka)) nodes.set(ka, e.p1);
+          if (!nodes.has(kb)) nodes.set(kb, e.p2);
+          const w = Math.hypot(e.p2.x - e.p1.x, e.p2.y - e.p1.y);
+          if (!adj.has(ka)) adj.set(ka, []);
+          if (!adj.has(kb)) adj.set(kb, []);
+          adj.get(ka)!.push({ nbr: kb, edgeIdx: i, w });
+          adj.get(kb)!.push({ nbr: ka, edgeIdx: i, w });
+        }
+        const dijkstra = (src: string) => {
+          const dist = new Map<string, number>([[src, 0]]);
+          const prev = new Map<string, string>();
+          const prevEdge = new Map<string, number>();
+          const done = new Set<string>();
+          while (done.size < nodes.size) {
+            let cur: string | null = null;
+            let curD = Infinity;
+            for (const [k, d] of dist) {
+              if (!done.has(k) && d < curD) { curD = d; cur = k; }
+            }
+            if (cur == null) break;
+            done.add(cur);
+            for (const { nbr, edgeIdx, w } of adj.get(cur) ?? []) {
+              const nd = curD + w;
+              if (nd < (dist.get(nbr) ?? Infinity)) {
+                dist.set(nbr, nd);
+                prev.set(nbr, cur);
+                prevEdge.set(nbr, edgeIdx);
+              }
+            }
+          }
+          let farthest = src, fd = 0;
+          for (const [k, d] of dist) if (d > fd) { fd = d; farthest = k; }
+          return { dist, prev, prevEdge, farthest, fd };
+        };
+        const seen = new Set<string>();
+        let bestEdges = new Set<number>();
+        let bestA: string | null = null;
+        let bestB: string | null = null;
+        let bestLen = 0;
+        for (const startNode of nodes.keys()) {
+          if (seen.has(startNode)) continue;
+          const r1 = dijkstra(startNode);
+          for (const k of r1.dist.keys()) seen.add(k);
+          const r2 = dijkstra(r1.farthest);
+          if (r2.fd > bestLen) {
+            bestLen = r2.fd;
+            bestA = r1.farthest;
+            bestB = r2.farthest;
+            bestEdges = new Set<number>();
+            let cur: string | undefined = r2.farthest;
+            while (cur && r2.prevEdge.has(cur)) {
+              bestEdges.add(r2.prevEdge.get(cur)!);
+              cur = r2.prev.get(cur);
+            }
+          }
+        }
+        if (bestA && bestB) {
+          const pathEdges = finalEdges.filter((_, i) => bestEdges.has(i));
+          // For each endpoint, find its tangent direction along the path (the
+          // direction *outward* from the path) and cast a ray to the polygon
+          // boundary. The boundary segment closest to the endpoint wins.
+          const extendTo = (endKey: string): { p1: Point; p2: Point } | null => {
+            const endPt = nodes.get(endKey);
+            if (!endPt) return null;
+            const nbrs = (adj.get(endKey) ?? []).filter((n) => bestEdges.has(n.edgeIdx));
+            if (nbrs.length === 0) return null;
+            const neighborPt = nodes.get(nbrs[0].nbr);
+            if (!neighborPt) return null;
+            const dxT = endPt.x - neighborPt.x;
+            const dyT = endPt.y - neighborPt.y;
+            const L = Math.hypot(dxT, dyT) || 1;
+            const ux = dxT / L, uy = dyT / L;
+            // Intersect ray (endPt + t·(ux,uy), t>0) with each polygon edge; keep min positive t.
+            let bestT = Infinity;
+            let hit: Point | null = null;
+            for (let i = 0; i < polygon.length; i++) {
+              const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+              const ex = b.x - a.x, ey = b.y - a.y;
+              const det = ux * (-ey) - uy * (-ex);
+              if (Math.abs(det) < 1e-9) continue;
+              const sx = a.x - endPt.x, sy = a.y - endPt.y;
+              const t = (sx * (-ey) - sy * (-ex)) / det;
+              const u = (ux * sy - uy * sx) / det;
+              if (t > 1e-3 && u >= -1e-6 && u <= 1 + 1e-6 && t < bestT) {
+                bestT = t;
+                hit = { x: endPt.x + ux * t, y: endPt.y + uy * t };
+              }
+            }
+            if (!hit) return null;
+            return { p1: endPt, p2: hit };
+          };
+          const extA = extendTo(bestA);
+          const extB = extendTo(bestB);
+          if (extA) extensionEdges.push(extA);
+          if (extB) extensionEdges.push(extB);
+          finalEdges = pathEdges;
+        }
+      }
+
+      if (finalEdges.length === 0 && extensionEdges.length === 0) { if (!silent) toast.error("Straight skeleton produced nothing"); return false; }
 
       const style = getCurrentWallStyle();
-      const newWalls: Wall[] = finalEdges.map((e) => ({
-        id: createId(),
-        start: e.p1,
-        end: e.p2,
-        thickness: style.thickness,
-        color: silent ? "#f97316" : "#ea580c",
-        mode: style.mode,
-        method: "center",
-        segmentType: "wall",
-        isSkeletonWall: !silent,
-        isSkeletonPreview: silent,
-        skeletonSourceRoomId: room.id,
-      }));
+      const newWalls: Wall[] = [
+        ...finalEdges.map((e) => ({
+          id: createId(),
+          start: e.p1,
+          end: e.p2,
+          thickness: style.thickness,
+          color: silent ? "#f97316" : "#ea580c",
+          mode: style.mode,
+          method: "center" as const,
+          segmentType: "wall" as const,
+          isSkeletonWall: !silent,
+          isSkeletonPreview: silent,
+          skeletonSourceRoomId: room.id,
+        })),
+        ...extensionEdges.map((e) => ({
+          id: createId(),
+          start: e.p1,
+          end: e.p2,
+          thickness: style.thickness,
+          color: silent ? "#2563eb" : "#1d4ed8",
+          mode: style.mode,
+          method: "center" as const,
+          segmentType: "wall" as const,
+          isSkeletonWall: !silent,
+          isSkeletonPreview: silent,
+          skeletonSourceRoomId: room.id,
+        })),
+      ];
       const h = historyRef.current;
       const cleaned = silent
         ? h.state.walls.filter((w) => !w.isSkeletonPreview || w.skeletonSourceRoomId !== room.id)
@@ -7781,7 +8234,7 @@ User request: ${aiPrompt.trim()}`;
     else h.set(nextState);
     if (!silent) toast.success(`Skeleton committed (${newWalls.length} segments)`);
     return true;
-  }, [skeletonSamples, skeletonType, skeletonPruneEnds, getCurrentWallStyle]);
+  }, [skeletonSamples, skeletonType, skeletonPruneEnds, skeletonLongestBranch, getCurrentWallStyle]);
 
   /** Live skeleton: re-run whenever sample density changes while Live is on. */
   useEffect(() => {
@@ -10644,6 +11097,26 @@ User request: ${aiPrompt.trim()}`;
       setBspSeedMetricsByRoom((prev) => ({ ...prev, [room.id]: metrics }));
     }
 
+    // Cache each seed's cell centroid (in canvas space) so the marker renders at the
+    // cell centre — guarantees the seed reference circle always sits inside the cell
+    // it drives, even when the area-percent split pushes the cut past the seed's
+    // input position. Stored as a degenerate rect so the existing leaf-centroid
+    // marker lookup (used by Connection mode) works unchanged.
+    {
+      const map: Record<string, { x0: number; y0: number; x1: number; y1: number }> = {};
+      for (let i = 0; i < seeds.length; i++) {
+        const r = leafRects[i];
+        if (!r) continue;
+        const sid = seeds[i].id;
+        if (!sid) continue;
+        const cxRot = (r.x0 + r.x1) / 2;
+        const cyRot = (r.y0 + r.y1) / 2;
+        const c = unrot({ x: cxRot, y: cyRot });
+        map[sid] = { x0: c.x, y0: c.y, x1: c.x, y1: c.y };
+      }
+      setBspLeafRectsByRoom((prev) => ({ ...prev, [room.id]: map }));
+    }
+
     // Precompute each corridor's 4 corners in rotated space — used by clipSegmentToPolygon
     // below to treat each corridor as a "hole" subtracted from the working polygon, so any
     // BSP cut segment crossing a corridor gets split at its boundary instead of running through.
@@ -10790,6 +11263,10 @@ User request: ${aiPrompt.trim()}`;
         : "line";
       const savedThickness = graphOrigThicknessRef.current;
       mergedWalls = mergedWalls.map((w) => {
+        // Path segments are exempt from the view-mode style collapse: in Graph mode
+        // they keep their corridor width and mitered-union rendering instead of
+        // becoming zero-thickness lines.
+        if (w.segmentType === "path") return w;
         if (layerVisibility.viewGraph) {
           return { ...w, mode: "line" as const, thickness: 0.01 };
         }
@@ -10839,20 +11316,6 @@ User request: ${aiPrompt.trim()}`;
     massingAvgWidth, livePreviewTick,
     runRoomInset, runRoomOptimiseRect, runRoomMassing,
   ]);
-
-  /** BSP "Live" semantics: seeds are visible and draggable, AND the partition is rendered as a
-   *  non-committing preview (dummy walls flagged isBspPreview). The original room stays intact —
-   *  only the "Apply BSP" button permanently commits and replaces the source room with sub-cells. */
-  useEffect(() => {
-    if (!bspLive) return;
-    const id = selectedRoomIdRef.current;
-    if (!id) return;
-    const room = visibleRoomsRef.current.find((r) => r.id === id);
-    if (!room) return;
-    const rt = room.roomType ?? "room";
-    if (rt !== "room" && rt !== "floorplate-boundary") return;
-    runRoomBsp(room, true);
-  }, [bspLive, bspSeedsByRoom, bspUseAreaPercent, bspTiltAngle, insetLive, optimiseLive, livePreviewTick, runRoomBsp, bspCorridorsByRoom]);
 
   /** RFP partition runner — slicing tree guided by the adjacency matrix. Same preview/commit
    *  semantics as BSP: silent=true writes isRfpPreview walls; silent=false commits walls and
@@ -10975,6 +11438,8 @@ User request: ${aiPrompt.trim()}`;
         : "line";
       const savedThickness = graphOrigThicknessRef.current;
       mergedWalls = mergedWalls.map((w) => {
+        // Path segments keep their corridor width + mitered-union look across views.
+        if (w.segmentType === "path") return w;
         if (layerVisibility.viewGraph) return { ...w, mode: "line" as const, thickness: 0.01 };
         const restored = savedThickness?.get(w.id) ?? (w.thickness <= 0.02 ? 10 : w.thickness);
         return { ...w, mode: wallMode, thickness: restored };
@@ -10995,6 +11460,257 @@ User request: ${aiPrompt.trim()}`;
     }
     return true;
   }, [rfpSeedsByRoom, rfpConnectionsByRoom, rfpUseAreaPercent, getCurrentWallStyle, logOp, pixelsPerMeter, layerVisibility]);
+
+  /** BSP Connection mode: runs the RFP slicing-tree solver against BSP-block state
+   *  (bspSeedsByRoom + bspConnectionsByRoom) and emits walls tagged as BSP so the
+   *  existing BSP cleanup filters apply. Adjacency matrix lives under the BSP block;
+   *  the RFP block is being phased out. */
+  const runRoomBspConnection = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
+    if (!room) return false;
+    const seeds = bspSeedsByRoom[room.id] ?? [];
+    if (seeds.length < 2) { if (!silent) toast.error("Need at least 2 seeds"); return false; }
+    const polygon = room.points;
+    if (polygon.length < 3) { if (!silent) toast.error("Need at least 3 vertices"); return false; }
+
+    const xs = polygon.map((p) => p.x), ys = polygon.map((p) => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+    const seedInputs = seeds.map((s, i) => ({
+      id: s.id ?? `bsp-seed-${i}`,
+      x: s.x,
+      y: s.y,
+      weight: bspUseAreaPercent ? Math.max(0.01, s.weight ?? 1) : 1,
+      label: s.label,
+    }));
+    const connections = bspConnectionsByRoom[room.id] ?? [];
+    const result = runRfp({ x0: minX, y0: minY, x1: maxX, y1: maxY }, seedInputs, connections);
+
+    // Seed-to-cell relabelling: the slicing-tree solver fixes the cell *layout*
+    // (cuts + leaf rects), but the seed→cell assignment can still be improved
+    // by relabelling cells. For small seed counts (<= 8, i.e. up to 40 320
+    // permutations) we brute-force every assignment and pick the one with the
+    // most satisfied adjacencies. For larger sets we fall back to a full-pass
+    // best-improvement swap loop that keeps going until no single pair-swap
+    // raises the satisfied count.
+    if (connections.length > 0 && result.leaves.length >= 2) {
+      const leaves = result.leaves;
+      const touch = (a: typeof leaves[number], b: typeof leaves[number]): boolean => {
+        const horiz =
+          (Math.abs(a.x1 - b.x0) < 1e-3 || Math.abs(b.x1 - a.x0) < 1e-3) &&
+          Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 1e-3;
+        const vert =
+          (Math.abs(a.y1 - b.y0) < 1e-3 || Math.abs(b.y1 - a.y0) < 1e-3) &&
+          Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 1e-3;
+        return horiz || vert;
+      };
+      const seedIds = leaves.map((l) => l.seedId);
+      const countSat = (assignment: string[]): number => {
+        const idxBySeed = new Map<string, number>();
+        for (let i = 0; i < assignment.length; i++) idxBySeed.set(assignment[i], i);
+        let count = 0;
+        for (const c of connections) {
+          const ia = idxBySeed.get(c.aSeedId);
+          const ib = idxBySeed.get(c.bSeedId);
+          if (ia == null || ib == null) continue;
+          if (touch(leaves[ia], leaves[ib])) count++;
+        }
+        return count;
+      };
+
+      let bestAssignment = [...seedIds];
+      let bestSat = countSat(bestAssignment);
+
+      if (leaves.length <= 8) {
+        // Brute-force every permutation of seed-id assignments to leaves.
+        const arr = [...seedIds];
+        const permute = (start: number) => {
+          if (start === arr.length - 1) {
+            const sat = countSat(arr);
+            if (sat > bestSat) {
+              bestSat = sat;
+              bestAssignment = [...arr];
+            }
+            return;
+          }
+          for (let i = start; i < arr.length; i++) {
+            [arr[start], arr[i]] = [arr[i], arr[start]];
+            permute(start + 1);
+            [arr[start], arr[i]] = [arr[i], arr[start]];
+          }
+        };
+        permute(0);
+      } else {
+        // Iterated full-pass swap: try every pair, pick the swap that gives
+        // the biggest improvement, commit it, repeat until no swap improves.
+        const cur = [...bestAssignment];
+        let guard = leaves.length * leaves.length * 4;
+        while (guard-- > 0) {
+          let bestI = -1, bestJ = -1, bestDelta = 0;
+          for (let i = 0; i < cur.length; i++) {
+            for (let j = i + 1; j < cur.length; j++) {
+              [cur[i], cur[j]] = [cur[j], cur[i]];
+              const sat = countSat(cur);
+              const delta = sat - bestSat;
+              if (delta > bestDelta) { bestDelta = delta; bestI = i; bestJ = j; }
+              [cur[i], cur[j]] = [cur[j], cur[i]];
+            }
+          }
+          if (bestI < 0) break;
+          [cur[bestI], cur[bestJ]] = [cur[bestJ], cur[bestI]];
+          bestSat += bestDelta;
+          bestAssignment = [...cur];
+        }
+      }
+
+      // Apply best assignment back to the leaves.
+      for (let i = 0; i < leaves.length; i++) leaves[i].seedId = bestAssignment[i];
+
+      // Rebuild satisfied / broken from the final assignment.
+      const byId = new Map<string, typeof leaves[number]>();
+      for (const l of leaves) byId.set(l.seedId, l);
+      result.satisfied.length = 0;
+      result.broken.length = 0;
+      for (const c of connections) {
+        const A = byId.get(c.aSeedId);
+        const B = byId.get(c.bSeedId);
+        if (A && B && touch(A, B)) result.satisfied.push(c);
+        else result.broken.push(c);
+      }
+    }
+
+    const ppm = pixelsPerMeter || 1;
+    const leafBySeed = new Map(result.leaves.map((l) => [l.seedId, l]));
+    const metrics: BspSeedMetric[] = seedInputs.map((s) => {
+      const l = leafBySeed.get(s.id);
+      if (!l) return null;
+      const wPx = Math.max(0, l.x1 - l.x0);
+      const hPx = Math.max(0, l.y1 - l.y0);
+      const areaM2 = (wPx * hPx) / (ppm * ppm);
+      const longer = Math.max(wPx, hPx), shorter = Math.max(1e-6, Math.min(wPx, hPx));
+      return { area: areaM2, aspectRatio: longer / shorter };
+    });
+    setBspSeedMetricsByRoom((prev) => ({ ...prev, [room.id]: metrics }));
+    // Cache the seed → leaf-rect map so the BSP seed markers re-render at the cell
+    // centroid the solver assigned, not at the user's input drop position.
+    {
+      const map: Record<string, { x0: number; y0: number; x1: number; y1: number }> = {};
+      for (const l of result.leaves) map[l.seedId] = { x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1 };
+      setBspLeafRectsByRoom((prev) => ({ ...prev, [room.id]: map }));
+    }
+
+    const pip = (px: number, py: number): boolean => {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const a = polygon[i], b = polygon[j];
+        const intersects = ((a.y > py) !== (b.y > py)) &&
+          (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x);
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    };
+    const clipSegment = (p1: Point, p2: Point): { a: Point; b: Point }[] => {
+      const ts: number[] = [0, 1];
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+        const ex = b.x - a.x, ey = b.y - a.y;
+        const det = dx * (-ey) - dy * (-ex);
+        if (Math.abs(det) < 1e-9) continue;
+        const s1x = a.x - p1.x, s1y = a.y - p1.y;
+        const t = (s1x * (-ey) - s1y * (-ex)) / det;
+        const u = (dx * s1y - dy * s1x) / det;
+        if (t >= -1e-6 && t <= 1 + 1e-6 && u >= -1e-6 && u <= 1 + 1e-6) ts.push(Math.max(0, Math.min(1, t)));
+      }
+      ts.sort((a, b) => a - b);
+      const out: { a: Point; b: Point }[] = [];
+      for (let i = 0; i + 1 < ts.length; i++) {
+        const t0 = ts[i], t1 = ts[i + 1];
+        if (t1 - t0 < 1e-4) continue;
+        const mx = p1.x + ((t0 + t1) / 2) * dx;
+        const my = p1.y + ((t0 + t1) / 2) * dy;
+        if (pip(mx, my)) {
+          out.push({
+            a: { x: p1.x + t0 * dx, y: p1.y + t0 * dy },
+            b: { x: p1.x + t1 * dx, y: p1.y + t1 * dy },
+          });
+        }
+      }
+      return out;
+    };
+
+    const edges: { p1: Point; p2: Point }[] = [];
+    for (const c of result.cuts) {
+      const p1 = c.axis === "x" ? { x: c.pos, y: c.y0 } : { x: c.x0, y: c.pos };
+      const p2 = c.axis === "x" ? { x: c.pos, y: c.y1 } : { x: c.x1, y: c.pos };
+      for (const seg of clipSegment(p1, p2)) edges.push({ p1: seg.a, p2: seg.b });
+    }
+    if (edges.length === 0) { if (!silent) toast.error("BSP (Connection) produced no cuts"); return false; }
+
+    const style = getCurrentWallStyle();
+    const newWalls: Wall[] = edges.map((e) => ({
+      id: createId(),
+      start: e.p1,
+      end: e.p2,
+      thickness: style.thickness,
+      color: silent ? "#3b82f6" : "#1d4ed8",
+      mode: style.mode,
+      method: "center",
+      segmentType: "wall",
+      isBspWall: !silent,
+      isBspPreview: silent,
+      bspSourceRoomId: room.id,
+    }));
+
+    const h = historyRef.current;
+    const cleaned = silent
+      ? h.state.walls.filter((w) => !w.isBspPreview || w.bspSourceRoomId !== room.id)
+      : h.state.walls.filter((w) => !w.isBspPreview && !(w.isBspWall && w.bspSourceRoomId === room.id));
+    const nextRooms = silent ? h.state.rooms : h.state.rooms.filter((r) => r.id !== room.id);
+    const nextState = { ...h.state, walls: [...cleaned, ...newWalls], rooms: nextRooms };
+    if (silent) h.replace(nextState);
+    else h.set(nextState);
+    if (!silent) {
+      const sat = result.satisfied.length;
+      const brk = result.broken.length;
+      toast.success(`BSP Connection committed (${seeds.length} regions, ${sat}/${sat + brk} adjacencies satisfied)`);
+    }
+    return true;
+  }, [bspSeedsByRoom, bspConnectionsByRoom, bspUseAreaPercent, getCurrentWallStyle, pixelsPerMeter]);
+
+  /** BSP "Live" semantics: seeds are visible and draggable, AND the partition is rendered as a
+   *  non-committing preview (dummy walls flagged isBspPreview). The original room stays intact —
+   *  only the "Apply BSP" button permanently commits and replaces the source room with sub-cells. */
+  useEffect(() => {
+    if (!bspLive) return;
+    const id = selectedRoomIdRef.current;
+    if (!id) return;
+    const room = visibleRoomsRef.current.find((r) => r.id === id);
+    if (!room) return;
+    const rt = room.roomType ?? "room";
+    if (rt !== "room" && rt !== "floorplate-boundary") return;
+    // Dispatch on the room's BSP mode so the Live preview matches whatever the
+    // Apply button would commit — including connection-driven partitioning.
+    const mode = bspModeByRoom[id] ?? "normal";
+    if ((mode === "connection" || mode === "area-and-connection") && runRoomBspConnection) {
+      runRoomBspConnection(room, true);
+    } else {
+      runRoomBsp(room, true);
+    }
+  }, [
+    bspLive,
+    bspSeedsByRoom,
+    bspConnectionsByRoom,
+    bspUseAreaPercent,
+    bspTiltAngle,
+    bspModeByRoom,
+    insetLive,
+    optimiseLive,
+    livePreviewTick,
+    runRoomBsp,
+    runRoomBspConnection,
+    bspCorridorsByRoom,
+  ]);
 
   /** RFP Live: shows draggable seed markers, adjacency lines, AND a non-committing partition
    *  preview (isRfpPreview walls) that updates as seeds move or connections change. Same model
@@ -12007,7 +12723,9 @@ User request: ${aiPrompt.trim()}`;
           end,
           spinePoints,
           splineTension: 0,
-          thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
+          thickness: nextWallSegmentType === "path"
+            ? pixelsPerMeter
+            : (layerVisibility.viewGraph ? 0.01 : wallThickness),
           color: wallColor,
           dashed: lineTypeDashed,
           mode: "line",
@@ -12018,7 +12736,7 @@ User request: ${aiPrompt.trim()}`;
     });
     setCurrentWallStart(null);
     setCurrentWallSplinePoints([]);
-  }, [currentWallSplinePoints, history, lineTypeDashed, wallColor, wallDrawMethod, wallThickness, layerVisibility.viewGraph, nextWallSegmentType]);
+  }, [currentWallSplinePoints, history, lineTypeDashed, wallColor, wallDrawMethod, wallThickness, layerVisibility.viewGraph, nextWallSegmentType, pixelsPerMeter]);
 
   const finishSegmentDraft = useCallback(() => {
     if (segmentDraft.length < 4) {
@@ -12889,7 +13607,9 @@ User request: ${aiPrompt.trim()}`;
             id: createId(),
             start: points[i],
             end: points[i + 1],
-            thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
+            thickness: nextWallSegmentType === "path"
+              ? pixelsPerMeter
+              : (layerVisibility.viewGraph ? 0.01 : wallThickness),
             color: wallColor,
             dashed: lineTypeDashed,
             mode: wallDrawMode,
@@ -12911,7 +13631,9 @@ User request: ${aiPrompt.trim()}`;
               id: createId(),
               start: currentWallStart,
               end: snapped,
-              thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
+              thickness: nextWallSegmentType === "path"
+                ? pixelsPerMeter
+                : (layerVisibility.viewGraph ? 0.01 : wallThickness),
               color: wallColor,
               dashed: lineTypeDashed,
               mode: wallDrawMode,
@@ -15204,6 +15926,7 @@ User request: ${aiPrompt.trim()}`;
                     const pb = visibleRooms.find((r) => r.roomType === "plot-boundary");
                     return pb?.floorToFloorM ?? 3.0;
                   })()}
+                  massingShowBlocks={massingShowBlocks}
                   onSelectWall={(id, additive) => {
                     if (!id) { selection.clearSelection(); return; }
                     if (additive) selection.toggleSelected(id);
@@ -15992,6 +16715,46 @@ User request: ${aiPrompt.trim()}`;
                     );
                   })}
 
+                  {/* Path corridors — render the mitered union of all path segments as a
+                      filled offset band plus its outer-edge boundary, regardless of view
+                      mode. Paths express their width as an actual corridor in all of
+                      Graph / Curved / Sharp; the view-mode style collapse for regular
+                      walls doesn't touch them. */}
+                  {pathMiteredUnion.fills.map((poly, i) => (
+                    <Line
+                      key={`path-fill-${i}`}
+                      points={poly.flatMap((p) => [p.x, p.y])}
+                      closed
+                      fill="rgba(148, 163, 184, 0.25)"
+                      stroke="transparent"
+                      strokeWidth={0}
+                      listening={false}
+                    />
+                  ))}
+                  {pathMiteredUnion.outerEdges.map((edge, i) => (
+                    <Line
+                      key={`path-edge-${i}`}
+                      points={[edge.a.x, edge.a.y, edge.b.x, edge.b.y]}
+                      stroke="#475569"
+                      strokeWidth={1 / scale}
+                      listening={false}
+                    />
+                  ))}
+
+                  {/* NURBS-pathJoin ribbons — chains of path walls flagged as NURBS render
+                      as a smooth offset band tessellated through the NURBS curve. */}
+                  {nurbsPathRibbons.map((rib, i) => (
+                    <Line
+                      key={`nurbs-path-${i}`}
+                      points={rib.polygon.flatMap((p) => [p.x, p.y])}
+                      closed
+                      fill="rgba(148, 163, 184, 0.25)"
+                      stroke="#475569"
+                      strokeWidth={1 / scale}
+                      listening={false}
+                    />
+                  ))}
+
                   {/* Sharp Union outer edges — only the non-shared boundary lines */}
                   {layerVisibility.viewSharp && layerVisibility.fillingUnion &&
                     miteredUnion.outerEdges
@@ -16446,16 +17209,29 @@ User request: ${aiPrompt.trim()}`;
                     );
                   })}
 
-                  {/* BSP seed connection lines (stored per BSP, not in walls). */}
-                  {selectedRoom && bspLive && layerVisibility.seeds && (bspConnectionsByRoom[selectedRoom.id] ?? []).map((cn, ci) => {
+                  {/* BSP seed connection lines (stored per BSP, not in walls). Always visible
+                      when seeds layer is on so users see their adjacency edges regardless of
+                      whether Live is active. Line endpoints read directly from seed state, so
+                      dragging a seed drags the line along with it. */}
+                  {selectedRoom && layerVisibility.seeds && (bspConnectionsByRoom[selectedRoom.id] ?? []).map((cn, ci) => {
                     const arr = bspSeedsByRoom[selectedRoom.id] ?? [];
                     const a = arr.find((s) => s.id === cn.aSeedId);
                     const b = arr.find((s) => s.id === cn.bSeedId);
                     if (!a || !b) return null;
+                    // Always use the cached leaf centroid when available so the connection
+                    // endpoint stays attached to the marker (which itself sits at the cell
+                    // centroid). Falls back to seed.x/y when no leaf has been cached yet.
+                    const leafMap = bspLeafRectsByRoom[selectedRoom.id] ?? {};
+                    const la = a.id ? leafMap[a.id] : undefined;
+                    const lb = b.id ? leafMap[b.id] : undefined;
+                    const ax = la ? (la.x0 + la.x1) / 2 : a.x;
+                    const ay = la ? (la.y0 + la.y1) / 2 : a.y;
+                    const bx = lb ? (lb.x0 + lb.x1) / 2 : b.x;
+                    const by = lb ? (lb.y0 + lb.y1) / 2 : b.y;
                     return (
                       <Line
                         key={`bsp-conn-${selectedRoom.id}-${ci}`}
-                        points={[a.x, a.y, b.x, b.y]}
+                        points={[ax, ay, bx, by]}
                         stroke="#16a34a"
                         strokeWidth={1.5 / scale}
                         dash={[6 / scale, 4 / scale]}
@@ -16465,18 +17241,27 @@ User request: ${aiPrompt.trim()}`;
                   })}
 
                   {/* BSP seed markers — draggable, green. Fixed-size dot with label.
-                      In addEdgeMode === "connection" + bspLive, clicks pick seed pairs instead of dragging. */}
+                      In addEdgeMode === "connection" + bspLive, clicks pick seed pairs instead of dragging.
+                      In BSP Connection mode, markers reposition to the cell centroid the solver picked
+                      (mirrors RFP behaviour) so the layout reflects the adjacency-driven partition. */}
                   {selectedRoom && layerVisibility.seeds && ((selectedRoom.roomType ?? "room") === "room" || selectedRoom.roomType === "floorplate-boundary") &&
                     (bspSeedsByRoom[selectedRoom.id] ?? []).map((seed, i) => {
                       const r = 3.5 / scale;
                       const label = seed.label ?? `Seed${i + 1}`;
                       const seedConnectMode = addEdgeMode === "connection" && bspLive;
                       const isFirstPick = seedConnectMode && addEdgeFirstBspSeed && seed.id === addEdgeFirstBspSeed;
+                      // Always render the seed marker at the cell centroid when a leaf
+                      // rect has been cached for this seed — keeps the dot inside the
+                      // cell it drives, regardless of BSP mode (Area / Connection).
+                      const leafMap = bspLeafRectsByRoom[selectedRoom.id] ?? {};
+                      const leaf = seed.id ? leafMap[seed.id] : undefined;
+                      const px = leaf ? (leaf.x0 + leaf.x1) / 2 : seed.x;
+                      const py = leaf ? (leaf.y0 + leaf.y1) / 2 : seed.y;
                       return (
                         <Group
                           key={`bsp-seed-${selectedRoom.id}-${i}`}
-                          x={seed.x}
-                          y={seed.y}
+                          x={px}
+                          y={py}
                           draggable={!seedConnectMode}
                           onMouseEnter={(e) => {
                             const c = e.target.getStage()?.container();
@@ -16509,12 +17294,45 @@ User request: ${aiPrompt.trim()}`;
                             }
                           }}
                           onDragMove={(e) => {
-                            const nx = e.target.x(), ny = e.target.y();
+                            let nx = e.target.x(), ny = e.target.y();
+                            // Clamp the dragged seed to the inside of the room polygon —
+                            // if the cursor exits, snap to the closest point on the boundary
+                            // so BSP seeds never end up outside the cell they partition.
+                            const poly = selectedRoom.points;
+                            if (poly.length >= 3 && !isPointInPolygon({ x: nx, y: ny }, poly)) {
+                              let bestX = nx, bestY = ny, bestD = Infinity;
+                              for (let k = 0; k < poly.length; k++) {
+                                const a = poly[k], b = poly[(k + 1) % poly.length];
+                                const ex = b.x - a.x, ey = b.y - a.y;
+                                const L2 = ex * ex + ey * ey;
+                                if (L2 < 1e-6) continue;
+                                let t = ((nx - a.x) * ex + (ny - a.y) * ey) / L2;
+                                t = Math.max(0, Math.min(1, t));
+                                const cx = a.x + t * ex, cy = a.y + t * ey;
+                                const d = Math.hypot(nx - cx, ny - cy);
+                                if (d < bestD) { bestD = d; bestX = cx; bestY = cy; }
+                              }
+                              nx = bestX; ny = bestY;
+                              e.target.position({ x: nx, y: ny });
+                            }
                             setBspSeedsByRoom((prev) => {
                               const arr = [...(prev[selectedRoom.id] ?? [])];
                               arr[i] = { ...arr[i], x: nx, y: ny };
                               return { ...prev, [selectedRoom.id]: arr };
                             });
+                            // Invalidate the dragged seed's cached leaf rect so the marker
+                            // and connection lines follow the drag instead of staying pinned
+                            // at the (now stale) cell centroid from the previous solve.
+                            const sid = seed.id;
+                            if (sid) {
+                              setBspLeafRectsByRoom((prev) => {
+                                const cur = prev[selectedRoom.id];
+                                if (!cur || !(sid in cur)) return prev;
+                                const next = { ...cur };
+                                delete next[sid];
+                                return { ...prev, [selectedRoom.id]: next };
+                              });
+                            }
                           }}
                         >
                           <Circle
@@ -17311,6 +18129,12 @@ User request: ${aiPrompt.trim()}`;
                     if (layerVisibility.viewGraph && !layerVisibility.doors && wall.segmentType === "door") return null;
                     if (layerVisibility.viewGraph && !layerVisibility.windows && wall.segmentType === "window") return null;
 
+                    // NURBS-pathJoin path walls render exclusively as the smooth ribbon
+                    // drawn from `nurbsPathRibbons` — skip every standard wall render
+                    // branch so the per-segment mitered rectangle / centerline don't
+                    // also appear on top of the smooth ribbon.
+                    if (wall.segmentType === "path" && wall.pathJoin === "nurbs") return null;
+
                     // Placement 2D Symbol mode: hide rectangle sides for objects whose kind has a symbol;
                     // the symbol is rendered separately below.
                     if (layerVisibility.placement2dSymbol && (wall.isPlacementWall || wall.isPlacementPreview)
@@ -17521,7 +18345,14 @@ User request: ${aiPrompt.trim()}`;
                       );
                     }
 
-                    const wStyle = wallWithDefaults(wall);
+                    let wStyle = wallWithDefaults(wall);
+                    // Path segments always render as a mitered-union offset corridor — the
+                    // view-mode (Graph / Curved / Sharp) overrides that normally collapse a
+                    // wall to a thin line don't apply to paths, because a path's whole point
+                    // is its width.
+                    if (wall.segmentType === "path") {
+                      wStyle = { ...wStyle, mode: "mitered-union" };
+                    }
                     const hasSplineSpine = !!(wall.spinePoints && wall.spinePoints.length >= 4);
                     const liveThickness =
                       wallResizeDraft?.wallId === wall.id && wallResizeDraft.kind === "thickness"
@@ -20375,15 +21206,31 @@ User request: ${aiPrompt.trim()}`;
                               const newType = e.target.value;
                               history.set({
                                 ...history.state,
-                                walls: history.state.walls.map((w) =>
-                                  w.id === selectedWall.id ? { ...w, segmentType: newType } : w
-                                ),
+                                walls: history.state.walls.map((w) => {
+                                  if (w.id !== selectedWall.id) return w;
+                                  // Switching to Path: force mitered-union so adjacent path
+                                  // segments render as one continuous offset corridor, and
+                                  // seed a default 1.8 m width if the wall was thin.
+                                  if (newType === "path") {
+                                    const minPx = 0.5 * pixelsPerMeter;
+                                    const seedWidth = (w.thickness ?? 0) < minPx ? 1.8 * pixelsPerMeter : w.thickness;
+                                    return {
+                                      ...w,
+                                      segmentType: "path" as const,
+                                      mode: "mitered-union" as const,
+                                      thickness: seedWidth,
+                                      pathJoin: w.pathJoin ?? "miter",
+                                    };
+                                  }
+                                  return { ...w, segmentType: newType };
+                                }),
                               });
                             }}
                           >
                             <option value="wall">Wall</option>
                             <option value="door">Door</option>
                             <option value="window">Window</option>
+                            <option value="path">Path</option>
                             <option value="plot-boundary">Site Boundary</option>
                             <option value="buildable-boundary">Buildable Boundary</option>
                             <option value="footprint-boundary">Footprint Boundary</option>
@@ -20393,6 +21240,32 @@ User request: ${aiPrompt.trim()}`;
                             ))}
                           </select>
                         </div>
+
+                        {/* Path-specific properties: corner join style. Width is the same as
+                            Thickness (path width = stroke thickness), so we keep the existing
+                            Thickness input below rather than duplicating the field here. */}
+                        {selectedWall.segmentType === "path" && (
+                          <div>
+                            <span className="text-[10px] text-slate-400">Path Join</span>
+                            <select
+                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+                              value={selectedWall.pathJoin ?? "miter"}
+                              onChange={(e) => {
+                                const v = e.target.value as "miter" | "round" | "nurbs";
+                                history.set({
+                                  ...history.state,
+                                  walls: history.state.walls.map((w) =>
+                                    w.id === selectedWall.id ? { ...w, pathJoin: v } : w
+                                  ),
+                                });
+                              }}
+                            >
+                              <option value="miter">Sharp (miter)</option>
+                              <option value="round">Curved (round)</option>
+                              <option value="nurbs">Smooth (NURBS)</option>
+                            </select>
+                          </div>
+                        )}
 
                         {/* Site Boundary: setback-regime dropdown (Indian-context adjacency types). */}
                         {selectedWall.segmentType === "plot-boundary" && (
@@ -22866,6 +23739,33 @@ User request: ${aiPrompt.trim()}`;
                       setExpanded={setClassifyExpanded}
                     />
 
+                    {/* Path Setter — materialise mitered-path ribbons inside this room as a Space. */}
+                    <PathSetterBlock
+                      selectedRoom={selectedRoom}
+                      expanded={pathSetterExpanded}
+                      setExpanded={setPathSetterExpanded}
+                      runRoomPathSpace={runRoomPathSpace}
+                      onClearRoomPreview={(roomId) => {
+                        const h = historyRef.current;
+                        h.replace({
+                          ...h.state,
+                          walls: h.state.walls.filter((w) => !(w.isPathSpacePreview && w.pathSpaceSourceRoomId === roomId)),
+                          rooms: h.state.rooms.filter((r) => !((r as { isPathSpacePreview?: boolean }).isPathSpacePreview && (r as { pathSpaceSourceRoomId?: string }).pathSpaceSourceRoomId === roomId)),
+                        });
+                      }}
+                      drawingPath={tool === "wall" && nextWallSegmentType === "path"}
+                      onStartDrawPath={() => {
+                        if (tool === "wall" && nextWallSegmentType === "path") {
+                          setNextWallSegmentType("wall");
+                          setTool("select");
+                        } else {
+                          setTool("wall");
+                          setWallDrawType("polyline");
+                          setNextWallSegmentType("path");
+                        }
+                      }}
+                    />
+
                     {/* Massing — auto-place windows/doors along the room boundary. */}
                     <MassingBlock
                       selectedRoom={selectedRoom}
@@ -22904,6 +23804,8 @@ User request: ${aiPrompt.trim()}`;
                       }}
                       floorsFromFsi={massingFloorsFromFsi}
                       setFloorsFromFsi={setMassingFloorsFromFsi}
+                      showBlocks={massingShowBlocks}
+                      setShowBlocks={setMassingShowBlocks}
                       siteAreaSqm={(() => {
                         // Reference livePreviewTick so this recomputes during live optimise/inset cascades.
                         void livePreviewTick;
@@ -23076,6 +23978,8 @@ User request: ${aiPrompt.trim()}`;
                       setLive={setVoronoiLive}
                       metric={voronoiMetric}
                       setMetric={setVoronoiMetric}
+                      filterLongestPath={voronoiFilterLongestPath}
+                      setFilterLongestPath={setVoronoiFilterLongestPath}
                       seedsByRoom={voronoiSeedsByRoom}
                       setSeedsByRoom={setVoronoiSeedsByRoom}
                       useVerticesByRoom={voronoiUseVerticesByRoom}
@@ -23144,6 +24048,8 @@ User request: ${aiPrompt.trim()}`;
                       setSamples={setSkeletonSamples}
                       pruneEnds={skeletonPruneEnds}
                       setPruneEnds={setSkeletonPruneEnds}
+                      longestBranch={skeletonLongestBranch}
+                      setLongestBranch={setSkeletonLongestBranch}
                       runRoomSkeleton={runRoomSkeleton}
                       onClearAllPreview={() => {
                         const h = historyRef.current;
@@ -23457,6 +24363,15 @@ User request: ${aiPrompt.trim()}`;
                       useAreaPercent={bspUseAreaPercent}
                       setUseAreaPercent={setBspUseAreaPercent}
                       runRoomBsp={runRoomBsp}
+                      runRoomBspConnection={runRoomBspConnection}
+                      mode={bspModeByRoom[selectedRoom.id] ?? "normal"}
+                      setMode={(m) => {
+                        setBspModeByRoom((prev) => ({ ...prev, [selectedRoom.id]: m }));
+                        // Mode drives the area-percent flag: "area-percent" and
+                        // "area-and-connection" weight the cut positions, the other two
+                        // produce equal splits.
+                        setBspUseAreaPercent(m === "area-percent" || m === "area-and-connection");
+                      }}
                       onClearAllPreview={() => {
                         const h = historyRef.current;
                         h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isBspPreview) });
@@ -23467,8 +24382,9 @@ User request: ${aiPrompt.trim()}`;
                       }}
                     />
 
-                    {/* RFP — Rectangular Floor Plan: slicing-tree partition guided by an adjacency matrix. */}
-                    <RfpBlock
+                    {/* RFP block — folded into BSP's "Connection" mode. Hidden but kept in
+                         source for one transition release; remove next pass. */}
+                    {false && (<RfpBlock
                       selectedRoom={selectedRoom}
                       scale={scale}
                       expanded={rfpExpanded}
@@ -23492,7 +24408,7 @@ User request: ${aiPrompt.trim()}`;
                         const h = historyRef.current;
                         h.replace({ ...h.state, walls: h.state.walls.filter((w) => !(w.isRfpPreview && w.rfpSourceRoomId === roomId)) });
                       }}
-                    />
+                    />)}
 
                     {/* Treemap inline removed; TreemapBlock available in components/roomProperties for future use. */}
 

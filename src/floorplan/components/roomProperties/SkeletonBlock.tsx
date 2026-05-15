@@ -15,6 +15,11 @@ export interface SkeletonBlockProps {
   setSamples: (v: number) => void;
   pruneEnds: boolean;
   setPruneEnds: (v: boolean) => void;
+  /** When true (and Prune Ends + Straight Skeleton are on): keep only the longest
+   *  branch of the skeleton and extend its two endpoints out to the polygon
+   *  boundary as blue completion segments. */
+  longestBranch?: boolean;
+  setLongestBranch?: (v: boolean) => void;
   runRoomSkeleton: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
   onClearAllPreview: () => void;
 }
@@ -69,6 +74,17 @@ export const SkeletonBlock = (p: SkeletonBlockProps) => (
           />
           Prune Ends
           <span className="text-[9px] text-slate-400">(hide spurs touching polygon vertices)</span>
+        </label>
+      )}
+      {p.type === "straight-skeleton" && p.pruneEnds && p.setLongestBranch && (
+        <label className="flex items-center gap-1 text-[10px] text-slate-600">
+          <input
+            type="checkbox"
+            checked={!!p.longestBranch}
+            onChange={(e) => p.setLongestBranch?.(e.target.checked)}
+          />
+          Longest Branch
+          <span className="text-[9px] text-slate-400">(extend ends to boundary in blue)</span>
         </label>
       )}
       <div className="flex items-center justify-between">

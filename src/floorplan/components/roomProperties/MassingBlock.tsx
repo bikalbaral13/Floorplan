@@ -21,6 +21,10 @@ export interface MassingBlockProps {
   /** When true, `floors` is auto-set to ceil(siteArea × maxFsi / optimisedArea). */
   floorsFromFsi: boolean;
   setFloorsFromFsi: (v: boolean) => void;
+  /** When true, suppress door/window bays and emit only plain perimeter walls so each floor
+   *  renders as a single extruded block stacked over the others. */
+  showBlocks: boolean;
+  setShowBlocks: (v: boolean) => void;
   /** Plot area of the selected room (m²) — null when not derivable. */
   siteAreaSqm: number | null;
   /** Optimise-Rectangle output area (m²) — null when the optimise stage hasn't published one. */
@@ -135,6 +139,17 @@ export const MassingBlock = (p: MassingBlockProps) => {
           onChange={(e) => p.setFloorsFromFsi(e.target.checked)}
         />
         Get Floors from Site Properties
+      </label>
+      <label className="flex items-center gap-1 text-[10px] text-slate-600">
+        <input
+          type="checkbox"
+          checked={p.showBlocks}
+          onChange={(e) => {
+            p.setShowBlocks(e.target.checked);
+            if (p.live) p.runRoomMassing(p.selectedRoom, true);
+          }}
+        />
+        Show Blocks (no doors/windows)
       </label>
       {p.floorsFromFsi && (
         <div className="rounded bg-slate-50 px-1.5 py-1 text-[9px] text-slate-500 leading-tight space-y-0.5">
