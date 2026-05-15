@@ -1561,6 +1561,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  the polygon boundary as blue "completion" segments — produces a single
    *  centerline that spans the full polygon from one boundary to the other. */
   const [skeletonLongestBranch, setSkeletonLongestBranch] = useState<boolean>(false);
+  /** Straight-Skeleton "Make Path": emit the resulting skeleton lines as
+   *  segmentType:"path" walls (using skeletonPathWidth as thickness in metres),
+   *  then materialise the mitered offset ribbon as a new Space via Path Setter. */
+  const [skeletonMakePath, setSkeletonMakePath] = useState<boolean>(false);
+  const [skeletonPathWidth, setSkeletonPathWidth] = useState<number>(2);
+  /** Straight-Skeleton recursion depth. 1 = single pass (default behaviour).
+   *  N = compute skeleton, split the polygon along the skeleton + boundary into
+   *  sub-faces, then recurse on each face. Capped at 4. */
+  const [skeletonLevel, setSkeletonLevel] = useState<number>(1);
   /** InCircles (iterated inscribed circles / circle packing) state. */
   const [inCirclesExpanded, setInCirclesExpanded] = useState<boolean>(false);
   const [inCirclesLive, setInCirclesLive] = useState<boolean>(false);
@@ -5425,8 +5434,10 @@ User request: ${aiPrompt.trim()}`;
     const style = getCurrentWallStyle();
     const sourceRoomTypeNow = historyRef.current.state.rooms.find((r) => r.id === room.id)?.roomType;
     const sourceIsSiteCommit = !silent && sourceRoomTypeNow === "plot-boundary";
-    const segTypeForCommit: WallSegmentType = sourceIsSiteCommit ? "buildable-boundary" : "wall";
-    const colorForCommit = sourceIsSiteCommit ? "#16a34a" : "#0f172a";
+    // On commit, every inset boundary segment is a buildable-boundary regardless of
+    // the source room — the resulting Space is the Buildable Area in both cases.
+    const segTypeForCommit: WallSegmentType = !silent ? "buildable-boundary" : "wall";
+    const colorForCommit = !silent ? "#16a34a" : "#0f172a";
     const newWalls: Wall[] = [];
     for (let i = 0; i < N; i++) {
       newWalls.push({
@@ -5464,8 +5475,17 @@ User request: ${aiPrompt.trim()}`;
         };
         nextRooms = [...h.state.rooms, buildableRoom];
       } else if (idx >= 0) {
-        // Non-site source: replace the source polygon with the inset polygon (legacy behaviour).
-        nextRooms = h.state.rooms.map((r, i) => i === idx ? { ...r, points: insetPts.map((p) => ({ x: p.x, y: p.y })) } : r);
+        // Non-site source: replace the source polygon with the inset polygon AND retype it as
+        // a Buildable Area space (matches the segmentType: buildable-boundary applied to the
+        // boundary walls above). Fill/stroke/label updated to the standard Buildable look.
+        nextRooms = h.state.rooms.map((r, i) => i === idx ? {
+          ...r,
+          points: insetPts.map((p) => ({ x: p.x, y: p.y })),
+          roomType: "buildable-area" as const,
+          fill: "rgba(220, 252, 231, 0.45)",
+          stroke: "#16a34a",
+          label: r.label ?? "Buildable Area",
+        } : r);
       }
     }
     const nextState = { ...h.state, walls: [...cleaned, ...newWalls], rooms: nextRooms };
@@ -7663,6 +7683,12 @@ User request: ${aiPrompt.trim()}`;
     if (polygon.length < 3) { if (!silent) toast.error("Need at least 3 vertices"); return false; }
 
     if (skeletonType === "straight-skeleton") {
+      // Level N: recurse `skeletonLevel` times. Each level computes the straight
+      // skeleton of every current sub-polygon; the resulting edges + polygon
+      // boundaries partition each polygon into faces, which become the next
+      // level's inputs. Level 1 = single pass (original behaviour).
+      const computeSkeletonForPoly = (skPoly: Point[]): { finalEdges: { p1: Point; p2: Point }[]; extensionEdges: { p1: Point; p2: Point }[] } => {
+      const polygon = skPoly;
       // Full-ish straight skeleton with both edge-collapse events and split events.
       // Each active vertex carries its "parent" — the most recent skeleton node on its trajectory.
       // Skeleton edges connect parent → event-hit point (not per-integration-step).
@@ -8002,9 +8028,89 @@ User request: ${aiPrompt.trim()}`;
         }
       }
 
+      return { finalEdges, extensionEdges };
+      };
+      // Recursion driver: at each level, compute the skeleton on every active polygon
+      // and accumulate edges. Between levels, the active polygons split into faces by
+      // building a planar graph of polygon boundaries + accumulated skeleton edges
+      // and running the existing auto-room detector.
+      const levels = Math.max(1, Math.min(4, Math.floor(skeletonLevel)));
+      let currentPolys: Point[][] = [polygon];
+      let finalEdges: { p1: Point; p2: Point }[] = [];
+      let extensionEdges: { p1: Point; p2: Point }[] = [];
+      for (let lv = 0; lv < levels; lv++) {
+        const levelFinal: { p1: Point; p2: Point }[] = [];
+        const levelExt: { p1: Point; p2: Point }[] = [];
+        for (const poly of currentPolys) {
+          if (poly.length < 3) continue;
+          const r = computeSkeletonForPoly(poly);
+          levelFinal.push(...r.finalEdges);
+          levelExt.push(...r.extensionEdges);
+        }
+        finalEdges.push(...levelFinal);
+        extensionEdges.push(...levelExt);
+        if (lv === levels - 1) break;
+        // Build a virtual Wall[] from the current polygon boundaries + level edges,
+        // then re-detect rooms to obtain the next level's sub-polygons.
+        const faceWalls: Wall[] = [];
+        for (const poly of currentPolys) {
+          for (let i = 0; i < poly.length; i++) {
+            const a = poly[i], b = poly[(i + 1) % poly.length];
+            if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-3) continue;
+            faceWalls.push({
+              id: createId(), start: a, end: b,
+              thickness: 1, color: "#000", mode: "line", method: "center", segmentType: "wall",
+            });
+          }
+        }
+        for (const e of [...levelFinal, ...levelExt]) {
+          if (Math.hypot(e.p2.x - e.p1.x, e.p2.y - e.p1.y) < 1e-3) continue;
+          faceWalls.push({
+            id: createId(), start: e.p1, end: e.p2,
+            thickness: 1, color: "#000", mode: "line", method: "center", segmentType: "wall",
+          });
+        }
+        const faces = detectAutoRoomsFromWalls(faceWalls);
+        if (faces.length === 0) break;
+        currentPolys = faces.map((f) => f.points);
+      }
+
       if (finalEdges.length === 0 && extensionEdges.length === 0) { if (!silent) toast.error("Straight skeleton produced nothing"); return false; }
 
       const style = getCurrentWallStyle();
+      // Make Path: emit the kept skeleton edges as segmentType:"path" walls (1 m default thickness
+      // is overridden by the user's slider value), then materialise the offset ribbon via Path
+      // Setter so the user gets a Space from the skeleton centerlines in one step.
+      if (skeletonMakePath) {
+        const pathThickness = Math.max(0.01, skeletonPathWidth) * pixelsPerMeter;
+        const pathWalls: Wall[] = [...finalEdges, ...extensionEdges].map((e) => ({
+          id: createId(),
+          start: e.p1,
+          end: e.p2,
+          thickness: pathThickness,
+          color: silent ? "#f97316" : "#ea580c",
+          mode: "line" as const,
+          method: "center" as const,
+          segmentType: "path" as const,
+          pathJoin: "miter" as const,
+          isSkeletonWall: !silent,
+          isSkeletonPreview: silent,
+          skeletonSourceRoomId: room.id,
+        }));
+        const h = historyRef.current;
+        const cleaned = silent
+          ? h.state.walls.filter((w) => (!w.isSkeletonPreview || w.skeletonSourceRoomId !== room.id) && !(w.isPathSpacePreview && w.pathSpaceSourceRoomId === room.id))
+          : h.state.walls.filter((w) => !w.isSkeletonPreview && !(w.isSkeletonWall && w.skeletonSourceRoomId === room.id));
+        const cleanedRooms = silent
+          ? h.state.rooms.filter((r) => !((r as { isPathSpacePreview?: boolean }).isPathSpacePreview && (r as { pathSpaceSourceRoomId?: string }).pathSpaceSourceRoomId === room.id))
+          : h.state.rooms;
+        const nextState = { ...h.state, walls: [...cleaned, ...pathWalls], rooms: cleanedRooms };
+        if (silent) h.replace(nextState);
+        else h.set(nextState);
+        runRoomPathSpace(room, silent);
+        if (!silent) toast.success(`Skeleton → Path Space (${pathWalls.length} segments)`);
+        return true;
+      }
       const newWalls: Wall[] = [
         ...finalEdges.map((e) => ({
           id: createId(),
@@ -8234,7 +8340,7 @@ User request: ${aiPrompt.trim()}`;
     else h.set(nextState);
     if (!silent) toast.success(`Skeleton committed (${newWalls.length} segments)`);
     return true;
-  }, [skeletonSamples, skeletonType, skeletonPruneEnds, skeletonLongestBranch, getCurrentWallStyle]);
+  }, [skeletonSamples, skeletonType, skeletonPruneEnds, skeletonLongestBranch, skeletonMakePath, skeletonPathWidth, skeletonLevel, pixelsPerMeter, runRoomPathSpace, getCurrentWallStyle]);
 
   /** Live skeleton: re-run whenever sample density changes while Live is on. */
   useEffect(() => {
@@ -8245,7 +8351,7 @@ User request: ${aiPrompt.trim()}`;
     if (!room) return;
     if ((room.roomType ?? "room") !== "room") return;
     runRoomSkeleton(room, true);
-  }, [skeletonLive, skeletonSamples, skeletonType, skeletonPruneEnds, runRoomSkeleton]);
+  }, [skeletonLive, skeletonSamples, skeletonType, skeletonPruneEnds, skeletonLongestBranch, skeletonMakePath, skeletonPathWidth, skeletonLevel, runRoomSkeleton]);
 
   /** Compute the minimum enclosing circle of a room's polygon vertices (Welzl) and emit it as wall segments. */
   const runRoomCircumcircle = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
@@ -24050,6 +24156,12 @@ User request: ${aiPrompt.trim()}`;
                       setPruneEnds={setSkeletonPruneEnds}
                       longestBranch={skeletonLongestBranch}
                       setLongestBranch={setSkeletonLongestBranch}
+                      makePath={skeletonMakePath}
+                      setMakePath={setSkeletonMakePath}
+                      pathWidth={skeletonPathWidth}
+                      setPathWidth={setSkeletonPathWidth}
+                      level={skeletonLevel}
+                      setLevel={setSkeletonLevel}
                       runRoomSkeleton={runRoomSkeleton}
                       onClearAllPreview={() => {
                         const h = historyRef.current;

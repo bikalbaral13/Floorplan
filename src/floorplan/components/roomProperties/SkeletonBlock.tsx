@@ -20,6 +20,19 @@ export interface SkeletonBlockProps {
    *  boundary as blue completion segments. */
   longestBranch?: boolean;
   setLongestBranch?: (v: boolean) => void;
+  /** Straight Skeleton only: when true, emit kept skeleton edges as path segments
+   *  (segmentType:"path") with thickness `pathWidth` and materialise the offset
+   *  ribbon as a new Space via Path Setter. */
+  makePath?: boolean;
+  setMakePath?: (v: boolean) => void;
+  /** Path width in metres (0–50). Used when makePath is on. */
+  pathWidth?: number;
+  setPathWidth?: (v: number) => void;
+  /** Straight Skeleton only: recursion depth (1–4). Level N means compute the
+   *  skeleton, split the polygon by the resulting edges into faces, then recurse
+   *  N–1 more times on each face. */
+  level?: number;
+  setLevel?: (v: number) => void;
   runRoomSkeleton: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
   onClearAllPreview: () => void;
 }
@@ -65,6 +78,24 @@ export const SkeletonBlock = (p: SkeletonBlockProps) => (
       {p.type === "straight-skeleton" && (
         <span className="text-[9px] text-slate-400">Exact vector skeleton — no resolution control. Works best on convex or mildly concave polygons.</span>
       )}
+      {p.type === "straight-skeleton" && p.setLevel && (
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500">Level</span>
+            <span className="font-mono text-[10px] text-slate-700">{p.level ?? 1}</span>
+          </div>
+          <input
+            type="range"
+            className="w-full"
+            min={1}
+            max={4}
+            step={1}
+            value={p.level ?? 1}
+            onChange={(e) => p.setLevel?.(+e.target.value)}
+          />
+          <span className="text-[9px] text-slate-400">Recursion depth (1 = single pass; N = re-skeleton sub-faces).</span>
+        </div>
+      )}
       {p.type === "straight-skeleton" && (
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
           <input
@@ -86,6 +117,34 @@ export const SkeletonBlock = (p: SkeletonBlockProps) => (
           Longest Branch
           <span className="text-[9px] text-slate-400">(extend ends to boundary in blue)</span>
         </label>
+      )}
+      {p.type === "straight-skeleton" && p.setMakePath && (
+        <label className="flex items-center gap-1 text-[10px] text-slate-600">
+          <input
+            type="checkbox"
+            checked={!!p.makePath}
+            onChange={(e) => p.setMakePath?.(e.target.checked)}
+          />
+          Make Path
+          <span className="text-[9px] text-slate-400">(emit skeleton as path, build Space)</span>
+        </label>
+      )}
+      {p.type === "straight-skeleton" && p.makePath && p.setPathWidth && (
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500">Width</span>
+            <span className="font-mono text-[10px] text-slate-700">{(p.pathWidth ?? 0).toFixed(2)} m</span>
+          </div>
+          <input
+            type="range"
+            className="w-full"
+            min={0}
+            max={50}
+            step={0.1}
+            value={p.pathWidth ?? 0}
+            onChange={(e) => p.setPathWidth?.(+e.target.value)}
+          />
+        </div>
       )}
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
