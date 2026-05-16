@@ -28,6 +28,12 @@ export interface VoronoiDiagramBlockProps {
   useVerticesByRoom?: Record<string, boolean>;
   setUseVerticesByRoom?: (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
 
+  /** Recursion depth when "Use vertices" is on (1–4). At level N the Voronoi
+   *  is re-computed N times, each pass replacing seeds with the cell-vertices
+   *  produced by the previous pass. Only shown when "Use vertices" is on. */
+  level?: number;
+  setLevel?: (v: number) => void;
+
   runRoomVoronoi: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
   /** Clear all Voronoi-preview walls (when Live is turned off). */
   onClearAllPreview: () => void;
@@ -91,6 +97,24 @@ export const VoronoiDiagramBlock = (p: VoronoiDiagramBlockProps) => {
           />
           Use vertices
         </label>
+        {useVertices && p.setLevel && (
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">Level</span>
+              <span className="font-mono text-[10px] text-slate-700">{p.level ?? 1}</span>
+            </div>
+            <input
+              type="range"
+              className="w-full"
+              min={1}
+              max={4}
+              step={1}
+              value={p.level ?? 1}
+              onChange={(e) => p.setLevel?.(+e.target.value)}
+            />
+            <span className="text-[9px] text-slate-400">Recursion depth (1 = vertices only; N = re-seed from previous Voronoi cell vertices).</span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-slate-500">Seeds</span>
           <span className="font-mono text-[10px] text-slate-700">{seeds.length}</span>

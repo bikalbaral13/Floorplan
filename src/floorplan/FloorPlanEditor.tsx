@@ -122,6 +122,7 @@ import {
   polygonToPolygonDistPx,
 } from "./algorithms/geometry/distances";
 import { classifyCardinal } from "./algorithms/geometry/cardinal";
+import { sutherlandHodgmanClip } from "./algorithms/geometry/sutherlandHodgman";
 import { computePolygonPrincipalAxes } from "./algorithms/geometry/principalAxes";
 import { sampleSegmentInside, computeVisibilityPolygon } from "./algorithms/geometry/visibilityPolygon";
 import { computeRegionSemantics, type RegionSemantics } from "./algorithms/semantics/regionSemantics";
@@ -133,6 +134,7 @@ import { LineThicknessDialog } from "./components/dialogs/LineThicknessDialog";
 import { CalibrationDialog } from "./components/dialogs/CalibrationDialog";
 import { AutoGenDialog } from "./components/dialogs/AutoGenDialog";
 import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealingDialog";
+import { DrawPathDialog } from "./components/dialogs/DrawPathDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { ToolsPanel } from "./components/ToolsPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
@@ -158,6 +160,13 @@ import { curveShorteningFlow } from "./algorithms/geometry/curveShorteningFlow";
 import { InsetPolygonBlock } from "./components/roomProperties/InsetPolygonBlock";
 import { PolygonUnrollBlock } from "./components/roomProperties/PolygonUnrollBlock";
 import { OptimiseRectangleBlock } from "./components/roomProperties/OptimiseRectangleBlock";
+import { InflationAlgorithmBlock, type InflationAngleMode } from "./components/roomProperties/InflationAlgorithmBlock";
+import { WallOutputsBlock } from "./components/segmentProperties/WallOutputsBlock";
+import { WallExtendBlock, type WallExtendMode } from "./components/segmentProperties/WallExtendBlock";
+import { WallDisplayBlock } from "./components/segmentProperties/WallDisplayBlock";
+import { WallSplitBlock } from "./components/segmentProperties/WallSplitBlock";
+import { WallInputsBlock } from "./components/segmentProperties/WallInputsBlock";
+import { computeInflationRect } from "./algorithms/layout/inflationRect";
 import { OptimiseShapeBlock, type OptimiseShapeKind } from "./components/roomProperties/OptimiseShapeBlock";
 import { computeOptimiseLShape } from "./algorithms/layout/optimiseLShape";
 import { computeOptimiseTShape } from "./algorithms/layout/optimiseTShape";
@@ -180,7 +189,6 @@ type WallResizeDraft =
   | { kind: "spine"; wallId: string; start: Point; end: Point; updates: Record<string, { start?: Point; end?: Point }> }
   | { kind: "thickness"; wallId: string; start: Point; end: Point; thickness: number; method: WallMethod }
   | { kind: "area"; wallId: string; start: Point; end: Point; updates: Record<string, { start?: Point; end?: Point }> };
-type WallExtendMode = "with-area" | "wall-only";
 
 
 /** Max distance from wall spine (world px) to place a door/window with the Door/Window tool. */
@@ -811,13 +819,24 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     [history.state.rooms]
   );
   const visibleRooms = useMemo(() => {
-    // Filter out auto rooms that overlap with manual rooms (e.g. plot-boundary rooms)
-    // so clicking always selects the manual room with its properties intact
+    // Hide an auto-detected room if (a) its centroid is within 10 px of a manual
+    // room's centroid (the original near-identical-region check), or (b) its centroid
+    // sits inside a manual room polygon — covers the "merge spaces" case where the
+    // merged manual polygon swallows several smaller auto-room cells.
+    const pip = (px: number, py: number, poly: Point[]): boolean => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+      }
+      return inside;
+    };
     const filteredAutoRooms = autoRooms.filter((autoRoom) => {
       const ac = polygonCentroid(autoRoom.points);
       return !manualRooms.some((manualRoom) => {
         const mc = polygonCentroid(manualRoom.points);
-        return Math.hypot(ac.x - mc.x, ac.y - mc.y) < 10;
+        if (Math.hypot(ac.x - mc.x, ac.y - mc.y) < 10) return true;
+        return manualRoom.points.length >= 3 && pip(ac.x, ac.y, manualRoom.points);
       });
     });
     // Manual rooms rendered after (on top) so they receive clicks first
@@ -1183,6 +1202,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Sticky segment-type override applied to walls created via the Wall tool.
    *  Used by the "Add Connection" entry point to draw segments as connection edges. */
   const [nextWallSegmentType, setNextWallSegmentType] = useState<"wall" | "connection" | "path">("wall");
+  /** Draw Path flow: dialog open + draft inputs (string-typed for input binding). */
+  const [drawPathDialogOpen, setDrawPathDialogOpen] = useState<boolean>(false);
+  const [drawPathLabelInput, setDrawPathLabelInput] = useState<string>("Path1");
+  const [drawPathThicknessInputM, setDrawPathThicknessInputM] = useState<string>("0.2");
+  /** Active path-draw config — when set, polyline-path walls use these values for
+   *  thickness (px) and label instead of the segment-type default. Cleared when the
+   *  user exits path mode. */
+  const [activeDrawPathConfig, setActiveDrawPathConfig] = useState<{ label: string; thicknessPx: number } | null>(null);
   const [wallExtendMode, setWallExtendMode] = useState<WallExtendMode>("with-area");
   const [lineThicknessDialogOpen, setLineThicknessDialogOpen] = useState(false);
   const [lineThicknessInput, setLineThicknessInput] = useState("0.2");
@@ -1544,6 +1571,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  internal-edge graph of the Voronoi partition — i.e. the medial-axis backbone /
    *  centerline of the polygon. The rest of the cell boundaries are discarded. */
   const [voronoiFilterLongestPath, setVoronoiFilterLongestPath] = useState<boolean>(false);
+  /** Voronoi recursion depth when "Use vertices" is on: at level N the
+   *  Voronoi is re-computed N times, each pass replacing seeds with the
+   *  cell-vertices produced by the previous pass. 1 = single pass. Only
+   *  applies to the Euclidean metric (Manhattan/Chebyshev are raster-based
+   *  and don't expose cell vertices). */
+  const [voronoiLevel, setVoronoiLevel] = useState<number>(1);
 
   /** Delaunay Triangulation state. */
   const [delaunaySeedsByRoom, setDelaunaySeedsByRoom] = useState<Record<string, Point[]>>({});
@@ -1652,6 +1685,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [convexHullExpanded, setConvexHullExpanded] = useState<boolean>(false);
   const [convexHullLive, setConvexHullLive] = useState<boolean>(false);
 
+  /** Inflation Algorithm (soap-film inscribed rectangle) state. */
+  const [inflationExpanded, setInflationExpanded] = useState<boolean>(false);
+  const [inflationLive, setInflationLive] = useState<boolean>(false);
+  const [inflationSeeds, setInflationSeeds] = useState<number>(16);
+  const [inflationAngleMode, setInflationAngleMode] = useState<InflationAngleMode>("sweep");
+  const [inflationAxisAngleDeg, setInflationAxisAngleDeg] = useState<number>(0);
+  const [inflationSweepSteps, setInflationSweepSteps] = useState<number>(8);
+  const [inflationCount, setInflationCount] = useState<number>(1);
+  const [inflationMinArea, setInflationMinArea] = useState<number>(500);
+
   /** Smoothing state. */
   const [smoothingExpanded, setSmoothingExpanded] = useState<boolean>(false);
   const [smoothingLive, setSmoothingLive] = useState<boolean>(false);
@@ -1714,6 +1757,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [bspSeedMetricsByRoom, setBspSeedMetricsByRoom] = useState<Record<string, BspSeedMetric[]>>({});
   /** Connections between BSP seeds, keyed by the room id whose seeds these belong to. */
   const [bspConnectionsByRoom, setBspConnectionsByRoom] = useState<Record<string, Array<{ aSeedId: string; bSeedId: string }>>>({});
+  /** Per-room set of "aId|bId" connection keys whose adjacency the solver couldn't
+   *  satisfy. Drives the red-dotted overlay on the canvas connection lines. */
+  const [bspBrokenConnectionsByRoom, setBspBrokenConnectionsByRoom] = useState<Record<string, Set<string>>>({});
   /** First-picked seed id while in addEdgeMode === "connection" and bspLive. */
   const [addEdgeFirstBspSeed, setAddEdgeFirstBspSeed] = useState<string | null>(null);
   /** Corridor strips inside a BSP room. Translatable / extensible 1-D objects. */
@@ -1721,17 +1767,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [bspExpanded, setBspExpanded] = useState<boolean>(false);
   const [bspLive, setBspLive] = useState<boolean>(false);
   const [bspUseAreaPercent, setBspUseAreaPercent] = useState<boolean>(true);
+  /** Top-level area-constraint toggle. When OFF, BSP cuts are placed at the median
+   *  position between adjacent seeds (positions drive the partition — seeds can be
+   *  dragged freely and the cells reshape with them). When ON, cuts balance the
+   *  clipped polygon area according to seed weights (per-seed when
+   *  bspUseAreaPercent=true, equal when false), and the Equal-area sub-checkbox
+   *  becomes visible. */
+  const [bspAreaConstraintActive, setBspAreaConstraintActive] = useState<boolean>(false);
   const [bspTiltAngle, setBspTiltAngle] = useState<number>(0);
-  /** Per-room mode for the BSP block. Four values:
-   *   - "normal"              : recursive BSP with equal-split positions (no weights).
-   *   - "area-percent"        : recursive BSP with area-weighted cut positions.
-   *   - "connection"          : RFP slicing-tree solver, equal-area cells.
-   *   - "area-and-connection" : RFP topology with area-weighted cut positions.
-   *  The mode is selected via the dropdown in the BSP block UI; it also drives the
-   *  global `bspUseAreaPercent` flag so the same area-weighting code path is reused
-   *  across runners. */
-  type BspMode = "normal" | "area-percent" | "connection" | "area-and-connection";
-  const [bspModeByRoom, setBspModeByRoom] = useState<Record<string, BspMode>>({});
   /** Per-seed leaf rectangle from the most recent Connection-mode run. Used to render
    *  the BSP seed marker at the cell centroid (mirrors RFP behaviour) so the markers
    *  reflect what the adjacency solver actually placed, not where the user dropped
@@ -3292,7 +3335,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             const rawType = c.roomType;
             const normType: Room["roomType"] = (rawType === "plot-boundary" || rawType === "site-boundary")
               ? "plot-boundary"
-              : (rawType === "floorplate-boundary" || rawType === "buildable-area" || rawType === "room")
+              : (rawType === "floorplate-boundary" || rawType === "buildable-area" || rawType === "room" || rawType === "path")
                 ? rawType
                 : "room";
             createdRoom = {
@@ -5848,6 +5891,249 @@ User request: ${aiPrompt.trim()}`;
     return true;
   }, [miteredPolygons, getCurrentWallStyle]);
 
+  /** Merge ≥2 currently-selected manual rooms into a single room. Uses the same
+   *  edge-cancellation algorithm as `computeMiteredUnion` — shared edges between
+   *  adjacent room polygons cancel; the remaining outer edges trace the merged
+   *  outline. The largest closed loop becomes the merged polygon; the source rooms
+   *  are dropped from history. Auto-detected rooms (which regenerate from walls) are
+   *  ignored — only entries in `history.state.rooms` are eligible. */
+  const mergeSelectedRooms = useCallback(() => {
+    const selectedIds = new Set(selection.selectedIds);
+    // Read from visibleRoomsRef so the merge handles BOTH manual rooms (entries in
+    // history.state.rooms) and auto-detected rooms (computed from walls). When we
+    // commit, only manual sources are removed — auto sources stay in `walls` and
+    // the auto-room filter hides them post-merge because their centroid will fall
+    // inside the new manual polygon.
+    const sourceRooms = visibleRoomsRef.current.filter((r) => selectedIds.has(r.id));
+    if (sourceRooms.length < 2) {
+      toast.info("Select 2 or more spaces (shift-click) then press Merge again");
+      return;
+    }
+    const polyMap = new Map<string, Point[]>();
+    for (const r of sourceRooms) {
+      if (r.points.length >= 3) polyMap.set(r.id, r.points);
+    }
+    if (polyMap.size < 2) {
+      toast.error("Selected spaces must each have at least 3 vertices");
+      return;
+    }
+    const { outerEdges } = computeMiteredUnion(polyMap);
+    if (outerEdges.length === 0) {
+      toast.error("Merge failed — selected spaces share no boundary");
+      return;
+    }
+    // Trace closed loops along the outer edges (same as runRoomPathSpace).
+    const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+    const used = new Array<boolean>(outerEdges.length).fill(false);
+    const loops: Point[][] = [];
+    for (let start = 0; start < outerEdges.length; start++) {
+      if (used[start]) continue;
+      used[start] = true;
+      const seed = outerEdges[start];
+      const loop: Point[] = [seed.a, seed.b];
+      let endKey = KEY(seed.b);
+      const startKey = KEY(seed.a);
+      for (let safety = 0; safety < outerEdges.length + 1; safety++) {
+        if (endKey === startKey) break;
+        let nextIdx = -1, reversed = false;
+        for (let i = 0; i < outerEdges.length; i++) {
+          if (used[i]) continue;
+          if (KEY(outerEdges[i].a) === endKey) { nextIdx = i; reversed = false; break; }
+          if (KEY(outerEdges[i].b) === endKey) { nextIdx = i; reversed = true; break; }
+        }
+        if (nextIdx === -1) break;
+        used[nextIdx] = true;
+        const ne = outerEdges[nextIdx];
+        const np = reversed ? ne.a : ne.b;
+        if (KEY(np) === startKey) break;
+        loop.push(np);
+        endKey = KEY(np);
+      }
+      if (loop.length >= 3) loops.push(loop);
+    }
+    if (loops.length === 0) {
+      toast.error("Merge failed — couldn't close the merged outline");
+      return;
+    }
+    // Pick the largest closed loop (shoelace area) — that's the union outline. If the
+    // selection contains multiple disjoint groups, only the biggest survives; the user
+    // can re-select and merge the others separately.
+    const shoelace = (poly: Point[]) => {
+      let a = 0;
+      for (let i = 0; i < poly.length; i++) {
+        const p = poly[i], q = poly[(i + 1) % poly.length];
+        a += p.x * q.y - q.x * p.y;
+      }
+      return Math.abs(a) / 2;
+    };
+    loops.sort((a, b) => shoelace(b) - shoelace(a));
+    const mergedPolygon = loops[0];
+    // Inherit visual styling + label from the first (largest) source room.
+    sourceRooms.sort((a, b) => shoelace(b.points) - shoelace(a.points));
+    const primary = sourceRooms[0];
+    const mergedRoom = {
+      ...primary,
+      id: createId(),
+      points: mergedPolygon,
+      label: primary.label ? `${primary.label} (merged)` : "Merged Space",
+    };
+    // Only manual rooms live in history.state.rooms — auto-detected ones disappear
+    // when their centroid falls inside the new manual polygon (visibleRooms filter).
+    const sourceIdSet = new Set(sourceRooms.map((r) => r.id));
+    const h = historyRef.current;
+    // Drop walls whose midpoint lies strictly inside the merged polygon AND is at
+    // least a couple of pixels away from the merged boundary — perimeter walls of
+    // the source spaces sit *on* the merged boundary and must be preserved; only
+    // walls fully interior to the union (the shared dividers) should disappear.
+    // Site / buildable / footprint / connection segments are preserved regardless
+    // since they carry contextual semantics.
+    const pipMerged = (px: number, py: number): boolean => {
+      let inside = false;
+      for (let i = 0, j = mergedPolygon.length - 1; i < mergedPolygon.length; j = i++) {
+        const a = mergedPolygon[i], b = mergedPolygon[j];
+        if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+      }
+      return inside;
+    };
+    /** Perpendicular distance from a point to the polygon's nearest edge. */
+    const distToMergedBoundary = (px: number, py: number): number => {
+      let best = Infinity;
+      for (let i = 0; i < mergedPolygon.length; i++) {
+        const a = mergedPolygon[i], b = mergedPolygon[(i + 1) % mergedPolygon.length];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
+        const cx = a.x + t * dx, cy = a.y + t * dy;
+        const d = Math.hypot(px - cx, py - cy);
+        if (d < best) best = d;
+      }
+      return best;
+    };
+    const BOUNDARY_TOL = 2.5; // px — anything within this of the merged outline is a perimeter wall.
+    const PRESERVED_SEG_TYPES = new Set(["plot-boundary", "buildable-boundary", "footprint-boundary", "connection"]);
+    const walls = h.state.walls.filter((w) => {
+      const st = w.segmentType ?? "wall";
+      if (PRESERVED_SEG_TYPES.has(st)) return true;
+      const mx = (w.start.x + w.end.x) / 2;
+      const my = (w.start.y + w.end.y) / 2;
+      if (!pipMerged(mx, my)) return true;                // outside the merge: keep.
+      if (distToMergedBoundary(mx, my) < BOUNDARY_TOL) return true; // on the outline: keep.
+      return false;                                        // strictly interior: drop.
+    });
+    h.set({
+      ...h.state,
+      walls,
+      rooms: [...h.state.rooms.filter((r) => !sourceIdSet.has(r.id)), mergedRoom],
+    });
+    selection.selectOne(mergedRoom.id);
+    toast.success(`Merged ${sourceRooms.length} spaces into "${mergedRoom.label}"`);
+  }, [selection]);
+
+  /** Convert the path segments drawn via the Drawing toolbar's "Draw Path" button into a
+   *  Space + boundary walls, then drop the source path segments. Matches the same
+   *  miter-union-and-loop-trace logic as `runRoomPathSpace`, but without needing a host
+   *  room — the drawn path stands alone. Triggered when the user finishes drawing (Enter
+   *  or Esc) while `activeDrawPathConfig` is set. */
+  const finalizeDrawnPathAsSpace = useCallback(() => {
+    const cfg = activeDrawPathConfig;
+    if (!cfg) return;
+    const walls = historyRef.current.state.walls;
+    // Path walls drawn in this session — match by label + path segmentType (skip any
+    // pre-existing path walls from PathSetter that already became spaces).
+    const pathWalls = walls.filter((w) =>
+      w.segmentType === "path" &&
+      w.label === cfg.label &&
+      !w.isPathSpacePreview &&
+      !w.isPathSpaceWall
+    );
+    if (pathWalls.length === 0) {
+      setActiveDrawPathConfig(null);
+      return;
+    }
+    const allPolys = computeMiteredWallPolygons(walls);
+    const pathPolys = new Map<string, Point[]>();
+    for (const w of pathWalls) {
+      if ((w.pathJoin ?? "miter") !== "miter") continue;
+      const poly = allPolys.get(w.id);
+      if (poly && poly.length >= 3) pathPolys.set(w.id, poly);
+    }
+    if (pathPolys.size === 0) {
+      setActiveDrawPathConfig(null);
+      return;
+    }
+    const { outerEdges } = computeMiteredUnion(pathPolys);
+    if (outerEdges.length === 0) {
+      setActiveDrawPathConfig(null);
+      return;
+    }
+    // Trace closed loops along the outer boundary (same as runRoomPathSpace).
+    const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+    const used = new Array<boolean>(outerEdges.length).fill(false);
+    const loops: Point[][] = [];
+    for (let start = 0; start < outerEdges.length; start++) {
+      if (used[start]) continue;
+      used[start] = true;
+      const seed = outerEdges[start];
+      const loop: Point[] = [seed.a, seed.b];
+      let endKey = KEY(seed.b);
+      const startKey = KEY(seed.a);
+      for (let safety = 0; safety < outerEdges.length + 1; safety++) {
+        if (endKey === startKey) break;
+        let nextIdx = -1, reversed = false;
+        for (let i = 0; i < outerEdges.length; i++) {
+          if (used[i]) continue;
+          if (KEY(outerEdges[i].a) === endKey) { nextIdx = i; reversed = false; break; }
+          if (KEY(outerEdges[i].b) === endKey) { nextIdx = i; reversed = true; break; }
+        }
+        if (nextIdx === -1) break;
+        used[nextIdx] = true;
+        const ne = outerEdges[nextIdx];
+        const np = reversed ? ne.a : ne.b;
+        if (KEY(np) === startKey) break;
+        loop.push(np);
+        endKey = KEY(np);
+      }
+      if (loop.length >= 3) loops.push(loop);
+    }
+    if (loops.length === 0) {
+      setActiveDrawPathConfig(null);
+      return;
+    }
+    const newSpaceId = createId();
+    const style = getCurrentWallStyle();
+    const newSpaceWalls = outerEdges.map((e) => ({
+      id: createId(),
+      start: e.a,
+      end: e.b,
+      thickness: style.thickness,
+      color: style.color,
+      mode: "fill" as const,
+      method: "center" as const,
+      segmentType: "wall" as const,
+      isPathSpaceWall: true,
+      pathSpaceSourceRoomId: newSpaceId,
+    }));
+    const newRooms = loops.map((points, i) => ({
+      id: i === 0 ? newSpaceId : createId(),
+      points,
+      fill: "rgba(14, 165, 233, 0.35)",
+      stroke: "#0369a1",
+      roomType: "path" as const,
+      label: loops.length > 1 ? `${cfg.label} ${i + 1}` : cfg.label,
+    }));
+    const h = historyRef.current;
+    const pathIdSet = new Set(pathWalls.map((w) => w.id));
+    h.set({
+      ...h.state,
+      walls: [...h.state.walls.filter((w) => !pathIdSet.has(w.id)), ...newSpaceWalls],
+      rooms: [...h.state.rooms, ...newRooms],
+    });
+    toast.success(`Created ${newRooms.length === 1 ? "space" : `${newRooms.length} spaces`} from path "${cfg.label}"`);
+    setActiveDrawPathConfig(null);
+    setNextWallSegmentType("wall");
+    setTool("select");
+  }, [activeDrawPathConfig, getCurrentWallStyle]);
+
   /** Add Openings: split a wall/site-boundary segment into pre / opening / post sub-segments.
    *  centerT (m from start) = lenOverride/2 + (posOverride/100) * (segLen - lenOverride),
    *  guaranteeing the opening sits inside the segment for any pos in [0,100]. */
@@ -7362,11 +7648,11 @@ User request: ${aiPrompt.trim()}`;
         }
         return out;
       };
-      const cells: Point[][] = seeds.map((s, i) => {
+      const computeCells = (seedSet: Point[]): Point[][] => seedSet.map((s, i) => {
         let cell = polygon.slice();
-        for (let j = 0; j < seeds.length; j++) {
+        for (let j = 0; j < seedSet.length; j++) {
           if (i === j) continue;
-          const o = seeds[j];
+          const o = seedSet[j];
           const mx = (s.x + o.x) / 2, my = (s.y + o.y) / 2;
           const nx = s.x - o.x, ny = s.y - o.y;
           cell = clip(cell, mx, my, nx, ny);
@@ -7374,6 +7660,34 @@ User request: ${aiPrompt.trim()}`;
         }
         return cell;
       });
+      // Iterative refinement: when "Use vertices" is on, each pass replaces the
+      // seed set with the cell-vertices produced by the previous pass. Level 1 =
+      // a single pass (current behaviour); higher levels deepen the partition.
+      // Only applies when this room has "Use vertices" enabled — otherwise the
+      // user-managed seed list is used as-is.
+      const useVerts = voronoiUseVerticesByRoom[room.id] ?? false;
+      const effectiveLevel = useVerts ? Math.max(1, Math.min(4, voronoiLevel)) : 1;
+      let currentSeeds: Point[] = seeds;
+      let cells: Point[][] = [];
+      for (let iter = 0; iter < effectiveLevel; iter++) {
+        cells = computeCells(currentSeeds);
+        if (iter < effectiveLevel - 1) {
+          // Collect unique cell vertices (rounded to 0.5 px) as next-iteration seeds.
+          const tol = 0.5;
+          const seen = new Set<string>();
+          const next: Point[] = [];
+          for (const cell of cells) {
+            for (const v of cell) {
+              const k = `${Math.round(v.x / tol)},${Math.round(v.y / tol)}`;
+              if (seen.has(k)) continue;
+              seen.add(k);
+              next.push(v);
+            }
+          }
+          if (next.length < 2) break;
+          currentSeeds = next;
+        }
+      }
       const key = (p: Point) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
       const edgeKey = (p: Point, q: Point) => {
         const a = key(p), b = key(q);
@@ -7552,7 +7866,7 @@ User request: ${aiPrompt.trim()}`;
     else h.set(nextState);
     if (!silent) toast.success(`Voronoi partition committed (${voronoiMetric}, ${edges.length} edges)`);
     return true;
-  }, [voronoiSeedsByRoom, voronoiMetric, voronoiFilterLongestPath, getCurrentWallStyle]);
+  }, [voronoiSeedsByRoom, voronoiMetric, voronoiFilterLongestPath, voronoiUseVerticesByRoom, voronoiLevel, getCurrentWallStyle]);
 
   /** Live voronoi: re-run whenever seeds or metric change for the selected room while Live is on. */
   useEffect(() => {
@@ -7563,7 +7877,7 @@ User request: ${aiPrompt.trim()}`;
     if (!room) return;
     if ((room.roomType ?? "room") !== "room") return;
     runRoomVoronoi(room, true);
-  }, [voronoiLive, voronoiSeedsByRoom, voronoiMetric, runRoomVoronoi]);
+  }, [voronoiLive, voronoiSeedsByRoom, voronoiMetric, voronoiLevel, runRoomVoronoi]);
 
   /** Delaunay triangulation (Bowyer–Watson) of seed points. Emits triangle edges as preview/real walls. */
   const runRoomDelaunay = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
@@ -10175,6 +10489,72 @@ User request: ${aiPrompt.trim()}`;
     runRoomConvexHull(room, true);
   }, [convexHullLive, runRoomConvexHull]);
 
+  /** Run the soap-film inflation algorithm on the selected room and emit walls. */
+  const runRoomInflation = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
+    if (!room) return false;
+    if (room.points.length < 3) {
+      if (!silent) toast.error("Need at least 3 vertices");
+      return false;
+    }
+    const style = getCurrentWallStyle();
+    const result = computeInflationRect(
+      {
+        pts: room.points,
+        seeds: inflationSeeds,
+        angleMode: inflationAngleMode,
+        axisAngleDeg: inflationAxisAngleDeg,
+        sweepSteps: inflationSweepSteps,
+        count: inflationCount,
+        minAreaPx: inflationMinArea,
+        maxSteps: 60,
+        edgeSamples: 6,
+        silent,
+      },
+      { thickness: style.thickness, mode: style.mode },
+      room.id,
+    );
+
+    if (result.errorMessage) {
+      if (!silent) toast.error(result.errorMessage);
+      // Even on error, clear any stale preview for this room.
+      const h = historyRef.current;
+      h.replace({
+        ...h.state,
+        walls: h.state.walls.filter((w) => !(w.isInflationPreview && w.inflationSourceRoomId === room.id)),
+      });
+      return false;
+    }
+
+    const h = historyRef.current;
+    const cleaned = silent
+      ? h.state.walls.filter((w) => !w.isInflationPreview || w.inflationSourceRoomId !== room.id)
+      : h.state.walls.filter((w) => !w.isInflationPreview && !(w.isInflationWall && w.inflationSourceRoomId === room.id));
+    const nextState = { ...h.state, walls: [...cleaned, ...result.newWalls] };
+    if (silent) h.replace(nextState);
+    else h.set(nextState);
+
+    if (!silent) {
+      const areaSqM = result.totalAreaPx / (pixelsPerMeter * pixelsPerMeter);
+      toast.success(`Inflation placed ${result.placed.length} rect${result.placed.length === 1 ? "" : "s"} (${areaSqM.toFixed(2)} ${unit}²)`);
+    }
+    return true;
+  }, [
+    getCurrentWallStyle, unit, pixelsPerMeter,
+    inflationSeeds, inflationAngleMode, inflationAxisAngleDeg,
+    inflationSweepSteps, inflationCount, inflationMinArea,
+  ]);
+
+  /** Live inflation: re-run when toggled on or when any parameter changes. */
+  useEffect(() => {
+    if (!inflationLive) return;
+    const id = selectedRoomIdRef.current;
+    if (!id) return;
+    const room = visibleRoomsRef.current.find((r) => r.id === id);
+    if (!room) return;
+    if ((room.roomType ?? "room") !== "room") return;
+    runRoomInflation(room, true);
+  }, [inflationLive, runRoomInflation]);
+
   /** Polygon smoothing via Chaikin's corner-cutting or cubic Bézier corner fillets. */
   const runRoomSmoothing = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
     if (!room) return false;
@@ -11143,17 +11523,44 @@ User request: ${aiPrompt.trim()}`;
     // Per-seed leaf cell AABB in rotated frame (pixel coords). One entry per seed index.
     const leafRects: Array<{ x0: number; y0: number; x1: number; y1: number } | null> = seeds.map(() => null);
 
+    // Area of the room polygon clipped to the given AABB (rotated frame). Used by
+    // area-percent mode so weighted cuts balance true polygon area, not AABB length.
+    const clipAreaInRect = (x0c: number, y0c: number, x1c: number, y1c: number): number => {
+      if (x1c - x0c <= 1e-9 || y1c - y0c <= 1e-9) return 0;
+      const rect: Point[] = [
+        { x: x0c, y: y0c }, { x: x1c, y: y0c },
+        { x: x1c, y: y1c }, { x: x0c, y: y1c },
+      ];
+      const clipped = sutherlandHodgmanClip(rotPolygon, rect);
+      if (clipped.length < 3) return 0;
+      let a = 0;
+      for (let i = 0; i < clipped.length; i++) {
+        const p = clipped[i], q = clipped[(i + 1) % clipped.length];
+        a += p.x * q.y - q.x * p.y;
+      }
+      return Math.abs(a) / 2;
+    };
+
     const recurse = (ids: number[], x0: number, y0: number, x1: number, y1: number, depth: number) => {
       if (ids.length === 1) { leafRects[ids[0]] = { x0, y0, x1, y1 }; return; }
       if (ids.length < 2 || depth > 18) return;
       const w = x1 - x0, h = y1 - y0;
       const axis: "x" | "y" = w >= h ? "x" : "y";
       const sorted = [...ids].sort((a, b) => axis === "x" ? rotSeeds[a].x - rotSeeds[b].x : rotSeeds[a].y - rotSeeds[b].y);
+      // Two cut strategies depending on bspAreaConstraintActive:
+      //   ON  → Area-balanced cut. Weights come from seed.weight when "Use Area
+      //         Percent" is on, or are uniform (=1) when "Equal area" is on. In both
+      //         cases the cut is binary-searched against the *clipped polygon area*
+      //         so irregular plots split correctly.
+      //   OFF → Median-position cut. The cut goes through the midpoint between the
+      //         two middle seeds' positions on the working axis — seed positions
+      //         drive the partition, so dragging a seed reshapes its cell.
       let splitIdx: number;
       let frac: number;
-      if (bspUseAreaPercent) {
-        // Weighted-mass split: pick index that best balances WL vs WR, then cut proportionally.
-        const weights = sorted.map((i) => Math.max(0.01, rotSeeds[i].weight ?? 1));
+      if (bspAreaConstraintActive) {
+        const weights = sorted.map((i) =>
+          bspUseAreaPercent ? Math.max(0.01, rotSeeds[i].weight ?? 1) : 1,
+        );
         const total = weights.reduce((s, v) => s + v, 0);
         splitIdx = 1;
         let bestDiff = Infinity, running = 0;
@@ -11162,10 +11569,40 @@ User request: ${aiPrompt.trim()}`;
           const diff = Math.abs(running - (total - running));
           if (diff < bestDiff) { bestDiff = diff; splitIdx = k; }
         }
-        const WL = sorted.slice(0, splitIdx).reduce((s, i) => s + Math.max(0.01, rotSeeds[i].weight ?? 1), 0);
-        frac = WL / total;
+        const WL = weights.slice(0, splitIdx).reduce((s, v) => s + v, 0);
+        const targetFrac = WL / total;
+        const Aparent = clipAreaInRect(x0, y0, x1, y1);
+        if (Aparent > 1e-6) {
+          const Atarget = targetFrac * Aparent;
+          // Tight area-balanced cut search. 64 iterations is overkill for IEEE 754
+          // but ensures the cut converges to within ε of the exact area target —
+          // matters for user-visible percentages (50/25/25 → 40.50/20.25/20.25 on
+          // an 81 m² polygon, not 40.19/20.41/20.41).
+          const EPS = Math.max(1e-3, Atarget * 1e-9);
+          let lo = axis === "x" ? x0 : y0;
+          let hi = axis === "x" ? x1 : y1;
+          let cutPos = (lo + hi) / 2;
+          for (let iter = 0; iter < 64; iter++) {
+            cutPos = (lo + hi) / 2;
+            const ALeft = axis === "x"
+              ? clipAreaInRect(x0, y0, cutPos, y1)
+              : clipAreaInRect(x0, y0, x1, cutPos);
+            if (Math.abs(ALeft - Atarget) < EPS) break;
+            if (ALeft < Atarget) lo = cutPos; else hi = cutPos;
+          }
+          // Bypass the AABB-fraction round-trip — use the binary-searched cutPos
+          // directly so the recursion's left/right rects match the area the search
+          // converged on (no `frac = (pos-x0)/w` → `pos = x0 + frac*w` re-derivation
+          // that loses bits on degenerate parent rects).
+          frac = axis === "x"
+            ? Math.max(0.001, Math.min(0.999, (cutPos - x0) / (w || 1)))
+            : Math.max(0.001, Math.min(0.999, (cutPos - y0) / (h || 1)));
+        } else {
+          // Degenerate parent (no polygon area inside) — fall back to length split.
+          frac = targetFrac;
+        }
       } else {
-        // Classic median-index split at midpoint between the two middle seeds' positions.
+        // Median position split: cut between the two middle seeds.
         splitIdx = Math.floor(sorted.length / 2);
         const lastLeft = sorted[splitIdx - 1], firstRight = sorted[splitIdx];
         const leftPos = axis === "x" ? rotSeeds[lastLeft].x : rotSeeds[lastLeft].y;
@@ -11187,15 +11624,32 @@ User request: ${aiPrompt.trim()}`;
     };
     recurse(seeds.map((_, i) => i), minX, minY, maxX, maxY, 0);
 
-    // Compute per-seed cell metrics (area in m², aspect ratio = longer/shorter side) from
-    // the leaf AABBs. With seeds.length < 2 no leaves are recorded, so an empty list is fine.
+    // Compute per-seed cell metrics (area in m², aspect ratio = longer/shorter side).
+    // Area uses the *clipped* polygon (leaf AABB ∩ room polygon) so irregular plots
+    // don't overcount — Sutherland–Hodgman with the room as subject and the rect as
+    // (convex) clip handles concave rooms correctly. Aspect ratio stays AABB-based,
+    // since post-clip shapes can be non-rectangular and an aspect there is ambiguous.
     {
       const ppm = pixelsPerMeter || 1;
+      const ppm2 = ppm * ppm;
       const metrics: BspSeedMetric[] = leafRects.map((r) => {
         if (!r) return null;
         const wPx = Math.max(0, r.x1 - r.x0);
         const hPx = Math.max(0, r.y1 - r.y0);
-        const areaM2 = (wPx * hPx) / (ppm * ppm);
+        const rectPoly: Point[] = [
+          { x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 },
+          { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 },
+        ];
+        const clipped = sutherlandHodgmanClip(rotPolygon, rectPoly);
+        let areaPx = 0;
+        if (clipped.length >= 3) {
+          for (let i = 0; i < clipped.length; i++) {
+            const a = clipped[i], b = clipped[(i + 1) % clipped.length];
+            areaPx += a.x * b.y - b.x * a.y;
+          }
+          areaPx = Math.abs(areaPx) / 2;
+        }
+        const areaM2 = areaPx / ppm2;
         const longer = Math.max(wPx, hPx), shorter = Math.max(1e-6, Math.min(wPx, hPx));
         const aspectRatio = longer / shorter;
         return { area: areaM2, aspectRatio };
@@ -11398,7 +11852,7 @@ User request: ${aiPrompt.trim()}`;
       });
     }
     return true;
-  }, [bspSeedsByRoom, bspUseAreaPercent, bspTiltAngle, insetLive, optimiseLive, getCurrentWallStyle, logOp, pixelsPerMeter, bspCorridorsByRoom]);
+  }, [bspSeedsByRoom, bspUseAreaPercent, bspAreaConstraintActive, bspTiltAngle, insetLive, optimiseLive, getCurrentWallStyle, logOp, pixelsPerMeter, bspCorridorsByRoom]);
 
   /** Site Tools "Live" cascade: when on, every enabled stage (Inset / OptRect / Massing)
    *  emits its own non-committing preview walls into history simultaneously, so the user sees all
@@ -11448,14 +11902,30 @@ User request: ${aiPrompt.trim()}`;
     const result = runRfp({ x0: minX, y0: minY, x1: maxX, y1: maxY }, seedInputs, connections);
 
     // Metrics per seed (area + aspect ratio) for the UI readouts.
+    // Area is computed from the leaf rect clipped to the actual room polygon so
+    // irregular plots report the true cell area, not the AABB overcount.
     const ppm = pixelsPerMeter || 1;
+    const ppm2 = ppm * ppm;
     const leafBySeed = new Map(result.leaves.map((l) => [l.seedId, l]));
     const metrics: RfpSeedMetric[] = seedInputs.map((s) => {
       const l = leafBySeed.get(s.id);
       if (!l) return null;
       const wPx = Math.max(0, l.x1 - l.x0);
       const hPx = Math.max(0, l.y1 - l.y0);
-      const areaM2 = (wPx * hPx) / (ppm * ppm);
+      const rectPoly: Point[] = [
+        { x: l.x0, y: l.y0 }, { x: l.x1, y: l.y0 },
+        { x: l.x1, y: l.y1 }, { x: l.x0, y: l.y1 },
+      ];
+      const clipped = sutherlandHodgmanClip(polygon, rectPoly);
+      let areaPx = 0;
+      if (clipped.length >= 3) {
+        for (let i = 0; i < clipped.length; i++) {
+          const a = clipped[i], b = clipped[(i + 1) % clipped.length];
+          areaPx += a.x * b.y - b.x * a.y;
+        }
+        areaPx = Math.abs(areaPx) / 2;
+      }
+      const areaM2 = areaPx / ppm2;
       const longer = Math.max(wPx, hPx), shorter = Math.max(1e-6, Math.min(wPx, hPx));
       return { area: areaM2, aspectRatio: longer / shorter };
     });
@@ -11590,109 +12060,160 @@ User request: ${aiPrompt.trim()}`;
       label: s.label,
     }));
     const connections = bspConnectionsByRoom[room.id] ?? [];
-    const result = runRfp({ x0: minX, y0: minY, x1: maxX, y1: maxY }, seedInputs, connections);
 
-    // Seed-to-cell relabelling: the slicing-tree solver fixes the cell *layout*
-    // (cuts + leaf rects), but the seed→cell assignment can still be improved
-    // by relabelling cells. For small seed counts (<= 8, i.e. up to 40 320
-    // permutations) we brute-force every assignment and pick the one with the
-    // most satisfied adjacencies. For larger sets we fall back to a full-pass
-    // best-improvement swap loop that keeps going until no single pair-swap
-    // raises the satisfied count.
-    if (connections.length > 0 && result.leaves.length >= 2) {
-      const leaves = result.leaves;
-      const touch = (a: typeof leaves[number], b: typeof leaves[number]): boolean => {
-        const horiz =
-          (Math.abs(a.x1 - b.x0) < 1e-3 || Math.abs(b.x1 - a.x0) < 1e-3) &&
-          Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 1e-3;
-        const vert =
-          (Math.abs(a.y1 - b.y0) < 1e-3 || Math.abs(b.y1 - a.y0) < 1e-3) &&
-          Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 1e-3;
-        return horiz || vert;
-      };
-      const seedIds = leaves.map((l) => l.seedId);
-      const countSat = (assignment: string[]): number => {
-        const idxBySeed = new Map<string, number>();
-        for (let i = 0; i < assignment.length; i++) idxBySeed.set(assignment[i], i);
-        let count = 0;
-        for (const c of connections) {
-          const ia = idxBySeed.get(c.aSeedId);
-          const ib = idxBySeed.get(c.bSeedId);
-          if (ia == null || ib == null) continue;
-          if (touch(leaves[ia], leaves[ib])) count++;
-        }
-        return count;
-      };
-
-      let bestAssignment = [...seedIds];
-      let bestSat = countSat(bestAssignment);
-
-      if (leaves.length <= 8) {
-        // Brute-force every permutation of seed-id assignments to leaves.
-        const arr = [...seedIds];
-        const permute = (start: number) => {
-          if (start === arr.length - 1) {
-            const sat = countSat(arr);
-            if (sat > bestSat) {
-              bestSat = sat;
-              bestAssignment = [...arr];
-            }
-            return;
-          }
-          for (let i = start; i < arr.length; i++) {
-            [arr[start], arr[i]] = [arr[i], arr[start]];
-            permute(start + 1);
-            [arr[start], arr[i]] = [arr[i], arr[start]];
-          }
+    /** Solve one (layout, assignment) for a specific seed ordering. Returns the
+     *  solver result and the number of adjacencies satisfied after the in-loop
+     *  best-assignment relabelling. */
+    const solveLayout = (orderedSeeds: typeof seedInputs) => {
+      const r = runRfp({ x0: minX, y0: minY, x1: maxX, y1: maxY }, orderedSeeds, connections);
+      let bestSat = 0;
+      if (connections.length > 0 && r.leaves.length >= 2) {
+        const leaves = r.leaves;
+        const touch = (a: typeof leaves[number], b: typeof leaves[number]): boolean => {
+          const horiz =
+            (Math.abs(a.x1 - b.x0) < 1e-3 || Math.abs(b.x1 - a.x0) < 1e-3) &&
+            Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 1e-3;
+          const vert =
+            (Math.abs(a.y1 - b.y0) < 1e-3 || Math.abs(b.y1 - a.y0) < 1e-3) &&
+            Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 1e-3;
+          return horiz || vert;
         };
-        permute(0);
-      } else {
-        // Iterated full-pass swap: try every pair, pick the swap that gives
-        // the biggest improvement, commit it, repeat until no swap improves.
-        const cur = [...bestAssignment];
-        let guard = leaves.length * leaves.length * 4;
-        while (guard-- > 0) {
-          let bestI = -1, bestJ = -1, bestDelta = 0;
-          for (let i = 0; i < cur.length; i++) {
-            for (let j = i + 1; j < cur.length; j++) {
-              [cur[i], cur[j]] = [cur[j], cur[i]];
-              const sat = countSat(cur);
-              const delta = sat - bestSat;
-              if (delta > bestDelta) { bestDelta = delta; bestI = i; bestJ = j; }
-              [cur[i], cur[j]] = [cur[j], cur[i]];
-            }
+        const seedIds = leaves.map((l) => l.seedId);
+        const countSat = (assignment: string[]): number => {
+          const idxBySeed = new Map<string, number>();
+          for (let i = 0; i < assignment.length; i++) idxBySeed.set(assignment[i], i);
+          let count = 0;
+          for (const c of connections) {
+            const ia = idxBySeed.get(c.aSeedId);
+            const ib = idxBySeed.get(c.bSeedId);
+            if (ia == null || ib == null) continue;
+            if (touch(leaves[ia], leaves[ib])) count++;
           }
-          if (bestI < 0) break;
-          [cur[bestI], cur[bestJ]] = [cur[bestJ], cur[bestI]];
-          bestSat += bestDelta;
-          bestAssignment = [...cur];
+          return count;
+        };
+
+        let bestAssignment = [...seedIds];
+        bestSat = countSat(bestAssignment);
+
+        if (leaves.length <= 8) {
+          const arr = [...seedIds];
+          const permute = (start: number) => {
+            if (start === arr.length - 1) {
+              const sat = countSat(arr);
+              if (sat > bestSat) {
+                bestSat = sat;
+                bestAssignment = [...arr];
+              }
+              return;
+            }
+            for (let i = start; i < arr.length; i++) {
+              [arr[start], arr[i]] = [arr[i], arr[start]];
+              permute(start + 1);
+              [arr[start], arr[i]] = [arr[i], arr[start]];
+            }
+          };
+          permute(0);
+        } else {
+          const cur = [...bestAssignment];
+          let guard = leaves.length * leaves.length * 4;
+          while (guard-- > 0) {
+            let bestI = -1, bestJ = -1, bestDelta = 0;
+            for (let i = 0; i < cur.length; i++) {
+              for (let j = i + 1; j < cur.length; j++) {
+                [cur[i], cur[j]] = [cur[j], cur[i]];
+                const sat = countSat(cur);
+                const delta = sat - bestSat;
+                if (delta > bestDelta) { bestDelta = delta; bestI = i; bestJ = j; }
+                [cur[i], cur[j]] = [cur[j], cur[i]];
+              }
+            }
+            if (bestI < 0) break;
+            [cur[bestI], cur[bestJ]] = [cur[bestJ], cur[bestI]];
+            bestSat += bestDelta;
+            bestAssignment = [...cur];
+          }
+        }
+
+        for (let i = 0; i < leaves.length; i++) leaves[i].seedId = bestAssignment[i];
+
+        const byId = new Map<string, typeof leaves[number]>();
+        for (const l of leaves) byId.set(l.seedId, l);
+        r.satisfied.length = 0;
+        r.broken.length = 0;
+        for (const c of connections) {
+          const A = byId.get(c.aSeedId);
+          const B = byId.get(c.bSeedId);
+          if (A && B && touch(A, B)) r.satisfied.push(c);
+          else r.broken.push(c);
         }
       }
+      return { result: r, satisfied: bestSat };
+    };
 
-      // Apply best assignment back to the leaves.
-      for (let i = 0; i < leaves.length; i++) leaves[i].seedId = bestAssignment[i];
-
-      // Rebuild satisfied / broken from the final assignment.
-      const byId = new Map<string, typeof leaves[number]>();
-      for (const l of leaves) byId.set(l.seedId, l);
-      result.satisfied.length = 0;
-      result.broken.length = 0;
-      for (const c of connections) {
-        const A = byId.get(c.aSeedId);
-        const B = byId.get(c.bSeedId);
-        if (A && B && touch(A, B)) result.satisfied.push(c);
-        else result.broken.push(c);
+    // Multi-start search: the RFP slicing-tree solver is deterministic per seed
+    // ordering, so feeding it shuffled orderings probes different layout topologies
+    // (cut sequences). For each candidate layout we still run the same best-
+    // assignment relabelling pass, so each (layout, assignment) pair is locally
+    // optimal — we just take the global best across all probes.
+    //   - Live mode (silent=true): single probe so dragging seeds stays snappy.
+    //   - Apply (silent=false): up to 12 probes when there are connections to satisfy;
+    //     stops early as soon as a probe satisfies every connection.
+    let bestSolve = solveLayout(seedInputs);
+    if (!silent && connections.length >= 1 && seedInputs.length >= 3 && bestSolve.satisfied < connections.length) {
+      const N = 12;
+      for (let k = 0; k < N; k++) {
+        const shuffled = [...seedInputs];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        const cand = solveLayout(shuffled);
+        if (cand.satisfied > bestSolve.satisfied) {
+          bestSolve = cand;
+          if (bestSolve.satisfied >= connections.length) break;
+        }
       }
     }
+    const result = bestSolve.result;
 
+    // Record which adjacency connections the solver couldn't satisfy, so the canvas
+    // can outline them in red. Key format mirrors the connection-toggle code:
+    // sorted `aId|bId` so order doesn't matter.
+    {
+      const brokenSet = new Set<string>();
+      for (const c of result.broken) {
+        const key = c.aSeedId < c.bSeedId
+          ? `${c.aSeedId}|${c.bSeedId}`
+          : `${c.bSeedId}|${c.aSeedId}`;
+        brokenSet.add(key);
+      }
+      setBspBrokenConnectionsByRoom((prev) => ({ ...prev, [room.id]: brokenSet }));
+    }
+
+    // Per-seed metrics: clipped-polygon area (true intersection with the room),
+    // AABB-based aspect ratio.
     const ppm = pixelsPerMeter || 1;
+    const ppm2 = ppm * ppm;
     const leafBySeed = new Map(result.leaves.map((l) => [l.seedId, l]));
     const metrics: BspSeedMetric[] = seedInputs.map((s) => {
       const l = leafBySeed.get(s.id);
       if (!l) return null;
       const wPx = Math.max(0, l.x1 - l.x0);
       const hPx = Math.max(0, l.y1 - l.y0);
-      const areaM2 = (wPx * hPx) / (ppm * ppm);
+      const rectPoly: Point[] = [
+        { x: l.x0, y: l.y0 }, { x: l.x1, y: l.y0 },
+        { x: l.x1, y: l.y1 }, { x: l.x0, y: l.y1 },
+      ];
+      const clipped = sutherlandHodgmanClip(polygon, rectPoly);
+      let areaPx = 0;
+      if (clipped.length >= 3) {
+        for (let i = 0; i < clipped.length; i++) {
+          const a = clipped[i], b = clipped[(i + 1) % clipped.length];
+          areaPx += a.x * b.y - b.x * a.y;
+        }
+        areaPx = Math.abs(areaPx) / 2;
+      }
+      const areaM2 = areaPx / ppm2;
       const longer = Math.max(wPx, hPx), shorter = Math.max(1e-6, Math.min(wPx, hPx));
       return { area: areaM2, aspectRatio: longer / shorter };
     });
@@ -11795,21 +12316,23 @@ User request: ${aiPrompt.trim()}`;
     if (!room) return;
     const rt = room.roomType ?? "room";
     if (rt !== "room" && rt !== "floorplate-boundary") return;
-    // Dispatch on the room's BSP mode so the Live preview matches whatever the
-    // Apply button would commit — including connection-driven partitioning.
-    const mode = bspModeByRoom[id] ?? "normal";
-    if ((mode === "connection" || mode === "area-and-connection") && runRoomBspConnection) {
-      runRoomBspConnection(room, true);
-    } else {
-      runRoomBsp(room, true);
-    }
+    // Routing decision:
+    //  - area-constraint OFF → runRoomBsp (median position cuts; free drag).
+    //  - area-constraint ON + connections present → runRoomBspConnection (adjacency
+    //    solver via runRfp; cuts are AABB-balanced inside the slicing tree).
+    //  - area-constraint ON + no connections → runRoomBsp (binary-searches the cut
+    //    against the *clipped polygon area* so cells split equally even when the
+    //    polygon is irregular — runRfp would balance on the AABB and drift).
+    const conns = bspConnectionsByRoom[id] ?? [];
+    if (bspAreaConstraintActive && conns.length > 0) runRoomBspConnection(room, true);
+    else runRoomBsp(room, true);
   }, [
     bspLive,
     bspSeedsByRoom,
     bspConnectionsByRoom,
     bspUseAreaPercent,
+    bspAreaConstraintActive,
     bspTiltAngle,
-    bspModeByRoom,
     insetLive,
     optimiseLive,
     livePreviewTick,
@@ -12830,13 +13353,19 @@ User request: ${aiPrompt.trim()}`;
           spinePoints,
           splineTension: 0,
           thickness: nextWallSegmentType === "path"
-            ? pixelsPerMeter
+            ? (activeDrawPathConfig?.thicknessPx ?? pixelsPerMeter)
             : (layerVisibility.viewGraph ? 0.01 : wallThickness),
           color: wallColor,
           dashed: lineTypeDashed,
-          mode: "line",
+          // Path walls drawn via the toolbar's Draw Path use mitered-union so the
+          // miter offset polygons are generated — required for converting the path
+          // into a Space when the user finishes drawing.
+          mode: nextWallSegmentType === "path" && activeDrawPathConfig ? "mitered-union" : "line",
           method: wallDrawMethod,
           segmentType: nextWallSegmentType,
+          ...(nextWallSegmentType === "path" && activeDrawPathConfig?.label
+            ? { label: activeDrawPathConfig.label }
+            : {}),
         },
       ]),
     });
@@ -13042,6 +13571,8 @@ User request: ${aiPrompt.trim()}`;
         // setTool("select")
         setCurrentWallStart(null);
         setCurrentWallSplinePoints([]);
+        // Active Draw-Path flow: convert the just-drawn path segments into a Space.
+        if (activeDrawPathConfig) finalizeDrawnPathAsSpace();
         setRoomDraft([]);
         setMeasureDraft(null);
         setMeasurePreviewPoint(null);
@@ -13072,6 +13603,8 @@ User request: ${aiPrompt.trim()}`;
         event.preventDefault();
         setCurrentWallStart(null);
         setCurrentWallSplinePoints([]);
+        // Active Draw-Path flow: convert the just-drawn path segments into a Space.
+        if (activeDrawPathConfig) finalizeDrawnPathAsSpace();
         // setTool("select")
       }
     };
@@ -13097,6 +13630,8 @@ User request: ${aiPrompt.trim()}`;
     wallDrawMethod,
     wallDrawType,
     wallOptionsOverlayOpen,
+    activeDrawPathConfig,
+    finalizeDrawnPathAsSpace,
   ]);
 
   const saveModel = async () => {
@@ -13714,13 +14249,16 @@ User request: ${aiPrompt.trim()}`;
             start: points[i],
             end: points[i + 1],
             thickness: nextWallSegmentType === "path"
-              ? pixelsPerMeter
+              ? (activeDrawPathConfig?.thicknessPx ?? pixelsPerMeter)
               : (layerVisibility.viewGraph ? 0.01 : wallThickness),
             color: wallColor,
             dashed: lineTypeDashed,
             mode: wallDrawMode,
             method: wallDrawMethod,
             segmentType: nextWallSegmentType,
+            ...(nextWallSegmentType === "path" && activeDrawPathConfig?.label
+              ? { label: activeDrawPathConfig.label }
+              : {}),
           });
         }
         history.set({
@@ -13738,13 +14276,16 @@ User request: ${aiPrompt.trim()}`;
               start: currentWallStart,
               end: snapped,
               thickness: nextWallSegmentType === "path"
-                ? pixelsPerMeter
+                ? (activeDrawPathConfig?.thicknessPx ?? pixelsPerMeter)
                 : (layerVisibility.viewGraph ? 0.01 : wallThickness),
               color: wallColor,
               dashed: lineTypeDashed,
               mode: wallDrawMode,
               method: wallDrawMethod,
               segmentType: nextWallSegmentType,
+              ...(nextWallSegmentType === "path" && activeDrawPathConfig?.label
+                ? { label: activeDrawPathConfig.label }
+                : {}),
             },
           ]),
         });
@@ -13821,6 +14362,31 @@ User request: ${aiPrompt.trim()}`;
 
     if (tool === "freehand") {
       setFreehandDraft([snapped.x, snapped.y]);
+      return;
+    }
+
+    if (tool === "point") {
+      // Drop a standalone node at the clicked point. Modelled as a zero-length
+      // wall (start === end) so the wall-node derivation picks it up. Use a thin
+      // line-mode segment with a near-invisible thickness so it renders as a dot.
+      history.set({
+        ...history.state,
+        walls: [
+          ...history.state.walls,
+          {
+            id: createId(),
+            start: { x: snapped.x, y: snapped.y },
+            end: { x: snapped.x, y: snapped.y },
+            thickness: 0.5,
+            color: wallColor,
+            dashed: false,
+            mode: "line",
+            method: "center",
+            segmentType: "wall",
+          },
+        ],
+      });
+      setTool("select");
       return;
     }
 
@@ -15483,166 +16049,7 @@ User request: ${aiPrompt.trim()}`;
     <div className="h-screen w-full bg-slate-50 text-slate-900">
       <div className="flex min-h-16 items-center justify-between gap-2 border-b bg-white px-3 py-2 shadow-sm">
         <p className="text-sm font-semibold text-slate-700">Floorplan Studio</p>
-        <div className="flex shrink-0 items-center gap-1">  <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Image underlay" aria-label="Image underlay">
-                    <Image className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent side="right" align="start" className="w-72 p-3 shadow-xl" sideOffset={10}>
-                  <p className="mb-2 text-sm font-semibold">Image underlay</p>
-                  <Input type="file" accept=".png,.jpg,.jpeg" onChange={onUnderlayUpload} className="mt-1" />
-                  {history.state.imageUnderlay ? (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-slate-500">Opacity</p>
-                      <Slider
-                        min={0}
-                        max={100}
-                        value={[history.state.imageUnderlay.opacity * 100]}
-                        onValueChange={(values) =>
-                          history.set({
-                            ...history.state,
-                            imageUnderlay: history.state.imageUnderlay
-                              ? {
-                                  ...history.state.imageUnderlay,
-                                  opacity: values[0] / 100,
-                                }
-                              : null,
-                          })
-                        }
-                      />
-                      <p className="text-xs text-slate-500">Scale</p>
-                      <Slider
-                        min={20}
-                        max={300}
-                        value={[history.state.imageUnderlay.scale * 100]}
-                        onValueChange={(values) => {
-                          const u = history.state.imageUnderlay;
-                          if (!u) {
-                            return;
-                          }
-                          const newScale = values[0] / 100;
-                          const oldW = u.width * u.scale;
-                          const oldH = u.height * u.scale;
-                          const cx = u.x + oldW / 2;
-                          const cy = u.y + oldH / 2;
-                          const newW = u.width * newScale;
-                          const newH = u.height * newScale;
-                          history.set({
-                            ...history.state,
-                            imageUnderlay: {
-                              ...u,
-                              scale: newScale,
-                              x: cx - newW / 2,
-                              y: cy - newH / 2,
-                            },
-                          });
-                        }}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() =>
-                          history.set({
-                            ...history.state,
-                            imageUnderlay: history.state.imageUnderlay
-                              ? {
-                                  ...history.state.imageUnderlay,
-                                  locked: !history.state.imageUnderlay.locked,
-                                }
-                              : null,
-                          })
-                        }
-                      >
-                        {history.state.imageUnderlay.locked ? "Unlock underlay" : "Lock underlay"}
-                      </Button>
-                      <Button
-                        variant={tool === "scale" || underlayCalibrationMode ? "default" : "outline"}
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                          setUnderlayCalibrationMode(false);
-                          setTool((prev) => (prev === "scale" ? "select" : "scale"));
-                          setCalibrationDraft(null);
-                          setCalibrationPreviewPoint(null);
-                          setCalibrationEndPoint(null);
-                          setCalibrationPixelDistance(null);
-                        }}
-                      >
-                        {tool === "scale" || underlayCalibrationMode
-                          ? calibrationDraft
-                            ? "Pick second point"
-                            : "Pick first point"
-                          : "Calibrate scale (2 clicks)"}
-                      </Button>
-                    </div>
-                  ) : null}
-                </PopoverContent>
-              </Popover>
-              <ToolButton active={false} icon={<Undo2 className="h-4 w-4" />} label="Undo" onClick={history.undo} disabled={!history.canUndo} />
-              <ToolButton
-                active={false}
-                icon={<ZoomIn className="h-4 w-4" />}
-                label="Reset view"
-                onClick={() => {
-                  setScale(1);
-                  setPosition({ x: 0, y: 0 });
-                }}
-              />
-              <ToolButton
-                active={false}
-                icon={<Maximize className="h-4 w-4" />}
-                label="Zoom extents"
-                onClick={() => {
-                  const pts: { x: number; y: number }[] = [];
-                  for (const w of history.state.walls) { pts.push(w.start, w.end); }
-                  for (const r of history.state.rooms) { for (const p of r.points) pts.push(p); }
-                  for (const o of history.state.objects) { pts.push({ x: o.x, y: o.y }); }
-                  for (const f of history.state.furniture) { pts.push({ x: f.x, y: f.y }); }
-                  if (pts.length === 0 || size.width <= 0 || size.height <= 0) return;
-                  const minX = Math.min(...pts.map((p) => p.x));
-                  const maxX = Math.max(...pts.map((p) => p.x));
-                  const minY = Math.min(...pts.map((p) => p.y));
-                  const maxY = Math.max(...pts.map((p) => p.y));
-                  const w = Math.max(1, maxX - minX);
-                  const h = Math.max(1, maxY - minY);
-                  const margin = 0.9;
-                  const newScale = Math.min(size.width / w, size.height / h) * margin;
-                  const cx = (minX + maxX) / 2;
-                  const cy = (minY + maxY) / 2;
-                  setScale(Number(newScale.toFixed(3)));
-                  setPosition({
-                    x: size.width / 2 - cx * newScale,
-                    y: size.height / 2 - cy * newScale,
-                  });
-                }}
-              />
-        <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} /></div>
-        
         <div className="flex shrink-0 items-center gap-1">
-        <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="File & export" aria-label="File and export">
-                    <Folder className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-56 p-3 shadow-xl" side="bottom" sideOffset={10}>
-                  <h4 className="mb-2 text-xs font-semibold uppercase text-slate-500">File</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import JSON" onClick={() => jsonInputRef.current?.click()} />
-                    <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Vestal JSON" onClick={() => vestalJsonInputRef.current?.click()} />
-                    <ToolButton active={false} icon={<Save className="h-4 w-4" />} label="Save to project" onClick={() => void saveModel()} />
-                    <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Reload from project" onClick={() => void loadModel()} />
-                    <ToolButton active={false} icon={<FileJson className="h-4 w-4" />} label="Export JSON" onClick={exportJsonFile} />
-                    <ToolButton active={false} icon={<Image className="h-4 w-4" />} label="Export PNG" onClick={exportPng} />
-                    <ToolButton active={false} icon={<FileImage className="h-4 w-4" />} label="Export SVG" onClick={exportSvgFile} />
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-          {layersPopover}
-          {viewModePopover}
          
              
           {/* <Button
@@ -15666,28 +16073,6 @@ User request: ${aiPrompt.trim()}`;
         >
           <ScrollArea className="h-full min-h-0 w-full">
             <div className="flex flex-col items-center gap-2 px-1 pb-2">
-              {/* 2D/3D view toggle (horizontal) */}
-              <div className="flex flex-row overflow-hidden rounded-md border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("2d")}
-                  className={`px-2 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                  aria-pressed={viewMode === "2d"}
-                  title="2D view"
-                >
-                  2D
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("3d")}
-                  className={`border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                  aria-pressed={viewMode === "3d"}
-                  title="3D view"
-                >
-                  3D
-                </button>
-              </div>
-              <div className="my-1 h-px w-full bg-slate-200" />
               <LeftToolbar
                 tool={tool}
                 onToolChange={setTool}
@@ -15775,10 +16160,189 @@ User request: ${aiPrompt.trim()}`;
                   setSaDialogOpen(true);
                 }}
                 onComputeFloorplate={handleComputeFloorplate}
-                settingsPopover={settingsPopover}
+                view2D3DToggle={(
+                  <div className="flex flex-row overflow-hidden rounded-md border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("2d")}
+                      className={`px-2 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                      aria-pressed={viewMode === "2d"}
+                      title="2D view"
+                    >
+                      2D
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("3d")}
+                      className={`border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                      aria-pressed={viewMode === "3d"}
+                      title="3D view"
+                    >
+                      3D
+                    </button>
+                  </div>
+                )}
+                settingsPopover={(
+                  <>
+                    {settingsPopover}
+                    {layersPopover}
+                    {viewModePopover}
+                  </>
+                )}
                 defaultSettingsPopover={defaultSettingsPopover}
+                filesSlot={(
+                  <>
+                    <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import JSON" onClick={() => jsonInputRef.current?.click()} />
+                    <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Vestal JSON" onClick={() => vestalJsonInputRef.current?.click()} />
+                    <ToolButton active={false} icon={<Save className="h-4 w-4" />} label="Save to project" onClick={() => void saveModel()} />
+                    <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Reload from project" onClick={() => void loadModel()} />
+                    <ToolButton active={false} icon={<FileJson className="h-4 w-4" />} label="Export JSON" onClick={exportJsonFile} />
+                    <ToolButton active={false} icon={<Image className="h-4 w-4" />} label="Export PNG" onClick={exportPng} />
+                    <ToolButton active={false} icon={<FileImage className="h-4 w-4" />} label="Export SVG" onClick={exportSvgFile} />
+                  </>
+                )}
+                topToolSlots={(
+                  <>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Image underlay" aria-label="Image underlay">
+                          <Image className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent side="right" align="start" className="w-72 p-3 shadow-xl" sideOffset={10}>
+                        <p className="mb-2 text-sm font-semibold">Image underlay</p>
+                        <Input type="file" accept=".png,.jpg,.jpeg" onChange={onUnderlayUpload} className="mt-1" />
+                        {history.state.imageUnderlay ? (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs text-slate-500">Opacity</p>
+                            <Slider
+                              min={0}
+                              max={100}
+                              value={[history.state.imageUnderlay.opacity * 100]}
+                              onValueChange={(values) =>
+                                history.set({
+                                  ...history.state,
+                                  imageUnderlay: history.state.imageUnderlay
+                                    ? { ...history.state.imageUnderlay, opacity: values[0] / 100 }
+                                    : null,
+                                })
+                              }
+                            />
+                            <p className="text-xs text-slate-500">Scale</p>
+                            <Slider
+                              min={20}
+                              max={300}
+                              value={[history.state.imageUnderlay.scale * 100]}
+                              onValueChange={(values) => {
+                                const u = history.state.imageUnderlay;
+                                if (!u) return;
+                                const newScale = values[0] / 100;
+                                const oldW = u.width * u.scale;
+                                const oldH = u.height * u.scale;
+                                const cx = u.x + oldW / 2;
+                                const cy = u.y + oldH / 2;
+                                const newW = u.width * newScale;
+                                const newH = u.height * newScale;
+                                history.set({
+                                  ...history.state,
+                                  imageUnderlay: { ...u, scale: newScale, x: cx - newW / 2, y: cy - newH / 2 },
+                                });
+                              }}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() =>
+                                history.set({
+                                  ...history.state,
+                                  imageUnderlay: history.state.imageUnderlay
+                                    ? { ...history.state.imageUnderlay, locked: !history.state.imageUnderlay.locked }
+                                    : null,
+                                })
+                              }
+                            >
+                              {history.state.imageUnderlay.locked ? "Unlock underlay" : "Lock underlay"}
+                            </Button>
+                            <Button
+                              variant={tool === "scale" || underlayCalibrationMode ? "default" : "outline"}
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                setUnderlayCalibrationMode(false);
+                                setTool((prev) => (prev === "scale" ? "select" : "scale"));
+                                setCalibrationDraft(null);
+                                setCalibrationPreviewPoint(null);
+                                setCalibrationEndPoint(null);
+                                setCalibrationPixelDistance(null);
+                              }}
+                            >
+                              {tool === "scale" || underlayCalibrationMode
+                                ? calibrationDraft
+                                  ? "Pick second point"
+                                  : "Pick first point"
+                                : "Calibrate scale (2 clicks)"}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </PopoverContent>
+                    </Popover>
+                    <ToolButton active={false} icon={<Undo2 className="h-4 w-4" />} label="Undo" onClick={history.undo} disabled={!history.canUndo} />
+                    <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} />
+                    <ToolButton
+                      active={false}
+                      icon={<ZoomIn className="h-4 w-4" />}
+                      label="Reset view"
+                      onClick={() => {
+                        setScale(1);
+                        setPosition({ x: 0, y: 0 });
+                      }}
+                    />
+                    <ToolButton
+                      active={false}
+                      icon={<Maximize className="h-4 w-4" />}
+                      label="Zoom extents"
+                      onClick={() => {
+                        const pts: { x: number; y: number }[] = [];
+                        for (const w of history.state.walls) { pts.push(w.start, w.end); }
+                        for (const r of history.state.rooms) { for (const p of r.points) pts.push(p); }
+                        for (const o of history.state.objects) { pts.push({ x: o.x, y: o.y }); }
+                        for (const f of history.state.furniture) { pts.push({ x: f.x, y: f.y }); }
+                        if (pts.length === 0 || size.width <= 0 || size.height <= 0) return;
+                        const minX = Math.min(...pts.map((p) => p.x));
+                        const maxX = Math.max(...pts.map((p) => p.x));
+                        const minY = Math.min(...pts.map((p) => p.y));
+                        const maxY = Math.max(...pts.map((p) => p.y));
+                        const w = Math.max(1, maxX - minX);
+                        const h = Math.max(1, maxY - minY);
+                        const margin = 0.9;
+                        const newScale = Math.min(size.width / w, size.height / h) * margin;
+                        const cx = (minX + maxX) / 2;
+                        const cy = (minY + maxY) / 2;
+                        setScale(Number(newScale.toFixed(3)));
+                        setPosition({
+                          x: size.width / 2 - cx * newScale,
+                          y: size.height / 2 - cy * newScale,
+                        });
+                      }}
+                    />
+                  </>
+                )}
                 onAddRoomTypeClick={() => setAddRoomTypeDialogOpen(true)}
                 onAddSegmentTypeClick={() => setAddSegmentTypeDialogOpen(true)}
+                canMergeSpaces={true}
+                onMergeSpaces={mergeSelectedRooms}
+                onDeleteSelection={deleteSelected}
+                drawingPath={tool === "wall" && nextWallSegmentType === "path"}
+                onDrawPathClick={() => {
+                  if (tool === "wall" && nextWallSegmentType === "path") {
+                    // Already drawing — second click cancels.
+                    setNextWallSegmentType("wall");
+                    setTool("select");
+                  } else {
+                    setDrawPathDialogOpen(true);
+                  }
+                }}
                 onTestDrawPolygon={() => {
                   // Materialise three nested Spaces in one click:
                   //   1) Site Area     — random 5-sided pentagon, plot-boundary segments + fence treatment.
@@ -17334,13 +17898,21 @@ User request: ${aiPrompt.trim()}`;
                     const ay = la ? (la.y0 + la.y1) / 2 : a.y;
                     const bx = lb ? (lb.x0 + lb.x1) / 2 : b.x;
                     const by = lb ? (lb.y0 + lb.y1) / 2 : b.y;
+                    // Violated connections (solver couldn't make the two cells adjacent)
+                    // render red with a tighter dash so they stand out from the satisfied
+                    // green ones.
+                    const brokenSet = bspBrokenConnectionsByRoom[selectedRoom.id];
+                    const key = cn.aSeedId < cn.bSeedId
+                      ? `${cn.aSeedId}|${cn.bSeedId}`
+                      : `${cn.bSeedId}|${cn.aSeedId}`;
+                    const violated = brokenSet?.has(key) ?? false;
                     return (
                       <Line
                         key={`bsp-conn-${selectedRoom.id}-${ci}`}
                         points={[ax, ay, bx, by]}
-                        stroke="#16a34a"
-                        strokeWidth={1.5 / scale}
-                        dash={[6 / scale, 4 / scale]}
+                        stroke={violated ? "#dc2626" : "#16a34a"}
+                        strokeWidth={(violated ? 2 : 1.5) / scale}
+                        dash={violated ? [3 / scale, 3 / scale] : [6 / scale, 4 / scale]}
                         listening={false}
                       />
                     );
@@ -17356,13 +17928,29 @@ User request: ${aiPrompt.trim()}`;
                       const label = seed.label ?? `Seed${i + 1}`;
                       const seedConnectMode = addEdgeMode === "connection" && bspLive;
                       const isFirstPick = seedConnectMode && addEdgeFirstBspSeed && seed.id === addEdgeFirstBspSeed;
-                      // Always render the seed marker at the cell centroid when a leaf
-                      // rect has been cached for this seed — keeps the dot inside the
-                      // cell it drives, regardless of BSP mode (Area / Connection).
+                      // Pin to the cached leaf-cell centroid only when area constraint
+                      // is active — the solver may have moved the cell away from the
+                      // seed's input position, so the marker should follow. When area
+                      // constraint is OFF (free drag), use the seed's stored x/y so
+                      // the marker tracks the cursor exactly.
                       const leafMap = bspLeafRectsByRoom[selectedRoom.id] ?? {};
-                      const leaf = seed.id ? leafMap[seed.id] : undefined;
+                      const leaf = bspAreaConstraintActive && seed.id ? leafMap[seed.id] : undefined;
                       const px = leaf ? (leaf.x0 + leaf.x1) / 2 : seed.x;
                       const py = leaf ? (leaf.y0 + leaf.y1) / 2 : seed.y;
+                      // Per-seed metric (area + aspect ratio) and constraint violation
+                      // check for the on-canvas badge under the label.
+                      const metrics = bspSeedMetricsByRoom[selectedRoom.id] ?? [];
+                      const m = metrics[i];
+                      const minA = seed.minArea ?? null;
+                      const maxA = seed.maxArea ?? null;
+                      const maxR = seed.maxRatio ?? null;
+                      const areaViol = !!(m && ((minA != null && m.area < minA) || (maxA != null && m.area > maxA)));
+                      const ratioViol = !!(m && maxR != null && m.aspectRatio > maxR);
+                      const violated = areaViol || ratioViol;
+                      const badgeColor = m ? (violated ? "#dc2626" : "#047857") : "#94a3b8";
+                      const badgeText = m
+                        ? `A: ${m.area.toFixed(2)}  AR: ${isFinite(m.aspectRatio) ? m.aspectRatio.toFixed(2) : "∞"}`
+                        : "A: —  AR: —";
                       return (
                         <Group
                           key={`bsp-seed-${selectedRoom.id}-${i}`}
@@ -17400,10 +17988,16 @@ User request: ${aiPrompt.trim()}`;
                             }
                           }}
                           onDragMove={(e) => {
+                            // Konva owns the visual position during the drag so the
+                            // marker doesn't jitter from re-renders fighting the drag.
+                            // Two modes:
+                            //  - Area-constraint ON  (expensive multi-start solver):
+                            //      no state commits per frame — partition redraws on
+                            //      release only (onDragEnd).
+                            //  - Area-constraint OFF (cheap median-position solver):
+                            //      commit on every frame so cells reshape live as the
+                            //      seed moves.
                             let nx = e.target.x(), ny = e.target.y();
-                            // Clamp the dragged seed to the inside of the room polygon —
-                            // if the cursor exits, snap to the closest point on the boundary
-                            // so BSP seeds never end up outside the cell they partition.
                             const poly = selectedRoom.points;
                             if (poly.length >= 3 && !isPointInPolygon({ x: nx, y: ny }, poly)) {
                               let bestX = nx, bestY = ny, bestD = Infinity;
@@ -17418,17 +18012,38 @@ User request: ${aiPrompt.trim()}`;
                                 const d = Math.hypot(nx - cx, ny - cy);
                                 if (d < bestD) { bestD = d; bestX = cx; bestY = cy; }
                               }
+                              e.target.position({ x: bestX, y: bestY });
                               nx = bestX; ny = bestY;
-                              e.target.position({ x: nx, y: ny });
                             }
+                            if (!bspAreaConstraintActive) {
+                              setBspSeedsByRoom((prev) => {
+                                const arr = [...(prev[selectedRoom.id] ?? [])];
+                                arr[i] = { ...arr[i], x: nx, y: ny };
+                                return { ...prev, [selectedRoom.id]: arr };
+                              });
+                              const sid = seed.id;
+                              if (sid) {
+                                setBspLeafRectsByRoom((prev) => {
+                                  const cur = prev[selectedRoom.id];
+                                  if (!cur || !(sid in cur)) return prev;
+                                  const next = { ...cur };
+                                  delete next[sid];
+                                  return { ...prev, [selectedRoom.id]: next };
+                                });
+                              }
+                            }
+                          }}
+                          onDragEnd={(e) => {
+                            // Commit the final position on release. Live BSP solver
+                            // re-runs once at the end of the drag instead of on every
+                            // mouse-move frame — keeps the drag itself smooth even when
+                            // the solver is expensive (multi-start with many seeds).
+                            const nx = e.target.x(), ny = e.target.y();
                             setBspSeedsByRoom((prev) => {
                               const arr = [...(prev[selectedRoom.id] ?? [])];
                               arr[i] = { ...arr[i], x: nx, y: ny };
                               return { ...prev, [selectedRoom.id]: arr };
                             });
-                            // Invalidate the dragged seed's cached leaf rect so the marker
-                            // and connection lines follow the drag instead of staying pinned
-                            // at the (now stale) cell centroid from the previous solve.
                             const sid = seed.id;
                             if (sid) {
                               setBspLeafRectsByRoom((prev) => {
@@ -17454,6 +18069,14 @@ User request: ${aiPrompt.trim()}`;
                             text={label}
                             fontSize={11 / scale}
                             fill="#047857"
+                            listening={false}
+                          />
+                          <Text
+                            x={r + 2 / scale}
+                            y={6 / scale}
+                            text={badgeText}
+                            fontSize={9 / scale}
+                            fill={badgeColor}
                             listening={false}
                           />
                         </Group>
@@ -21259,741 +21882,89 @@ User request: ${aiPrompt.trim()}`;
                   <>
                     <p className="text-xs text-slate-500">Selected: Segment{selectedWall.label ? ` — ${selectedWall.label}` : ""}</p>
 
-                    {/* Inputs block — user-editable wall parameters */}
-                    <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-left"
-                        onClick={() => setWallInputsExpanded((v) => !v)}
-                      >
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Inputs</span>
-                        <span className="text-[11px] text-slate-400">{wallInputsExpanded ? "▼" : "▶"}</span>
-                      </button>
-                      {wallInputsExpanded && <>
-                        {(() => {
-                          const idx = history.state.walls.findIndex((w) => w.id === selectedWall.id);
-                          const displayId = idx >= 0 ? `Wall${String(idx + 1).padStart(3, "0")}` : "—";
-                          return (
-                            <div>
-                              <span className="text-[10px] text-slate-400">ID</span>
-                              <input
-                                type="text"
-                                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-slate-50 px-1.5 text-xs font-mono text-slate-700"
-                                value={displayId}
-                                readOnly
-                              />
-                            </div>
-                          );
-                        })()}
-                        <div>
-                          <span className="text-[10px] text-slate-400">Label</span>
-                          <input
-                            type="text"
-                            className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                            value={selectedWall.label ?? ""}
-                            placeholder="Optional label"
-                            onChange={(e) => {
-                              const newLabel = e.target.value;
-                              history.set({
-                                ...history.state,
-                                walls: history.state.walls.map((w) =>
-                                  w.id === selectedWall.id ? { ...w, label: newLabel } : w
-                                ),
-                              });
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400">Segment Type</span>
-                          <select
-                            className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                            value={selectedWall.segmentType ?? "wall"}
-                            onChange={(e) => {
-                              const newType = e.target.value;
-                              history.set({
-                                ...history.state,
-                                walls: history.state.walls.map((w) => {
-                                  if (w.id !== selectedWall.id) return w;
-                                  // Switching to Path: force mitered-union so adjacent path
-                                  // segments render as one continuous offset corridor, and
-                                  // seed a default 1.8 m width if the wall was thin.
-                                  if (newType === "path") {
-                                    const minPx = 0.5 * pixelsPerMeter;
-                                    const seedWidth = (w.thickness ?? 0) < minPx ? 1.8 * pixelsPerMeter : w.thickness;
-                                    return {
-                                      ...w,
-                                      segmentType: "path" as const,
-                                      mode: "mitered-union" as const,
-                                      thickness: seedWidth,
-                                      pathJoin: w.pathJoin ?? "miter",
-                                    };
-                                  }
-                                  return { ...w, segmentType: newType };
-                                }),
-                              });
-                            }}
-                          >
-                            <option value="wall">Wall</option>
-                            <option value="door">Door</option>
-                            <option value="window">Window</option>
-                            <option value="path">Path</option>
-                            <option value="plot-boundary">Site Boundary</option>
-                            <option value="buildable-boundary">Buildable Boundary</option>
-                            <option value="footprint-boundary">Footprint Boundary</option>
-                            <option value="connection">Connection</option>
-                            {Object.values(history.state.customSegmentTypes ?? {}).map((t) => (
-                              <option key={t.id} value={t.id}>{t.displayName}</option>
-                            ))}
-                          </select>
-                        </div>
+                    <WallInputsBlock
+                      selectedWall={selectedWall}
+                      wallIndex={history.state.walls.findIndex((w) => w.id === selectedWall.id)}
+                      unit={unit}
+                      pixelsPerMeter={pixelsPerMeter}
+                      expanded={wallInputsExpanded}
+                      setExpanded={setWallInputsExpanded}
+                      customSegmentTypes={history.state.customSegmentTypes ?? {}}
+                      visibleRooms={visibleRooms}
+                      renderPullPanel={renderPullPanel}
+                      updateSelectedWall={(updater) => {
+                        history.set({
+                          ...history.state,
+                          walls: history.state.walls.map((w) =>
+                            w.id === selectedWall.id ? updater(w) : w
+                          ),
+                        });
+                      }}
+                      onJustificationChange={setWallMethodForUi}
+                      mInUnit={mInUnit}
+                      unitToM={unitToM}
+                      unitDecimals={unitDecimals}
+                      unitStep={unitStep}
+                    />
 
-                        {/* Path-specific properties: corner join style. Width is the same as
-                            Thickness (path width = stroke thickness), so we keep the existing
-                            Thickness input below rather than duplicating the field here. */}
-                        {selectedWall.segmentType === "path" && (
-                          <div>
-                            <span className="text-[10px] text-slate-400">Path Join</span>
-                            <select
-                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                              value={selectedWall.pathJoin ?? "miter"}
-                              onChange={(e) => {
-                                const v = e.target.value as "miter" | "round" | "nurbs";
-                                history.set({
-                                  ...history.state,
-                                  walls: history.state.walls.map((w) =>
-                                    w.id === selectedWall.id ? { ...w, pathJoin: v } : w
-                                  ),
-                                });
-                              }}
-                            >
-                              <option value="miter">Sharp (miter)</option>
-                              <option value="round">Curved (round)</option>
-                              <option value="nurbs">Smooth (NURBS)</option>
-                            </select>
-                          </div>
-                        )}
+                    <WallOutputsBlock
+                      selectedWall={selectedWall}
+                      unit={unit}
+                      pixelsPerMeter={pixelsPerMeter}
+                      expanded={wallOutputsExpanded}
+                      setExpanded={setWallOutputsExpanded}
+                    />
 
-                        {/* Site Boundary: setback-regime dropdown (Indian-context adjacency types). */}
-                        {selectedWall.segmentType === "plot-boundary" && (
-                          <div>
-                            <span className="text-[10px] text-slate-400">Setback Regime</span>
-                            <select
-                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                              value={selectedWall.setbackRegime ?? ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                history.set({
-                                  ...history.state,
-                                  walls: history.state.walls.map((w) =>
-                                    w.id === selectedWall.id
-                                      ? { ...w, setbackRegime: v === "" ? undefined : (v as NonNullable<Wall["setbackRegime"]>) }
-                                      : w
-                                  ),
-                                });
-                              }}
-                            >
-                              <option value="">— None —</option>
-                              <option value="road">Road</option>
-                              <option value="adjoining-plot">Adjoining Plot</option>
-                              <option value="nala-drain">Nala / Drain</option>
-                              <option value="water-body">Water Body</option>
-                              <option value="restricted-zone">Restricted Zone</option>
-                              <option value="green-open-space">Green / Open Space</option>
-                            </select>
-                            {selectedWall.setbackRegime === "road" && (
-                              <div className="mt-2">
-                                <span className="text-[10px] text-slate-400">Road Width (m)</span>
-                                <input
-                                  type="number"
-                                  step="0.5"
-                                  min="0"
-                                  className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                                  value={selectedWall.roadWidthM ?? ""}
-                                  placeholder="e.g. 9"
-                                  onChange={(e) => {
-                                    const raw = e.target.value;
-                                    const v = raw === "" ? undefined : Math.max(0, Number(raw) || 0);
-                                    history.set({
-                                      ...history.state,
-                                      walls: history.state.walls.map((w) =>
-                                        w.id === selectedWall.id ? { ...w, roadWidthM: v } : w
-                                      ),
-                                    });
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
+                    <WallExtendBlock
+                      expanded={wallExtendExpanded}
+                      setExpanded={setWallExtendExpanded}
+                      directionConstraint={wallDirectionConstraint}
+                      setDirectionConstraint={setWallDirectionConstraint}
+                      extendMode={wallExtendMode}
+                      setExtendMode={setWallExtendMode}
+                    />
 
-                        {/* Connection-specific properties: linked room badges + Pull panel. */}
-                        {selectedWall.segmentType === "connection" && (() => {
-                          const roomA = visibleRooms.find((r) => r.id === selectedWall.aRoomId);
-                          const roomB = visibleRooms.find((r) => r.id === selectedWall.bRoomId);
-                          return (
-                            <div className="space-y-2">
-                              <div className="rounded border bg-green-50 p-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-green-700 mb-1">Linked Rooms</p>
-                                <div className="flex items-center gap-2">
-                                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">{roomA?.label ?? selectedWall.aRoomId ?? "—"}</span>
-                                  <span className="text-slate-400">—</span>
-                                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">{roomB?.label ?? selectedWall.bRoomId ?? "—"}</span>
-                                </div>
-                              </div>
-                              {renderPullPanel(selectedWall.aRoomId, selectedWall.bRoomId)}
-                            </div>
-                          );
-                        })()}
+                    <WallDisplayBlock
+                      selectedWall={selectedWall}
+                      expanded={wallDisplayExpanded}
+                      setExpanded={setWallDisplayExpanded}
+                      wallLevels={wallLevels}
+                      onToggleShowDirection={(show) => {
+                        history.set({
+                          ...history.state,
+                          walls: history.state.walls.map((w) =>
+                            w.id === selectedWall.id ? { ...w, showDirection: show } : w
+                          ),
+                        });
+                      }}
+                      onFlipDirection={() => {
+                        history.set({
+                          ...history.state,
+                          walls: history.state.walls.map((w) =>
+                            w.id === selectedWall.id
+                              ? { ...w, start: { ...w.end }, end: { ...w.start } }
+                              : w
+                          ),
+                        });
+                      }}
+                    />
 
-                        {/* Custom segment-type parameters — auto-rendered from the registered schema.
-                            Stored under wall.customParams[key]. Built-ins skip this branch. */}
-                        {(() => {
-                          const st = selectedWall.segmentType ?? "wall";
-                          if (st === "wall" || st === "door" || st === "window" || st === "plot-boundary" || st === "connection" || st === "buildable-boundary" || st === "footprint-boundary") return null;
-                          const def = (history.state.customSegmentTypes ?? {})[st];
-                          if (!def || def.params.length === 0) return null;
-                          const cp: Record<string, string | number | boolean> = selectedWall.customParams ?? {};
-                          const writeParam = (key: string, value: string | number | boolean) => {
-                            const next = { ...cp, [key]: value };
-                            history.set({
-                              ...history.state,
-                              walls: history.state.walls.map((w) =>
-                                w.id === selectedWall.id ? { ...w, customParams: next } : w
-                              ),
-                            });
-                          };
-                          return (
-                            <div className="col-span-2 mt-1 grid grid-cols-2 gap-1.5 rounded border border-slate-100 bg-slate-50 p-1.5">
-                              <div className="col-span-2 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
-                                {def.displayName} parameters
-                              </div>
-                              {def.params.map((p) => {
-                                const cur = cp[p.key];
-                                if (p.kind === "number") {
-                                  const v = (typeof cur === "number" ? cur : p.default ?? 0) as number;
-                                  return (
-                                    <div key={p.key}>
-                                      <span className="text-[10px] text-slate-400">{p.label}{p.unit ? ` (${p.unit})` : ""}</span>
-                                      <input
-                                        key={`scp-${selectedWall.id}-${p.key}`}
-                                        type="number"
-                                        min={p.min}
-                                        max={p.max}
-                                        step={p.step ?? 0.1}
-                                        className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                                        defaultValue={v}
-                                        onBlur={(e) => {
-                                          const nv = +e.target.value;
-                                          if (!Number.isFinite(nv)) return;
-                                          writeParam(p.key, nv);
-                                        }}
-                                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                      />
-                                    </div>
-                                  );
-                                }
-                                if (p.kind === "text") {
-                                  const v = (typeof cur === "string" ? cur : p.default ?? "") as string;
-                                  return (
-                                    <div key={p.key} className="col-span-2">
-                                      <span className="text-[10px] text-slate-400">{p.label}</span>
-                                      <input
-                                        key={`scp-${selectedWall.id}-${p.key}`}
-                                        type="text"
-                                        className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                                        defaultValue={v}
-                                        onBlur={(e) => writeParam(p.key, e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                      />
-                                    </div>
-                                  );
-                                }
-                                if (p.kind === "boolean") {
-                                  const v = (typeof cur === "boolean" ? cur : p.default ?? false) as boolean;
-                                  return (
-                                    <label key={p.key} className="col-span-2 flex items-center gap-1 text-[10px] text-slate-600">
-                                      <input
-                                        type="checkbox"
-                                        checked={v}
-                                        onChange={(e) => writeParam(p.key, e.target.checked)}
-                                      />
-                                      {p.label}
-                                    </label>
-                                  );
-                                }
-                                if (p.kind === "select") {
-                                  const v = (typeof cur === "string" ? cur : p.default ?? p.options[0]) as string;
-                                  return (
-                                    <div key={p.key} className="col-span-2">
-                                      <span className="text-[10px] text-slate-400">{p.label}</span>
-                                      <select
-                                        className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                                        value={v}
-                                        onChange={(e) => writeParam(p.key, e.target.value)}
-                                      >
-                                        {p.options.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                                      </select>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })}
-                            </div>
-                          );
-                        })()}
-                        <div>
-                          <span className="text-[10px] text-slate-400">Category</span>
-                          <select
-                            className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                            value={selectedWall.category ?? ""}
-                            onChange={(e) => {
-                              const newCategory = (e.target.value || undefined) as Wall["category"];
-                              history.set({
-                                ...history.state,
-                                walls: history.state.walls.map((w) =>
-                                  w.id === selectedWall.id ? { ...w, category: newCategory } : w
-                                ),
-                              });
-                            }}
-                          >
-                            <option value="">— none —</option>
-                            <option value="Fire Exit">Fire Exit</option>
-                            <option value="Facade">Facade</option>
-                            <option value="Electrical Entrance">Electrical Entrance</option>
-                            <option value="Lift Entrance">Lift Entrance</option>
-                          </select>
-                        </div>
-                        {selectedWall.segmentType === "plot-boundary" && (
-                          <div>
-                            <span className="text-[10px] text-slate-400">Boundary Treatment</span>
-                            <select
-                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                              value={selectedWall.boundaryTreatment ?? "solid"}
-                              onChange={(e) => {
-                                const newTreatment = e.target.value as "fence" | "railing" | "open" | "solid" | "gate";
-                                history.set({
-                                  ...history.state,
-                                  walls: history.state.walls.map((w) =>
-                                    w.id === selectedWall.id ? { ...w, boundaryTreatment: newTreatment } : w
-                                  ),
-                                });
-                              }}
-                            >
-                              <option value="solid">Solid</option>
-                              <option value="fence">Fence</option>
-                              <option value="railing">Railing</option>
-                              <option value="gate">Gate</option>
-                              <option value="open">Open</option>
-                            </select>
-                          </div>
-                        )}
-                        {((selectedWall.segmentType ?? "wall") === "wall" || selectedWall.segmentType === "plot-boundary") && (
-                          <div>
-                            <span className="text-[10px] text-slate-400">Height ({unit})</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={unitStep()}
-                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                              value={selectedWall.heightM == null ? "" : mInUnit(selectedWall.heightM).toFixed(unitDecimals())}
-                              placeholder={mInUnit(2.7).toFixed(unitDecimals())}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                const u = raw === "" ? undefined : +raw;
-                                if (raw !== "" && (!isFinite(u as number) || (u as number) < 0)) return;
-                                const v = u === undefined ? undefined : unitToM(u as number);
-                                history.set({
-                                  ...history.state,
-                                  walls: history.state.walls.map((w) =>
-                                    w.id === selectedWall.id ? { ...w, heightM: v } : w
-                                  ),
-                                });
-                              }}
-                            />
-                          </div>
-                        )}
-                        <div>
-                          <span className="text-[10px] text-slate-400">Thickness ({unit})</span>
-                          <input
-                            type="number"
-                            min={0.01}
-                            step={unit === "cm" ? 1 : 0.01}
-                            className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                            value={unitValueFromPixels(selectedWall.thickness, unit, pixelsPerMeter).toFixed(unit === "cm" ? 0 : 3)}
-                            onChange={(e) => {
-                              const uVal = parseFloat(e.target.value);
-                              if (!isFinite(uVal) || uVal <= 0) return;
-                              const px = pixelsFromUnitValue(uVal, unit, pixelsPerMeter);
-                              history.set({
-                                ...history.state,
-                                walls: history.state.walls.map((w) =>
-                                  w.id === selectedWall.id ? { ...w, thickness: px } : w
-                                ),
-                              });
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400">Justification</span>
-                          <div className="mt-0.5 flex flex-wrap gap-1.5">
-                            <Button size="sm" variant={(selectedWall.method ?? "center") === "left" ? "default" : "outline"} onClick={() => setWallMethodForUi("left")}>
-                              Left
-                            </Button>
-                            <Button size="sm" variant={(selectedWall.method ?? "center") === "center" ? "default" : "outline"} onClick={() => setWallMethodForUi("center")}>
-                              Center
-                            </Button>
-                            <Button size="sm" variant={(selectedWall.method ?? "center") === "right" ? "default" : "outline"} onClick={() => setWallMethodForUi("right")}>
-                              Right
-                            </Button>
-                          </div>
-                          <p className="mt-0.5 text-[9px] text-slate-400">Press Tab while drawing to cycle.</p>
-                        </div>
-                        {(selectedWall.segmentType === "door" || selectedWall.segmentType === "window") && (
-                          <div>
-                            <span className="text-[10px] text-slate-400">Lintel Height ({unit})</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={unitStep()}
-                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                              value={selectedWall.lintelHeightM == null ? "" : mInUnit(selectedWall.lintelHeightM).toFixed(unitDecimals())}
-                              placeholder={mInUnit(2.10).toFixed(unitDecimals())}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                const u = raw === "" ? undefined : parseFloat(raw);
-                                if (raw !== "" && (!isFinite(u as number) || (u as number) < 0)) return;
-                                const v = u === undefined ? undefined : unitToM(u as number);
-                                history.set({
-                                  ...history.state,
-                                  walls: history.state.walls.map((w) =>
-                                    w.id === selectedWall.id ? { ...w, lintelHeightM: v } : w
-                                  ),
-                                });
-                              }}
-                            />
-                          </div>
-                        )}
-                        {selectedWall.segmentType === "window" && (
-                          <div>
-                            <span className="text-[10px] text-slate-400">Sill Height ({unit})</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={unitStep()}
-                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                              value={selectedWall.sillHeightM == null ? "" : mInUnit(selectedWall.sillHeightM).toFixed(unitDecimals())}
-                              placeholder={mInUnit(0.90).toFixed(unitDecimals())}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                const u = raw === "" ? undefined : parseFloat(raw);
-                                if (raw !== "" && (!isFinite(u as number) || (u as number) < 0)) return;
-                                const v = u === undefined ? undefined : unitToM(u as number);
-                                history.set({
-                                  ...history.state,
-                                  walls: history.state.walls.map((w) =>
-                                    w.id === selectedWall.id ? { ...w, sillHeightM: v } : w
-                                  ),
-                                });
-                              }}
-                            />
-                          </div>
-                        )}
-                        {selectedWall.segmentType === "window" && (
-                          <label className="flex items-center gap-1 text-[10px] text-slate-600">
-                            <input
-                              type="checkbox"
-                              checked={!!selectedWall.isOpen}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                history.set({
-                                  ...history.state,
-                                  walls: history.state.walls.map((w) =>
-                                    w.id === selectedWall.id ? { ...w, isOpen: checked } : w
-                                  ),
-                                });
-                              }}
-                            />
-                            Is Open <span className="text-slate-400">(3D only — sash swings outward)</span>
-                          </label>
-                        )}
-                      </>}
-                    </div>
-
-                    {/* Outputs block — derived, read-only */}
-                    <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-left"
-                        onClick={() => setWallOutputsExpanded((v) => !v)}
-                      >
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Outputs</span>
-                        <span className="text-[11px] text-slate-400">{wallOutputsExpanded ? "▼" : "▶"}</span>
-                      </button>
-                      {wallOutputsExpanded && (() => {
-                        const wdx = selectedWall.end.x - selectedWall.start.x;
-                        const wdy = selectedWall.end.y - selectedWall.start.y;
-                        const lenPx = Math.hypot(wdx, wdy);
-                        const lenUnit = unitValueFromPixels(lenPx, unit, pixelsPerMeter);
-                        const angleDeg = (Math.atan2(wdy, wdx) * 180) / Math.PI;
-                        // Screen y grows downward, so flip sign to show conventional rise-over-run slope.
-                        const slope = Math.abs(wdx) < 1e-9 ? Infinity : -wdy / wdx;
-                        const sx = selectedWall.start.x / pixelsPerMeter;
-                        const sy = selectedWall.start.y / pixelsPerMeter;
-                        const tx = selectedWall.end.x / pixelsPerMeter;
-                        const ty = selectedWall.end.y / pixelsPerMeter;
-                        return (
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                            <div>
-                              <span className="text-[9px] text-slate-400">Length</span>
-                              <p className="font-mono text-slate-700">{lenUnit.toFixed(3)} {unit}</p>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">Angle</span>
-                              <p className="font-mono text-slate-700">{angleDeg.toFixed(2)}°</p>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">Slope (rise/run)</span>
-                              <p className="font-mono text-slate-700">{isFinite(slope) ? slope.toFixed(3) : "∞ (vertical)"}</p>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">Direction</span>
-                              <p className="font-mono text-slate-700">
-                                {Math.abs(wdy) < 0.5 ? "horizontal" : Math.abs(wdx) < 0.5 ? "vertical" : "oblique"}
-                              </p>
-                            </div>
-                            <div className="col-span-2">
-                              <span className="text-[9px] text-slate-400">Nodes (m)</span>
-                              <div className="mt-0.5 rounded border border-slate-100 bg-slate-50 p-1 font-mono text-[9px] leading-[1.35] text-slate-700">
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-slate-400">source</span>
-                                  <span>{sx.toFixed(3)}, {sy.toFixed(3)}</span>
-                                </div>
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-slate-400">target</span>
-                                  <span>{tx.toFixed(3)}, {ty.toFixed(3)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Wall extend behavior — direction + connection constraints */}
-                    <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-left"
-                        onClick={() => setWallExtendExpanded((v) => !v)}
-                      >
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Wall Extend Behavior</span>
-                        <span className="text-[11px] text-slate-400">{wallExtendExpanded ? "▼" : "▶"}</span>
-                      </button>
-                      {wallExtendExpanded && <>
-                        <div>
-                          <span className="text-[10px] text-slate-400">Direction Constraints</span>
-                          <div className="mt-0.5 flex flex-wrap gap-1.5">
-                            <Button size="sm" variant={wallDirectionConstraint === "perpendicular" ? "default" : "outline"} onClick={() => setWallDirectionConstraint("perpendicular")}>
-                              Move perpendicular to edge
-                            </Button>
-                            <Button size="sm" variant={wallDirectionConstraint === "free" ? "default" : "outline"} onClick={() => setWallDirectionConstraint("free")}>
-                              Move Freely
-                            </Button>
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400">Connection Constraints</span>
-                          <div className="mt-0.5 flex flex-wrap gap-1.5">
-                            <Button size="sm" variant={wallExtendMode === "with-area" ? "default" : "outline"} onClick={() => setWallExtendMode("with-area")}>
-                              Move connected edges as well
-                            </Button>
-                            <Button size="sm" variant={wallExtendMode === "wall-only" ? "default" : "outline"} onClick={() => setWallExtendMode("wall-only")}>
-                              Move independently
-                            </Button>
-                          </div>
-                        </div>
-                      </>}
-                    </div>
-
-                    {/* Display — per-wall rendering toggles (e.g. direction arrow) */}
-                    <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-left"
-                        onClick={() => setWallDisplayExpanded((v) => !v)}
-                      >
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Display</span>
-                        <span className="text-[11px] text-slate-400">{wallDisplayExpanded ? "▼" : "▶"}</span>
-                      </button>
-                      {wallDisplayExpanded && <>
-                        <label className="flex items-center gap-1 text-[10px] text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={!!selectedWall.showDirection}
-                            onChange={(e) => {
-                              const show = e.target.checked;
-                              history.set({
-                                ...history.state,
-                                walls: history.state.walls.map((w) =>
-                                  w.id === selectedWall.id ? { ...w, showDirection: show } : w
-                                ),
-                              });
-                            }}
-                          />
-                          Show Direction
-                          <span className="text-[9px] text-slate-400">(arrow at midpoint, source → target)</span>
-                        </label>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full text-[11px]"
-                          onClick={() => {
-                            history.set({
-                              ...history.state,
-                              walls: history.state.walls.map((w) =>
-                                w.id === selectedWall.id
-                                  ? { ...w, start: { ...w.end }, end: { ...w.start } }
-                                  : w
-                              ),
-                            });
-                          }}
-                        >
-                          Flip Direction
-                        </Button>
-                        <p className="text-[9px] text-slate-400">
-                          Level: {wallLevels.has(selectedWall.id) ? `L${wallLevels.get(selectedWall.id)}` : "—"}
-                          <span className="ml-1">(toggle “Show Level” in Default Settings to display globally)</span>
-                        </p>
-                      </>}
-                    </div>
-
-                    {/* Splitting — split wall into N parts by percent or length */}
-                    <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-left"
-                        onClick={() => setWallSplitExpanded((v) => !v)}
-                      >
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Splitting</span>
-                        <span className="text-[11px] text-slate-400">{wallSplitExpanded ? "▼" : "▶"}</span>
-                      </button>
-                      {wallSplitExpanded && (() => {
-                        const totalPx = Math.hypot(selectedWall.end.x - selectedWall.start.x, selectedWall.end.y - selectedWall.start.y);
-                        const totalUnit = unitValueFromPixels(totalPx, unit, pixelsPerMeter);
-                        const N = Math.max(2, Math.min(20, Math.round(wallSplitCount)));
-                        const percents = wallSplitPercents.slice(0, N - 1);
-                        const lengths = wallSplitLengths.slice(0, N - 1);
-                        const sumPct = percents.reduce((s, v) => s + v, 0);
-                        const sumLen = lengths.reduce((s, v) => s + v, 0);
-                        const lastPct = Math.max(0, 100 - sumPct);
-                        const lastLen = Math.max(0, totalUnit - sumLen);
-                        return (
-                          <>
-                            <div>
-                              <span className="text-[10px] text-slate-400">Number of parts (n)</span>
-                              <input
-                                type="number"
-                                min={2}
-                                max={20}
-                                step={1}
-                                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                                value={wallSplitCount}
-                                onChange={(e) => setWallSplitCount(Math.max(2, Math.min(20, Math.round(+e.target.value || 2))))}
-                              />
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-400">Type</span>
-                              <div className="mt-0.5 flex flex-wrap gap-1.5">
-                                <Button size="sm" variant={wallSplitType === "percent" ? "default" : "outline"} onClick={() => setWallSplitType("percent")}>
-                                  Based on Percent
-                                </Button>
-                                <Button size="sm" variant={wallSplitType === "length" ? "default" : "outline"} onClick={() => setWallSplitType("length")}>
-                                  Based on Length
-                                </Button>
-                              </div>
-                            </div>
-                            {wallSplitType === "percent" ? (
-                              <div>
-                                <span className="text-[10px] text-slate-400">Percentages for first {N - 1} parts (%)</span>
-                                <div className="mt-0.5 space-y-1">
-                                  {percents.map((p, i) => (
-                                    <div key={i} className="flex items-center gap-2">
-                                      <span className="w-10 text-[10px] text-slate-500">Part {i + 1}</span>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        max={100}
-                                        step={1}
-                                        className="h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                                        value={p}
-                                        onChange={(e) => {
-                                          const v = +e.target.value;
-                                          setWallSplitPercents((arr) => arr.map((x, idx) => idx === i ? v : x));
-                                        }}
-                                      />
-                                      <span className="text-[9px] text-slate-400">%</span>
-                                    </div>
-                                  ))}
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-10 text-[10px] text-slate-500">Part {N}</span>
-                                    <input
-                                      type="text"
-                                      readOnly
-                                      className="h-6 w-full rounded-md border border-slate-200 bg-slate-50 px-1.5 text-xs font-mono text-slate-700"
-                                      value={lastPct.toFixed(2)}
-                                    />
-                                    <span className="text-[9px] text-slate-400">% (auto)</span>
-                                  </div>
-                                </div>
-                                {sumPct >= 100 && <p className="text-[9px] text-red-600">Sum of percentages must be &lt; 100</p>}
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="text-[10px] text-slate-400">Lengths for first {N - 1} parts ({unit}) — total {totalUnit.toFixed(3)} {unit}</span>
-                                <div className="mt-0.5 space-y-1">
-                                  {lengths.map((L, i) => (
-                                    <div key={i} className="flex items-center gap-2">
-                                      <span className="w-10 text-[10px] text-slate-500">Part {i + 1}</span>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        step={unit === "cm" ? 1 : 0.01}
-                                        className="h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                                        value={L}
-                                        onChange={(e) => {
-                                          const v = +e.target.value;
-                                          setWallSplitLengths((arr) => arr.map((x, idx) => idx === i ? v : x));
-                                        }}
-                                      />
-                                      <span className="text-[9px] text-slate-400">{unit}</span>
-                                    </div>
-                                  ))}
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-10 text-[10px] text-slate-500">Part {N}</span>
-                                    <input
-                                      type="text"
-                                      readOnly
-                                      className="h-6 w-full rounded-md border border-slate-200 bg-slate-50 px-1.5 text-xs font-mono text-slate-700"
-                                      value={lastLen.toFixed(3)}
-                                    />
-                                    <span className="text-[9px] text-slate-400">{unit} (auto)</span>
-                                  </div>
-                                </div>
-                                {sumLen >= totalUnit - 1e-6 && <p className="text-[9px] text-red-600">Sum of lengths must be &lt; total ({totalUnit.toFixed(3)} {unit})</p>}
-                              </div>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full text-[11px]"
-                              onClick={splitSelectedWallByParams}
-                            >
-                              Apply Split
-                            </Button>
-                          </>
-                        );
-                      })()}
-                    </div>
+                    <WallSplitBlock
+                      selectedWall={selectedWall}
+                      unit={unit}
+                      pixelsPerMeter={pixelsPerMeter}
+                      expanded={wallSplitExpanded}
+                      setExpanded={setWallSplitExpanded}
+                      count={wallSplitCount}
+                      setCount={setWallSplitCount}
+                      type={wallSplitType}
+                      setType={setWallSplitType}
+                      percents={wallSplitPercents}
+                      setPercents={setWallSplitPercents}
+                      lengths={wallSplitLengths}
+                      setLengths={setWallSplitLengths}
+                      onApplySplit={splitSelectedWallByParams}
+                    />
 
                     {((selectedWall.segmentType ?? "wall") === "wall" || selectedWall.segmentType === "plot-boundary") && (() => {
                       const segLenPx = Math.hypot(selectedWall.end.x - selectedWall.start.x, selectedWall.end.y - selectedWall.start.y);
@@ -22580,10 +22551,6 @@ User request: ${aiPrompt.trim()}`;
 
                 {selectedRoom ? (
                   <div className="mt-4 rounded border bg-green-50 p-2 text-xs space-y-2">
-                    {selectedRoom.label ? (
-                      <p className="font-semibold text-green-800">{selectedRoom.label}</p>
-                    ) : null}
-
                     {/* Box 1: Input parameters */}
                     <div className="rounded border border-slate-200 bg-white p-2">
                       <button
@@ -22613,13 +22580,41 @@ User request: ${aiPrompt.trim()}`;
                         );
                       })()}
                       <div className="mt-2">
+                        <span className="text-[10px] text-slate-400">Label</span>
+                        <input
+                          type="text"
+                          className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+                          value={selectedRoom.label ?? ""}
+                          placeholder="Optional label"
+                          onChange={(e) => {
+                            const newLabel = e.target.value || undefined;
+                            const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                            if (isAuto) {
+                              // Auto-detected rooms have no entry in history.state.rooms — promote
+                              // to manual so the label persists across wall edits.
+                              const newId = createId();
+                              history.set({
+                                ...history.state,
+                                rooms: [...history.state.rooms, { ...selectedRoom, id: newId, label: newLabel }],
+                              });
+                              selection.selectOne(newId);
+                            } else {
+                              history.set({
+                                ...history.state,
+                                rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, label: newLabel } : r),
+                              });
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="mt-2">
                       <span className="text-[10px] text-slate-400">Type</span>
                       <select
                         className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
                         value={selectedRoom.roomType ?? "room"}
                         onChange={(e) => {
                           const newType = e.target.value;
-                          const isBuiltin = newType === "room" || newType === "floorplate-boundary" || newType === "plot-boundary" || newType === "buildable-area";
+                          const isBuiltin = newType === "room" || newType === "floorplate-boundary" || newType === "plot-boundary" || newType === "buildable-area" || newType === "path";
                           // Custom (user-defined) types: simple roomType swap, no special wall/floorplate handling.
                           if (!isBuiltin) {
                             const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
@@ -22778,6 +22773,7 @@ User request: ${aiPrompt.trim()}`;
                         <option value="buildable-area">Buildable Area</option>
                         <option value="floorplate-boundary">Footprint Area</option>
                         <option value="room">Room</option>
+                        <option value="path">Path</option>
                         {Object.values(history.state.customRoomTypes ?? {}).map((t) => (
                           <option key={t.id} value={t.id}>{t.displayName}</option>
                         ))}
@@ -23838,6 +23834,31 @@ User request: ${aiPrompt.trim()}`;
                       }}
                     />
 
+                    {/* Inflation Algorithm — soap-film inscribed rectangle solver (concave-aware). */}
+                    <InflationAlgorithmBlock
+                      selectedRoom={selectedRoom}
+                      expanded={inflationExpanded}
+                      setExpanded={setInflationExpanded}
+                      live={inflationLive}
+                      setLive={setInflationLive}
+                      seeds={inflationSeeds}
+                      setSeeds={setInflationSeeds}
+                      angleMode={inflationAngleMode}
+                      setAngleMode={setInflationAngleMode}
+                      axisAngleDeg={inflationAxisAngleDeg}
+                      setAxisAngleDeg={setInflationAxisAngleDeg}
+                      sweepSteps={inflationSweepSteps}
+                      setSweepSteps={setInflationSweepSteps}
+                      count={inflationCount}
+                      setCount={setInflationCount}
+                      minArea={inflationMinArea}
+                      setMinArea={setInflationMinArea}
+                      runRoomInflation={runRoomInflation}
+                      onClearAllPreview={() => {
+                        const h = historyRef.current;
+                        h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInflationPreview) });
+                      }}
+                    />
                     {/* Classify Polygon — runs the rectilinear shape classifier on the selected room. */}
                     <ClassifyPolygonBlock
                       selectedRoom={selectedRoom}
@@ -24090,6 +24111,8 @@ User request: ${aiPrompt.trim()}`;
                       setSeedsByRoom={setVoronoiSeedsByRoom}
                       useVerticesByRoom={voronoiUseVerticesByRoom}
                       setUseVerticesByRoom={setVoronoiUseVerticesByRoom}
+                      level={voronoiLevel}
+                      setLevel={setVoronoiLevel}
                       runRoomVoronoi={runRoomVoronoi}
                       onClearAllPreview={() => {
                         const h = historyRef.current;
@@ -24474,16 +24497,10 @@ User request: ${aiPrompt.trim()}`;
                       setTiltAngle={setBspTiltAngle}
                       useAreaPercent={bspUseAreaPercent}
                       setUseAreaPercent={setBspUseAreaPercent}
+                      areaConstraintActive={bspAreaConstraintActive}
+                      setAreaConstraintActive={setBspAreaConstraintActive}
                       runRoomBsp={runRoomBsp}
                       runRoomBspConnection={runRoomBspConnection}
-                      mode={bspModeByRoom[selectedRoom.id] ?? "normal"}
-                      setMode={(m) => {
-                        setBspModeByRoom((prev) => ({ ...prev, [selectedRoom.id]: m }));
-                        // Mode drives the area-percent flag: "area-percent" and
-                        // "area-and-connection" weight the cut positions, the other two
-                        // produce equal splits.
-                        setBspUseAreaPercent(m === "area-percent" || m === "area-and-connection");
-                      }}
                       onClearAllPreview={() => {
                         const h = historyRef.current;
                         h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isBspPreview) });
@@ -25441,6 +25458,29 @@ User request: ${aiPrompt.trim()}`;
         maxRatio={addRoomMaxRatio}
         onMaxRatioChange={setAddRoomMaxRatio}
         onConfirm={handleAddRoomConfirm}
+      />
+
+      {/* Draw Path Dialog — prompts label + thickness, then activates polyline-path draw mode. */}
+      <DrawPathDialog
+        open={drawPathDialogOpen}
+        onOpenChange={setDrawPathDialogOpen}
+        label={drawPathLabelInput}
+        onLabelChange={setDrawPathLabelInput}
+        thicknessM={drawPathThicknessInputM}
+        onThicknessChange={setDrawPathThicknessInputM}
+        onStart={() => {
+          const tM = parseFloat(drawPathThicknessInputM);
+          const safeThicknessM = isFinite(tM) && tM > 0 ? tM : 0.2;
+          const safeLabel = drawPathLabelInput.trim() || "Path1";
+          setActiveDrawPathConfig({
+            label: safeLabel,
+            thicknessPx: safeThicknessM * pixelsPerMeter,
+          });
+          setTool("wall");
+          setWallDrawType("polyline");
+          setNextWallSegmentType("path");
+          setDrawPathDialogOpen(false);
+        }}
       />
 
       {/* Simulated Annealing Dialog — parameter setup only */}

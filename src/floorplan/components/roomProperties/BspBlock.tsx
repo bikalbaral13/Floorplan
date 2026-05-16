@@ -53,15 +53,15 @@ export interface BspBlockProps {
   setTiltAngle: (v: number) => void;
   useAreaPercent: boolean;
   setUseAreaPercent: (v: boolean) => void;
+  /** Top-level "Use Area Percent" toggle. When false, the BSP solver picks cut
+   *  positions by seed median (free drag); when true, area-balanced cuts are used
+   *  and the Equal-area sub-checkbox becomes visible. */
+  areaConstraintActive?: boolean;
+  setAreaConstraintActive?: (v: boolean) => void;
   runRoomBsp: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
   /** Connection-mode runner: solves a slicing tree from the adjacency matrix on the
    *  same seeds. Optional — if omitted, Connection / Area+Connection modes hide. */
   runRoomBspConnection?: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
-  /** Per-room BSP mode (single dropdown). "normal" = equal-split BSP;
-   *  "area-percent" = weighted BSP; "connection" = adjacency-only RFP; and
-   *  "area-and-connection" = adjacency topology with weighted cut positions. */
-  mode?: "normal" | "area-percent" | "connection" | "area-and-connection";
-  setMode?: (m: "normal" | "area-percent" | "connection" | "area-and-connection") => void;
   onClearAllPreview: () => void;
   onClearRoomPreview: (roomId: string) => void;
 }
@@ -69,8 +69,6 @@ export interface BspBlockProps {
 export const BspBlock = (p: BspBlockProps) => {
   const rid = p.selectedRoom.id;
   const seeds = p.seedsByRoom[rid] ?? [];
-  const mode = p.mode ?? "normal";
-  const isConnectionMode = mode === "connection" || mode === "area-and-connection";
   const conns = p.connectionsByRoom?.[rid] ?? [];
   const connSet = new Set(
     conns.map((c) => (c.aSeedId < c.bSeedId ? `${c.aSeedId}|${c.bSeedId}` : `${c.bSeedId}|${c.aSeedId}`))
@@ -102,20 +100,28 @@ export const BspBlock = (p: BspBlockProps) => {
         <span className="text-[11px] text-slate-400">{p.expanded ? "▼" : "▶"}</span>
       </button>
       {p.expanded && <>
-        {p.setMode && (
-          <div>
-            <span className="text-[10px] text-slate-500">Mode</span>
-            <select
-              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-              value={mode}
-              onChange={(e) => p.setMode?.(e.target.value as typeof mode)}
-            >
-              <option value="normal">Normal (equal split)</option>
-              <option value="area-percent">Area Percent (weighted)</option>
-              <option value="connection">Connection (adjacency only)</option>
-              <option value="area-and-connection">Area + Connection</option>
-            </select>
-          </div>
+        {/* Two-level toggle:
+            "Use Area Percent" (top) — when OFF, BSP cuts are median-position between
+            adjacent seeds, so dragging a seed reshapes its cell. When ON, cuts are
+            area-balanced and the nested "Equal area" sub-toggle chooses between
+            per-seed weights and uniform weights. */}
+        <label className="flex items-center gap-1 text-[10px] text-slate-600">
+          <input
+            type="checkbox"
+            checked={!!p.areaConstraintActive}
+            onChange={(e) => p.setAreaConstraintActive?.(e.target.checked)}
+          />
+          Use Area Percent
+        </label>
+        {p.areaConstraintActive && (
+          <label className="ml-4 flex items-center gap-1 text-[10px] text-slate-600">
+            <input
+              type="checkbox"
+              checked={!p.useAreaPercent}
+              onChange={(e) => p.setUseAreaPercent(!e.target.checked)}
+            />
+            Equal area (every seed shares equally)
+          </label>
         )}
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-slate-500">Seeds</span>
@@ -132,12 +138,20 @@ export const BspBlock = (p: BspBlockProps) => {
             const angle = idx * ((Math.PI * 2) / 7);
             const newCount = seeds.length + 1;
             const equalShare = Math.round(100 / newCount);
+            // Randomised soft constraints so each new seed lands with a different
+            // green/red target window — feels less canned than fixed defaults, and
+            // surfaces violations realistically without the user editing anything.
+            // Ranges: minArea ∈ [4, 10) m², maxArea ∈ [10, 30) m², maxRatio ∈ [1.5, 2).
+            const randIn = (lo: number, hi: number) => +(lo + Math.random() * (hi - lo)).toFixed(2);
             const ns: BspSeed = {
               x: c.x + Math.cos(angle) * offsetStep * (idx + 1) * 0.8,
               y: c.y + Math.sin(angle) * offsetStep * (idx + 1) * 0.8,
               weight: equalShare,
               id: makeSeedId(),
               label: `Seed${idx + 1}`,
+              minArea: randIn(4, 10),
+              maxArea: randIn(10, 30),
+              maxRatio: randIn(1.5, 2),
             };
             p.setSeedsByRoom((prev) => {
               const existing = (prev[rid] ?? []).map((s, i) => ({
@@ -166,152 +180,6 @@ export const BspBlock = (p: BspBlockProps) => {
           </Button>
         )}
 
-        {/* Corridor — separate primitive: 1-D strip with width, translatable and extensible. */}
-        {(() => {
-          const corridors = p.corridorsByRoom?.[rid] ?? [];
-          const ppm = p.pixelsPerMeter ?? 50;
-          return (
-            <div className="rounded border border-slate-200 bg-slate-50 p-1.5 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Corridors</span>
-                <span className="font-mono text-[10px] text-slate-700">{corridors.length}</span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-[11px]"
-                onClick={() => {
-                  if (!p.setCorridorsByRoom) return;
-                  const pts = p.selectedRoom.points;
-                  const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
-                  const minX = Math.min(...xs), maxX = Math.max(...xs);
-                  const minY = Math.min(...ys), maxY = Math.max(...ys);
-                  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-                  const w = maxX - minX, h = maxY - minY;
-                  // Default corridor: along the longer bbox axis, 70% length, centered.
-                  const horizontal = w >= h;
-                  const halfLen = (horizontal ? w : h) * 0.35;
-                  const a: Point = horizontal ? { x: cx - halfLen, y: cy } : { x: cx, y: cy - halfLen };
-                  const b: Point = horizontal ? { x: cx + halfLen, y: cy } : { x: cx, y: cy + halfLen };
-                  const newCor: BspCorridor = {
-                    id: makeSeedId(),
-                    label: `Corridor${(corridors.length) + 1}`,
-                    centerline: [a, b],
-                    width: 1.8,
-                  };
-                  p.setCorridorsByRoom((prev) => ({ ...prev, [rid]: [...(prev[rid] ?? []), newCor] }));
-                }}
-              >
-                Add Corridor
-              </Button>
-              {corridors.length > 0 && (
-                <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
-                  {corridors.map((c, i) => {
-                    const dx = c.centerline[1].x - c.centerline[0].x;
-                    const dy = c.centerline[1].y - c.centerline[0].y;
-                    const lenM = Math.hypot(dx, dy) / ppm;
-                    return (
-                      <div key={`cor-${c.id}`} className="rounded border border-slate-200 bg-white p-1 space-y-1">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[9px] text-slate-500 w-4">{i + 1}</span>
-                          <input
-                            type="text"
-                            className="flex-1 min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[10px]"
-                            value={c.label}
-                            onChange={(e) => {
-                              if (!p.setCorridorsByRoom) return;
-                              const v = e.target.value;
-                              p.setCorridorsByRoom((prev) => {
-                                const arr = [...(prev[rid] ?? [])];
-                                arr[i] = { ...arr[i], label: v };
-                                return { ...prev, [rid]: arr };
-                              });
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="text-[10px] text-slate-400 hover:text-red-600"
-                            title="Remove corridor"
-                            onClick={() => {
-                              if (!p.setCorridorsByRoom) return;
-                              p.setCorridorsByRoom((prev) => {
-                                const arr = (prev[rid] ?? []).filter((_, idx) => idx !== i);
-                                return { ...prev, [rid]: arr };
-                              });
-                            }}
-                          >×</button>
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] text-slate-500">width</span>
-                            <span className="font-mono text-[10px] text-slate-700">{c.width.toFixed(2)} m</span>
-                          </div>
-                          <input
-                            type="range"
-                            className="w-full"
-                            min={0.5}
-                            max={10}
-                            step={0.1}
-                            value={c.width}
-                            onChange={(e) => {
-                              if (!p.setCorridorsByRoom) return;
-                              const v = +e.target.value;
-                              p.setCorridorsByRoom((prev) => {
-                                const arr = [...(prev[rid] ?? [])];
-                                arr[i] = { ...arr[i], width: v };
-                                return { ...prev, [rid]: arr };
-                              });
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] text-slate-500">length</span>
-                            <span className="font-mono text-[10px] text-slate-700">{lenM.toFixed(2)} m</span>
-                          </div>
-                          <input
-                            type="range"
-                            className="w-full"
-                            min={0.5}
-                            max={100}
-                            step={0.1}
-                            value={lenM}
-                            onChange={(e) => {
-                              if (!p.setCorridorsByRoom) return;
-                              const targetM = +e.target.value;
-                              const targetPx = targetM * ppm;
-                              p.setCorridorsByRoom((prev) => {
-                                const arr = [...(prev[rid] ?? [])];
-                                const cur = arr[i];
-                                const [a0, b0] = cur.centerline;
-                                const cx = (a0.x + b0.x) / 2, cy = (a0.y + b0.y) / 2;
-                                const ddx = b0.x - a0.x, ddy = b0.y - a0.y;
-                                const curLen = Math.hypot(ddx, ddy) || 1;
-                                // Direction = current centerline direction; fall back to +x if degenerate.
-                                const ux = curLen > 1e-3 ? ddx / curLen : 1;
-                                const uy = curLen > 1e-3 ? ddy / curLen : 0;
-                                const half = targetPx / 2;
-                                arr[i] = {
-                                  ...cur,
-                                  centerline: [
-                                    { x: cx - ux * half, y: cy - uy * half },
-                                    { x: cx + ux * half, y: cy + uy * half },
-                                  ],
-                                };
-                                return { ...prev, [rid]: arr };
-                              });
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
         <div>
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500">Tilt angle</span>
@@ -320,15 +188,6 @@ export const BspBlock = (p: BspBlockProps) => {
           <input type="range" className="w-full" min={0} max={179} step={1}
             value={p.tiltAngle} onChange={(e) => p.setTiltAngle(+e.target.value)} />
         </div>
-
-        {/* "Use Area Percent" is now derived from the Mode dropdown above. Hidden
-            when the Mode prop is wired so the two controls don't conflict. */}
-        {!p.setMode && (
-          <label className="flex items-center gap-1 text-[10px] text-slate-600">
-            <input type="checkbox" checked={p.useAreaPercent} onChange={(e) => p.setUseAreaPercent(e.target.checked)} />
-            Use Area Percent
-          </label>
-        )}
 
         {seeds.length > 0 && (() => {
           const totalW = seeds.reduce((sum, s) => sum + Math.max(0.01, s.weight ?? 1), 0) || 1;
@@ -403,18 +262,55 @@ export const BspBlock = (p: BspBlockProps) => {
                         min={0}
                         max={100}
                         step={1}
-                        value={raw}
+                        value={Math.round(raw)}
                         disabled={!p.useAreaPercent}
                         onChange={(e) => {
-                          const v = +e.target.value;
+                          const v = Math.max(0, Math.min(100, Math.round(+e.target.value)));
                           p.setSeedsByRoom((prev) => {
                             const arr = [...(prev[rid] ?? [])];
-                            arr[i] = { ...arr[i], weight: v };
+                            // Auto-rebalance: keep the sum of all seed weights at 100,
+                            // so the slider value the user picks is literally that
+                            // seed's % share. Other seeds are scaled proportionally
+                            // (or split equally when they were all at zero). Each
+                            // weight is rounded to an integer so subsequent slider
+                            // moves snap cleanly to 1% increments.
+                            const otherIndices = arr.map((_, idx) => idx).filter((idx) => idx !== i);
+                            const otherSum = otherIndices.reduce((s, idx) => s + Math.max(0, arr[idx].weight ?? 0), 0);
+                            const remaining = 100 - v;
+                            if (otherIndices.length === 0) {
+                              arr[i] = { ...arr[i], weight: v };
+                            } else if (otherSum > 1e-6) {
+                              // Scale, then round; redistribute residue (sum-100 drift
+                              // from rounding) onto the largest neighbour so the total
+                              // always lands exactly on 100.
+                              const scaled = otherIndices.map((idx) =>
+                                Math.round(Math.max(0, arr[idx].weight ?? 0) * remaining / otherSum),
+                              );
+                              const drift = remaining - scaled.reduce((s, x) => s + x, 0);
+                              if (drift !== 0 && scaled.length > 0) {
+                                let bigIdx = 0;
+                                for (let k = 1; k < scaled.length; k++) if (scaled[k] > scaled[bigIdx]) bigIdx = k;
+                                scaled[bigIdx] += drift;
+                              }
+                              for (let k = 0; k < otherIndices.length; k++) {
+                                const idx = otherIndices[k];
+                                arr[idx] = { ...arr[idx], weight: Math.max(0, scaled[k]) };
+                              }
+                              arr[i] = { ...arr[i], weight: v };
+                            } else {
+                              const share = Math.floor(remaining / otherIndices.length);
+                              const residue = remaining - share * otherIndices.length;
+                              for (let k = 0; k < otherIndices.length; k++) {
+                                const idx = otherIndices[k];
+                                arr[idx] = { ...arr[idx], weight: share + (k < residue ? 1 : 0) };
+                              }
+                              arr[i] = { ...arr[i], weight: v };
+                            }
                             return { ...prev, [rid]: arr };
                           });
                         }}
                       />
-                      <span className="text-[9px] font-mono text-slate-600 w-10 text-right">{normalised.toFixed(0)}%</span>
+                      <span className="text-[9px] font-mono text-slate-600 w-10 text-right">{Math.round(raw)}%</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="text-[9px] text-slate-500 w-14 shrink-0">MinArea :</span>
@@ -474,7 +370,7 @@ export const BspBlock = (p: BspBlockProps) => {
           );
         })()}
 
-        {seeds.length >= 2 && isConnectionMode && (
+        {seeds.length >= 2 && (
           <div className="rounded border border-slate-200 bg-slate-50 p-1.5 space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Adjacency Matrix</span>
@@ -542,11 +438,11 @@ export const BspBlock = (p: BspBlockProps) => {
                 const on = e.target.checked;
                 p.setLive(on);
                 if (on) {
-                  if (isConnectionMode && p.runRoomBspConnection) {
-                    p.runRoomBspConnection(p.selectedRoom, true);
-                  } else {
-                    p.runRoomBsp(p.selectedRoom, true);
-                  }
+                  // Always route through the connection-aware runner. With an empty
+                  // adjacency matrix it degenerates to pure area-balanced cuts; with
+                  // ticks present it adds adjacency constraints — no mode toggle needed.
+                  if (p.runRoomBspConnection) p.runRoomBspConnection(p.selectedRoom, true);
+                  else p.runRoomBsp(p.selectedRoom, true);
                 } else {
                   p.onClearAllPreview();
                 }
@@ -554,7 +450,7 @@ export const BspBlock = (p: BspBlockProps) => {
             />
             Live
           </label>
-          <span className="text-[9px] text-slate-400">{p.live ? "auto-updates on drag" : `click Apply ${isConnectionMode ? "(Connection)" : "BSP"}`}</span>
+          <span className="text-[9px] text-slate-400">{p.live ? "auto-updates on drag" : "click Apply BSP"}</span>
         </div>
 
         <Button
@@ -562,14 +458,11 @@ export const BspBlock = (p: BspBlockProps) => {
           size="sm"
           className="w-full text-[11px]"
           onClick={() => {
-            if (isConnectionMode && p.runRoomBspConnection) {
-              p.runRoomBspConnection(p.selectedRoom, false);
-            } else {
-              p.runRoomBsp(p.selectedRoom, false);
-            }
+            if (p.runRoomBspConnection) p.runRoomBspConnection(p.selectedRoom, false);
+            else p.runRoomBsp(p.selectedRoom, false);
           }}
         >
-          {isConnectionMode ? "Apply BSP (Connection)" : "Apply BSP"}
+          Apply BSP
         </Button>
       </>}
     </div>

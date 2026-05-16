@@ -112,6 +112,12 @@ export interface Wall {
   isConvexHullPreview?: boolean;
   /** Source room id for convex hull walls. */
   convexHullSourceRoomId?: string;
+  /** Wall belongs to a committed inflation (soap-film) inscribed rectangle. */
+  isInflationWall?: boolean;
+  /** Live-preview variant of inflation rectangle — excluded from room detection. */
+  isInflationPreview?: boolean;
+  /** Source room id for inflation rectangle walls. */
+  inflationSourceRoomId?: string;
   /** Wall belongs to a committed BSP partition. */
   isBspWall?: boolean;
   /** Live-preview variant of BSP partition — excluded from room detection. */
@@ -342,7 +348,7 @@ export interface WallPolygonGeometry {
  *  Built-in slugs are kept as a string union for code paths that branch on them.
  *  User-defined types extend this set at runtime via `FloorPlanModel.customRoomTypes`,
  *  so consumers should treat `roomType` as `string` when dealing with arbitrary values. */
-export type RoomType = "room" | "floorplate-boundary" | "plot-boundary" | "buildable-area";
+export type RoomType = "room" | "floorplate-boundary" | "plot-boundary" | "buildable-area" | "path";
 
 /** Schema for a single user-defined parameter on a custom room type. */
 export type ParamDef =
@@ -424,7 +430,8 @@ export type Tool =
   | "scale"
   | "pan"
   | "door"
-  | "window";
+  | "window"
+  | "point";
 
 export interface BaseObject {
   id: string;
