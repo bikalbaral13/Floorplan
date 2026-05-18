@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import type { Wall } from "../../types";
+import type { Wall, WallMethod } from "../../types";
 
 export interface WallDisplayBlockProps {
   selectedWall: Wall;
@@ -11,6 +11,8 @@ export interface WallDisplayBlockProps {
   onToggleShowDirection: (show: boolean) => void;
   /** Swap the wall's source and target endpoints (visual direction reverse). */
   onFlipDirection: () => void;
+  /** Justification change — keeps draw-mode default in sync. */
+  onJustificationChange: (m: WallMethod) => void;
 }
 
 /** Per-wall rendering toggles — direction arrow visibility, flip endpoints, and a
@@ -27,6 +29,21 @@ export const WallDisplayBlock = (p: WallDisplayBlockProps) => (
     </button>
     {p.expanded && (
       <>
+        <div>
+          <span className="text-[10px] text-slate-400">Justification</span>
+          <div className="mt-0.5 flex flex-wrap gap-1.5">
+            <Button size="sm" variant={(p.selectedWall.method ?? "center") === "left" ? "default" : "outline"} onClick={() => p.onJustificationChange("left")}>
+              Left
+            </Button>
+            <Button size="sm" variant={(p.selectedWall.method ?? "center") === "center" ? "default" : "outline"} onClick={() => p.onJustificationChange("center")}>
+              Center
+            </Button>
+            <Button size="sm" variant={(p.selectedWall.method ?? "center") === "right" ? "default" : "outline"} onClick={() => p.onJustificationChange("right")}>
+              Right
+            </Button>
+          </div>
+          <p className="mt-0.5 text-[9px] text-slate-400">Press Tab while drawing to cycle.</p>
+        </div>
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
           <input
             type="checkbox"

@@ -13,6 +13,27 @@ export const polygonArea = (points: Point[]) => {
   return Math.abs(total) / 2;
 };
 
+/** Area of a polygon with holes: outer area minus sum of hole areas.
+ *  Holes are not validated for containment — caller is responsible. */
+export const polygonAreaWithHoles = (outer: Point[], holes: Point[][] = []) => {
+  let area = polygonArea(outer);
+  for (const hole of holes) {
+    area -= polygonArea(hole);
+  }
+  return Math.max(0, area);
+};
+
+/** True iff every vertex of `inner` lies inside `outer`. Cheap conservative
+ *  containment test — assumes neither ring self-intersects and they don't cross
+ *  each other (which is the case for a plot fully containing a footprint). */
+export const polygonContainsPolygon = (outer: Point[], inner: Point[]) => {
+  if (outer.length < 3 || inner.length < 3) return false;
+  for (const p of inner) {
+    if (!isPointInPolygon(p, outer)) return false;
+  }
+  return true;
+};
+
 export const isPointInPolygon = (point: Point, polygon: Point[]) => {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {

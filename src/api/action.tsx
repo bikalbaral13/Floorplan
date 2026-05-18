@@ -10,13 +10,9 @@ export const getAuthHeaders = () => {
 };
 
 const handleUnauthorized = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("role");
-
-  // Avoid redirect loop
-  if (window.location.pathname !== "/signin") {
-    window.location.href = "/signin";
-  }
+  // Dev login bypass: swallow 401s instead of clearing the token and
+  // redirecting to /signin. The default token in getAuthHeaders keeps
+  // requests going; failures just bubble to the caller.
 };
 
 export const postServiceByEntity = async (

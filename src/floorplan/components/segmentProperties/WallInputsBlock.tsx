@@ -375,21 +375,7 @@ export const WallInputsBlock = (p: WallInputsBlockProps) => {
             />
           </div>
 
-          <div>
-            <span className="text-[10px] text-slate-400">Justification</span>
-            <div className="mt-0.5 flex flex-wrap gap-1.5">
-              <Button size="sm" variant={(w.method ?? "center") === "left" ? "default" : "outline"} onClick={() => p.onJustificationChange("left")}>
-                Left
-              </Button>
-              <Button size="sm" variant={(w.method ?? "center") === "center" ? "default" : "outline"} onClick={() => p.onJustificationChange("center")}>
-                Center
-              </Button>
-              <Button size="sm" variant={(w.method ?? "center") === "right" ? "default" : "outline"} onClick={() => p.onJustificationChange("right")}>
-                Right
-              </Button>
-            </div>
-            <p className="mt-0.5 text-[9px] text-slate-400">Press Tab while drawing to cycle.</p>
-          </div>
+          {/* Justification moved to Segment Tools → Display. */}
 
           {(w.segmentType === "door" || w.segmentType === "window") && (
             <div>

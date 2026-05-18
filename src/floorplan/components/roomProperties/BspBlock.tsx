@@ -58,6 +58,19 @@ export interface BspBlockProps {
    *  and the Equal-area sub-checkbox becomes visible. */
   areaConstraintActive?: boolean;
   setAreaConstraintActive?: (v: boolean) => void;
+  /** When true, the adjacency matrix is solved by the connection-aware runner.
+   *  When false, the matrix is rendered as dotted lines on the canvas (green/red)
+   *  but the BSP runs pure area / median-cut without any connection optimisation. */
+  useConnection?: boolean;
+  setUseConnection?: (v: boolean) => void;
+  /** Opens the Simulated Annealing dialog (parent owns the dialog + saRunning state).
+   *  The BSP block just renders the trigger button, gated on the area/connection flags. */
+  onSimulatedAnnealingClick?: () => void;
+  /** True when SA can run at all — requires a generated layout from the Optimisation
+   *  toolbar. When false, the button stays disabled even if the gating flags allow it. */
+  saAvailable?: boolean;
+  /** True while SA is iterating — toggles the button to its active visual state. */
+  saRunning?: boolean;
   runRoomBsp: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
   /** Connection-mode runner: solves a slicing tree from the adjacency matrix on the
    *  same seeds. Optional — if omitted, Connection / Area+Connection modes hide. */
@@ -371,6 +384,19 @@ export const BspBlock = (p: BspBlockProps) => {
         })()}
 
         {seeds.length >= 2 && (
+          <>
+            <label className="flex items-center gap-1 text-[10px] text-slate-600">
+              <input
+                type="checkbox"
+                checked={!!p.useConnection}
+                onChange={(e) => p.setUseConnection?.(e.target.checked)}
+              />
+              Use connection
+              <span className="text-[9px] text-slate-400">(feed matrix into solver)</span>
+            </label>
+          </>
+        )}
+        {seeds.length >= 2 && (
           <div className="rounded border border-slate-200 bg-slate-50 p-1.5 space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Adjacency Matrix</span>
@@ -464,6 +490,35 @@ export const BspBlock = (p: BspBlockProps) => {
         >
           Apply BSP
         </Button>
+
+        {/* Simulated Annealing — wires to the global SA pipeline from the Optimisation
+            toolbar. Only available when both Use Area Percent and Use Connection are
+            off (SA assumes free seed placement, no adjacency / area constraints). */}
+        {(() => {
+          // Button is enabled whenever Use Area Percent + Use Connection are both
+          // off. The "no generated layout" case is surfaced at click time via a
+          // toast — keeping the button live lets the user see SA exists and learn
+          // the prerequisite without having to flip flags around to discover it.
+          const saAllowed = !p.areaConstraintActive && !p.useConnection;
+          return (
+            <Button
+              variant={p.saRunning ? "default" : "outline"}
+              size="sm"
+              className="w-full text-[11px]"
+              disabled={!saAllowed}
+              title={
+                !saAllowed
+                  ? "Disable Use Area Percent and Use Connection to enable SA"
+                  : p.saRunning
+                  ? "Click to stop simulated annealing"
+                  : "Run simulated annealing on the BSP seeds of the selected space"
+              }
+              onClick={() => p.onSimulatedAnnealingClick?.()}
+            >
+              {p.saRunning ? "Stop SA" : "Simulated Annealing"}
+            </Button>
+          );
+        })()}
       </>}
     </div>
   );

@@ -49,6 +49,9 @@ export interface Wall {
   /** Corner join style when `segmentType === "path"`. Defaults to "miter" if omitted.
    *  Ignored for all other segment types. */
   pathJoin?: PathJoin;
+  /** When `pathJoin === "nurbs"`, controls whether the curve passes exactly through
+   *  each vertex (interpolating Catmull-Rom) or approximates the polyline (B-spline). */
+  nurbsInterpolate?: boolean;
   /** Per-wall values for parameters declared by a custom segment type's schema.
    *  Keyed by ParamDef.key. Built-in segment types ignore this field. */
   customParams?: Record<string, string | number | boolean>;
@@ -373,6 +376,11 @@ export interface AreaTypeDef {
 export interface Room {
   id: string;
   points: Point[];
+  /** Inner rings carved out of this room (holes). Mostly meaningful on
+   *  plot-boundary rooms that contain a footprint/building. Derived on the fly
+   *  by `getRoomHoles(room, rooms)` so callers usually don't need to set this
+   *  explicitly — it's exposed for serialization and future manual overrides. */
+  holes?: Point[][];
   fill: string;
   stroke: string;
   label?: string;

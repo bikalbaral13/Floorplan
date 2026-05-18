@@ -106,7 +106,7 @@ export const ToolsPanel = ({
       className="flex w-full items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2 text-left"
       onClick={() => onPanelExpandedChange((v) => !v)}
     >
-      <span className="text-sm font-semibold">Tools</span>
+      <span className="text-sm font-semibold">Global Tools</span>
       <span className="text-[11px] text-slate-400">{panelExpanded ? "▼" : "▶"}</span>
     </button>
     {panelExpanded && (
