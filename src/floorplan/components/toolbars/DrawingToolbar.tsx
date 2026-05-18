@@ -9,11 +9,15 @@ import {
   Plus,
   Proportions,
   Ruler,
+  Shapes,
   Slash,
   Spline,
+  Square,
   Trash2,
   Type,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToolButton } from "@/components/toolbutton";
 import { SectionHeader } from "./SectionHeader";
 import type { Tool } from "../../types";
@@ -48,6 +52,9 @@ export interface DrawingToolbarProps {
   onDeleteSelection: () => void;
   /** Parent-rendered Image underlay / Undo / Redo / Reset view / Zoom extents slot. */
   topToolSlots?: ReactNode;
+  /** Shapes popover open state (Rectangle / Circle / Segment sub-tools). */
+  shapesPopoverOpen: boolean;
+  onShapesPopoverOpenChange: (value: boolean) => void;
 }
 
 /** Primary canvas-interaction tools — Add Segment, Delete, Select, Pan, Set Scale,
@@ -167,6 +174,53 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             label="Delete selection"
             onClick={p.onDeleteSelection}
           />
+          {/* Shapes popover — moved here from Building (Construction) toolbar. */}
+          <Popover open={p.shapesPopoverOpen} onOpenChange={p.onShapesPopoverOpenChange}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={p.tool === "rect" || p.tool === "circle" || p.tool === "segment" ? "default" : "outline"}
+                size="sm"
+                className="h-9 w-9 shrink-0 p-0"
+                title="Shapes"
+                aria-label="Shapes — rectangle, circle, segment"
+                aria-expanded={p.shapesPopoverOpen}
+              >
+                <Shapes className="h-6 w-6" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="right" align="start" className="w-56 p-3 shadow-xl" sideOffset={10}>
+              <h4 className="mb-2 text-xs font-semibold uppercase text-slate-500">Shapes</h4>
+              <div className="grid grid-cols-3 gap-2">
+                <ToolButton
+                  active={p.tool === "rect"}
+                  icon={<Square className="h-4 w-4" />}
+                  label="Rectangle"
+                  onClick={() => {
+                    p.onToolChange("rect");
+                    p.onShapesPopoverOpenChange(false);
+                  }}
+                />
+                <ToolButton
+                  active={p.tool === "circle"}
+                  icon={<CircleIcon className="h-4 w-4" />}
+                  label="Circle"
+                  onClick={() => {
+                    p.onToolChange("circle");
+                    p.onShapesPopoverOpenChange(false);
+                  }}
+                />
+                <ToolButton
+                  active={p.tool === "segment"}
+                  icon={<Slash className="h-4 w-4" />}
+                  label="Segment"
+                  onClick={() => {
+                    p.onToolChange("segment");
+                    p.onShapesPopoverOpenChange(false);
+                  }}
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       )}
     </div>

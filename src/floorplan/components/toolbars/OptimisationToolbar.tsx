@@ -23,7 +23,7 @@ export interface OptimisationToolbarProps {
 /** Layout-generation and solver entrypoints — Add Room popover, Auto Generate Floor
  *  Plan, Simulated Annealing, Compute floorplate. 2-col grid. */
 export const OptimisationToolbar = (p: OptimisationToolbarProps) => {
-  const [open, setOpen] = useState<boolean>(true);
+  const [open, setOpen] = useState<boolean>(false);
   return (
     <div className="flex flex-col gap-1 px-1">
       <SectionHeader label="Optimisation" open={open} onToggle={() => setOpen((v) => !v)} />

@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,6 +28,9 @@ interface ToolsPanelProps {
 
   // Clean Walls
   onCleanWalls: () => void;
+
+  // Test — random Site/Buildable/Footprint cascade (dev shortcut).
+  onTestDrawPolygon: () => void;
 
   // AI Chat
   aiPrompt: string;
@@ -75,6 +78,7 @@ export const ToolsPanel = ({
   regionSemanticsById,
   onComputeSemantics,
   onCleanWalls,
+  onTestDrawPolygon,
   aiPrompt,
   onAiPromptChange,
   aiApiKey,
@@ -99,7 +103,9 @@ export const ToolsPanel = ({
   onLoadSemanticLayer,
   onCommandsPreview,
   onCommandsRun,
-}: ToolsPanelProps) => (
+}: ToolsPanelProps) => {
+  const [testExpanded, setTestExpanded] = useState<boolean>(false);
+  return (
   <div className="shrink-0 border-t border-slate-200 bg-slate-50" style={panelExpanded ? { maxHeight: "45%" } : undefined}>
     <button
       type="button"
@@ -155,19 +161,9 @@ export const ToolsPanel = ({
             </>}
           </div>
 
-          {/* Clean Walls */}
-          <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-[11px]"
-              onClick={onCleanWalls}
-              title="Split walls at T-junctions and remove duplicate / overlapping wall segments. Plot-boundary walls are preserved."
-            >
-              Clean Walls
-            </Button>
-            <p className="text-[9px] text-slate-400">Splits walls at any T-junction (where another wall's endpoint lands on its interior) and removes duplicate segments. Run after creating rooms via JSON / AI to clean up shared edges.</p>
-          </div>
+          {/* Clean Walls — removed at user request. */}
+
+          {/* Test block moved below the Commands section. */}
 
           {/* Apply JSON */}
           <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
@@ -423,8 +419,32 @@ export const ToolsPanel = ({
             </>}
           </div>
 
+          {/* Test — foldable dev shortcut. Sits below Commands. */}
+          <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setTestExpanded((v) => !v)}
+            >
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Test</span>
+              <span className="text-[11px] text-slate-400">{testExpanded ? "▼" : "▶"}</span>
+            </button>
+            {testExpanded && <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-[11px]"
+                onClick={onTestDrawPolygon}
+              >
+                Random Site Cascade
+              </Button>
+              <p className="text-[9px] text-slate-400">Drops a random pentagonal Site + Buildable + Footprint set on the canvas.</p>
+            </>}
+          </div>
+
         </div>
       </ScrollArea>
     )}
   </div>
-);
+  );
+};

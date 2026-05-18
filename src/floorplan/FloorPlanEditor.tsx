@@ -1930,6 +1930,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [spaceToolsSiteMassingExpanded, setSpaceToolsSiteMassingExpanded] = useState<boolean>(false);
   const [spaceToolsTextureExpanded, setSpaceToolsTextureExpanded] = useState<boolean>(false);
   const [spaceToolsUiToolsExpanded, setSpaceToolsUiToolsExpanded] = useState<boolean>(false);
+  const [spaceToolsLayoutGenExpanded, setSpaceToolsLayoutGenExpanded] = useState<boolean>(false);
   // Segment Tools — sibling to Space Tools, targets the selected Wall/Segment.
   const [segmentToolsExpanded, setSegmentToolsExpanded] = useState<boolean>(true);
   const [segmentToolsInputsExpanded, setSegmentToolsInputsExpanded] = useState<boolean>(false);
@@ -15862,6 +15863,27 @@ User request: ${aiPrompt.trim()}`;
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-56" side="bottom" sideOffset={8}>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">2D / 3D</p>
+        <div className="mb-3 flex flex-row overflow-hidden rounded-md border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setViewMode("2d")}
+            className={`flex-1 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "2d"}
+            title="2D view"
+          >
+            2D
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("3d")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "3d"}
+            title="3D view"
+          >
+            3D
+          </button>
+        </div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">View Mode</p>
         <div className="grid grid-cols-1 gap-2">
           <Button size="sm" variant={layerVisibility.viewCurved ? "default" : "outline"} onClick={() => {
@@ -15957,67 +15979,61 @@ User request: ${aiPrompt.trim()}`;
     </Popover>
   );
 
-  const settingsPopover = (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" title="Snapping" aria-label="Snapping">
-          <Settings className="h-4 w-4" />
+  // Snapping content moved into the Default Settings popover. The
+  // top bar no longer shows a separate Snapping button.
+  const snappingSection = (
+    <div>
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Snapping</p>
+      <div className="grid grid-cols-2 gap-2">
+        <Button size="sm" variant={snapSettings.grid ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, grid: !prev.grid }))}>
+          Grid
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80" side="bottom" sideOffset={8}>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Snapping</p>
-        <div className="grid grid-cols-2 gap-2">
-          <Button size="sm" variant={snapSettings.grid ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, grid: !prev.grid }))}>
-            Grid
-          </Button>
-          <Button size="sm" variant={snapSettings.endpoints ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, endpoints: !prev.endpoints }))}>
-            Endpoints
-          </Button>
-          <Button size="sm" variant={snapSettings.midpoints ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, midpoints: !prev.midpoints }))}>
-            Midpoints
-          </Button>
-          <Button size="sm" variant={snapSettings.objectEdges ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, objectEdges: !prev.objectEdges }))}>
-            Object edges
-          </Button>
+        <Button size="sm" variant={snapSettings.endpoints ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, endpoints: !prev.endpoints }))}>
+          Endpoints
+        </Button>
+        <Button size="sm" variant={snapSettings.midpoints ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, midpoints: !prev.midpoints }))}>
+          Midpoints
+        </Button>
+        <Button size="sm" variant={snapSettings.objectEdges ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, objectEdges: !prev.objectEdges }))}>
+          Object edges
+        </Button>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-slate-500">Node snap radius</span>
+          <span className="font-mono text-[11px] text-slate-700">{snapSettings.endpointRadius} px</span>
         </div>
-
-        <div className="mt-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-500">Node snap radius</span>
-            <span className="font-mono text-[11px] text-slate-700">{snapSettings.endpointRadius} px</span>
-          </div>
-          <input
-            type="range"
-            className="mt-1 w-full"
-            min={0}
-            max={30}
-            step={1}
-            value={snapSettings.endpointRadius}
-            onChange={(e) => setSnapSettings((prev) => ({ ...prev, endpointRadius: +e.target.value }))}
-            disabled={!snapSettings.endpoints}
-          />
-          <span className="text-[9px] text-slate-400">Lower = easier to draw short segments near existing nodes. 0 disables endpoint snapping.</span>
+        <input
+          type="range"
+          className="mt-1 w-full"
+          min={0}
+          max={30}
+          step={1}
+          value={snapSettings.endpointRadius}
+          onChange={(e) => setSnapSettings((prev) => ({ ...prev, endpointRadius: +e.target.value }))}
+          disabled={!snapSettings.endpoints}
+        />
+        <span className="text-[9px] text-slate-400">Lower = easier to draw short segments near existing nodes. 0 disables endpoint snapping.</span>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-slate-500">Wall-spine snap radius</span>
+          <span className="font-mono text-[11px] text-slate-700">{snapSettings.wallSpineRadius} px</span>
         </div>
-
-        <div className="mt-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-500">Wall-spine snap radius</span>
-            <span className="font-mono text-[11px] text-slate-700">{snapSettings.wallSpineRadius} px</span>
-          </div>
-          <input
-            type="range"
-            className="mt-1 w-full"
-            min={0}
-            max={56}
-            step={1}
-            value={snapSettings.wallSpineRadius}
-            onChange={(e) => setSnapSettings((prev) => ({ ...prev, wallSpineRadius: +e.target.value }))}
-          />
-          <span className="text-[9px] text-slate-400">Pointer is projected onto the nearest wall's spine within this radius while drawing. 0 disables.</span>
-        </div>
-      </PopoverContent>
-    </Popover>
+        <input
+          type="range"
+          className="mt-1 w-full"
+          min={0}
+          max={56}
+          step={1}
+          value={snapSettings.wallSpineRadius}
+          onChange={(e) => setSnapSettings((prev) => ({ ...prev, wallSpineRadius: +e.target.value }))}
+        />
+        <span className="text-[9px] text-slate-400">Pointer is projected onto the nearest wall's spine within this radius while drawing. 0 disables.</span>
+      </div>
+    </div>
   );
+  const settingsPopover = null;
 
   const defaultSettingsPopover = (
     <Popover>
@@ -16026,24 +16042,25 @@ User request: ${aiPrompt.trim()}`;
           variant="outline"
           size="sm"
           className="h-9 w-9 shrink-0 p-0"
-          title="Default Settings"
-          aria-label="Default Settings"
+          title="Preferences"
+          aria-label="Preferences"
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <Settings className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        side="right"
-        align="start"
+        side="bottom"
+        align="end"
         className="max-h-[min(85vh,640px)] w-[22rem] overflow-y-auto p-4 shadow-xl"
         sideOffset={10}
       >
         <div className="mb-3 border-b border-slate-100 pb-2">
-          <h4 className="text-sm font-semibold text-slate-900">Default Settings</h4>
-          <p className="mt-0.5 text-xs text-slate-500">Global parameters and wall-drawing defaults.</p>
+          <h4 className="text-sm font-semibold text-slate-900">Preferences</h4>
+          <p className="mt-0.5 text-xs text-slate-500">Snapping, global parameters, and wall-drawing defaults.</p>
         </div>
 
         <div className="flex flex-col gap-3">
+          {snappingSection}
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Units</p>
             <div className="flex flex-wrap gap-1.5">
@@ -16348,6 +16365,29 @@ User request: ${aiPrompt.trim()}`;
           {wallDrawType === "spline" ? (
             <p className="text-xs text-slate-500">NURBS: add control points with click; double-click or Enter to finish.</p>
           ) : null}
+
+          {/* Schema — moved from the left sidebar's Add Semantics block. */}
+          <div className="border-t border-slate-100 pt-3">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Schema</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-[11px]"
+                onClick={() => setAddRoomTypeDialogOpen(true)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Room Type
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-[11px]"
+                onClick={() => setAddSegmentTypeDialogOpen(true)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Segment Type
+              </Button>
+            </div>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -16598,23 +16638,289 @@ User request: ${aiPrompt.trim()}`;
     );
   };
 
+  /** Dev shortcut: drops a random pentagonal Site + Buildable + Footprint cascade on
+   *  the canvas. Lifted here from the inline LeftToolbar prop so both LeftToolbar and
+   *  Global Tools (ToolsPanel) can reference the same handler. */
+  const handleTestDrawPolygon = () => {
+    const ppm = pixelsPerMeter;
+    const t = Date.now();
+    const cx = ((t % 7) - 3) * ppm;
+    const cy = ((t / 7) % 7 - 3) * ppm;
+    const N = 5;
+    const MIN_SIDE_M = 22;
+    const minSidePx = MIN_SIDE_M * ppm;
+    const tryGenerate = (): { x: number; y: number }[] => {
+      const radius = 25 * ppm;
+      const startAngle = Math.random() * Math.PI * 2;
+      return Array.from({ length: N }, (_, i) => {
+        const a = startAngle + (i * 2 * Math.PI) / N + (Math.random() - 0.5) * 0.3;
+        const r = radius * (0.85 + Math.random() * 0.3);
+        return { x: +(cx + Math.cos(a) * r).toFixed(2), y: +(cy + Math.sin(a) * r).toFixed(2) };
+      });
+    };
+    const minSide = (poly: { x: number; y: number }[]) => {
+      let m = Infinity;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        m = Math.min(m, Math.hypot(b.x - a.x, b.y - a.y));
+      }
+      return m;
+    };
+    let sitePts = tryGenerate();
+    for (let attempt = 0; attempt < 50 && minSide(sitePts) < minSidePx; attempt++) {
+      sitePts = tryGenerate();
+    }
+    const siteRoom: Room = {
+      id: createId(),
+      points: sitePts,
+      fill: "rgba(254, 243, 199, 0.35)",
+      stroke: "#b45309",
+      label: "Test Site Area",
+      roomType: "plot-boundary",
+    };
+    const siteWalls: Wall[] = sitePts.map((p, i) => {
+      const q = sitePts[(i + 1) % N];
+      return {
+        id: createId(),
+        start: { x: p.x, y: p.y },
+        end: { x: q.x, y: q.y },
+        thickness: 6,
+        color: "#dc2626",
+        mode: "line",
+        method: "center",
+        segmentType: "plot-boundary",
+        boundaryTreatment: "fence",
+      };
+    });
+    const setbacks = sitePts.map(() => +(0.5 + Math.random() * 2.0).toFixed(2));
+    const computeInset = (poly: { x: number; y: number }[], setbacksM: number[]): { x: number; y: number }[] => {
+      let signed = 0;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        signed += a.x * b.y - b.x * a.y;
+      }
+      const sign = signed > 0 ? 1 : -1;
+      const NN = poly.length;
+      const lines: Array<{ px: number; py: number; ux: number; uy: number }> = [];
+      for (let i = 0; i < NN; i++) {
+        const a = poly[i], b = poly[(i + 1) % NN];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const ux = dx / L, uy = dy / L;
+        const nx = -uy * sign, ny = ux * sign;
+        const sb = setbacksM[i] * ppm;
+        lines.push({ px: a.x + nx * sb, py: a.y + ny * sb, ux, uy });
+      }
+      const out: { x: number; y: number }[] = [];
+      for (let i = 0; i < NN; i++) {
+        const l1 = lines[(i + NN - 1) % NN], l2 = lines[i];
+        const det = l1.ux * (-l2.uy) - l1.uy * (-l2.ux);
+        if (Math.abs(det) < 1e-6) continue;
+        const dx = l2.px - l1.px, dy = l2.py - l1.py;
+        const tt = (dx * (-l2.uy) - dy * (-l2.ux)) / det;
+        out.push({ x: +(l1.px + tt * l1.ux).toFixed(2), y: +(l1.py + tt * l1.uy).toFixed(2) });
+      }
+      return out;
+    };
+    const buildablePts = computeInset(sitePts, setbacks);
+    let buildableRoom: Room | null = null;
+    let buildableWalls: Wall[] = [];
+    if (buildablePts.length >= 3) {
+      buildableRoom = {
+        id: createId(),
+        points: buildablePts,
+        fill: "rgba(220, 252, 231, 0.45)",
+        stroke: "#16a34a",
+        label: "Test Buildable Area",
+        roomType: "buildable-area",
+      };
+      buildableWalls = buildablePts.map((p, i) => {
+        const q = buildablePts[(i + 1) % buildablePts.length];
+        return {
+          id: createId(),
+          start: { x: p.x, y: p.y },
+          end: { x: q.x, y: q.y },
+          thickness: 4,
+          color: "#16a34a",
+          mode: "line",
+          method: "center",
+          segmentType: "buildable-boundary",
+        };
+      });
+    }
+    const computeLargestRect = (poly: { x: number; y: number }[]): { x: number; y: number }[] | null => {
+      if (poly.length < 3) return null;
+      const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y);
+      const xMin = Math.min(...xs), xMax = Math.max(...xs);
+      const yMin = Math.min(...ys), yMax = Math.max(...ys);
+      const span = Math.max(xMax - xMin, yMax - yMin);
+      if (span < 1) return null;
+      const GRID = 120;
+      const cell = span / GRID;
+      const W = Math.max(1, Math.ceil((xMax - xMin) / cell));
+      const H = Math.max(1, Math.ceil((yMax - yMin) / cell));
+      const pip = (qx: number, qy: number): boolean => {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const a = poly[i], b = poly[j];
+          if (((a.y > qy) !== (b.y > qy)) && (qx < (b.x - a.x) * (qy - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+        }
+        return inside;
+      };
+      const occ: Uint8Array[] = Array.from({ length: H }, (_, r) => {
+        const row = new Uint8Array(W);
+        const y = yMin + (r + 0.5) * cell;
+        for (let c = 0; c < W; c++) row[c] = pip(xMin + (c + 0.5) * cell, y) ? 1 : 0;
+        return row;
+      });
+      const heights = new Int32Array(W);
+      let best = { r0: 0, c0: 0, rh: 0, rw: 0, area: 0 };
+      for (let r = 0; r < H; r++) {
+        for (let c = 0; c < W; c++) heights[c] = occ[r][c] ? heights[c] + 1 : 0;
+        const stack: number[] = [];
+        for (let c = 0; c <= W; c++) {
+          const h = c === W ? 0 : heights[c];
+          while (stack.length && heights[stack[stack.length - 1]] >= h) {
+            const top = stack.pop()!;
+            const w = stack.length === 0 ? c : c - stack[stack.length - 1] - 1;
+            const a = heights[top] * w;
+            if (a > best.area) best = { r0: r - heights[top] + 1, c0: c - w, rh: heights[top], rw: w, area: a };
+          }
+          stack.push(c);
+        }
+      }
+      if (best.area <= 0) return null;
+      const x0 = xMin + best.c0 * cell, y0 = yMin + best.r0 * cell;
+      const x1 = x0 + best.rw * cell, y1 = y0 + best.rh * cell;
+      return [
+        { x: +x0.toFixed(2), y: +y0.toFixed(2) },
+        { x: +x1.toFixed(2), y: +y0.toFixed(2) },
+        { x: +x1.toFixed(2), y: +y1.toFixed(2) },
+        { x: +x0.toFixed(2), y: +y1.toFixed(2) },
+      ];
+    };
+    const fpPts = buildableRoom ? computeLargestRect(buildableRoom.points) : null;
+    let fpRoom: Room | null = null;
+    let fpWalls: Wall[] = [];
+    if (fpPts && fpPts.length === 4) {
+      fpRoom = {
+        id: createId(),
+        points: fpPts,
+        fill: "rgba(254, 226, 226, 0.55)",
+        stroke: "#7f1d1d",
+        label: "Test Footprint Area",
+        roomType: "floorplate-boundary",
+      };
+      fpWalls = fpPts.map((p, i) => {
+        const q = fpPts[(i + 1) % fpPts.length];
+        return {
+          id: createId(),
+          start: { x: p.x, y: p.y },
+          end: { x: q.x, y: q.y },
+          thickness: 6,
+          color: "#7f1d1d",
+          mode: "line",
+          method: "center",
+          segmentType: "footprint-boundary",
+        };
+      });
+    }
+    history.set({
+      ...history.state,
+      rooms: [
+        ...history.state.rooms,
+        siteRoom,
+        ...(buildableRoom ? [buildableRoom] : []),
+        ...(fpRoom ? [fpRoom] : []),
+      ],
+      walls: [
+        ...history.state.walls,
+        ...siteWalls,
+        ...buildableWalls,
+        ...fpWalls,
+      ],
+    });
+    selection.selectOne(fpRoom?.id ?? buildableRoom?.id ?? siteRoom.id);
+    if (fpRoom) setMassingLive(true);
+    toast.success(`Test cascade: Site → Buildable${fpRoom ? " → Footprint + Massing" : ""}`);
+  };
+
   return (
     <div className="h-screen w-full bg-slate-50 text-slate-900">
       <div className="flex min-h-16 items-center justify-between gap-2 border-b bg-white px-3 py-2 shadow-sm">
         <p className="text-sm font-semibold text-slate-700">Floorplan Studio</p>
+        {/* Top-center toolbar: Undo / Redo / Reset view / Zoom extents — navigation
+            actions moved out of the Drawing left-sidebar group. */}
         <div className="flex shrink-0 items-center gap-1">
-         
-             
-          {/* <Button
-            variant={isRightPanelCollapsed ? "outline" : "default"}
-            size="sm"
-            title={isRightPanelCollapsed ? "Show properties panel" : "Hide properties panel"}
-            aria-label={isRightPanelCollapsed ? "Show properties panel" : "Hide properties panel"}
-            aria-pressed={!isRightPanelCollapsed}
-            onClick={() => setIsRightPanelCollapsed((prev) => !prev)}
-          >
-            <Info className="h-4 w-4" />
-          </Button> */}
+          <ToolButton active={false} icon={<Undo2 className="h-4 w-4" />} label="Undo" onClick={history.undo} disabled={!history.canUndo} />
+          <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} />
+          <ToolButton
+            active={false}
+            icon={<ZoomIn className="h-4 w-4" />}
+            label="Reset view"
+            onClick={() => {
+              setScale(1);
+              setPosition({ x: 0, y: 0 });
+            }}
+          />
+          <ToolButton
+            active={false}
+            icon={<Maximize className="h-4 w-4" />}
+            label="Zoom extents"
+            onClick={() => {
+              const pts: { x: number; y: number }[] = [];
+              for (const w of history.state.walls) { pts.push(w.start, w.end); }
+              for (const r of history.state.rooms) { for (const p of r.points) pts.push(p); }
+              for (const o of history.state.objects) { pts.push({ x: o.x, y: o.y }); }
+              for (const f of history.state.furniture) { pts.push({ x: f.x, y: f.y }); }
+              if (pts.length === 0 || size.width <= 0 || size.height <= 0) return;
+              const minX = Math.min(...pts.map((p) => p.x));
+              const maxX = Math.max(...pts.map((p) => p.x));
+              const minY = Math.min(...pts.map((p) => p.y));
+              const maxY = Math.max(...pts.map((p) => p.y));
+              const w = Math.max(1, maxX - minX);
+              const h = Math.max(1, maxY - minY);
+              const margin = 0.9;
+              const newScale = Math.min(size.width / w, size.height / h) * margin;
+              const cx = (minX + maxX) / 2;
+              const cy = (minY + maxY) / 2;
+              setScale(Number(newScale.toFixed(3)));
+              setPosition({
+                x: size.width / 2 - cx * newScale,
+                y: size.height / 2 - cy * newScale,
+              });
+            }}
+          />
+        </div>
+        {/* Top-right toolbar: Files block + View block moved here from the left
+            sidebar. Files first (import/save/load/export), then a thin divider, then
+            View (2D/3D toggle, Snapping/Layers/View Mode/Default-Settings popovers). */}
+        <div className="flex shrink-0 items-center gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Files (import / save / export)" aria-label="Files">
+                <FolderOpen className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="end" className="w-auto p-2 shadow-xl" sideOffset={6}>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Files</p>
+              <div className="grid grid-cols-2 place-items-center gap-2">
+                <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import JSON" onClick={() => jsonInputRef.current?.click()} />
+                <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Vestal JSON" onClick={() => vestalJsonInputRef.current?.click()} />
+                <ToolButton active={false} icon={<Save className="h-4 w-4" />} label="Save to project" onClick={() => void saveModel()} />
+                <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Reload from project" onClick={() => void loadModel()} />
+                <ToolButton active={false} icon={<FileJson className="h-4 w-4" />} label="Export JSON" onClick={exportJsonFile} />
+                <ToolButton active={false} icon={<Image className="h-4 w-4" />} label="Export PNG" onClick={exportPng} />
+                <ToolButton active={false} icon={<FileImage className="h-4 w-4" />} label="Export SVG" onClick={exportSvgFile} />
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="mx-1 h-6 w-px bg-slate-200" />
+          {/* 2D/3D toggle moved into the View Mode popover. */}
+          {settingsPopover}
+          {layersPopover}
+          {viewModePopover}
+          {defaultSettingsPopover}
         </div>
         <input ref={jsonInputRef} type="file" accept=".json" onChange={importJsonFile} className="hidden" />
         <input ref={vestalJsonInputRef} type="file" accept=".json" onChange={importVestalJson} className="hidden" />
@@ -16840,45 +17146,7 @@ User request: ${aiPrompt.trim()}`;
                         ) : null}
                       </PopoverContent>
                     </Popover>
-                    <ToolButton active={false} icon={<Undo2 className="h-4 w-4" />} label="Undo" onClick={history.undo} disabled={!history.canUndo} />
-                    <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} />
-                    <ToolButton
-                      active={false}
-                      icon={<ZoomIn className="h-4 w-4" />}
-                      label="Reset view"
-                      onClick={() => {
-                        setScale(1);
-                        setPosition({ x: 0, y: 0 });
-                      }}
-                    />
-                    <ToolButton
-                      active={false}
-                      icon={<Maximize className="h-4 w-4" />}
-                      label="Zoom extents"
-                      onClick={() => {
-                        const pts: { x: number; y: number }[] = [];
-                        for (const w of history.state.walls) { pts.push(w.start, w.end); }
-                        for (const r of history.state.rooms) { for (const p of r.points) pts.push(p); }
-                        for (const o of history.state.objects) { pts.push({ x: o.x, y: o.y }); }
-                        for (const f of history.state.furniture) { pts.push({ x: f.x, y: f.y }); }
-                        if (pts.length === 0 || size.width <= 0 || size.height <= 0) return;
-                        const minX = Math.min(...pts.map((p) => p.x));
-                        const maxX = Math.max(...pts.map((p) => p.x));
-                        const minY = Math.min(...pts.map((p) => p.y));
-                        const maxY = Math.max(...pts.map((p) => p.y));
-                        const w = Math.max(1, maxX - minX);
-                        const h = Math.max(1, maxY - minY);
-                        const margin = 0.9;
-                        const newScale = Math.min(size.width / w, size.height / h) * margin;
-                        const cx = (minX + maxX) / 2;
-                        const cy = (minY + maxY) / 2;
-                        setScale(Number(newScale.toFixed(3)));
-                        setPosition({
-                          x: size.width / 2 - cx * newScale,
-                          y: size.height / 2 - cy * newScale,
-                        });
-                      }}
-                    />
+                    {/* Undo / Redo / Reset view / Zoom extents moved to the top-center bar. */}
                   </>
                 )}
                 onAddRoomTypeClick={() => setAddRoomTypeDialogOpen(true)}
@@ -16896,227 +17164,7 @@ User request: ${aiPrompt.trim()}`;
                     setDrawPathDialogOpen(true);
                   }
                 }}
-                onTestDrawPolygon={() => {
-                  // Materialise three nested Spaces in one click:
-                  //   1) Site Area     — random 5-sided pentagon, plot-boundary segments + fence treatment.
-                  //   2) Buildable Area — inset polygon offset by random per-edge setbacks (0.5–2.5 m),
-                  //                       with buildable-boundary segments wrapping it.
-                  //   3) Footprint Area — largest axis-aligned rectangle inscribed in the buildable poly,
-                  //                       with footprint-boundary segments wrapping it.
-                  // Geometry is computed inline so the click produces three persistent committed rooms,
-                  // not a transient live preview.
-                  const ppm = pixelsPerMeter;
-                  const t = Date.now();
-                  const cx = ((t % 7) - 3) * ppm;
-                  const cy = ((t / 7) % 7 - 3) * ppm;
-                  const N = 5;
-                  const MIN_SIDE_M = 22;
-                  const minSidePx = MIN_SIDE_M * ppm;
-                  const tryGenerate = (): { x: number; y: number }[] => {
-                    const radius = 25 * ppm;
-                    const startAngle = Math.random() * Math.PI * 2;
-                    return Array.from({ length: N }, (_, i) => {
-                      const a = startAngle + (i * 2 * Math.PI) / N + (Math.random() - 0.5) * 0.3;
-                      const r = radius * (0.85 + Math.random() * 0.3);
-                      return { x: +(cx + Math.cos(a) * r).toFixed(2), y: +(cy + Math.sin(a) * r).toFixed(2) };
-                    });
-                  };
-                  const minSide = (poly: { x: number; y: number }[]) => {
-                    let m = Infinity;
-                    for (let i = 0; i < poly.length; i++) {
-                      const a = poly[i], b = poly[(i + 1) % poly.length];
-                      m = Math.min(m, Math.hypot(b.x - a.x, b.y - a.y));
-                    }
-                    return m;
-                  };
-                  let sitePts = tryGenerate();
-                  for (let attempt = 0; attempt < 50 && minSide(sitePts) < minSidePx; attempt++) {
-                    sitePts = tryGenerate();
-                  }
-
-                  // ── 1. Site Area ─────────────────────────────────────────────────────────
-                  const siteRoom: Room = {
-                    id: createId(),
-                    points: sitePts,
-                    fill: "rgba(254, 243, 199, 0.35)",
-                    stroke: "#b45309",
-                    label: "Test Site Area",
-                    roomType: "plot-boundary",
-                  };
-                  const siteWalls: Wall[] = sitePts.map((p, i) => {
-                    const q = sitePts[(i + 1) % N];
-                    return {
-                      id: createId(),
-                      start: { x: p.x, y: p.y },
-                      end: { x: q.x, y: q.y },
-                      thickness: 6,
-                      color: "#dc2626",
-                      mode: "line",
-                      method: "center",
-                      segmentType: "plot-boundary",
-                      boundaryTreatment: "fence",
-                    };
-                  });
-
-                  // ── 2. Buildable Area = Site polygon offset inward by per-edge setbacks ──
-                  const setbacks = sitePts.map(() => +(0.5 + Math.random() * 2.0).toFixed(2));
-                  const computeInset = (poly: { x: number; y: number }[], setbacksM: number[]): { x: number; y: number }[] => {
-                    let signed = 0;
-                    for (let i = 0; i < poly.length; i++) {
-                      const a = poly[i], b = poly[(i + 1) % poly.length];
-                      signed += a.x * b.y - b.x * a.y;
-                    }
-                    const sign = signed > 0 ? 1 : -1;
-                    const NN = poly.length;
-                    const lines: Array<{ px: number; py: number; ux: number; uy: number }> = [];
-                    for (let i = 0; i < NN; i++) {
-                      const a = poly[i], b = poly[(i + 1) % NN];
-                      const dx = b.x - a.x, dy = b.y - a.y;
-                      const L = Math.hypot(dx, dy) || 1;
-                      const ux = dx / L, uy = dy / L;
-                      const nx = -uy * sign, ny = ux * sign;
-                      const sb = setbacksM[i] * ppm;
-                      lines.push({ px: a.x + nx * sb, py: a.y + ny * sb, ux, uy });
-                    }
-                    const out: { x: number; y: number }[] = [];
-                    for (let i = 0; i < NN; i++) {
-                      const l1 = lines[(i + NN - 1) % NN], l2 = lines[i];
-                      const det = l1.ux * (-l2.uy) - l1.uy * (-l2.ux);
-                      if (Math.abs(det) < 1e-6) continue;
-                      const dx = l2.px - l1.px, dy = l2.py - l1.py;
-                      const tt = (dx * (-l2.uy) - dy * (-l2.ux)) / det;
-                      out.push({ x: +(l1.px + tt * l1.ux).toFixed(2), y: +(l1.py + tt * l1.uy).toFixed(2) });
-                    }
-                    return out;
-                  };
-                  const buildablePts = computeInset(sitePts, setbacks);
-                  let buildableRoom: Room | null = null;
-                  let buildableWalls: Wall[] = [];
-                  if (buildablePts.length >= 3) {
-                    buildableRoom = {
-                      id: createId(),
-                      points: buildablePts,
-                      fill: "rgba(220, 252, 231, 0.45)",
-                      stroke: "#16a34a",
-                      label: "Test Buildable Area",
-                      roomType: "buildable-area",
-                    };
-                    buildableWalls = buildablePts.map((p, i) => {
-                      const q = buildablePts[(i + 1) % buildablePts.length];
-                      return {
-                        id: createId(),
-                        start: { x: p.x, y: p.y },
-                        end: { x: q.x, y: q.y },
-                        thickness: 4,
-                        color: "#16a34a",
-                        mode: "line",
-                        method: "center",
-                        segmentType: "buildable-boundary",
-                      };
-                    });
-                  }
-
-                  // ── 3. Footprint Area = largest axis-aligned rectangle inscribed in buildable ──
-                  const computeLargestRect = (poly: { x: number; y: number }[]): { x: number; y: number }[] | null => {
-                    if (poly.length < 3) return null;
-                    const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y);
-                    const xMin = Math.min(...xs), xMax = Math.max(...xs);
-                    const yMin = Math.min(...ys), yMax = Math.max(...ys);
-                    const span = Math.max(xMax - xMin, yMax - yMin);
-                    if (span < 1) return null;
-                    const GRID = 120;
-                    const cell = span / GRID;
-                    const W = Math.max(1, Math.ceil((xMax - xMin) / cell));
-                    const H = Math.max(1, Math.ceil((yMax - yMin) / cell));
-                    const pip = (qx: number, qy: number): boolean => {
-                      let inside = false;
-                      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-                        const a = poly[i], b = poly[j];
-                        if (((a.y > qy) !== (b.y > qy)) && (qx < (b.x - a.x) * (qy - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
-                      }
-                      return inside;
-                    };
-                    const occ: Uint8Array[] = Array.from({ length: H }, (_, r) => {
-                      const row = new Uint8Array(W);
-                      const y = yMin + (r + 0.5) * cell;
-                      for (let c = 0; c < W; c++) row[c] = pip(xMin + (c + 0.5) * cell, y) ? 1 : 0;
-                      return row;
-                    });
-                    const heights = new Int32Array(W);
-                    let best = { r0: 0, c0: 0, rh: 0, rw: 0, area: 0 };
-                    for (let r = 0; r < H; r++) {
-                      for (let c = 0; c < W; c++) heights[c] = occ[r][c] ? heights[c] + 1 : 0;
-                      const stack: number[] = [];
-                      for (let c = 0; c <= W; c++) {
-                        const h = c === W ? 0 : heights[c];
-                        while (stack.length && heights[stack[stack.length - 1]] >= h) {
-                          const top = stack.pop()!;
-                          const w = stack.length === 0 ? c : c - stack[stack.length - 1] - 1;
-                          const a = heights[top] * w;
-                          if (a > best.area) best = { r0: r - heights[top] + 1, c0: c - w, rh: heights[top], rw: w, area: a };
-                        }
-                        stack.push(c);
-                      }
-                    }
-                    if (best.area <= 0) return null;
-                    const x0 = xMin + best.c0 * cell, y0 = yMin + best.r0 * cell;
-                    const x1 = x0 + best.rw * cell, y1 = y0 + best.rh * cell;
-                    return [
-                      { x: +x0.toFixed(2), y: +y0.toFixed(2) },
-                      { x: +x1.toFixed(2), y: +y0.toFixed(2) },
-                      { x: +x1.toFixed(2), y: +y1.toFixed(2) },
-                      { x: +x0.toFixed(2), y: +y1.toFixed(2) },
-                    ];
-                  };
-                  const fpPts = buildableRoom ? computeLargestRect(buildableRoom.points) : null;
-                  let fpRoom: Room | null = null;
-                  let fpWalls: Wall[] = [];
-                  if (fpPts && fpPts.length === 4) {
-                    fpRoom = {
-                      id: createId(),
-                      points: fpPts,
-                      fill: "rgba(254, 226, 226, 0.55)",
-                      stroke: "#7f1d1d",
-                      label: "Test Footprint Area",
-                      roomType: "floorplate-boundary",
-                    };
-                    fpWalls = fpPts.map((p, i) => {
-                      const q = fpPts[(i + 1) % fpPts.length];
-                      return {
-                        id: createId(),
-                        start: { x: p.x, y: p.y },
-                        end: { x: q.x, y: q.y },
-                        thickness: 6,
-                        color: "#7f1d1d",
-                        mode: "line",
-                        method: "center",
-                        segmentType: "footprint-boundary",
-                      };
-                    });
-                  }
-
-                  history.set({
-                    ...history.state,
-                    rooms: [
-                      ...history.state.rooms,
-                      siteRoom,
-                      ...(buildableRoom ? [buildableRoom] : []),
-                      ...(fpRoom ? [fpRoom] : []),
-                    ],
-                    walls: [
-                      ...history.state.walls,
-                      ...siteWalls,
-                      ...buildableWalls,
-                      ...fpWalls,
-                    ],
-                  });
-                  selection.selectOne(fpRoom?.id ?? buildableRoom?.id ?? siteRoom.id);
-                  // Auto-enable Massing Live so the Footprint Area immediately gets windows / doors
-                  // along its perimeter (and they extrude in 3D since wall/door/window segments are
-                  // covered by isExtrudableWall).
-                  if (fpRoom) setMassingLive(true);
-                  toast.success(`Test cascade: Site → Buildable${fpRoom ? " → Footprint + Massing" : ""}`);
-                }}
+                onTestDrawPolygon={handleTestDrawPolygon}
               />
             </div>
           </ScrollArea>
@@ -26282,6 +26330,73 @@ User request: ${aiPrompt.trim()}`;
                       </div>
                     )}
                   </div>
+
+                  {/* Layout Generation — moved from the left sidebar's Optimisation toolbar. */}
+                  <div className="rounded border border-slate-200 bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                      onClick={() => setSpaceToolsLayoutGenExpanded((v) => !v)}
+                    >
+                      <span>Layout Generation</span>
+                      <span className="text-[10px] text-slate-400">{spaceToolsLayoutGenExpanded ? "▼" : "▶"}</span>
+                    </button>
+                    {spaceToolsLayoutGenExpanded && (
+                      <div className="grid grid-cols-2 place-items-center gap-2 border-t border-slate-100 p-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-9 shrink-0 p-0"
+                              title="Add Room"
+                              disabled={!generatedLayout}
+                            >
+                              <Plus className="h-5 w-5" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent side="left" align="start" className="w-40 p-1 shadow-xl" sideOffset={10}>
+                            <button
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-slate-100"
+                              onClick={() => {
+                                setAddRoomMode(true);
+                                setAddEdgeMode(null);
+                                setAddEdgeFirstRoom(null);
+                                setSelectedGenElement(null);
+                                toast.info("Click on the floorplan to place a new room");
+                              }}
+                            >
+                              <LandPlot className="h-4 w-4 text-green-600" /> Room
+                            </button>
+                          </PopoverContent>
+                        </Popover>
+                        <ToolButton
+                          active={false}
+                          icon={<LandPlot className="h-6 w-6" />}
+                          label="Auto Generate Floor Plan"
+                          onClick={() => setAutoGenDialogOpen(true)}
+                        />
+                        <ToolButton
+                          active={saRunning}
+                          icon={<Play className="h-6 w-6" />}
+                          label="Simulated Annealing"
+                          onClick={() => {
+                            if (!generatedLayout) {
+                              toast.error("Generate a floor plan first before running SA");
+                              return;
+                            }
+                            setSaDialogOpen(true);
+                          }}
+                        />
+                        <ToolButton
+                          active={false}
+                          icon={<Proportions className="h-6 w-6" />}
+                          label="Compute floorplate from plot boundary"
+                          onClick={handleComputeFloorplate}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -26552,6 +26667,7 @@ User request: ${aiPrompt.trim()}`;
                   `Clean Walls: ${result.tJunctions} T-junction split${result.tJunctions === 1 ? "" : "s"}, ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} removed (${before} → ${after})`
                 );
               }}
+              onTestDrawPolygon={handleTestDrawPolygon}
               aiPrompt={aiPrompt}
               onAiPromptChange={setAiPrompt}
               aiApiKey={aiApiKey}

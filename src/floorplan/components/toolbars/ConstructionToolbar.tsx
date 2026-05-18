@@ -46,12 +46,12 @@ export const ConstructionToolbar = (p: ConstructionToolbarProps) => {
   return (
     <div className="flex flex-col gap-1 px-1">
       <SectionHeader
-        label="Construction Toolbar"
+        label="Building"
         open={open}
         onToggle={() => setOpen((v) => !v)}
       />
       {open && (
-        <div className="grid grid-cols-3 place-items-center gap-2 pt-1">
+        <div className="grid grid-cols-2 place-items-center gap-2 pt-1">
           <ToolButton
             active={p.addDoorMode}
             icon={<DoorOpen className="h-6 w-6" />}
@@ -138,52 +138,7 @@ export const ConstructionToolbar = (p: ConstructionToolbarProps) => {
               }
             }}
           />
-          <Popover open={p.shapesPopoverOpen} onOpenChange={p.onShapesPopoverOpenChange}>
-            <PopoverTrigger asChild>
-              <Button
-                variant={p.tool === "rect" || p.tool === "circle" || p.tool === "segment" ? "default" : "outline"}
-                size="sm"
-                className="h-9 w-9 shrink-0 p-0"
-                title="Shapes"
-                aria-label="Shapes — rectangle, circle, segment"
-                aria-expanded={p.shapesPopoverOpen}
-              >
-                <Shapes className="h-6 w-6" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent side="right" align="start" className="w-56 p-3 shadow-xl" sideOffset={10}>
-              <h4 className="mb-2 text-xs font-semibold uppercase text-slate-500">Shapes</h4>
-              <div className="grid grid-cols-3 gap-2">
-                <ToolButton
-                  active={p.tool === "rect"}
-                  icon={<Square className="h-4 w-4" />}
-                  label="Rectangle"
-                  onClick={() => {
-                    p.onToolChange("rect");
-                    p.onShapesPopoverOpenChange(false);
-                  }}
-                />
-                <ToolButton
-                  active={p.tool === "circle"}
-                  icon={<CircleIcon className="h-4 w-4" />}
-                  label="Circle"
-                  onClick={() => {
-                    p.onToolChange("circle");
-                    p.onShapesPopoverOpenChange(false);
-                  }}
-                />
-                <ToolButton
-                  active={p.tool === "segment"}
-                  icon={<Slash className="h-4 w-4" />}
-                  label="Segment"
-                  onClick={() => {
-                    p.onToolChange("segment");
-                    p.onShapesPopoverOpenChange(false);
-                  }}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
+          {/* Shapes popover moved to Drawing toolbar. */}
         </div>
       )}
     </div>

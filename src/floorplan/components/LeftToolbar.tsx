@@ -61,7 +61,8 @@ interface LeftToolbarProps {
   /** Opens the Add Segment Type dialog. */
   onAddSegmentTypeClick: () => void;
   /** Spawns a random 5-sided polygon room (debug / test shortcut). */
-  onTestDrawPolygon: () => void;
+  /** Unused after the Test toolbar moved to Global Tools. Kept optional for API compat. */
+  onTestDrawPolygon?: () => void;
   /** Opens the Draw Path dialog. */
   onDrawPathClick: () => void;
   /** True while polyline-path drawing is the active mode. */
@@ -140,9 +141,11 @@ export const LeftToolbar = ({
       onMergeSpaces={onMergeSpaces}
       onDeleteSelection={onDeleteSelection}
       topToolSlots={topToolSlots}
+      shapesPopoverOpen={shapesPopoverOpen}
+      onShapesPopoverOpenChange={onShapesPopoverOpenChange}
     />
 
-    {filesSlot && <FilesToolbar slot={filesSlot} />}
+    {/* Files toolbar moved to the top-right bar. */}
 
     <ConstructionToolbar
       tool={tool}
@@ -164,29 +167,12 @@ export const LeftToolbar = ({
       onShapesPopoverOpenChange={onShapesPopoverOpenChange}
     />
 
-    <OptimisationToolbar
-      hasGeneratedLayout={hasGeneratedLayout}
-      saRunning={saRunning}
-      onAddRoomModeChange={onAddRoomModeChange}
-      onAddEdgeModeChange={onAddEdgeModeChange}
-      onAddEdgeFirstRoomChange={onAddEdgeFirstRoomChange}
-      onSelectedGenElementChange={onSelectedGenElementChange}
-      onAutoGenerateClick={onAutoGenerateClick}
-      onSimulatedAnnealingClick={onSimulatedAnnealingClick}
-      onComputeFloorplate={onComputeFloorplate}
-    />
+    {/* Optimisation toolbar moved to Space Tools → Layout Generation. */}
 
-    <ViewToolbar
-      view2D3DToggle={view2D3DToggle}
-      settingsPopover={settingsPopover}
-      defaultSettingsPopover={defaultSettingsPopover}
-    />
+    {/* View toolbar moved to the top-right bar. */}
 
-    <AddSemanticsToolbar
-      onAddRoomTypeClick={onAddRoomTypeClick}
-      onAddSegmentTypeClick={onAddSegmentTypeClick}
-    />
+    {/* Add Semantics moved to Preferences → Schema. */}
 
-    <TestToolbar onTestDrawPolygon={onTestDrawPolygon} />
+    {/* Test toolbar moved to Global Tools. */}
   </div>
 );

@@ -10,7 +10,7 @@ export interface AddSemanticsToolbarProps {
 
 /** User-defined room and segment type builders — opens the corresponding dialog. */
 export const AddSemanticsToolbar = (p: AddSemanticsToolbarProps) => {
-  const [open, setOpen] = useState<boolean>(true);
+  const [open, setOpen] = useState<boolean>(false);
   return (
     <div className="flex flex-col gap-1 px-1">
       <SectionHeader label="Add Semantics" open={open} onToggle={() => setOpen((v) => !v)} />
