@@ -67,6 +67,10 @@ interface LeftToolbarProps {
   onDrawPathClick: () => void;
   /** True while polyline-path drawing is the active mode. */
   drawingPath: boolean;
+  /** Opens the Add Wall dialog. */
+  onAddWallClick: () => void;
+  /** True while the dialog-configured polyline wall draw mode is active. */
+  drawingWall: boolean;
   /** Merge selected spaces into one. */
   onMergeSpaces: () => void;
   /** Unused — kept for backwards compatibility with the parent invocation. */
@@ -115,6 +119,8 @@ export const LeftToolbar = ({
   onTestDrawPolygon,
   onDrawPathClick,
   drawingPath,
+  onAddWallClick,
+  drawingWall,
   onMergeSpaces,
   canMergeSpaces: _canMergeSpaces,
   onDeleteSelection,
@@ -165,6 +171,8 @@ export const LeftToolbar = ({
       onSelectedGenElementChange={onSelectedGenElementChange}
       shapesPopoverOpen={shapesPopoverOpen}
       onShapesPopoverOpenChange={onShapesPopoverOpenChange}
+      onAddWallClick={onAddWallClick}
+      drawingWall={drawingWall}
     />
 
     {/* Optimisation toolbar moved to Space Tools → Layout Generation. */}

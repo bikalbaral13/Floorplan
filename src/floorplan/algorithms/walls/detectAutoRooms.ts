@@ -4,6 +4,119 @@ import { isPointInPolygon, polygonArea, polygonCentroid } from "../geometry/poly
 export const ROOM_AUTO_ID_PREFIX = "auto-room:";
 const ROOM_MIN_AREA_PX = 200;
 
+/** Is point `p` on the line segment `a`→`b` (within `eps` perpendicular distance,
+ *  and projected parameter within [0,1])? Used to match a face edge back to its
+ *  source wall (whose centerline may be split into several face edges). */
+const isPointOnSegment = (p: Point, a: Point, b: Point, eps = 4): boolean => {
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  if (d < 0.1) return false;
+  const ux = (b.x - a.x) / d, uy = (b.y - a.y) / d;
+  const px = p.x - a.x, py = p.y - a.y;
+  const along = px * ux + py * uy;
+  const perp = Math.abs(px * uy - py * ux);
+  return perp <= eps && along >= -eps && along <= d + eps;
+};
+
+/** Intersect two lines `p1 + t*d1` and `p2 + s*d2`. Returns null if parallel. */
+const intersectLines = (p1: Point, d1: Point, p2: Point, d2: Point): Point | null => {
+  const denom = d1.x * d2.y - d1.y * d2.x;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / denom;
+  return { x: p1.x + t * d1.x, y: p1.y + t * d1.y };
+};
+
+/** Phase-2 offset: handle "left" / "right" justification only. Center walls keep the
+ *  centerline trace (no offset). For left/right, shift the face edge by thickness/2
+ *  perpendicular to the wall, in the direction defined by the wall's justification
+ *  (relative to the wall's start→end direction).
+ *  "left" perp = (-uy, ux), matching miteredWalls.ts:perpL. "right" is the opposite. */
+const applyLeftRightOffset = (face: Point[], walls: Wall[]): Point[] => {
+  if (face.length < 3) return face;
+  type Line = { p: Point; dir: Point };
+  const offsetLines: Line[] = [];
+  for (let i = 0; i < face.length; i++) {
+    const a = face[i];
+    const b = face[(i + 1) % face.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    let shiftX = 0, shiftY = 0;
+    for (const w of walls) {
+      if (w.segmentType === "connection") continue;
+      const m = w.method ?? "center";
+      if (m === "center") continue;
+      if (!(isPointOnSegment(a, w.start, w.end) && isPointOnSegment(b, w.start, w.end))) continue;
+      const wdx = w.end.x - w.start.x;
+      const wdy = w.end.y - w.start.y;
+      const wlen = Math.hypot(wdx, wdy) || 1;
+      const wux = wdx / wlen, wuy = wdy / wlen;
+      // perpL relative to the WALL's own direction (independent of face traversal direction).
+      const plx = -wuy, ply = wux;
+      const half = (w.thickness ?? 0) / 2;
+      const sign = m === "left" ? -1 : 1; // sign chosen to match the visual side users expect
+      shiftX = plx * half * sign;
+      shiftY = ply * half * sign;
+      break;
+    }
+    offsetLines.push({ p: { x: a.x + shiftX, y: a.y + shiftY }, dir: { x: ux, y: uy } });
+  }
+  const out: Point[] = [];
+  for (let i = 0; i < offsetLines.length; i++) {
+    const prev = offsetLines[(i - 1 + offsetLines.length) % offsetLines.length];
+    const curr = offsetLines[i];
+    const pt = intersectLines(prev.p, prev.dir, curr.p, curr.dir);
+    out.push(pt ?? curr.p);
+  }
+  return out;
+};
+
+/** (Legacy) Offset a closed face polygon inward by the per-edge wall intrusion. Currently
+ *  unused — kept for reference while phase 2 (`applyLeftRightOffset`) is dialled in. */
+const buildOffsetFace = (face: Point[], walls: Wall[]): Point[] => {
+  if (face.length < 3) return face;
+  const centroid = polygonCentroid(face);
+  type Line = { p: Point; dir: Point };
+  const offsetLines: Line[] = [];
+  for (let i = 0; i < face.length; i++) {
+    const a = face[i];
+    const b = face[(i + 1) % face.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    // Perpendicular pointing toward the polygon centroid = inward.
+    const n1x = -uy, n1y = ux;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const inwardSign = (n1x * (centroid.x - mx) + n1y * (centroid.y - my)) >= 0 ? 1 : -1;
+    const inx = n1x * inwardSign, iny = n1y * inwardSign;
+    // Find the source wall whose centerline contains this edge.
+    let wall: Wall | null = null;
+    for (const w of walls) {
+      if (w.segmentType === "connection") continue;
+      if (isPointOnSegment(a, w.start, w.end) && isPointOnSegment(b, w.start, w.end)) {
+        wall = w; break;
+      }
+    }
+    let intrusion = 0;
+    if (wall) {
+      const t = wall.thickness ?? 0;
+      const m = wall.method ?? "center";
+      // Phase 1: handle center only — offset inward by thickness/2.
+      // Left/right justification is handled in a later pass; leave it at zero for now.
+      if (m === "center") intrusion = t / 2;
+    }
+    offsetLines.push({ p: { x: a.x + inx * intrusion, y: a.y + iny * intrusion }, dir: { x: ux, y: uy } });
+  }
+  // Recompute each vertex as the intersection of its incoming and outgoing offset lines.
+  const out: Point[] = [];
+  for (let i = 0; i < offsetLines.length; i++) {
+    const prev = offsetLines[(i - 1 + offsetLines.length) % offsetLines.length];
+    const curr = offsetLines[i];
+    const pt = intersectLines(prev.p, prev.dir, curr.p, curr.dir);
+    out.push(pt ?? curr.p);
+  }
+  return out;
+};
+
 const getLineIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
   const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
   const x3 = p3.x, y3 = p3.y, x4 = p4.x, y4 = p4.y;
@@ -189,9 +302,14 @@ export const detectAutoRoomsFromWalls = (walls: Wall[]): Room[] => {
         }
 
         if (signedArea < 0 && Math.abs(signedArea) / 2 > ROOM_MIN_AREA_PX) {
+          // Per-edge offset based on wall justification (centerline-trace stays for "center"):
+          //   left  → shift face edge by +thickness/2 perpendicular to wall, in the wall's "left"
+          //   right → shift face edge by +thickness/2 perpendicular to wall, in the wall's "right"
+          // "left" perpendicular matches miteredWalls.ts: perpL(ux,uy) = (-uy, ux).
+          const offsetPts = applyLeftRightOffset(facePoints, walls);
           faces.push({
             id: `${ROOM_AUTO_ID_PREFIX}${cycleCanonicalKey(facePoints.map(getPointKey))}`,
-            points: facePoints,
+            points: offsetPts.length >= 3 ? offsetPts : facePoints,
             fill: "rgba(34,197,94,0.2)",
             stroke: "#16A34A",
           });

@@ -1,6 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Room } from "../types";
 import type { RegionSemantics } from "../algorithms/semantics/regionSemantics";
@@ -31,6 +32,13 @@ interface ToolsPanelProps {
 
   // Test — random Site/Buildable/Footprint cascade (dev shortcut).
   onTestDrawPolygon: () => void;
+
+  /** Capture a PNG snapshot of the currently-visible canvas (3D if in 3D mode, else 2D).
+   *  Returns the data URL ("data:image/png;base64,...") or null on failure. */
+  onCaptureCanvasPng: () => Promise<string | null>;
+  /** Capture six multi-view PNGs of the 3D scene. Returns `[{ view, dataUrl }, …]`
+   *  or null on failure. Will auto-switch the editor to 3D mode if it isn't already. */
+  onCaptureSnapshots: () => Promise<{ view: string; dataUrl: string }[] | null>;
 
   // AI Chat
   aiPrompt: string;
@@ -79,6 +87,8 @@ export const ToolsPanel = ({
   onComputeSemantics,
   onCleanWalls,
   onTestDrawPolygon,
+  onCaptureCanvasPng,
+  onCaptureSnapshots,
   aiPrompt,
   onAiPromptChange,
   aiApiKey,
@@ -105,6 +115,272 @@ export const ToolsPanel = ({
   onCommandsRun,
 }: ToolsPanelProps) => {
   const [testExpanded, setTestExpanded] = useState<boolean>(false);
+  const [sampleJsonsExpanded, setSampleJsonsExpanded] = useState<boolean>(false);
+
+  const SAMPLE_1_SITE_TO_FOOTPRINT = `{
+  "rooms": [
+    {
+      "create": {
+        "label": "Test Site Area",
+        "roomType": "site-boundary",
+        "fill": "rgba(254, 243, 199, 0.4)",
+        "stroke": "#b45309",
+        "max height": 30,
+        "floor_height": 3,
+        "max FSI": 2.5,
+        "GCR": 40,
+        "points": [
+          { "x": 0,    "y": -780 },
+          { "x": 720,  "y": -260 },
+          { "x": 530,  "y": 620  },
+          { "x": -440, "y": 700  },
+          { "x": -760, "y": -160 }
+        ],
+        "walls": [
+          { "segmentType": "site-boundary", "boundaryTreatment": "fence", "setbackRegime": "road",              "roadWidthM": 12 },
+          { "segmentType": "site-boundary", "boundaryTreatment": "fence", "setbackRegime": "adjoining-plot" },
+          { "segmentType": "site-boundary", "boundaryTreatment": "fence", "setbackRegime": "green-open-space" },
+          { "segmentType": "site-boundary", "boundaryTreatment": "fence", "setbackRegime": "adjoining-plot" },
+          { "segmentType": "site-boundary", "boundaryTreatment": "fence", "setbackRegime": "nala-drain" }
+        ]
+      },
+      "operations": [
+        {
+          "tool": "regime-inset",
+          "params": {
+            "regimes": {
+              "road": [
+                { "if": { "widthLt": 6  }, "setback": 1.5 },
+                { "if": { "widthLt": 9  }, "setback": 3.0 },
+                { "if": { "widthLt": 12 }, "setback": 3.5 },
+                { "setback": 6.0 }
+              ],
+              "adjoining-plot":   { "setback": 1.5 },
+              "nala-drain":       { "setback": 3.0 },
+              "water-body":       { "setback": 5.0 },
+              "restricted-zone":  { "setback": 9.0 },
+              "green-open-space": { "setback": 3.0 }
+            },
+            "default": 0
+          },
+          "commit": false
+        },
+        {
+          "tool": "optimise-rect",
+          "params": {
+            "shape": "rectangle",
+            "reference": "custom",
+            "axisAngle": 0,
+            "count": 2,
+            "union": true,
+            "shrinkEnabled": true,
+            "shrinkAngle": 90,
+            "optimiseShrinkEnabled": true,
+            "targetFromGcr": true
+          },
+          "commit": false
+        },
+        {
+          "tool": "massing",
+          "params": {
+            "avgWidth": 3.5,
+            "floorsFromSiteProperties": true
+          },
+          "commit": false
+        }
+      ]
+    }
+  ]
+}`;
+
+  const SAMPLE_3_FOOTPRINT_TO_FURNITURE = `{
+  "create": [
+    {
+      "id": "floorplate-01",
+      "label": "Apartment Boundary",
+      "points": [[0,0], [12,0], [12,10], [0,10]],
+      "fill": "rgba(100,100,100,0.05)",
+      "stroke": "#333"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "R1-BSP",
+      "match": { "id": "floorplate-01" },
+      "operations": [
+        {
+          "tool": "bsp",
+          "params": {
+            "useAreaPercent": true,
+            "tiltAngle": 90,
+            "seeds": [
+              {"x": 0.4, "y": 0.4, "weight": 28},
+              {"x": 0.8, "y": 0.2, "weight": 18},
+              {"x": 0.8, "y": 0.8, "weight": 15},
+              {"x": 0.1, "y": 0.2, "weight": 12},
+              {"x": 0.2, "y": 0.5, "weight": 10},
+              {"x": 0.9, "y": 0.5, "weight": 6},
+              {"x": 0.1, "y": 0.8, "weight": 6},
+              {"x": 0.5, "y": 0.05, "weight": 3},
+              {"x": 0.05, "y": 0.5, "weight": 2}
+            ]
+          },
+          "commit": true
+        }
+      ]
+    },
+    {
+      "id": "R2-Living",
+      "match": { "areaM2": { "gt": 25 } },
+      "operations": [
+        { "tool": "set-label", "params": { "label": "Large Interior" }, "commit": true },
+        { "tool": "add-window", "params": { "side": "N", "position": 50, "widthM": 2.5 }, "commit": true },
+        { "tool": "place-object", "params": { "objects": [
+          {"kind": "sofa", "length": 3.0, "breadth": 1.0, "position": 15, "setback": 0.1},
+          {"kind": "tv-unit", "length": 2.0, "breadth": 0.4, "position": 65, "setback": 0.1}
+        ]}, "commit": true }
+      ]
+    },
+    {
+      "id": "R3-Bedrooms",
+      "match": { "areaM2": { "gt": 14, "lte": 25 } },
+      "operations": [
+        { "tool": "set-label", "params": { "label": "Medium Interior" }, "commit": true },
+        { "tool": "add-window", "params": { "side": "E", "position": 50, "widthM": 1.5 }, "commit": true },
+        { "tool": "add-door", "params": { "side": "W", "position": 20, "widthM": 0.9 }, "commit": true },
+        { "tool": "place-object", "params": { "objects": [
+          {"kind": "bed", "length": 2.0, "breadth": 1.8, "position": 70, "setback": 0.05},
+          {"kind": "wardrobe", "length": 1.8, "breadth": 0.6, "position": 30, "setback": 0.05}
+        ]}, "commit": true }
+      ]
+    },
+    {
+      "id": "R4-Kitchen",
+      "match": { "areaM2": { "gt": 9, "lte": 14 } },
+      "operations": [
+        { "tool": "set-label", "params": { "label": "Service" }, "commit": true },
+        { "tool": "add-window", "params": { "side": "W", "position": 50, "widthM": 1.2 }, "commit": true },
+        { "tool": "place-object", "params": { "objects": [
+          {"kind": "fridge", "length": 0.7, "breadth": 0.7, "position": 10, "setback": 0.05},
+          {"kind": "table", "length": 1.2, "breadth": 0.7, "position": 80, "setback": 0.05}
+        ]}, "commit": true }
+      ]
+    },
+    {
+      "id": "R5-Bathrooms",
+      "match": { "areaM2": { "gt": 4, "lte": 9 } },
+      "operations": [
+        { "tool": "set-label", "params": { "label": "Service" }, "commit": true },
+        { "tool": "add-door", "params": { "side": "S", "position": 50, "widthM": 0.75 }, "commit": true },
+        { "tool": "place-object", "params": { "objects": [
+          {"kind": "toilet", "length": 0.5, "breadth": 0.7, "position": 85, "setback": 0.05},
+          {"kind": "bathtub", "length": 1.6, "breadth": 0.7, "position": 20, "setback": 0.05}
+        ]}, "commit": true }
+      ]
+    }
+  ]
+}`;
+  // Render — AI image render of the current 3D snapshot. Local state persisted to
+  // localStorage so the user's API key + model survive reloads.
+  const [renderExpanded, setRenderExpanded] = useState<boolean>(false);
+  const [renderApiKey, setRenderApiKey] = useState<string>(() => {
+    try { return localStorage.getItem("render-api-key") ?? ""; } catch { return ""; }
+  });
+  const [renderModel, setRenderModel] = useState<string>(() => {
+    try { return localStorage.getItem("render-model-v3") || "gemini-3.1-flash-image-preview"; } catch { return "gemini-3.1-flash-image-preview"; }
+  });
+  const [renderPrompt, setRenderPrompt] = useState<string>(
+    "Edit the attached architectural massing snapshot into a photorealistic render with daylight, realistic facade materials, landscaping, and sky."
+  );
+  const [renderBusy, setRenderBusy] = useState<boolean>(false);
+  const [renderResultUrl, setRenderResultUrl] = useState<string | null>(null);
+  /** Six-view snapshots captured from the 3D scene. The user picks one to send to the model. */
+  const [renderSnapshots, setRenderSnapshots] = useState<{ view: string; dataUrl: string }[] | null>(null);
+  const [renderSelectedView, setRenderSelectedView] = useState<string | null>(null);
+  const [snapshotBusy, setSnapshotBusy] = useState<boolean>(false);
+
+  const handleSnapshot = async () => {
+    try {
+      setSnapshotBusy(true);
+      const shots = await onCaptureSnapshots();
+      if (!shots || shots.length === 0) {
+        toast.error("Snapshot failed");
+        return;
+      }
+      setRenderSnapshots(shots);
+      setRenderSelectedView(shots[0]?.view ?? null);
+      toast.success(`Captured ${shots.length} views — pick one to render`);
+    } finally {
+      setSnapshotBusy(false);
+    }
+  };
+
+  const handleRender = async () => {
+    if (!renderApiKey.trim()) {
+      toast.error("Add a Google AI Studio API key first");
+      return;
+    }
+    try {
+      setRenderBusy(true);
+      setRenderResultUrl(null);
+      try { localStorage.setItem("render-api-key", renderApiKey); } catch { /* ignore */ }
+      try { localStorage.setItem("render-model-v3", renderModel); } catch { /* ignore */ }
+      // Prefer the user-picked snapshot if available; otherwise live-capture the canvas.
+      let dataUrl: string | null = null;
+      if (renderSnapshots && renderSelectedView) {
+        const sel = renderSnapshots.find((s) => s.view === renderSelectedView);
+        if (sel?.dataUrl) dataUrl = sel.dataUrl;
+      }
+      if (!dataUrl) dataUrl = await onCaptureCanvasPng();
+      if (!dataUrl) { toast.error("Couldn't capture canvas snapshot"); return; }
+      const base64 = dataUrl.split(",")[1] ?? "";
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(renderModel)}:generateContent?key=${encodeURIComponent(renderApiKey)}`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              // Text BEFORE image: Gemini's image-edit endpoint frequently returns only
+              // a text part when the image precedes the instruction.
+              { text: renderPrompt },
+              { inline_data: { mime_type: "image/png", data: base64 } },
+            ],
+          }],
+          generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        toast.error(`Render failed (${res.status})`);
+        console.error("Render error:", errText);
+        return;
+      }
+      const json = await res.json();
+      const parts = json?.candidates?.[0]?.content?.parts ?? [];
+      // Accept both snake_case (REST docs) and camelCase (SDK/proto-JSON) field names.
+      const imgPart = parts.find((p: { inline_data?: { data?: string; mime_type?: string }; inlineData?: { data?: string; mimeType?: string } }) =>
+        p.inline_data?.data || p.inlineData?.data
+      );
+      if (!imgPart) {
+        const finishReason = json?.candidates?.[0]?.finishReason;
+        const blockReason = json?.promptFeedback?.blockReason;
+        const detail = blockReason ? `blocked: ${blockReason}` : finishReason ? `finish: ${finishReason}` : "no image part";
+        toast.error(`Model returned no image (${detail})`);
+        console.error("Render response:", json);
+        return;
+      }
+      const inline = imgPart.inline_data ?? imgPart.inlineData;
+      const mime = inline.mime_type ?? inline.mimeType ?? "image/png";
+      setRenderResultUrl(`data:${mime};base64,${inline.data}`);
+      toast.success("Render complete");
+    } catch (e) {
+      toast.error("Render error");
+      console.error(e);
+    } finally {
+      setRenderBusy(false);
+    }
+  };
   return (
   <div className="shrink-0 border-t border-slate-200 bg-slate-50" style={panelExpanded ? { maxHeight: "45%" } : undefined}>
     <button
@@ -233,6 +509,50 @@ export const ToolsPanel = ({
                     title="Generate JSON into the textarea below. Review, then press Apply JSON."
                   >
                     {aiBusy ? "Generating…" : "Generate → fill JSON below"}
+                  </Button>
+                </>}
+              </div>
+
+              {/* Sample JSONs — quick-start recipes. Handlers are placeholders for now. */}
+              <div className="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-left"
+                  onClick={() => setSampleJsonsExpanded((v) => !v)}
+                >
+                  <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Sample JSONs</span>
+                  <span className="text-[11px] text-slate-400">{sampleJsonsExpanded ? "▼" : "▶"}</span>
+                </button>
+                {sampleJsonsExpanded && <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-[11px]"
+                    onClick={() => {
+                      onJsonTextChange(SAMPLE_1_SITE_TO_FOOTPRINT);
+                      toast.success("Loaded Sample 1: Site to Building Footprint");
+                    }}
+                  >
+                    Sample 1: Site to Building Footprint
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-[11px]"
+                    onClick={() => toast.info("Sample 2 — handler not wired yet")}
+                  >
+                    Sample 2: City to Site Plans
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-[11px]"
+                    onClick={() => {
+                      onJsonTextChange(SAMPLE_3_FOOTPRINT_TO_FURNITURE);
+                      toast.success("Loaded Sample 3: Building Footprint to Furniture Placement");
+                    }}
+                  >
+                    Sample 3: Building Footprint to Furniture Placement
                   </Button>
                 </>}
               </div>
@@ -439,6 +759,105 @@ export const ToolsPanel = ({
                 Random Site Cascade
               </Button>
               <p className="text-[9px] text-slate-400">Drops a random pentagonal Site + Buildable + Footprint set on the canvas.</p>
+            </>}
+          </div>
+
+          {/* Render — AI image render of the current 3D snapshot. */}
+          <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setRenderExpanded((v) => !v)}
+            >
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Render</span>
+              <span className="text-[11px] text-slate-400">{renderExpanded ? "▼" : "▶"}</span>
+            </button>
+            {renderExpanded && <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-[11px]"
+                disabled={snapshotBusy}
+                onClick={handleSnapshot}
+              >
+                {snapshotBusy ? "Capturing…" : "Snapshot (6 views from 3D)"}
+              </Button>
+              {renderSnapshots && renderSnapshots.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-semibold text-slate-600">Pick a view</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {renderSnapshots.map((s) => (
+                      <button
+                        key={s.view}
+                        type="button"
+                        onClick={() => setRenderSelectedView(s.view)}
+                        className={`flex flex-col items-center gap-0.5 rounded border p-0.5 text-[9px] transition ${
+                          renderSelectedView === s.view
+                            ? "border-sky-500 ring-1 ring-sky-300"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <img src={s.dataUrl} alt={s.view} className="w-full rounded-sm" />
+                        <span className="capitalize text-slate-600">{s.view}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <p className="mb-1 text-[10px] font-semibold text-slate-600">API Key (Google AI Studio)</p>
+                <Input
+                  type="password"
+                  placeholder="AIza…"
+                  value={renderApiKey}
+                  onChange={(e) => setRenderApiKey(e.target.value)}
+                  className="h-7 text-[11px]"
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-semibold text-slate-600">Model</p>
+                <Input
+                  value={renderModel}
+                  onChange={(e) => setRenderModel(e.target.value)}
+                  className="h-7 text-[11px]"
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-semibold text-slate-600">Prompt</p>
+                <textarea
+                  value={renderPrompt}
+                  onChange={(e) => setRenderPrompt(e.target.value)}
+                  className="min-h-[60px] w-full rounded border border-slate-200 bg-white p-1.5 text-[11px]"
+                />
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full text-[11px]"
+                disabled={renderBusy}
+                onClick={handleRender}
+              >
+                {renderBusy ? "Rendering…" : "Render snapshot of 3D view"}
+              </Button>
+              <p className="text-[9px] text-slate-400">
+                Captures the visible canvas (3D if toggled on) and sends it to Gemini with the prompt. Result appears below.
+              </p>
+              {renderResultUrl && (
+                <div className="space-y-1">
+                  <img
+                    src={renderResultUrl}
+                    alt="Rendered output"
+                    className="w-full rounded border border-slate-200"
+                  />
+                  <a
+                    href={renderResultUrl}
+                    download="render.png"
+                    className="text-[10px] text-sky-600 hover:underline"
+                  >
+                    Download
+                  </a>
+                </div>
+              )}
             </>}
           </div>
 

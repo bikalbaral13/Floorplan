@@ -1,5 +1,5 @@
-﻿import { useMemo, type ComponentProps, type ReactNode } from "react";
-import { Canvas } from "@react-three/fiber";
+﻿import { forwardRef, useImperativeHandle, useMemo, type ComponentProps, type ReactNode, type MutableRefObject } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
@@ -17,10 +17,21 @@ function EdgedMesh(props: ComponentProps<"mesh">) {
   );
 }
 
+/** View axes for the multi-view snapshot grid exposed by the imperative ref. */
+export type SnapshotView =
+  | "front" | "back" | "left" | "right" | "top" | "isometric";
+export interface SnapshotResult { view: SnapshotView; dataUrl: string }
+export interface SnapshotApi {
+  captureAll: () => Promise<SnapshotResult[]>;
+}
+
 interface Props {
   model: FloorPlanModel;
   pixelsPerMeter: number;
   placementMode?: "polygon" | "2dSymbol" | "rendered";
+  /** Imperative bridge — when set, exposes captureAll() to render the scene from
+   *  six canonical viewpoints and return the resulting PNG data URLs. */
+  snapshotApiRef?: MutableRefObject<SnapshotApi | null>;
   /** Visible rooms (manual + auto-detected). When present, each is extruded as a thin floor slab
    *  and click-selectable. Falls back to model.rooms (manual only) if not provided. */
   rooms?: Room[];
@@ -106,7 +117,49 @@ const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }
   return [{ yMin: 0, yMax: fullH }];
 };
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM, massingShowBlocks = false }: Props) {
+/** Bridge component mounted inside <Canvas/> so it has access to gl/scene/camera
+ *  via useThree. Exposes a captureAll() that renders the scene from six canonical
+ *  viewpoints to the offscreen-capable WebGL buffer (preserveDrawingBuffer on),
+ *  then restores the original camera. */
+const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number; floorHeightM: number }>(
+  ({ widthM, depthM, floorHeightM }, ref) => {
+    const { gl, scene, camera, size } = useThree();
+    useImperativeHandle(ref, () => ({
+      captureAll: async () => {
+        const aspect = Math.max(1e-6, size.width / size.height);
+        const dist = Math.max(widthM, depthM) * 1.1 + 6;
+        const eyeY = floorHeightM * 0.6;
+        const center = new THREE.Vector3(0, eyeY, 0);
+        const views: { view: SnapshotView; pos: [number, number, number] }[] = [
+          { view: "front",     pos: [0, eyeY, dist] },
+          { view: "back",      pos: [0, eyeY, -dist] },
+          { view: "left",      pos: [-dist, eyeY, 0] },
+          { view: "right",     pos: [dist, eyeY, 0] },
+          { view: "top",       pos: [0, dist * 1.4, 0.001] },
+          { view: "isometric", pos: [dist, dist * 0.8, dist] },
+        ];
+        const results: SnapshotResult[] = [];
+        for (const v of views) {
+          const cam = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
+          cam.position.set(v.pos[0], v.pos[1], v.pos[2]);
+          cam.lookAt(center);
+          cam.updateMatrixWorld();
+          gl.render(scene, cam);
+          let url = "";
+          try { url = gl.domElement.toDataURL("image/png"); } catch { url = ""; }
+          results.push({ view: v.view, dataUrl: url });
+        }
+        // Restore the original framebuffer so the user keeps seeing the live view.
+        gl.render(scene, camera);
+        return results;
+      },
+    }), [gl, scene, camera, size, widthM, depthM, floorHeightM]);
+    return null;
+  }
+);
+SnapshotBridge.displayName = "SnapshotBridge";
+
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM, massingShowBlocks = false, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -302,8 +355,17 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     <Canvas
       camera={{ position: [camDist, camDist * 0.8, camDist], fov: 45, near: 0.1, far: 1000 }}
       style={{ width: "100%", height: "100%", background: "#eef2f7" }}
+      gl={{ preserveDrawingBuffer: true }}
       onPointerMissed={() => onSelectWall?.(null, false)}
     >
+      {snapshotApiRef && (
+        <SnapshotBridge
+          ref={snapshotApiRef}
+          widthM={widthM}
+          depthM={depthM}
+          floorHeightM={FLOOR_H}
+        />
+      )}
       <ambientLight intensity={1.1} />
       <directionalLight position={[20, 30, 15]} intensity={0.5} />
       <directionalLight position={[-15, 20, -10]} intensity={0.35} />

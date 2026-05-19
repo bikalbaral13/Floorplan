@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 const FloorPlan3DCanvas = lazy(() => import("./three/FloorPlan3DCanvas"));
+import type { SnapshotApi } from "./three/FloorPlan3DCanvas";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -35,6 +36,9 @@ import {
   Circle as CircleIcon,
   DoorOpen,
   Eye,
+  EyeOff,
+  Lock,
+  Unlock,
   FileImage,
   FileJson,
   Folder,
@@ -86,6 +90,7 @@ import type {
   WallMethod,
   WallMode,
 } from "./types";
+import { defaultLayerTable, withLayerDefaults } from "./types";
 import { isWallMountedFurnitureType, snapPointerToNearestWall } from "./wallSnap";
 import {
   computeMoveMeasurements,
@@ -137,6 +142,7 @@ import { CalibrationDialog } from "./components/dialogs/CalibrationDialog";
 import { AutoGenDialog } from "./components/dialogs/AutoGenDialog";
 import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealingDialog";
 import { DrawPathDialog, type DrawPathStyle } from "./components/dialogs/DrawPathDialog";
+import { AddWallDialog } from "./components/dialogs/AddWallDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { ToolsPanel } from "./components/ToolsPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
@@ -494,6 +500,7 @@ const initialModel: FloorPlanModel = {
   objects: [],
   furniture: [],
   imageUnderlay: null,
+  layers: defaultLayerTable(),
 };
 
 interface SnapSettings {
@@ -864,14 +871,82 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // BSP preview walls (isBspPreview) are excluded — same as inset preview walls — so the partition
     // shows only as ephemeral cut strokes during Live, never as real auto-rooms. The cells become
     // real rooms only after Apply BSP commits (which removes the source room and converts the cuts
-    // to non-preview walls).
-    () => detectAutoRoomsFromWalls(history.state.walls.filter((w) => w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview)),
-    [history.state.walls]
+    // to non-preview walls). Walls on hidden layers are also excluded so auto-rooms derived from
+    // them don't keep surfacing while the user has the layer hidden.
+    () => {
+      const layerTable = history.state.layers ?? [];
+      const visibleLayerIds = new Set<string>();
+      const knownLayerIds = new Set<string>();
+      for (const l of layerTable) {
+        knownLayerIds.add(l.id);
+        if (l.visible) visibleLayerIds.add(l.id);
+      }
+      const isWallLayerVisible = (w: { layerId?: string }) => {
+        const id = w.layerId ?? "0";
+        if (!knownLayerIds.has(id)) return true;
+        return visibleLayerIds.has(id);
+      };
+      return detectAutoRoomsFromWalls(history.state.walls.filter((w) => isWallLayerVisible(w) && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview));
+    },
+    [history.state.walls, history.state.layers]
   );
   const manualRooms = useMemo(
     () => history.state.rooms.filter((room) => !room.id.startsWith(ROOM_AUTO_ID_PREFIX)),
     [history.state.rooms]
   );
+  // Layer-aware visibility/lock memos. Missing/unknown layerIds resolve to "0".
+  // A layer that doesn't exist in the table is treated as visible+unlocked so legacy
+  // entities never disappear if their layer was renamed/deleted upstream.
+  const layerVisibleSet = useMemo(() => {
+    const out = new Set<string>();
+    for (const l of (history.state.layers ?? [])) if (l.visible) out.add(l.id);
+    return out;
+  }, [history.state.layers]);
+  const layerLockedSet = useMemo(() => {
+    const out = new Set<string>();
+    for (const l of (history.state.layers ?? [])) if (l.locked) out.add(l.id);
+    return out;
+  }, [history.state.layers]);
+  const layerTableHasId = useMemo(() => {
+    const out = new Set<string>();
+    for (const l of (history.state.layers ?? [])) out.add(l.id);
+    return out;
+  }, [history.state.layers]);
+  /** Paint order — entities on higher-order layers render on top. Lookup by layerId. */
+  const layerOrderMap = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const l of (history.state.layers ?? [])) out.set(l.id, l.order);
+    return out;
+  }, [history.state.layers]);
+  /** Per-layer color, indexed by layerId. Used to resolve `color: "ByLayer"` entities. */
+  const layerColorMap = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const l of (history.state.layers ?? [])) out.set(l.id, l.color);
+    return out;
+  }, [history.state.layers]);
+  /** Stable comparator: sort ascending by layer.order so higher-order layers render last (on top). */
+  const compareByLayer = useCallback(<T extends { layerId?: string }>(a: T, b: T) => {
+    const ao = layerOrderMap.get(a.layerId ?? "0") ?? 0;
+    const bo = layerOrderMap.get(b.layerId ?? "0") ?? 0;
+    return ao - bo;
+  }, [layerOrderMap]);
+  /** Resolve an entity's effective stroke/fill color. If `color === "ByLayer"`, use the layer's color. */
+  const resolveColor = useCallback((entityColor: string | undefined, layerId: string | undefined): string => {
+    if (entityColor === "ByLayer") return layerColorMap.get(layerId ?? "0") ?? "#000000";
+    return entityColor ?? "#000000";
+  }, [layerColorMap]);
+  /** Resolve an entity's effective visibility: hidden iff its layer is in the table AND marked invisible. */
+  const isLayerVisible = useCallback((layerId: string | undefined) => {
+    const id = layerId ?? "0";
+    if (!layerTableHasId.has(id)) return true;
+    return layerVisibleSet.has(id);
+  }, [layerTableHasId, layerVisibleSet]);
+  /** Resolve an entity's effective lock state. Unknown layers are unlocked. */
+  const isLayerLocked = useCallback((layerId: string | undefined) => {
+    const id = layerId ?? "0";
+    return layerLockedSet.has(id);
+  }, [layerLockedSet]);
+
   const visibleRooms = useMemo(() => {
     // Hide an auto-detected room if (a) its centroid is within 10 px of a manual
     // room's centroid (the original near-identical-region check), or (b) its centroid
@@ -893,9 +968,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         return manualRoom.points.length >= 3 && pip(ac.x, ac.y, manualRoom.points);
       });
     });
-    // Manual rooms rendered after (on top) so they receive clicks first
-    return [...filteredAutoRooms, ...manualRooms];
-  }, [manualRooms, autoRooms]);
+    // Manual rooms rendered after (on top) so they receive clicks first.
+    // Layer-aware visibility filter: drop rooms whose layer is hidden.
+    // Paint order: sort by layer.order so higher-order layers draw on top.
+    const combined = [...filteredAutoRooms, ...manualRooms];
+    return combined.filter((r) => isLayerVisible(r.layerId)).slice().sort(compareByLayer);
+  }, [manualRooms, autoRooms, isLayerVisible, compareByLayer]);
   /** Mitered wall polygons — computed once when walls change, shared across all mitered wall renders. */
   const miteredPolygons = useMemo(() => computeMiteredWallPolygons(history.state.walls), [history.state.walls]);
   const miteredUnion = useMemo(() => computeMiteredUnion(miteredPolygons), [miteredPolygons]);
@@ -1185,9 +1263,23 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
 
   const wallNodes = useMemo(() => {
     const NODE_TOL = 1.5;
+    // Skip walls on hidden/locked layers so their nodes don't show or grab clicks.
+    const layerTable = history.state.layers ?? [];
+    const visibleLayerIds = new Set<string>();
+    const knownLayerIds = new Set<string>();
+    for (const l of layerTable) {
+      knownLayerIds.add(l.id);
+      if (l.visible) visibleLayerIds.add(l.id);
+    }
+    const isWallLayerVisible = (w: { layerId?: string }) => {
+      const id = w.layerId ?? "0";
+      if (!knownLayerIds.has(id)) return true;
+      return visibleLayerIds.has(id);
+    };
     const nodes: { key: string; stableKey: string; x: number; y: number; wallIds: string[]; degree: number }[] = [];
     const allPts: { x: number; y: number; wallId: string; end: "start" | "end" }[] = [];
     for (const w of history.state.walls) {
+      if (!isWallLayerVisible(w)) continue;
       allPts.push({ x: w.start.x, y: w.start.y, wallId: w.id, end: "start" });
       allPts.push({ x: w.end.x, y: w.end.y, wallId: w.id, end: "end" });
     }
@@ -1217,7 +1309,25 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       nodes.push({ key, stableKey, x: cx, y: cy, wallIds, degree: wallIds.length });
     }
     return nodes;
-  }, [history.state.walls]);
+  }, [history.state.walls, history.state.layers]);
+  /** Walls usable as snap targets — excludes hidden-layer and locked-layer walls so
+   *  the cursor doesn't snap to geometry the user can't currently see or edit. */
+  const snapWalls = useMemo(() => {
+    const layerTable = history.state.layers ?? [];
+    const visibleLayerIds = new Set<string>();
+    const lockedLayerIds = new Set<string>();
+    const knownLayerIds = new Set<string>();
+    for (const l of layerTable) {
+      knownLayerIds.add(l.id);
+      if (l.visible) visibleLayerIds.add(l.id);
+      if (l.locked) lockedLayerIds.add(l.id);
+    }
+    return history.state.walls.filter((w) => {
+      const id = w.layerId ?? "0";
+      if (!knownLayerIds.has(id)) return true;
+      return visibleLayerIds.has(id) && !lockedLayerIds.has(id);
+    });
+  }, [history.state.walls, history.state.layers]);
   const [tool, setTool] = useState<Tool>("select");
   const [unit, setUnit] = useState<Unit>("m");
   /** Convert a value stored in m² to the currently-selected display unit's square. */
@@ -1272,6 +1382,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  thickness (px) and label instead of the segment-type default. Cleared when the
    *  user exits path mode. */
   const [activeDrawPathConfig, setActiveDrawPathConfig] = useState<{ label: string; thicknessPx: number; method: WallMethod; style: DrawPathStyle } | null>(null);
+  /** Add Wall flow: dialog open + thickness/justification draft inputs. */
+  const [addWallDialogOpen, setAddWallDialogOpen] = useState<boolean>(false);
+  const [addWallThicknessInputM, setAddWallThicknessInputM] = useState<string>("0.2");
+  const [addWallMethodInput, setAddWallMethodInput] = useState<WallMethod>("center");
   const [wallExtendMode, setWallExtendMode] = useState<WallExtendMode>("with-area");
   const [lineThicknessDialogOpen, setLineThicknessDialogOpen] = useState(false);
   const [lineThicknessInput, setLineThicknessInput] = useState("0.2");
@@ -1313,6 +1427,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   });
   const [pixelsPerMeter, setPixelsPerMeter] = useState(50);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  /** Bridge to FloorPlan3DCanvas's WebGL renderer — used to capture multi-view PNGs for the Render block. */
+  const snapshotApiRef = useRef<SnapshotApi | null>(null);
+  /** Active layer — new entities created from here will be stamped with this id.
+   *  Default `"0"` (the seed layer). Step 4 will surface this in the Layers UI. */
+  const [activeLayerId, setActiveLayerId] = useState<string>("0");
   const [measureDraft, setMeasureDraft] = useState<Point | null>(null);
   const [measurePreviewPoint, setMeasurePreviewPoint] = useState<Point | null>(null);
   const [measureSegments, setMeasureSegments] = useState<{ id: string; start: Point; end: Point }[]>([]);
@@ -1383,6 +1502,51 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Room properties Outputs foldable. */
   const [roomOutputsExpanded, setRoomOutputsExpanded] = useState<boolean>(true);
   const [nodeOutputsExpanded, setNodeOutputsExpanded] = useState<boolean>(false);
+  // Auto-stamp layerId on any newly-created entity that's missing it. Acts as a
+  // central catch-all so the 100+ history.set call sites don't all need to pass
+  // layerId explicitly. Walls pick a default layer by segmentType (door→Door,
+  // window→Window, anything else→Wall); other entity types fall back to the
+  // active layer. Uses history.replace (no extra undo entry) and only fires
+  // when at least one entity is missing the field, so the loop is self-limiting.
+  useEffect(() => {
+    const s = history.state;
+    const missing = (arr: Array<{ layerId?: string }> | undefined) =>
+      (arr ?? []).some((e) => !e.layerId);
+    if (!missing(s.walls) && !missing(s.rooms) && !missing(s.objects) && !missing(s.furniture)) return;
+    const layerIds = new Set((s.layers ?? []).map((l) => l.id));
+    const wallDefault = layerIds.has("wall") ? "wall" : activeLayerId;
+    const doorDefault = layerIds.has("door") ? "door" : wallDefault;
+    const windowDefault = layerIds.has("window") ? "window" : wallDefault;
+    const furnitureDefault = layerIds.has("furniture") ? "furniture" : activeLayerId;
+    const stamp = <T extends { layerId?: string }>(arr: T[]): T[] =>
+      arr.map((e) => (e.layerId ? e : { ...e, layerId: activeLayerId }));
+    const stampWalls = (arr: Wall[]): Wall[] =>
+      arr.map((w) => {
+        if (w.layerId) return w;
+        // Placement-along-boundary objects emit walls flagged isPlacementWall — route
+        // those to the Furniture layer so they share the same visibility/lock as the
+        // Add-Furniture sprites.
+        if (w.isPlacementWall || w.isPlacementPreview) return { ...w, layerId: furnitureDefault };
+        const seg = w.segmentType ?? "wall";
+        const lid = seg === "door" ? doorDefault : seg === "window" ? windowDefault : wallDefault;
+        return { ...w, layerId: lid };
+      });
+    const stampFurniture = (arr: FurnitureItem[]): FurnitureItem[] =>
+      arr.map((f) => {
+        if (f.layerId) return f;
+        const lid = f.type === "door" ? doorDefault : f.type === "window" ? windowDefault : furnitureDefault;
+        return { ...f, layerId: lid };
+      });
+    history.replace({
+      ...s,
+      walls: stampWalls(s.walls),
+      rooms: stamp(s.rooms),
+      objects: stamp(s.objects),
+      furniture: stampFurniture(s.furniture),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history.state, activeLayerId]);
+
   useEffect(() => {
     const need = Math.max(1, Math.min(19, Math.round(wallSplitCount) - 1));
     setWallSplitPercents((arr) => {
@@ -2353,6 +2517,35 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const operationGroups = (recipeObj?.operationGroups && typeof recipeObj.operationGroups === "object") ? (recipeObj.operationGroups as Record<string, Array<Record<string, unknown>>>) : {};
     const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
+    // Top-level `layers` block: merge/extend the layer table before any ops run.
+    // Each entry: { id, name, color, visible?, locked?, order? }. Existing ids are
+    // updated in place; new ids are appended. The default "0" is always preserved.
+    if (Array.isArray(recipeObj?.layers)) {
+      const incoming = recipeObj.layers as Array<Record<string, unknown>>;
+      const h = historyRef.current;
+      const current = h.state.layers ?? [];
+      const merged = [...current];
+      let nextOrder = merged.reduce((m, l) => Math.max(m, l.order), 0);
+      for (const raw of incoming) {
+        if (!raw || typeof raw !== "object") continue;
+        const id = typeof raw.id === "string" ? raw.id : null;
+        if (!id) continue;
+        const existingIdx = merged.findIndex((l) => l.id === id);
+        const patched = {
+          id,
+          name: typeof raw.name === "string" ? raw.name : (existingIdx >= 0 ? merged[existingIdx].name : id),
+          color: typeof raw.color === "string" ? raw.color : (existingIdx >= 0 ? merged[existingIdx].color : "#000000"),
+          visible: typeof raw.visible === "boolean" ? raw.visible : (existingIdx >= 0 ? merged[existingIdx].visible : true),
+          locked: typeof raw.locked === "boolean" ? raw.locked : (existingIdx >= 0 ? merged[existingIdx].locked : false),
+          order: typeof raw.order === "number" ? raw.order : (existingIdx >= 0 ? merged[existingIdx].order : ++nextOrder),
+        };
+        if (existingIdx >= 0) merged[existingIdx] = patched;
+        else merged.push(patched);
+      }
+      h.set({ ...h.state, layers: merged });
+      await tick();
+    }
+
     // Deep substitute variable references in string leaves. Two syntaxes are accepted:
     //   1. "{{name}}"  — must be the whole string (preserves the variable's original type)
     //   2. "$name"     — whole string preserves type; otherwise interpolated as text inside the string
@@ -2995,6 +3188,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           if (typeof p.type === "string") setSkeletonType(p.type as "sampled-voronoi" | "segment-sweepline" | "straight-skeleton");
           if (typeof p.samples === "number") setSkeletonSamples(p.samples as number);
           if (typeof p.pruneEnds === "boolean") setSkeletonPruneEnds(p.pruneEnds as boolean);
+          if (typeof p.longestBranch === "boolean") setSkeletonLongestBranch(p.longestBranch as boolean);
+          if (typeof p.makePath === "boolean") setSkeletonMakePath(p.makePath as boolean);
+          if (typeof p.pathWidth === "number") setSkeletonPathWidth(p.pathWidth as number);
+          if (typeof p.level === "number") setSkeletonLevel(p.level as number);
           await tick();
           runnersRef.current!.skeleton(currentRoom, opSilent);
         } else if (tool === "convex-hull") {
@@ -3445,6 +3642,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
               : (rawType === "floorplate-boundary" || rawType === "buildable-area" || rawType === "room" || rawType === "path")
                 ? rawType
                 : "room";
+            const createLayerId = typeof c.layerId === "string" ? c.layerId : typeof c.layer === "string" ? c.layer : undefined;
             createdRoom = {
               id: createId(),
               points: pts,
@@ -3452,6 +3650,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
               stroke: typeof c.stroke === "string" ? c.stroke : "#b45309",
               label: typeof c.label === "string" ? c.label : "Recipe Room",
               roomType: normType,
+              ...(createLayerId ? { layerId: createLayerId } : {}),
               // Site-property inputs (plot-boundary rooms). Accept canonical and friendly keys.
               maxHeightM:        num("maxHeightM", "max height", "maxHeight", "max_height"),
               floorToFloorM:     num("floorToFloorM", "floor_height", "floorHeight", "floor height"),
@@ -6278,21 +6477,40 @@ User request: ${aiPrompt.trim()}`;
       setActiveDrawPathConfig(null);
       return;
     }
+    // Drop collinear midpoint vertices on each loop (e.g. centerline endpoint sitting
+    // on the cap edge between the two cap corners). Cross < 0.01 px² treats the
+    // vertex as on the segment between its neighbours.
+    const simplifyLoop = (pts: Point[]): Point[] => {
+      const n = pts.length;
+      if (n < 3) return pts;
+      const keep: Point[] = [];
+      for (let i = 0; i < n; i++) {
+        const a = pts[(i - 1 + n) % n];
+        const b = pts[i];
+        const c = pts[(i + 1) % n];
+        const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        if (Math.abs(cross) > 0.01) keep.push(b);
+      }
+      return keep.length >= 3 ? keep : pts;
+    };
+    const simplifiedLoops = loops.map(simplifyLoop);
     const newSpaceId = createId();
     const style = getCurrentWallStyle();
-    const newSpaceWalls = outerEdges.map((e) => ({
-      id: createId(),
-      start: e.a,
-      end: e.b,
-      thickness: style.thickness,
-      color: style.color,
-      mode: "fill" as const,
-      method: "center" as const,
-      segmentType: "wall" as const,
-      isPathSpaceWall: true,
-      pathSpaceSourceRoomId: newSpaceId,
-    }));
-    const newRooms = loops.map((points, i) => ({
+    const newSpaceWalls = simplifiedLoops.flatMap((loop) =>
+      loop.map((p, i) => ({
+        id: createId(),
+        start: p,
+        end: loop[(i + 1) % loop.length],
+        thickness: style.thickness,
+        color: style.color,
+        mode: "fill" as const,
+        method: "center" as const,
+        segmentType: "wall" as const,
+        isPathSpaceWall: true,
+        pathSpaceSourceRoomId: newSpaceId,
+      }))
+    );
+    const newRooms = simplifiedLoops.map((points, i) => ({
       id: i === 0 ? newSpaceId : createId(),
       points,
       fill: "rgba(14, 165, 233, 0.35)",
@@ -8600,8 +8818,11 @@ User request: ${aiPrompt.trim()}`;
         const nextState = { ...h.state, walls: [...cleaned, ...pathWalls], rooms: cleanedRooms };
         if (silent) h.replace(nextState);
         else h.set(nextState);
-        runRoomPathSpace(room, silent);
-        if (!silent) toast.success(`Skeleton → Path Space (${pathWalls.length} segments)`);
+        // Live preview shows the path segments only — the Space is materialised on Apply.
+        if (!silent) {
+          runRoomPathSpace(room, silent);
+          toast.success(`Skeleton → Path Space (${pathWalls.length} segments)`);
+        }
         return true;
       }
       const newWalls: Wall[] = [
@@ -14159,11 +14380,11 @@ User request: ${aiPrompt.trim()}`;
     try {
       const parsed = JSON.parse(project.floorPlanStudio) as FloorPlanModel;
       const rooms = parsed.rooms?.filter((r) => !r.id.startsWith(ROOM_AUTO_ID_PREFIX)) ?? [];
-      history.set({
+      history.set(withLayerDefaults({
         ...parsed,
         walls: splitWallsAtIntersections(parsed.walls ?? []),
         rooms,
-      });
+      }));
       toast.success("Reloaded floor plan from project.");
     } catch {
       toast.error("Saved floor plan data is invalid.");
@@ -14675,8 +14896,8 @@ User request: ${aiPrompt.trim()}`;
       }
       return;
     }
-    const spine = withNearestWallSpine(pointer, history.state.walls, tool, snapSettings.wallSpineRadius);
-    const snapped = snapPoint(spine, history.state.walls, history.state.objects, snapSettings, visibleRooms);
+    const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
+    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
     setGuideLines([snapped.x, snapped.y]);
     applyWorldDrawDown(snapped, event.evt.detail, event.evt.shiftKey);
   };
@@ -15065,8 +15286,8 @@ User request: ${aiPrompt.trim()}`;
         const hit = snapPointerToNearestWall(pointer, history.state.walls, WALL_OPENING_PLACE_MAX_DIST);
         setGuideLines(hit ? [hit.x, hit.y] : [pointer.x, pointer.y]);
       } else {
-        const spine = withNearestWallSpine(pointer, history.state.walls, tool, snapSettings.wallSpineRadius);
-        const snapped = snapPoint(spine, history.state.walls, history.state.objects, snapSettings, visibleRooms);
+        const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
+        const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
         setGuideLines([snapped.x, snapped.y]);
         if (tool === "segment" && segmentDraft.length >= 2) {
           const ax = segmentDraft[segmentDraft.length - 2];
@@ -15088,8 +15309,8 @@ User request: ${aiPrompt.trim()}`;
     if (!pointer) {
       return;
     }
-    const spine = withNearestWallSpine(pointer, history.state.walls, tool, snapSettings.wallSpineRadius);
-    const snapped = snapPoint(spine, history.state.walls, history.state.objects, snapSettings, visibleRooms);
+    const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
+    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
     setFreehandDraft((prev) => [...prev, snapped.x, snapped.y]);
   };
 
@@ -15113,6 +15334,8 @@ User request: ${aiPrompt.trim()}`;
           });
         }
       }
+      // Active Draw-Path flow: convert the just-drawn path segments into a Space.
+      if (activeDrawPathConfig) finalizeDrawnPathAsSpace();
       return;
     }
 
@@ -15151,8 +15374,8 @@ User request: ${aiPrompt.trim()}`;
           if (!pointer) {
             return null;
           }
-          const spine = withNearestWallSpine(pointer, history.state.walls, tool, snapSettings.wallSpineRadius);
-          return snapPoint(spine, history.state.walls, history.state.objects, snapSettings, visibleRooms);
+          const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
+          return snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
         })();
       pendingMeasureFinishSnapRef.current = null;
       if (!end) {
@@ -15243,6 +15466,13 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onObjectSelect = (id: string, shift: boolean) => {
+    // Gate selection by layer lock — silently ignore clicks on locked entities.
+    const wallHit = history.state.walls.find((w) => w.id === id);
+    const objHit = history.state.objects.find((o) => o.id === id);
+    const furnHit = history.state.furniture.find((f) => f.id === id);
+    const roomHit = history.state.rooms.find((r) => r.id === id);
+    const hitLayer = wallHit?.layerId ?? objHit?.layerId ?? furnHit?.layerId ?? roomHit?.layerId;
+    if (hitLayer && isLayerLocked(hitLayer)) return;
     // Add window mode: clicking a wall splits it to insert a window segment
     if (addWindowMode) {
       const wall = history.state.walls.find((w) => w.id === id);
@@ -15792,8 +16022,131 @@ User request: ${aiPrompt.trim()}`;
           <Layers className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80" side="bottom" sideOffset={8}>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Layers</p>
+      <PopoverContent align="end" className="w-80 max-h-[70vh] overflow-y-auto" side="bottom" sideOffset={8}>
+        {/* Drawing Layers — AutoCAD-style. Each row: visible, locked, color, name, active radio, delete. */}
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Drawing Layers</p>
+        <div className="mb-3 space-y-1">
+          {(history.state.layers ?? []).map((layer) => {
+            const isActive = activeLayerId === layer.id;
+            const isDefault = layer.id === "0";
+            const updateLayer = (patch: Partial<typeof layer>) => {
+              const h = history;
+              h.set({ ...h.state, layers: (h.state.layers ?? []).map((l) => l.id === layer.id ? { ...l, ...patch } : l) });
+            };
+            return (
+              <div key={layer.id} className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[11px] ${isActive ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}>
+                <button
+                  type="button"
+                  title={layer.visible ? "Hide layer" : "Show layer"}
+                  onClick={() => updateLayer({ visible: !layer.visible })}
+                  className="rounded p-0.5 hover:bg-slate-100"
+                >
+                  {layer.visible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+                </button>
+                <button
+                  type="button"
+                  title={layer.locked ? "Unlock layer" : "Lock layer"}
+                  onClick={() => updateLayer({ locked: !layer.locked })}
+                  className="rounded p-0.5 hover:bg-slate-100"
+                >
+                  {layer.locked ? <Lock className="h-3.5 w-3.5 text-amber-600" /> : <Unlock className="h-3.5 w-3.5 text-slate-400" />}
+                </button>
+                <input
+                  type="color"
+                  value={layer.color}
+                  onChange={(e) => updateLayer({ color: e.target.value })}
+                  className="h-4 w-4 cursor-pointer rounded border border-slate-200 p-0"
+                  title="Layer color"
+                />
+                <input
+                  type="text"
+                  value={layer.name}
+                  onChange={(e) => updateLayer({ name: e.target.value })}
+                  disabled={isDefault}
+                  className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0 text-[11px] hover:border-slate-200 focus:border-slate-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                  title={isDefault ? "Default layer name is fixed" : "Rename layer"}
+                />
+                <input
+                  type="radio"
+                  name="active-layer"
+                  checked={isActive}
+                  onChange={() => setActiveLayerId(layer.id)}
+                  title="Set as active layer"
+                  className="cursor-pointer"
+                />
+                {!isDefault && (
+                  <button
+                    type="button"
+                    title="Delete layer (entities move to Layer 0)"
+                    onClick={() => {
+                      if (isActive) setActiveLayerId("0");
+                      const h = history;
+                      const reassign = <T extends { layerId?: string }>(arr: T[]): T[] =>
+                        arr.map((e) => (e.layerId === layer.id ? { ...e, layerId: "0" } : e));
+                      h.set({
+                        ...h.state,
+                        layers: (h.state.layers ?? []).filter((l) => l.id !== layer.id),
+                        walls: reassign(h.state.walls),
+                        rooms: reassign(h.state.rooms),
+                        objects: reassign(h.state.objects),
+                        furniture: reassign(h.state.furniture),
+                      });
+                    }}
+                    className="rounded p-0.5 text-red-500 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 text-[11px]"
+              onClick={() => {
+                const layers = history.state.layers ?? [];
+                const newId = `layer-${Date.now().toString(36)}`;
+                const order = layers.reduce((m, l) => Math.max(m, l.order), 0) + 1;
+                const palette = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899"];
+                const color = palette[layers.length % palette.length];
+                history.set({
+                  ...history.state,
+                  layers: [...layers, { id: newId, name: `Layer ${layers.length}`, color, visible: true, locked: false, order }],
+                });
+                setActiveLayerId(newId);
+              }}
+            >
+              <Plus className="mr-1 h-3 w-3" /> New layer
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 text-[11px]"
+              disabled={selection.selectedIds.length === 0}
+              title="Move the current selection to the active layer"
+              onClick={() => {
+                const ids = new Set(selection.selectedIds);
+                const h = history;
+                const reassign = <T extends { id: string; layerId?: string }>(arr: T[]): T[] =>
+                  arr.map((e) => (ids.has(e.id) ? { ...e, layerId: activeLayerId } : e));
+                h.set({
+                  ...h.state,
+                  walls: reassign(h.state.walls),
+                  rooms: reassign(h.state.rooms),
+                  objects: reassign(h.state.objects),
+                  furniture: reassign(h.state.furniture),
+                });
+                toast.success(`Moved ${ids.size} item${ids.size === 1 ? "" : "s"} to layer`);
+              }}
+            >
+              Move sel → active
+            </Button>
+          </div>
+        </div>
+        <div className="my-2 border-t border-slate-200" />
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Display Layers</p>
         <div className="grid grid-cols-2 gap-2">
           <Button size="sm" variant={layerVisibility.grid ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, grid: !prev.grid }))}>
             Grid
@@ -17164,6 +17517,15 @@ User request: ${aiPrompt.trim()}`;
                     setDrawPathDialogOpen(true);
                   }
                 }}
+                drawingWall={tool === "wall" && nextWallSegmentType === "wall" && wallDrawType === "polyline"}
+                onAddWallClick={() => {
+                  if (tool === "wall" && nextWallSegmentType === "wall" && wallDrawType === "polyline") {
+                    // Already drawing — second click cancels.
+                    setTool("select");
+                  } else {
+                    setAddWallDialogOpen(true);
+                  }
+                }}
                 onTestDrawPolygon={handleTestDrawPolygon}
               />
             </div>
@@ -17175,7 +17537,12 @@ User request: ${aiPrompt.trim()}`;
             <div className="absolute inset-0 z-20">
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-slate-500">Loading 3D…</div>}>
                 <FloorPlan3DCanvas
-                  model={history.state}
+                  model={{
+                    ...history.state,
+                    walls: history.state.walls.filter((w) => isLayerVisible(w.layerId)),
+                    objects: history.state.objects.filter((o) => isLayerVisible(o.layerId)),
+                    furniture: history.state.furniture.filter((f) => isLayerVisible(f.layerId)),
+                  }}
                   rooms={visibleRooms}
                   pixelsPerMeter={pixelsPerMeter}
                   placementMode={
@@ -17198,6 +17565,7 @@ User request: ${aiPrompt.trim()}`;
                     return pb?.floorToFloorM ?? 3.0;
                   })()}
                   massingShowBlocks={massingShowBlocks}
+                  snapshotApiRef={snapshotApiRef}
                   onSelectWall={(id, additive) => {
                     if (!id) { selection.clearSelection(); return; }
                     if (additive) selection.toggleSelected(id);
@@ -17318,8 +17686,8 @@ User request: ${aiPrompt.trim()}`;
                         }
                         return;
                       }
-                      const spine = withNearestWallSpine(pointer, history.state.walls, tool, snapSettings.wallSpineRadius);
-                      const snapped = snapPoint(spine, history.state.walls, history.state.objects, snapSettings, visibleRooms);
+                      const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
+                      const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
                       setGuideLines([snapped.x, snapped.y]);
                       applyWorldDrawDown(snapped, e.evt.detail);
                     }}
@@ -18301,7 +18669,7 @@ User request: ${aiPrompt.trim()}`;
                   })}
 
                   {/* Graph mode — architectural dimension lines for each wall edge */}
-                  {layerVisibility.viewGraph && layerVisibility.measure && history.state.walls.map((wall) => {
+                  {layerVisibility.viewGraph && layerVisibility.measure && history.state.walls.filter((w) => isLayerVisible(w.layerId)).slice().sort(compareByLayer).map((wall) => {
                     const ppm = pixelsPerMeter;
                     const dx = wall.end.x - wall.start.x;
                     const dy = wall.end.y - wall.start.y;
@@ -19524,7 +19892,7 @@ User request: ${aiPrompt.trim()}`;
                     ))
                   )}
 
-                  {history.state.walls.map((wall) => {
+                  {history.state.walls.filter((w) => isLayerVisible(w.layerId)).slice().sort(compareByLayer).map((wall) => {
                     // In graph mode, hide door/window segments when Doors layer is off
                     if (layerVisibility.viewGraph && !layerVisibility.doors && wall.segmentType === "door") return null;
                     if (layerVisibility.viewGraph && !layerVisibility.windows && wall.segmentType === "window") return null;
@@ -21111,7 +21479,7 @@ User request: ${aiPrompt.trim()}`;
                   ) : null}
                   {/* Curved Union — global inner pass to erase junction interiors */}
                   {layerVisibility.viewCurved && layerVisibility.fillingUnion &&
-                    history.state.walls.map((wall) => {
+                    history.state.walls.filter((w) => isLayerVisible(w.layerId)).slice().sort(compareByLayer).map((wall) => {
                       const ww = wallWithDefaults(wall);
                       if (ww.thickness <= 2) return null;
                       return (
@@ -21128,7 +21496,7 @@ User request: ${aiPrompt.trim()}`;
                     })
                   }
                   {/* Per-wall level labels (convergence/divergence BFS depth). Global toggle only. */}
-                  {globalShowLevel && history.state.walls.map((wall) => {
+                  {globalShowLevel && history.state.walls.filter((w) => isLayerVisible(w.layerId)).slice().sort(compareByLayer).map((wall) => {
                     const lv = wallLevels.get(wall.id);
                     if (lv === undefined) return null;
                     const dx = wall.end.x - wall.start.x;
@@ -21158,7 +21526,7 @@ User request: ${aiPrompt.trim()}`;
                   })}
                   {/* Per-wall direction arrows (from source → target at the segment midpoint).
                    *  Rendered if the global Default Settings toggle is on, or the per-wall flag is set. */}
-                  {history.state.walls.map((wall) => {
+                  {history.state.walls.filter((w) => isLayerVisible(w.layerId)).slice().sort(compareByLayer).map((wall) => {
                     if (!globalShowDirection && !wall.showDirection) return null;
                     const dx = wall.end.x - wall.start.x;
                     const dy = wall.end.y - wall.start.y;
@@ -21208,7 +21576,7 @@ User request: ${aiPrompt.trim()}`;
             {layerVisibility.objects ? (
               <Layer>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
-                  {history.state.objects.map((objectItem) => {
+                  {history.state.objects.filter((o) => isLayerVisible(o.layerId)).slice().sort(compareByLayer).map((objectItem) => {
                     if (objectItem.kind === "rect") {
                       return (
                         <Rect
@@ -21333,6 +21701,8 @@ User request: ${aiPrompt.trim()}`;
                     .filter((item) => !(layerVisibility.viewGraph && item.type === "door"))
                     .filter((item) => !(!layerVisibility.doors && item.type === "door"))
                     .filter((item) => !(!layerVisibility.windows && item.type === "window"))
+                    .filter((item) => isLayerVisible(item.layerId))
+                    .slice().sort(compareByLayer)
                     .map((item) => (
                     <FurnitureRenderer
                       key={item.id}
@@ -25298,6 +25668,91 @@ User request: ${aiPrompt.trim()}`;
                                 h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isTilingPreview) });
                               }}
                             />
+                            <SplittingActionsBlock
+                              selectedRoom={selectedRoom}
+                              pixelsPerMeter={pixelsPerMeter}
+                              expanded={splitExpanded}
+                              setExpanded={setSplitExpanded}
+                              live={splitLive}
+                              setLive={setSplitLive}
+                              count={splitCount}
+                              setCount={setSplitCount}
+                              ratios={splitRatios}
+                              setRatios={setSplitRatios}
+                              edge={splitEdge}
+                              setEdge={setSplitEdge}
+                              edgeFlip={splitEdgeFlip}
+                              setEdgeFlip={setSplitEdgeFlip}
+                              alongMinorPrincipalAxis={splitAlongMinorPrincipalAxis}
+                              setAlongMinorPrincipalAxis={setSplitAlongMinorPrincipalAxis}
+                              angle={splitAngle}
+                              setAngle={setSplitAngle}
+                              mode={splitMode}
+                              setMode={setSplitMode}
+                              target={splitTarget}
+                              setTarget={setSplitTarget}
+                              lengths={splitLengths}
+                              setLengths={setSplitLengths}
+                              type={splitType}
+                              setType={setSplitType}
+                              stripLength={splitStripLength}
+                              setStripLength={setSplitStripLength}
+                              stripPosition={splitStripPosition}
+                              setStripPosition={setSplitStripPosition}
+                              runRoomSplit={runRoomSplit}
+                              onLiveOff={() => {
+                                const h = historyRef.current;
+                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isSplitWall) });
+                                setLivePreviewTick((t) => t + 1);
+                              }}
+                            />
+                            <SkeletonBlock
+                              selectedRoom={selectedRoom}
+                              expanded={skeletonExpanded}
+                              setExpanded={setSkeletonExpanded}
+                              live={skeletonLive}
+                              setLive={setSkeletonLive}
+                              type={skeletonType}
+                              setType={setSkeletonType}
+                              samples={skeletonSamples}
+                              setSamples={setSkeletonSamples}
+                              pruneEnds={skeletonPruneEnds}
+                              setPruneEnds={setSkeletonPruneEnds}
+                              longestBranch={skeletonLongestBranch}
+                              setLongestBranch={setSkeletonLongestBranch}
+                              makePath={skeletonMakePath}
+                              setMakePath={setSkeletonMakePath}
+                              pathWidth={skeletonPathWidth}
+                              setPathWidth={setSkeletonPathWidth}
+                              level={skeletonLevel}
+                              setLevel={setSkeletonLevel}
+                              runRoomSkeleton={runRoomSkeleton}
+                              onClearAllPreview={() => {
+                                const h = historyRef.current;
+                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isSkeletonPreview) });
+                              }}
+                            />
+                            <MeshingBlock
+                              selectedRoom={selectedRoom}
+                              expanded={meshExpanded}
+                              setExpanded={setMeshExpanded}
+                              live={meshLive}
+                              setLive={setMeshLive}
+                              type={meshType}
+                              setType={setMeshType}
+                              showCircumcenters={meshShowCircumcenters}
+                              setShowCircumcenters={setMeshShowCircumcenters}
+                              runRoomMesh={runRoomMesh}
+                              onClearAllPreview={() => {
+                                const h = historyRef.current;
+                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isMeshPreview) });
+                                setMeshCircumcentersByRoom((prev) => {
+                                  const next = { ...prev };
+                                  delete next[selectedRoom.id];
+                                  return next;
+                                });
+                              }}
+                            />
                           </>
                         )}
                       </div>
@@ -25342,30 +25797,6 @@ User request: ${aiPrompt.trim()}`;
                                 setLivePreviewTick((t) => t + 1);
                               }}
                             />
-                            <InflationAlgorithmBlock
-                              selectedRoom={selectedRoom}
-                              expanded={inflationExpanded}
-                              setExpanded={setInflationExpanded}
-                              live={inflationLive}
-                              setLive={setInflationLive}
-                              seeds={inflationSeeds}
-                              setSeeds={setInflationSeeds}
-                              angleMode={inflationAngleMode}
-                              setAngleMode={setInflationAngleMode}
-                              axisAngleDeg={inflationAxisAngleDeg}
-                              setAxisAngleDeg={setInflationAxisAngleDeg}
-                              sweepSteps={inflationSweepSteps}
-                              setSweepSteps={setInflationSweepSteps}
-                              count={inflationCount}
-                              setCount={setInflationCount}
-                              minArea={inflationMinArea}
-                              setMinArea={setInflationMinArea}
-                              runRoomInflation={runRoomInflation}
-                              onClearAllPreview={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInflationPreview) });
-                              }}
-                            />
                             <SmoothingBlock
                               selectedRoom={selectedRoom}
                               expanded={smoothingExpanded}
@@ -25403,30 +25834,6 @@ User request: ${aiPrompt.trim()}`;
                                 h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isContourPreview) });
                               }}
                             />
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Shape Analysis — read-only descriptors. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsShapeAnalysisExpanded((v) => !v)}
-                    >
-                      <span>Shape Analysis</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsShapeAnalysisExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsShapeAnalysisExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <>
                             <ConvexHullBlock
                               selectedRoom={selectedRoom}
                               expanded={convexHullExpanded}
@@ -25466,23 +25873,6 @@ User request: ${aiPrompt.trim()}`;
                                 });
                               }}
                             />
-                            <PrincipalAxesBlock
-                              selectedRoom={selectedRoom}
-                              expanded={principalAxesExpanded}
-                              setExpanded={setPrincipalAxesExpanded}
-                              live={principalAxesLive}
-                              setLive={setPrincipalAxesLive}
-                              runRoomPrincipalAxes={runRoomPrincipalAxes}
-                              onClearAllPreview={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isPrincipalAxisPreview) });
-                              }}
-                            />
-                            <ClassifyPolygonBlock
-                              selectedRoom={selectedRoom}
-                              expanded={classifyExpanded}
-                              setExpanded={setClassifyExpanded}
-                            />
                             <PolygonUnrollBlock
                               selectedRoom={selectedRoom}
                               unit={unit}
@@ -25500,6 +25890,47 @@ User request: ${aiPrompt.trim()}`;
                                 const h = historyRef.current;
                                 h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isUnrollPreview) });
                               }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Shape Analysis — read-only descriptors. */}
+                  <div className="rounded border border-slate-200 bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                      onClick={() => setSpaceToolsShapeAnalysisExpanded((v) => !v)}
+                    >
+                      <span>Shape Analysis</span>
+                      <span className="text-[10px] text-slate-400">{spaceToolsShapeAnalysisExpanded ? "▼" : "▶"}</span>
+                    </button>
+                    {spaceToolsShapeAnalysisExpanded && (
+                      <div className="space-y-1.5 border-t border-slate-100 p-2">
+                        {!selectedRoom ? (
+                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
+                            Select a Space on the canvas to use these tools.
+                          </p>
+                        ) : (
+                          <>
+                            <PrincipalAxesBlock
+                              selectedRoom={selectedRoom}
+                              expanded={principalAxesExpanded}
+                              setExpanded={setPrincipalAxesExpanded}
+                              live={principalAxesLive}
+                              setLive={setPrincipalAxesLive}
+                              runRoomPrincipalAxes={runRoomPrincipalAxes}
+                              onClearAllPreview={() => {
+                                const h = historyRef.current;
+                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isPrincipalAxisPreview) });
+                              }}
+                            />
+                            <ClassifyPolygonBlock
+                              selectedRoom={selectedRoom}
+                              expanded={classifyExpanded}
+                              setExpanded={setClassifyExpanded}
                             />
                             <InCirclesBlock
                               selectedRoom={selectedRoom}
@@ -25559,54 +25990,6 @@ User request: ${aiPrompt.trim()}`;
                               );
                             })()}
                           </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Skeleton & Medial Axis. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsSkeletonExpanded((v) => !v)}
-                    >
-                      <span>Skeleton &amp; Medial Axis</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsSkeletonExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsSkeletonExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <SkeletonBlock
-                            selectedRoom={selectedRoom}
-                            expanded={skeletonExpanded}
-                            setExpanded={setSkeletonExpanded}
-                            live={skeletonLive}
-                            setLive={setSkeletonLive}
-                            type={skeletonType}
-                            setType={setSkeletonType}
-                            samples={skeletonSamples}
-                            setSamples={setSkeletonSamples}
-                            pruneEnds={skeletonPruneEnds}
-                            setPruneEnds={setSkeletonPruneEnds}
-                            longestBranch={skeletonLongestBranch}
-                            setLongestBranch={setSkeletonLongestBranch}
-                            makePath={skeletonMakePath}
-                            setMakePath={setSkeletonMakePath}
-                            pathWidth={skeletonPathWidth}
-                            setPathWidth={setSkeletonPathWidth}
-                            level={skeletonLevel}
-                            setLevel={setSkeletonLevel}
-                            runRoomSkeleton={runRoomSkeleton}
-                            onClearAllPreview={() => {
-                              const h = historyRef.current;
-                              h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isSkeletonPreview) });
-                            }}
-                          />
                         )}
                       </div>
                     )}
@@ -25794,27 +26177,6 @@ User request: ${aiPrompt.trim()}`;
                               setPolygonsByRoom={setVisibilityPolygonsByRoom}
                               setRaysByRoom={setVisibilityRaysByRoom}
                             />
-                            <MeshingBlock
-                              selectedRoom={selectedRoom}
-                              expanded={meshExpanded}
-                              setExpanded={setMeshExpanded}
-                              live={meshLive}
-                              setLive={setMeshLive}
-                              type={meshType}
-                              setType={setMeshType}
-                              showCircumcenters={meshShowCircumcenters}
-                              setShowCircumcenters={setMeshShowCircumcenters}
-                              runRoomMesh={runRoomMesh}
-                              onClearAllPreview={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isMeshPreview) });
-                                setMeshCircumcentersByRoom((prev) => {
-                                  const next = { ...prev };
-                                  delete next[selectedRoom.id];
-                                  return next;
-                                });
-                              }}
-                            />
                           </>
                         )}
                       </div>
@@ -25911,52 +26273,6 @@ User request: ${aiPrompt.trim()}`;
                           </p>
                         ) : (
                           <>
-                            <SiteToolsBlock
-                              selectedRoom={selectedRoom}
-                              pixelsPerMeter={pixelsPerMeter}
-                              scale={scale}
-                              expanded={siteToolsExpanded}
-                              setExpanded={setSiteToolsExpanded}
-                              live={siteToolsLive}
-                              setLive={setSiteToolsLive}
-                              insetEnabled={siteToolsInsetEnabled}     setInsetEnabled={setSiteToolsInsetEnabled}
-                              optEnabled={siteToolsOptEnabled}         setOptEnabled={setSiteToolsOptEnabled}
-                              massingEnabled={siteToolsMassingEnabled} setMassingEnabled={setSiteToolsMassingEnabled}
-                              insetSetAll={insetSetAll}
-                              setInsetSetAll={setInsetSetAll}
-                              insetSetbacks={insetSetbacks}
-                              setInsetSetbacks={setInsetSetbacks}
-                              optShape={maxRectShape}
-                              setOptShape={setMaxRectShape}
-                              optReference={maxRectReference}
-                              setOptReference={setMaxRectReference}
-                              optAxisAngle={maxRectAxisAngle}
-                              setOptAxisAngle={setMaxRectAxisAngle}
-                              optCount={maxRectCount}
-                              setOptCount={setMaxRectCount}
-                              optMinArea={maxRectMinArea}
-                              setOptMinArea={setMaxRectMinArea}
-                              optUnion={maxRectUnion}
-                              setOptUnion={setMaxRectUnion}
-                              massingAvgWidth={massingAvgWidth}
-                              setMassingAvgWidth={setMassingAvgWidth}
-                              runRoomInset={runRoomInset}
-                              runRoomOptimiseRect={runRoomOptimiseRect}
-                              runRoomMassing={runRoomMassing}
-                              onLiveOff={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInsetWall && !w.isMaxRectPreview && !w.isMassingPreview) });
-                                if (selectedRoom) {
-                                  delete livePreviewPolygonRef.current[selectedRoom.id];
-                                  delete optimiseUnionPolygonRef.current[selectedRoom.id];
-                                }
-                                setLivePreviewTick((t) => t + 1);
-                              }}
-                              onApplyStart={(roomId) => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !(w.isMassingPreview && w.massingSourceRoomId === roomId)) });
-                              }}
-                            />
                             <MassingBlock
                               selectedRoom={selectedRoom}
                               expanded={massingExpanded}
@@ -26017,83 +26333,6 @@ User request: ${aiPrompt.trim()}`;
                                 const pb = visibleRooms.find((r) => r.roomType === "plot-boundary");
                                 return pb?.floorToFloorM ?? selectedRoom.floorToFloorM ?? 3.0;
                               })()}
-                            />
-                            {(() => {
-                              const pts = selectedRoom.points;
-                              let signed = 0;
-                              for (let i = 0; i < pts.length; i++) {
-                                const a = pts[i], b = pts[(i + 1) % pts.length];
-                                signed += a.x * b.y - b.x * a.y;
-                              }
-                              const roomAreaM2 = Math.abs(signed) / 2 / (pixelsPerMeter * pixelsPerMeter);
-                              const committed = fillAreaByRoom[selectedRoom.id];
-                              return (
-                                <FillAreaBlock
-                                  selectedRoom={selectedRoom}
-                                  expanded={fillAreaExpanded}
-                                  setExpanded={setFillAreaExpanded}
-                                  live={fillAreaLive}
-                                  setLive={setFillAreaLive}
-                                  target={fillAreaTarget}
-                                  setTarget={setFillAreaTarget}
-                                  tilt={fillAreaTilt}
-                                  setTilt={setFillAreaTilt}
-                                  roomAreaM2={roomAreaM2}
-                                  hasCommitted={!!committed}
-                                  onApply={() => {
-                                    setFillAreaByRoom((prev) => ({
-                                      ...prev,
-                                      [selectedRoom.id]: { target: fillAreaTarget, tilt: fillAreaTilt },
-                                    }));
-                                    toast.success(`Fill committed (${fillAreaTarget.toFixed(1)} m² @ ${fillAreaTilt}°)`);
-                                  }}
-                                  onClear={() => {
-                                    setFillAreaByRoom((prev) => {
-                                      const next = { ...prev };
-                                      delete next[selectedRoom.id];
-                                      return next;
-                                    });
-                                  }}
-                                />
-                              );
-                            })()}
-                            <SplittingActionsBlock
-                              selectedRoom={selectedRoom}
-                              pixelsPerMeter={pixelsPerMeter}
-                              expanded={splitExpanded}
-                              setExpanded={setSplitExpanded}
-                              live={splitLive}
-                              setLive={setSplitLive}
-                              count={splitCount}
-                              setCount={setSplitCount}
-                              ratios={splitRatios}
-                              setRatios={setSplitRatios}
-                              edge={splitEdge}
-                              setEdge={setSplitEdge}
-                              edgeFlip={splitEdgeFlip}
-                              setEdgeFlip={setSplitEdgeFlip}
-                              alongMinorPrincipalAxis={splitAlongMinorPrincipalAxis}
-                              setAlongMinorPrincipalAxis={setSplitAlongMinorPrincipalAxis}
-                              angle={splitAngle}
-                              setAngle={setSplitAngle}
-                              mode={splitMode}
-                              setMode={setSplitMode}
-                              target={splitTarget}
-                              setTarget={setSplitTarget}
-                              lengths={splitLengths}
-                              setLengths={setSplitLengths}
-                              type={splitType}
-                              setType={setSplitType}
-                              stripLength={splitStripLength}
-                              setStripLength={setSplitStripLength}
-                              stripPosition={splitStripPosition}
-                              setStripPosition={setSplitStripPosition}
-                              runRoomSplit={runRoomSplit}
-                              onLiveOff={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isSplitWall) });
-                                setLivePreviewTick((t) => t + 1);
-                              }}
                             />
                           </>
                         )}
@@ -26278,54 +26517,6 @@ User request: ${aiPrompt.trim()}`;
                               })()}
                             </div>
                           </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Texture & Generative. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsTextureExpanded((v) => !v)}
-                    >
-                      <span>Texture &amp; Generative</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsTextureExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsTextureExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <NoiseTextureBlock
-                            selectedRoom={selectedRoom}
-                            expanded={noiseTextureExpanded}
-                            setExpanded={setNoiseTextureExpanded}
-                            live={noiseTextureLive}
-                            setLive={setNoiseTextureLive}
-                            kind={noiseKind}
-                            setKind={setNoiseKind}
-                            octaves={noiseOctaves}
-                            setOctaves={setNoiseOctaves}
-                            lacunarity={noiseLacunarity}
-                            setLacunarity={setNoiseLacunarity}
-                            persistence={noisePersistence}
-                            setPersistence={setNoisePersistence}
-                            scale={noiseScale}
-                            setScale={setNoiseScale}
-                            levels={noiseLevels}
-                            setLevels={setNoiseLevels}
-                            seed={noiseSeed}
-                            setSeed={setNoiseSeed}
-                            runRoomNoiseTexture={runRoomNoiseTexture}
-                            onClearAllPreview={() => {
-                              const h = historyRef.current;
-                              h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isNoiseTexturePreview) });
-                            }}
-                          />
                         )}
                       </div>
                     )}
@@ -26668,6 +26859,35 @@ User request: ${aiPrompt.trim()}`;
                 );
               }}
               onTestDrawPolygon={handleTestDrawPolygon}
+              onCaptureCanvasPng={async () => {
+                if (viewMode === "3d") {
+                  const canvas = containerRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
+                  if (!canvas) return null;
+                  try { return canvas.toDataURL("image/png"); } catch { return null; }
+                }
+                const stage = stageRef.current;
+                if (!stage) return null;
+                try { return stage.toDataURL({ pixelRatio: 2, mimeType: "image/png" }); } catch { return null; }
+              }}
+              onCaptureSnapshots={async () => {
+                if (viewMode !== "3d") {
+                  toast.info("Switch to 3D view to capture snapshots");
+                  setViewMode("3d");
+                  // Wait one frame for the 3D canvas to mount + render.
+                  await new Promise((r) => setTimeout(r, 350));
+                }
+                const api = snapshotApiRef.current;
+                if (!api) {
+                  toast.error("3D canvas not ready yet — try again");
+                  return null;
+                }
+                try {
+                  return await api.captureAll();
+                } catch (e) {
+                  console.error("captureAll failed", e);
+                  return null;
+                }
+              }}
               aiPrompt={aiPrompt}
               onAiPromptChange={setAiPrompt}
               aiApiKey={aiApiKey}
@@ -26954,6 +27174,27 @@ User request: ${aiPrompt.trim()}`;
           setWallDrawType("polyline");
           setNextWallSegmentType("path");
           setDrawPathDialogOpen(false);
+        }}
+      />
+
+      {/* Add Wall Dialog — prompts thickness + justification, then starts polyline wall draw. */}
+      <AddWallDialog
+        open={addWallDialogOpen}
+        onOpenChange={setAddWallDialogOpen}
+        thicknessM={addWallThicknessInputM}
+        onThicknessChange={setAddWallThicknessInputM}
+        method={addWallMethodInput}
+        onMethodChange={setAddWallMethodInput}
+        onStart={() => {
+          const tM = parseFloat(addWallThicknessInputM);
+          const safeThicknessM = isFinite(tM) && tM > 0 ? tM : 0.2;
+          setWallThickness(safeThicknessM * pixelsPerMeter);
+          setWallDrawMethod(addWallMethodInput);
+          setTool("wall");
+          setWallDrawType("polyline");
+          setNextWallSegmentType("wall");
+          setActiveDrawPathConfig(null);
+          setAddWallDialogOpen(false);
         }}
       />
 

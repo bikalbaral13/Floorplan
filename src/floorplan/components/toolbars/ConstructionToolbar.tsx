@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   AppWindow,
+  BrickWall,
   Circle as CircleIcon,
   DoorOpen,
   Plus,
@@ -36,6 +37,10 @@ export interface ConstructionToolbarProps {
   onSelectedGenElementChange: (value: null) => void;
   shapesPopoverOpen: boolean;
   onShapesPopoverOpenChange: (value: boolean) => void;
+  /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
+  onAddWallClick: () => void;
+  /** True while the dialog-configured polyline wall draw mode is active. */
+  drawingWall: boolean;
 }
 
 /** Construction primitives — Door, Window, Furniture, Connection, Shapes — laid out
@@ -137,6 +142,17 @@ export const ConstructionToolbar = (p: ConstructionToolbarProps) => {
                 toast.info("Click two rooms to add a connection — press Esc to cancel");
               }
             }}
+          />
+          <ToolButton
+            active={p.drawingWall}
+            icon={
+              <span className="relative inline-flex h-6 w-6 items-center justify-center">
+                <BrickWall className="h-6 w-6 text-amber-600" />
+                <Plus className="absolute -right-0.5 -top-0.5 h-3 w-3 text-amber-600" strokeWidth={3} />
+              </span>
+            }
+            label="Add Wall"
+            onClick={p.onAddWallClick}
           />
           {/* Shapes popover moved to Drawing toolbar. */}
         </div>

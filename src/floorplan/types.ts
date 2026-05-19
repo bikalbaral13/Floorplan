@@ -32,6 +32,8 @@ export interface Wall {
   id: string;
   start: Point;
   end: Point;
+  /** Layer this wall lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`). */
+  layerId?: string;
   /** Optional spine polyline for curved walls (x1, y1, x2, y2, ...). */
   spinePoints?: number[];
   /** Konva Line tension used when rendering spinePoints as a spline. */
@@ -376,6 +378,8 @@ export interface AreaTypeDef {
 export interface Room {
   id: string;
   points: Point[];
+  /** Layer this room lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`). */
+  layerId?: string;
   /** Inner rings carved out of this room (holes). Mostly meaningful on
    *  plot-boundary rooms that contain a footprint/building. Derived on the fly
    *  by `getRoomHoles(room, rooms)` so callers usually don't need to set this
@@ -443,6 +447,8 @@ export type Tool =
 
 export interface BaseObject {
   id: string;
+  /** Layer this object lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`). */
+  layerId?: string;
   x: number;
   y: number;
   rotation: number;
@@ -499,6 +505,8 @@ export type FloorObject = RectObject | CircleObject | PolygonObject | FreehandOb
 export interface FurnitureItem {
   id: string;
   type: "bed" | "sofa" | "table" | "chair" | "door" | "window";
+  /** Layer this furniture lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`). */
+  layerId?: string;
   x: number;
   y: number;
   rotation: number;
@@ -546,7 +554,63 @@ export interface FloorPlanModel {
   /** User-defined segment-type registry. Keyed by slug (= the value stored in wall.segmentType).
    *  Built-ins (`wall`, `door`, `window`, `plot-boundary`) are NOT stored here. */
   customSegmentTypes?: Record<string, AreaTypeDef>;
+  /** AutoCAD-style layer table. Always non-empty (a default `"0"` layer is seeded).
+   *  Per-entity `layerId` references entries here; missing/unknown references resolve to `"0"`. */
+  layers?: Layer[];
 }
+
+/** AutoCAD-style layer. Every drawable entity carries a `layerId` referencing one of these. */
+export interface Layer {
+  id: string;
+  name: string;
+  color: string;
+  visible: boolean;
+  locked: boolean;
+  /** Paint order — higher values draw on top. Default `0` for the seed layer. */
+  order: number;
+}
+
+/** Built-in default layer id. Always present in `FloorPlanModel.layers` and cannot be deleted. */
+export const DEFAULT_LAYER_ID = "0";
+
+/** Returns a fresh seed layer table containing the default `"0"` layer plus
+ *  Wall / Door / Window. Created entities are auto-stamped onto the appropriate
+ *  layer by segmentType so users get sensible defaults without having to set
+ *  the active layer first. */
+export const DEFAULT_WALL_LAYER_ID = "wall";
+export const DEFAULT_DOOR_LAYER_ID = "door";
+export const DEFAULT_WINDOW_LAYER_ID = "window";
+export const DEFAULT_FURNITURE_LAYER_ID = "furniture";
+export const defaultLayerTable = (): Layer[] => [
+  { id: DEFAULT_LAYER_ID,             name: "0",         color: "#000000", visible: true, locked: false, order: 0 },
+  { id: DEFAULT_WALL_LAYER_ID,        name: "Wall",      color: "#475569", visible: true, locked: false, order: 1 },
+  { id: DEFAULT_DOOR_LAYER_ID,        name: "Door",      color: "#b45309", visible: true, locked: false, order: 2 },
+  { id: DEFAULT_WINDOW_LAYER_ID,      name: "Window",    color: "#0ea5e9", visible: true, locked: false, order: 3 },
+  { id: DEFAULT_FURNITURE_LAYER_ID,   name: "Furniture", color: "#22c55e", visible: true, locked: false, order: 4 },
+];
+
+/** Migrate a (possibly older) FloorPlanModel into the layer-aware shape:
+ *  – ensure `model.layers` exists and contains the default `"0"` layer
+ *  – stamp `layerId = "0"` on every drawable entity that's missing it
+ *  Call this on any model loaded from external storage (JSON file, project API). */
+export const withLayerDefaults = (model: FloorPlanModel): FloorPlanModel => {
+  const existing = model.layers && model.layers.length > 0 ? model.layers : [];
+  const haveIds = new Set(existing.map((l) => l.id));
+  // Add any built-in default layers (0, Wall, Door, Window) that the loaded model
+  // is missing, without disturbing the user's other custom layers or their order.
+  const seeds = defaultLayerTable().filter((s) => !haveIds.has(s.id));
+  const layers: Layer[] = [...seeds, ...existing];
+  const stamp = <T extends { layerId?: string }>(arr: T[] | undefined): T[] =>
+    (arr ?? []).map((e) => (e.layerId ? e : { ...e, layerId: DEFAULT_LAYER_ID }));
+  return {
+    ...model,
+    layers,
+    walls: stamp(model.walls),
+    rooms: stamp(model.rooms),
+    objects: stamp(model.objects),
+    furniture: stamp(model.furniture),
+  };
+};
 
 /** Stored state from an auto-generated floor plan, enabling interactive room dragging. */
 export interface GeneratedLayoutState {
