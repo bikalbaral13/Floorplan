@@ -554,6 +554,14 @@ export const ToolsPanel = ({
                   >
                     Sample 3: Building Footprint to Furniture Placement
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start text-[11px]"
+                    onClick={() => toast.info("Sample 4 — handler not wired yet")}
+                  >
+                    Sample 4: Existing City into Buildings
+                  </Button>
                 </>}
               </div>
 

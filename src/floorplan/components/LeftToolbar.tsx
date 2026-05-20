@@ -14,8 +14,8 @@ interface LeftToolbarProps {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
   /** Sticky segment-type override applied to walls drawn with the Wall tool ("wall", "connection", or "path"). */
-  nextWallSegmentType: "wall" | "connection" | "path";
-  onNextWallSegmentTypeChange: (value: "wall" | "connection" | "path") => void;
+  nextWallSegmentType: "wall" | "line" | "connection" | "path";
+  onNextWallSegmentTypeChange: (value: "wall" | "line" | "connection" | "path") => void;
 
   addDoorMode: boolean;
   onAddDoorModeChange: (value: boolean) => void;
@@ -71,12 +71,21 @@ interface LeftToolbarProps {
   onAddWallClick: () => void;
   /** True while the dialog-configured polyline wall draw mode is active. */
   drawingWall: boolean;
+  /** Add Segment override — parent handles the full state setup so the segment
+   *  renders as a thin line (mode: "line") instead of a thick wall band. */
+  onAddSegmentClick?: () => void;
   /** Merge selected spaces into one. */
   onMergeSpaces: () => void;
   /** Unused — kept for backwards compatibility with the parent invocation. */
   canMergeSpaces?: boolean;
   /** Delete the currently-selected node / segment / space. */
   onDeleteSelection: () => void;
+  /** Starts the "Add Space → Shapes → Rectangle" trace tool (click-click + L×B inputs). */
+  onAddSpaceRectClick?: () => void;
+  /** Starts the "Add Space → Shapes → Circle" trace tool (click center, drag/type radius). */
+  onAddSpaceCircleClick?: () => void;
+  /** Starts the "Add Segment" tool (single straight line via click-click). */
+  onSingleSegmentClick?: () => void;
 }
 
 /** Left sidebar composition — thin shell that arranges the per-section foldable
@@ -121,9 +130,13 @@ export const LeftToolbar = ({
   drawingPath,
   onAddWallClick,
   drawingWall,
+  onAddSegmentClick,
   onMergeSpaces,
   canMergeSpaces: _canMergeSpaces,
   onDeleteSelection,
+  onAddSpaceRectClick,
+  onAddSpaceCircleClick,
+  onSingleSegmentClick,
 }: LeftToolbarProps) => (
   <div className="flex w-full flex-col items-stretch gap-2">
     <DrawingToolbar
@@ -144,11 +157,15 @@ export const LeftToolbar = ({
       onSetScale={onSetScale}
       onDrawPathClick={onDrawPathClick}
       drawingPath={drawingPath}
+      onAddSegmentClick={onAddSegmentClick}
       onMergeSpaces={onMergeSpaces}
       onDeleteSelection={onDeleteSelection}
       topToolSlots={topToolSlots}
       shapesPopoverOpen={shapesPopoverOpen}
       onShapesPopoverOpenChange={onShapesPopoverOpenChange}
+      onAddSpaceRectClick={onAddSpaceRectClick}
+      onAddSpaceCircleClick={onAddSpaceCircleClick}
+      onSingleSegmentClick={onSingleSegmentClick}
     />
 
     {/* Files toolbar moved to the top-right bar. */}

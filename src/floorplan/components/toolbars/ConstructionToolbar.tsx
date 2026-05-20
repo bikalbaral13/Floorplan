@@ -22,7 +22,7 @@ type EdgeMode = "connection" | null;
 export interface ConstructionToolbarProps {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
-  onNextWallSegmentTypeChange: (value: "wall" | "connection" | "path") => void;
+  onNextWallSegmentTypeChange: (value: "wall" | "line" | "connection" | "path") => void;
   addDoorMode: boolean;
   onAddDoorModeChange: (value: boolean) => void;
   addWindowMode: boolean;

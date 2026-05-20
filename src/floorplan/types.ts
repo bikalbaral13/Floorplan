@@ -11,7 +11,7 @@ export type WallMethod = "left" | "center" | "right";
 
 /** Segment type: wall, door opening, window opening, plot boundary, layout connection edge, or
  *  the buildable / footprint boundary lines that wrap their corresponding Space types. */
-export type WallSegmentType = "wall" | "door" | "window" | "plot-boundary" | "connection"
+export type WallSegmentType = "wall" | "line" | "door" | "window" | "plot-boundary" | "connection"
   | "buildable-boundary" | "footprint-boundary" | "path";
 
 /** Corner style for `segmentType: "path"` segments at junctions where consecutive
@@ -443,7 +443,13 @@ export type Tool =
   | "pan"
   | "door"
   | "window"
-  | "point";
+  | "point"
+  /** "Add Space → Shapes → Rectangle" — click-click trace that emits a Space (Room). */
+  | "space-rect"
+  /** "Add Space → Shapes → Circle" — click center, drag for radius, type exact radius. */
+  | "space-circle"
+  /** "Add Segment" (drawing toolbar) — click-click for a single straight line segment. */
+  | "single-segment";
 
 export interface BaseObject {
   id: string;
@@ -529,6 +535,10 @@ export interface ImageUnderlay {
   opacity: number;
   scale: number;
   locked: boolean;
+  /** Layer this underlay lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`).
+   *  New uploads (image or PDF raster) are stamped with `DEFAULT_IMAGE_LAYER_ID` ("image") so
+   *  toggling the Image layer hides them. */
+  layerId?: string;
 }
 
 export interface RoomConstraint {
@@ -537,12 +547,22 @@ export interface RoomConstraint {
   maxRatio: number;
 }
 
+/** OSM map overlay state. When set, the MapTileLayer renders OSM tiles below the
+ *  drawing layers. `anchor` maps the world coord (0,0) to a geographic lat/lon, and
+ *  `zoom` is an integer OSM zoom level (typically 16–19 for site-scale work). */
+export interface MapOverlayState {
+  anchor: { lat: number; lon: number };
+  zoom: number;
+}
+
 export interface FloorPlanModel {
   walls: Wall[];
   rooms: Room[];
   objects: FloorObject[];
   furniture: FurnitureItem[];
   imageUnderlay: ImageUnderlay | null;
+  /** Optional OSM overlay configuration. Renders only when the "map" layer is visible. */
+  mapOverlay?: MapOverlayState | null;
   constraints?: {
     rooms: RoomConstraint[];
     connections: [string, string][];
@@ -581,12 +601,19 @@ export const DEFAULT_WALL_LAYER_ID = "wall";
 export const DEFAULT_DOOR_LAYER_ID = "door";
 export const DEFAULT_WINDOW_LAYER_ID = "window";
 export const DEFAULT_FURNITURE_LAYER_ID = "furniture";
+export const DEFAULT_IMAGE_LAYER_ID = "image";
+export const DEFAULT_SPACE_LAYER_ID = "space";
+export const DEFAULT_MAP_LAYER_ID = "map";
 export const defaultLayerTable = (): Layer[] => [
-  { id: DEFAULT_LAYER_ID,             name: "0",         color: "#000000", visible: true, locked: false, order: 0 },
-  { id: DEFAULT_WALL_LAYER_ID,        name: "Wall",      color: "#475569", visible: true, locked: false, order: 1 },
-  { id: DEFAULT_DOOR_LAYER_ID,        name: "Door",      color: "#b45309", visible: true, locked: false, order: 2 },
-  { id: DEFAULT_WINDOW_LAYER_ID,      name: "Window",    color: "#0ea5e9", visible: true, locked: false, order: 3 },
-  { id: DEFAULT_FURNITURE_LAYER_ID,   name: "Furniture", color: "#22c55e", visible: true, locked: false, order: 4 },
+  { id: DEFAULT_LAYER_ID,             name: "0",         color: "#000000", visible: true,  locked: false, order: 0 },
+  { id: DEFAULT_WALL_LAYER_ID,        name: "Wall",      color: "#475569", visible: true,  locked: false, order: 1 },
+  { id: DEFAULT_DOOR_LAYER_ID,        name: "Door",      color: "#b45309", visible: true,  locked: false, order: 2 },
+  { id: DEFAULT_WINDOW_LAYER_ID,      name: "Window",    color: "#0ea5e9", visible: true,  locked: false, order: 3 },
+  { id: DEFAULT_FURNITURE_LAYER_ID,   name: "Furniture", color: "#22c55e", visible: true,  locked: false, order: 4 },
+  { id: DEFAULT_IMAGE_LAYER_ID,       name: "Image",     color: "#a855f7", visible: true,  locked: false, order: 5 },
+  { id: DEFAULT_SPACE_LAYER_ID,       name: "Space",     color: "#f59e0b", visible: true,  locked: false, order: 6 },
+  // Map layer is hidden by default — toggling it visible opens the OSM search panel.
+  { id: DEFAULT_MAP_LAYER_ID,         name: "Map",       color: "#0284c7", visible: false, locked: false, order: 7 },
 ];
 
 /** Migrate a (possibly older) FloorPlanModel into the layer-aware shape:

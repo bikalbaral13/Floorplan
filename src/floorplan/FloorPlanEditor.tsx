@@ -90,7 +90,10 @@ import type {
   WallMethod,
   WallMode,
 } from "./types";
-import { defaultLayerTable, withLayerDefaults } from "./types";
+import { defaultLayerTable, withLayerDefaults, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID } from "./types";
+import { rasterizePdfFirstPage } from "./pdfRaster";
+import { MapTileLayer } from "./components/MapTileLayer";
+import { searchNominatim, pixelsPerMeterFromMap, type NominatimHit } from "./osmMap";
 import { isWallMountedFurnitureType, snapPointerToNearestWall } from "./wallSnap";
 import {
   computeMoveMeasurements,
@@ -1369,9 +1372,35 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Manual L×B input for the Rect wall-draw mode. Anchor = currentWallStart (last click). */
   const [rectLenInput, setRectLenInput] = useState<string>("");
   const [rectBreInput, setRectBreInput] = useState<string>("");
+  /** "Add Space → Rectangle" trace state. Anchor is set on first click;
+   *  preview tracks the cursor; commit happens on second click or Enter from L/B inputs. */
+  const [spaceRectAnchor, setSpaceRectAnchor] = useState<Point | null>(null);
+  const [spaceRectPreview, setSpaceRectPreview] = useState<Point | null>(null);
+  const [spaceRectLenInput, setSpaceRectLenInput] = useState<string>("");
+  const [spaceRectBreInput, setSpaceRectBreInput] = useState<string>("");
+  /** True once the user has manually typed into either L/B input — stops mouse-move from
+   *  overwriting their typed value. Cleared on commit / cancel / next anchor. */
+  const [spaceRectInputDirty, setSpaceRectInputDirty] = useState<boolean>(false);
+  /** "Add Segment" (single-line) trace state — click sets start, second click commits one segment. */
+  const [singleSegStart, setSingleSegStart] = useState<Point | null>(null);
+  const [singleSegPreview, setSingleSegPreview] = useState<Point | null>(null);
+  /** OSM map search UI state — shown when the Map layer is visible but no anchor has been picked yet. */
+  const [mapSearchQuery, setMapSearchQuery] = useState<string>("");
+  const [mapSearchHits, setMapSearchHits] = useState<NominatimHit[]>([]);
+  const [mapSearchLoading, setMapSearchLoading] = useState<boolean>(false);
+  const [mapSearchZoomInput, setMapSearchZoomInput] = useState<string>("18");
+  /** Alternate "Go to lat/lon" inputs — skips Nominatim entirely. Default coordinates
+   *  preload the inputs so the user can hit Go immediately for the typical project site. */
+  const [mapLatInput, setMapLatInput] = useState<string>("12.902750");
+  const [mapLonInput, setMapLonInput] = useState<string>("79.931389");
+  /** "Add Space → Circle" trace — center set on first click, radius from cursor or typed input. */
+  const [spaceCircleCenter, setSpaceCircleCenter] = useState<Point | null>(null);
+  const [spaceCirclePreview, setSpaceCirclePreview] = useState<Point | null>(null);
+  const [spaceCircleRadiusInput, setSpaceCircleRadiusInput] = useState<string>("");
+  const [spaceCircleInputDirty, setSpaceCircleInputDirty] = useState<boolean>(false);
   /** Sticky segment-type override applied to walls created via the Wall tool.
    *  Used by the "Add Connection" entry point to draw segments as connection edges. */
-  const [nextWallSegmentType, setNextWallSegmentType] = useState<"wall" | "connection" | "path">("wall");
+  const [nextWallSegmentType, setNextWallSegmentType] = useState<"wall" | "line" | "connection" | "path">("wall");
   /** Draw Path flow: dialog open + draft inputs (string-typed for input binding). */
   const [drawPathDialogOpen, setDrawPathDialogOpen] = useState<boolean>(false);
   const [drawPathLabelInput, setDrawPathLabelInput] = useState<string>("Path1");
@@ -2089,7 +2118,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [spaceToolsShapeAnalysisExpanded, setSpaceToolsShapeAnalysisExpanded] = useState<boolean>(false);
   const [spaceToolsSkeletonExpanded, setSpaceToolsSkeletonExpanded] = useState<boolean>(false);
   const [spaceToolsOptimisationExpanded, setSpaceToolsOptimisationExpanded] = useState<boolean>(false);
-  const [spaceToolsVisibilityExpanded, setSpaceToolsVisibilityExpanded] = useState<boolean>(false);
   const [spaceToolsPlacementExpanded, setSpaceToolsPlacementExpanded] = useState<boolean>(false);
   const [spaceToolsSiteMassingExpanded, setSpaceToolsSiteMassingExpanded] = useState<boolean>(false);
   const [spaceToolsTextureExpanded, setSpaceToolsTextureExpanded] = useState<boolean>(false);
@@ -3450,6 +3478,53 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             }
           } else {
             h.set({ ...h.state, rooms: h.state.rooms.map((r) => r.id === roomId ? { ...r, label: newLabel } : r) });
+          }
+        } else if (tool === "set-site-properties") {
+          // Mutate the matched room's type + Site INPUTS in place. Mirrors the field set used by
+          // the `create` flow at room creation time, so downstream optimise-rect (targetFromGcr)
+          // and massing (floorsFromSiteProperties) read the same canonical keys.
+          // Accepted param keys (friendly aliases supported):
+          //   roomType:     "site-boundary" | "plot-boundary" | "buildable-area" | "floorplate-boundary" | "room"
+          //   GCR | groundCoveragePct | gcr | ground_coverage_pct
+          //   max FSI | maxFsi | maxFSI | max_fsi | FSI | fsi
+          //   max height | maxHeightM | maxHeight | max_height
+          //   floor_height | floorToFloorM | floorHeight | floor height
+          const num = (...keys: string[]): number | undefined => {
+            for (const k of keys) {
+              const v = (p as Record<string, unknown>)[k];
+              if (typeof v === "number" && isFinite(v)) return v;
+            }
+            return undefined;
+          };
+          const rawType = (p as { roomType?: unknown }).roomType;
+          const normType: Room["roomType"] | undefined =
+            rawType === "plot-boundary" || rawType === "site-boundary"
+              ? "plot-boundary"
+              : rawType === "floorplate-boundary" || rawType === "buildable-area" || rawType === "room" || rawType === "path"
+                ? rawType
+                : undefined;
+          const gcr     = num("groundCoveragePct", "GCR", "gcr", "ground_coverage_pct", "groundCoverage");
+          const fsi     = num("maxFsi", "max FSI", "maxFSI", "max_fsi", "FSI", "fsi");
+          const maxH    = num("maxHeightM", "max height", "maxHeight", "max_height");
+          const floorH  = num("floorToFloorM", "floor_height", "floorHeight", "floor height");
+          const patch: Partial<Room> = {
+            ...(normType !== undefined ? { roomType: normType } : {}),
+            ...(gcr     !== undefined ? { groundCoveragePct: gcr } : {}),
+            ...(fsi     !== undefined ? { maxFsi: fsi } : {}),
+            ...(maxH    !== undefined ? { maxHeightM: maxH } : {}),
+            ...(floorH  !== undefined ? { floorToFloorM: floorH } : {}),
+          };
+          const h = historyRef.current;
+          const isAuto = roomId.startsWith(ROOM_AUTO_ID_PREFIX);
+          if (isAuto) {
+            // Auto-detected room: promote with a FRESH non-auto id so manualRooms picks it up
+            // (the auto-id-prefix filter would otherwise drop our patched entry). The original
+            // auto-room then gets filtered out by the centroid-match dedupe in `visibleRooms`.
+            const promotedId = createId();
+            h.set({ ...h.state, rooms: [...h.state.rooms, { ...currentRoom, id: promotedId, ...patch }] });
+            roomId = promotedId; // retarget downstream ops at the promoted room
+          } else {
+            h.set({ ...h.state, rooms: h.state.rooms.map((r) => r.id === roomId ? { ...r, ...patch } : r) });
           }
         } else {
           skipped += 1;
@@ -14305,6 +14380,10 @@ User request: ${aiPrompt.trim()}`;
         setSegmentDraft([]);
         setSegmentPreviewPoint(null);
         setWallResizeDraft(null);
+        // Add-Segment polyline: drop the in-progress chain. Already-committed
+        // segments stay; this only clears the next-anchor preview state.
+        setSingleSegStart(null);
+        setSingleSegPreview(null);
       }
       if (event.key === "Enter" && tool === "segment") {
         event.preventDefault();
@@ -14865,7 +14944,10 @@ User request: ${aiPrompt.trim()}`;
       tool === "freehand" ||
       tool === "text" ||
       tool === "rect" ||
-      tool === "circle";
+      tool === "circle" ||
+      tool === "space-rect" ||
+      tool === "space-circle" ||
+      tool === "single-segment";
     if (!clickedOnStage && !drawHitsShapes) {
       return;
     }
@@ -14912,6 +14994,93 @@ User request: ${aiPrompt.trim()}`;
     const snappedAngle = Math.round(angle / step) * step;
     const dist = Math.hypot(dx, dy);
     return { x: anchor.x + dist * Math.cos(snappedAngle), y: anchor.y + dist * Math.sin(snappedAngle) };
+  };
+
+  /** Commit a Space (Room) defined by the current `spaceRectAnchor` and an opposite-corner point.
+   *  Also commits the 4 boundary edges as line-mode wall segments (segmentType "line") so the
+   *  room has explicit boundary geometry, not just the fill area.
+   *  Used by both the second-click on canvas and the L×B-input Enter flow. */
+  const commitSpaceRectFromCorner = (corner: Point) => {
+    if (!spaceRectAnchor) return;
+    const x1 = Math.min(spaceRectAnchor.x, corner.x);
+    const x2 = Math.max(spaceRectAnchor.x, corner.x);
+    const y1 = Math.min(spaceRectAnchor.y, corner.y);
+    const y2 = Math.max(spaceRectAnchor.y, corner.y);
+    if (x2 - x1 < 1 || y2 - y1 < 1) return; // ignore zero-area degenerate rectangles
+    const points: Point[] = [
+      { x: x1, y: y1 },
+      { x: x2, y: y1 },
+      { x: x2, y: y2 },
+      { x: x1, y: y2 },
+    ];
+    // 4 boundary edges as thin "line"-mode wall segments — matches the Add Segment style.
+    const boundary: Wall[] = [];
+    for (let i = 0; i < 4; i++) {
+      boundary.push({
+        id: createId(),
+        start: points[i],
+        end: points[(i + 1) % 4],
+        thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
+        color: wallColor,
+        dashed: lineTypeDashed,
+        mode: "line",
+        method: "center",
+        segmentType: "line",
+      });
+    }
+    history.set({
+      ...history.state,
+      rooms: [
+        ...history.state.rooms,
+        {
+          id: createId(),
+          points,
+          fill: "rgba(245,158,11,0.18)",
+          stroke: "#f59e0b",
+          layerId: DEFAULT_SPACE_LAYER_ID,
+        },
+      ],
+      walls: splitWallsAtIntersections([...history.state.walls, ...boundary]),
+    });
+    setSpaceRectAnchor(null);
+    setSpaceRectPreview(null);
+    setSpaceRectLenInput("");
+    setSpaceRectBreInput("");
+    setSpaceRectInputDirty(false);
+    setTool("select");
+  };
+
+  /** Commit a circular Space (Room) defined by the current `spaceCircleCenter` and a radius (in world px).
+   *  The room is approximated as a 64-sided regular polygon (visually smooth at typical zoom levels). */
+  const commitSpaceCircle = (radiusPx: number) => {
+    if (!spaceCircleCenter || !Number.isFinite(radiusPx) || radiusPx < 1) return;
+    const SEGMENTS = 64;
+    const points: Point[] = [];
+    for (let i = 0; i < SEGMENTS; i++) {
+      const t = (i / SEGMENTS) * Math.PI * 2;
+      points.push({
+        x: spaceCircleCenter.x + radiusPx * Math.cos(t),
+        y: spaceCircleCenter.y + radiusPx * Math.sin(t),
+      });
+    }
+    history.set({
+      ...history.state,
+      rooms: [
+        ...history.state.rooms,
+        {
+          id: createId(),
+          points,
+          fill: "rgba(245,158,11,0.18)",
+          stroke: "#f59e0b",
+          layerId: DEFAULT_SPACE_LAYER_ID,
+        },
+      ],
+    });
+    setSpaceCircleCenter(null);
+    setSpaceCirclePreview(null);
+    setSpaceCircleRadiusInput("");
+    setSpaceCircleInputDirty(false);
+    setTool("select");
   };
 
   /** Walls, rooms, shapes, measure, calibration, etc. — same whether the click hit the stage or the image underlay. */
@@ -15115,6 +15284,71 @@ User request: ${aiPrompt.trim()}`;
       return;
     }
 
+    if (tool === "space-rect") {
+      // First click: set anchor. Second click: commit Space (Room) from anchor → snapped.
+      if (!spaceRectAnchor) {
+        setSpaceRectAnchor(snapped);
+        setSpaceRectPreview(snapped);
+        setSpaceRectLenInput("");
+        setSpaceRectBreInput("");
+        return;
+      }
+      commitSpaceRectFromCorner(snapped);
+      return;
+    }
+
+    if (tool === "space-circle") {
+      // First click: set center. Second click: commit circle using cursor distance as radius.
+      if (!spaceCircleCenter) {
+        setSpaceCircleCenter(snapped);
+        setSpaceCirclePreview(snapped);
+        setSpaceCircleRadiusInput("");
+        setSpaceCircleInputDirty(false);
+        return;
+      }
+      const radiusPx = Math.hypot(snapped.x - spaceCircleCenter.x, snapped.y - spaceCircleCenter.y);
+      commitSpaceCircle(radiusPx);
+      return;
+    }
+
+    if (tool === "single-segment") {
+      // Polyline mode: first click sets the starting vertex; every subsequent click
+      // commits a Wall (segmentType "line") from the previous vertex to the new one
+      // AND keeps the chain alive (sets the new vertex as the next anchor).
+      // Double-click or Escape ends the chain. Shift axis-locks the next segment.
+      if (!singleSegStart) {
+        setSingleSegStart(snapped);
+        setSingleSegPreview(snapped);
+        return;
+      }
+      let end = snapped;
+      if (shiftKey) end = axisLockToAnchor(singleSegStart, snapped);
+      const dx = end.x - singleSegStart.x;
+      const dy = end.y - singleSegStart.y;
+      if (dx * dx + dy * dy < 1) return; // ignore degenerate zero-length segments
+      history.set({
+        ...history.state,
+        walls: splitWallsAtIntersections([
+          ...history.state.walls,
+          {
+            id: createId(),
+            start: singleSegStart,
+            end,
+            thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
+            color: wallColor,
+            dashed: lineTypeDashed,
+            mode: "line",
+            method: "center",
+            segmentType: "line",
+          },
+        ]),
+      });
+      // Continue the chain — the new vertex becomes the next anchor.
+      setSingleSegStart(end);
+      setSingleSegPreview(end);
+      return;
+    }
+
     if (tool === "circle") {
       history.set({
         ...history.state,
@@ -15172,47 +15406,10 @@ User request: ${aiPrompt.trim()}`;
         const ay = segmentDraft[segmentDraft.length - 1];
         pt = axisLockToAnchor({ x: ax, y: ay }, snapped);
       }
-      // Close-the-polygon: clicking near the first vertex with ≥3 prior points commits
-      // the segment as a closed polygon and drops back to the select tool.
-      if (segmentDraft.length >= 6) {
-        const fx = segmentDraft[0];
-        const fy = segmentDraft[1];
-        const closeTol = 10 / Math.max(1, scale);
-        if (Math.hypot(pt.x - fx, pt.y - fy) <= closeTol) {
-          const closed = [...segmentDraft, fx, fy];
-          const measurements: string[] = [];
-          let totalVal = 0;
-          for (let i = 0; i < closed.length - 2; i += 2) {
-            const a = { x: closed[i], y: closed[i + 1] };
-            const b = { x: closed[i + 2], y: closed[i + 3] };
-            const val = distanceInUnit(a, b, unit, pixelsPerMeter);
-            measurements.push(`${val.toFixed(2)} ${unit}`);
-            totalVal += val;
-          }
-          history.set({
-            ...history.state,
-            objects: [
-              ...history.state.objects,
-              {
-                id: createId(),
-                kind: "segment",
-                x: 0,
-                y: 0,
-                rotation: 0,
-                points: closed,
-                stroke: "#0F766E",
-                fill: "transparent",
-                measurements,
-                totalText: `${totalVal.toFixed(2)} ${unit}`,
-              },
-            ],
-          });
-          setSegmentDraft([]);
-          setSegmentPreviewPoint(null);
-          setTool("select");
-          return;
-        }
-      }
+      // NOTE: Add Segment intentionally does NOT auto-close into a Space/polygon.
+      // It just draws open segments — double-click (handled by `finishSegmentDraft`)
+      // commits the current chain as an open polyline. Closed-polygon "Space" creation
+      // is the job of the "Add Space → Polyline" tool (separate flow, to be wired next).
       setSegmentDraft((prev) => [...prev, pt.x, pt.y]);
       return;
     }
@@ -15295,6 +15492,31 @@ User request: ${aiPrompt.trim()}`;
           const locked = event.evt.shiftKey ? axisLockToAnchor({ x: ax, y: ay }, snapped) : snapped;
           setSegmentPreviewPoint(locked);
         }
+        if (tool === "single-segment" && singleSegStart) {
+          const locked = event.evt.shiftKey ? axisLockToAnchor(singleSegStart, snapped) : snapped;
+          setSingleSegPreview(locked);
+        }
+        if (tool === "space-circle" && spaceCircleCenter) {
+          setSpaceCirclePreview(snapped);
+          // Sync radius input to live cursor unless the user has manually typed.
+          if (!spaceCircleInputDirty) {
+            const rPx = Math.hypot(snapped.x - spaceCircleCenter.x, snapped.y - spaceCircleCenter.y);
+            const rUnit = distanceInUnit({ x: 0, y: 0 }, { x: rPx, y: 0 }, unit, pixelsPerMeter);
+            setSpaceCircleRadiusInput(rUnit.toFixed(2));
+          }
+        }
+        if (tool === "space-rect" && spaceRectAnchor) {
+          setSpaceRectPreview(snapped);
+          // Keep L×B inputs synced to the live cursor while the user hasn't manually typed.
+          if (!spaceRectInputDirty) {
+            const dx = Math.abs(snapped.x - spaceRectAnchor.x);
+            const dy = Math.abs(snapped.y - spaceRectAnchor.y);
+            const L = distanceInUnit({ x: 0, y: 0 }, { x: dx, y: 0 }, unit, pixelsPerMeter);
+            const B = distanceInUnit({ x: 0, y: 0 }, { x: 0, y: dy }, unit, pixelsPerMeter);
+            setSpaceRectLenInput(L.toFixed(2));
+            setSpaceRectBreInput(B.toFixed(2));
+          }
+        }
         if (tool === "measure" && measureDraft) {
           setMeasurePreviewPoint(snapped);
         }
@@ -15315,6 +15537,27 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onStageDblClick = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    // Add-Segment polyline: end the chain. The double-click's first click already
+    // committed the last segment; the second click would have added a tiny zero-length
+    // wall — strip it if present, then return to Select.
+    if (tool === "single-segment") {
+      const state = history.state;
+      if (state.walls.length > 0) {
+        const last = state.walls[state.walls.length - 1];
+        const distSq = (last.end.x - last.start.x) ** 2 + (last.end.y - last.start.y) ** 2;
+        if (distSq < 1) {
+          history.set({
+            ...state,
+            walls: splitWallsAtIntersections(state.walls.slice(0, -1)),
+          });
+        }
+      }
+      setSingleSegStart(null);
+      setSingleSegPreview(null);
+      setTool("select");
+      return;
+    }
+
     if (tool === "wall") {
       if (wallDrawType === "spline" && currentWallSplinePoints.length > 1) {
         finishWallSplineDraft();
@@ -15859,9 +16102,9 @@ User request: ${aiPrompt.trim()}`;
     if (!file) {
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const src = String(reader.result);
+    // Shared finalizer: takes a PNG/JPEG data URL and stages it into imageUnderlay,
+    // sizing the underlay box to the image's intrinsic pixel dimensions.
+    const applyDataUrl = (src: string) => {
       const image = new window.Image();
       image.onload = () => {
         const initialScale = 1;
@@ -15878,11 +16121,37 @@ User request: ${aiPrompt.trim()}`;
             opacity: 0.55,
             scale: initialScale,
             locked: true,
+            // Park new uploads on the built-in Image layer so toggling that
+            // layer hides them (matches the user expectation that the Image
+            // layer controls the underlay).
+            layerId: DEFAULT_IMAGE_LAYER_ID,
           },
         });
       };
       image.src = src;
     };
+
+    // PDF branch: rasterize page 1 to a 300-DPI PNG via pdf.js, then funnel
+    // through the same code path as a regular image upload. Resolution is
+    // preserved up to that DPI — fine for moderate zoom, will pixelate when
+    // zoomed past it (acceptable for v1; "path (a)" from the design discussion).
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (isPdf) {
+      const toastId = toast.loading("Rendering PDF…");
+      rasterizePdfFirstPage(file, 300)
+        .then(({ dataUrl }) => {
+          applyDataUrl(dataUrl);
+          toast.success("PDF loaded as underlay (page 1, 300 DPI)", { id: toastId });
+        })
+        .catch((err) => {
+          console.error("PDF rasterization failed", err);
+          toast.error(`Couldn't render PDF: ${err?.message ?? "unknown error"}`, { id: toastId });
+        });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => applyDataUrl(String(reader.result));
     reader.readAsDataURL(file);
   };
 
@@ -17305,6 +17574,29 @@ User request: ${aiPrompt.trim()}`;
                 onSelectedGenElementChange={setSelectedGenElement}
                 shapesPopoverOpen={shapesPopoverOpen}
                 onShapesPopoverOpenChange={setShapesPopoverOpen}
+                onAddSpaceRectClick={() => {
+                  // Start the click-click rectangle-space trace. Reset any prior anchor.
+                  setSpaceRectAnchor(null);
+                  setSpaceRectPreview(null);
+                  setSpaceRectLenInput("");
+                  setSpaceRectBreInput("");
+                  setSpaceRectInputDirty(false);
+                  setTool("space-rect");
+                }}
+                onSingleSegmentClick={() => {
+                  // Start the click-click single-line segment trace.
+                  setSingleSegStart(null);
+                  setSingleSegPreview(null);
+                  setTool("single-segment");
+                }}
+                onAddSpaceCircleClick={() => {
+                  // Start the click + drag/type-radius circle-space trace.
+                  setSpaceCircleCenter(null);
+                  setSpaceCirclePreview(null);
+                  setSpaceCircleRadiusInput("");
+                  setSpaceCircleInputDirty(false);
+                  setTool("space-circle");
+                }}
                 hasGeneratedLayout={!!generatedLayout}
                 saRunning={saRunning}
                 onClearCanvas={() => {
@@ -17423,7 +17715,7 @@ User request: ${aiPrompt.trim()}`;
                       </PopoverTrigger>
                       <PopoverContent side="right" align="start" className="w-72 p-3 shadow-xl" sideOffset={10}>
                         <p className="mb-2 text-sm font-semibold">Image underlay</p>
-                        <Input type="file" accept=".png,.jpg,.jpeg" onChange={onUnderlayUpload} className="mt-1" />
+                        <Input type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={onUnderlayUpload} className="mt-1" />
                         {history.state.imageUnderlay ? (
                           <div className="mt-3 space-y-2">
                             <p className="text-xs text-slate-500">Opacity</p>
@@ -17517,6 +17809,17 @@ User request: ${aiPrompt.trim()}`;
                     setDrawPathDialogOpen(true);
                   }
                 }}
+                onAddSegmentClick={() => {
+                  setTool("wall");
+                  // Add Segment = simple line segment: segmentType "line" + mode "line"
+                  // so the result is a thin stroke, not a thick wall band.
+                  setNextWallSegmentType("line");
+                  setWallDrawMode("line");
+                  setAddDoorMode(false);
+                  setAddWindowMode(false);
+                  setAddEdgeMode(null);
+                  setAddRoomMode(false);
+                }}
                 drawingWall={tool === "wall" && nextWallSegmentType === "wall" && wallDrawType === "polyline"}
                 onAddWallClick={() => {
                   if (tool === "wall" && nextWallSegmentType === "wall" && wallDrawType === "polyline") {
@@ -17603,7 +17906,10 @@ User request: ${aiPrompt.trim()}`;
                     tool === "text" ||
                     tool === "segment" ||
                     tool === "door" ||
-                    tool === "window"
+                    tool === "window" ||
+                    tool === "space-rect" ||
+                    tool === "space-circle" ||
+                    tool === "single-segment"
                     ? "crosshair"
                     : "default",
             }}
@@ -17642,9 +17948,35 @@ User request: ${aiPrompt.trim()}`;
               );
             })() : null}
 
+            {/* OSM Map tile layer — renders only when the "map" layer is visible AND an anchor
+             *  has been picked via the search panel. Lives below the main drawing layer so
+             *  walls/rooms/objects sit on top of the map. */}
+            {isLayerVisible(DEFAULT_MAP_LAYER_ID) && history.state.mapOverlay ? (() => {
+              const padPx = 200;
+              const worldMinX = (-position.x - padPx) / scale;
+              const worldMaxX = (size.width - position.x + padPx) / scale;
+              const worldMinY = (-position.y - padPx) / scale;
+              const worldMaxY = (size.height - position.y + padPx) / scale;
+              return (
+                <Layer listening={false}>
+                  <WorldViewport x={position.x} y={position.y} scale={scale}>
+                    <MapTileLayer
+                      anchorLat={history.state.mapOverlay.anchor.lat}
+                      anchorLon={history.state.mapOverlay.anchor.lon}
+                      zoom={history.state.mapOverlay.zoom}
+                      worldMinX={worldMinX}
+                      worldMaxX={worldMaxX}
+                      worldMinY={worldMinY}
+                      worldMaxY={worldMaxY}
+                    />
+                  </WorldViewport>
+                </Layer>
+              );
+            })() : null}
+
             <Layer>
               <WorldViewport x={position.x} y={position.y} scale={scale}>
-                {layerVisibility.underlay && history.state.imageUnderlay && imageElement ? (
+                {layerVisibility.underlay && history.state.imageUnderlay && imageElement && isLayerVisible(history.state.imageUnderlay.layerId) ? (
                   <KonvaImage
                     id="underlay"
                     image={imageElement}
@@ -19771,8 +20103,10 @@ User request: ${aiPrompt.trim()}`;
                     );
                   })()}
 
-                  {/* Wall junction nodes — selectable & draggable */}
-                  {tool === "select" && wallNodes.map((node) => {
+                  {/* Wall junction nodes — selectable & draggable.
+                   *  Also rendered during "single-segment" (Add Segment) so the user can
+                   *  see existing endpoints to snap to while drawing a new polyline. */}
+                  {(tool === "select" || tool === "single-segment") && wallNodes.map((node) => {
                     const isSelected = selectedNodeKey === node.key || selectedNodeKey === node.stableKey;
                     return (
                       <Group key={`node-frag-${node.stableKey}`} listening>
@@ -22669,6 +23003,117 @@ User request: ${aiPrompt.trim()}`;
                       ) : null}
                     </>
                   ) : null}
+                  {/* Add-Segment single-line preview: dashed line + live length label. */}
+                  {tool === "single-segment" && singleSegStart && singleSegPreview ? (() => {
+                    const a = singleSegStart;
+                    const b = singleSegPreview;
+                    const len = distanceInUnit(a, b, unit, pixelsPerMeter);
+                    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                    const fontPx = Math.max(10, 12 / Math.max(1, scale));
+                    return (
+                      <>
+                        <Line
+                          points={[a.x, a.y, b.x, b.y]}
+                          stroke="#0F766E"
+                          strokeWidth={Math.max(1.5, 2 / Math.max(1, scale))}
+                          dash={[6, 4]}
+                          lineCap="round"
+                          listening={false}
+                        />
+                        <Circle x={a.x} y={a.y} radius={Math.max(3, 4 / Math.max(1, scale))} fill="#0F766E" stroke="#fff" strokeWidth={1} />
+                        <Text x={mid.x + 6 / Math.max(1, scale)} y={mid.y - fontPx - 4 / Math.max(1, scale)} text={`${len.toFixed(2)} ${unit}`} fontSize={fontPx} fill="#0F766E" listening={false} />
+                      </>
+                    );
+                  })() : null}
+                  {/* Add-Space circle trace preview: dashed circle + radius line + label. */}
+                  {tool === "space-circle" && spaceCircleCenter && spaceCirclePreview ? (() => {
+                    const c = spaceCircleCenter;
+                    const p = spaceCirclePreview;
+                    const rPx = Math.hypot(p.x - c.x, p.y - c.y);
+                    const rText = `${distanceInUnit({ x: 0, y: 0 }, { x: rPx, y: 0 }, unit, pixelsPerMeter).toFixed(2)} ${unit}`;
+                    const fontPx = Math.max(10, 12 / Math.max(1, scale));
+                    return (
+                      <>
+                        <Circle
+                          x={c.x}
+                          y={c.y}
+                          radius={Math.max(0.5, rPx)}
+                          stroke="#f59e0b"
+                          strokeWidth={Math.max(1.5, 2 / Math.max(1, scale))}
+                          dash={[6, 4]}
+                          fill="rgba(245,158,11,0.10)"
+                          listening={false}
+                        />
+                        <Circle x={c.x} y={c.y} radius={Math.max(3, 4 / Math.max(1, scale))} fill="#f59e0b" stroke="#fff" strokeWidth={1} />
+                        <Line
+                          points={[c.x, c.y, p.x, p.y]}
+                          stroke="#f59e0b"
+                          opacity={0.7}
+                          strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))}
+                          dash={[3, 3]}
+                          listening={false}
+                        />
+                        <Text
+                          x={(c.x + p.x) / 2 + 6 / Math.max(1, scale)}
+                          y={(c.y + p.y) / 2 - fontPx - 4 / Math.max(1, scale)}
+                          text={`r = ${rText}`}
+                          fontSize={fontPx}
+                          fill="#92400e"
+                          listening={false}
+                        />
+                      </>
+                    );
+                  })() : null}
+                  {/* Add-Space rectangle trace preview: dashed outline + per-edge L×B labels. */}
+                  {tool === "space-rect" && spaceRectAnchor && spaceRectPreview ? (() => {
+                    const x1 = Math.min(spaceRectAnchor.x, spaceRectPreview.x);
+                    const x2 = Math.max(spaceRectAnchor.x, spaceRectPreview.x);
+                    const y1 = Math.min(spaceRectAnchor.y, spaceRectPreview.y);
+                    const y2 = Math.max(spaceRectAnchor.y, spaceRectPreview.y);
+                    const w = x2 - x1, h = y2 - y1;
+                    const lText = `${distanceInUnit({ x: 0, y: 0 }, { x: w, y: 0 }, unit, pixelsPerMeter).toFixed(2)} ${unit}`;
+                    const bText = `${distanceInUnit({ x: 0, y: 0 }, { x: 0, y: h }, unit, pixelsPerMeter).toFixed(2)} ${unit}`;
+                    const fontPx = Math.max(10, 12 / Math.max(1, scale));
+                    const labelOffset = 8 / Math.max(1, scale);
+                    return (
+                      <>
+                        <Rect
+                          x={x1}
+                          y={y1}
+                          width={w}
+                          height={h}
+                          stroke="#f59e0b"
+                          strokeWidth={Math.max(1.5, 2 / Math.max(1, scale))}
+                          dash={[6, 4]}
+                          fill="rgba(245,158,11,0.10)"
+                          listening={false}
+                        />
+                        {/* Anchor marker */}
+                        <Circle x={spaceRectAnchor.x} y={spaceRectAnchor.y} radius={Math.max(3, 4 / Math.max(1, scale))} fill="#f59e0b" stroke="#fff" strokeWidth={1} />
+                        {/* Length label centred on top edge */}
+                        <Text
+                          x={(x1 + x2) / 2}
+                          y={y1 - labelOffset - fontPx}
+                          text={lText}
+                          fontSize={fontPx}
+                          fill="#92400e"
+                          align="center"
+                          width={120 / Math.max(1, scale)}
+                          offsetX={60 / Math.max(1, scale)}
+                          listening={false}
+                        />
+                        {/* Breadth label on right edge */}
+                        <Text
+                          x={x2 + labelOffset}
+                          y={(y1 + y2) / 2 - fontPx / 2}
+                          text={bText}
+                          fontSize={fontPx}
+                          fill="#92400e"
+                          listening={false}
+                        />
+                      </>
+                    );
+                  })() : null}
                   {(tool === "scale" || calibrationDraft || calibrationDialogOpen) && calibrationDraft ? (
                     (() => {
                       const end = calibrationEndPoint ?? calibrationPreviewPoint;
@@ -22840,6 +23285,324 @@ User request: ${aiPrompt.trim()}`;
               </WorldViewport>
             </Layer>
           </Stage>
+          {/* "Add Space → Rectangle" floating L×B inputs — only while a trace is active.
+           *  Positioned in screen-space near the cursor (preview point) so the user can
+           *  Tab into the fields and type exact dimensions, then press Enter to commit. */}
+          {tool === "space-rect" && spaceRectAnchor && spaceRectPreview ? (() => {
+            // World → screen conversion uses the stage's pan (position) + zoom (scale).
+            const screenX = spaceRectPreview.x * scale + position.x;
+            const screenY = spaceRectPreview.y * scale + position.y;
+            const commitFromInputs = () => {
+              if (!spaceRectAnchor) return;
+              const L = Number(spaceRectLenInput);
+              const B = Number(spaceRectBreInput);
+              if (!Number.isFinite(L) || !Number.isFinite(B) || L <= 0 || B <= 0) {
+                toast.error("Enter positive Length and Breadth");
+                return;
+              }
+              const Lpx = pixelsFromUnitValue(L, unit, pixelsPerMeter);
+              const Bpx = pixelsFromUnitValue(B, unit, pixelsPerMeter);
+              // Place the opposite corner in the quadrant the cursor is currently in
+              // (so typed dimensions still respect the user's "direction" intent).
+              const sx = spaceRectPreview.x >= spaceRectAnchor.x ? 1 : -1;
+              const sy = spaceRectPreview.y >= spaceRectAnchor.y ? 1 : -1;
+              commitSpaceRectFromCorner({
+                x: spaceRectAnchor.x + sx * Lpx,
+                y: spaceRectAnchor.y + sy * Bpx,
+              });
+            };
+            return (
+              <div
+                className="pointer-events-auto absolute z-30 flex items-center gap-1 rounded-md border border-amber-300 bg-white/95 px-2 py-1 shadow-lg backdrop-blur"
+                style={{ left: Math.max(8, Math.min(screenX + 16, size.width - 240)), top: Math.max(8, Math.min(screenY + 16, size.height - 48)) }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+              >
+                <span className="text-[10px] font-semibold uppercase text-amber-700">L</span>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={spaceRectLenInput}
+                  onChange={(e) => { setSpaceRectInputDirty(true); setSpaceRectLenInput(e.target.value); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") commitFromInputs(); if (e.key === "Escape") { setSpaceRectAnchor(null); setSpaceRectPreview(null); setSpaceRectLenInput(""); setSpaceRectBreInput(""); setSpaceRectInputDirty(false); } }}
+                  className="w-20 rounded border border-slate-200 px-1 py-0.5 font-mono text-xs"
+                  placeholder={unit}
+                  autoFocus
+                />
+                <span className="text-[10px] font-semibold uppercase text-amber-700">B</span>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={spaceRectBreInput}
+                  onChange={(e) => { setSpaceRectInputDirty(true); setSpaceRectBreInput(e.target.value); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") commitFromInputs(); if (e.key === "Escape") { setSpaceRectAnchor(null); setSpaceRectPreview(null); setSpaceRectLenInput(""); setSpaceRectBreInput(""); setSpaceRectInputDirty(false); } }}
+                  className="w-20 rounded border border-slate-200 px-1 py-0.5 font-mono text-xs"
+                  placeholder={unit}
+                />
+                <span className="ml-1 text-[10px] text-slate-400">{unit}</span>
+                <Button size="sm" variant="outline" className="ml-1 h-6 px-2 text-[10px]" onClick={commitFromInputs}>
+                  OK
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-1 text-[10px] text-slate-500"
+                  onClick={() => { setSpaceRectAnchor(null); setSpaceRectPreview(null); setSpaceRectLenInput(""); setSpaceRectBreInput(""); setSpaceRectInputDirty(false); }}
+                >
+                  ✕
+                </Button>
+              </div>
+            );
+          })() : null}
+          {/* "Add Space → Circle" floating radius input — only while a trace is active. */}
+          {tool === "space-circle" && spaceCircleCenter && spaceCirclePreview ? (() => {
+            const screenX = spaceCirclePreview.x * scale + position.x;
+            const screenY = spaceCirclePreview.y * scale + position.y;
+            const commitFromInput = () => {
+              if (!spaceCircleCenter) return;
+              const r = Number(spaceCircleRadiusInput);
+              if (!Number.isFinite(r) || r <= 0) {
+                toast.error("Enter a positive radius");
+                return;
+              }
+              const rPx = pixelsFromUnitValue(r, unit, pixelsPerMeter);
+              commitSpaceCircle(rPx);
+            };
+            const cancel = () => {
+              setSpaceCircleCenter(null);
+              setSpaceCirclePreview(null);
+              setSpaceCircleRadiusInput("");
+              setSpaceCircleInputDirty(false);
+            };
+            return (
+              <div
+                className="pointer-events-auto absolute z-30 flex items-center gap-1 rounded-md border border-amber-300 bg-white/95 px-2 py-1 shadow-lg backdrop-blur"
+                style={{ left: Math.max(8, Math.min(screenX + 16, size.width - 200)), top: Math.max(8, Math.min(screenY + 16, size.height - 48)) }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+              >
+                <span className="text-[10px] font-semibold uppercase text-amber-700">r</span>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={spaceCircleRadiusInput}
+                  onChange={(e) => { setSpaceCircleInputDirty(true); setSpaceCircleRadiusInput(e.target.value); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") commitFromInput(); if (e.key === "Escape") cancel(); }}
+                  className="w-20 rounded border border-slate-200 px-1 py-0.5 font-mono text-xs"
+                  placeholder={unit}
+                  autoFocus
+                />
+                <span className="text-[10px] text-slate-400">{unit}</span>
+                <Button size="sm" variant="outline" className="ml-1 h-6 px-2 text-[10px]" onClick={commitFromInput}>
+                  OK
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 px-1 text-[10px] text-slate-500" onClick={cancel}>
+                  ✕
+                </Button>
+              </div>
+            );
+          })() : null}
+          {/* OSM Map: search panel — appears when the Map layer is visible but no anchor exists yet. */}
+          {isLayerVisible(DEFAULT_MAP_LAYER_ID) && !history.state.mapOverlay ? (() => {
+            // Shared "go to lat/lon at zoom" finalizer — used by both Nominatim result clicks
+            // and the direct lat/lon "Go" button. Auto-derives pixelsPerMeter from Mercator
+            // ground resolution at this latitude/zoom so distance labels read in real metres.
+            const applyAnchor = (lat: number, lon: number) => {
+              const zoomNum = Math.max(0, Math.min(19, Math.round(Number(mapSearchZoomInput) || 18)));
+              const ppm = pixelsPerMeterFromMap(lat, zoomNum);
+              setPixelsPerMeter(ppm);
+              history.set({
+                ...history.state,
+                mapOverlay: { anchor: { lat, lon }, zoom: zoomNum },
+              });
+              setMapSearchHits([]);
+              setMapSearchQuery("");
+              // Restore defaults so the next time the panel shows (after Reset) the user
+              // sees the project's typical site coordinates already filled in.
+              setMapLatInput("12.902750");
+              setMapLonInput("79.931389");
+              toast.success(`Map centered. Scale auto-set: 1 m ≈ ${ppm.toFixed(2)} px`);
+            };
+            return (
+            <div
+              className="pointer-events-auto absolute left-1/2 top-6 z-30 w-[420px] -translate-x-1/2 rounded-lg border border-sky-300 bg-white/95 p-3 shadow-xl backdrop-blur"
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase text-sky-700">Map · Search a location</h4>
+                <span className="text-[10px] text-slate-400">OSM · Nominatim</span>
+              </div>
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  value={mapSearchQuery}
+                  onChange={(e) => setMapSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !mapSearchLoading && mapSearchQuery.trim()) {
+                      setMapSearchLoading(true);
+                      searchNominatim(mapSearchQuery)
+                        .then((hits) => setMapSearchHits(hits))
+                        .catch((err) => toast.error(`Search failed: ${err?.message ?? "unknown"}`))
+                        .finally(() => setMapSearchLoading(false));
+                    }
+                  }}
+                  placeholder="e.g. Eiffel Tower, Paris"
+                  className="flex-1 rounded border border-slate-200 px-2 py-1 text-sm"
+                  autoFocus
+                />
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="19"
+                  value={mapSearchZoomInput}
+                  onChange={(e) => setMapSearchZoomInput(e.target.value)}
+                  className="w-14 rounded border border-slate-200 px-2 py-1 font-mono text-sm"
+                  title="OSM zoom level (0–19)"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={mapSearchLoading || !mapSearchQuery.trim()}
+                  onClick={() => {
+                    setMapSearchLoading(true);
+                    searchNominatim(mapSearchQuery)
+                      .then((hits) => setMapSearchHits(hits))
+                      .catch((err) => toast.error(`Search failed: ${err?.message ?? "unknown"}`))
+                      .finally(() => setMapSearchLoading(false));
+                  }}
+                >
+                  {mapSearchLoading ? "…" : "Find"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-slate-500"
+                  title="Hide the Map layer"
+                  onClick={() => {
+                    // Toggle the Map layer off so the panel goes away.
+                    history.set({
+                      ...history.state,
+                      layers: (history.state.layers ?? defaultLayerTable()).map((l) =>
+                        l.id === DEFAULT_MAP_LAYER_ID ? { ...l, visible: false } : l,
+                      ),
+                    });
+                  }}
+                >
+                  ✕
+                </Button>
+              </div>
+              {mapSearchHits.length > 0 && (
+                <ul className="mt-2 max-h-44 space-y-0.5 overflow-y-auto rounded border border-slate-100">
+                  {mapSearchHits.map((h, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        className="w-full truncate rounded px-2 py-1 text-left text-xs hover:bg-sky-50"
+                        title={h.displayName}
+                        onClick={() => applyAnchor(h.lat, h.lon)}
+                      >
+                        {h.displayName}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* — divider — */}
+              <div className="my-2 flex items-center gap-2">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-[10px] uppercase tracking-wide text-slate-400">or jump to coordinates</span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+              {/* Direct lat/lon entry — skips Nominatim entirely. */}
+              <div className="flex gap-1">
+                <input
+                  type="number"
+                  step="any"
+                  value={mapLatInput}
+                  onChange={(e) => setMapLatInput(e.target.value)}
+                  placeholder="Latitude"
+                  className="flex-1 rounded border border-slate-200 px-2 py-1 font-mono text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const lat = Number(mapLatInput), lon = Number(mapLonInput);
+                      if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -85 && lat <= 85 && lon >= -180 && lon <= 180) {
+                        applyAnchor(lat, lon);
+                      } else {
+                        toast.error("Enter valid lat (-85..85) and lon (-180..180)");
+                      }
+                    }
+                  }}
+                />
+                <input
+                  type="number"
+                  step="any"
+                  value={mapLonInput}
+                  onChange={(e) => setMapLonInput(e.target.value)}
+                  placeholder="Longitude"
+                  className="flex-1 rounded border border-slate-200 px-2 py-1 font-mono text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const lat = Number(mapLatInput), lon = Number(mapLonInput);
+                      if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -85 && lat <= 85 && lon >= -180 && lon <= 180) {
+                        applyAnchor(lat, lon);
+                      } else {
+                        toast.error("Enter valid lat (-85..85) and lon (-180..180)");
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!mapLatInput.trim() || !mapLonInput.trim()}
+                  onClick={() => {
+                    const lat = Number(mapLatInput), lon = Number(mapLonInput);
+                    if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -85 && lat <= 85 && lon >= -180 && lon <= 180) {
+                      applyAnchor(lat, lon);
+                    } else {
+                      toast.error("Enter valid lat (-85..85) and lon (-180..180)");
+                    }
+                  }}
+                >
+                  Go
+                </Button>
+              </div>
+              <p className="mt-2 text-[10px] text-slate-400">
+                Tip: trace the site outline with <b>Add Space ▸ Polygon</b>. Scale is auto-derived from map zoom + latitude.
+              </p>
+            </div>
+            );
+          })() : null}
+          {/* OSM Map: attribution — required by the OSM tile usage policy whenever tiles are visible. */}
+          {isLayerVisible(DEFAULT_MAP_LAYER_ID) && history.state.mapOverlay ? (
+            <div className="pointer-events-auto absolute bottom-1 right-1 z-20 rounded bg-white/80 px-1.5 py-0.5 text-[9px] text-slate-600 backdrop-blur">
+              ©{" "}
+              <a
+                href="https://www.openstreetmap.org/copyright"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-sky-700"
+              >
+                OpenStreetMap
+              </a>{" "}
+              contributors
+              <button
+                type="button"
+                className="ml-2 text-[9px] text-slate-400 hover:text-slate-700"
+                title="Clear map anchor (lets you pick a new location)"
+                onClick={() => {
+                  history.set({ ...history.state, mapOverlay: null });
+                }}
+              >
+                · reset
+              </button>
+            </div>
+          ) : null}
           {/* SA Progress Bar — bottom overlay */}
           {saRunning && saProgress && (
             <div className="absolute bottom-12 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-slate-300 bg-white/95 px-4 py-2 shadow-lg backdrop-blur" style={{ minWidth: 520 }}>
@@ -25989,6 +26752,29 @@ User request: ${aiPrompt.trim()}`;
                                 />
                               );
                             })()}
+                            <VisibilityPolygonBlock
+                              selectedRoom={selectedRoom}
+                              pixelsPerMeter={pixelsPerMeter}
+                              unit={unit}
+                              expanded={visibilityExpanded}
+                              setExpanded={setVisibilityExpanded}
+                              live={visibilityLive}
+                              setLive={setVisibilityLive}
+                              modeByRoom={visibilityModeByRoom}
+                              setModeByRoom={setVisibilityModeByRoom}
+                              viewerByRoom={visibilityViewerByRoom}
+                              setViewerByRoom={setVisibilityViewerByRoom}
+                              edgeIndexByRoom={visibilityEdgeIndexByRoom}
+                              setEdgeIndexByRoom={setVisibilityEdgeIndexByRoom}
+                              bouncesByRoom={visibilityBouncesByRoom}
+                              setBouncesByRoom={setVisibilityBouncesByRoom}
+                              rayCountByRoom={visibilityRayCountByRoom}
+                              setRayCountByRoom={setVisibilityRayCountByRoom}
+                              reflectivityByRoom={visibilityReflectivityByRoom}
+                              setReflectivityByRoom={setVisibilityReflectivityByRoom}
+                              setPolygonsByRoom={setVisibilityPolygonsByRoom}
+                              setRaysByRoom={setVisibilityRaysByRoom}
+                            />
                           </>
                         )}
                       </div>
@@ -26129,53 +26915,6 @@ User request: ${aiPrompt.trim()}`;
                                 });
                                 setLivePreviewTick((t) => t + 1);
                               }}
-                            />
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Visibility & Meshing. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsVisibilityExpanded((v) => !v)}
-                    >
-                      <span>Visibility &amp; Meshing</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsVisibilityExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsVisibilityExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <>
-                            <VisibilityPolygonBlock
-                              selectedRoom={selectedRoom}
-                              pixelsPerMeter={pixelsPerMeter}
-                              unit={unit}
-                              expanded={visibilityExpanded}
-                              setExpanded={setVisibilityExpanded}
-                              live={visibilityLive}
-                              setLive={setVisibilityLive}
-                              modeByRoom={visibilityModeByRoom}
-                              setModeByRoom={setVisibilityModeByRoom}
-                              viewerByRoom={visibilityViewerByRoom}
-                              setViewerByRoom={setVisibilityViewerByRoom}
-                              edgeIndexByRoom={visibilityEdgeIndexByRoom}
-                              setEdgeIndexByRoom={setVisibilityEdgeIndexByRoom}
-                              bouncesByRoom={visibilityBouncesByRoom}
-                              setBouncesByRoom={setVisibilityBouncesByRoom}
-                              rayCountByRoom={visibilityRayCountByRoom}
-                              setRayCountByRoom={setVisibilityRayCountByRoom}
-                              reflectivityByRoom={visibilityReflectivityByRoom}
-                              setReflectivityByRoom={setVisibilityReflectivityByRoom}
-                              setPolygonsByRoom={setVisibilityPolygonsByRoom}
-                              setRaysByRoom={setVisibilityRaysByRoom}
                             />
                           </>
                         )}
