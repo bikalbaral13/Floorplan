@@ -39,6 +39,19 @@ export interface VoronoiDiagramBlockProps {
   onClearAllPreview: () => void;
   /** Clear Voronoi-preview walls for a specific room (Clear Seeds button). */
   onClearRoomPreview: (roomId: string) => void;
+
+  /** Lloyd / CVT relaxation sub-block (merged into this block). When `relax` is on,
+   *  Live previews the relaxed-Voronoi diagram and Apply runs relaxation before
+   *  committing cells. */
+  relax: boolean;
+  setRelax: (v: boolean) => void;
+  relaxIterations: number;
+  setRelaxIterations: (v: number) => void;
+  relaxTolerance: number;
+  setRelaxTolerance: (v: number) => void;
+  runRoomCvt: (room: { id: string; points: Point[] }, mode: "preview" | "relax" | "cells") => boolean;
+  /** Clear all CVT-preview walls (used when toggling Live off / Relax off). */
+  onClearAllCvtPreview: () => void;
 }
 
 export const VoronoiDiagramBlock = (p: VoronoiDiagramBlockProps) => {
@@ -53,7 +66,7 @@ export const VoronoiDiagramBlock = (p: VoronoiDiagramBlockProps) => {
         className="flex w-full items-center justify-between text-left"
         onClick={() => p.setExpanded((v) => !v)}
       >
-        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Voronoi Seeds</span>
+        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Voronoi Polygons</span>
         <span className="text-[11px] text-slate-400">{p.expanded ? "▼" : "▶"}</span>
       </button>
       {p.expanded && <>
@@ -156,6 +169,41 @@ export const VoronoiDiagramBlock = (p: VoronoiDiagramBlockProps) => {
           </Button>
         )}
 
+        <label className="flex items-center gap-1 text-[10px] text-slate-600">
+          <input
+            type="checkbox"
+            checked={p.relax}
+            onChange={(e) => {
+              const on = e.target.checked;
+              p.setRelax(on);
+              if (!on) p.onClearAllCvtPreview();
+              else if (p.live) p.onClearAllPreview();
+            }}
+          />
+          Relax seeds (Lloyd / CVT)
+        </label>
+        {p.relax && (
+          <>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-500">Lloyd iterations</span>
+                <span className="font-mono text-[10px] text-slate-700">{p.relaxIterations}</span>
+              </div>
+              <input type="range" className="w-full" min={1} max={50} step={1}
+                value={p.relaxIterations} onChange={(e) => p.setRelaxIterations(+e.target.value)} />
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-500">Tolerance</span>
+                <span className="font-mono text-[10px] text-slate-700">{p.relaxTolerance.toFixed(2)} px</span>
+              </div>
+              <input type="range" className="w-full" min={0.1} max={5} step={0.1}
+                value={p.relaxTolerance} onChange={(e) => p.setRelaxTolerance(+e.target.value)} />
+              <span className="text-[9px] text-slate-400">Loop ends early once the largest seed move falls below this.</span>
+            </div>
+          </>
+        )}
+
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-1 text-[10px] text-slate-600">
             <input
@@ -164,24 +212,47 @@ export const VoronoiDiagramBlock = (p: VoronoiDiagramBlockProps) => {
               onChange={(e) => {
                 const on = e.target.checked;
                 p.setLive(on);
-                if (on) p.runRoomVoronoi(p.selectedRoom, true);
-                else p.onClearAllPreview();
+                if (on) {
+                  if (p.relax) p.runRoomCvt(p.selectedRoom, "preview");
+                  else p.runRoomVoronoi(p.selectedRoom, true);
+                } else {
+                  p.onClearAllPreview();
+                  p.onClearAllCvtPreview();
+                }
               }}
             />
             Live
           </label>
-          <span className="text-[9px] text-slate-400">{p.live ? "auto-updates on drag" : "click Apply Voronoi"}</span>
+          <span className="text-[9px] text-slate-400">
+            {p.live ? (p.relax ? "preview relaxed cells" : "auto-updates on drag") : "click Apply Voronoi"}
+          </span>
         </div>
 
         <Button
           variant="outline"
           size="sm"
           className="w-full text-[11px]"
-          onClick={() => { p.runRoomVoronoi(p.selectedRoom, false); }}
+          onClick={() => {
+            if (p.relax) {
+              if (!p.runRoomCvt(p.selectedRoom, "relax")) return;
+            }
+            p.runRoomVoronoi(p.selectedRoom, false);
+          }}
         >
           Apply Voronoi
         </Button>
+        {p.relax && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-[11px]"
+            onClick={() => { p.runRoomCvt(p.selectedRoom, "relax"); }}
+          >
+            Apply Relaxed Seeds
+          </Button>
+        )}
       </>}
     </div>
   );
 };
+

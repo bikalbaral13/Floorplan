@@ -294,9 +294,25 @@ export const ToolsPanel = ({
   );
   const [renderBusy, setRenderBusy] = useState<boolean>(false);
   const [renderResultUrl, setRenderResultUrl] = useState<string | null>(null);
+  // ── Video render (Veo) ──
+  // Veo is an async long-running-operation (LRO): we POST a prompt + optional
+  // reference image, get an operation name back, poll until done, then fetch
+  // the generated video URI and surface a <video> + download link.
+  const [videoModel, setVideoModel] = useState<string>(() => {
+    try { return localStorage.getItem("video-model-v1") || "veo-3.1-generate-preview"; } catch { return "veo-3.1-generate-preview"; }
+  });
+  const [videoPrompt, setVideoPrompt] = useState<string>(
+    "Cinematic drone fly-through of this architectural massing at golden hour. Smooth slow forward motion, wide cinematic aspect, photorealistic materials, soft warm light, gentle camera arc around the building, depth of field, subtle haze, calm atmosphere."
+  );
+  const [videoBusy, setVideoBusy] = useState<boolean>(false);
+  const [videoStatus, setVideoStatus] = useState<string>(""); // human-readable progress for the user
+  const [videoResultUrl, setVideoResultUrl] = useState<string | null>(null);
   /** Six-view snapshots captured from the 3D scene. The user picks one to send to the model. */
   const [renderSnapshots, setRenderSnapshots] = useState<{ view: string; dataUrl: string }[] | null>(null);
-  const [renderSelectedView, setRenderSelectedView] = useState<string | null>(null);
+  /** Multi-select: user can pick one or more snapshot views to send to the model.
+   *  Gemini accepts multiple inline_data parts in a single request, which lets it
+   *  reason about a 3D massing from several angles at once. */
+  const [renderSelectedViews, setRenderSelectedViews] = useState<string[]>([]);
   const [snapshotBusy, setSnapshotBusy] = useState<boolean>(false);
 
   const handleSnapshot = async () => {
@@ -308,8 +324,10 @@ export const ToolsPanel = ({
         return;
       }
       setRenderSnapshots(shots);
-      setRenderSelectedView(shots[0]?.view ?? null);
-      toast.success(`Captured ${shots.length} views — pick one to render`);
+      // Default-select the first view so Render works one-click after Snapshot,
+      // but the user can shift to a multi-image request by toggling more tiles on.
+      setRenderSelectedViews(shots[0] ? [shots[0].view] : []);
+      toast.success(`Captured ${shots.length} views — pick one or more to render`);
     } finally {
       setSnapshotBusy(false);
     }
@@ -325,28 +343,41 @@ export const ToolsPanel = ({
       setRenderResultUrl(null);
       try { localStorage.setItem("render-api-key", renderApiKey); } catch { /* ignore */ }
       try { localStorage.setItem("render-model-v3", renderModel); } catch { /* ignore */ }
-      // Prefer the user-picked snapshot if available; otherwise live-capture the canvas.
-      let dataUrl: string | null = null;
-      if (renderSnapshots && renderSelectedView) {
-        const sel = renderSnapshots.find((s) => s.view === renderSelectedView);
-        if (sel?.dataUrl) dataUrl = sel.dataUrl;
+      // Collect every user-picked snapshot. If none are selected (or no snapshot has
+      // been taken), fall back to live-capturing the on-screen canvas — so the Render
+      // button still works without first hitting Snapshot.
+      const pickedUrls: string[] = [];
+      if (renderSnapshots && renderSelectedViews.length > 0) {
+        for (const v of renderSelectedViews) {
+          const sel = renderSnapshots.find((s) => s.view === v);
+          if (sel?.dataUrl) pickedUrls.push(sel.dataUrl);
+        }
       }
-      if (!dataUrl) dataUrl = await onCaptureCanvasPng();
-      if (!dataUrl) { toast.error("Couldn't capture canvas snapshot"); return; }
-      const base64 = dataUrl.split(",")[1] ?? "";
+      if (pickedUrls.length === 0) {
+        const live = await onCaptureCanvasPng();
+        if (live) pickedUrls.push(live);
+      }
+      if (pickedUrls.length === 0) { toast.error("Couldn't capture canvas snapshot"); return; }
+      // Build the multi-image Gemini payload: one text part with the prompt followed
+      // by one inline_data part per selected snapshot. Mime is inferred from the
+      // dataUrl prefix (jpeg for cube faces, png otherwise).
+      // Renamed from `parts` to `requestParts` to avoid colliding with the
+      // identically-named local later in this function that reads parts off the
+      // Gemini response.
+      const requestParts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+        { text: renderPrompt },
+      ];
+      for (const url of pickedUrls) {
+        const mime = url.startsWith("data:image/jpeg") ? "image/jpeg" : "image/png";
+        const data = url.split(",")[1] ?? "";
+        requestParts.push({ inline_data: { mime_type: mime, data } });
+      }
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(renderModel)}:generateContent?key=${encodeURIComponent(renderApiKey)}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{
-            parts: [
-              // Text BEFORE image: Gemini's image-edit endpoint frequently returns only
-              // a text part when the image precedes the instruction.
-              { text: renderPrompt },
-              { inline_data: { mime_type: "image/png", data: base64 } },
-            ],
-          }],
+          contents: [{ parts: requestParts }],
           generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
         }),
       });
@@ -381,6 +412,206 @@ export const ToolsPanel = ({
       setRenderBusy(false);
     }
   };
+
+  /** Submit a video-generation job to Veo (long-running operation), poll until
+   *  it finishes, then surface the resulting MP4 in a <video> tag with a Download
+   *  link. Veo accepts an optional reference image (image-to-video) and a text
+   *  prompt; multi-image isn't supported by the current Veo API, so we send the
+   *  first selected snapshot only (falling back to the live canvas capture). */
+  const handleRenderVideo = async () => {
+    if (!renderApiKey.trim()) {
+      toast.error("Add a Google AI Studio API key first");
+      return;
+    }
+    try {
+      setVideoBusy(true);
+      setVideoResultUrl(null);
+      setVideoStatus("Preparing request…");
+      try { localStorage.setItem("video-model-v1", videoModel); } catch { /* ignore */ }
+
+      // Pick a reference image: first user-selected snapshot only (no live-canvas
+      // fallback for video — image-to-video should be opt-in via Snapshot+select).
+      let refUrl: string | null = null;
+      if (renderSnapshots && renderSelectedViews.length > 0) {
+        const sel = renderSnapshots.find((s) => s.view === renderSelectedViews[0]);
+        if (sel?.dataUrl) refUrl = sel.dataUrl;
+      }
+      const refMime = refUrl?.startsWith("data:image/jpeg") ? "image/jpeg" : "image/png";
+      const refB64 = refUrl ? (refUrl.split(",")[1] ?? "") : "";
+
+      // Veo image-to-video. Veo 3.1 expects `image.inlineData.{mimeType,data}`
+      // for the first-frame image (the flat `image.imageBytes` shape used by
+      // older Veo 2 previews is rejected with "imageBytes isn't supported by
+      // this model"). If no snapshot is selected we omit `image` entirely and
+      // the model runs text-to-video.
+      const startEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(videoModel)}:predictLongRunning`;
+      const startBody: Record<string, unknown> = {
+        instances: [
+          {
+            prompt: videoPrompt,
+            ...(refB64 ? { image: { inlineData: { mimeType: refMime, data: refB64 } } } : {}),
+          },
+        ],
+        // Conservative defaults — short clip, 16:9 cinematic frame, 720p.
+        // Note: the public Veo REST docs show `durationSeconds` as a string, but
+        // the live API actually rejects strings ("needs to be a number"). Use a
+        // numeric value here.
+        parameters: { durationSeconds: 8, aspectRatio: "16:9", resolution: "720p" },
+      };
+      if (refB64) {
+        setVideoStatus("Sending with reference image…");
+      }
+      const startRes = await fetch(startEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": renderApiKey,
+        },
+        body: JSON.stringify(startBody),
+      });
+      if (!startRes.ok) {
+        const errText = await startRes.text();
+        // Extract Google's structured error message if present so the user sees
+        // the actual cause (e.g. "Model not found", "API not enabled for project",
+        // "Quota exceeded") rather than just an HTTP code.
+        let detail = errText;
+        try {
+          const parsed = JSON.parse(errText);
+          detail = parsed?.error?.message ?? errText;
+        } catch { /* not JSON */ }
+        if (startRes.status === 404) {
+          toast.error(
+            `Veo 404 — model "${videoModel}" not available on this key. Try veo-3.1-generate-preview or veo-3.1-lite-generate-preview, and ensure your Google AI Studio key has Veo (paid tier) enabled.`,
+            { duration: 12000 },
+          );
+        } else {
+          toast.error(`Video request failed (${startRes.status}): ${detail.slice(0, 200)}`, { duration: 10000 });
+        }
+        console.error("Video start error:", errText);
+        return;
+      }
+      const startJson = await startRes.json();
+      const opName: string | undefined = startJson?.name;
+      if (!opName) {
+        toast.error("No operation name returned");
+        console.error("Veo start response:", startJson);
+        return;
+      }
+      setVideoStatus("Queued — Veo can take 1-3 minutes…");
+
+      // Poll the operation until done or timeout. Veo runs are typically 60-180s.
+      const pollEndpoint = `https://generativelanguage.googleapis.com/v1beta/${opName}`;
+      const POLL_INTERVAL_MS = 6000;
+      const MAX_POLLS = 60; // ~6 minutes ceiling
+      let opJson: unknown = null;
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        setVideoStatus(`Rendering… (${(i + 1) * POLL_INTERVAL_MS / 1000}s elapsed)`);
+        const pr = await fetch(pollEndpoint, {
+          method: "GET",
+          headers: { "x-goog-api-key": renderApiKey },
+        });
+        if (!pr.ok) {
+          const t = await pr.text();
+          console.error("Veo poll error:", t);
+          continue;
+        }
+        const pj = await pr.json();
+        if (pj?.done) { opJson = pj; break; }
+      }
+      if (!opJson) {
+        toast.error("Video generation timed out");
+        return;
+      }
+      // The response shape varies between docs versions and model variants —
+      // walk the result tree generically to find ANY video URI or inline bytes.
+      // Logs the full response so we can see what Veo actually returned if extraction fails.
+      // eslint-disable-next-line no-console
+      console.log("Veo final response:", opJson);
+      const findVideoPayload = (node: unknown): { uri?: string; bytes?: string; mimeType?: string } | null => {
+        if (!node || typeof node !== "object") return null;
+        const obj = node as Record<string, unknown>;
+        // Common Veo shapes we've seen across revisions:
+        //   { video: { uri: "..." } }
+        //   { video: { videoBytes: "<base64>", mimeType: "video/mp4" } }
+        //   { videoUri: "..." }
+        //   { uri: "..." }   (deep enough to be a media URI)
+        //   { bytesBase64Encoded: "<base64>", mimeType: "video/mp4" }
+        if (typeof obj.uri === "string" && /\.(mp4|webm)|generativelanguage|videofile/i.test(obj.uri)) {
+          return { uri: obj.uri };
+        }
+        if (typeof obj.videoUri === "string") return { uri: obj.videoUri };
+        if (typeof obj.videoBytes === "string") {
+          return { bytes: obj.videoBytes, mimeType: (typeof obj.mimeType === "string" ? obj.mimeType : "video/mp4") };
+        }
+        if (typeof obj.bytesBase64Encoded === "string" && typeof obj.mimeType === "string" && (obj.mimeType as string).startsWith("video/")) {
+          return { bytes: obj.bytesBase64Encoded, mimeType: obj.mimeType as string };
+        }
+        // Recurse into known container fields first, then any others.
+        const keys = ["video", "generatedSamples", "generatedVideos", "samples", "response", "generateVideoResponse", "result", "predictions"];
+        for (const k of keys) {
+          if (obj[k] !== undefined) {
+            const hit = findVideoPayload(obj[k]);
+            if (hit) return hit;
+          }
+        }
+        // Arrays and any remaining nested objects.
+        for (const v of Object.values(obj)) {
+          if (Array.isArray(v)) {
+            for (const it of v) {
+              const hit = findVideoPayload(it);
+              if (hit) return hit;
+            }
+          } else if (v && typeof v === "object") {
+            const hit = findVideoPayload(v);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      };
+      const payload = findVideoPayload(opJson);
+      if (!payload) {
+        toast.error("Veo finished but no video URI/bytes found — check console for the raw response", { duration: 10000 });
+        return;
+      }
+
+      // Inline-bytes branch: convert base64 directly to a Blob URL, no extra fetch.
+      if (payload.bytes) {
+        const byteChars = atob(payload.bytes);
+        const byteArr = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([byteArr], { type: payload.mimeType ?? "video/mp4" });
+        setVideoResultUrl(URL.createObjectURL(blob));
+        setVideoStatus("");
+        toast.success("Video ready");
+        return;
+      }
+
+      const firstUri = payload.uri!;
+      // Veo's URI requires the API key — sent as the `x-goog-api-key` header so
+      // it doesn't leak into Referer / server logs the way `?key=` would.
+      setVideoStatus("Downloading video…");
+      const vidRes = await fetch(firstUri, {
+        method: "GET",
+        headers: { "x-goog-api-key": renderApiKey },
+      });
+      if (!vidRes.ok) {
+        toast.error(`Video fetch failed (${vidRes.status})`);
+        return;
+      }
+      const blob = await vidRes.blob();
+      const objUrl = URL.createObjectURL(blob);
+      setVideoResultUrl(objUrl);
+      setVideoStatus("");
+      toast.success("Video ready");
+    } catch (e) {
+      toast.error("Video render error");
+      console.error(e);
+    } finally {
+      setVideoBusy(false);
+    }
+  };
+
   return (
   <div className="shrink-0 border-t border-slate-200 bg-slate-50" style={panelExpanded ? { maxHeight: "45%" } : undefined}>
     <button
@@ -790,28 +1021,81 @@ export const ToolsPanel = ({
               >
                 {snapshotBusy ? "Capturing…" : "Snapshot (6 views from 3D)"}
               </Button>
-              {renderSnapshots && renderSnapshots.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-[10px] font-semibold text-slate-600">Pick a view</p>
-                  <div className="grid grid-cols-3 gap-1">
-                    {renderSnapshots.map((s) => (
-                      <button
-                        key={s.view}
-                        type="button"
-                        onClick={() => setRenderSelectedView(s.view)}
-                        className={`flex flex-col items-center gap-0.5 rounded border p-0.5 text-[9px] transition ${
-                          renderSelectedView === s.view
-                            ? "border-sky-500 ring-1 ring-sky-300"
-                            : "border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        <img src={s.dataUrl} alt={s.view} className="w-full rounded-sm" />
-                        <span className="capitalize text-slate-600">{s.view}</span>
-                      </button>
-                    ))}
+              {renderSnapshots && renderSnapshots.length > 0 && (() => {
+                // Display labels for the snapshot view codes — keeps the 360 / cubemap entries
+                // human-readable while leaving the underlying view-code unchanged.
+                const VIEW_LABELS: Record<string, string> = {
+                  front: "Front", back: "Back", left: "Left", right: "Right",
+                  top: "Top", isometric: "Isometric",
+                  composite: "All Views (composite)",
+                  panorama: "360 Panorama",
+                  "cube-px": "Cube +X", "cube-nx": "Cube -X",
+                  "cube-py": "Cube +Y (Up)", "cube-ny": "Cube -Y (Down)",
+                  "cube-pz": "Cube +Z", "cube-nz": "Cube -Z",
+                };
+                const selectedSet = new Set(renderSelectedViews);
+                const toggleView = (v: string) => {
+                  setRenderSelectedViews((prev) =>
+                    prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v],
+                  );
+                };
+                return (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-semibold text-slate-600">
+                        Pick view(s) — {renderSelectedViews.length} selected
+                      </p>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          className="text-[9px] text-slate-500 underline-offset-2 hover:underline"
+                          onClick={() => setRenderSelectedViews(renderSnapshots.map((s) => s.view))}
+                        >
+                          all
+                        </button>
+                        <span className="text-[9px] text-slate-300">·</span>
+                        <button
+                          type="button"
+                          className="text-[9px] text-slate-500 underline-offset-2 hover:underline"
+                          onClick={() => setRenderSelectedViews([])}
+                        >
+                          none
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {renderSnapshots.map((s) => {
+                        const checked = selectedSet.has(s.view);
+                        return (
+                          <button
+                            key={s.view}
+                            type="button"
+                            onClick={() => toggleView(s.view)}
+                            aria-pressed={checked}
+                            className={`relative flex flex-col items-center gap-0.5 rounded border p-0.5 text-[9px] transition ${
+                              checked
+                                ? "border-sky-500 ring-1 ring-sky-300 bg-sky-50/50"
+                                : "border-slate-200 hover:border-slate-300"
+                            }`}
+                          >
+                            {/* Checkmark badge — clearer "this is selected" affordance than a ring alone. */}
+                            {checked && (
+                              <span
+                                aria-hidden
+                                className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-sky-500 text-[8px] font-bold text-white shadow"
+                              >
+                                ✓
+                              </span>
+                            )}
+                            <img src={s.dataUrl} alt={s.view} className="w-full rounded-sm" />
+                            <span className="text-slate-600">{VIEW_LABELS[s.view] ?? s.view}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
               <div>
                 <p className="mb-1 text-[10px] font-semibold text-slate-600">API Key (Google AI Studio)</p>
                 <Input
@@ -866,6 +1150,63 @@ export const ToolsPanel = ({
                   </a>
                 </div>
               )}
+              {/* ── Render Video (Veo) ──
+                  Separate sub-section under the same Render block. Reuses the API
+                  key + selected reference snapshot from above; adds its own model
+                  field + cinematic prompt. */}
+              <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Render Video (Veo)
+                </p>
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold text-slate-600">Video Model</p>
+                  <Input
+                    value={videoModel}
+                    onChange={(e) => setVideoModel(e.target.value)}
+                    className="h-7 text-[11px]"
+                    placeholder="veo-3.0-generate-preview"
+                  />
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold text-slate-600">Video Prompt</p>
+                  <textarea
+                    value={videoPrompt}
+                    onChange={(e) => setVideoPrompt(e.target.value)}
+                    rows={3}
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-[11px]"
+                  />
+                </div>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="w-full text-[11px]"
+                  disabled={videoBusy}
+                  onClick={handleRenderVideo}
+                >
+                  {videoBusy ? (videoStatus || "Rendering video…") : "Render Video"}
+                </Button>
+                <p className="text-[9px] text-slate-400">
+                  When a snapshot is selected above, its first image is used as the starting
+                  reference frame (image-to-video). With no selection, runs text-to-video.
+                  Generation is asynchronous — usually 1-3 minutes.
+                </p>
+                {videoResultUrl && (
+                  <div className="space-y-1">
+                    <video
+                      src={videoResultUrl}
+                      controls
+                      className="w-full rounded border border-slate-200"
+                    />
+                    <a
+                      href={videoResultUrl}
+                      download="render.mp4"
+                      className="text-[10px] text-sky-600 hover:underline"
+                    >
+                      Download video
+                    </a>
+                  </div>
+                )}
+              </div>
             </>}
           </div>
 

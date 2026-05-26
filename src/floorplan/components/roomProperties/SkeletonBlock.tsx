@@ -20,6 +20,11 @@ export interface SkeletonBlockProps {
    *  boundary as blue completion segments. */
   longestBranch?: boolean;
   setLongestBranch?: (v: boolean) => void;
+  /** Visvalingam simplification on the longest-branch polyline. 0 = none,
+   *  100 = collapse to straight line between endpoints. Only meaningful when
+   *  Longest Branch is on. */
+  simplify?: number;
+  setSimplify?: (v: number) => void;
   /** Straight Skeleton only: when true, emit kept skeleton edges as path segments
    *  (segmentType:"path") with thickness `pathWidth` and materialise the offset
    *  ribbon as a new Space via Path Setter. */
@@ -117,6 +122,26 @@ export const SkeletonBlock = (p: SkeletonBlockProps) => (
           Longest Branch
           <span className="text-[9px] text-slate-400">(extend ends to boundary in blue)</span>
         </label>
+      )}
+      {p.type === "straight-skeleton" && p.pruneEnds && p.longestBranch && p.setSimplify && (
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500">Simplify</span>
+            <span className="font-mono text-[10px] text-slate-700">{p.simplify ?? 0}%</span>
+          </div>
+          <input
+            type="range"
+            className="w-full"
+            min={0}
+            max={100}
+            step={1}
+            value={p.simplify ?? 0}
+            onChange={(e) => p.setSimplify?.(+e.target.value)}
+          />
+          <span className="text-[9px] text-slate-400">
+            Visvalingam-Whyatt: drops low-importance vertices first. 0 = none, 100 = straight line between endpoints.
+          </span>
+        </div>
       )}
       {p.type === "straight-skeleton" && p.setMakePath && (
         <label className="flex items-center gap-1 text-[10px] text-slate-600">

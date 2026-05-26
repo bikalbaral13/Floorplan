@@ -142,6 +142,7 @@ import { clipPolygonByHalfPlane } from "./algorithms/partitioning/voronoi";
 import { AddRoomDialog } from "./components/dialogs/AddRoomDialog";
 import { LineThicknessDialog } from "./components/dialogs/LineThicknessDialog";
 import { CalibrationDialog } from "./components/dialogs/CalibrationDialog";
+import { AreaCalibrationDialog } from "./components/dialogs/AreaCalibrationDialog";
 import { AutoGenDialog } from "./components/dialogs/AutoGenDialog";
 import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealingDialog";
 import { DrawPathDialog, type DrawPathStyle } from "./components/dialogs/DrawPathDialog";
@@ -192,9 +193,11 @@ import { BspBlock, type BspSeed, type BspSeedMetric, type BspCorridor } from "./
 import { RfpBlock, type RfpSeed, type RfpSeedMetric } from "./components/roomProperties/RfpBlock";
 import { runRfp } from "./algorithms/partitioning/rfp";
 import { SiteToolsBlock } from "./components/roomProperties/SiteToolsBlock";
+import { CircularSetbackSolverBlock } from "./components/roomProperties/CircularSetbackSolverBlock";
+import { BuaCalculatorBlock } from "./components/roomProperties/BuaCalculatorBlock";
 import { FillAreaBlock } from "./components/roomProperties/FillAreaBlock";
 import { AddRoomTypeDialog } from "./components/dialogs/AddRoomTypeDialog";
-import type { AreaTypeDef } from "./types";
+import type { AreaTypeDef, SelectFilter } from "./types";
 
 type WallResizeDraft =
   | { kind: "spine"; wallId: string; start: Point; end: Point; updates: Record<string, { start?: Point; end?: Point }> }
@@ -1470,6 +1473,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [calibrationPixelDistance, setCalibrationPixelDistance] = useState<number | null>(null);
   const [calibrationDistanceInput, setCalibrationDistanceInput] = useState("3");
   const [calibrationDialogOpen, setCalibrationDialogOpen] = useState(false);
+  // Set Scale → By Area: state for the polygon-area calibration workflow.
+  // We pin the room being calibrated when the dialog opens so subsequent
+  // selection changes don't shift the reference area mid-edit.
+  const [areaCalibrationDialogOpen, setAreaCalibrationDialogOpen] = useState(false);
+  const [areaCalibrationInput, setAreaCalibrationInput] = useState("");
+  const [areaCalibrationPickedRoomId, setAreaCalibrationPickedRoomId] = useState<string | null>(null);
+  const [areaCalibrationCurrentAreaUnit, setAreaCalibrationCurrentAreaUnit] = useState(0);
+  const [areaCalibrationCurrentAreaPx, setAreaCalibrationCurrentAreaPx] = useState(0);
   const [underlayCalibrationMode, setUnderlayCalibrationMode] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   /** True for the whole pan gesture (mousedown→mouseup); updated synchronously so drag/pan never races React state. */
@@ -2120,6 +2131,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [spaceToolsOptimisationExpanded, setSpaceToolsOptimisationExpanded] = useState<boolean>(false);
   const [spaceToolsPlacementExpanded, setSpaceToolsPlacementExpanded] = useState<boolean>(false);
   const [spaceToolsSiteMassingExpanded, setSpaceToolsSiteMassingExpanded] = useState<boolean>(false);
+  const [circularSetbackSolverExpanded, setCircularSetbackSolverExpanded] = useState<boolean>(false);
+  const [buaCalculatorExpanded, setBuaCalculatorExpanded] = useState<boolean>(false);
+  // Scope filter for the Select tool — wires DrawingToolbar's Select popover
+  // ("All" / "Node" / "Segment" / "Space"). Without this state the popover
+  // calls `undefined` on click and the Select button title shows "undefined".
+  const [selectFilter, setSelectFilter] = useState<SelectFilter>("all");
   const [spaceToolsTextureExpanded, setSpaceToolsTextureExpanded] = useState<boolean>(false);
   const [spaceToolsUiToolsExpanded, setSpaceToolsUiToolsExpanded] = useState<boolean>(false);
   const [spaceToolsLayoutGenExpanded, setSpaceToolsLayoutGenExpanded] = useState<boolean>(false);
@@ -17557,6 +17574,8 @@ User request: ${aiPrompt.trim()}`;
               <LeftToolbar
                 tool={tool}
                 onToolChange={setTool}
+                selectFilter={selectFilter}
+                onSelectFilterChange={setSelectFilter}
                 nextWallSegmentType={nextWallSegmentType}
                 onNextWallSegmentTypeChange={setNextWallSegmentType}
                 addDoorMode={addDoorMode}
@@ -17654,6 +17673,31 @@ User request: ${aiPrompt.trim()}`;
                   setCalibrationPreviewPoint(null);
                   setCalibrationEndPoint(null);
                   setCalibrationPixelDistance(null);
+                }}
+                onSetScaleArea={() => {
+                  // Open the AreaCalibrationDialog against the currently-selected Space.
+                  // We don't enter a separate "scale-area" tool mode — instead we require
+                  // the user to have a Space selected first, which keeps the wiring tiny
+                  // and avoids a new canvas pick handler.
+                  if (!selectedRoom || (selectedRoom.points?.length ?? 0) < 3) {
+                    toast.error("Select a Space (≥3 vertices) before using Set Scale → By Area");
+                    return;
+                  }
+                  // Shoelace area in pixel coords.
+                  const pts = selectedRoom.points;
+                  let a = 0;
+                  for (let i = 0; i < pts.length; i++) {
+                    const j = (i + 1) % pts.length;
+                    a += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+                  }
+                  const areaPx = Math.abs(a) / 2;
+                  const areaM2 = areaPx / (pixelsPerMeter * pixelsPerMeter);
+                  const areaUnit = m2InUnit(areaM2);
+                  setAreaCalibrationPickedRoomId(selectedRoom.id);
+                  setAreaCalibrationCurrentAreaPx(areaPx);
+                  setAreaCalibrationCurrentAreaUnit(areaUnit);
+                  setAreaCalibrationInput(areaUnit.toFixed(2));
+                  setAreaCalibrationDialogOpen(true);
                 }}
                 onAutoGenerateClick={() => setAutoGenDialogOpen(true)}
                 onSimulatedAnnealingClick={() => {
@@ -24280,10 +24324,8 @@ User request: ${aiPrompt.trim()}`;
                     <div className="rounded border border-slate-200 bg-white p-2">
                       {true && (<div>
                       {(() => {
-                        // Derive a display ID from the room's position in the current visibleRooms list.
-                        // Uses 1-based indexing, zero-padded to 3 digits: Room001, Room002, ...
                         const idx = visibleRooms.findIndex((r) => r.id === selectedRoom.id);
-                        const displayId = idx >= 0 ? `Room${String(idx + 1).padStart(3, "0")}` : "—";
+                        const displayId = idx >= 0 ? `Space${String(idx + 1).padStart(3, "0")}` : "—";
                         return (
                           <div className="mt-1">
                             <span className="text-[10px] text-slate-400">ID</span>
@@ -24490,6 +24532,7 @@ User request: ${aiPrompt.trim()}`;
                         <option value="buildable-area">Buildable Area</option>
                         <option value="floorplate-boundary">Footprint Area</option>
                         <option value="room">Room</option>
+                        <option value="area">Area</option>
                         <option value="path">Path</option>
                         {Object.values(history.state.customRoomTypes ?? {}).map((t) => (
                           <option key={t.id} value={t.id}>{t.displayName}</option>
@@ -24591,81 +24634,11 @@ User request: ${aiPrompt.trim()}`;
                           </div>
                         );
                       })()}
-                      {(
-                        <div className="mt-2">
-                          <span className="text-[10px] text-slate-400">Zone Label</span>
-                          <select
-                            className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                            value={selectedRoom.label ?? ""}
-                            onChange={(e) => {
-                              const newLabel = e.target.value || undefined;
-                              const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
-                              if (isAuto) {
-                                // Promote auto room → manual room so the label persists.
-                                const newId = createId();
-                                history.set({
-                                  ...history.state,
-                                  rooms: [...history.state.rooms, { ...selectedRoom, id: newId, label: newLabel }],
-                                });
-                                selection.selectOne(newId);
-                              } else {
-                                history.set({
-                                  ...history.state,
-                                  rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, label: newLabel } : r),
-                                });
-                              }
-                            }}
-                          >
-                            <option value="">— none —</option>
-                            <option value="Large Facade">Large Facade</option>
-                            <option value="Medium Facade">Medium Facade</option>
-                            <option value="Small Facade">Small Facade</option>
-                            <option value="Large Interior">Large Interior</option>
-                            <option value="Medium Interior">Medium Interior</option>
-                            <option value="Small Interior">Small Interior</option>
-                            <option value="Service">Service</option>
-                            <option value="Corridor">Corridor</option>
-                          </select>
-                        </div>
-                      )}
-                      {(
-                        <div className="mt-2">
-                          <span className="text-[10px] text-slate-400">Region</span>
-                          <select
-                            className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-                            value={selectedRoom.region ?? ""}
-                            onChange={(e) => {
-                              const newRegion = e.target.value || undefined;
-                              const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
-                              if (isAuto) {
-                                // Promote auto room → manual room so the region persists.
-                                const newId = createId();
-                                history.set({
-                                  ...history.state,
-                                  rooms: [...history.state.rooms, { ...selectedRoom, id: newId, region: newRegion as Room["region"] }],
-                                });
-                                selection.selectOne(newId);
-                              } else {
-                                history.set({
-                                  ...history.state,
-                                  rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, region: newRegion as Room["region"] } : r),
-                                });
-                              }
-                            }}
-                          >
-                            <option value="">— none —</option>
-                            <option value="Core">Core</option>
-                            <option value="Staircase">Staircase</option>
-                            <option value="AHU">AHU</option>
-                            <option value="Electrical Room">Electrical Room</option>
-                            <option value="Service">Service</option>
-                            <option value="Lift">Lift</option>
-                            <option value="Toilet">Toilet</option>
-                            <option value="Corridor">Corridor</option>
-                          </select>
-                        </div>
-                      )}
-                      {(() => {
+                      {/* Zone Label and Region dropdowns removed per request. */}
+                      {/* Min/Max area & Max ratio are validation constraints meant for Rooms —
+                          hide them on Site Area, where the Space represents a plot and these
+                          numbers don't apply. */}
+                      {selectedRoom.roomType !== "plot-boundary" && (() => {
                         const updateRoomNumber = (key: "minArea" | "maxArea" | "maxRatio", raw: string) => {
                           const v = raw === "" ? undefined : parseFloat(raw);
                           if (raw !== "" && (!isFinite(v as number) || (v as number) < 0)) return;
@@ -25077,105 +25050,8 @@ User request: ${aiPrompt.trim()}`;
                       );
                     })()}
 
-                    {/* Computed Results — Floor Count & BUA */}
-                    {(selectedRoom.roomType === "plot-boundary") && (() => {
-                      const ppm = pixelsPerMeter;
-                      const ppm2 = ppm * ppm;
-                      // Inputs
-                      const gcrPct = selectedRoom.groundCoveragePct ?? 40;
-                      const maxHeight = selectedRoom.maxHeightM ?? 30;
-                      const f2f = selectedRoom.floorToFloorM ?? 3.0;
-                      const maxFsi = selectedRoom.maxFsi ?? 2.5;
-                      // Plot area from room polygon
-                      const plotPts = selectedRoom.points;
-                      let plotAreaPx = 0;
-                      for (let pi = 0; pi < plotPts.length; pi++) { const pj = (pi + 1) % plotPts.length; plotAreaPx += plotPts[pi].x * plotPts[pj].y - plotPts[pj].x * plotPts[pi].y; }
-                      plotAreaPx = Math.abs(plotAreaPx) / 2;
-                      const plotAreaM2 = plotAreaPx / ppm2;
-
-                      // Floorplate area from computed walls
-                      const fpWalls = history.state.walls.filter((w) => w.isFloorplateComputed);
-                      let fpAreaM2 = 0;
-                      if (fpWalls.length >= 3) {
-                        const fpPts = fpWalls.map((w) => w.start);
-                        let fpAreaPx = 0;
-                        for (let fi = 0; fi < fpPts.length; fi++) { const fj = (fi + 1) % fpPts.length; fpAreaPx += fpPts[fi].x * fpPts[fj].y - fpPts[fj].x * fpPts[fi].y; }
-                        fpAreaM2 = Math.abs(fpAreaPx) / 2 / ppm2;
-                      }
-
-                      // GCR buildable area = min(floorplate, plot × GCR%)
-                      const gcrCapM2 = plotAreaM2 * (gcrPct / 100);
-                      const gcrAreaM2 = fpAreaM2 > 0 ? Math.min(fpAreaM2, gcrCapM2) : 0;
-
-                      // Max rect area
-                      const maxRectWalls = history.state.walls.filter((w) => w.isMaxRectComputed);
-                      let maxRectAreaM2 = 0;
-                      if (maxRectWalls.length >= 3) {
-                        const mrPts = maxRectWalls.map((w) => w.start);
-                        let mrAreaPx = 0;
-                        for (let mi = 0; mi < mrPts.length; mi++) { const mj = (mi + 1) % mrPts.length; mrAreaPx += mrPts[mi].x * mrPts[mj].y - mrPts[mj].x * mrPts[mi].y; }
-                        maxRectAreaM2 = Math.abs(mrAreaPx) / 2 / ppm2;
-                      }
-
-                      // Computations
-                      const effectiveFootprint = gcrAreaM2 > 0 ? gcrAreaM2 : fpAreaM2;
-                      const maxFloorsByHeight = Math.floor(maxHeight / f2f);
-                      const maxFloorsByFsi = effectiveFootprint > 0 ? Math.ceil((maxFsi * plotAreaM2) / effectiveFootprint) : 0;
-                      const maxFloors = Math.min(maxFloorsByHeight, maxFloorsByFsi);
-                      const totalBUA = effectiveFootprint * maxFloors;
-                      const achievedFsi = plotAreaM2 > 0 ? totalBUA / plotAreaM2 : 0;
-
-                      return (
-                        <div className="mt-2 rounded border bg-blue-50 p-2 text-xs space-y-1">
-                          <span className="text-[9px] font-semibold text-blue-500 uppercase tracking-wide">Computed Results</span>
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                            <div>
-                              <span className="text-[9px] text-slate-400">Plot Area</span>
-                              <p className="font-mono font-medium text-slate-700">{m2InUnit(plotAreaM2).toFixed(1)} {unit}²</p>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">Floorplate Area</span>
-                              <p className="font-mono font-medium text-green-700">{fpAreaM2 > 0 ? `${m2InUnit(fpAreaM2).toFixed(1)} ${unit}²` : "—"}</p>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">GCR Area ({gcrPct}%)</span>
-                              <p className="font-mono font-medium text-purple-700">{gcrAreaM2 > 0 ? `${m2InUnit(gcrAreaM2).toFixed(1)} ${unit}²` : "—"}</p>
-                            </div>
-                            <div>
-                              <span className="text-[9px] text-slate-400">Max Rect Area</span>
-                              <p className="font-mono font-medium text-red-700">{maxRectAreaM2 > 0 ? `${m2InUnit(maxRectAreaM2).toFixed(1)} ${unit}²` : "—"}</p>
-                            </div>
-                          </div>
-                          {fpAreaM2 > 0 && (
-                            <>
-                              <div className="my-1 h-px bg-blue-200" />
-                              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                <div>
-                                  <span className="text-[9px] text-slate-400">Max Floors (height)</span>
-                                  <p className="font-mono font-bold text-blue-700">{maxFloorsByHeight}</p>
-                                </div>
-                                <div>
-                                  <span className="text-[9px] text-slate-400">Max Floors (FSI)</span>
-                                  <p className="font-mono font-bold text-blue-700">{maxFloorsByFsi}</p>
-                                </div>
-                                <div>
-                                  <span className="text-[9px] text-slate-400">Effective Floors</span>
-                                  <p className="font-mono font-bold text-blue-900 text-sm">{maxFloors}</p>
-                                </div>
-                                <div>
-                                  <span className="text-[9px] text-slate-400">Total BUA</span>
-                                  <p className="font-mono font-bold text-blue-900 text-sm">{m2InUnit(totalBUA).toFixed(0)} {unit}²</p>
-                                </div>
-                              </div>
-                              <div className="mt-1 rounded bg-blue-100 p-1.5 text-center">
-                                <span className="text-[9px] text-blue-500">Achieved FSI</span>
-                                <p className="font-mono text-lg font-bold text-blue-800">{achievedFsi.toFixed(2)}</p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {/* Computed Results block removed — superseded by BUA Calculator
+                        (Space Tools → Site & Massing → BUA Calculator → Calculate). */}
 
                     {/* Area Extend Behaviour and Display moved to Space Tools → UI Tools. */}
                     {false && (() => {
@@ -27073,6 +26949,42 @@ User request: ${aiPrompt.trim()}`;
                                 return pb?.floorToFloorM ?? selectedRoom.floorToFloorM ?? 3.0;
                               })()}
                             />
+                            <CircularSetbackSolverBlock
+                              selectedRoom={selectedRoom}
+                              pixelsPerMeter={pixelsPerMeter}
+                              expanded={circularSetbackSolverExpanded}
+                              setExpanded={setCircularSetbackSolverExpanded}
+                              onShowOnCanvas={(room, distances) => {
+                                // Drive runRoomInset with our own per-edge setbacks via the
+                                // existing override ref (same mechanism the recipe runner uses).
+                                // commit = false (silent = true) so this paints preview walls
+                                // only — no new Buildable Area room is created.
+                                insetSetbacksOverrideRef.current = distances;
+                                try {
+                                  runRoomInset(room, true);
+                                } finally {
+                                  insetSetbacksOverrideRef.current = null;
+                                }
+                              }}
+                              onClearPreview={() => {
+                                const h = historyRef.current;
+                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInsetWall) });
+                              }}
+                            />
+                            {selectedRoom.roomType === "plot-boundary" && (
+                              <BuaCalculatorBlock
+                                selectedRoom={selectedRoom}
+                                pixelsPerMeter={pixelsPerMeter}
+                                expanded={buaCalculatorExpanded}
+                                setExpanded={setBuaCalculatorExpanded}
+                                onUpdateRoom={(updates) => {
+                                  history.set({
+                                    ...history.state,
+                                    rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, ...updates } : r),
+                                  });
+                                }}
+                              />
+                            )}
                           </>
                         )}
                       </div>
@@ -27859,6 +27771,49 @@ User request: ${aiPrompt.trim()}`;
         value={calibrationDistanceInput}
         onValueChange={setCalibrationDistanceInput}
         onApply={applyScaleCalibration}
+      />
+      <AreaCalibrationDialog
+        open={areaCalibrationDialogOpen}
+        onOpenChange={(open) => {
+          setAreaCalibrationDialogOpen(open);
+          if (!open) {
+            setAreaCalibrationPickedRoomId(null);
+            setAreaCalibrationInput("");
+          }
+        }}
+        unit={`${unit}²`}
+        currentArea={areaCalibrationCurrentAreaUnit}
+        value={areaCalibrationInput}
+        onValueChange={setAreaCalibrationInput}
+        onApply={() => {
+          // Convert the user-entered area (in unit²) back to m², then derive the
+          // new pixelsPerMeter so that the picked polygon measures exactly that.
+          //   areaM² = pixelArea / ppm²  →  ppm = sqrt(pixelArea / areaM²)
+          const targetUnit2 = Number(areaCalibrationInput);
+          if (!isFinite(targetUnit2) || targetUnit2 <= 0) {
+            toast.error("Enter a positive target area");
+            return;
+          }
+          const targetM2 = unit === "m"
+            ? targetUnit2
+            : unit === "cm"
+              ? targetUnit2 / 10000
+              : targetUnit2 / 10.7639;   // ft² (also the fallback)
+          if (areaCalibrationCurrentAreaPx <= 0 || targetM2 <= 0) {
+            toast.error("Invalid reference area");
+            return;
+          }
+          const newPpm = Math.sqrt(areaCalibrationCurrentAreaPx / targetM2);
+          if (!isFinite(newPpm) || newPpm <= 0) {
+            toast.error("Scale calibration failed");
+            return;
+          }
+          setPixelsPerMeter(newPpm);
+          setAreaCalibrationDialogOpen(false);
+          setAreaCalibrationPickedRoomId(null);
+          setAreaCalibrationInput("");
+          toast.success(`Scale updated — ${targetUnit2.toFixed(2)} ${unit}² applied`);
+        }}
       />
 
       <AutoGenDialog

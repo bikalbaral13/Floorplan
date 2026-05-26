@@ -5,6 +5,7 @@ import {
   Combine,
   FilePlus2,
   Hand,
+  MapPin,
   MousePointer2,
   Pencil,
   Plus,
@@ -12,6 +13,8 @@ import {
   Ruler,
   Shapes,
   Slash,
+  Hexagon,
+  Dot,
   Spline,
   Square,
   Trash2,
@@ -21,13 +24,17 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToolButton } from "@/components/toolbutton";
 import { SectionHeader } from "./SectionHeader";
-import type { Tool } from "../../types";
+import type { SelectFilter, Tool } from "../../types";
 
 type EdgeMode = "connection" | null;
 
 export interface DrawingToolbarProps {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
+  /** Active scope filter while Select tool is in use. */
+  selectFilter: SelectFilter;
+  /** Set the scope filter — invoked from the Select-button dropdown. */
+  onSelectFilterChange: (value: SelectFilter) => void;
   nextWallSegmentType: "wall" | "line" | "connection" | "path";
   onNextWallSegmentTypeChange: (value: "wall" | "line" | "connection" | "path") => void;
   addDoorMode: boolean;
@@ -40,7 +47,10 @@ export interface DrawingToolbarProps {
   onAddRoomModeChange: (value: boolean) => void;
   onAddFurnitureModeChange: (value: boolean) => void;
   onClearCanvas: () => void;
+  /** Begin the "By Segment" scale calibration — pick two points + type real distance. */
   onSetScale: () => void;
+  /** Begin the "By Area" scale calibration — click a space/polygon + type real area. */
+  onSetScaleArea: () => void;
   /** Opens the Draw Path dialog. Parent owns the dialog + path-config state and
    *  activates polyline-path draw mode after the user clicks "Start drawing". */
   onDrawPathClick: () => void;
@@ -66,6 +76,9 @@ export interface DrawingToolbarProps {
   onAddSpaceCircleClick?: () => void;
   /** Starts the "Add Segment" tool (click-click for a single straight line). */
   onSingleSegmentClick?: () => void;
+  /** Opens the GeoJSON file picker and imports polygons onto the OSM map.
+   *  Requires the Map layer to be visible with an anchor already set. */
+  onImportGeojson?: () => void;
 }
 
 /** Primary canvas-interaction tools — Add Segment, Delete, Select, Pan, Set Scale,
@@ -76,6 +89,10 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
   // "Add Space" dropdown — UI-only for now (no actions wired).
   const [addSpaceOpen, setAddSpaceOpen] = useState<boolean>(false);
   const [addSpaceShapesOpen, setAddSpaceShapesOpen] = useState<boolean>(false);
+  // "Set Scale" dropdown — chooses between "By Segment" (default) and "By Area" workflows.
+  const [setScalePopoverOpen, setSetScalePopoverOpen] = useState<boolean>(false);
+  // "Select" dropdown — chooses scope for the Select tool: All / Node / Segment / Space.
+  const [selectPopoverOpen, setSelectPopoverOpen] = useState<boolean>(false);
 
   const resetModes = () => {
     p.onAddDoorModeChange(false);
@@ -93,11 +110,63 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
           {/* Row 1 — Image Overlay (from parent slot) + Set Scale. */}
           <div className="grid grid-cols-2 place-items-center gap-2">
             {p.topToolSlots}
+            {/* Set Scale — split into "By Segment" (2-point line + distance) and
+             *  "By Area" (click polygon + target area). Active when either calibration
+             *  tool is current; chevron indicates the dropdown. */}
+            <Popover open={setScalePopoverOpen} onOpenChange={setSetScalePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={p.tool === "scale" || p.tool === "scale-area" ? "default" : "outline"}
+                  size="sm"
+                  className="relative h-9 w-9 shrink-0 p-0"
+                  title="Set scale"
+                  aria-label="Set scale"
+                  aria-expanded={setScalePopoverOpen}
+                >
+                  <Proportions className="h-6 w-6" />
+                  <ChevronDown className="absolute bottom-0.5 right-0.5 h-2 w-2 text-slate-400" aria-hidden />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
+                <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Set Scale</h4>
+                <div className="flex flex-col gap-1">
+                  <Button
+                    variant={p.tool === "scale" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                    onClick={() => {
+                      p.onSetScale();
+                      setSetScalePopoverOpen(false);
+                    }}
+                  >
+                    <Ruler className="h-4 w-4" />
+                    By Segment
+                  </Button>
+                  <Button
+                    variant={p.tool === "scale-area" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                    onClick={() => {
+                      p.onSetScaleArea();
+                      setSetScalePopoverOpen(false);
+                    }}
+                  >
+                    <Square className="h-4 w-4" />
+                    By Area
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          {/* Row 1b — Import GeoJSON (icon-only, tooltip on hover). Drops site polygons onto
+           *  the OSM map by projecting lat/lon onto world pixels using the current map anchor + zoom. */}
+          <div className="grid grid-cols-2 place-items-center gap-2">
             <ToolButton
-              active={p.tool === "scale"}
-              icon={<Proportions className="h-6 w-6" />}
-              label="Set scale"
-              onClick={p.onSetScale}
+              active={false}
+              icon={<MapPin className="h-6 w-6 text-sky-600" />}
+              label="Import Geojson"
+              onClick={() => p.onImportGeojson?.()}
+              disabled={!p.onImportGeojson}
             />
           </div>
           <hr className="border-slate-200" />
@@ -238,20 +307,56 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
           <hr className="border-slate-200" />
           {/* Remaining tools — Select, Pan, Measure, Text, New, Merge spaces, Delete selection. */}
           <div className="grid grid-cols-2 place-items-center gap-2">
-            <ToolButton
-              active={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode}
-              icon={<MousePointer2 className="h-6 w-6" />}
-              label="Select"
-              onClick={() => {
-                p.onToolChange("select");
-                p.onAddDoorModeChange(false);
-                p.onAddWindowModeChange(false);
-                p.onAddEdgeModeChange(null);
-                p.onAddEdgeFirstRoomChange(null);
-                p.onAddRoomModeChange(false);
-                p.onAddFurnitureModeChange(false);
-              }}
-            />
+            {/* Select tool — split popover. Active when Select is the current tool
+             *  (regardless of scope). Dropdown chooses the scope filter: All / Node /
+             *  Segment / Space, which gates what the user can click in the canvas. */}
+            <Popover open={selectPopoverOpen} onOpenChange={setSelectPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode ? "default" : "outline"}
+                  size="sm"
+                  className="relative h-9 w-9 shrink-0 p-0"
+                  title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : "Space only"})`}
+                  aria-label="Select"
+                  aria-expanded={selectPopoverOpen}
+                >
+                  <MousePointer2 className="h-6 w-6" />
+                  <ChevronDown className="absolute bottom-0.5 right-0.5 h-2 w-2 text-slate-400" aria-hidden />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="right" align="start" className="w-48 p-2 shadow-xl" sideOffset={10}>
+                <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Select scope</h4>
+                <div className="flex flex-col gap-1">
+                  {([
+                    { v: "all", label: "All", Icon: MousePointer2 },
+                    { v: "node", label: "Node", Icon: Dot },
+                    { v: "segment", label: "Segment", Icon: Slash },
+                    { v: "space", label: "Space", Icon: Hexagon },
+                  ] as const).map(({ v, label, Icon }) => (
+                    <Button
+                      key={v}
+                      variant={p.tool === "select" && p.selectFilter === v ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                      onClick={() => {
+                        p.onSelectFilterChange(v);
+                        p.onToolChange("select");
+                        p.onAddDoorModeChange(false);
+                        p.onAddWindowModeChange(false);
+                        p.onAddEdgeModeChange(null);
+                        p.onAddEdgeFirstRoomChange(null);
+                        p.onAddRoomModeChange(false);
+                        p.onAddFurnitureModeChange(false);
+                        setSelectPopoverOpen(false);
+                      }}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
             <ToolButton
               active={p.tool === "pan"}
               icon={<Hand className="h-6 w-6" />}

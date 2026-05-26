@@ -22,12 +22,18 @@ export const useSelection = () => {
 
   const clearSelection = () => setSelectedIds([]);
 
+  /** Replace the entire selection set with the given list of ids. Used after
+   *  bulk operations that promote auto-rooms (whose ids change) so the multi-
+   *  selection survives the promotion. */
+  const setSelection = (ids: string[]) => setSelectedIds(ids);
+
   return useMemo(
     () => ({
       selectedIds,
       selectOne,
       toggleSelected,
       clearSelection,
+      setSelection,
     }),
     [selectedIds]
   );

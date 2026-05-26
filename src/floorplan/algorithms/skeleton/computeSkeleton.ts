@@ -2,6 +2,46 @@ import type { Point } from "../../types";
 
 export type SkeletonType = "straight-skeleton" | "segment-sweepline" | "sampled-voronoi";
 
+/** Visvalingam-Whyatt polyline simplification. Repeatedly drops the interior
+ *  vertex whose triangle (with its two neighbours) has the smallest area until
+ *  the surviving count reaches `targetCount`. Endpoints are preserved. O(n²)
+ *  worst-case which is fine for skeleton polylines (typically < 200 vertices). */
+export const simplifyPolylineVW = (poly: Point[], targetCount: number): Point[] => {
+  const n = poly.length;
+  if (n <= 2) return poly.slice();
+  const tgt = Math.max(2, Math.min(n, targetCount));
+  if (tgt >= n) return poly.slice();
+  const prev = new Int32Array(n);
+  const next = new Int32Array(n);
+  const removed = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { prev[i] = i - 1; next[i] = i + 1; }
+  next[n - 1] = -1;
+  const triArea = (i: number): number => {
+    const ip = prev[i], inx = next[i];
+    if (ip < 0 || inx < 0) return Infinity;
+    const a = poly[ip], b = poly[i], c = poly[inx];
+    return Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / 2;
+  };
+  let remaining = n;
+  while (remaining > tgt) {
+    let bestI = -1, bestA = Infinity;
+    for (let i = 0; i < n; i++) {
+      if (removed[i]) continue;
+      const A = triArea(i);
+      if (A < bestA) { bestA = A; bestI = i; }
+    }
+    if (bestI < 0) break;
+    removed[bestI] = 1;
+    const p = prev[bestI], nx = next[bestI];
+    if (p >= 0) next[p] = nx;
+    if (nx >= 0) prev[nx] = p;
+    remaining--;
+  }
+  const out: Point[] = [];
+  for (let i = 0; i < n; i++) if (!removed[i]) out.push(poly[i]);
+  return out;
+};
+
 export interface SkeletonOptions {
   /** Per-edge sample count for `sampled-voronoi`, or grid resolution scaling for `segment-sweepline`. */
   samples?: number;

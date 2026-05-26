@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
 import { computePolygonPrincipalAxes } from "../../algorithms/geometry/principalAxes";
+import type { PrincipalAxesMethod, PrincipalAxesShow } from "../../algorithms/geometry/principalAxes";
 
 export type SplitMode = "equal" | "ratio" | "target" | "length";
 
@@ -30,12 +31,42 @@ export interface SplittingActionsBlockProps {
   lengths: number[];
   setLengths: (updater: (prev: number[]) => number[]) => void;
   /** "normal" = existing N-piece logic; "strip" = exactly two parallel cuts of given width. */
-  type: "normal" | "strip";
-  setType: (v: "normal" | "strip") => void;
+  type: "normal" | "strip" | "grid" | "principal";
+  setType: (v: "normal" | "strip" | "grid" | "principal") => void;
   stripLength: number;
   setStripLength: (v: number) => void;
   stripPosition: number;
   setStripPosition: (v: number) => void;
+  /** Grid 2×n: count → user picks n directly; width → n derived from cell width along major axis. */
+  gridMode: "count" | "width";
+  setGridMode: (v: "count" | "width") => void;
+  gridCount: number;
+  setGridCount: (v: number) => void;
+  gridWidth: number;
+  setGridWidth: (v: number) => void;
+  /** Principal-axes split: mirrors the Shape Analysis Principal Axes controls. */
+  principalMethod: PrincipalAxesMethod;
+  setPrincipalMethod: (v: PrincipalAxesMethod) => void;
+  principalShow: PrincipalAxesShow;
+  setPrincipalShow: (v: PrincipalAxesShow) => void;
+  principalAlignToCenter: boolean;
+  setPrincipalAlignToCenter: (v: boolean) => void;
+  /** Sub-split: n−1 perpendicular cuts distributed along the long axis. */
+  principalSubsplit: boolean;
+  setPrincipalSubsplit: (v: boolean) => void;
+  principalSubsplitMode: "count" | "width";
+  setPrincipalSubsplitMode: (v: "count" | "width") => void;
+  principalSubsplitCount: number;
+  setPrincipalSubsplitCount: (v: number) => void;
+  principalSubsplitWidth: number;
+  setPrincipalSubsplitWidth: (v: number) => void;
+  /** Minimum area (m²) for keeping a slice of the long axis between two sub-cuts. */
+  principalMinArea: number;
+  setPrincipalMinArea: (v: number) => void;
+  /** Visvalingam-Whyatt polyline simplification — only shown when method = "skeleton".
+   *  Bound to the same state slot as the Skeleton block's "Simplify" slider. */
+  principalSimplify: number;
+  setPrincipalSimplify: (v: number) => void;
   runRoomSplit: (room: { id: string; points: Point[] }, silent: boolean) => boolean;
   /** Drop split preview walls (isSplitWall) when Live is toggled off. */
   onLiveOff: () => void;
@@ -57,10 +88,12 @@ export const SplittingActionsBlock = (p: SplittingActionsBlockProps) => (
         <select
           className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
           value={p.type}
-          onChange={(e) => p.setType(e.target.value as "normal" | "strip")}
+          onChange={(e) => p.setType(e.target.value as "normal" | "strip" | "grid")}
         >
           <option value="normal">Normal</option>
           <option value="strip">Strip</option>
+          <option value="grid">Grid 2×n</option>
+          <option value="principal">Principal Axes</option>
         </select>
       </div>
 
@@ -92,71 +125,77 @@ export const SplittingActionsBlock = (p: SplittingActionsBlockProps) => (
         </div>
       )}
 
-      <div>
-        <span className="text-[10px] text-slate-500">Measure along edge</span>
-        <select
-          className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-          value={p.edge ?? ""}
-          onChange={(e) => p.setEdge(e.target.value === "" ? null : +e.target.value)}
-        >
-          <option value="">— manual angle —</option>
-          {p.selectedRoom.points.map((pt, i) => {
-            const q = p.selectedRoom.points[(i + 1) % p.selectedRoom.points.length];
-            const Lm = Math.hypot(q.x - pt.x, q.y - pt.y) / p.pixelsPerMeter;
-            return <option key={i} value={i}>{`Edge ${i} — ${Lm.toFixed(2)} m`}</option>;
-          })}
-        </select>
-        {p.edge !== null && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-1 h-6 w-full text-[10px]"
-            onClick={() => p.setEdgeFlip((v) => !v)}
+      {p.type !== "principal" && (
+        <div>
+          <span className="text-[10px] text-slate-500">Measure along edge</span>
+          <select
+            className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+            value={p.edge ?? ""}
+            onChange={(e) => p.setEdge(e.target.value === "" ? null : +e.target.value)}
           >
-            Flip direction {p.edgeFlip ? "(end → start)" : "(start → end)"}
-          </Button>
-        )}
-      </div>
-
-      <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
-        <input
-          type="checkbox"
-          checked={p.alongMinorPrincipalAxis}
-          onChange={(e) => p.setAlongMinorPrincipalAxis(e.target.checked)}
-        />
-        Split along minor principal axis
-        <span
-          className="text-[9px] text-slate-400"
-          title="Cut lines run along the minor principal axis (the polygon's short direction). Pieces stack along the major axis — the long dimension is sliced into normal-aspect children. Falls back to the manual angle for near-isotropic polygons."
-        >
-          (auto angle)
-        </span>
-      </label>
-
-      <div>
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-slate-500">Splitting angle</span>
-          <span className="font-mono text-[10px] text-slate-700">
-            {p.alongMinorPrincipalAxis
-              ? (() => {
-                  const { majorAngleDeg, anisotropy } = computePolygonPrincipalAxes(p.selectedRoom.points);
-                  if (anisotropy < 0.05) return `${p.angle}° (isotropic — manual)`;
-                  return `${majorAngleDeg.toFixed(1)}° (major principal)`;
-                })()
-              : `${p.angle}°${p.edge !== null ? " (derived)" : ""}`}
-          </span>
+            <option value="">— manual angle —</option>
+            {p.selectedRoom.points.map((pt, i) => {
+              const q = p.selectedRoom.points[(i + 1) % p.selectedRoom.points.length];
+              const Lm = Math.hypot(q.x - pt.x, q.y - pt.y) / p.pixelsPerMeter;
+              return <option key={i} value={i}>{`Edge ${i} — ${Lm.toFixed(2)} m`}</option>;
+            })}
+          </select>
+          {p.edge !== null && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-1 h-6 w-full text-[10px]"
+              onClick={() => p.setEdgeFlip((v) => !v)}
+            >
+              Flip direction {p.edgeFlip ? "(end → start)" : "(start → end)"}
+            </Button>
+          )}
         </div>
-        <input
-          type="range"
-          className="w-full"
-          min={0}
-          max={360}
-          step={1}
-          value={p.angle}
-          disabled={p.alongMinorPrincipalAxis}
-          onChange={(e) => { p.setEdge(null); p.setAngle(+e.target.value); }}
-        />
-      </div>
+      )}
+
+      {p.type !== "principal" && (
+        <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
+          <input
+            type="checkbox"
+            checked={p.alongMinorPrincipalAxis}
+            onChange={(e) => p.setAlongMinorPrincipalAxis(e.target.checked)}
+          />
+          Split along minor principal axis
+          <span
+            className="text-[9px] text-slate-400"
+            title="Cut lines run along the minor principal axis (the polygon's short direction). Pieces stack along the major axis — the long dimension is sliced into normal-aspect children. Falls back to the manual angle for near-isotropic polygons."
+          >
+            (auto angle)
+          </span>
+        </label>
+      )}
+
+      {p.type !== "principal" && (
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500">Splitting angle</span>
+            <span className="font-mono text-[10px] text-slate-700">
+              {p.alongMinorPrincipalAxis
+                ? (() => {
+                    const { majorAngleDeg, anisotropy } = computePolygonPrincipalAxes(p.selectedRoom.points);
+                    if (anisotropy < 0.05) return `${p.angle}° (isotropic — manual)`;
+                    return `${majorAngleDeg.toFixed(1)}° (major principal)`;
+                  })()
+                : `${p.angle}°${p.edge !== null ? " (derived)" : ""}`}
+            </span>
+          </div>
+          <input
+            type="range"
+            className="w-full"
+            min={0}
+            max={360}
+            step={1}
+            value={p.angle}
+            disabled={p.alongMinorPrincipalAxis}
+            onChange={(e) => { p.setEdge(null); p.setAngle(+e.target.value); }}
+          />
+        </div>
+      )}
 
       {p.type === "strip" && (() => {
         const pts = p.selectedRoom.points;
@@ -203,6 +242,228 @@ export const SplittingActionsBlock = (p: SplittingActionsBlockProps) => (
           </>
         );
       })()}
+
+      {p.type === "grid" && (() => {
+        const pts = p.selectedRoom.points;
+        const { majorAngleDeg, anisotropy } = computePolygonPrincipalAxes(pts, "obb");
+        const cx = pts.reduce((s, pt) => s + pt.x, 0) / pts.length;
+        const cy = pts.reduce((s, pt) => s + pt.y, 0) / pts.length;
+        const useMajor = anisotropy >= 0.05;
+        const rad = ((useMajor ? majorAngleDeg : p.angle) * Math.PI) / 180;
+        const c = Math.cos(rad), sn = Math.sin(rad);
+        const rxs = pts.map((pt) => (pt.x - cx) * c + (pt.y - cy) * sn);
+        const majorSpanM = (Math.max(...rxs) - Math.min(...rxs)) / p.pixelsPerMeter;
+        const derivedN = p.gridMode === "width"
+          ? Math.max(1, Math.round(majorSpanM / Math.max(0.01, p.gridWidth)))
+          : Math.max(1, Math.floor(p.gridCount));
+        const effectiveWidth = majorSpanM / derivedN;
+        return (
+          <>
+            <div className="text-[9px] text-slate-500">
+              Major axis: {useMajor ? `${majorAngleDeg.toFixed(1)}° (principal)` : `${p.angle}° (isotropic — manual)`}, span {majorSpanM.toFixed(2)} m
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-500">Mode</span>
+              <select
+                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+                value={p.gridMode}
+                onChange={(e) => p.setGridMode(e.target.value as "count" | "width")}
+              >
+                <option value="count">Count (n)</option>
+                <option value="width">Cell width (m)</option>
+              </select>
+            </div>
+            {p.gridMode === "count" ? (
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500">n (columns)</span>
+                  <span className="font-mono text-[10px] text-slate-700">{p.gridCount} → {2 * p.gridCount} cells</span>
+                </div>
+                <input
+                  type="range"
+                  className="w-full"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={p.gridCount}
+                  onChange={(e) => p.setGridCount(+e.target.value)}
+                />
+                <span className="text-[9px] text-slate-400">Cell width ≈ {effectiveWidth.toFixed(2)} m</span>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500">Cell width</span>
+                  <span className="font-mono text-[10px] text-slate-700">{p.gridWidth.toFixed(2)} m → n = {derivedN}</span>
+                </div>
+                <input
+                  type="number"
+                  className="h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                  min={0.1}
+                  max={Math.max(0.2, majorSpanM)}
+                  step={0.05}
+                  value={p.gridWidth}
+                  onChange={(e) => p.setGridWidth(+e.target.value)}
+                />
+                <span className="text-[9px] text-slate-400">{2 * derivedN} cells, actual width ≈ {effectiveWidth.toFixed(2)} m</span>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      {p.type === "principal" && (
+        <div className="space-y-2">
+          <span className="text-[9px] text-slate-400">
+            Emit the polygon's long/short principal axes as walls. Major = amber, minor = violet. Live previews softly; Apply commits as real walls and removes the source space.
+          </span>
+          <div>
+            <span className="text-[10px] text-slate-500">Method</span>
+            <select
+              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+              value={p.principalMethod}
+              onChange={(e) => p.setPrincipalMethod(e.target.value as PrincipalAxesMethod)}
+            >
+              <option value="obb">Min-area OBB (best-fit rectangle)</option>
+              <option value="pca">PCA (area-weighted moments)</option>
+              <option value="skeleton">Straight Skeleton (longest path)</option>
+            </select>
+          </div>
+          {p.principalMethod === "skeleton" && (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-500">Simplify</span>
+                <span className="font-mono text-[10px] text-slate-700">{p.principalSimplify}%</span>
+              </div>
+              <input
+                type="range"
+                className="w-full"
+                min={0}
+                max={100}
+                step={1}
+                value={p.principalSimplify}
+                onChange={(e) => p.setPrincipalSimplify(+e.target.value)}
+              />
+              <span className="text-[9px] text-slate-400">
+                Visvalingam-Whyatt simplification of the skeleton spine (shared with Skeleton block).
+              </span>
+            </div>
+          )}
+          {p.principalMethod !== "skeleton" && (
+            <div>
+              <span className="text-[10px] text-slate-500">Show</span>
+              <select
+                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+                value={p.principalShow}
+                onChange={(e) => p.setPrincipalShow(e.target.value as PrincipalAxesShow)}
+              >
+                <option value="both">Both axes</option>
+                <option value="long">Long axis only</option>
+                <option value="short">Short axis only</option>
+              </select>
+            </div>
+          )}
+          {p.principalMethod !== "skeleton" && (
+            <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
+              <input
+                type="checkbox"
+                checked={p.principalAlignToCenter}
+                onChange={(e) => p.setPrincipalAlignToCenter(e.target.checked)}
+              />
+              Align to Center
+              <span
+                className="text-[9px] text-slate-400"
+                title="Snap each axis to the midpoints of the two edges the principal direction crosses (visually-centered for parallelograms/trapezoids)."
+              >
+                (edge-midpoints)
+              </span>
+            </label>
+          )}
+
+          {(p.principalMethod === "skeleton" || p.principalShow !== "short") && (
+            <>
+              <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={p.principalSubsplit}
+                  onChange={(e) => p.setPrincipalSubsplit(e.target.checked)}
+                />
+                Sub-split
+                <span
+                  className="text-[9px] text-slate-400"
+                  title="Distribute perpendicular cut lines along the long axis. Each cut is a line perpendicular to the major direction, clipped to the polygon."
+                >
+                  (perpendicular to long axis)
+                </span>
+              </label>
+              {p.principalSubsplit && (
+                <div className="ml-4 space-y-1.5 border-l border-slate-200 pl-2">
+                  <div>
+                    <span className="text-[10px] text-slate-500">Mode</span>
+                    <select
+                      className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+                      value={p.principalSubsplitMode}
+                      onChange={(e) => p.setPrincipalSubsplitMode(e.target.value as "count" | "width")}
+                    >
+                      <option value="count">Count (n)</option>
+                      <option value="width">Cell width (m)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500">Min cell area</span>
+                      <span className="font-mono text-[10px] text-slate-700">{p.principalMinArea.toFixed(1)} m²</span>
+                    </div>
+                    <input
+                      type="number"
+                      className="h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                      min={0}
+                      step={0.5}
+                      value={p.principalMinArea}
+                      onChange={(e) => p.setPrincipalMinArea(+e.target.value)}
+                    />
+                    <span className="text-[9px] text-slate-400">
+                      Skip the long-axis slice when either top or bottom cell at that position is below this area.
+                    </span>
+                  </div>
+                  {p.principalSubsplitMode === "count" ? (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500">n</span>
+                        <span className="font-mono text-[10px] text-slate-700">{p.principalSubsplitCount} → {Math.max(0, p.principalSubsplitCount - 1)} cuts</span>
+                      </div>
+                      <input
+                        type="range"
+                        className="w-full"
+                        min={1}
+                        max={20}
+                        step={1}
+                        value={p.principalSubsplitCount}
+                        onChange={(e) => p.setPrincipalSubsplitCount(+e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500">Cell width</span>
+                        <span className="font-mono text-[10px] text-slate-700">{p.principalSubsplitWidth.toFixed(2)} m</span>
+                      </div>
+                      <input
+                        type="number"
+                        className="h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                        min={0.1}
+                        step={0.05}
+                        value={p.principalSubsplitWidth}
+                        onChange={(e) => p.setPrincipalSubsplitWidth(+e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {p.type === "normal" && (
         <div>

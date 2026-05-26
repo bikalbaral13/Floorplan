@@ -17,9 +17,18 @@ function EdgedMesh(props: ComponentProps<"mesh">) {
   );
 }
 
-/** View axes for the multi-view snapshot grid exposed by the imperative ref. */
+/** View axes for the multi-view snapshot grid exposed by the imperative ref.
+ *  - 6 canonical orthographic-ish views (front/back/left/right/top/isometric)
+ *  - "panorama"        → equirectangular 2:1 PNG, useful as a VR/360 photo
+ *  - "cube-{px|nx|py|ny|pz|nz}" → six raw cube-map face JPGs (one per direction) */
 export type SnapshotView =
-  | "front" | "back" | "left" | "right" | "top" | "isometric";
+  | "front" | "back" | "left" | "right" | "top" | "isometric"
+  | "panorama"
+  | "cube-px" | "cube-nx" | "cube-py" | "cube-ny" | "cube-pz" | "cube-nz"
+  /** Composite — front/back/left/right/top arranged into one image with labels.
+   *  Lets a single-image render model (Gemini, etc.) reason about the 3D massing
+   *  from all five orthographic views simultaneously. */
+  | "composite";
 export interface SnapshotResult { view: SnapshotView; dataUrl: string }
 export interface SnapshotApi {
   captureAll: () => Promise<SnapshotResult[]>;
@@ -149,6 +158,220 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
           try { url = gl.domElement.toDataURL("image/png"); } catch { url = ""; }
           results.push({ view: v.view, dataUrl: url });
         }
+
+        // ── Composite (front/back/left/right/top into one labelled grid) ──────
+        // Single image that lets a one-shot render model see all five orthographic
+        // views together. Laid out as a 3×2 grid with the top view on the centre
+        // of row 1 (the classic unfolded-cross spirit, minus the bottom face):
+        //   [Left ][Front][Right]
+        //   [Back ][Top  ][     ]
+        // Each cell is the captured PNG, padded with a thin border, and a small
+        // text label is drawn under each so the model can disambiguate them.
+        try {
+          const get = (v: SnapshotView) => results.find((r) => r.view === v)?.dataUrl;
+          const layout: { url: string | undefined; label: string }[] = [
+            { url: get("left"),  label: "LEFT"  },
+            { url: get("front"), label: "FRONT" },
+            { url: get("right"), label: "RIGHT" },
+            { url: get("back"),  label: "BACK"  },
+            { url: get("top"),   label: "TOP"   },
+            { url: undefined,    label: ""      }, // placeholder; isometric could go here
+          ];
+          const CELL = 512;          // pixel size of each view in the composite
+          const PAD = 16;            // outer padding around the whole image
+          const GAP = 12;            // gap between cells
+          const LABEL_H = 28;        // height of the label strip below each cell
+          const cols = 3, rowsN = 2;
+          const compW = PAD * 2 + cols * CELL + (cols - 1) * GAP;
+          const compH = PAD * 2 + rowsN * (CELL + LABEL_H) + (rowsN - 1) * GAP;
+          const comp = document.createElement("canvas");
+          comp.width = compW;
+          comp.height = compH;
+          const ctx = comp.getContext("2d");
+          if (ctx) {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, compW, compH);
+            // Each cell is a sub-image plus a label band below.
+            const drawCell = async (slot: typeof layout[number], col: number, row: number) => {
+              const x = PAD + col * (CELL + GAP);
+              const y = PAD + row * (CELL + LABEL_H + GAP);
+              // Cell background + border so empty slots don't read as missing data.
+              ctx.fillStyle = "#f1f5f9";
+              ctx.fillRect(x, y, CELL, CELL + LABEL_H);
+              ctx.strokeStyle = "#cbd5e1";
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL + LABEL_H - 1);
+              if (slot.url) {
+                const img = new Image();
+                img.src = slot.url;
+                await new Promise<void>((resolve) => {
+                  if (img.complete) { resolve(); return; }
+                  img.onload = () => resolve();
+                  img.onerror = () => resolve();
+                });
+                // Fit the image inside the cell while preserving aspect ratio.
+                const iw = img.naturalWidth || CELL;
+                const ih = img.naturalHeight || CELL;
+                const r = Math.min(CELL / iw, CELL / ih);
+                const dw = iw * r, dh = ih * r;
+                ctx.drawImage(img, x + (CELL - dw) / 2, y + (CELL - dh) / 2, dw, dh);
+              }
+              // Label strip.
+              ctx.fillStyle = "#0f172a";
+              ctx.font = "bold 18px sans-serif";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText(slot.label, x + CELL / 2, y + CELL + LABEL_H / 2);
+            };
+            // Render cells in order (sequential awaits — the total wait is dominated
+            // by image decode, which is microseconds for cached data URLs).
+            for (let i = 0; i < layout.length; i++) {
+              const col = i % cols;
+              const row = Math.floor(i / cols);
+              await drawCell(layout[i], col, row);
+            }
+            try {
+              results.push({ view: "composite", dataUrl: comp.toDataURL("image/png") });
+            } catch { /* canvas tainted — skip */ }
+          }
+        } catch (e) {
+          // Non-fatal: just skip the composite if anything went wrong.
+          // eslint-disable-next-line no-console
+          console.warn("Composite snapshot skipped:", e);
+        }
+
+        // ── 360 / cubemap capture ─────────────────────────────────────────────
+        // Render the scene from the eye-height centre point with a 90° FOV camera
+        // pointed at each of ±X / ±Y / ±Z. Each render is read back as a JPG data
+        // URL (one "cube-{face}" SnapshotResult), and the six faces are then
+        // sampled into a 2:1 equirectangular panorama emitted as one extra
+        // SnapshotResult ("panorama"). All renders use the *same* WebGL context
+        // we're already rendering to — no extra render targets or contexts.
+        try {
+          const faceSize = 1024;
+          // Save framebuffer-affecting state so we restore exactly what was on screen.
+          const prevW = size.width;
+          const prevH = size.height;
+          const prevPixelRatio = gl.getPixelRatio();
+          // Force a 1:1 ratio + square viewport so each face is exactly faceSize×faceSize.
+          gl.setPixelRatio(1);
+          gl.setSize(faceSize, faceSize, false);
+          const faceCfg: { view: SnapshotView; target: [number, number, number]; up: [number, number, number] }[] = [
+            { view: "cube-px", target: [ 1,  0,  0], up: [0,  1,  0] },
+            { view: "cube-nx", target: [-1,  0,  0], up: [0,  1,  0] },
+            { view: "cube-py", target: [ 0,  1,  0], up: [0,  0,  1] },
+            { view: "cube-ny", target: [ 0, -1,  0], up: [0,  0, -1] },
+            { view: "cube-pz", target: [ 0,  0,  1], up: [0,  1,  0] },
+            { view: "cube-nz", target: [ 0,  0, -1], up: [0,  1,  0] },
+          ];
+          // Cache each face's pixel data so we can read while sampling the panorama
+          // without re-rendering. Keyed by the face's view code.
+          const facePixels: Record<string, Uint8ClampedArray> = {};
+          const offCanvas = document.createElement("canvas");
+          offCanvas.width = faceSize;
+          offCanvas.height = faceSize;
+          const offCtx = offCanvas.getContext("2d");
+          for (const f of faceCfg) {
+            const cam = new THREE.PerspectiveCamera(90, 1, 0.05, 5000);
+            cam.position.copy(center);
+            cam.up.set(f.up[0], f.up[1], f.up[2]);
+            cam.lookAt(center.x + f.target[0], center.y + f.target[1], center.z + f.target[2]);
+            cam.updateMatrixWorld();
+            gl.render(scene, cam);
+            // Snapshot the gl canvas (current dimensions = faceSize × faceSize).
+            let url = "";
+            try { url = gl.domElement.toDataURL("image/jpeg", 0.92); } catch { url = ""; }
+            results.push({ view: f.view, dataUrl: url });
+            // Read pixel data for panorama sampling. We use the canvas2d API rather
+            // than gl.readPixels so the result is already flipped to the conventional
+            // top-down image orientation (matches what toDataURL produced).
+            if (offCtx) {
+              const img = new Image();
+              img.src = url;
+              // Image is synchronous in data-URL form once decoded; for robustness await it.
+              await new Promise<void>((resolve) => {
+                if (img.complete) { resolve(); return; }
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+              });
+              offCtx.clearRect(0, 0, faceSize, faceSize);
+              offCtx.drawImage(img, 0, 0, faceSize, faceSize);
+              const data = offCtx.getImageData(0, 0, faceSize, faceSize).data;
+              facePixels[f.view] = data;
+            }
+          }
+
+          // Build the 2:1 equirectangular panorama by sampling the cubemap.
+          // For each output pixel (u, v) ∈ [0,1)², convert to a spherical direction
+          // (θ, φ), find which cube face that direction lies on, project onto that
+          // face's (s, t) ∈ [0,1)², and copy that pixel into the panorama.
+          const panoW = 2048;
+          const panoH = 1024;
+          const panoCanvas = document.createElement("canvas");
+          panoCanvas.width = panoW;
+          panoCanvas.height = panoH;
+          const panoCtx = panoCanvas.getContext("2d");
+          if (panoCtx && Object.keys(facePixels).length === 6) {
+            const out = panoCtx.createImageData(panoW, panoH);
+            const samplePano = (x: number, y: number): [number, number, number] => {
+              // x → longitude θ ∈ [-π, π); y → latitude φ ∈ [π/2, -π/2].
+              const u = x / panoW;
+              const v = y / panoH;
+              const theta = u * Math.PI * 2 - Math.PI;
+              const phi = (0.5 - v) * Math.PI;
+              const dx = Math.cos(phi) * Math.sin(theta);
+              const dy = Math.sin(phi);
+              const dz = Math.cos(phi) * Math.cos(theta);
+              // Pick the dominant axis to choose the face.
+              const ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz);
+              let face = "cube-pz" as SnapshotView, sc = 0, tc = 0, ma = 1;
+              if (ax >= ay && ax >= az) {
+                ma = ax;
+                if (dx > 0) { face = "cube-px"; sc = -dz; tc = -dy; }
+                else         { face = "cube-nx"; sc =  dz; tc = -dy; }
+              } else if (ay >= ax && ay >= az) {
+                ma = ay;
+                if (dy > 0) { face = "cube-py"; sc =  dx; tc =  dz; }
+                else         { face = "cube-ny"; sc =  dx; tc = -dz; }
+              } else {
+                ma = az;
+                if (dz > 0) { face = "cube-pz"; sc =  dx; tc = -dy; }
+                else         { face = "cube-nz"; sc = -dx; tc = -dy; }
+              }
+              // (sc, tc) ∈ [-ma, ma] → (s, t) ∈ [0, 1].
+              const s = (sc / ma + 1) * 0.5;
+              const t = (tc / ma + 1) * 0.5;
+              const px = Math.max(0, Math.min(faceSize - 1, Math.floor(s * faceSize)));
+              const py = Math.max(0, Math.min(faceSize - 1, Math.floor(t * faceSize)));
+              const idx = (py * faceSize + px) * 4;
+              const data = facePixels[face];
+              return [data[idx], data[idx + 1], data[idx + 2]];
+            };
+            for (let y = 0; y < panoH; y++) {
+              for (let x = 0; x < panoW; x++) {
+                const [r, g, b] = samplePano(x, y);
+                const oi = (y * panoW + x) * 4;
+                out.data[oi]     = r;
+                out.data[oi + 1] = g;
+                out.data[oi + 2] = b;
+                out.data[oi + 3] = 255;
+              }
+            }
+            panoCtx.putImageData(out, 0, 0);
+            try {
+              results.push({ view: "panorama", dataUrl: panoCanvas.toDataURL("image/png") });
+            } catch { /* taint or context loss — skip */ }
+          }
+
+          // Restore the original renderer size + pixel ratio.
+          gl.setPixelRatio(prevPixelRatio);
+          gl.setSize(prevW, prevH, false);
+        } catch (e) {
+          // Non-fatal: the 6 orthographic snapshots are already captured. Log + continue.
+          // eslint-disable-next-line no-console
+          console.warn("360 / cubemap capture skipped:", e);
+        }
+
         // Restore the original framebuffer so the user keeps seeing the live view.
         gl.render(scene, camera);
         return results;

@@ -52,7 +52,7 @@ export interface WallInputsBlockProps {
  *  type sub-panels. All mutations go through `updateSelectedWall`. */
 export const WallInputsBlock = (p: WallInputsBlockProps) => {
   const w = p.selectedWall;
-  const displayId = p.wallIndex >= 0 ? `Wall${String(p.wallIndex + 1).padStart(3, "0")}` : "—";
+  const displayId = p.wallIndex >= 0 ? `Segment${String(p.wallIndex + 1).padStart(3, "0")}` : "—";
 
   return (
     <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
@@ -299,23 +299,7 @@ export const WallInputsBlock = (p: WallInputsBlockProps) => {
             );
           })()}
 
-          <div>
-            <span className="text-[10px] text-slate-400">Category</span>
-            <select
-              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
-              value={w.category ?? ""}
-              onChange={(e) => {
-                const newCategory = (e.target.value || undefined) as Wall["category"];
-                p.updateSelectedWall((wall) => ({ ...wall, category: newCategory }));
-              }}
-            >
-              <option value="">— none —</option>
-              <option value="Fire Exit">Fire Exit</option>
-              <option value="Facade">Facade</option>
-              <option value="Electrical Entrance">Electrical Entrance</option>
-              <option value="Lift Entrance">Lift Entrance</option>
-            </select>
-          </div>
+          {/* Category dropdown removed per request. */}
 
           {w.segmentType === "plot-boundary" && (
             <div>

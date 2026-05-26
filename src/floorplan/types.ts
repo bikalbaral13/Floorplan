@@ -353,7 +353,7 @@ export interface WallPolygonGeometry {
  *  Built-in slugs are kept as a string union for code paths that branch on them.
  *  User-defined types extend this set at runtime via `FloorPlanModel.customRoomTypes`,
  *  so consumers should treat `roomType` as `string` when dealing with arbitrary values. */
-export type RoomType = "room" | "floorplate-boundary" | "plot-boundary" | "buildable-area" | "path";
+export type RoomType = "room" | "area" | "floorplate-boundary" | "plot-boundary" | "buildable-area" | "path";
 
 /** Schema for a single user-defined parameter on a custom room type. */
 export type ParamDef =
@@ -418,6 +418,34 @@ export interface Room {
   zone?: string;
   /** Massing: number of floors to render in 3D (default 1). */
   floorsCount?: number;
+  // ── FSI Statement inputs (plot-boundary rooms only) ──────────────────────────
+  /** Amenity open space surrender rate as a fraction of gross plot (e.g. 0.10 = 10%). */
+  amenityOsRate?: number;
+  /** Layout open space (LOS) rate on net plot area (e.g. 0.15 = 15%). */
+  losRate?: number;
+  /** Zonal / basic FSI multiplier (e.g. 1.0). */
+  basicFsiMultiplier?: number;
+  /** Premium FSI multiplier — on payment (e.g. 0.5). */
+  premiumFsiMultiplier?: number;
+  /** TDR FSI multiplier — max permissible (e.g. 0.9). */
+  tdrMultiplier?: number;
+  /** Scheme-specific balance FSI given as an absolute area (sq.m), not a ratio. */
+  schemeFsiSqm?: number;
+  /** Fungible FSI rate applied on top of all FSI components (e.g. 0.35 = 35%). */
+  fungibleRate?: number;
+  /** In-situ FSI factor: FSI credit per sq.m of surrendered amenity OS (e.g. 2 = 2×). */
+  inSituFsiFactor?: number;
+  // ── Build Program inputs (plot-boundary rooms only) ──────────────────────────
+  /** Total car parks required (nos). */
+  carParksRequired?: number;
+  /** Area per car park stall (sq.m), e.g. 30 for ramp parking. */
+  areaPerCarParkSqm?: number;
+  /** Other non-FSI area (sq.m) — terraces, utilities, refuge floors. */
+  otherNonFsiSqm?: number;
+  /** Number of wings / cores per floor. */
+  wingsPerFloor?: number;
+  /** Chosen gross floor plate area (sq.m) for Massing calculation (default 2500). */
+  chosenPlateM2?: number;
   /** Room produced by Path Setter live preview — excluded from room detection / commit. */
   isPathSpacePreview?: boolean;
   /** Source host-room id for Path Setter–generated spaces. */
@@ -428,6 +456,14 @@ export interface Room {
 }
 
 export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "segment";
+
+/** Scope filter applied while the Select tool is active.
+ *  - "all": pick anything (current behavior — default).
+ *  - "node": only wall endpoints / corner nodes are selectable.
+ *  - "segment": only walls / segment lines are selectable.
+ *  - "space": only Room polygons are selectable.
+ *  Doors/windows/objects always fall back to "all" — only available without a scope. */
+export type SelectFilter = "all" | "node" | "segment" | "space";
 
 export type Tool =
   | "select"
@@ -440,6 +476,8 @@ export type Tool =
   | "segment"
   | "measure"
   | "scale"
+  /** "Set Scale → By Area" — click a space/polygon, then enter its real-world area to rescale the drawing. */
+  | "scale-area"
   | "pan"
   | "door"
   | "window"
@@ -577,6 +615,9 @@ export interface FloorPlanModel {
   /** AutoCAD-style layer table. Always non-empty (a default `"0"` layer is seeded).
    *  Per-entity `layerId` references entries here; missing/unknown references resolve to `"0"`. */
   layers?: Layer[];
+  /** Canvas scale: pixels per metre. Persisted so an imported file renders at the same scale
+   *  it was authored at. Defaults to 50 when absent. */
+  pixelsPerMeter?: number;
 }
 
 /** AutoCAD-style layer. Every drawable entity carries a `layerId` referencing one of these. */

@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, type ReactNode } from "react";
-import type { Tool } from "../types";
+import type { SelectFilter, Tool } from "../types";
 import { DrawingToolbar } from "./toolbars/DrawingToolbar";
 import { FilesToolbar } from "./toolbars/FilesToolbar";
 import { ConstructionToolbar } from "./toolbars/ConstructionToolbar";
@@ -13,6 +13,9 @@ type EdgeMode = "connection" | null;
 interface LeftToolbarProps {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
+  /** Current scope for the Select tool — "all" / "node" / "segment" / "space". */
+  selectFilter: SelectFilter;
+  onSelectFilterChange: (value: SelectFilter) => void;
   /** Sticky segment-type override applied to walls drawn with the Wall tool ("wall", "connection", or "path"). */
   nextWallSegmentType: "wall" | "line" | "connection" | "path";
   onNextWallSegmentTypeChange: (value: "wall" | "line" | "connection" | "path") => void;
@@ -39,6 +42,7 @@ interface LeftToolbarProps {
 
   onClearCanvas: () => void;
   onSetScale: () => void;
+  onSetScaleArea: () => void;
   onAutoGenerateClick: () => void;
   onSimulatedAnnealingClick: () => void;
   onComputeFloorplate: () => void;
@@ -86,6 +90,8 @@ interface LeftToolbarProps {
   onAddSpaceCircleClick?: () => void;
   /** Starts the "Add Segment" tool (single straight line via click-click). */
   onSingleSegmentClick?: () => void;
+  /** Opens the GeoJSON file picker and imports polygons onto the OSM map. */
+  onImportGeojson?: () => void;
 }
 
 /** Left sidebar composition — thin shell that arranges the per-section foldable
@@ -94,6 +100,8 @@ interface LeftToolbarProps {
 export const LeftToolbar = ({
   tool,
   onToolChange,
+  selectFilter,
+  onSelectFilterChange,
   nextWallSegmentType,
   onNextWallSegmentTypeChange,
   addDoorMode,
@@ -115,6 +123,7 @@ export const LeftToolbar = ({
   saRunning,
   onClearCanvas,
   onSetScale,
+  onSetScaleArea,
   onAutoGenerateClick,
   onSimulatedAnnealingClick,
   onComputeFloorplate,
@@ -137,11 +146,14 @@ export const LeftToolbar = ({
   onAddSpaceRectClick,
   onAddSpaceCircleClick,
   onSingleSegmentClick,
+  onImportGeojson,
 }: LeftToolbarProps) => (
   <div className="flex w-full flex-col items-stretch gap-2">
     <DrawingToolbar
       tool={tool}
       onToolChange={onToolChange}
+      selectFilter={selectFilter}
+      onSelectFilterChange={onSelectFilterChange}
       nextWallSegmentType={nextWallSegmentType}
       onNextWallSegmentTypeChange={onNextWallSegmentTypeChange}
       addDoorMode={addDoorMode}
@@ -155,6 +167,7 @@ export const LeftToolbar = ({
       onAddFurnitureModeChange={onAddFurnitureModeChange}
       onClearCanvas={onClearCanvas}
       onSetScale={onSetScale}
+      onSetScaleArea={onSetScaleArea}
       onDrawPathClick={onDrawPathClick}
       drawingPath={drawingPath}
       onAddSegmentClick={onAddSegmentClick}
@@ -166,6 +179,7 @@ export const LeftToolbar = ({
       onAddSpaceRectClick={onAddSpaceRectClick}
       onAddSpaceCircleClick={onAddSpaceCircleClick}
       onSingleSegmentClick={onSingleSegmentClick}
+      onImportGeojson={onImportGeojson}
     />
 
     {/* Files toolbar moved to the top-right bar. */}
