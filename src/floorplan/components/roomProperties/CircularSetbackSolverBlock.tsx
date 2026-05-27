@@ -5,6 +5,7 @@ import {
   DEFAULT_REGULATIONS,
   OCCUPANCY_LABELS,
   ROAD_LOCATION_LABELS,
+  polygonArea,
   runCircularSetbackSolver,
   type Occupancy,
   type Regulations,
@@ -25,6 +26,13 @@ export interface CircularSetbackSolverBlockProps {
   onShowOnCanvas?: (room: { id: string; points: Point[] }, perEdgeDistancesM: number[]) => void;
   /** Remove any inset preview walls previously painted by onShowOnCanvas. */
   onClearPreview?: () => void;
+  /** Indices of `selectedRoom.points` whose outgoing edge is tagged as Front
+   *  (via Segment Properties → Edge Role = Front on a Site Boundary segment).
+   *  Empty array ⇒ no front edges; all edges use the side setback. */
+  frontEdgeIndices?: number[];
+  /** Amenity / open-space area in m² to deduct from buildable inside the solver
+   *  (typically wired to the Inset Polygon block's Deduct Area value). */
+  amenityDeductionM2?: number;
 }
 
 /**
@@ -55,7 +63,8 @@ export const CircularSetbackSolverBlock = (p: CircularSetbackSolverBlockProps) =
 
   const [occupancy, setOccupancy] = useState<Occupancy>("residential");
   const [roadLocation, setRoadLocation] = useState<RoadLocation>("areas-in-city");
-  const [bua, setBua] = useState<number>(17280);
+  const [bua, setBua] = useState<number>(39560);
+  const [deductionM2Input, setDeductionM2Input] = useState<number>(814);
   const [regsText, setRegsText] = useState<string>(() =>
     JSON.stringify(DEFAULT_REGULATIONS, null, 2),
   );
@@ -85,13 +94,33 @@ export const CircularSetbackSolverBlock = (p: CircularSetbackSolverBlockProps) =
       setResult(null);
       return;
     }
+    // Convert the selected polygon from canvas pixels to metres for the solver.
+    const polygonM: Point[] = (p.selectedRoom.points ?? []).map((q) => ({
+      x: q.x / p.pixelsPerMeter,
+      y: q.y / p.pixelsPerMeter,
+    }));
+    const frontSet = new Set<number>(p.frontEdgeIndices ?? []);
+    // The block-local "Deduction" input takes precedence (explicit user value);
+    // otherwise fall back to whatever the parent passes (e.g. the Inset Polygon
+    // block's Deduct Area value).
+    const amenityM2 = deductionM2Input > 0 ? deductionM2Input : (p.amenityDeductionM2 ?? 0);
+    // Initial plate guess = actual polygon area − deduction. Use the polygon's
+    // own area (not the bounding box) so the seed isn't immediately clamped down
+    // by the solver — for irregular plots width×depth is much larger than the
+    // real area, which would otherwise mask the deduction at iter 1.
+    const polygonAreaM2 = polygonArea(polygonM);
+    const startPlate = Math.max(1, polygonAreaM2 - amenityM2);
     const res = runCircularSetbackSolver({
+      plotPolygonM: polygonM,
+      frontEdgeIndices: frontSet,
+      amenityDeductionM2: amenityM2,
       plotWidthM,
       plotDepthM,
       totalBuaM2: bua,
       regs,
       occupancy,
       roadLocation,
+      startPlateGuessM2: startPlate,
     });
     setResult(res);
   };
@@ -194,6 +223,25 @@ export const CircularSetbackSolverBlock = (p: CircularSetbackSolverBlockProps) =
             </p>
           </div>
 
+          {/* ── Deduction (amenities / open space, m²) ──────────────────── */}
+          <div>
+            <span className="text-[9px] text-slate-500">Deduction (m²)</span>
+            <input
+              type="number"
+              step={10}
+              min={0}
+              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-mono"
+              value={deductionM2Input}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setDeductionM2Input(Number.isFinite(v) && v >= 0 ? v : 0);
+              }}
+            />
+            <p className="mt-0.5 text-[9px] italic text-slate-400 leading-tight">
+              Subtracted from the inset buildable area each iteration (amenities, open space, etc.).
+            </p>
+          </div>
+
           {/* ── Regulations JSON ─────────────────────────────────────────── */}
           <div>
             <span className="text-[9px] text-slate-500">Regulations (JSON)</span>
@@ -232,16 +280,13 @@ export const CircularSetbackSolverBlock = (p: CircularSetbackSolverBlockProps) =
                 const lastRow = result.rows[result.rows.length - 1];
                 const side = Number.isFinite(lastRow.sideSetbackM) ? lastRow.sideSetbackM : 0;
                 const front = result.frontSetbackUsedM;
-                // Per-edge distance array: for each polygon edge, classify as horizontal
-                // or vertical and pick the matching setback. Matches the solver's
-                // (W − 2·side) × (D − 2·front) convention on axis-aligned rectangles.
+                // Per-edge distance array: edges tagged Front via Segment Properties
+                // → Edge Role = Front receive the front setback; all other edges receive
+                // the side / rear setback. Matches the solver's inset-polygon buildable
+                // calculation, so the canvas preview is the very polygon the solver scored.
                 const pts = p.selectedRoom.points;
-                const distances = pts.map((a, i) => {
-                  const b = pts[(i + 1) % pts.length];
-                  const dx = Math.abs(b.x - a.x);
-                  const dy = Math.abs(b.y - a.y);
-                  return dx >= dy ? front : side; // horizontal edge → front, vertical → side
-                });
+                const frontSet = new Set<number>(p.frontEdgeIndices ?? []);
+                const distances = pts.map((_, i) => (frontSet.has(i) ? front : side));
                 p.onClearPreview?.();
                 p.onShowOnCanvas(p.selectedRoom, distances);
               }}
@@ -267,33 +312,30 @@ export const CircularSetbackSolverBlock = (p: CircularSetbackSolverBlockProps) =
                   <table className="w-full text-[9px] tabular-nums">
                     <thead className="bg-slate-100 text-slate-600">
                       <tr>
-                        <th className="px-1 py-0.5 text-left">Iter</th>
-                        <th className="px-1 py-0.5 text-right">Plate in</th>
-                        <th className="px-1 py-0.5 text-right">Flrs</th>
-                        <th className="px-1 py-0.5 text-right">H (m)</th>
-                        <th className="px-1 py-0.5 text-right">Side</th>
-                        <th className="px-1 py-0.5 text-right">B-W</th>
-                        <th className="px-1 py-0.5 text-right">B-D</th>
-                        <th className="px-1 py-0.5 text-right">Buildable</th>
-                        <th className="px-1 py-0.5 text-center">Fits?</th>
-                        <th className="px-1 py-0.5 text-left">Note</th>
+                        <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Plate</th>
+                        <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Floors</th>
+                        <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Height</th>
+                        <th colSpan={2} className="px-1 py-0.5 text-center border-b border-slate-200">Setbacks</th>
+                        <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Inset Area</th>
+                        <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Inset After Deduction</th>
+                      </tr>
+                      <tr>
+                        <th className="px-1 py-0.5 text-right font-normal">Front</th>
+                        <th className="px-1 py-0.5 text-right font-normal">Remaining</th>
                       </tr>
                     </thead>
                     <tbody>
                       {result.rows.map((r) => (
                         <tr key={r.iter} className="border-t border-slate-100">
-                          <td className="px-1 py-0.5 text-slate-700">{r.iter}</td>
                           <td className="px-1 py-0.5 text-right font-mono">{r.plateInM2.toFixed(1)}</td>
                           <td className="px-1 py-0.5 text-right font-mono">{r.floors}</td>
                           <td className="px-1 py-0.5 text-right font-mono">{r.heightM.toFixed(1)}</td>
+                          <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.frontSetbackM) ? r.frontSetbackM.toFixed(2) : "—"}</td>
                           <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.sideSetbackM) ? r.sideSetbackM.toFixed(2) : "—"}</td>
-                          <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.buildWidthM) ? r.buildWidthM.toFixed(1) : "—"}</td>
-                          <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.buildDepthM) ? r.buildDepthM.toFixed(1) : "—"}</td>
-                          <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.buildableM2) ? r.buildableM2.toFixed(1) : "—"}</td>
-                          <td className={`px-1 py-0.5 text-center font-semibold ${r.note === "CONVERGED" ? "text-emerald-700" : r.plateFits ? "text-emerald-600" : "text-red-600"}`}>
-                            {r.note === "CONVERGED" ? "✓✓" : r.plateFits ? "yes" : "no"}
+                          <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.insetAreaM2) ? r.insetAreaM2.toFixed(1) : "—"}</td>
+                          <td className={`px-1 py-0.5 text-right font-mono ${r.note === "CONVERGED" ? "font-semibold text-emerald-700" : ""}`}>
+                            {Number.isFinite(r.buildableM2) ? r.buildableM2.toFixed(1) : "—"}
                           </td>
-                          <td className="px-1 py-0.5 text-slate-500">{r.note}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -5,13 +5,21 @@
  *   side setback ← height ← floors ← plate ← buildable ← side setback
  *
  * No forward pass exists. We iterate: start with a plate guess, compute the
- * resulting setbacks, derive the buildable rectangle, shrink the plate to fit,
- * and repeat until plate_in == buildable (converged) — or until the implied
- * height exceeds the cap (infeasible).
+ * resulting setbacks, derive the buildable area, shrink the plate to fit, and
+ * repeat until plate_in == buildable (converged) — or until the implied height
+ * exceeds the cap (infeasible).
+ *
+ * Buildable area is computed by **insetting the plot polygon** with per-edge
+ * setbacks (front edges get the front setback, every other edge gets the side
+ * setback), then subtracting an optional amenity deduction. This handles
+ * arbitrary irregular plots and supersedes the old `(W − 2·side) × (D − 2·front)`
+ * rectangular formula.
  *
  * The regulations JSON is occupancy-aware (Residential / Commercial / Assembly)
  * and road-location-aware, matching the structure of the LandWise PDF.
  */
+
+import type { Point } from "../../types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Regulation JSON shape
@@ -134,7 +142,19 @@ export const DEFAULT_REGULATIONS: Regulations = {
 // Setback lookups
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Resolve the side/rear setback at a given height by walking the band ladder. */
+/**
+ * Resolve the side/rear setback at a given height by walking the band ladder.
+ *
+ * Uses the **Min** column of the regulations table (not Typical / Max):
+ *   • If the band has a positive constant floor (`minM`), use it as the setback.
+ *   • Otherwise use the linear term `ratio × height`.
+ *
+ * Examples from the LandWise table:
+ *   • Resi  h ≤ 32 m → minM 3.6 → returns 3.6 (constant).
+ *   • Comm  h ≤ 32 m → minM 4.5 → returns 4.5.
+ *   • Any  32 < h ≤ 70 m → minM 0, ratio 0.25 → returns 0.25·h.
+ *   • Any  h > 120 m → minM 20 → returns 20.
+ */
 export function sideSetbackFromBands(heightM: number, bands: SetbackBand[]): number {
   const band =
     bands.find((b) => b.uptoHeightM != null && heightM <= b.uptoHeightM) ??
@@ -143,9 +163,9 @@ export function sideSetbackFromBands(heightM: number, bands: SetbackBand[]): num
   if (!band) return 0;
   const min = band.minM ?? 0;
   const ratio = band.ratio ?? 0;
-  const max = band.maxM ?? Number.POSITIVE_INFINITY;
-  const value = Math.max(min, ratio * heightM);
-  return Math.min(value, max);
+  // Constant floor present → that *is* the Min value for this band.
+  // Otherwise the Min value scales linearly with height (`ratio · h`).
+  return min > 0 ? min : ratio * heightM;
 }
 
 /** Resolve the front setback for a given occupancy/road combination. */
@@ -155,13 +175,122 @@ export function frontSetbackFor(rules: OccupancyRules, road: RoadLocation): numb
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Polygon inset (irregular plot support)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Inset an arbitrary simple polygon by per-edge distances (positive = inward).
+ * Mirrors the algorithm used by the Inset Polygon block in the editor: each
+ * edge becomes an inward-offset line; consecutive offset lines are intersected
+ * to produce the inset polygon's vertices.
+ *
+ * `distances[i]` applies to the edge from `pts[i] → pts[(i+1) % N]`. If any
+ * pair of consecutive offset lines is parallel, or the resulting polygon is
+ * inverted/collapsed, returns `null` (caller should treat as zero buildable).
+ *
+ * Distance and point units must agree (both metres, or both pixels).
+ */
+export function insetPolygon(pts: Point[], distances: number[]): Point[] | null {
+  const N = pts.length;
+  if (N < 3) return null;
+  let signedArea = 0;
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[(i + 1) % N];
+    signedArea += a.x * b.y - b.x * a.y;
+  }
+  if (Math.abs(signedArea) < 1e-9) return null;
+  const sign = signedArea > 0 ? 1 : -1;
+  type Line = { px: number; py: number; ux: number; uy: number };
+  const lines: Line[] = [];
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[(i + 1) % N];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const L = Math.hypot(dx, dy) || 1;
+    const ux = dx / L, uy = dy / L;
+    const nx = -uy * sign, ny = ux * sign;
+    const d = distances[i] ?? 0;
+    lines.push({ px: a.x + nx * d, py: a.y + ny * d, ux, uy });
+  }
+  const intersect = (l1: Line, l2: Line): Point | null => {
+    const det = l1.ux * (-l2.uy) - l1.uy * (-l2.ux);
+    if (Math.abs(det) < 1e-9) return null;
+    const dx = l2.px - l1.px, dy = l2.py - l1.py;
+    const t = (dx * (-l2.uy) - dy * (-l2.ux)) / det;
+    return { x: l1.px + t * l1.ux, y: l1.py + t * l1.uy };
+  };
+  const out: Point[] = [];
+  for (let i = 0; i < N; i++) {
+    const v = intersect(lines[(i - 1 + N) % N], lines[i]);
+    if (!v) return null;
+    out.push(v);
+  }
+  // Reject inverted/collapsed insets.
+  let insArea = 0;
+  for (let i = 0; i < N; i++) {
+    const a = out[i], b = out[(i + 1) % N];
+    insArea += a.x * b.y - b.x * a.y;
+  }
+  if (Math.sign(insArea) !== Math.sign(signedArea) || Math.abs(insArea) < 1e-9) return null;
+  return out;
+}
+
+/** Absolute area of a simple polygon (shoelace). */
+export function polygonArea(pts: Point[]): number {
+  const N = pts.length;
+  if (N < 3) return 0;
+  let s = 0;
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[(i + 1) % N];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(s) / 2;
+}
+
+/**
+ * Compute buildable area from a plot polygon by insetting with per-edge
+ * setbacks (front edges get `front`, every other edge gets `side`) and
+ * subtracting an optional amenity deduction.
+ *
+ * Returns 0 if the polygon collapses under the setbacks or the amenity
+ * deduction is larger than the inset area.
+ */
+export function buildableAreaFromInset(
+  plotPolygonM: Point[],
+  frontEdgeIndices: ReadonlySet<number>,
+  frontM: number,
+  sideM: number,
+  amenityDeductionM2 = 0,
+): number {
+  const N = plotPolygonM.length;
+  if (N < 3) return 0;
+  const distances = new Array(N).fill(0).map((_, i) =>
+    frontEdgeIndices.has(i) ? frontM : sideM,
+  );
+  const inset = insetPolygon(plotPolygonM, distances);
+  if (!inset) return 0;
+  const a = polygonArea(inset);
+  return Math.max(0, a - Math.max(0, amenityDeductionM2));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Solver
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SolverInputs {
-  /** Plot width (m), from the room's bounding box. */
+  /** Plot polygon in metres. Drives the buildable-area computation via the
+   *  Inset Polygon algorithm (front edges → front setback, others → side). */
+  plotPolygonM: Point[];
+  /** Indices into `plotPolygonM` whose outgoing edge is a "front" edge (e.g.
+   *  tagged via Segment Properties → Edge Role = Front). All other edges
+   *  receive the side / rear setback. Empty set ⇒ no edges are front. */
+  frontEdgeIndices: ReadonlySet<number>;
+  /** Optional amenity / open-space area in m² to subtract from the inset
+   *  buildable area (e.g. internal amenities the BUA workflow deducts). */
+  amenityDeductionM2?: number;
+  /** Plot width (m), from the room's bounding box — informational, used by
+   *  reporting only. The solver no longer uses it for buildable area. */
   plotWidthM: number;
-  /** Plot depth (m), from the room's bounding box. */
+  /** Plot depth (m), from the room's bounding box — informational only. */
   plotDepthM: number;
   /**
    * Required total built-up area (m²) — the loop's target. Caller decides how
@@ -188,9 +317,17 @@ export interface SolverRow {
   plateInM2: number;
   floors: number;
   heightM: number;
+  /** Front (street-facing) setback used this iteration. */
+  frontSetbackM: number;
+  /** Side/rear (remaining edges) setback used this iteration. */
   sideSetbackM: number;
+  /** Bounding-box-derived buildable width — kept for backward compat, not displayed. */
   buildWidthM: number;
+  /** Bounding-box-derived buildable depth — kept for backward compat, not displayed. */
   buildDepthM: number;
+  /** Area of the inset polygon (front on Front edges, side on all others), m². */
+  insetAreaM2: number;
+  /** Inset area minus amenity deduction — this is what the solver compares to plate. */
   buildableM2: number;
   plateFits: boolean;
   note: string;
@@ -227,6 +364,9 @@ export interface SolverResult {
  */
 export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
   const {
+    plotPolygonM,
+    frontEdgeIndices,
+    amenityDeductionM2 = 0,
     plotWidthM,
     plotDepthM,
     totalBuaM2,
@@ -253,7 +393,7 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
       message: `Regulations JSON has no rules for occupancy "${occupancy}".`,
     };
   }
-  if (!(plotWidthM > 0) || !(plotDepthM > 0) || !(totalBuaM2 > 0) || !(regs.floorToFloorM > 0)) {
+  if (!Array.isArray(plotPolygonM) || plotPolygonM.length < 3 || !(totalBuaM2 > 0) || !(regs.floorToFloorM > 0)) {
     return {
       status: "invalid-input",
       rows: [],
@@ -262,11 +402,11 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
       totalBuaM2: 0,
       frontSetbackUsedM: 0,
       heightCapUsedM: occRules.permissibleHeightM,
-      message: "Plot width/depth, BUA and floor-to-floor must all be positive.",
+      message: "Plot polygon (≥3 pts), BUA and floor-to-floor must all be positive.",
     };
   }
 
-  const plotAreaM2 = plotWidthM * plotDepthM;
+  const plotAreaM2 = polygonArea(plotPolygonM);
   const front = frontSetbackFor(occRules, roadLocation);
   const heightCap = occRules.permissibleHeightM;
 
@@ -284,9 +424,11 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
         plateInM2: plateIn,
         floors,
         heightM,
+        frontSetbackM: front,
         sideSetbackM: NaN,
         buildWidthM: NaN,
         buildDepthM: NaN,
+        insetAreaM2: NaN,
         buildableM2: NaN,
         plateFits: false,
         note: `height ${heightM.toFixed(1)} m exceeds cap ${heightCap} m`,
@@ -304,9 +446,15 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
     }
 
     const side = sideSetbackFromBands(heightM, occRules.sideSetbackBands);
+    // Inset area = polygon inset with `front` on tagged Front edges and `side`
+    // on every other edge. Buildable = inset area − amenity deduction. Replaces
+    // the legacy (W−2·side)·(D−2·front) rectangle formula so the solver works
+    // for any irregular plot shape.
+    const insetAreaM2 = buildableAreaFromInset(plotPolygonM, frontEdgeIndices, front, side, 0);
+    const buildable = Math.max(0, insetAreaM2 - Math.max(0, amenityDeductionM2));
+    // Bounding-box-derived width/depth — kept on the row for backward compat.
     const buildWidth = Math.max(0, plotWidthM - 2 * side);
     const buildDepth = Math.max(0, plotDepthM - 2 * front);
-    const buildable = buildWidth * buildDepth;
 
     const fits = plateIn <= buildable + tolM2;
     const converged = fits && Math.abs(plateIn - buildable) <= tolM2;
@@ -316,9 +464,11 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
       plateInM2: plateIn,
       floors,
       heightM,
+      frontSetbackM: front,
       sideSetbackM: side,
       buildWidthM: buildWidth,
       buildDepthM: buildDepth,
+      insetAreaM2,
       buildableM2: buildable,
       plateFits: fits,
       note: converged ? "CONVERGED" : fits ? `fits with slack ${(buildable - plateIn).toFixed(1)} m²` : `shrink → ${buildable.toFixed(1)}`,

@@ -1,6 +1,17 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
+import {
+  DEFAULT_REGULATIONS,
+  OCCUPANCY_LABELS,
+  ROAD_LOCATION_LABELS,
+  polygonArea,
+  runCircularSetbackSolver,
+  type Occupancy,
+  type Regulations,
+  type RoadLocation,
+  type SolverResult,
+} from "../../algorithms/dcr/circularSetbackSolver";
 
 /**
  * Shape of the Space fields this block reads/writes. Mirrors the optional
@@ -39,6 +50,21 @@ export interface BuaCalculatorBlockProps {
   setExpanded: (v: boolean | ((prev: boolean) => boolean)) => void;
   /** Persist one or more field updates back onto the room in history state. */
   onUpdateRoom: (updates: Partial<BuaCalculatorRoom>) => void;
+  /** Indices of `selectedRoom.points` whose outgoing edge is tagged as Front
+   *  via Segment Properties → Edge Role = Front. Drives the setback solver. */
+  frontEdgeIndices?: number[];
+  /** Paint a preview inset polygon on the canvas using the supplied per-edge
+   *  setback distances (metres). Also hands the amenity deduction (m²) over to
+   *  the Inset Polygon block so the same Deduct Area overlay updates live.
+   *  Implementation should drive the Inset Polygon block's per-room setbacks,
+   *  enable Live, and enable Deduct Area with the supplied deduction. */
+  onShowOnCanvas?: (
+    room: { id: string; points: Point[] },
+    perEdgeDistancesM: number[],
+    deductionM2: number,
+  ) => void;
+  /** Remove any inset preview walls previously painted by onShowOnCanvas. */
+  onClearPreview?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,10 +90,6 @@ interface ComputedStatement {
   floorsMaxHt: number; stairsPerCore: number;
   stairFootprintEach: number; liftLobby: number; corePerWing: number;
   totalCoreM2: number; corePctBua: number;
-  chosenPlate: number; floorsNeeded: number; htNeeded: number; htOk: boolean;
-  sideSetback: number; bboxWm: number; bboxDm: number;
-  maxPlateAllowed: number; plateOk: boolean;
-  massingCoreM2: number; massingCorePct: number;
 }
 
 function computeStatement(room: BuaCalculatorRoom, pixelsPerMeter: number): ComputedStatement {
@@ -132,22 +154,6 @@ function computeStatement(room: BuaCalculatorRoom, pixelsPerMeter: number): Comp
   const totalCoreM2 = corePerWing * wings * floorsMaxHt;
   const corePctBua = maxGrossBua > 0 ? totalCoreM2 / maxGrossBua : 0;
 
-  // Massing (plate-driven)
-  const chosenPlate  = room.chosenPlateM2 ?? 2500;
-  const floorsNeeded = chosenPlate > 0 ? Math.ceil(maxGrossBua / chosenPlate) : 0;
-  const htNeeded     = floorsNeeded * floorHt;
-  const htOk         = htNeeded <= maxHt;
-  const sideSetback  = htNeeded > 32 ? 0.25 * htNeeded : 3.6;
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const bboxWm = (Math.max(...xs) - Math.min(...xs)) / ppm;
-  const bboxDm = (Math.max(...ys) - Math.min(...ys)) / ppm;
-  const frontSetback = 4.5;
-  const maxPlateAllowed = Math.max(0, bboxWm - 2 * sideSetback) * Math.max(0, bboxDm - 2 * frontSetback);
-  const plateOk        = chosenPlate <= maxPlateAllowed;
-  const massingCoreM2  = corePerWing * wings * floorsNeeded;
-  const massingCorePct = maxGrossBua > 0 ? massingCoreM2 / maxGrossBua : 0;
-
   return {
     plotAreaM2, gcrPct, gcrCapM2, maxFsi, maxBuaM2,
     amenityOsRate, losRate, basicMult, premiumMult, tdrMult,
@@ -158,9 +164,6 @@ function computeStatement(room: BuaCalculatorRoom, pixelsPerMeter: number): Comp
     carParks, areaPerPark, otherNonFsi, parkingM2, totalConstM2, totalConstSqFt,
     maxHt, floorHt, wings, floorsMaxHt, stairsPerCore,
     stairFootprintEach, liftLobby, corePerWing, totalCoreM2, corePctBua,
-    chosenPlate, floorsNeeded, htNeeded, htOk,
-    sideSetback, bboxWm, bboxDm, maxPlateAllowed, plateOk,
-    massingCoreM2, massingCorePct,
   };
 }
 
@@ -206,6 +209,23 @@ const NumCell = (p: NumCellProps) => (
 
 export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
   const [calc, setCalc] = useState<ComputedStatement | null>(null);
+  // Setback Solver inputs (merged in from the standalone Circular Setback Solver block).
+  // The solver no longer needs a Total BUA input — it'll consume `maxGrossBua` directly
+  // off the BUA calc result. The amenity deduction is computed from `amenityOsRate × plotArea`.
+  const [occupancy, setOccupancy] = useState<Occupancy>("residential");
+  const [roadLocation, setRoadLocation] = useState<RoadLocation>("areas-in-city");
+  const [regsText, setRegsText] = useState<string>(() => JSON.stringify(DEFAULT_REGULATIONS, null, 2));
+  const [regsExpanded, setRegsExpanded] = useState<boolean>(false);
+  const [regsParseError, setRegsParseError] = useState<string | null>(null);
+  const [solverResult, setSolverResult] = useState<SolverResult | null>(null);
+  // Live preview of the resolved front setback / height cap from the current dropdowns.
+  const liveRegs = useMemo(() => {
+    try { return JSON.parse(regsText) as typeof DEFAULT_REGULATIONS; } catch { return null; }
+  }, [regsText]);
+  const occRulesPreview = liveRegs?.occupancies?.[occupancy];
+  const previewFront = occRulesPreview?.frontSetbacks.find((r) => r.location === roadLocation)?.setbackM
+    ?? occRulesPreview?.frontSetbacks[0]?.setbackM ?? null;
+  const previewHeightCap = occRulesPreview?.permissibleHeightM ?? null;
 
   const onCommit = (field: keyof BuaCalculatorRoom, value: number) => {
     p.onUpdateRoom({ [field]: value } as Partial<BuaCalculatorRoom>);
@@ -225,7 +245,46 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
     return Math.abs(a) / 2 / ppm2;
   }, [room.points, p.pixelsPerMeter]);
 
-  const onCalculate = () => setCalc(computeStatement(room, p.pixelsPerMeter));
+  const onCalculate = () => {
+    // 1. Existing BUA calc.
+    const next = computeStatement(room, p.pixelsPerMeter);
+    setCalc(next);
+
+    // 2. Setback solver — Total BUA = max gross BUA from the calc above;
+    //    Deduction = amenity OS area (rate × plot area) already computed.
+    let regs: Regulations;
+    try {
+      regs = JSON.parse(regsText) as Regulations;
+      setRegsParseError(null);
+    } catch (e) {
+      setRegsParseError(e instanceof Error ? e.message : String(e));
+      setSolverResult(null);
+      return;
+    }
+    const polygonM: Point[] = (room.points ?? []).map((q) => ({
+      x: q.x / p.pixelsPerMeter,
+      y: q.y / p.pixelsPerMeter,
+    }));
+    if (polygonM.length < 3) { setSolverResult(null); return; }
+    const frontSet = new Set<number>(p.frontEdgeIndices ?? []);
+    const polygonAreaM2 = polygonArea(polygonM);
+    const startPlate = Math.max(1, polygonAreaM2 - next.amenityOsM2);
+    const res = runCircularSetbackSolver({
+      plotPolygonM: polygonM,
+      frontEdgeIndices: frontSet,
+      amenityDeductionM2: next.amenityOsM2,
+      // Bounding-box dimensions are informational on the solver row; the real
+      // buildable area comes from the inset of the actual polygon.
+      plotWidthM: 0,
+      plotDepthM: 0,
+      totalBuaM2: next.maxGrossBua,
+      regs,
+      occupancy,
+      roadLocation,
+      startPlateGuessM2: startPlate,
+    });
+    setSolverResult(res);
+  };
 
   // Shared row-style helpers (preserved from the original render).
   const rowBase = "grid gap-x-1 py-[1px] text-[9px]";
@@ -293,8 +352,77 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                 field="otherNonFsiSqm" value={room.otherNonFsiSqm ?? 6000} min={0} step={100} onCommit={onCommit} />
               <NumCell roomId={room.id} label="Wings / Cores" title="Number of wings / cores per floor"
                 field="wingsPerFloor" value={room.wingsPerFloor ?? 5} min={1} step={1} onCommit={onCommit} />
-              <NumCell roomId={room.id} label="Floor Plate (m²)" title="Chosen gross floor plate area (sq.m) used for Massing — how big each typical floor is"
-                field="chosenPlateM2" value={room.chosenPlateM2 ?? 2500} min={100} step={50} onCommit={onCommit} />
+            </div>
+          </div>
+
+          {/* ── Setback Regulations ────────────────────────────────────── */}
+          <div className="rounded border border-slate-200 bg-white p-1.5">
+            <p className="mb-1 border-b border-slate-200 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+              Setback Regulations
+            </p>
+            <div className="grid grid-cols-1 gap-1.5">
+              <div>
+                <span className="text-[9px] text-slate-500">Building type</span>
+                <select
+                  className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1 text-[11px]"
+                  value={occupancy}
+                  onChange={(e) => setOccupancy(e.target.value as Occupancy)}
+                >
+                  {(Object.keys(OCCUPANCY_LABELS) as Occupancy[]).map((k) => (
+                    <option key={k} value={k}>{OCCUPANCY_LABELS[k]}</option>
+                  ))}
+                </select>
+                {previewHeightCap != null && (
+                  <p className="mt-0.5 text-[9px] text-slate-400">
+                    Permissible height: <span className="font-mono text-slate-600">{previewHeightCap} m</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <span className="text-[9px] text-slate-500">Road location (front setback)</span>
+                <select
+                  className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1 text-[11px]"
+                  value={roadLocation}
+                  onChange={(e) => setRoadLocation(e.target.value as RoadLocation)}
+                >
+                  {(Object.keys(ROAD_LOCATION_LABELS) as RoadLocation[]).map((k) => (
+                    <option key={k} value={k}>{ROAD_LOCATION_LABELS[k]}</option>
+                  ))}
+                </select>
+                {previewFront != null && (
+                  <p className="mt-0.5 text-[9px] text-slate-400">
+                    Front setback: <span className="font-mono text-slate-600">{previewFront} m</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-left text-[9px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
+                  onClick={() => setRegsExpanded((v) => !v)}
+                >
+                  <span>Regulations (JSON)</span>
+                  <span className="text-[10px] text-slate-400">{regsExpanded ? "▼" : "▶"}</span>
+                </button>
+                {regsExpanded && (
+                  <>
+                    <textarea
+                      className="mt-0.5 w-full rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-mono text-slate-700"
+                      rows={12}
+                      value={regsText}
+                      onChange={(e) => {
+                        setRegsText(e.target.value);
+                        try { JSON.parse(e.target.value); setRegsParseError(null); }
+                        catch (err) { setRegsParseError(err instanceof Error ? err.message : String(err)); }
+                      }}
+                      spellCheck={false}
+                    />
+                    {regsParseError && (
+                      <p className="mt-1 text-[9px] text-red-600">JSON parse error: {regsParseError}</p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -388,34 +516,97 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                 </div>
               </div>
 
-              {/* Massing */}
-              <div className="border-t border-slate-100 pt-2">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Massing</span>
-                <p className="text-[8px] italic text-slate-400">plate-driven · uses Floor Plate input above</p>
-                <div className="mt-1.5 font-mono">
-                  <div className={`${rowBase} ${cols2} border-b border-slate-300 pb-0.5 mb-0.5 font-semibold text-slate-500`}><span>Item</span><span className={right}>Value</span></div>
-                  <div className={`${rowBase} ${cols2} ${bold} text-slate-700`}><span>Chosen floor plate (m²)</span><span className={right}>{f(calc.chosenPlate)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Target BUA (m²)</span><span className={right}>{f(calc.maxGrossBua)}</span></div>
-                  <div className={`${rowBase} ${cols2} ${bold} text-slate-700`}><span>Floors needed</span><span className={right}>{calc.floorsNeeded}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Building height needed (m)</span><span className={`${right} ${calc.htOk ? "" : "text-red-600 font-semibold"}`}>{f(calc.htNeeded)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Height ceiling (m)</span><span className={right}>{f(calc.maxHt)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Height OK?</span><span className={`${right} font-semibold ${calc.htOk ? "text-green-600" : "text-red-600"}`}>{calc.htOk ? "✓ OK" : "✗ OVER"}</span></div>
-
-                  <div className="mt-1.5 mb-0.5 text-[9px] font-semibold text-slate-600">Setback feasibility (forward-pass, ≥32m → 0.25h)</div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Side setback at this ht (m)</span><span className={right}>{f(calc.sideSetback)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Plot W × D (m)</span><span className={right}>{calc.bboxWm.toFixed(1)}×{calc.bboxDm.toFixed(1)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Max plate (setbacks) (m²)</span><span className={right}>{f(calc.maxPlateAllowed)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Plate fits setbacks?</span><span className={`${right} font-semibold ${calc.plateOk ? "text-green-600" : "text-red-600"}`}>{calc.plateOk ? "✓ OK" : "✗ OVER"}</span></div>
-
-                  <div className="mt-1.5 mb-0.5 text-[9px] font-semibold text-slate-600">Resulting program</div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>FSI BUA (m²)</span><span className={right}>{f(calc.maxGrossBua)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Parking (m²)</span><span className={right}>{f(calc.parkingM2)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-600`}><span>Other non-FSI (m²)</span><span className={right}>{f(calc.otherNonFsi)}</span></div>
-                  <div className={`${rowBase} ${cols2} ${bold} border-t border-slate-200 text-slate-700`}><span>Total construction (m²)</span><span className={right}>{f(calc.totalConstM2)}</span></div>
-                  <div className={`${rowBase} ${cols2} ${bold} rounded bg-amber-50 px-1 text-amber-800`}><span>Core estimate (m²)</span><span className={right}>{f(calc.massingCoreM2)}</span></div>
-                  <div className={`${rowBase} ${cols2} text-slate-500`}><span className="pl-2">Core as % of BUA</span><span className={right}>{(calc.massingCorePct * 100).toFixed(1)}%</span></div>
+              {/* Setback Solver — fed by maxGrossBua (target BUA) and amenityOsM2 (deduction). */}
+              {solverResult && (
+                <div className="border-t border-slate-100 pt-2">
+                  <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Setback Solver</span>
+                  <p className="text-[8px] italic text-slate-400">
+                    target BUA = max gross BUA ({f(solverResult.totalBuaM2)} m²) · deduction = amenity OS ({f(calc.amenityOsM2)} m²)
+                  </p>
+                  <div className={`mt-1 rounded border px-2 py-1 text-[10px] ${
+                    solverResult.status === "converged" ? "border-emerald-300 bg-emerald-50 text-emerald-700" :
+                    solverResult.status === "invalid-input" ? "border-slate-300 bg-slate-50 text-slate-700" :
+                    "border-red-300 bg-red-50 text-red-700"
+                  }`}>
+                    <div className="font-semibold uppercase tracking-wide">{solverResult.status.replace(/-/g, " ")}</div>
+                    <div>{solverResult.message}</div>
+                    <div className="mt-0.5 text-[9px] opacity-80">
+                      front: {solverResult.frontSetbackUsedM.toFixed(2)} m · cap: {solverResult.heightCapUsedM} m
+                    </div>
+                  </div>
+                  {solverResult.rows.length > 0 && p.onShowOnCanvas && (
+                    <div className="mt-1.5 flex gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-[11px] border-indigo-400 bg-white hover:bg-indigo-50"
+                        title="Paint the final-iteration setback as an Inset Polygon preview (no commit)"
+                        onClick={() => {
+                          if (!p.onShowOnCanvas) return;
+                          const lastRow = solverResult.rows[solverResult.rows.length - 1];
+                          const side = Number.isFinite(lastRow.sideSetbackM) ? lastRow.sideSetbackM : 0;
+                          const front = solverResult.frontSetbackUsedM;
+                          const frontSet = new Set<number>(p.frontEdgeIndices ?? []);
+                          const distances = room.points.map((_, i) => (frontSet.has(i) ? front : side));
+                          // Hand the amenity OS area to Inset Polygon as the deduction so the
+                          // red half-plane overlay matches what the solver subtracted.
+                          const deductionM2 = calc?.amenityOsM2 ?? 0;
+                          p.onClearPreview?.();
+                          p.onShowOnCanvas({ id: room.id, points: room.points }, distances, deductionM2);
+                        }}
+                      >
+                        Show on Canvas
+                      </Button>
+                      {p.onClearPreview && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-[11px] border-slate-300 bg-white hover:bg-slate-50"
+                          onClick={() => p.onClearPreview?.()}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {solverResult.rows.length > 0 && (
+                    <div className="mt-1.5 overflow-x-auto rounded border border-slate-200 bg-white">
+                      <table className="w-full text-[9px] tabular-nums">
+                        <thead className="bg-slate-100 text-slate-600">
+                          <tr>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Plate</th>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Floors</th>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Height</th>
+                            <th colSpan={2} className="px-1 py-0.5 text-center border-b border-slate-200">Setbacks</th>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Inset Area</th>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Inset After Deduction</th>
+                          </tr>
+                          <tr>
+                            <th className="px-1 py-0.5 text-right font-normal">Front</th>
+                            <th className="px-1 py-0.5 text-right font-normal">Remaining</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {solverResult.rows.map((r) => (
+                            <tr key={r.iter} className="border-t border-slate-100">
+                              <td className="px-1 py-0.5 text-right font-mono">{r.plateInM2.toFixed(1)}</td>
+                              <td className="px-1 py-0.5 text-right font-mono">{r.floors}</td>
+                              <td className="px-1 py-0.5 text-right font-mono">{r.heightM.toFixed(1)}</td>
+                              <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.frontSetbackM) ? r.frontSetbackM.toFixed(2) : "—"}</td>
+                              <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.sideSetbackM) ? r.sideSetbackM.toFixed(2) : "—"}</td>
+                              <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.insetAreaM2) ? r.insetAreaM2.toFixed(1) : "—"}</td>
+                              <td className={`px-1 py-0.5 text-right font-mono ${r.note === "CONVERGED" ? "font-semibold text-emerald-700" : ""}`}>
+                                {Number.isFinite(r.buildableM2) ? r.buildableM2.toFixed(1) : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
+
             </div>
           )}
         </>

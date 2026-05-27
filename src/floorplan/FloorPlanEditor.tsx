@@ -193,7 +193,6 @@ import { BspBlock, type BspSeed, type BspSeedMetric, type BspCorridor } from "./
 import { RfpBlock, type RfpSeed, type RfpSeedMetric } from "./components/roomProperties/RfpBlock";
 import { runRfp } from "./algorithms/partitioning/rfp";
 import { SiteToolsBlock } from "./components/roomProperties/SiteToolsBlock";
-import { CircularSetbackSolverBlock } from "./components/roomProperties/CircularSetbackSolverBlock";
 import { BuaCalculatorBlock } from "./components/roomProperties/BuaCalculatorBlock";
 import { FillAreaBlock } from "./components/roomProperties/FillAreaBlock";
 import { AddRoomTypeDialog } from "./components/dialogs/AddRoomTypeDialog";
@@ -1727,6 +1726,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Foldable section expansion state (properties-tab blocks). */
   const [splitExpanded, setSplitExpanded] = useState<boolean>(false);
   const [insetExpanded, setInsetExpanded] = useState<boolean>(false);
+  // Inset Polygon → Deduct Area UI state (lifted from InsetPolygonBlock so the canvas can render it).
+  const [insetDeductEnabled, setInsetDeductEnabled] = useState<boolean>(false);
+  const [insetDeductMode, setInsetDeductMode] = useState<"area" | "percent">("area");
+  const [insetDeductAreaM2, setInsetDeductAreaM2] = useState<number>(0);
+  const [insetDeductPercent, setInsetDeductPercent] = useState<number>(0);
+  const [insetDeductAngle, setInsetDeductAngle] = useState<number>(0);
+  // Inset Polygon → Mode + Front/Remaining values (lifted so the BUA Calculator's
+  // Show on Canvas can drive the block straight into Front-And-Remaining mode).
+  const [insetMode, setInsetMode] = useState<"equal" | "variable" | "front-remaining">("variable");
+  const [insetFrontVal, setInsetFrontVal] = useState<number>(0);
+  const [insetRemainingVal, setInsetRemainingVal] = useState<number>(0);
   const [massingExpanded, setMassingExpanded] = useState<boolean>(false);
   const [massingAvgWidth, setMassingAvgWidth] = useState<number>(3.5);
   const [massingLive, setMassingLive] = useState<boolean>(false);
@@ -2131,7 +2141,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [spaceToolsOptimisationExpanded, setSpaceToolsOptimisationExpanded] = useState<boolean>(false);
   const [spaceToolsPlacementExpanded, setSpaceToolsPlacementExpanded] = useState<boolean>(false);
   const [spaceToolsSiteMassingExpanded, setSpaceToolsSiteMassingExpanded] = useState<boolean>(false);
-  const [circularSetbackSolverExpanded, setCircularSetbackSolverExpanded] = useState<boolean>(false);
   const [buaCalculatorExpanded, setBuaCalculatorExpanded] = useState<boolean>(false);
   // Scope filter for the Select tool — wires DrawingToolbar's Select popover
   // ("All" / "Node" / "Segment" / "Space"). Without this state the popover
@@ -19878,6 +19887,68 @@ User request: ${aiPrompt.trim()}`;
                     }
                     const anySetback = insetSetbacks.some((s) => (s ?? 0) > 0.001);
 
+                    // Deduction overlay — mirrors Optimise-Rect's Shrink + Optimise-Shrink logic.
+                    // The deduction is the *cut-off* piece produced by clipping the inset polygon
+                    // with a half-plane at `deductAngle`; the slide% along that direction is binary-
+                    // searched so the cut-off area equals the target deduction (in m² or % of main).
+                    let deductionPolyPts: { x: number; y: number }[] | null = null;
+                    if (insetDeductEnabled && insetValid && insetPts.length >= 3) {
+                      // Main polygon area in m² for the percent mode.
+                      let mainAreaPx2 = 0;
+                      for (let i = 0; i < N; i++) {
+                        const a = pts[i], b = pts[(i + 1) % N];
+                        mainAreaPx2 += a.x * b.y - b.x * a.y;
+                      }
+                      const mainAreaM2 = Math.abs(mainAreaPx2) / 2 / (pixelsPerMeter * pixelsPerMeter);
+                      // Inset polygon area in px².
+                      let insetAreaPx2 = 0;
+                      for (let i = 0; i < insetPts.length; i++) {
+                        const a = insetPts[i], b = insetPts[(i + 1) % insetPts.length];
+                        insetAreaPx2 += a.x * b.y - b.x * a.y;
+                      }
+                      insetAreaPx2 = Math.abs(insetAreaPx2) / 2;
+                      const dedM2 = insetDeductMode === "area"
+                        ? insetDeductAreaM2
+                        : (insetDeductPercent / 100) * mainAreaM2;
+                      const targetCutPx2 = Math.min(dedM2 * pixelsPerMeter * pixelsPerMeter, insetAreaPx2);
+                      if (targetCutPx2 > 0.5) {
+                        // Half-plane direction from the deduction angle.
+                        const rad = (insetDeductAngle * Math.PI) / 180;
+                        const nx = Math.cos(rad), ny = Math.sin(rad);
+                        const projs = insetPts.map((q) => q.x * nx + q.y * ny);
+                        const pMin = Math.min(...projs);
+                        const pMax = Math.max(...projs);
+                        // Cut-off polygon for slide s∈[0,100]: keep the *high* side (normal +n).
+                        const cutAt = (s: number): { poly: { x: number; y: number }[]; area: number } => {
+                          if (s <= 0) return { poly: [], area: 0 };
+                          const c = pMax - (Math.min(100, Math.max(0, s)) / 100) * (pMax - pMin);
+                          const cl = clipPolygonByHalfPlane(insetPts, c * nx, c * ny, nx, ny);
+                          if (cl.length < 3) return { poly: cl, area: 0 };
+                          let a = 0;
+                          for (let i = 0; i < cl.length; i++) {
+                            const p1 = cl[i], p2 = cl[(i + 1) % cl.length];
+                            a += p1.x * p2.y - p2.x * p1.y;
+                          }
+                          return { poly: cl, area: Math.abs(a) / 2 };
+                        };
+                        // Cut-off area increases monotonically with slide%. Binary-search the slide
+                        // that yields the target cut area (same scheme as Optimise-Rect's solver).
+                        let lo = 0, hi = 100;
+                        const atHi = cutAt(hi);
+                        if (atHi.area <= targetCutPx2) {
+                          deductionPolyPts = atHi.poly.length >= 3 ? atHi.poly : null;
+                        } else {
+                          for (let iter = 0; iter < 24; iter++) {
+                            const mid = (lo + hi) / 2;
+                            const a = cutAt(mid).area;
+                            if (a < targetCutPx2) lo = mid; else hi = mid;
+                          }
+                          const finalRes = cutAt(hi);
+                          deductionPolyPts = finalRes.poly.length >= 3 ? finalRes.poly : null;
+                        }
+                      }
+                    }
+
                     return (
                       <Group listening={false}>
                         {/* Inset polygon outline (only when at least one setback > 0 and the inset is valid). */}
@@ -19889,6 +19960,17 @@ User request: ${aiPrompt.trim()}`;
                             strokeWidth={1.5 / scale}
                             dash={[6 / scale, 3 / scale]}
                             fill="rgba(22, 163, 74, 0.06)"
+                          />
+                        )}
+                        {/* Deduction footprint — rotated square inside the inset polygon. */}
+                        {deductionPolyPts && (
+                          <Line
+                            points={deductionPolyPts.flatMap((q) => [q.x, q.y])}
+                            closed
+                            stroke="#dc2626"
+                            strokeWidth={1.5 / scale}
+                            dash={[5 / scale, 3 / scale]}
+                            fill="rgba(220, 38, 38, 0.18)"
                           />
                         )}
                         {pts.map((_, i) => {
@@ -26429,6 +26511,45 @@ User request: ${aiPrompt.trim()}`;
                               bumpLivePreviewTick={() => setLivePreviewTick((t) => t + 1)}
                               runRoomInset={runRoomInset}
                               unit={unit}
+                              pixelsPerMeter={pixelsPerMeter}
+                              deductEnabled={insetDeductEnabled}
+                              setDeductEnabled={setInsetDeductEnabled}
+                              deductMode={insetDeductMode}
+                              setDeductMode={setInsetDeductMode}
+                              deductAreaM2={insetDeductAreaM2}
+                              setDeductAreaM2={setInsetDeductAreaM2}
+                              deductPercent={insetDeductPercent}
+                              setDeductPercent={setInsetDeductPercent}
+                              deductAngle={insetDeductAngle}
+                              setDeductAngle={setInsetDeductAngle}
+                              mode={insetMode}
+                              setMode={setInsetMode}
+                              frontVal={insetFrontVal}
+                              setFrontVal={setInsetFrontVal}
+                              remainingVal={insetRemainingVal}
+                              setRemainingVal={setInsetRemainingVal}
+                              frontEdgeIndex={(() => {
+                                // Find the edge index of selectedRoom whose endpoints coincide
+                                // with a Site Boundary wall tagged edgeRole === "front".
+                                if (!selectedRoom) return null;
+                                const pts = selectedRoom.points;
+                                const N = pts.length;
+                                if (N < 2) return null;
+                                const eq = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+                                  Math.hypot(a.x - b.x, a.y - b.y) < 0.5;
+                                const frontWalls = history.state.walls.filter(
+                                  (w) => w.segmentType === "plot-boundary" && w.edgeRole === "front",
+                                );
+                                for (const fw of frontWalls) {
+                                  for (let i = 0; i < N; i++) {
+                                    const a = pts[i], b = pts[(i + 1) % N];
+                                    if ((eq(fw.start, a) && eq(fw.end, b)) || (eq(fw.start, b) && eq(fw.end, a))) {
+                                      return i;
+                                    }
+                                  }
+                                }
+                                return null;
+                              })()}
                               onLiveOff={() => {
                                 const h = historyRef.current;
                                 h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInsetWall) });
@@ -26949,28 +27070,7 @@ User request: ${aiPrompt.trim()}`;
                                 return pb?.floorToFloorM ?? selectedRoom.floorToFloorM ?? 3.0;
                               })()}
                             />
-                            <CircularSetbackSolverBlock
-                              selectedRoom={selectedRoom}
-                              pixelsPerMeter={pixelsPerMeter}
-                              expanded={circularSetbackSolverExpanded}
-                              setExpanded={setCircularSetbackSolverExpanded}
-                              onShowOnCanvas={(room, distances) => {
-                                // Drive runRoomInset with our own per-edge setbacks via the
-                                // existing override ref (same mechanism the recipe runner uses).
-                                // commit = false (silent = true) so this paints preview walls
-                                // only — no new Buildable Area room is created.
-                                insetSetbacksOverrideRef.current = distances;
-                                try {
-                                  runRoomInset(room, true);
-                                } finally {
-                                  insetSetbacksOverrideRef.current = null;
-                                }
-                              }}
-                              onClearPreview={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInsetWall) });
-                              }}
-                            />
+                            {/* Circular Setback Solver merged into BUA Calculator below. */}
                             {selectedRoom.roomType === "plot-boundary" && (
                               <BuaCalculatorBlock
                                 selectedRoom={selectedRoom}
@@ -26983,6 +27083,84 @@ User request: ${aiPrompt.trim()}`;
                                     rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, ...updates } : r),
                                   });
                                 }}
+                                onShowOnCanvas={(room, distances, deductionM2) => {
+                                  // Drive the Inset Polygon block end-to-end via its "Front And
+                                  // Remaining" mode so the user sees the exact same preview the
+                                  // Inset Polygon block would paint and the panel reflects what's
+                                  // happening:
+                                  //   1. Push per-edge setbacks into the room's slice (the source
+                                  //      of truth that runRoomInset and the canvas overlay read).
+                                  //   2. Switch the block to Front-And-Remaining mode and seed the
+                                  //      Front + Remaining sliders from the distances array (front
+                                  //      comes from any tagged Front edge; otherwise edge 0).
+                                  //   3. Switch Deduct Area on with mode = area + amenity value.
+                                  //   4. Turn Live on; bump the preview tick + run runRoomInset
+                                  //      (silent) so the preview walls and overlays appear at once.
+                                  setInsetSetbacksByRoom((prev) => ({ ...prev, [room.id]: distances }));
+                                  // Pick front index the same way InsetPolygonBlock does — first
+                                  // edge tagged Front, falling back to 0.
+                                  const frontEdges = history.state.walls.filter(
+                                    (w) => w.segmentType === "plot-boundary" && w.edgeRole === "front",
+                                  );
+                                  const pts = room.points;
+                                  const eq = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+                                    Math.hypot(a.x - b.x, a.y - b.y) < 0.5;
+                                  let frontIdx = 0;
+                                  outer: for (const fw of frontEdges) {
+                                    for (let i = 0; i < pts.length; i++) {
+                                      const a = pts[i], b = pts[(i + 1) % pts.length];
+                                      if ((eq(fw.start, a) && eq(fw.end, b)) || (eq(fw.start, b) && eq(fw.end, a))) {
+                                        frontIdx = i; break outer;
+                                      }
+                                    }
+                                  }
+                                  const frontVal = distances[frontIdx] ?? 0;
+                                  const remainingVal = distances.find((_, i) => i !== frontIdx) ?? 0;
+                                  setInsetMode("front-remaining");
+                                  setInsetFrontVal(frontVal);
+                                  setInsetRemainingVal(remainingVal);
+                                  setInsetDeductEnabled(deductionM2 > 0);
+                                  setInsetDeductMode("area");
+                                  setInsetDeductAreaM2(Math.max(0, deductionM2));
+                                  setInsetLive(true);
+                                  insetSetbacksOverrideRef.current = distances;
+                                  try { runRoomInset(room, true); }
+                                  finally { insetSetbacksOverrideRef.current = null; }
+                                  setLivePreviewTick((t) => t + 1);
+                                }}
+                                onClearPreview={() => {
+                                  const h = historyRef.current;
+                                  h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInsetWall) });
+                                  setInsetLive(false);
+                                  setInsetDeductEnabled(false);
+                                  if (selectedRoom) delete livePreviewPolygonRef.current[selectedRoom.id];
+                                  setLivePreviewTick((t) => t + 1);
+                                }}
+                                frontEdgeIndices={(() => {
+                                  // Walk every Site Boundary wall tagged edgeRole === "front"
+                                  // and match it to a polygon edge of the selected room by
+                                  // endpoint proximity. Drives the embedded setback solver.
+                                  if (!selectedRoom) return [];
+                                  const pts = selectedRoom.points;
+                                  const N = pts.length;
+                                  if (N < 2) return [];
+                                  const eq = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+                                    Math.hypot(a.x - b.x, a.y - b.y) < 0.5;
+                                  const frontWalls = history.state.walls.filter(
+                                    (w) => w.segmentType === "plot-boundary" && w.edgeRole === "front",
+                                  );
+                                  const out: number[] = [];
+                                  for (const fw of frontWalls) {
+                                    for (let i = 0; i < N; i++) {
+                                      const a = pts[i], b = pts[(i + 1) % N];
+                                      if ((eq(fw.start, a) && eq(fw.end, b)) || (eq(fw.start, b) && eq(fw.end, a))) {
+                                        if (!out.includes(i)) out.push(i);
+                                        break;
+                                      }
+                                    }
+                                  }
+                                  return out;
+                                })()}
                               />
                             )}
                           </>

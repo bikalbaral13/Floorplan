@@ -271,6 +271,9 @@ export interface Wall {
   setbackRegime?: "road" | "adjoining-plot" | "nala-drain" | "water-body" | "restricted-zone" | "green-open-space";
   /** Site Boundary + setbackRegime="road" only: abutting road width in metres (drives tiered setback). */
   roadWidthM?: number;
+  /** Site Boundary only: role of this edge along the plot perimeter — "front" (street-facing)
+   *  or "remaining" (everything else). Drives the Inset Polygon "Front And Remaining" mode. */
+  edgeRole?: "front" | "remaining";
   /** Wall produced by Add Openings (committed). */
   isOpeningWall?: boolean;
   /** Live-preview variant of Add Openings — excluded from room detection. */

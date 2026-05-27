@@ -303,6 +303,23 @@ export const WallInputsBlock = (p: WallInputsBlockProps) => {
 
           {w.segmentType === "plot-boundary" && (
             <div>
+              <span className="text-[10px] text-slate-400">Edge Role</span>
+              <select
+                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+                value={w.edgeRole ?? "remaining"}
+                onChange={(e) => {
+                  const v = e.target.value as "front" | "remaining";
+                  p.updateSelectedWall((wall) => ({ ...wall, edgeRole: v }));
+                }}
+              >
+                <option value="front">Front</option>
+                <option value="remaining">Remaining</option>
+              </select>
+            </div>
+          )}
+
+          {w.segmentType === "plot-boundary" && (
+            <div>
               <span className="text-[10px] text-slate-400">Boundary Treatment</span>
               <select
                 className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
