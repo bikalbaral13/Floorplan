@@ -20,6 +20,8 @@
  */
 
 import type { Point } from "../../types";
+import { largestInscribedRectangle } from "../layout/optimiseRect";
+import { clipPolygonByHalfPlane } from "../partitioning/voronoi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Regulation JSON shape
@@ -287,6 +289,12 @@ export interface SolverInputs {
   /** Optional amenity / open-space area in m² to subtract from the inset
    *  buildable area (e.g. internal amenities the BUA workflow deducts). */
   amenityDeductionM2?: number;
+  /** Direction of the amenity-deduction half-plane (degrees). The solver clips
+   *  the inset polygon by this half-plane (keeping the opposite side) so the
+   *  max-rect search excludes the amenity region — i.e. the rectangle sits
+   *  inside the *post-deduction* available area, not the raw inset. Default 0
+   *  (horizontal cut, removing the top edge of the inset). */
+  amenityDeductionAngleDeg?: number;
   /** Plot width (m), from the room's bounding box — informational, used by
    *  reporting only. The solver no longer uses it for buildable area. */
   plotWidthM: number;
@@ -327,7 +335,28 @@ export interface SolverRow {
   buildDepthM: number;
   /** Area of the inset polygon (front on Front edges, side on all others), m². */
   insetAreaM2: number;
-  /** Inset area minus amenity deduction — this is what the solver compares to plate. */
+  /** Setback inset polygon (m), used for the Show-on-Canvas Inset Area room. */
+  insetPolyM: Point[];
+  /** Inset polygon minus the amenity deduction half-plane (m). When deduction
+   *  is 0 this equals insetPolyM. Used for the Show-on-Canvas Buildable Area. */
+  buildablePolyM: Point[];
+  /** The amenity-deduction half-plane piece cut OUT of the inset polygon (m) —
+   *  the complement of buildablePolyM within insetPolyM. Empty when the
+   *  deduction is 0. Drives the Show-on-Canvas Deduction Area. */
+  deductionPolyM: Point[];
+  /** Largest free-angle rectangle inscribed in the inset polygon (m²). This is
+   *  the *actual* plate a rectangular tower can occupy — smaller than the inset
+   *  polygon for irregular plots. The solver compares plate to this minus the
+   *  amenity deduction. */
+  maxRectAreaM2: number;
+  /** Rectangle width / depth (longer / shorter), metres. */
+  maxRectWidthM: number;
+  maxRectDepthM: number;
+  /** Orientation of the rectangle's long axis, degrees in [0, 180). */
+  maxRectAngleDeg: number;
+  /** World-space 4 corners of the rectangle, in metres. Empty when none found. */
+  maxRectCornersM: Point[];
+  /** Buildable plate after deductions — `maxRectAreaM2 − amenity` (clamped ≥ 0). */
   buildableM2: number;
   plateFits: boolean;
   note: string;
@@ -367,6 +396,7 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
     plotPolygonM,
     frontEdgeIndices,
     amenityDeductionM2 = 0,
+    amenityDeductionAngleDeg = 0,
     plotWidthM,
     plotDepthM,
     totalBuaM2,
@@ -429,6 +459,14 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
         buildWidthM: NaN,
         buildDepthM: NaN,
         insetAreaM2: NaN,
+        insetPolyM: [],
+        buildablePolyM: [],
+        deductionPolyM: [],
+        maxRectAreaM2: NaN,
+        maxRectWidthM: NaN,
+        maxRectDepthM: NaN,
+        maxRectAngleDeg: NaN,
+        maxRectCornersM: [],
         buildableM2: NaN,
         plateFits: false,
         note: `height ${heightM.toFixed(1)} m exceeds cap ${heightCap} m`,
@@ -446,12 +484,58 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
     }
 
     const side = sideSetbackFromBands(heightM, occRules.sideSetbackBands);
-    // Inset area = polygon inset with `front` on tagged Front edges and `side`
-    // on every other edge. Buildable = inset area − amenity deduction. Replaces
-    // the legacy (W−2·side)·(D−2·front) rectangle formula so the solver works
-    // for any irregular plot shape.
-    const insetAreaM2 = buildableAreaFromInset(plotPolygonM, frontEdgeIndices, front, side, 0);
-    const buildable = Math.max(0, insetAreaM2 - Math.max(0, amenityDeductionM2));
+    // Inset polygon = plot polygon inset with `front` on tagged Front edges and
+    // `side` on every other edge. The inset is the *legal envelope*; the actual
+    // rectangular tower is the largest free-angle rectangle inscribed within it.
+    const N = plotPolygonM.length;
+    const perEdgeDistances = new Array(N).fill(0).map((_, e) =>
+      frontEdgeIndices.has(e) ? front : side,
+    );
+    const insetPoly = insetPolygon(plotPolygonM, perEdgeDistances);
+    const insetAreaM2 = insetPoly ? polygonArea(insetPoly) : 0;
+    // Carve the amenity-deduction half-plane out of the inset polygon BEFORE
+    // running max-rect, so the rectangle sits inside the actually-available
+    // post-deduction area (not just the raw setback inset).
+    // Half-plane: normal = (cos θ, sin θ); cut line at projection `c`, slide
+    // binary-searched so the +n side has area = amenityDeductionM2. We keep
+    // the −n side (the polygon minus the deduction wedge).
+    let availablePoly = insetPoly;
+    let deductionPoly: Point[] = [];
+    if (insetPoly && insetPoly.length >= 3 && amenityDeductionM2 > 0) {
+      const rad = (amenityDeductionAngleDeg * Math.PI) / 180;
+      const nx = Math.cos(rad), ny = Math.sin(rad);
+      const projs = insetPoly.map((q) => q.x * nx + q.y * ny);
+      const pMin = Math.min(...projs);
+      const pMax = Math.max(...projs);
+      const cutAt = (s: number): { poly: Point[]; cutArea: number } => {
+        const c = pMax - (Math.min(100, Math.max(0, s)) / 100) * (pMax - pMin);
+        const cutPoly = clipPolygonByHalfPlane(insetPoly, c * nx, c * ny, nx, ny);
+        const cutArea = cutPoly.length >= 3 ? polygonArea(cutPoly) : 0;
+        return { poly: cutPoly, cutArea };
+      };
+      // Find slide s such that cut area ≈ amenityDeductionM2 (clamped to inset).
+      const target = Math.min(amenityDeductionM2, insetAreaM2);
+      let lo = 0, hi = 100;
+      for (let it = 0; it < 24; it++) {
+        const mid = (lo + hi) / 2;
+        if (cutAt(mid).cutArea < target) lo = mid; else hi = mid;
+      }
+      const c = pMax - (hi / 100) * (pMax - pMin);
+      // The +n side is the amenity-deduction piece carved out of the inset.
+      const cut = clipPolygonByHalfPlane(insetPoly, c * nx, c * ny, nx, ny);
+      if (cut.length >= 3) deductionPoly = cut;
+      // Keep the opposite side (−n) → the polygon minus the deduction.
+      const remaining = clipPolygonByHalfPlane(insetPoly, c * nx, c * ny, -nx, -ny);
+      if (remaining.length >= 3) availablePoly = remaining;
+    }
+    // Free-angle largest inscribed rectangle inside the available (post-deduction)
+    // polygon. Falls back to 0 when the solver can't find a fit.
+    const rect = availablePoly ? largestInscribedRectangle(availablePoly) : null;
+    const maxRectArea = rect ? rect.area : 0;
+    // Plate-after-deduction is now equal to maxRectArea since the deduction has
+    // already been clipped out of the search region. Keep the same name for
+    // backward compat in the panel.
+    const buildable = Math.max(0, maxRectArea);
     // Bounding-box-derived width/depth — kept on the row for backward compat.
     const buildWidth = Math.max(0, plotWidthM - 2 * side);
     const buildDepth = Math.max(0, plotDepthM - 2 * front);
@@ -469,6 +553,14 @@ export function runCircularSetbackSolver(input: SolverInputs): SolverResult {
       buildWidthM: buildWidth,
       buildDepthM: buildDepth,
       insetAreaM2,
+      insetPolyM: insetPoly ?? [],
+      buildablePolyM: availablePoly ?? [],
+      deductionPolyM: deductionPoly,
+      maxRectAreaM2: maxRectArea,
+      maxRectWidthM: rect ? rect.widthM : 0,
+      maxRectDepthM: rect ? rect.depthM : 0,
+      maxRectAngleDeg: rect ? (rect.angleRad * 180) / Math.PI : 0,
+      maxRectCornersM: rect ? rect.corners : [],
       buildableM2: buildable,
       plateFits: fits,
       note: converged ? "CONVERGED" : fits ? `fits with slack ${(buildable - plateIn).toFixed(1)} m²` : `shrink → ${buildable.toFixed(1)}`,

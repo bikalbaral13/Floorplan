@@ -58,6 +58,14 @@ interface Props {
   /** Massing "Show Blocks" mode: render each floor as a discrete prism with a visible gap
    *  between adjacent floors so the stack reads as stacked blocks rather than one tall mass. */
   massingShowBlocks?: boolean;
+  /** Direction of massing extrusion. true = upward (default), false = downward (basement-style).
+   *  When false, every floor's y is mirrored: floor 0 sits just below ground (y = -floorH),
+   *  floor N-1 is deepest (y = -N × floorH). */
+  massingExtrudeUpwards?: boolean;
+  /** Live (uncommitted) massing preview from the Flow editor — solid stacked prisms extruded from an
+   *  arbitrary polygon (e.g. an Optimise Rectangle output) by `floors`. Upward = Footprint-style,
+   *  downward = Basement-style. Rendered translucent so it reads as a preview, not committed geometry. */
+  massingPreview?: { points: Point[]; floors: number; direction: "upward" | "downward" }[];
 }
 
 type PlacementKind =
@@ -382,7 +390,7 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM, massingShowBlocks = false, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -572,6 +580,11 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     (planY - cy) / ppm,
   ];
 
+  // Direction-aware floor base Y. Upward: fi * h. Downward: -(fi+1) * h, so floor 0
+  // (ground / B1) sits just below grade and deeper floors stack downward.
+  const massingFloorBaseY = (fi: number, h: number): number =>
+    massingExtrudeUpwards ? fi * h : -(fi + 1) * h;
+
   const camDist = Math.max(widthM, depthM) * 1.1 + 6;
 
   return (
@@ -594,6 +607,34 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
       <directionalLight position={[-15, 20, -10]} intensity={0.35} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[0, 1, 0]} />
 
+      {/* Live massing preview (Flow editor) — solid stacked prisms extruded from an uncommitted polygon
+           by its floor count. Upward = Footprint (orange), downward = Basement (blue). Translucent so it
+           reads as a preview. Updates as the Flow's floor slider / upstream geometry changes. */}
+      {(massingPreview ?? []).map((mp, mi) => {
+        if (!Array.isArray(mp.points) || mp.points.length < 3) return null;
+        const shape = new THREE.Shape(mp.points.map((p) => {
+          const [sx, sz] = toScene(p.x, p.y);
+          return new THREE.Vector2(sx, -sz);
+        }));
+        const floors = Math.max(1, Math.floor(mp.floors));
+        const up = mp.direction !== "downward";
+        const prismH = FLOOR_H * 0.985; // tiny gap → visible floor seam
+        const color = up ? "#f97316" : "#2563eb";
+        return Array.from({ length: floors }, (_, i) => {
+          const baseY = up ? i * FLOOR_H : -(i + 1) * FLOOR_H;
+          return (
+            <EdgedMesh
+              key={`massing-preview-${mi}-${i}`}
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, baseY + (FLOOR_H - prismH) / 2, 0]}
+            >
+              <extrudeGeometry args={[shape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
+              <meshStandardMaterial color={color} transparent opacity={0.55} />
+            </EdgedMesh>
+          );
+        });
+      })}
+
       {/* Room slabs â€” extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
            selection list is shared with walls (a single id list keyed by room.id or wall.id).
            Low-poly mode: each room becomes a single flat ShapeGeometry plane (no extrusion, no
@@ -607,12 +648,54 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         );
         const isSelected = selectedSet.has(r.id);
 
-        if (lowPoly) {
+        if (lowPoly && r.roomType !== "basement-area") {
           const baseColor =
             r.roomType === "plot-boundary" ? "#86efac" :
             r.roomType === "buildable-area" ? "#16a34a" :
             (typeof r.fill === "string" && r.fill.startsWith("#") ? r.fill : "#cbd5e1");
           const color = isSelected ? "#f97316" : baseColor;
+          const floors = Math.max(1, Math.floor(r.floorsCount ?? 1));
+
+          // Footprint Area in Graph mode: render solid stacked prisms extruding UPWARD —
+          // the exact mirror of the Basement Area's below-grade prisms — so each floor
+          // reads as a real block instead of a floating seam plane. (Previously this only
+          // dropped thin overhang "seam rings", which looked like detached sheets.)
+          if (r.roomType === "floorplate-boundary") {
+            const prismH = FLOOR_H * 0.985; // tiny gap → visible floor seam
+            // Expand the footprint slightly outward (when stacked) so each prism's edge
+            // pokes past the wall plane and the floor seams read cleanly — same overhang
+            // the Basement / solid-mode slabs use.
+            const fpShape = (() => {
+              if (floors <= 1) return shape;
+              let rcx = 0, rcy = 0;
+              for (const pp of r.points) { rcx += pp.x; rcy += pp.y; }
+              rcx /= r.points.length; rcy /= r.points.length;
+              const overhangPx = 0.12 * ppm;
+              const expanded = r.points.map((pp) => {
+                const dx = pp.x - rcx, dy = pp.y - rcy;
+                const d = Math.hypot(dx, dy);
+                if (d < 1e-6) return pp;
+                return { x: pp.x + (dx / d) * overhangPx, y: pp.y + (dy / d) * overhangPx };
+              });
+              return new THREE.Shape(expanded.map((pp) => {
+                const [sx, sz] = toScene(pp.x, pp.y);
+                return new THREE.Vector2(sx, -sz);
+              }));
+            })();
+            return Array.from({ length: floors }, (_, i) => (
+              <EdgedMesh
+                key={`lowpoly-room-${r.id}-fp${i}`}
+                rotation={[-Math.PI / 2, 0, 0]}
+                position={[0, (isSelected ? 0.001 : 0) + i * FLOOR_H + (FLOOR_H - prismH) / 2, 0]}
+                onClick={handleWallClick(r.id)}
+              >
+                <extrudeGeometry args={[fpShape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
+                <meshStandardMaterial color={color} />
+              </EdgedMesh>
+            ));
+          }
+
+          // All other low-poly rooms: a single flat schematic plane at ground level.
           return [
             <EdgedMesh
               key={`lowpoly-room-${r.id}`}
@@ -665,18 +748,69 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const floors = Math.max(1, Math.floor(r.floorsCount ?? 1));
         const floorH = FLOOR_H;
         const slabBumpY = isSelected ? 0.001 : 0;
-        // n floors â†’ n+1 slabs (one per floor base + a roof slab capping the top floor).
-        return Array.from({ length: floors + 1 }, (_, i) => (
-          <EdgedMesh
-            key={`room-${r.id}-f${i}`}
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, slabBumpY + i * floorH, 0]}
-            onClick={handleWallClick(r.id)}
-          >
-            <extrudeGeometry args={[shape, { depth: ROOM_SLAB_THICKNESS_M, bevelEnabled: false, steps: 1 }]} />
-            <meshStandardMaterial color={color} />
-          </EdgedMesh>
-        ));
+        const isBasement = r.roomType === "basement-area";
+        // Footprint Area / Basement Area: when stacked > 1 floor, expand the slab footprint by a
+        // small outward overhang so each floor's slab pokes past the wall plane and reads as a
+        // visible horizontal floor band/edge. Footprint stacks upward; Basement stacks downward.
+        const slabOverhangM = ((r.roomType === "floorplate-boundary" || isBasement) && floors > 1) ? 0.12 : 0;
+        const slabShape = (() => {
+          if (slabOverhangM <= 0) return shape;
+          let rcx = 0, rcy = 0;
+          for (const pp of r.points) { rcx += pp.x; rcy += pp.y; }
+          rcx /= r.points.length; rcy /= r.points.length;
+          const overhangPx = slabOverhangM * ppm;
+          const expanded = r.points.map((p) => {
+            const dx = p.x - rcx, dy = p.y - rcy;
+            const d = Math.hypot(dx, dy);
+            if (d < 1e-6) return p;
+            return { x: p.x + (dx / d) * overhangPx, y: p.y + (dy / d) * overhangPx };
+          });
+          return new THREE.Shape(expanded.map((p) => {
+            const [sx, sz] = toScene(p.x, p.y);
+            return new THREE.Vector2(sx, -sz);
+          }));
+        })();
+        // Basement Area: render n stacked full-height prisms (one per floor) extruding
+        // downward. EdgedMesh outlines on each prism naturally produce visible floor seams,
+        // so the basement reads as a solid tower mirrored below grade — same visual idea as
+        // a Footprint Area tower (walls + slabs).
+        if (isBasement) {
+          const prismH = floorH * 0.985; // tiny gap → visible floor seam
+          return Array.from({ length: floors }, (_, i) => (
+            <EdgedMesh
+              key={`room-${r.id}-bp${i}`}
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, slabBumpY - (i + 1) * floorH + (floorH - prismH) / 2, 0]}
+              onClick={handleWallClick(r.id)}
+            >
+              <extrudeGeometry args={[slabShape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
+              <meshStandardMaterial color={color} />
+            </EdgedMesh>
+          ));
+        }
+        // Footprint Area / regular room: n+1 thin slabs (one per floor base + a roof cap).
+        // Seam slabs (i ∈ 1..floors-1) are centered on the seam so the band reads as a
+        // continuous floor plate. The actual wall planes come from model.walls extrusion
+        // elsewhere — which is what gives the upward tower its "solid + seam" look.
+        const slabT = ROOM_SLAB_THICKNESS_M;
+        return Array.from({ length: floors + 1 }, (_, i) => {
+          const y = i === 0
+            ? slabBumpY
+            : i === floors
+              ? slabBumpY + floors * floorH
+              : slabBumpY + i * floorH - slabT / 2;
+          return (
+            <EdgedMesh
+              key={`room-${r.id}-f${i}`}
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, y, 0]}
+              onClick={handleWallClick(r.id)}
+            >
+              <extrudeGeometry args={[slabShape, { depth: slabT, bevelEnabled: false, steps: 1 }]} />
+              <meshStandardMaterial color={color} />
+            </EdgedMesh>
+          );
+        });
       })}
 
       {/* Massing slabs — fill the massing footprint with n+1 horizontal floor plates
@@ -743,11 +877,12 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           // floor's base level) so the visible band reads as a continuous floor plate.
           // Floor 0 slab sits at ground (no descent below y=0); roof slab caps the top floor.
           return Array.from({ length: floors + 1 }, (_, i) => {
-            const y = i === 0
+            const yUp = i === 0
               ? 0.001
               : i === floors
                 ? floors * FLOOR_H
                 : i * FLOOR_H - slabThickness / 2;
+            const y = massingExtrudeUpwards ? yUp : -yUp;
             return (
               <EdgedMesh
                 key={`massing-slab-${roomId}-${i}`}
@@ -813,7 +948,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
             <EdgedMesh
               key={`mass-block-${roomId}-${fi}`}
               rotation={[-Math.PI / 2, 0, 0]}
-              position={[0, fi * floorH + blockGap / 2, 0]}
+              position={[0, massingFloorBaseY(fi, floorH) + blockGap / 2, 0]}
             >
               <extrudeGeometry args={[shape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
               <meshStandardMaterial color="#cbd5e1" />
@@ -830,7 +965,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const blockGap = 0;
         const prismH = floorH - blockGap;
         return Array.from({ length: globalFloors }, (_, fi) => (
-          <group key={`mass-floor-${fi}`} position={[0, fi * floorH + blockGap / 2, 0]}>
+          <group key={`mass-floor-${fi}`} position={[0, massingFloorBaseY(fi, floorH) + blockGap / 2, 0]}>
             {(() => {
         const signedArea = (loop: Point[]): number => {
           let a = 0;
@@ -908,7 +1043,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         // present (Massing runs on a single selected room at a time, so a global flag is fine).
         const hasMassingPreview = model.walls.some((w) => w.isMassingPreview);
         return Array.from({ length: globalFloors }, (_, fi) => (
-          <group key={`lowpoly-walls-floor-${fi}`} position={[0, fi * floorH, 0]}>
+          <group key={`lowpoly-walls-floor-${fi}`} position={[0, massingFloorBaseY(fi, floorH), 0]}>
             {model.walls.filter((w) => {
               const t = w.segmentType ?? "wall";
               // Plot-boundary segments are rendered ONCE outside this per-floor stack (single
@@ -921,7 +1056,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               // Show-Blocks: massing walls are replaced by stacked filled prisms (rendered
               // in a dedicated block below), so suppress their thin wall planes here.
               if (massingShowBlocks && (w.isMassingPreview || w.isMassingWall)) return false;
-              if (w.isInsetWall || w.isSplitWall || w.isBspPreview || w.isVoronoiPreview ||
+              if (w.isInsetWall || w.isBasementOutlineWall || w.isSplitWall || w.isBspPreview || w.isVoronoiPreview ||
                   w.isCvtPreview || w.isDelaunayPreview || w.isSkeletonPreview || w.isConvexHullPreview ||
                   w.isRectDecompPreview || w.isSmoothingPreview || w.isMeshPreview ||
                   w.isConvexDecompPreview || w.isCircumcirclePreview || w.isEllipsePreview ||
@@ -1036,7 +1171,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const globalFloors = Math.max(1, ...slabRooms.map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
         const floorH = FLOOR_H;
         return Array.from({ length: globalFloors }, (_, fi) => (
-          <group key={`walls-floor-${fi}`} position={[0, fi * floorH, 0]}>
+          <group key={`walls-floor-${fi}`} position={[0, massingFloorBaseY(fi, floorH), 0]}>
       {model.walls.filter((w) => {
         if (!isExtrudableWall(w)) return false;
         if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) return false;
@@ -1046,7 +1181,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         // Hide upstream-cascade preview walls in 3D — only the Optimise Rectangle output (and Massing
         // walls placed along it) should extrude as "the building". Inset / split / BSP / etc. previews
         // are 2D-only guides; rendering them in 3D adds confusing duplicate walls.
-        if (w.isInsetWall || w.isSplitWall || w.isBspPreview || w.isRfpPreview || w.isVoronoiPreview ||
+        if (w.isInsetWall || w.isBasementOutlineWall || w.isSplitWall || w.isBspPreview || w.isRfpPreview || w.isVoronoiPreview ||
             w.isCvtPreview || w.isDelaunayPreview || w.isSkeletonPreview || w.isConvexHullPreview ||
             w.isRectDecompPreview || w.isSmoothingPreview || w.isMeshPreview ||
             w.isConvexDecompPreview || w.isCircumcirclePreview || w.isEllipsePreview ||
@@ -1193,7 +1328,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const globalFloors = Math.max(1, ...slabRooms.map((r) => Math.max(1, Math.floor(r.floorsCount ?? 1))));
         const floorH = FLOOR_H;
         return Array.from({ length: globalFloors }, (_, fi) => (
-          <group key={`dw-floor-${fi}`} position={[0, fi * floorH, 0]}>
+          <group key={`dw-floor-${fi}`} position={[0, massingFloorBaseY(fi, floorH), 0]}>
       {model.walls.map((w) => {
         if (w.segmentType !== "door" && w.segmentType !== "window") return null;
         const dx = w.end.x - w.start.x;
@@ -2287,6 +2422,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           </EdgedMesh>
         );
       })}
+
     </Canvas>
   );
 }

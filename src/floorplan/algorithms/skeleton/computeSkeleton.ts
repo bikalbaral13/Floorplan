@@ -72,6 +72,142 @@ export const computePolygonSkeleton = (
   return computeSampledVoronoiSkeleton(polygon, samples);
 };
 
+/** First intersection of the ray `origin + t·dir` (t > 0) with the polygon boundary, or null. */
+const rayPolygonHit = (origin: Point, dir: Point, polygon: Point[]): Point | null => {
+  let best: Point | null = null;
+  let bestT = Infinity;
+  const N = polygon.length;
+  for (let i = 0; i < N; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % N];
+    const ex = b.x - a.x, ey = b.y - a.y;
+    const denom = dir.x * ey - dir.y * ex;
+    if (Math.abs(denom) < 1e-9) continue; // parallel
+    // origin + t·dir = a + s·(b-a)
+    const t = ((a.x - origin.x) * ey - (a.y - origin.y) * ex) / denom;
+    const s = ((a.x - origin.x) * dir.y - (a.y - origin.y) * dir.x) / denom;
+    if (t > 1e-3 && s >= -1e-6 && s <= 1 + 1e-6 && t < bestT) {
+      bestT = t;
+      best = { x: origin.x + t * dir.x, y: origin.y + t * dir.y };
+    }
+  }
+  return best;
+};
+
+/** "Reduce segments": thin a skeleton by repeatedly midpoint-merging interior vertices, anchored at
+ *  the chain endpoints (junctions AND tips stay fixed, so connectivity and the skeleton's reach are
+ *  preserved). The graph is split into chains at every node of degree ≠ 2; within each chain the
+ *  interior vertices are pairwise-averaged to their midpoints, halving interior detail per `level`.
+ *  Closed loops (all degree-2) are decimated cyclically. Endpoints are never moved, so tips used by
+ *  computeSkeletonBoundaryJoins are unchanged. */
+export const reduceSkeletonByMidpoints = (edges: SkeletonEdge[], level: number): SkeletonEdge[] => {
+  const L = Math.max(0, Math.min(8, Math.floor(level)));
+  if (L <= 0 || edges.length === 0) return edges;
+  const mid = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const key = (p: Point) => `${Math.round(p.x)}_${Math.round(p.y)}`;
+  const eid = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+  const nodePt = new Map<string, Point>();
+  const adj = new Map<string, string[]>();
+  for (const e of edges) {
+    const ka = key(e.p1), kb = key(e.p2);
+    if (ka === kb) continue;
+    nodePt.set(ka, e.p1); nodePt.set(kb, e.p2);
+    (adj.get(ka) ?? adj.set(ka, []).get(ka)!).push(kb);
+    (adj.get(kb) ?? adj.set(kb, []).get(kb)!).push(ka);
+  }
+  const degree = (k: string) => adj.get(k)?.length ?? 0;
+
+  // Walk a maximal chain from `start` along its neighbour `first`, through degree-2 nodes only.
+  const used = new Set<string>();
+  const walk = (start: string, first: string): Point[] => {
+    const pts = [nodePt.get(start)!];
+    let prev = start, cur = first;
+    used.add(eid(prev, cur));
+    pts.push(nodePt.get(cur)!);
+    while (degree(cur) === 2 && cur !== start) {
+      const nbs = adj.get(cur)!;
+      const next = nbs.find((n) => n !== prev) ?? nbs[0];
+      if (next === undefined || used.has(eid(cur, next))) break;
+      used.add(eid(cur, next));
+      pts.push(nodePt.get(next)!);
+      prev = cur; cur = next;
+    }
+    return pts;
+  };
+
+  type Chain = { pts: Point[]; closed: boolean };
+  const chains: Chain[] = [];
+  for (const k of nodePt.keys()) {
+    if (degree(k) === 2) continue;
+    for (const nb of adj.get(k)!) {
+      if (used.has(eid(k, nb))) continue;
+      chains.push({ pts: walk(k, nb), closed: false });
+    }
+  }
+  // Any edges left over belong to pure cycles (every node degree 2).
+  for (const e of edges) {
+    const ka = key(e.p1), kb = key(e.p2);
+    if (ka === kb || used.has(eid(ka, kb))) continue;
+    chains.push({ pts: walk(ka, kb), closed: true });
+  }
+
+  const out: SkeletonEdge[] = [];
+  for (const ch of chains) {
+    let pts = ch.pts;
+    if (ch.closed) {
+      for (let it = 0; it < L && pts.length > 4; it++) {
+        const next: Point[] = [];
+        for (let i = 0; i < pts.length; i += 2) next.push(mid(pts[i], pts[(i + 1) % pts.length]));
+        pts = next;
+      }
+      for (let i = 0; i < pts.length; i++) out.push({ p1: pts[i], p2: pts[(i + 1) % pts.length] });
+    } else {
+      for (let it = 0; it < L && pts.length > 3; it++) {
+        const a = pts[0], b = pts[pts.length - 1];
+        const interior = pts.slice(1, -1);
+        const reduced: Point[] = [];
+        for (let i = 0; i < interior.length; i += 2) {
+          reduced.push(i + 1 < interior.length ? mid(interior[i], interior[i + 1]) : interior[i]);
+        }
+        pts = [a, ...reduced, b];
+      }
+      for (let i = 0; i < pts.length - 1; i++) out.push({ p1: pts[i], p2: pts[i + 1] });
+    }
+  }
+  return out;
+};
+
+/** "Join to Boundary": for a pruned skeleton, take each open branch tip (a node touched by exactly
+ *  one skeleton edge) and extend it — continuing the branch's direction — out to the polygon
+ *  boundary. Returns those completion segments (the red lines). Pruning is forced on, since the tips
+ *  only become interior once spurs to the original vertices are removed. */
+export const computeSkeletonBoundaryJoins = (
+  polygon: Point[],
+  type: SkeletonType,
+  samples = 8,
+): SkeletonEdge[] => {
+  if (polygon.length < 3) return [];
+  const edges = computePolygonSkeleton(polygon, type, { samples, pruneEnds: true });
+  if (edges.length === 0) return [];
+  const key = (p: Point) => `${Math.round(p.x)}_${Math.round(p.y)}`;
+  const degree = new Map<string, number>();
+  for (const e of edges) {
+    degree.set(key(e.p1), (degree.get(key(e.p1)) ?? 0) + 1);
+    degree.set(key(e.p2), (degree.get(key(e.p2)) ?? 0) + 1);
+  }
+  const joins: SkeletonEdge[] = [];
+  for (const e of edges) {
+    for (const [tip, other] of [[e.p1, e.p2], [e.p2, e.p1]] as const) {
+      if ((degree.get(key(tip)) ?? 0) !== 1) continue; // only leaf tips
+      const dx = tip.x - other.x, dy = tip.y - other.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const hit = rayPolygonHit(tip, { x: dx / len, y: dy / len }, polygon);
+      if (hit && Math.hypot(hit.x - tip.x, hit.y - tip.y) > 0.5) joins.push({ p1: tip, p2: hit });
+    }
+  }
+  return joins;
+};
+
 // ── Straight skeleton ─────────────────────────────────────────────────────────
 const computeStraightSkeleton = (polygon: Point[], pruneEnds: boolean): SkeletonEdge[] => {
   type SkV = { x: number; y: number; px: number; py: number };

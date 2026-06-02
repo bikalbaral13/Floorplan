@@ -2,8 +2,18 @@ import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
 import { computePolygonPrincipalAxes } from "../../algorithms/geometry/principalAxes";
 import type { PrincipalAxesMethod, PrincipalAxesShow } from "../../algorithms/geometry/principalAxes";
+import { computeSplitPolygons } from "../../algorithms/geometry/splitPolygons";
 
 export type SplitMode = "equal" | "ratio" | "target" | "length";
+
+/** Compact, scrollable read-only list of a piece's vertices (in metres). */
+const VertexList = ({ pts, ppm }: { pts: Point[]; ppm: number }) => (
+  <div className="mt-0.5 max-h-20 overflow-y-auto rounded border border-slate-200 bg-white px-1 py-0.5 font-mono text-[9px] leading-tight text-slate-700">
+    {pts.map((q, i) => (
+      <div key={i}>{i + 1}: ({(q.x / ppm).toFixed(2)}, {(q.y / ppm).toFixed(2)})</div>
+    ))}
+  </div>
+);
 
 export interface SplittingActionsBlockProps {
   selectedRoom: { id: string; points: Point[]; roomType?: string };
@@ -566,6 +576,58 @@ export const SplittingActionsBlock = (p: SplittingActionsBlockProps) => (
                 </div>
               );
             })}
+          </div>
+        );
+      })()}
+
+      {/* Result polygons — live vertices + area for each piece the current parameters
+       *  would produce. Mirrors the committing runner's cut math, so this preview matches
+       *  what Apply Split commits. Recomputed every render → updates as parameters change. */}
+      {(() => {
+        const pieces = computeSplitPolygons(p.selectedRoom.points, p.pixelsPerMeter, {
+          type: p.type,
+          mode: p.mode,
+          count: p.count,
+          ratios: p.ratios,
+          target: p.target,
+          lengths: p.lengths,
+          angle: p.angle,
+          edge: p.edge,
+          edgeFlip: p.edgeFlip,
+          alongMinorPrincipalAxis: p.alongMinorPrincipalAxis,
+          stripLength: p.stripLength,
+          stripPosition: p.stripPosition,
+        });
+        const totalM2 = pieces?.reduce((s, pc) => s + pc.areaM2, 0) ?? 0;
+        return (
+          <div className="space-y-1.5 rounded bg-slate-50 px-1.5 py-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                Result polygons (m)
+              </span>
+              {pieces && (
+                <span className="font-mono text-[9px] text-slate-500">
+                  {pieces.length} pcs · Σ {totalM2.toFixed(2)} m²
+                </span>
+              )}
+            </div>
+            {pieces ? (
+              pieces.map((pc, i) => (
+                <div key={i}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-slate-600">Piece {i + 1}</span>
+                    <span className="font-mono text-[10px] text-slate-800">{pc.areaM2.toFixed(2)} m²</span>
+                  </div>
+                  <VertexList pts={pc.pts} ppm={p.pixelsPerMeter} />
+                </div>
+              ))
+            ) : (
+              <div className="text-[9px] italic text-slate-400">
+                {p.type === "grid" || p.type === "principal"
+                  ? "Piece list not available for this split type."
+                  : "—"}
+              </div>
+            )}
           </div>
         );
       })()}

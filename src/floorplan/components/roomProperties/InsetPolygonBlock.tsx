@@ -1,8 +1,37 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
+import { clipInsetByDeduction } from "../../algorithms/geometry/insetDeduction";
+import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
 
 export type InsetMode = "equal" | "variable" | "front-remaining";
+
+/** Compact, scrollable read-only list of polygon vertices (in display units). */
+const VertexList = ({
+  title,
+  pts,
+  fmtVertex,
+}: {
+  title: string;
+  pts: Point[];
+  fmtVertex: (q: Point) => string;
+}) => (
+  <div>
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-medium text-slate-600">{title}</span>
+      <span className="font-mono text-[9px] text-slate-400">{pts.length} pts</span>
+    </div>
+    {pts.length > 0 ? (
+      <div className="mt-0.5 max-h-20 overflow-y-auto rounded border border-slate-200 bg-white px-1 py-0.5 font-mono text-[9px] leading-tight text-slate-700">
+        {pts.map((q, i) => (
+          <div key={i}>{i + 1}: {fmtVertex(q)}</div>
+        ))}
+      </div>
+    ) : (
+      <div className="text-[9px] italic text-slate-400">—</div>
+    )}
+  </div>
+);
 
 export interface InsetPolygonBlockProps {
   selectedRoom: { id: string; points: Point[]; roomType?: string };
@@ -26,6 +55,9 @@ export interface InsetPolygonBlockProps {
   /** Canvas-to-world scale — required to convert the pixel-space room polygon + metres-space
    *  setbacks into a real area readout. */
   pixelsPerMeter: number;
+  /** Offset direction: true (default) = inset inward; false = offset outward. */
+  inside: boolean;
+  setInside: (v: boolean) => void;
   // --- Deduct Area state (lifted to parent so the canvas overlay can render it). ---
   deductEnabled: boolean;
   setDeductEnabled: (v: boolean) => void;
@@ -69,6 +101,10 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
   const remainingVal = p.remainingVal ?? localRemainingVal;
   const setRemainingVal = p.setRemainingVal ?? setLocalRemainingVal;
 
+  // Recipe JSON preview — foldable, default collapsed.
+  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [recipeCopied, setRecipeCopied] = useState(false);
+
   // Deduct Area: optional subtraction from the displayed inset area. The deduction is reported
   // either as an absolute area (in m²) or as a percentage of the *main* (original) room area.
   // State is lifted to the parent so the canvas overlay can render the deduction footprint.
@@ -78,56 +114,27 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
     p.setSetbacks(() => p.setbacks.map((_, i) => (i === frontIdx ? front : remaining)));
   };
 
-  // Compute the inset polygon area for the current room + setbacks. Mirrors the offset-line
-  // intersection used by runRoomInset, but stays in this component so the readout updates live
-  // as sliders move (without round-tripping through the parent commit/preview cycle).
-  const computeInsetAreaM2 = (): number | null => {
-    const pts = p.selectedRoom.points;
-    const N = pts.length;
-    if (N < 3) return null;
-    let signedArea = 0;
-    for (let i = 0; i < N; i++) {
-      const a = pts[i], b = pts[(i + 1) % N];
-      signedArea += a.x * b.y - b.x * a.y;
-    }
-    if (Math.abs(signedArea) < 1) return null;
-    const sign = signedArea > 0 ? 1 : -1;
-    type Line = { px: number; py: number; ux: number; uy: number };
-    const lines: Line[] = [];
-    for (let i = 0; i < N; i++) {
-      const a = pts[i], b = pts[(i + 1) % N];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const L = Math.hypot(dx, dy) || 1;
-      const ux = dx / L, uy = dy / L;
-      const nx = -uy * sign, ny = ux * sign;
-      const setbackM = p.setbacks[i] ?? 0;
-      const setbackPx = setbackM * p.pixelsPerMeter;
-      lines.push({ px: a.x + nx * setbackPx, py: a.y + ny * setbackPx, ux, uy });
-    }
-    const intersect = (l1: Line, l2: Line): { x: number; y: number } | null => {
-      const det = l1.ux * (-l2.uy) - l1.uy * (-l2.ux);
-      if (Math.abs(det) < 1e-6) return null;
-      const dx = l2.px - l1.px, dy = l2.py - l1.py;
-      const t = (dx * (-l2.uy) - dy * (-l2.ux)) / det;
-      return { x: l1.px + t * l1.ux, y: l1.py + t * l1.uy };
-    };
-    const insetPts: { x: number; y: number }[] = [];
-    for (let i = 0; i < N; i++) {
-      const v = intersect(lines[(i - 1 + N) % N], lines[i]);
-      if (!v) return null;
-      insetPts.push(v);
-    }
+  // Inset polygon area + vertices for the current room + setbacks. Delegates to the
+  // shared `computeInsetPolygon` (the same routine runRoomInset and the canvas overlay
+  // use) so the readout can never diverge from what's drawn/committed. Mapping back to
+  // this block's null/zero-area contract: degenerate or parallel-edge cases → null;
+  // collapsed (setbacks too large) → keep the ring but report zero area.
+  const computeInsetReadout = (): { pts: Point[]; areaM2: number } | null => {
+    const res = computeInsetPolygon(p.selectedRoom.points, p.setbacks, p.pixelsPerMeter, p.inside);
+    if (res.reason === "degenerate" || res.reason === "parallel") return null;
     let area = 0;
+    const N = res.pts.length;
     for (let i = 0; i < N; i++) {
-      const a = insetPts[i], b = insetPts[(i + 1) % N];
+      const a = res.pts[i], b = res.pts[(i + 1) % N];
       area += a.x * b.y - b.x * a.y;
     }
-    if (Math.sign(area) !== Math.sign(signedArea)) return 0; // collapsed / inverted
-    const areaPx2 = Math.abs(area) / 2;
-    return areaPx2 / (p.pixelsPerMeter * p.pixelsPerMeter);
+    const areaM2 = res.valid ? Math.abs(area) / 2 / (p.pixelsPerMeter * p.pixelsPerMeter) : 0;
+    return { pts: res.pts, areaM2 };
   };
 
-  const insetAreaM2 = computeInsetAreaM2();
+  const insetResult = computeInsetReadout();
+  const insetPolyPx = insetResult?.pts ?? [];
+  const insetAreaM2 = insetResult ? insetResult.areaM2 : null;
 
   // Main (original room) area in m² — drives the "% of Main Area" deduction.
   const computeMainAreaM2 = (): number => {
@@ -165,6 +172,48 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
   const maxDeductU = areaInUnit(maxDeductM2);
   const deductStepU = u === "cm" ? 10 : u === "ft" ? 0.1 : 0.05;
 
+  // Deduction + post-deduction (available) polygons — same shared helper the canvas
+  // overlay uses, so the listed vertices match what's drawn.
+  const dedClip = (deductEnabled && insetPolyPx.length >= 3)
+    ? clipInsetByDeduction(insetPolyPx, {
+        angleDeg: deductAngle,
+        mode: deductMode,
+        areaM2: deductAreaM2,
+        percent: deductPercent,
+        mainAreaM2,
+        ppm: p.pixelsPerMeter,
+      })
+    : null;
+  const deductionPolyPx = dedClip?.deduction ?? [];
+  const availablePolyPx = dedClip && dedClip.available.length >= 3 ? dedClip.available : insetPolyPx;
+
+  // Vertex formatter: world-pixel coordinate → display unit, as "(x, y)".
+  const fmtVertex = (q: Point): string => {
+    const d = u === "cm" ? 0 : 2;
+    return `(${mToU(q.x / p.pixelsPerMeter).toFixed(d)}, ${mToU(q.y / p.pixelsPerMeter).toFixed(d)})`;
+  };
+
+  // Executable recipe op for the current parameters. Carries the offset direction
+  // (`inside`) and the UI `mode` plus its mode-specific values, all of which
+  // applyRecipeJson now replays. Geometry comes from `uniformSetback` (equal) or the
+  // per-edge `setbacks` array. (Deduct Area isn't replayed yet, so it's still omitted.)
+  // Wrapped in { operations: [...] } so it drops straight into the Apply JSON box.
+  const recipeJson = (() => {
+    const sb = p.setbacks ?? [];
+    const round = (n: number): number => Number(n.toFixed(4));
+    const params: Record<string, unknown> = { mode, inside: p.inside };
+    if (mode === "equal") {
+      params.uniformSetback = round(p.setAll);
+    } else if (mode === "front-remaining") {
+      params.front = round(frontVal);
+      params.remaining = round(remainingVal);
+      params.setbacks = sb.map(round);
+    } else {
+      params.setbacks = sb.map(round);
+    }
+    return JSON.stringify({ operations: [{ tool: "inset", params, commit: true }] }, null, 2);
+  })();
+
   return (
   <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
     <button
@@ -176,6 +225,21 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
       <span className="text-[11px] text-slate-400">{p.expanded ? "▼" : "▶"}</span>
     </button>
     {p.expanded && <>
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-1 text-[10px] text-slate-600" title="When checked the polygon is offset inward (classic inset). Uncheck to offset the polygon outward by the setback distance.">
+          <input
+            type="checkbox"
+            checked={p.inside}
+            onChange={(e) => {
+              p.setInside(e.target.checked);
+              if (p.live) p.runRoomInset(p.selectedRoom, true);
+              p.bumpLivePreviewTick();
+            }}
+          />
+          Inside
+        </label>
+        <span className="text-[9px] text-slate-400">{p.inside ? "offset inward" : "offset outward"}</span>
+      </div>
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] text-slate-500">Mode</span>
         <select
@@ -413,6 +477,17 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
           <span className="font-mono text-[10px] text-slate-800">{areaLabel}</span>
         </div>
       )}
+      {/* Polygon vertex lists (coordinates in display units). */}
+      <div className="space-y-1.5 rounded bg-slate-50 px-1.5 py-1">
+        <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Polygons ({u})</div>
+        <VertexList title="Inset polygon" pts={insetPolyPx} fmtVertex={fmtVertex} />
+        {deductEnabled && (
+          <>
+            <VertexList title="Deduction polygon" pts={deductionPolyPx} fmtVertex={fmtVertex} />
+            <VertexList title="Inset after deduction" pts={availablePolyPx} fmtVertex={fmtVertex} />
+          </>
+        )}
+      </div>
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
           <input
@@ -433,10 +508,50 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
         variant="outline"
         size="sm"
         className="w-full text-[11px]"
-        onClick={() => { p.runRoomInset(p.selectedRoom, false); }}
+        onClick={() => {
+          p.runRoomInset(p.selectedRoom, false);
+          // After committing, drop out of Live mode. Do NOT call onLiveOff here:
+          // the commit (silent=false) already strips this room's preview walls and
+          // its livePreviewPolygon entry, and onLiveOff's h.replace reads a stale
+          // history snapshot (set() updates the shadow ref synchronously, but
+          // historyRef.current.state isn't refreshed until the next render) — calling
+          // it in the same tick would clobber the just-committed inset segments.
+          if (p.live) p.setLive(false);
+        }}
       >
         Apply Inset
       </Button>
+
+      {/* Recipe JSON — live op for the current parameters, foldable (default collapsed).
+          Copy and paste into the Apply JSON box to replay this inset. */}
+      <div className="rounded border border-slate-200 bg-white">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-2 py-1 text-left"
+          onClick={() => setRecipeOpen((v) => !v)}
+        >
+          <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Recipe JSON</span>
+          <span className="text-[11px] text-slate-400">{recipeOpen ? "▼" : "▶"}</span>
+        </button>
+        {recipeOpen && (
+          <div className="space-y-1 px-2 pb-2">
+            <pre className="max-h-40 overflow-auto whitespace-pre rounded border border-slate-200 bg-slate-50 px-1.5 py-1 font-mono text-[9px] leading-tight text-slate-700">{recipeJson}</pre>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 w-full text-[10px]"
+              onClick={() => {
+                navigator.clipboard.writeText(recipeJson).then(
+                  () => { setRecipeCopied(true); window.setTimeout(() => setRecipeCopied(false), 1500); },
+                  () => { /* clipboard unavailable — no-op */ },
+                );
+              }}
+            >
+              {recipeCopied ? "Copied!" : "Copy"}
+            </Button>
+          </div>
+        )}
+      </div>
     </>}
   </div>
   );

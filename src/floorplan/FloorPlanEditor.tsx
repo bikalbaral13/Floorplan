@@ -90,8 +90,10 @@ import type {
   WallMethod,
   WallMode,
 } from "./types";
-import { defaultLayerTable, withLayerDefaults, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID } from "./types";
+import { defaultLayerTable, withLayerDefaults, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, layerForRoomType } from "./types";
 import { rasterizePdfFirstPage } from "./pdfRaster";
+import { vectorizeImage, type VectorizeColorMode } from "./algorithms/vector/vectorizeImage";
+import { detectObjects, splitDataUrl, DEFAULT_DETECTION_MODEL, type Detection, type DetectionMode } from "./algorithms/vision/geminiObjectDetection";
 import { MapTileLayer } from "./components/MapTileLayer";
 import { searchNominatim, pixelsPerMeterFromMap, type NominatimHit } from "./osmMap";
 import { isWallMountedFurnitureType, snapPointerToNearestWall } from "./wallSnap";
@@ -123,6 +125,7 @@ import {
   rotatePolygon,
   inflatePolygon,
   polygonContainsPolygon,
+  longestEdgeIndex,
 } from "./algorithms/geometry/polygon";
 import { getRoomHoles, roomNetArea } from "./roomGeometry";
 import {
@@ -134,11 +137,16 @@ import {
 import { classifyCardinal } from "./algorithms/geometry/cardinal";
 import { sutherlandHodgmanClip } from "./algorithms/geometry/sutherlandHodgman";
 import { computePolygonPrincipalAxes } from "./algorithms/geometry/principalAxes";
+import { areaProportionalCuts, computeSplitPolygons } from "./algorithms/geometry/splitPolygons";
 import { sampleSegmentInside, computeVisibilityPolygon } from "./algorithms/geometry/visibilityPolygon";
 import { computeRegionSemantics, type RegionSemantics } from "./algorithms/semantics/regionSemantics";
 import { cleanWalls } from "./algorithms/walls/cleanWalls";
 import { detectAutoRoomsFromWalls, ROOM_AUTO_ID_PREFIX } from "./algorithms/walls/detectAutoRooms";
 import { clipPolygonByHalfPlane } from "./algorithms/partitioning/voronoi";
+import { relaxVoronoiSeeds } from "./algorithms/partitioning/cvtRelaxation";
+import { computeSkeletonBoundaryJoins, reduceSkeletonByMidpoints } from "./algorithms/skeleton/computeSkeleton";
+import { clipInsetByDeduction } from "./algorithms/geometry/insetDeduction";
+import { computeInsetPolygon } from "./algorithms/geometry/insetPolygon";
 import { AddRoomDialog } from "./components/dialogs/AddRoomDialog";
 import { LineThicknessDialog } from "./components/dialogs/LineThicknessDialog";
 import { CalibrationDialog } from "./components/dialogs/CalibrationDialog";
@@ -188,6 +196,10 @@ import { BoundingShapesBlock } from "./components/roomProperties/BoundingShapesB
 import { MassingBlock } from "./components/roomProperties/MassingBlock";
 import { PathSetterBlock } from "./components/roomProperties/PathSetterBlock";
 import { SplittingActionsBlock } from "./components/roomProperties/SplittingActionsBlock";
+import { FlowOverlay } from "./flow/FlowOverlay";
+import type { FlowPreviewItem } from "./flow/eval/evaluateFlow";
+import { evaluateSpaceCondition } from "./flow/conditional";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { NoiseTextureBlock } from "./components/roomProperties/NoiseTextureBlock";
 import { BspBlock, type BspSeed, type BspSeedMetric, type BspCorridor } from "./components/roomProperties/BspBlock";
 import { RfpBlock, type RfpSeed, type RfpSeedMetric } from "./components/roomProperties/RfpBlock";
@@ -891,7 +903,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (!knownLayerIds.has(id)) return true;
         return visibleLayerIds.has(id);
       };
-      return detectAutoRoomsFromWalls(history.state.walls.filter((w) => isWallLayerVisible(w) && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview));
+      return detectAutoRoomsFromWalls(history.state.walls.filter((w) => isWallLayerVisible(w) && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview && !w.isVectorWall && !w.isVectorPreview));
     },
     [history.state.walls, history.state.layers]
   );
@@ -965,11 +977,26 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }
       return inside;
     };
+    // Container types are expected to enclose other rooms (a basement holds a footprint;
+    // a site/buildable area holds a footprint). For these, only the tight centroid-proximity
+    // match counts as a duplicate — the point-in-polygon "swallow" rule is skipped so legit
+    // nested rooms aren't filtered out as if they'd been merged into the container.
+    const CONTAINER_TYPES = new Set<string>([
+      "basement-area",
+      "plot-boundary",
+      "buildable-area",
+      "floorplate-boundary",
+    ]);
+    // Only manual rooms on VISIBLE layers may suppress an underlying auto-room. Otherwise a
+    // hidden overlay (e.g. the Partitions layer hidden) would keep swallowing the original
+    // auto-detected area, leaving nothing selectable where the original sits.
+    const suppressors = manualRooms.filter((m) => isLayerVisible(m.layerId));
     const filteredAutoRooms = autoRooms.filter((autoRoom) => {
       const ac = polygonCentroid(autoRoom.points);
-      return !manualRooms.some((manualRoom) => {
+      return !suppressors.some((manualRoom) => {
         const mc = polygonCentroid(manualRoom.points);
         if (Math.hypot(ac.x - mc.x, ac.y - mc.y) < 10) return true;
+        if (CONTAINER_TYPES.has(manualRoom.roomType ?? "")) return false;
         return manualRoom.points.length >= 3 && pip(ac.x, ac.y, manualRoom.points);
       });
     });
@@ -1463,6 +1490,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Active layer — new entities created from here will be stamped with this id.
    *  Default `"0"` (the seed layer). Step 4 will surface this in the Layers UI. */
   const [activeLayerId, setActiveLayerId] = useState<string>("0");
+  /** Foldable "Site" group in the Layers panel — collapsed = the four
+   *  Site-related layers (Buildable / Footprint / Basement / Inset Area) hide
+   *  under a single header row. Default expanded so users see them on first run. */
+  const [siteLayerGroupExpanded, setSiteLayerGroupExpanded] = useState<boolean>(true);
   const [measureDraft, setMeasureDraft] = useState<Point | null>(null);
   const [measurePreviewPoint, setMeasurePreviewPoint] = useState<Point | null>(null);
   const [measureSegments, setMeasureSegments] = useState<{ id: string; start: Point; end: Point }[]>([]);
@@ -1673,6 +1704,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Edge-based length splitting. splitEdge = index of the reference edge (null = manual angle). */
   const [splitEdge, setSplitEdge] = useState<number | null>(null);
   const [splitEdgeFlip, setSplitEdgeFlip] = useState<boolean>(false);
+  /** Flow editor (node-graph pipeline) overlay open state. */
+  const [flowOpen, setFlowOpen] = useState<boolean>(false);
+  /** Pure-evaluated Flow pipeline output polygons, rendered as a canvas overlay (preview). */
+  const [flowPreview, setFlowPreview] = useState<FlowPreviewItem[]>([]);
+  /** Live massing previews (Flow "Massing" nodes) → extruded as buildings in the 3D view while the
+   *  Flow editor is open, so an Optimise Rectangle → Massing chain shows n floors before committing. */
+  const flowMassingPreview = useMemo(
+    () => (flowOpen
+      ? flowPreview.map((i) => i.massing).filter((m): m is NonNullable<FlowPreviewItem["massing"]> => !!m)
+      : undefined),
+    [flowOpen, flowPreview],
+  );
   /** Per-piece lengths in metres (used when splitMode === "length"). */
   const [splitLengths, setSplitLengths] = useState<number[]>([2]);
   /** "normal" runs the existing N-piece split; "strip" generates exactly two parallel cuts
@@ -1720,12 +1763,27 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Per-room live-preview polygon of the Optimise Rectangle Union output (bounding box of the union).
    *  Downstream tools (currently BSP) use this as their working polygon when Inset+Optimise are both Live. */
   const optimiseUnionPolygonRef = useRef<Record<string, Point[] | null>>({});
+  /** Flow per-piece preview: when a Split node feeds a downstream tool from one piece handle, the
+   *  Split op publishes that piece's polygon here so the downstream tool (Optimise Rect, etc.)
+   *  previews fitted INSIDE the chosen piece — not the whole split. Cleared each preview run. */
+  const flowPiecePolygonRef = useRef<Record<string, Point[] | null>>({});
+  /** Single "working polygon" threaded through a Flow pipeline in execution order. Each tool, while
+   *  `flowChainActiveRef` is on (preview), reads this as its INPUT (falling back to the room polygon)
+   *  and writes its OUTPUT here for the next tool. This is what makes the pipeline strictly
+   *  sequential — Optimise→Inset insets the optimise output; Inset→Optimise optimises the inset —
+   *  without the ambiguity of tool-specific cascade refs reading each other. */
+  const flowWorkRef = useRef<Record<string, Point[] | null>>({});
+  const flowChainActiveRef = useRef<boolean>(false);
   /** Bumped by writers of livePreviewPolygonRef so React effects can rewatch and re-run. */
   const [livePreviewTick, setLivePreviewTick] = useState<number>(0);
 
   /** Foldable section expansion state (properties-tab blocks). */
   const [splitExpanded, setSplitExpanded] = useState<boolean>(false);
   const [insetExpanded, setInsetExpanded] = useState<boolean>(false);
+  // Inset Polygon → offset direction. true (default) = offset inward (classic inset);
+  // false = offset the polygon outward by the setback distance. Lifted so runRoomInset
+  // and the canvas overlay agree on the direction.
+  const [insetInside, setInsetInside] = useState<boolean>(true);
   // Inset Polygon → Deduct Area UI state (lifted from InsetPolygonBlock so the canvas can render it).
   const [insetDeductEnabled, setInsetDeductEnabled] = useState<boolean>(false);
   const [insetDeductMode, setInsetDeductMode] = useState<"area" | "percent">("area");
@@ -1742,6 +1800,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [massingLive, setMassingLive] = useState<boolean>(false);
   const [massingFloorsFromFsi, setMassingFloorsFromFsi] = useState<boolean>(false);
   const [massingShowBlocks, setMassingShowBlocks] = useState<boolean>(false);
+  const [massingExtrudeUpwards, setMassingExtrudeUpwards] = useState<boolean>(true);
   const [pathSetterExpanded, setPathSetterExpanded] = useState<boolean>(false);
   const [openingExpanded, setOpeningExpanded] = useState<boolean>(false);
   const [openingLength, setOpeningLength] = useState<number>(1.0);
@@ -2157,6 +2216,52 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [segmentToolsDisplayExpanded, setSegmentToolsDisplayExpanded] = useState<boolean>(false);
   const [segmentToolsSplitExpanded, setSegmentToolsSplitExpanded] = useState<boolean>(false);
   const [segmentToolsOpeningsExpanded, setSegmentToolsOpeningsExpanded] = useState<boolean>(false);
+  // Image Tools — sibling to Space/Segment Tools. Operates on the uploaded image
+  // underlay. "Vectorisation" traces raster lines into overlaid segments.
+  const [imageToolsExpanded, setImageToolsExpanded] = useState<boolean>(true);
+  const [vectorizationExpanded, setVectorizationExpanded] = useState<boolean>(false);
+  const [vecColorMode, setVecColorMode] = useState<VectorizeColorMode>("black");
+  const [vecTolerance, setVecTolerance] = useState<number>(50);
+  const [vecDilate, setVecDilate] = useState<number>(3);
+  const [vecMinLength, setVecMinLength] = useState<number>(30);
+  const [vecSimplify, setVecSimplify] = useState<number>(1.5);
+  const [vecSnap, setVecSnap] = useState<number>(6);
+  const [vecBusy, setVecBusy] = useState<boolean>(false);
+  const [vecStats, setVecStats] = useState<{ lines: number; nodes: number; edges: number } | null>(null);
+  // Live preview: when on, slider/colour changes re-run a debounced ephemeral
+  // trace (isVectorPreview, via history.replace — no undo entry); the Vectorize
+  // button commits a permanent result (isVectorWall, undoable). The params ref
+  // mirrors the slider state so the debounced run never reads a stale closure.
+  const [vecLive, setVecLive] = useState<boolean>(false);
+  const vecLiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vecParamsRef = useRef({
+    colorMode: "black" as VectorizeColorMode,
+    tolerance: 50,
+    dilate: 3,
+    minLength: 30,
+    simplifyEpsilon: 1.5,
+    snapTolerance: 6,
+  });
+  useEffect(() => {
+    vecParamsRef.current = {
+      colorMode: vecColorMode,
+      tolerance: vecTolerance,
+      dilate: vecDilate,
+      minLength: vecMinLength,
+      simplifyEpsilon: vecSimplify,
+      snapTolerance: vecSnap,
+    };
+  }, [vecColorMode, vecTolerance, vecDilate, vecMinLength, vecSimplify, vecSnap]);
+  // Object Detection (Image Tools) — Gemini spatial / Robotics-ER. Detected
+  // boxes/points are overlaid on the underlay (not committed to the model).
+  const [objectDetectionExpanded, setObjectDetectionExpanded] = useState<boolean>(false);
+  const [odModel, setOdModel] = useState<string>(DEFAULT_DETECTION_MODEL);
+  const [odApiKey, setOdApiKey] = useState<string>("");
+  const [odTargets, setOdTargets] = useState<string>("");
+  const [odMaxItems, setOdMaxItems] = useState<number>(20);
+  const [odMode, setOdMode] = useState<DetectionMode>("box");
+  const [odBusy, setOdBusy] = useState<boolean>(false);
+  const [objectDetections, setObjectDetections] = useState<Detection[]>([]);
   const logOp = useCallback((entry: Omit<LoggedOp, "id" | "timestamp">) => {
     setActionLog((prev) => {
       const next = [...prev, { ...entry, id: createId(), timestamp: Date.now() }];
@@ -2541,6 +2646,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  `mode` = "preview" calls every runner with silent:true (temporary via history.replace, same as Live across tools). */
   const applyRecipeJson = useCallback(async (jsonString: string, recipeMode: "commit" | "preview" = "commit") => {
     const silent = recipeMode === "preview";
+    // Flow cascade polygons are recomputed fresh each run. Clear ALL of them at the start of a
+    // preview so each run starts from the actual space and chains purely by execution (topological)
+    // order. Otherwise — since Inset reads the optimise polygon AND Optimise reads the inset polygon
+    // — the leftover refs from the previous run feed each other and the result shrinks every run
+    // (inset-of-optimise-of-inset-of…). Clearing breaks that cross-run feedback.
+    flowPiecePolygonRef.current = {};
+    flowWorkRef.current = {};
+    if (silent) {
+      optimiseUnionPolygonRef.current = {};
+      livePreviewPolygonRef.current = {};
+    }
     if (silent) {
       // Clear any existing preview walls from prior Interact runs before laying down fresh previews.
       const h = historyRef.current;
@@ -2907,6 +3023,29 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         continue;
       }
 
+      // ── Control-flow op: conditional gate (Flow "Conditional" node) ──
+      // { "tool": "conditional", "params": { metric, op, value }, "produces": [trueName, falseName], on? }
+      // Evaluates the metric test on each input room and republishes it under the True OR False
+      // produced-name (the other gets []). Downstream ops wired via `on:` then no-op when their name
+      // resolves to zero rooms — so they only run on the branch that matched.
+      if (opAny.tool === "conditional") {
+        const condParams = (op.params ?? {}) as Record<string, unknown>;
+        const inputRooms = (typeof opAny.on === "string" || Array.isArray(opAny.on))
+          ? resolveByName(opAny.on as string | string[])
+          : (() => { const r = lookupRoom(); return r ? [r] : []; })();
+        const producesKey = (op as { produces?: unknown }).produces;
+        const names = Array.isArray(producesKey) ? (producesKey as string[]) : typeof producesKey === "string" ? [producesKey] : [];
+        const trueName = names[0], falseName = names[1];
+        const trueIds: string[] = [], falseIds: string[] = [];
+        for (const r of inputRooms) {
+          (evaluateSpaceCondition(r.points, pixelsPerMeter, condParams) ? trueIds : falseIds).push(r.id);
+        }
+        if (trueName) recipeCtx.producedMap.set(trueName, trueIds);
+        if (falseName) recipeCtx.producedMap.set(falseName, falseIds);
+        recipeCtx.trace.push({ tool: "conditional", ok: true, reason: `${trueIds.length} true / ${falseIds.length} false` });
+        continue;
+      }
+
       const tool = op.tool;
       const p = (op.params ?? {}) as Record<string, unknown>;
       // Per-op commit override: commit=false → preview/live; commit=true → permanent apply.
@@ -2989,12 +3128,58 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         };
         liveSetters[tool]?.(true);
         if (tool === "inset") {
+          // Offset direction (geometry-relevant) + UI mode/values, so a pasted recipe
+          // restores the Inset block fully — not just the per-edge setbacks.
+          if (typeof p.inside === "boolean") setInsetInside(p.inside as boolean);
+          const m = p.mode;
+          if (m === "equal" || m === "variable" || m === "front-remaining") {
+            setInsetMode(m as "equal" | "variable" | "front-remaining");
+          }
+          if (typeof p.front === "number") setInsetFrontVal(p.front as number);
+          if (typeof p.remaining === "number") setInsetRemainingVal(p.remaining as number);
           const sb = Array.isArray(p.setbacks) ? (p.setbacks as number[]) : [];
           const uniform = typeof p.uniformSetback === "number" ? (p.uniformSetback as number) : null;
+          // Equal mode: keep the "Set all" slider in sync (per-room slice — direct write,
+          // since the wrapper setter keys off the stale selectedRoomIdRef).
+          if (uniform !== null) setInsetSetAllByRoom((prev) => ({ ...prev, [currentRoom.id]: uniform }));
           const N = currentRoom.points.length;
-          const next = uniform !== null
-            ? Array.from({ length: N }, () => uniform)
-            : Array.from({ length: N }, (_, i) => sb[i] ?? 0);
+          // Front & Remaining mode driven by scalar `front`/`remaining` (no explicit per-edge
+          // `setbacks` array): apply `front` to the tagged front edge (Site Boundary wall with
+          // edgeRole === "front"; fallback edge 0) and `remaining` to all others. Mirrors the
+          // Inset block's Front-And-Remaining workflow so a flow node can drive it.
+          const wantFrontRemaining =
+            m === "front-remaining" &&
+            !Array.isArray(p.setbacks) &&
+            uniform === null &&
+            (typeof p.front === "number" || typeof p.remaining === "number");
+          let next: number[];
+          if (uniform !== null) {
+            next = Array.from({ length: N }, () => uniform);
+          } else if (wantFrontRemaining) {
+            const frontVal = typeof p.front === "number" ? (p.front as number) : 0;
+            const remVal = typeof p.remaining === "number" ? (p.remaining as number) : 0;
+            // Explicit front-edge from a Flow Inset node: "longest" (auto) or an edge index. Falls
+            // back to the site-boundary "front"-tagged wall (then edge 0) when not supplied.
+            let frontIdx: number;
+            if (p.frontEdge === "longest") {
+              frontIdx = longestEdgeIndex(currentRoom.points);
+            } else if (typeof p.frontEdge === "number") {
+              frontIdx = Math.max(0, Math.min(N - 1, Math.round(p.frontEdge as number)));
+            } else {
+              const eq = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y) < 0.5;
+              const frontWalls = historyRef.current.state.walls.filter((w) => w.segmentType === "plot-boundary" && w.edgeRole === "front");
+              frontIdx = 0;
+              outer: for (const fw of frontWalls) {
+                for (let i = 0; i < N; i++) {
+                  const a = currentRoom.points[i], b = currentRoom.points[(i + 1) % N];
+                  if ((eq(fw.start, a) && eq(fw.end, b)) || (eq(fw.start, b) && eq(fw.end, a))) { frontIdx = i; break outer; }
+                }
+              }
+            }
+            next = Array.from({ length: N }, (_, i) => (i === frontIdx ? frontVal : remVal));
+          } else {
+            next = Array.from({ length: N }, (_, i) => sb[i] ?? 0);
+          }
           // Write directly to the per-room slice — wrapper would key off the stale selectedRoomIdRef.
           setInsetSetbacksByRoom((prev) => ({ ...prev, [currentRoom.id]: next }));
           await tick();
@@ -3098,6 +3283,32 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           if (typeof p.stripPosition === "number") setSplitStripPosition(Math.max(0, Math.min(100, p.stripPosition as number)));
           await tick();
           runnersRef.current!.split(currentRoom, opSilent);
+          // Flow per-piece preview: when `publishPiece` is set (preview only), compute the split
+          // pieces of the working polygon and publish the chosen one so a downstream Optimise Rect /
+          // Split previews fitted inside THAT piece. Mirrors the runner's cut math via the shared helper.
+          if (opSilent && typeof p.publishPiece === "number") {
+            const srcPoly = (flowChainActiveRef.current ? flowWorkRef.current[currentRoom.id] : null)
+              ?? livePreviewPolygonRef.current[currentRoom.id] ?? currentRoom.points;
+            const pcs = computeSplitPolygons(srcPoly, pixelsPerMeter, {
+              type: (p.type === "strip" ? "strip" : "normal"),
+              mode: (typeof p.mode === "string" ? p.mode : "equal") as "equal" | "ratio" | "target" | "length",
+              count: typeof p.count === "number" ? p.count : 2,
+              ratios: Array.isArray(p.ratios) ? (p.ratios as number[]) : [],
+              target: typeof p.target === "number" ? p.target : 0,
+              lengths: Array.isArray(p.lengths) ? (p.lengths as number[]) : [],
+              angle: typeof p.angle === "number" ? p.angle : 0,
+              edge: typeof p.edge === "number" ? p.edge : null,
+              edgeFlip: Boolean(p.edgeFlip),
+              alongMinorPrincipalAxis: Boolean(p.splitAlongMinorPrincipalAxis),
+              stripLength: typeof p.stripLength === "number" ? p.stripLength : 1,
+              stripPosition: typeof p.stripPosition === "number" ? p.stripPosition : 50,
+            });
+            const piece = pcs?.[p.publishPiece as number];
+            flowPiecePolygonRef.current[currentRoom.id] = piece ? piece.pts : null;
+            // Flow chain: the chosen piece is this Split's output for the next tool.
+            if (flowChainActiveRef.current) flowWorkRef.current[currentRoom.id] = piece ? piece.pts : null;
+            await tick();
+          }
         } else if (tool === "optimise-rect") {
           if (typeof p.shape === "string" && (p.shape === "rectangle" || p.shape === "square" || p.shape === "hexagon" || p.shape === "lshape")) {
             setMaxRectShape(p.shape as "rectangle" | "square" | "hexagon" | "lshape");
@@ -3106,6 +3317,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             setMaxRectReference(p.reference as "none" | "custom");
           } else if (typeof p.reference === "number" && p.reference >= 0) {
             setMaxRectReference(Math.floor(p.reference as number));
+          } else if (p.reference === "by-edge" && typeof p.referenceEdge === "number") {
+            // Flow node "By edge" form: reference is the edge index in `referenceEdge`.
+            setMaxRectReference(Math.max(0, Math.floor(p.referenceEdge as number)));
           }
           if (typeof p.axisAngle === "number") {
             const a = ((p.axisAngle as number) % 180 + 180) % 180;
@@ -3127,6 +3341,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           if (typeof p.shrinkAngle === "number") setMaxRectShrinkAngle(((p.shrinkAngle as number) % 360 + 360) % 360);
           if (typeof p.shrinkSlide === "number") setMaxRectShrinkSlide(Math.max(0, Math.min(100, p.shrinkSlide as number)));
           if (typeof p.optimiseShrinkEnabled === "boolean") setMaxRectOptimiseShrinkEnabled(p.optimiseShrinkEnabled as boolean);
+          if (typeof p.exactArea === "boolean") setMaxRectExactArea(p.exactArea as boolean);
           if (typeof p.targetArea === "number") setMaxRectTargetArea(Math.max(0, p.targetArea as number));
           // `targetFromGcr: true` (or `targetArea: "gcr" | "from-gcr"`) — enable the GCR-derived
           // target so the slider is hidden and the runner picks up GCR % × site area.
@@ -3186,7 +3401,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           runnersRef.current!.placement(currentRoom, opSilent);
         } else if (tool === "voronoi") {
           if (typeof p.metric === "string") setVoronoiMetric(p.metric as "euclidean" | "manhattan" | "chebyshev");
-          if (Array.isArray(p.seeds)) setVoronoiSeedsByRoom((prev) => ({ ...prev, [roomId]: rescaleSeedsToRoom(p.seeds as Array<{ x: number; y: number }>, currentRoom.points) }));
+          // seedMode:"vertices" (Flow Voronoi node) → seed at the room's own vertices, one cell per
+          // vertex. Vertices are already world-pixel coords, so use them directly (no rescale).
+          // `relax` Lloyd/CVT-relaxes those seeds toward cell centroids before partitioning.
+          if (p.seedMode === "vertices") {
+            let seeds = currentRoom.points.map((pt) => ({ x: pt.x, y: pt.y }));
+            if (p.relax) seeds = relaxVoronoiSeeds(currentRoom.points, seeds, 15, 0.5);
+            setVoronoiSeedsByRoom((prev) => ({ ...prev, [roomId]: seeds }));
+          } else if (Array.isArray(p.seeds)) {
+            setVoronoiSeedsByRoom((prev) => ({ ...prev, [roomId]: rescaleSeedsToRoom(p.seeds as Array<{ x: number; y: number }>, currentRoom.points) }));
+          }
           await tick();
           runnersRef.current!.voronoi(currentRoom, opSilent);
         } else if (tool === "cvt") {
@@ -3248,6 +3472,56 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           if (typeof p.level === "number") setSkeletonLevel(p.level as number);
           await tick();
           runnersRef.current!.skeleton(currentRoom, opSilent);
+          // "Reduce segments": midpoint-thin the runner's emitted skeleton walls (anchored at
+          // junctions/tips). Operates on the drawn walls so it's independent of the runner's internal
+          // paths; runs BEFORE join-to-boundary so the red joins still attach at the preserved tips.
+          {
+            const reduceLevel = typeof p.reduceLevel === "number" ? p.reduceLevel : 0;
+            if (reduceLevel > 0) {
+              const h = historyRef.current;
+              const isRoomSkel = (w: Wall) =>
+                w.skeletonSourceRoomId === currentRoom.id && (w.segmentType ?? "wall") !== "path" &&
+                (opSilent ? w.isSkeletonPreview : w.isSkeletonWall);
+              const skelWalls = h.state.walls.filter(isRoomSkel);
+              if (skelWalls.length > 1) {
+                const reduced = reduceSkeletonByMidpoints(skelWalls.map((w) => ({ p1: w.start, p2: w.end })), reduceLevel);
+                const style = getCurrentWallStyle();
+                const color = skelWalls[0].color;
+                const rebuilt: Wall[] = reduced.map((e) => ({
+                  id: createId(), start: e.p1, end: e.p2, thickness: style.thickness, color,
+                  mode: style.mode, method: "center", segmentType: "wall",
+                  isSkeletonWall: !opSilent, isSkeletonPreview: opSilent, skeletonSourceRoomId: currentRoom.id,
+                }));
+                const others = h.state.walls.filter((w) => !isRoomSkel(w));
+                h.replace({ ...h.state, walls: [...others, ...rebuilt] });
+              }
+            }
+          }
+          // "Join to boundary": continue each pruned branch tip out to the polygon boundary as red
+          // completion segments. Appended after the runner so it's independent of the runner's many
+          // internal paths (level recursion, makePath, …). Tagged like skeleton walls so they clear
+          // on re-run. Straight-skeleton + pruneEnds only.
+          if (p.joinToBoundary && p.pruneEnds && (p.type ?? "straight-skeleton") === "straight-skeleton") {
+            const joins = computeSkeletonBoundaryJoins(currentRoom.points, "straight-skeleton");
+            if (joins.length > 0) {
+              const style = getCurrentWallStyle();
+              const h = historyRef.current;
+              const joinWalls: Wall[] = joins.map((e) => ({
+                id: createId(),
+                start: e.p1,
+                end: e.p2,
+                thickness: style.thickness,
+                color: "#ef4444",
+                mode: style.mode,
+                method: "center",
+                segmentType: "wall",
+                isSkeletonWall: !opSilent,
+                isSkeletonPreview: opSilent,
+                skeletonSourceRoomId: currentRoom.id,
+              }));
+              h.replace({ ...h.state, walls: [...h.state.walls, ...joinWalls] });
+            }
+          }
         } else if (tool === "convex-hull") {
           runnersRef.current!.convexHull(currentRoom, opSilent);
         } else if (tool === "rect-decomp") {
@@ -3259,6 +3533,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         } else if (tool === "smoothing") {
           if (typeof p.type === "string") setSmoothingType(p.type as "chaikin" | "bezier");
           if (typeof p.level === "number") setSmoothingLevel(p.level as number);
+          if (typeof p.restrictInside === "boolean") setSmoothingRestrictInside(p.restrictInside as boolean);
+          if (typeof p.curveShortening === "number") setSmoothingCurveShortening(p.curveShortening as number);
           await tick();
           runnersRef.current!.smoothing(currentRoom, opSilent);
         } else if (tool === "mesh") {
@@ -3266,7 +3542,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           await tick();
           runnersRef.current!.mesh(currentRoom, opSilent);
         } else if (tool === "convex-decomp") {
-          if (typeof p.type === "string") setDecompType(p.type as "hertel-mehlhorn" | "bayazit" | "acd");
+          if (typeof p.type === "string") setDecompType(p.type as "hertel-mehlhorn" | "bayazit" | "acd" | "steiner");
           if (typeof p.tolerance === "number") setDecompTolerance(p.tolerance as number);
           await tick();
           runnersRef.current!.convexDecomp(currentRoom, opSilent);
@@ -3342,6 +3618,33 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           }
           await tick();
           runnersRef.current!.massing(currentRoom, opSilent, avg);
+        } else if (tool === "floor-massing") {
+          // Flow "Massing" node: tag the space as Footprint (upward) or Basement (downward) Area and
+          // set its floor count. Mirrors the room-type dropdown — sets roomType + layerId, moves the
+          // perimeter walls to that layer, and writes floorsCount for the 3D extrusion.
+          const downward = p.direction === "downward" || p.direction === "down" || p.direction === "downwards";
+          const newType = downward ? "basement-area" : "floorplate-boundary";
+          const numFloors = Math.max(1, Math.round(Number(p.n) || Number(p.numFloors) || 1));
+          const layer = layerForRoomType(newType);
+          const roomPts = currentRoom.points;
+          const tol = 3;
+          const isAuto = currentRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+          const newRoomId = isAuto ? createId() : currentRoom.id;
+          const updatedRoom = { ...currentRoom, id: newRoomId, roomType: newType, layerId: layer, floorsCount: numFloors };
+          const h = historyRef.current;
+          h.replace({
+            ...h.state,
+            walls: h.state.walls.map((w) => {
+              const startMatch = roomPts.some((pt) => Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < tol);
+              const endMatch = roomPts.some((pt) => Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < tol);
+              return startMatch && endMatch ? { ...w, layerId: layer } : w;
+            }),
+            rooms: isAuto
+              ? [...h.state.rooms, updatedRoom]
+              : h.state.rooms.map((r) => (r.id === currentRoom.id ? updatedRoom : r)),
+          });
+          roomId = newRoomId; // re-key so `produces`/subsequent ops target the (possibly materialised) room
+          await tick();
         } else if (tool === "add-door" || tool === "add-window") {
           // Add a door/window opening on a chosen wall of the room.
           // params: { "wallIndex"?: int (polygon-edge index), "side"?: "N"|"E"|"S"|"W", "position"?: 0-100 (% along the wall, default 50), "widthM"?: number (default 1 for door, 1.5 for window) }
@@ -3564,7 +3867,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const afterRooms = visibleRoomsRef.current;
         const newIds: string[] = [];
         for (const rr of afterRooms) {
-          if (!beforeIds.has(rr.id) && (rr.roomType ?? "room") === "room") newIds.push(rr.id);
+          // Capture auto-detected "room" cells AND explicit "area" Spaces (e.g. Split partitions),
+          // so `produces` can name them for downstream `on` targeting.
+          const rt = rr.roomType ?? "room";
+          if (!beforeIds.has(rr.id) && (rt === "room" || rt === "area")) newIds.push(rr.id);
         }
         // Cascade-aware roomId chaining: if this op committed and produced a typed child Space
         // (Inset on Site → Buildable Area; Optimise Rect on Buildable → Footprint Area), retarget
@@ -3573,8 +3879,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         // Also include the promoted child in `newIds` so `produces` can capture it under a name —
         // otherwise the newIds filter (which only keeps roomType === "room") would drop it.
         if (!opSilent && (tool === "inset" || tool === "regime-inset" || tool === "optimise-rect")) {
-          const targetType = tool === "optimise-rect" ? "floorplate-boundary" : "buildable-area";
-          const promoted = afterRooms.find((rr) => !beforeIds.has(rr.id) && rr.roomType === targetType);
+          // Inset on a site plot promotes to "buildable-area"; on a generic Space it produces an
+          // "inset-area" Space — match either so the inset's output is captured for `produces`/`on`.
+          const targetTypes = tool === "optimise-rect" ? ["floorplate-boundary"] : ["buildable-area", "inset-area"];
+          const promoted = afterRooms.find((rr) => !beforeIds.has(rr.id) && targetTypes.includes(rr.roomType ?? ""));
           if (promoted) {
             roomId = promoted.id;
             if (!newIds.includes(promoted.id)) newIds.push(promoted.id);
@@ -3848,7 +4156,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const startRoom = selectedRoom;
     if (!startRoom) { toast.error("Select a room first"); return; }
     const expandedV1 = expandOps(topOps);
+    // Activate the sequential working-polygon chain for preview pipelines so each tool feeds the next.
+    flowChainActiveRef.current = silent;
     const res = await runOpsForRoom(startRoom, expandedV1);
+    flowChainActiveRef.current = false;
     toast.success(`${silent ? "Previewed" : "Applied"} ${res.applied} operation${res.applied === 1 ? "" : "s"}${res.skipped ? `, skipped ${res.skipped}` : ""}${res.errors ? `, ${res.errors} errors` : ""}`);
     if (recipeObj?.trace === true) {
       // eslint-disable-next-line no-console
@@ -4448,6 +4759,30 @@ User request: ${aiPrompt.trim()}`;
       setAiBusy(false);
     }
   }, [aiApiKey, aiPrompt, aiModel, selectedRoom, applyRecipeJson, pixelsPerMeter]);
+
+  /** Clear ALL Flow live-preview geometry from the canvas — both the preview walls
+   *  (inset / split / opt-rect) AND the polygon overlays that the inset / optimise-rect
+   *  previews render from (livePreviewPolygonRef / optimiseUnionPolygonRef). Without clearing
+   *  the polygon refs the inset preview outline would linger after a connection is deleted.
+   *  Stable identity so the FlowOverlay preview effect doesn't re-fire every render. */
+  const clearFlowPreview = useCallback(() => {
+    const h = historyRef.current;
+    h.replace({
+      ...h.state,
+      walls: h.state.walls.filter((w) => !w.isInsetWall && !w.isSplitWall && !w.isMaxRectPreview),
+    });
+    livePreviewPolygonRef.current = {};
+    optimiseUnionPolygonRef.current = {};
+    flowPiecePolygonRef.current = {};
+    flowWorkRef.current = {};
+    flowChainActiveRef.current = false;
+    // Disarm the live flags the preview run armed — otherwise the inset/opt-rect live effects
+    // (watching these flags) would immediately re-draw the preview we just cleared.
+    setInsetLive(false);
+    setSplitLive(false);
+    setOptimiseLive(false);
+    setLivePreviewTick((t) => t + 1);
+  }, []);
 
   visibleRoomsRef.current = visibleRooms;
 
@@ -5646,9 +5981,11 @@ User request: ${aiPrompt.trim()}`;
     // When upstream tools (Inset, OptRect) have published a live working polygon for this room,
     // operate on that — same chain pattern as runRoomOptimiseRect. So inside Site Tools the
     // split slices the inset polygon (or the optimise-rect union) instead of the raw room.
+    const chainIn = (silent && flowChainActiveRef.current) ? flowWorkRef.current[room.id] : null;
     const optPts = silent ? optimiseUnionPolygonRef.current[room.id] : null;
     const insetPts = silent ? livePreviewPolygonRef.current[room.id] : null;
-    const pts = (optPts && optPts.length >= 3) ? optPts
+    const pts = (chainIn && chainIn.length >= 3) ? chainIn
+              : (optPts && optPts.length >= 3) ? optPts
               : (insetPts && insetPts.length >= 3) ? insetPts
               : room.points;
     if (pts.length < 3) { if (!silent) toast.error("Need at least 3 vertices"); return false; }
@@ -5756,10 +6093,20 @@ User request: ${aiPrompt.trim()}`;
       }
       // Drop cuts that fall outside the polygon's axis span — they won't intersect anyway.
       cuts = cuts.filter((x) => x > axisMin + 0.01 && x < axisMax - 0.01);
-    } else {
+    } else if (splitMode === "length") {
+      // length-proportional cuts: fractions map directly to axis length.
       cuts = [];
       let acc = axisMin;
       for (let i = 0; i < fracs.length - 1; i++) { acc += fracs[i] * axisLen; cuts.push(acc); }
+    } else {
+      // equal / ratio / target → AREA-proportional cuts so each piece gets the intended
+      // share of the polygon's AREA (not just its axis length). Essential for non-rectangular
+      // shapes — equal length bands of a triangle have very unequal areas.
+      const cum: number[] = [];
+      let a = 0;
+      for (let i = 0; i < fracs.length - 1; i++) { a += fracs[i]; cum.push(a); }
+      cuts = areaProportionalCuts(rotated, axisMin, axisMax, cum)
+        .filter((x) => x > axisMin + 0.01 && x < axisMax - 0.01);
     }
 
     const unrotate = (p: { x: number; y: number }) => ({
@@ -5799,17 +6146,50 @@ User request: ${aiPrompt.trim()}`;
       }
     }
 
-    if (newWalls.length === 0) { if (!silent) toast.error("Could not compute split"); return false; }
-
     const h = historyRef.current;
     // Always drop any prior live-preview walls for this room; they're about to be replaced.
     const cleaned = h.state.walls.filter((w) => !w.isSplitWall || w.splitSourceRoomId !== room.id);
-    // On commit, also remove the original manual room so it doesn't linger on top of the new pieces.
-    const nextRooms = silent ? h.state.rooms : h.state.rooms.filter((r) => r.id !== room.id);
-    const nextState = { ...h.state, walls: [...cleaned, ...newWalls], rooms: nextRooms };
-    if (silent) h.replace(nextState);
-    else h.set(nextState);
-    if (!silent) toast.success(`Split into ${splitCount} piece${splitCount > 1 ? "s" : ""} (${splitAngle}°, ${splitMode})`);
+
+    if (silent) {
+      // Live preview: just show the cut walls (excluded from room detection).
+      if (newWalls.length === 0) return false;
+      h.replace({ ...h.state, walls: [...cleaned, ...newWalls], rooms: h.state.rooms });
+      return true;
+    }
+
+    // Commit: materialise the pieces as real "Area" Spaces on the Partitions layer, replacing
+    // the source Space. Uses the same cut math as the readout (computeSplitPolygons) so the
+    // committed polygons match exactly what the Result-polygons list shows.
+    const pieces = computeSplitPolygons(pts, pixelsPerMeter, {
+      type: splitType,
+      mode: splitMode,
+      count: splitCount,
+      ratios: splitRatios,
+      target: splitTarget,
+      lengths: splitLengths,
+      angle: splitAngle,
+      edge: splitEdge,
+      edgeFlip: splitEdgeFlip,
+      alongMinorPrincipalAxis: splitAlongMinorPrincipalAxis,
+      stripLength: splitStripLength,
+      stripPosition: splitStripPosition,
+    });
+    if (!pieces || pieces.length === 0) { toast.error("Could not compute split"); return false; }
+
+    const partitionRooms: Room[] = pieces.map((pc, i) => ({
+      id: createId(),
+      points: pc.pts.map((q) => ({ x: q.x, y: q.y })),
+      fill: "rgba(13, 148, 136, 0.18)",
+      stroke: "#0d9488",
+      label: `Partition ${i + 1}`,
+      roomType: "area",
+      layerId: DEFAULT_PARTITION_LAYER_ID,
+    }));
+    // Keep the original Space untouched on its own layer — the partitions are layered ON TOP
+    // (on the Partitions layer), so hiding Partitions reveals the original area exactly as it was.
+    const nextRooms = [...h.state.rooms, ...partitionRooms];
+    h.set({ ...h.state, walls: cleaned, rooms: nextRooms });
+    toast.success(`Split into ${partitionRooms.length} partition${partitionRooms.length > 1 ? "s" : ""} on the Partitions layer`);
     return true;
   }, [splitAngle, splitMode, splitCount, splitRatios, splitTarget, splitLengths, splitEdge, splitEdgeFlip, splitAlongMinorPrincipalAxis, splitType, splitStripLength, splitStripPosition, pixelsPerMeter, getCurrentWallStyle]);
 
@@ -5817,77 +6197,44 @@ User request: ${aiPrompt.trim()}`;
    *  Silent = preview (isInsetWall flag, excluded from room detection). Commit = real walls + delete original. */
   const runRoomInset = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
     if (!room) return false;
-    const pts = room.points;
+    // Flow pipeline chain: in preview, inset the upstream tool's output polygon (threaded through
+    // flowWorkRef in execution order) — so Optimise → Inset insets the optimised rectangle, not the
+    // original space. On commit the `on`-targeted room already carries the right points.
+    const chainIn = (silent && flowChainActiveRef.current) ? flowWorkRef.current[room.id] : null;
+    const pts = (chainIn && chainIn.length >= 3) ? chainIn : room.points;
     if (pts.length < 3) { if (!silent) toast.error("Need at least 3 vertices"); return false; }
-
-    // Signed area in screen coords (y-down). Positive => polygon drawn clockwise on screen,
-    // for which the +90° rotation of each edge direction (-uy, ux) points INTO the polygon.
-    let signedArea = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const a = pts[i], b = pts[(i + 1) % pts.length];
-      signedArea += (a.x * b.y - b.x * a.y);
-    }
-
-    // For each segment build an offset line shifted toward interior.
     const N = pts.length;
-    type Line = { px: number; py: number; ux: number; uy: number };
-    const lines: Line[] = [];
-    for (let i = 0; i < N; i++) {
-      const a = pts[i], b = pts[(i + 1) % N];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const L = Math.hypot(dx, dy) || 1;
-      const ux = dx / L, uy = dy / L;
-      // (-uy, ux) is +90° rotation. Negate when polygon is drawn CCW on screen so normal points inward.
-      const sign = signedArea > 0 ? 1 : -1;
-      const nx = -uy * sign, ny = ux * sign;
-      const ovr = insetSetbacksOverrideRef.current;
-      const roomSetbacks = insetSetbacksByRoom[room.id] ?? [];
-      const setbackM = (ovr ? ovr[i] : roomSetbacks[i]) ?? 0;
-      const setbackPx = setbackM * pixelsPerMeter;
-      lines.push({ px: a.x + nx * setbackPx, py: a.y + ny * setbackPx, ux, uy });
-    }
 
-    // Intersect consecutive offset lines to compute inset vertices.
-    const intersect = (l1: Line, l2: Line): { x: number; y: number } | null => {
-      // Solve l1.p + t*l1.u = l2.p + s*l2.u
-      const det = l1.ux * (-l2.uy) - l1.uy * (-l2.ux);
-      if (Math.abs(det) < 1e-6) return null; // parallel
-      const dx = l2.px - l1.px, dy = l2.py - l1.py;
-      const t = (dx * (-l2.uy) - dy * (-l2.ux)) / det;
-      return { x: l1.px + t * l1.ux, y: l1.py + t * l1.uy };
-    };
-
-    const insetPts: { x: number; y: number }[] = [];
-    for (let i = 0; i < N; i++) {
-      const prev = lines[(i - 1 + N) % N];
-      const curr = lines[i];
-      const v = intersect(prev, curr);
-      if (!v) { if (!silent) toast.error("Inset failed: parallel adjacent edges"); return false; }
-      insetPts.push(v);
-    }
-
-    // Sanity check: inset polygon must have positive area (in same orientation), else setbacks are too large.
-    let insArea = 0;
-    for (let i = 0; i < N; i++) {
-      const a = insetPts[i], b = insetPts[(i + 1) % N];
-      insArea += (a.x * b.y - b.x * a.y);
-    }
-    if (Math.sign(insArea) !== Math.sign(signedArea) || Math.abs(insArea) < 1) {
-      if (!silent) toast.error("Inset failed: setbacks too large");
+    // Resolve this room's per-edge setbacks (recipe override wins over the room's slice),
+    // then compute the inset via the shared routine the overlay + block readout also use.
+    const ovr = insetSetbacksOverrideRef.current;
+    const roomSetbacks = insetSetbacksByRoom[room.id] ?? [];
+    const setbacksM = pts.map((_, i) => (ovr ? ovr[i] : roomSetbacks[i]) ?? 0);
+    const insetRes = computeInsetPolygon(pts, setbacksM, pixelsPerMeter, insetInside);
+    if (!insetRes.valid) {
+      if (!silent) {
+        toast.error(insetRes.reason === "parallel"
+          ? "Inset failed: parallel adjacent edges"
+          : "Inset failed: setbacks too large");
+      }
       return false;
     }
+    const insetPts = insetRes.pts;
 
-    // Build wall segments connecting consecutive inset vertices. On commit from a Site Area source,
-    // these become the boundary segments of a new Buildable Area room (segmentType="buildable-boundary"),
-    // so the cascade Site → Inset → Buildable Area / Buildable → OptRect → Footprint reads cleanly in
-    // the data model without relying on preview flags alone.
+    // Build wall segments connecting consecutive inset vertices. On commit, these become the
+    // boundary segments of a new Inset Area room, so applying an inset produces a typed
+    // "Inset Area" Space on the Inset Area layer (not just preview walls).
     const style = getCurrentWallStyle();
     const sourceRoomTypeNow = historyRef.current.state.rooms.find((r) => r.id === room.id)?.roomType;
     const sourceIsSiteCommit = !silent && sourceRoomTypeNow === "plot-boundary";
-    // On commit, every inset boundary segment is a buildable-boundary regardless of
-    // the source room — the resulting Space is the Buildable Area in both cases.
-    const segTypeForCommit: WallSegmentType = !silent ? "buildable-boundary" : "wall";
-    const colorForCommit = !silent ? "#16a34a" : "#0f172a";
+    // Inset Area has no dedicated boundary segmentType (matches what the Properties
+    // type-selector does for "Inset Area" — it just relayers perimeter walls onto the
+    // Inset Area layer). Committed inset walls are plain wall segments on that layer.
+    const segTypeForCommit: WallSegmentType = "wall";
+    const colorForCommit = !silent ? "#0369a1" : "#0f172a";
+    // Committed inset walls form the Inset Area boundary, so they belong on the Inset
+    // Area layer. Preview walls stay on the default layer.
+    const wallLayerOnCommit = layerForRoomType("inset-area");
     const newWalls: Wall[] = [];
     for (let i = 0; i < N; i++) {
       newWalls.push({
@@ -5901,41 +6248,72 @@ User request: ${aiPrompt.trim()}`;
         segmentType: silent ? "wall" : segTypeForCommit,
         isInsetWall: silent,
         insetSourceRoomId: silent ? room.id : undefined,
+        ...(silent ? {} : { layerId: wallLayerOnCommit }),
       });
     }
 
     const h = historyRef.current;
     const cleaned = h.state.walls.filter((w) => !w.isInsetWall || w.insetSourceRoomId !== room.id);
     let nextRooms = h.state.rooms;
-    let createdBuildableId: string | null = null;
+    let createdInsetId: string | null = null;
     if (!silent) {
       const idx = h.state.rooms.findIndex((r) => r.id === room.id);
-      const sourceIsSite = idx >= 0 && h.state.rooms[idx].roomType === "plot-boundary";
-      if (idx >= 0 && sourceIsSite) {
-        // Site Area source: keep the site polygon untouched, materialise a separate Buildable Area
-        // room from the inset polygon so the cascade produces a typed Space, not just walls.
-        createdBuildableId = createId();
-        const buildableRoom: Room = {
-          id: createdBuildableId,
+      if (idx >= 0) {
+        // Keep the SOURCE Space untouched — so it stays selectable and retains its
+        // identity — and materialise a SEPARATE "Inset Area" Space from the inset
+        // polygon. Applies to both the site/plot boundary and regular drawn Spaces;
+        // previously regular Spaces were overwritten by the inset, which consumed the
+        // original and made it unselectable.
+        createdInsetId = createId();
+        const insetRoom: Room = {
+          id: createdInsetId,
           points: insetPts.map((p) => ({ x: p.x, y: p.y })),
-          fill: "rgba(220, 252, 231, 0.45)",
-          stroke: "#16a34a",
-          label: "Buildable Area",
-          roomType: "buildable-area",
+          fill: "rgba(186, 230, 253, 0.35)",
+          stroke: "#0369a1",
+          label: "Inset Area",
+          roomType: "inset-area",
+          layerId: layerForRoomType("inset-area"),
         };
-        nextRooms = [...h.state.rooms, buildableRoom];
-      } else if (idx >= 0) {
-        // Non-site source: replace the source polygon with the inset polygon AND retype it as
-        // a Buildable Area space (matches the segmentType: buildable-boundary applied to the
-        // boundary walls above). Fill/stroke/label updated to the standard Buildable look.
-        nextRooms = h.state.rooms.map((r, i) => i === idx ? {
-          ...r,
-          points: insetPts.map((p) => ({ x: p.x, y: p.y })),
-          roomType: "buildable-area" as const,
-          fill: "rgba(220, 252, 231, 0.45)",
-          stroke: "#16a34a",
-          label: r.label ?? "Buildable Area",
-        } : r);
+        nextRooms = [...h.state.rooms, insetRoom];
+      }
+      // Deduct Area on: also materialise (a) the deduction piece as a "Deduction Area"
+      // Space and (b) the remaining inset-minus-deduction as a "Buildable Area" Space,
+      // each on its own layer. Uses the same shared helper the overlay uses so the
+      // committed polygons match what was previewed.
+      if (insetDeductEnabled) {
+        const mainAreaM2 = Math.abs(polygonArea(room.points)) / (pixelsPerMeter * pixelsPerMeter);
+        const { available, deduction } = clipInsetByDeduction(insetPts, {
+          angleDeg: insetDeductAngle,
+          mode: insetDeductMode,
+          areaM2: insetDeductAreaM2,
+          percent: insetDeductPercent,
+          mainAreaM2,
+          ppm: pixelsPerMeter,
+        });
+        if (deduction.length >= 3) {
+          const deductionRoom: Room = {
+            id: createId(),
+            points: deduction.map((p) => ({ x: p.x, y: p.y })),
+            fill: "rgba(254, 215, 170, 0.5)",
+            stroke: "#ea580c",
+            label: "Deduction Area",
+            roomType: "deduction-area",
+            layerId: layerForRoomType("deduction-area"),
+          };
+          nextRooms = [...nextRooms, deductionRoom];
+        }
+        if (available.length >= 3) {
+          const buildableRoom: Room = {
+            id: createId(),
+            points: available.map((p) => ({ x: p.x, y: p.y })),
+            fill: "rgba(220, 252, 231, 0.45)",
+            stroke: "#16a34a",
+            label: "Buildable Area",
+            roomType: "buildable-area",
+            layerId: layerForRoomType("buildable-area"),
+          };
+          nextRooms = [...nextRooms, buildableRoom];
+        }
       }
     }
     const nextState = { ...h.state, walls: [...cleaned, ...newWalls], rooms: nextRooms };
@@ -5946,13 +6324,20 @@ User request: ${aiPrompt.trim()}`;
     // Cleared on commit so the downstream tools fall back to the auto-detected inset room.
     if (silent) {
       livePreviewPolygonRef.current[room.id] = insetPts.map((p) => ({ x: p.x, y: p.y }));
+      // Flow chain: publish the inset polygon as this step's output for the next tool.
+      if (flowChainActiveRef.current) flowWorkRef.current[room.id] = insetPts.map((p) => ({ x: p.x, y: p.y }));
     } else {
       delete livePreviewPolygonRef.current[room.id];
     }
     setLivePreviewTick((t) => t + 1);
 
     if (!silent) {
-      const areaPx = Math.abs(insArea) / 2;
+      let shoelace = 0;
+      for (let i = 0; i < N; i++) {
+        const a = insetPts[i], b = insetPts[(i + 1) % N];
+        shoelace += a.x * b.y - b.x * a.y;
+      }
+      const areaPx = Math.abs(shoelace) / 2;
       const areaUnit = areaInSquareUnit(areaPx, unit, pixelsPerMeter);
       toast.success(`Inset polygon committed (${N} edges, area ${areaUnit.toFixed(2)} ${unit}²)`);
       // Op log entry: prefer uniformSetback when all edges share the same value; otherwise emit
@@ -5968,7 +6353,7 @@ User request: ${aiPrompt.trim()}`;
       });
     }
     return true;
-  }, [insetSetbacksByRoom, pixelsPerMeter, getCurrentWallStyle, unit, logOp]);
+  }, [insetSetbacksByRoom, pixelsPerMeter, getCurrentWallStyle, unit, logOp, insetInside, insetDeductEnabled, insetDeductAngle, insetDeductMode, insetDeductAreaM2, insetDeductPercent]);
 
   /** When a reference edge is chosen, derive splitAngle so cuts land perpendicular to that edge. */
   useEffect(() => {
@@ -6829,10 +7214,35 @@ User request: ${aiPrompt.trim()}`;
   /** Compute & apply Optimise Rectangle walls. Silent uses history.replace for live preview. */
   const runRoomOptimiseRect = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
     if (!room) return false;
-    // In live/preview mode, if an upstream tool (e.g. Inset) has published a preview polygon for this
-    // room, operate on that instead — so changing the Inset slider also reshapes Max Rect live.
-    const livePts = silent ? livePreviewPolygonRef.current[room.id] : null;
-    const sourcePts = livePts && livePts.length >= 3 ? livePts : room.points;
+    // When the Inset Polygon block is Live it publishes the inset polygon for this room;
+    // fit the rectangle inside it (both live preview AND Apply) so the tower never leaves
+    // the inset. If the Inset block's Deduct Area is enabled, clip the inset down to its
+    // "available" (post-deduction) side first, so the rectangle is always drawn inside the
+    // inset AND clear of the deduction region.
+    // Flow pipeline chain wins: fit inside the upstream tool's output polygon when present.
+    const chainIn = (silent && flowChainActiveRef.current) ? flowWorkRef.current[room.id] : null;
+    const flowPiece = flowPiecePolygonRef.current[room.id];
+    const insetPoly = (chainIn && chainIn.length >= 3)
+      ? chainIn
+      : (flowPiece && flowPiece.length >= 3)
+        ? flowPiece
+        : (insetLive ? livePreviewPolygonRef.current[room.id] : null);
+    const hasInset = !!(insetPoly && insetPoly.length >= 3);
+    let baseSource: Point[] = hasInset ? insetPoly! : room.points;
+    if (hasInset && insetDeductEnabled) {
+      const ppm = pixelsPerMeter;
+      const mainAreaM2 = Math.abs(polygonArea(room.points)) / (ppm * ppm);
+      const { available } = clipInsetByDeduction(baseSource, {
+        angleDeg: insetDeductAngle,
+        mode: insetDeductMode,
+        areaM2: insetDeductAreaM2,
+        percent: insetDeductPercent,
+        mainAreaM2,
+        ppm,
+      });
+      if (available.length >= 3) baseSource = available;
+    }
+    const sourcePts = baseSource;
     if (sourcePts.length < 3) { if (!silent) toast.error("Need at least 3 vertices"); return false; }
     // Shrink: when enabled, clip the source polygon by a half-plane perpendicular to `shrinkAngle`.
     // Manual mode: cut position = `shrinkSlide` (0–100%). Optimise-shrink: binary-search the cut
@@ -7556,6 +7966,7 @@ User request: ${aiPrompt.trim()}`;
             if (area > bestArea) { bestArea = area; bestLoop = lp; }
           }
           optimiseUnionPolygonRef.current[room.id] = bestLoop;
+          if (flowChainActiveRef.current) flowWorkRef.current[room.id] = bestLoop.map((p) => ({ x: p.x, y: p.y }));
         } else if (placed.length > 0) {
           // Last-resort: largest single placed rectangle. Better than the inset polygon (too big)
           // or no polygon at all. Should rarely fire now that chaining is robust.
@@ -7571,6 +7982,7 @@ User request: ${aiPrompt.trim()}`;
             if (area > bestArea) { bestArea = area; bestIdx = i; }
           }
           optimiseUnionPolygonRef.current[room.id] = placed[bestIdx].map((p) => ({ x: p.x, y: p.y }));
+          if (flowChainActiveRef.current) flowWorkRef.current[room.id] = placed[bestIdx].map((p) => ({ x: p.x, y: p.y }));
         } else {
           delete optimiseUnionPolygonRef.current[room.id];
         }
@@ -7600,8 +8012,12 @@ User request: ${aiPrompt.trim()}`;
     if (allNewWalls.length === 0) { if (!silent) toast.error("No rectangles placed (check Min area)"); return false; }
 
     // The TRUE union outline of placed rectangles is now published unconditionally inside the
-    // mask/ring block above (regardless of useUnion). On commit (silent === false), clear the ref
-    // so committed downstream tools fall back to room.points / inset polygon.
+    // mask/ring block above (regardless of useUnion). On commit (silent === false), capture it
+    // first (it drives the Footprint Area room below), then clear the ref so committed downstream
+    // tools fall back to room.points / inset polygon.
+    const committedUnionPoly: Point[] | null = !silent
+      ? (optimiseUnionPolygonRef.current[room.id] ?? null)
+      : null;
     if (!silent) {
       delete optimiseUnionPolygonRef.current[room.id];
     }
@@ -7625,25 +8041,28 @@ User request: ${aiPrompt.trim()}`;
 
     const h = historyRef.current;
     const cleanedWalls = h.state.walls.filter((w) => !w.isMaxRectComputed && !w.isMaxRectPreview);
-    // Cascade-aware commit: when Optimise Rectangle commits on a Buildable Area source, materialise a
-    // Footprint Area room from the chosen polygon (single rect → its 4 corners; union mode → the cached
-    // union outline) and re-tag the emitted walls as `footprint-boundary` so the data model carries the
-    // typed Space, not just generic walls.
-    const sourceRoomNow = h.state.rooms.find((r) => r.id === room.id);
-    const sourceIsBuildableCommit = !silent && sourceRoomNow?.roomType === "buildable-area";
+    // On ANY commit, materialise the optimised polygon as a "Footprint Area" Space (single rect →
+    // its 4 corners; union mode → the cached union outline) and re-tag the emitted walls as
+    // `footprint-boundary` so the data model carries the typed Space, not just generic walls.
+    // (Previously gated on a Buildable Area source, so committing on a regular Space produced no
+    // Footprint room at all — that's what Apply in the Optimise Rectangle block relies on.)
     let footprintRoom: Room | null = null;
     let nextWalls = [...cleanedWalls, ...allNewWalls];
     let nextRooms = h.state.rooms;
-    if (sourceIsBuildableCommit) {
-      // Re-tag committed walls as footprint-boundary.
+    if (!silent) {
+      // Re-tag committed walls as footprint-boundary AND move them onto the Footprint
+      // Area layer, so the whole footprint (room fill + boundary segments) honours that
+      // layer's visibility — otherwise hiding "Footprint Area" left the wall outline showing.
       nextWalls = [
         ...cleanedWalls,
         ...allNewWalls.map((w) => (
-          w.isMaxRectComputed ? { ...w, segmentType: "footprint-boundary" as const, color: "#7f1d1d" } : w
+          w.isMaxRectComputed
+            ? { ...w, segmentType: "footprint-boundary" as const, color: "#7f1d1d", layerId: layerForRoomType("floorplate-boundary") }
+            : w
         )),
       ];
-      // Pick the polygon for the new Footprint room: union outline if any, else the largest placed rect.
-      const unionPoly = optimiseUnionPolygonRef.current[room.id];
+      // Pick the polygon for the new Footprint room: captured union outline if any, else the largest placed rect.
+      const unionPoly = committedUnionPoly;
       let fpPts: Point[] | null = null;
       if (unionPoly && unionPoly.length >= 3) {
         fpPts = unionPoly.map((p) => ({ x: p.x, y: p.y }));
@@ -7668,6 +8087,7 @@ User request: ${aiPrompt.trim()}`;
           stroke: "#7f1d1d",
           label: "Footprint Area",
           roomType: "floorplate-boundary",
+          layerId: layerForRoomType("floorplate-boundary"),
         };
         nextRooms = [...h.state.rooms, footprintRoom];
       }
@@ -7708,7 +8128,7 @@ User request: ${aiPrompt.trim()}`;
       });
     }
     return true;
-  }, [maxRectReference, maxRectCount, maxRectMinArea, maxRectUnion, maxRectAxisAngle, maxRectShape, maxRectShrinkEnabled, maxRectShrinkAngle, maxRectShrinkSlide, maxRectOptimiseShrinkEnabled, maxRectTargetArea, getCurrentWallStyle, pixelsPerMeter, logOp]);
+  }, [maxRectReference, maxRectCount, maxRectMinArea, maxRectUnion, maxRectAxisAngle, maxRectShape, maxRectShrinkEnabled, maxRectShrinkAngle, maxRectShrinkSlide, maxRectOptimiseShrinkEnabled, maxRectTargetArea, getCurrentWallStyle, pixelsPerMeter, logOp, insetLive, insetDeductEnabled, insetDeductAngle, insetDeductMode, insetDeductAreaM2, insetDeductPercent]);
 
   /** Live optimise: re-run when mode changes while Live is on. */
   useEffect(() => {
@@ -7718,7 +8138,7 @@ User request: ${aiPrompt.trim()}`;
     const room = visibleRoomsRef.current.find((r) => r.id === id);
     if (!room) return;
     runRoomOptimiseRect(room, true);
-  }, [optimiseLive, maxRectReference, maxRectCount, maxRectMinArea, maxRectUnion, maxRectAxisAngle, maxRectShape, maxRectShrinkEnabled, maxRectShrinkAngle, maxRectShrinkSlide, maxRectOptimiseShrinkEnabled, maxRectTargetArea, runRoomOptimiseRect, livePreviewTick]);
+  }, [optimiseLive, maxRectReference, maxRectCount, maxRectMinArea, maxRectUnion, maxRectAxisAngle, maxRectShape, maxRectShrinkEnabled, maxRectShrinkAngle, maxRectShrinkSlide, maxRectOptimiseShrinkEnabled, maxRectTargetArea, runRoomOptimiseRect, livePreviewTick, insetLive, insetDeductEnabled, insetDeductAngle, insetDeductMode, insetDeductAreaM2, insetDeductPercent]);
 
   /** Live massing: re-run whenever an upstream cascade tool refreshes (livePreviewTick bumps after
    *  Inset / Optimise Rectangle silent runs) so Massing follows the latest optimise-rect outline. */
@@ -8491,7 +8911,10 @@ User request: ${aiPrompt.trim()}`;
   /** Compute approximate medial-axis skeleton of a polygon using Voronoi of boundary samples. */
   const runRoomSkeleton = useCallback((room: { id: string; points: Point[] } | null, silent: boolean): boolean => {
     if (!room) return false;
-    const polygon = room.points;
+    // Flow pipeline chain: in preview, skeletonise the upstream tool's output polygon.
+    // On commit the `on`-targeted room already carries the right points.
+    const chainIn = (silent && flowChainActiveRef.current) ? flowWorkRef.current[room.id] : null;
+    const polygon = (chainIn && chainIn.length >= 3) ? chainIn : room.points;
     if (polygon.length < 3) { if (!silent) toast.error("Need at least 3 vertices"); return false; }
 
     if (skeletonType === "straight-skeleton") {
@@ -9155,7 +9578,7 @@ User request: ${aiPrompt.trim()}`;
     else h.set(nextState);
     if (!silent) toast.success(`Skeleton committed (${newWalls.length} segments)`);
     return true;
-  }, [skeletonSamples, skeletonType, skeletonPruneEnds, skeletonLongestBranch, skeletonMakePath, skeletonPathWidth, skeletonLevel, pixelsPerMeter, runRoomPathSpace, getCurrentWallStyle]);
+  }, [skeletonSamples, skeletonType, skeletonPruneEnds, skeletonLongestBranch, skeletonMakePath, skeletonPathWidth, skeletonLevel, pixelsPerMeter, runRoomPathSpace, getCurrentWallStyle, insetLive]);
 
   /** Live skeleton: re-run whenever sample density changes while Live is on. */
   useEffect(() => {
@@ -15742,6 +16165,19 @@ User request: ${aiPrompt.trim()}`;
     const roomHit = history.state.rooms.find((r) => r.id === id);
     const hitLayer = wallHit?.layerId ?? objHit?.layerId ?? furnHit?.layerId ?? roomHit?.layerId;
     if (hitLayer && isLayerLocked(hitLayer)) return;
+    // Gate selection by the Select-tool scope filter. "all" allows everything; a
+    // specific scope only lets clicks of the matching kind through. Nodes are handled
+    // by a separate path (setSelectedNodeKey), so a "node" scope blocks everything here.
+    if (tool === "select" && selectFilter !== "all") {
+      const hitKind: SelectFilter | null = wallHit
+        ? "segment"
+        : objHit?.kind === "segment"
+          ? "segment"
+          : roomHit
+            ? "space"
+            : null;
+      if (hitKind !== selectFilter) return;
+    }
     // Add window mode: clicking a wall splits it to insert a window segment
     if (addWindowMode) {
       const wall = history.state.walls.find((w) => w.id === id);
@@ -16181,6 +16617,147 @@ User request: ${aiPrompt.trim()}`;
     reader.readAsDataURL(file);
   };
 
+  /** Clear any previously generated vector segments (committed or preview). */
+  const clearVectorWalls = () => {
+    const h = historyRef.current;
+    const before = h.state.walls.length;
+    const next = h.state.walls.filter((w) => !w.isVectorWall && !w.isVectorPreview);
+    if (next.length === before) return;
+    h.set({ ...h.state, walls: next });
+    setVecStats(null);
+  };
+
+  /** Drop only the ephemeral live-preview vector segments (leaves committed ones). */
+  const clearVectorPreview = () => {
+    const h = historyRef.current;
+    const next = h.state.walls.filter((w) => !w.isVectorPreview);
+    if (next.length === h.state.walls.length) return;
+    h.replace({ ...h.state, walls: next });
+  };
+
+  /** Image Tools → Vectorisation. Rasterizes the loaded underlay image, traces
+   *  its lines into polylines, maps them onto the underlay's world box and emits
+   *  them as `segmentType: "line"` segments overlaying the image. `preview` =
+   *  true commits ephemerally (isVectorPreview, history.replace — no undo entry,
+   *  excluded from room detection); false commits permanently (isVectorWall). */
+  const runVectorization = async (preview: boolean) => {
+    const underlay = historyRef.current.state.imageUnderlay;
+    if (!underlay || !imageElement) {
+      if (!preview) toast.error("Upload an image first (drop a PNG/JPG onto the canvas).");
+      return;
+    }
+    if (!preview) {
+      setVecBusy(true);
+      // Yield a frame so the disabled/busy UI paints before the (synchronous,
+      // potentially heavy) trace pipeline runs.
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    try {
+      const w = imageElement.naturalWidth || imageElement.width;
+      const h = imageElement.naturalHeight || imageElement.height;
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        if (!preview) toast.error("Couldn't read image pixels (canvas unavailable).");
+        return;
+      }
+      ctx.drawImage(imageElement, 0, 0, w, h);
+      const imgData = ctx.getImageData(0, 0, w, h);
+      // Read params from the ref so a debounced live run never sees a stale closure.
+      const result = vectorizeImage(imgData.data, w, h, vecParamsRef.current);
+      const hist = historyRef.current;
+      const cleaned = hist.state.walls.filter((wl) => !wl.isVectorWall && !wl.isVectorPreview);
+      if (result.polylines.length === 0) {
+        const emptyState = { ...hist.state, walls: cleaned };
+        if (preview) hist.replace(emptyState);
+        else hist.set(emptyState);
+        setVecStats(null);
+        if (!preview) toast.warning("No lines found — try a different colour filter or raise the tolerance.");
+        return;
+      }
+      // Image-pixel → world: the underlay box starts at (x, y) and each image
+      // pixel spans `scale` world units (it is drawn at width*scale / height*scale).
+      const ox = underlay.x;
+      const oy = underlay.y;
+      const s = underlay.scale || 1;
+      const newWalls: Wall[] = [];
+      for (const pl of result.polylines) {
+        for (let i = 0; i < pl.length - 1; i++) {
+          newWalls.push({
+            id: createId(),
+            start: { x: ox + pl[i][0] * s, y: oy + pl[i][1] * s },
+            end: { x: ox + pl[i + 1][0] * s, y: oy + pl[i + 1][1] * s },
+            thickness: Math.max(1, s * 1.5),
+            color: preview ? "#34d399" : "#00b87d",
+            mode: "line",
+            method: "center",
+            segmentType: "line",
+            ...(preview ? { isVectorPreview: true } : { isVectorWall: true }),
+          });
+        }
+      }
+      const nextState = { ...hist.state, walls: [...cleaned, ...newWalls] };
+      if (preview) hist.replace(nextState);
+      else hist.set(nextState);
+      setVecStats({ lines: result.polylines.length, nodes: result.nodeCount, edges: result.edgeCount });
+      if (!preview) toast.success(`Vectorized — ${result.polylines.length} polylines, ${newWalls.length} segments`);
+    } catch (err) {
+      console.error("Vectorization failed", err);
+      if (!preview) toast.error(`Vectorization failed: ${(err as Error)?.message ?? "unknown error"}`);
+    } finally {
+      if (!preview) setVecBusy(false);
+    }
+  };
+
+  /** Debounced live preview — re-runs an ephemeral trace ~300ms after the last change. */
+  const scheduleVectorPreview = () => {
+    if (vecLiveTimerRef.current) clearTimeout(vecLiveTimerRef.current);
+    vecLiveTimerRef.current = setTimeout(() => { void runVectorization(true); }, 300);
+  };
+
+  /** Image Tools → Object Detection. Sends the underlay image to Gemini and
+   *  overlays the returned bounding boxes / points (with labels) on the canvas. */
+  const runObjectDetection = async () => {
+    const underlay = historyRef.current.state.imageUnderlay;
+    if (!underlay?.src) {
+      toast.error("Upload an image first (drop a PNG/JPG onto the canvas).");
+      return;
+    }
+    if (!odApiKey.trim()) {
+      toast.error("Enter a Gemini API key.");
+      return;
+    }
+    setOdBusy(true);
+    const toastId = toast.loading("Detecting objects…");
+    try {
+      const { mimeType, base64 } = splitDataUrl(underlay.src);
+      const detections = await detectObjects({
+        model: odModel,
+        apiKey: odApiKey,
+        mode: odMode,
+        targets: odTargets,
+        maxItems: odMaxItems,
+        imageBase64: base64,
+        mimeType,
+      });
+      setObjectDetections(detections);
+      if (detections.length === 0) {
+        toast.warning("No objects detected — try a broader prompt or a different model.", { id: toastId });
+      } else {
+        const single = odMode === "box" ? "box" : "point";
+        const label = detections.length === 1 ? single : `${single}${odMode === "box" ? "es" : "s"}`;
+        toast.success(`Detected ${detections.length} ${label}`, { id: toastId });
+      }
+    } catch (err) {
+      console.error("Object detection failed", err);
+      toast.error(`Object detection failed: ${(err as Error)?.message ?? "unknown error"}`, { id: toastId });
+    } finally {
+      setOdBusy(false);
+    }
+  };
+
   const exportPng = () => {
     const stage = stageRef.current;
     if (!stage) {
@@ -16205,7 +16782,23 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const exportJsonFile = () => {
-    const payload = JSON.stringify({ ...history.state, rooms: visibleRooms }, null, 2);
+    // Export EVERY manual Space with its full parameter set (label, roomType,
+    // customParams, floorsCount, …) regardless of layer visibility — using
+    // `visibleRooms` would silently drop Spaces on hidden layers. Visible
+    // auto-detected rooms are still included for external consumers; on import
+    // they're stripped and regenerated from the walls.
+    const exportRooms = [
+      ...visibleRooms.filter((r) => r.id.startsWith(ROOM_AUTO_ID_PREFIX)),
+      ...history.state.rooms,
+    ];
+    // Persist the current scale calibration (pixels-per-metre) alongside the
+    // model so re-importing restores the same real-world scale. It lives in
+    // component state, not the model, so it must be added explicitly here.
+    // Walls already carry their full parameters (segmentType, customParams,
+    // label, category, …) and the custom-type registries
+    // (customSegmentTypes / customRoomTypes) are part of history.state, so both
+    // segment and space parameters round-trip through the spread below.
+    const payload = JSON.stringify({ ...history.state, rooms: exportRooms, pixelsPerMeter }, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -16224,15 +16817,24 @@ User request: ${aiPrompt.trim()}`;
     reader.onload = (e) => {
       try {
         const raw = e.target?.result as string;
-        const model = JSON.parse(raw) as FloorPlanModel;
+        // `pixelsPerMeter` is stored next to the model (it's component state, not
+        // part of FloorPlanModel) — strip it out before building the model.
+        const { pixelsPerMeter: importedPpm, ...model } = JSON.parse(raw) as FloorPlanModel & { pixelsPerMeter?: number };
         if (model.rooms) {
           model.rooms = model.rooms.filter((r) => !r.id.startsWith(ROOM_AUTO_ID_PREFIX));
         }
-        history.set({
+        // Seed any built-in default layers (incl. the Site cascade — Buildable /
+        // Footprint / Basement / Inset Area) that the imported file is missing,
+        // without disturbing the user's own custom layers or their order.
+        history.set(withLayerDefaults({
           ...initialModel,
           ...model,
           walls: splitWallsAtIntersections(model.walls ?? []),
-        });
+        }));
+        // Restore the saved scale calibration so dimensions match the export.
+        if (typeof importedPpm === "number" && Number.isFinite(importedPpm) && importedPpm > 0) {
+          setPixelsPerMeter(importedPpm);
+        }
         // Clear the input so the same file can be imported again
         event.target.value = "";
       } catch (err) {
@@ -16318,83 +16920,135 @@ User request: ${aiPrompt.trim()}`;
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 max-h-[70vh] overflow-y-auto" side="bottom" sideOffset={8}>
-        {/* Drawing Layers — AutoCAD-style. Each row: visible, locked, color, name, active radio, delete. */}
+        {/* Drawing Layers — AutoCAD-style. Each row: visible, locked, color, name, active radio, delete.
+            The Site-related layers (Buildable / Footprint / Basement / Inset Area) are pulled out
+            into a foldable "Site" group so they don't dominate the list. */}
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Drawing Layers</p>
         <div className="mb-3 space-y-1">
-          {(history.state.layers ?? []).map((layer) => {
-            const isActive = activeLayerId === layer.id;
-            const isDefault = layer.id === "0";
-            const updateLayer = (patch: Partial<typeof layer>) => {
-              const h = history;
-              h.set({ ...h.state, layers: (h.state.layers ?? []).map((l) => l.id === layer.id ? { ...l, ...patch } : l) });
-            };
-            return (
-              <div key={layer.id} className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[11px] ${isActive ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}>
-                <button
-                  type="button"
-                  title={layer.visible ? "Hide layer" : "Show layer"}
-                  onClick={() => updateLayer({ visible: !layer.visible })}
-                  className="rounded p-0.5 hover:bg-slate-100"
-                >
-                  {layer.visible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
-                </button>
-                <button
-                  type="button"
-                  title={layer.locked ? "Unlock layer" : "Lock layer"}
-                  onClick={() => updateLayer({ locked: !layer.locked })}
-                  className="rounded p-0.5 hover:bg-slate-100"
-                >
-                  {layer.locked ? <Lock className="h-3.5 w-3.5 text-amber-600" /> : <Unlock className="h-3.5 w-3.5 text-slate-400" />}
-                </button>
-                <input
-                  type="color"
-                  value={layer.color}
-                  onChange={(e) => updateLayer({ color: e.target.value })}
-                  className="h-4 w-4 cursor-pointer rounded border border-slate-200 p-0"
-                  title="Layer color"
-                />
-                <input
-                  type="text"
-                  value={layer.name}
-                  onChange={(e) => updateLayer({ name: e.target.value })}
-                  disabled={isDefault}
-                  className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0 text-[11px] hover:border-slate-200 focus:border-slate-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                  title={isDefault ? "Default layer name is fixed" : "Rename layer"}
-                />
-                <input
-                  type="radio"
-                  name="active-layer"
-                  checked={isActive}
-                  onChange={() => setActiveLayerId(layer.id)}
-                  title="Set as active layer"
-                  className="cursor-pointer"
-                />
-                {!isDefault && (
+          {(() => {
+            const allLayers = history.state.layers ?? [];
+            const renderRow = (layer: typeof allLayers[number]) => {
+              const isActive = activeLayerId === layer.id;
+              const isDefault = layer.id === "0";
+              const updateLayer = (patch: Partial<typeof layer>) => {
+                const h = history;
+                h.set({ ...h.state, layers: (h.state.layers ?? []).map((l) => l.id === layer.id ? { ...l, ...patch } : l) });
+              };
+              return (
+                <div key={layer.id} className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[11px] ${isActive ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}>
                   <button
                     type="button"
-                    title="Delete layer (entities move to Layer 0)"
-                    onClick={() => {
-                      if (isActive) setActiveLayerId("0");
-                      const h = history;
-                      const reassign = <T extends { layerId?: string }>(arr: T[]): T[] =>
-                        arr.map((e) => (e.layerId === layer.id ? { ...e, layerId: "0" } : e));
-                      h.set({
-                        ...h.state,
-                        layers: (h.state.layers ?? []).filter((l) => l.id !== layer.id),
-                        walls: reassign(h.state.walls),
-                        rooms: reassign(h.state.rooms),
-                        objects: reassign(h.state.objects),
-                        furniture: reassign(h.state.furniture),
-                      });
-                    }}
-                    className="rounded p-0.5 text-red-500 hover:bg-red-50"
+                    title={layer.visible ? "Hide layer" : "Show layer"}
+                    onClick={() => updateLayer({ visible: !layer.visible })}
+                    className="rounded p-0.5 hover:bg-slate-100"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    {layer.visible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
                   </button>
+                  <button
+                    type="button"
+                    title={layer.locked ? "Unlock layer" : "Lock layer"}
+                    onClick={() => updateLayer({ locked: !layer.locked })}
+                    className="rounded p-0.5 hover:bg-slate-100"
+                  >
+                    {layer.locked ? <Lock className="h-3.5 w-3.5 text-amber-600" /> : <Unlock className="h-3.5 w-3.5 text-slate-400" />}
+                  </button>
+                  <input
+                    type="color"
+                    value={layer.color}
+                    onChange={(e) => updateLayer({ color: e.target.value })}
+                    className="h-4 w-4 cursor-pointer rounded border border-slate-200 p-0"
+                    title="Layer color"
+                  />
+                  <input
+                    type="text"
+                    value={layer.name}
+                    onChange={(e) => updateLayer({ name: e.target.value })}
+                    disabled={isDefault}
+                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0 text-[11px] hover:border-slate-200 focus:border-slate-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    title={isDefault ? "Default layer name is fixed" : "Rename layer"}
+                  />
+                  <input
+                    type="radio"
+                    name="active-layer"
+                    checked={isActive}
+                    onChange={() => setActiveLayerId(layer.id)}
+                    title="Set as active layer"
+                    className="cursor-pointer"
+                  />
+                  {!isDefault && (
+                    <button
+                      type="button"
+                      title="Delete layer (entities move to Layer 0)"
+                      onClick={() => {
+                        if (isActive) setActiveLayerId("0");
+                        const h = history;
+                        const reassign = <T extends { layerId?: string }>(arr: T[]): T[] =>
+                          arr.map((e) => (e.layerId === layer.id ? { ...e, layerId: "0" } : e));
+                        h.set({
+                          ...h.state,
+                          layers: (h.state.layers ?? []).filter((l) => l.id !== layer.id),
+                          walls: reassign(h.state.walls),
+                          rooms: reassign(h.state.rooms),
+                          objects: reassign(h.state.objects),
+                          furniture: reassign(h.state.furniture),
+                        });
+                      }}
+                      className="rounded p-0.5 text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            };
+
+            const siteLayers = allLayers.filter((l) => SITE_GROUP_LAYER_IDS.has(l.id));
+            const nonSiteLayers = allLayers.filter((l) => !SITE_GROUP_LAYER_IDS.has(l.id));
+            // "Site" group header: clicking the eye toggles visibility on all four site
+            // layers at once; the caret folds the list of individual rows.
+            const allSiteVisible = siteLayers.length > 0 && siteLayers.every((l) => l.visible);
+            const setAllSiteVisible = (visible: boolean) => {
+              const h = history;
+              h.set({
+                ...h.state,
+                layers: (h.state.layers ?? []).map((l) =>
+                  SITE_GROUP_LAYER_IDS.has(l.id) ? { ...l, visible } : l,
+                ),
+              });
+            };
+            return (
+              <>
+                {nonSiteLayers.map(renderRow)}
+                {siteLayers.length > 0 && (
+                  <div className="rounded border border-slate-200 bg-slate-50">
+                    <div className="flex items-center gap-1 px-1.5 py-1 text-[11px]">
+                      <button
+                        type="button"
+                        title={allSiteVisible ? "Hide all Site layers" : "Show all Site layers"}
+                        onClick={() => setAllSiteVisible(!allSiteVisible)}
+                        className="rounded p-0.5 hover:bg-slate-200"
+                      >
+                        {allSiteVisible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSiteLayerGroupExpanded((v) => !v)}
+                        className="flex flex-1 items-center justify-between rounded px-1 py-0.5 text-left font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-200"
+                      >
+                        <span>Site</span>
+                        <span className="text-[10px] text-slate-400">{siteLayerGroupExpanded ? "▼" : "▶"} {siteLayers.length}</span>
+                      </button>
+                    </div>
+                    {siteLayerGroupExpanded && (
+                      <div className="space-y-1 border-t border-slate-200 bg-white p-1">
+                        {siteLayers.map(renderRow)}
+                      </div>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             );
-          })}
+          })()}
           <div className="flex gap-1">
             <Button
               size="sm"
@@ -17888,7 +18542,23 @@ User request: ${aiPrompt.trim()}`;
           </ScrollArea>
         </div>
 
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
+        <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
+        <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
+        <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
+          {/* Flow editor — node-graph pipeline that composes the stepwise tools (Inset,
+              Optimise Rect, Split, …) and runs them via the existing recipe engine.
+              When open it occupies a resizable bottom dock (below) so the canvas + flow
+              are visible at once; this button just opens it. */}
+          {!flowOpen && (
+            <button
+              type="button"
+              onClick={() => setFlowOpen(true)}
+              className="absolute bottom-3 left-3 z-30 flex items-center gap-1.5 rounded-md border border-slate-300 bg-white/90 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 shadow-md backdrop-blur hover:bg-white"
+              title="Open the Flow pipeline editor"
+            >
+              <span aria-hidden>⬡</span> Flow
+            </button>
+          )}
           {viewMode === "3d" ? (
             <div className="absolute inset-0 z-20">
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-slate-500">Loading 3D…</div>}>
@@ -17921,6 +18591,8 @@ User request: ${aiPrompt.trim()}`;
                     return pb?.floorToFloorM ?? 3.0;
                   })()}
                   massingShowBlocks={massingShowBlocks}
+                  massingExtrudeUpwards={massingExtrudeUpwards}
+                  massingPreview={flowMassingPreview}
                   snapshotApiRef={snapshotApiRef}
                   onSelectWall={(id, additive) => {
                     if (!id) { selection.clearSelection(); return; }
@@ -18091,13 +18763,69 @@ User request: ${aiPrompt.trim()}`;
                     }
                   />
                 ) : null}
+
+                {/* Object Detection overlay — Gemini boxes/points mapped from the
+                    0–1000 normalised grid onto the underlay's world box. */}
+                {layerVisibility.underlay && history.state.imageUnderlay && objectDetections.length > 0
+                  ? (() => {
+                      const u = history.state.imageUnderlay;
+                      const ox = u.x;
+                      const oy = u.y;
+                      const dispW = u.width * u.scale;
+                      const dispH = u.height * u.scale;
+                      const fs = 14 / scale; // keep label ~14px on screen at any zoom
+                      const sw = 2 / scale; // ~2px strokes
+                      return (
+                        <Group listening={false}>
+                          {objectDetections.map((d, i) => {
+                            if (d.box2d) {
+                              const [ymin, xmin, ymax, xmax] = d.box2d;
+                              const x = ox + (xmin / 1000) * dispW;
+                              const y = oy + (ymin / 1000) * dispH;
+                              const w = ((xmax - xmin) / 1000) * dispW;
+                              const h = ((ymax - ymin) / 1000) * dispH;
+                              return (
+                                <Group key={`od-${i}`}>
+                                  <Rect x={x} y={y} width={w} height={h} stroke="#f43f5e" strokeWidth={sw} />
+                                  <Rect x={x} y={y - fs * 1.4} width={Math.max(d.label.length * fs * 0.62, fs * 2)} height={fs * 1.4} fill="#f43f5e" />
+                                  <Text x={x + fs * 0.2} y={y - fs * 1.25} text={d.label} fontSize={fs} fill="#ffffff" />
+                                </Group>
+                              );
+                            }
+                            if (d.point) {
+                              const [py, px] = d.point;
+                              const x = ox + (px / 1000) * dispW;
+                              const y = oy + (py / 1000) * dispH;
+                              const r = 5 / scale;
+                              return (
+                                <Group key={`od-${i}`}>
+                                  <Circle x={x} y={y} radius={r} fill="#f43f5e" stroke="#ffffff" strokeWidth={sw * 0.75} />
+                                  <Rect x={x + r * 1.5} y={y - fs * 0.7} width={Math.max(d.label.length * fs * 0.62, fs * 2)} height={fs * 1.4} fill="#f43f5e" />
+                                  <Text x={x + r * 1.5 + fs * 0.2} y={y - fs * 0.55} text={d.label} fontSize={fs} fill="#ffffff" />
+                                </Group>
+                              );
+                            }
+                            return null;
+                          })}
+                        </Group>
+                      );
+                    })()
+                  : null}
               </WorldViewport>
             </Layer>
 
             {layerVisibility.drawing ? (
               <Layer>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
-                  {layerVisibility.rooms && visibleRooms.map((room: Room, roomIdx: number) => {
+                  {/* Render rooms in descending-area order so larger container polygons
+                      (Basement Area, Site Area, Buildable Area) are painted first and any
+                      smaller polygons nested inside (Footprint Area, Rooms) sit on top.
+                      Konva uses painter's order for hit-testing — the last-drawn shape
+                      under the cursor receives the click — so this ordering lets the user
+                      click into an inner room without being intercepted by its container. */}
+                  {layerVisibility.rooms && [...visibleRooms]
+                    .sort((a, b) => Math.abs(polygonArea(b.points)) - Math.abs(polygonArea(a.points)))
+                    .map((room: Room, roomIdx: number) => {
                     const center = polygonCentroid(room.points);
                     // React-key strategy: manual rooms have stable IDs. Auto-rooms' IDs are derived from
                     // rounded coordinates, so dragging a room (or a wall that forms one) changes its ID every
@@ -19837,54 +20565,17 @@ User request: ${aiPrompt.trim()}`;
                       The polygon outline is drawn directly here (independent of runRoomInset's emitted walls)
                       so the user always sees the inset shape live, even when other cascade stages would
                       otherwise visually clutter or compete with it. */}
-                  {(insetLive || siteToolsLive) && selectedRoom && (() => {
+                  {(insetLive || siteToolsLive) && isLayerVisible(layerForRoomType("inset-area")) && selectedRoom && (() => {
                     const pts = selectedRoom.points;
                     if (pts.length < 3) return null;
-                    let signedArea = 0;
-                    for (let i = 0; i < pts.length; i++) {
-                      const a = pts[i], b = pts[(i + 1) % pts.length];
-                      signedArea += (a.x * b.y - b.x * a.y);
-                    }
-                    const sign = signedArea > 0 ? 1 : -1;
                     const N = pts.length;
 
-                    // Compute inset polygon vertices by intersecting offset lines (same math as runRoomInset).
-                    type Line = { px: number; py: number; ux: number; uy: number };
-                    const offsetLines: Line[] = [];
-                    for (let i = 0; i < N; i++) {
-                      const a = pts[i], b = pts[(i + 1) % N];
-                      const dx = b.x - a.x, dy = b.y - a.y;
-                      const L = Math.hypot(dx, dy) || 1;
-                      const ux = dx / L, uy = dy / L;
-                      const nx = -uy * sign, ny = ux * sign; // inward normal
-                      const sb = (insetSetbacks[i] ?? 0) * pixelsPerMeter;
-                      offsetLines.push({ px: a.x + nx * sb, py: a.y + ny * sb, ux, uy });
-                    }
-                    const intersect = (a: Line, b: Line): { x: number; y: number } | null => {
-                      const det = a.ux * (-b.uy) - a.uy * (-b.ux);
-                      if (Math.abs(det) < 1e-9) return null;
-                      const dx = b.px - a.px, dy = b.py - a.py;
-                      const t = (dx * (-b.uy) - dy * (-b.ux)) / det;
-                      return { x: a.px + a.ux * t, y: a.py + a.uy * t };
-                    };
-                    const insetPts: { x: number; y: number }[] = [];
-                    let insetValid = true;
-                    for (let i = 0; i < N; i++) {
-                      const v = intersect(offsetLines[(i - 1 + N) % N], offsetLines[i]);
-                      if (!v) { insetValid = false; break; }
-                      insetPts.push(v);
-                    }
-                    // Sanity: signed area should match original orientation (else setbacks too large).
-                    if (insetValid) {
-                      let insArea = 0;
-                      for (let i = 0; i < N; i++) {
-                        const a = insetPts[i], b = insetPts[(i + 1) % N];
-                        insArea += a.x * b.y - b.x * a.y;
-                      }
-                      if (Math.sign(insArea) !== Math.sign(signedArea) || Math.abs(insArea) < 1) {
-                        insetValid = false;
-                      }
-                    }
+                    // Inset vertices via the shared routine (same math as runRoomInset + the
+                    // block readout, so the drawn outline can't drift from what's committed).
+                    const insetRes = computeInsetPolygon(pts, insetSetbacks, pixelsPerMeter, insetInside);
+                    const insetPts = insetRes.pts;
+                    const insetValid = insetRes.valid;
+                    const sign = insetRes.sign;
                     const anySetback = insetSetbacks.some((s) => (s ?? 0) > 0.001);
 
                     // Deduction overlay — mirrors Optimise-Rect's Shrink + Optimise-Shrink logic.
@@ -19900,53 +20591,17 @@ User request: ${aiPrompt.trim()}`;
                         mainAreaPx2 += a.x * b.y - b.x * a.y;
                       }
                       const mainAreaM2 = Math.abs(mainAreaPx2) / 2 / (pixelsPerMeter * pixelsPerMeter);
-                      // Inset polygon area in px².
-                      let insetAreaPx2 = 0;
-                      for (let i = 0; i < insetPts.length; i++) {
-                        const a = insetPts[i], b = insetPts[(i + 1) % insetPts.length];
-                        insetAreaPx2 += a.x * b.y - b.x * a.y;
-                      }
-                      insetAreaPx2 = Math.abs(insetAreaPx2) / 2;
-                      const dedM2 = insetDeductMode === "area"
-                        ? insetDeductAreaM2
-                        : (insetDeductPercent / 100) * mainAreaM2;
-                      const targetCutPx2 = Math.min(dedM2 * pixelsPerMeter * pixelsPerMeter, insetAreaPx2);
-                      if (targetCutPx2 > 0.5) {
-                        // Half-plane direction from the deduction angle.
-                        const rad = (insetDeductAngle * Math.PI) / 180;
-                        const nx = Math.cos(rad), ny = Math.sin(rad);
-                        const projs = insetPts.map((q) => q.x * nx + q.y * ny);
-                        const pMin = Math.min(...projs);
-                        const pMax = Math.max(...projs);
-                        // Cut-off polygon for slide s∈[0,100]: keep the *high* side (normal +n).
-                        const cutAt = (s: number): { poly: { x: number; y: number }[]; area: number } => {
-                          if (s <= 0) return { poly: [], area: 0 };
-                          const c = pMax - (Math.min(100, Math.max(0, s)) / 100) * (pMax - pMin);
-                          const cl = clipPolygonByHalfPlane(insetPts, c * nx, c * ny, nx, ny);
-                          if (cl.length < 3) return { poly: cl, area: 0 };
-                          let a = 0;
-                          for (let i = 0; i < cl.length; i++) {
-                            const p1 = cl[i], p2 = cl[(i + 1) % cl.length];
-                            a += p1.x * p2.y - p2.x * p1.y;
-                          }
-                          return { poly: cl, area: Math.abs(a) / 2 };
-                        };
-                        // Cut-off area increases monotonically with slide%. Binary-search the slide
-                        // that yields the target cut area (same scheme as Optimise-Rect's solver).
-                        let lo = 0, hi = 100;
-                        const atHi = cutAt(hi);
-                        if (atHi.area <= targetCutPx2) {
-                          deductionPolyPts = atHi.poly.length >= 3 ? atHi.poly : null;
-                        } else {
-                          for (let iter = 0; iter < 24; iter++) {
-                            const mid = (lo + hi) / 2;
-                            const a = cutAt(mid).area;
-                            if (a < targetCutPx2) lo = mid; else hi = mid;
-                          }
-                          const finalRes = cutAt(hi);
-                          deductionPolyPts = finalRes.poly.length >= 3 ? finalRes.poly : null;
-                        }
-                      }
+                      // Shared with Optimise Rectangle so the drawn deduction and the region the
+                      // rectangle avoids are computed identically.
+                      const { deduction } = clipInsetByDeduction(insetPts, {
+                        angleDeg: insetDeductAngle,
+                        mode: insetDeductMode,
+                        areaM2: insetDeductAreaM2,
+                        percent: insetDeductPercent,
+                        mainAreaM2,
+                        ppm: pixelsPerMeter,
+                      });
+                      deductionPolyPts = deduction.length >= 3 ? deduction : null;
                     }
 
                     return (
@@ -19981,7 +20636,9 @@ User request: ${aiPrompt.trim()}`;
                           const nx = -uy * sign, ny = ux * sign;
                           const setbackM = insetSetbacks[i] ?? 0;
                           if (setbackM <= 0.001) return null;
-                          const setbackPx = setbackM * pixelsPerMeter;
+                          // Match the offset direction: leader points inward when "Inside" is on,
+                          // outward when off, so the setback dimension lands on the offset polygon.
+                          const setbackPx = setbackM * pixelsPerMeter * (insetInside ? 1 : -1);
                           const mxOrig = (a.x + b.x) / 2;
                           const myOrig = (a.y + b.y) / 2;
                           const mxIn = mxOrig + nx * setbackPx;
@@ -20266,6 +20923,9 @@ User request: ${aiPrompt.trim()}`;
                           if (container) container.style.cursor = "default";
                         }}
                         onClick={() => {
+                          // Respect the Select-tool scope: a non-"all"/"node" scope
+                          // ignores node clicks. (Add-Segment tool is unaffected.)
+                          if (tool === "select" && selectFilter !== "all" && selectFilter !== "node") return;
                           setSelectedNodeKey(node.stableKey);
                           selection.clearSelection();
                           setSelectedGenElement(null);
@@ -23383,6 +24043,29 @@ User request: ${aiPrompt.trim()}`;
               </Layer>
             ) : null}
 
+            {/* Flow pipeline preview — pure-evaluated output polygons (Inset / Optimise / Split
+                pieces). Final node(s) filled + solid; intermediates dashed outlines. */}
+            {flowOpen && flowPreview.length > 0 && (
+              <Layer listening={false}>
+                <WorldViewport x={position.x} y={position.y} scale={scale}>
+                  {flowPreview.flatMap((item) =>
+                    item.polygons.map((poly, pi) => (
+                      <Line
+                        key={`flow-${item.nodeId}-${pi}`}
+                        points={poly.flatMap((p) => [p.x, p.y])}
+                        closed
+                        stroke={item.color}
+                        strokeWidth={(item.isFinal ? 2.5 : 1.5) / scale}
+                        dash={item.isFinal ? undefined : [6 / scale, 4 / scale]}
+                        fill={item.isFinal ? `${item.color}22` : undefined}
+                        listening={false}
+                      />
+                    )),
+                  )}
+                </WorldViewport>
+              </Layer>
+            )}
+
             <Layer>
               <WorldViewport x={position.x} y={position.y} scale={scale}>
                 <Transformer
@@ -23802,6 +24485,41 @@ User request: ${aiPrompt.trim()}`;
             </>
           )}
         </div>
+        </Panel>
+        {flowOpen && (
+          <PanelResizeHandle className="group relative h-2 shrink-0 bg-slate-200 transition-colors hover:bg-sky-300">
+            <div className="absolute left-1/2 top-1/2 h-1 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-400 group-hover:bg-sky-500" />
+          </PanelResizeHandle>
+        )}
+        {flowOpen && (
+          <Panel id="flow-panel" order={2} minSize={15} defaultSize={35} className="min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-inner">
+            <FlowOverlay
+              open={flowOpen}
+              onClose={() => { setFlowPreview([]); setFlowOpen(false); }}
+              onRunCommit={(json) => { applyRecipeJson(json, "commit"); }}
+              onPreview={setFlowPreview}
+              sourcePolygon={selectedRoom?.points ?? []}
+              pixelsPerMeter={pixelsPerMeter}
+              selectedRoomLabel={selectedRoom?.label ?? (selectedRoom ? "selected space" : null)}
+              onCaptureIsometric={async () => {
+                // The Render node snapshots the 3D view's isometric angle. captureAll() renders the
+                // canonical views; pick "isometric" (fall back to the first / live canvas).
+                const api = snapshotApiRef.current;
+                if (api) {
+                  try {
+                    const shots = await api.captureAll();
+                    const iso = shots.find((s) => s.view === "isometric") ?? shots[0];
+                    if (iso?.dataUrl) return iso.dataUrl;
+                  } catch (e) { console.error("captureAll failed", e); }
+                }
+                // Fallback: grab the on-screen 3D <canvas> directly.
+                const canvas = containerRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
+                try { return canvas?.toDataURL("image/png") ?? null; } catch { return null; }
+              }}
+            />
+          </Panel>
+        )}
+        </PanelGroup>
 
         {/* Properties|Metrics column — an independent sibling of the Tools panel.
             Folds via the canvas-edge chevron; folding does not affect the Tools
@@ -24455,20 +25173,20 @@ User request: ${aiPrompt.trim()}`;
                         value={selectedRoom.roomType ?? "room"}
                         onChange={(e) => {
                           const newType = e.target.value;
-                          const isBuiltin = newType === "room" || newType === "floorplate-boundary" || newType === "plot-boundary" || newType === "buildable-area" || newType === "path";
+                          const isBuiltin = newType === "room" || newType === "floorplate-boundary" || newType === "basement-area" || newType === "inset-area" || newType === "deduction-area" || newType === "plot-boundary" || newType === "buildable-area" || newType === "path";
                           // Custom (user-defined) types: simple roomType swap, no special wall/floorplate handling.
                           if (!isBuiltin) {
                             const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
                             if (isAuto) {
                               history.set({
                                 ...history.state,
-                                rooms: [...history.state.rooms, { ...selectedRoom, id: createId(), roomType: newType }],
+                                rooms: [...history.state.rooms, { ...selectedRoom, id: createId(), roomType: newType, layerId: layerForRoomType(newType) }],
                               });
                             } else {
                               history.set({
                                 ...history.state,
                                 rooms: history.state.rooms.map((r) =>
-                                  r.id === selectedRoom.id ? { ...r, roomType: newType } : r
+                                  r.id === selectedRoom.id ? { ...r, roomType: newType, layerId: layerForRoomType(newType) } : r
                                 ),
                               });
                             }
@@ -24502,10 +25220,11 @@ User request: ${aiPrompt.trim()}`;
                             // Space type — same pattern as Site Area / Buildable Area below.
                             const roomPts = selectedRoom.points;
                             const tolerance = 3;
+                            const fpLayerId = layerForRoomType("floorplate-boundary");
                             const updateWalls = (walls: Wall[]) => walls.map((w) => {
                               const startMatch = roomPts.some((p) => Math.hypot(p.x - w.start.x, p.y - w.start.y) < tolerance);
                               const endMatch = roomPts.some((p) => Math.hypot(p.x - w.end.x, p.y - w.end.y) < tolerance);
-                              if (startMatch && endMatch) return { ...w, segmentType: "footprint-boundary" as const, color: "#7f1d1d" };
+                              if (startMatch && endMatch) return { ...w, segmentType: "footprint-boundary" as const, color: "#7f1d1d", layerId: fpLayerId };
                               return w;
                             });
                             // Persist the manual room if it was auto so the id is stable for subsequent room additions
@@ -24513,14 +25232,14 @@ User request: ${aiPrompt.trim()}`;
                               history.set({
                                 ...history.state,
                                 walls: updateWalls(history.state.walls),
-                                rooms: [...history.state.rooms, { ...selectedRoom, id: fpRoomId, roomType: newType }],
+                                rooms: [...history.state.rooms, { ...selectedRoom, id: fpRoomId, roomType: newType, layerId: layerForRoomType(newType) }],
                               });
                               selection.selectOne(fpRoomId);
                             } else {
                               history.set({
                                 ...history.state,
                                 walls: updateWalls(history.state.walls),
-                                rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, roomType: newType } : r),
+                                rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, roomType: newType, layerId: layerForRoomType(newType) } : r),
                               });
                             }
                             toast.success(`Footprint Area set (${boundaryM.length - 1} vertices, ${areaInSquareUnit(roomNetArea(selectedRoom, history.state.rooms), "m", ppm).toFixed(1)} m²)`);
@@ -24545,16 +25264,17 @@ User request: ${aiPrompt.trim()}`;
                             const roomPts = selectedRoom.points;
                             const tolerance = 3;
                             const targetSeg = TYPE_TO_SEG[newType];
+                            const targetLayer = layerForRoomType(newType);
                             const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
                             const newRoomId = isAuto ? createId() : selectedRoom.id;
-                            const updatedRoom = { ...selectedRoom, id: newRoomId, roomType: newType };
+                            const updatedRoom = { ...selectedRoom, id: newRoomId, roomType: newType, layerId: targetLayer };
                             history.set({
                               ...history.state,
                               walls: history.state.walls.map((w) => {
                                 const startMatch = roomPts.some((p) => Math.hypot(p.x - w.start.x, p.y - w.start.y) < tolerance);
                                 const endMatch = roomPts.some((p) => Math.hypot(p.x - w.end.x, p.y - w.end.y) < tolerance);
                                 if (startMatch && endMatch) {
-                                  const next: Wall = { ...w, segmentType: targetSeg };
+                                  const next: Wall = { ...w, segmentType: targetSeg, layerId: targetLayer };
                                   if (targetSeg === "plot-boundary") next.plotBoundaryType = w.plotBoundaryType ?? "road" as const;
                                   const col = TYPE_TO_COLOR[targetSeg];
                                   if (col) next.color = col;
@@ -24568,6 +25288,84 @@ User request: ${aiPrompt.trim()}`;
                             });
                             if (isAuto) selection.selectOne(newRoomId);
                             toast.success(`${newType === "plot-boundary" ? "Site Area" : "Buildable Area"} set — ${roomPts.length} perimeter segments marked as ${targetSeg}`);
+                            return;
+                          }
+
+                          if (newType === "inset-area") {
+                            // Inset Area: no dedicated segmentType, mirror Basement Area's
+                            // wall-relayering so toggling the Inset Area layer hides both
+                            // the polygon and its perimeter segments together.
+                            const roomPts = selectedRoom.points;
+                            const tolerance = 3;
+                            const insetLayer = layerForRoomType("inset-area");
+                            const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                            const newRoomId = isAuto ? createId() : selectedRoom.id;
+                            const updatedRoom = { ...selectedRoom, id: newRoomId, roomType: newType, layerId: insetLayer };
+                            history.set({
+                              ...history.state,
+                              walls: history.state.walls.map((w) => {
+                                const startMatch = roomPts.some((pt) => Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < tolerance);
+                                const endMatch = roomPts.some((pt) => Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < tolerance);
+                                return startMatch && endMatch ? { ...w, layerId: insetLayer } : w;
+                              }),
+                              rooms: isAuto
+                                ? [...history.state.rooms, updatedRoom]
+                                : history.state.rooms.map((r) => r.id === selectedRoom.id ? updatedRoom : r),
+                            });
+                            if (isAuto) selection.selectOne(newRoomId);
+                            toast.success(`Inset Area set — ${roomPts.length} perimeter segments moved to Inset Area layer`);
+                            return;
+                          }
+
+                          if (newType === "deduction-area") {
+                            // Deduction Area: no dedicated segmentType — mirror Inset/Basement Area's
+                            // wall-relayering so toggling the Deduction Area layer hides both the
+                            // polygon and its perimeter segments together.
+                            const roomPts = selectedRoom.points;
+                            const tolerance = 3;
+                            const deductionLayer = layerForRoomType("deduction-area");
+                            const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                            const newRoomId = isAuto ? createId() : selectedRoom.id;
+                            const updatedRoom = { ...selectedRoom, id: newRoomId, roomType: newType, layerId: deductionLayer };
+                            history.set({
+                              ...history.state,
+                              walls: history.state.walls.map((w) => {
+                                const startMatch = roomPts.some((pt) => Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < tolerance);
+                                const endMatch = roomPts.some((pt) => Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < tolerance);
+                                return startMatch && endMatch ? { ...w, layerId: deductionLayer } : w;
+                              }),
+                              rooms: isAuto
+                                ? [...history.state.rooms, updatedRoom]
+                                : history.state.rooms.map((r) => r.id === selectedRoom.id ? updatedRoom : r),
+                            });
+                            if (isAuto) selection.selectOne(newRoomId);
+                            toast.success(`Deduction Area set — ${roomPts.length} perimeter segments moved to Deduction Area layer`);
+                            return;
+                          }
+
+                          if (newType === "basement-area") {
+                            // Basement Area has no dedicated segmentType, but its perimeter walls
+                            // still need to move to the basement-area layer so toggling that layer's
+                            // visibility / lock hides both the polygon AND its outer segments.
+                            const roomPts = selectedRoom.points;
+                            const tolerance = 3;
+                            const basementLayer = layerForRoomType("basement-area");
+                            const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                            const newRoomId = isAuto ? createId() : selectedRoom.id;
+                            const updatedRoom = { ...selectedRoom, id: newRoomId, roomType: newType, layerId: basementLayer };
+                            history.set({
+                              ...history.state,
+                              walls: history.state.walls.map((w) => {
+                                const startMatch = roomPts.some((pt) => Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < tolerance);
+                                const endMatch = roomPts.some((pt) => Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < tolerance);
+                                return startMatch && endMatch ? { ...w, layerId: basementLayer } : w;
+                              }),
+                              rooms: isAuto
+                                ? [...history.state.rooms, updatedRoom]
+                                : history.state.rooms.map((r) => r.id === selectedRoom.id ? updatedRoom : r),
+                            });
+                            if (isAuto) selection.selectOne(newRoomId);
+                            toast.success(`Basement Area set — ${roomPts.length} perimeter segments moved to Basement Area layer`);
                             return;
                           }
 
@@ -24586,7 +25384,7 @@ User request: ${aiPrompt.trim()}`;
                                 return w;
                               }),
                               rooms: history.state.rooms.map((r) =>
-                                r.id === selectedRoom.id ? { ...r, roomType: newType } : r
+                                r.id === selectedRoom.id ? { ...r, roomType: newType, layerId: layerForRoomType(newType) } : r
                               ),
                             });
                           }
@@ -24597,13 +25395,13 @@ User request: ${aiPrompt.trim()}`;
                             if (isAuto) {
                               history.set({
                                 ...history.state,
-                                rooms: [...history.state.rooms, { ...selectedRoom, id: createId(), roomType: newType }],
+                                rooms: [...history.state.rooms, { ...selectedRoom, id: createId(), roomType: newType, layerId: layerForRoomType(newType) }],
                               });
                             } else {
                               history.set({
                                 ...history.state,
                                 rooms: history.state.rooms.map((r) =>
-                                  r.id === selectedRoom.id ? { ...r, roomType: newType } : r
+                                  r.id === selectedRoom.id ? { ...r, roomType: newType, layerId: layerForRoomType(newType) } : r
                                 ),
                               });
                             }
@@ -24613,6 +25411,9 @@ User request: ${aiPrompt.trim()}`;
                         <option value="plot-boundary">Site Area</option>
                         <option value="buildable-area">Buildable Area</option>
                         <option value="floorplate-boundary">Footprint Area</option>
+                        <option value="basement-area">Basement Area</option>
+                        <option value="inset-area">Inset Area</option>
+                        <option value="deduction-area">Deduction Area</option>
                         <option value="room">Room</option>
                         <option value="area">Area</option>
                         <option value="path">Path</option>
@@ -24717,6 +25518,46 @@ User request: ${aiPrompt.trim()}`;
                         );
                       })()}
                       {/* Zone Label and Region dropdowns removed per request. */}
+                      {/* Footprint Area: number-of-floors input. Writes room.floorsCount, which
+                          the 3D renderer already reads to extrude n stacked slabs automatically —
+                          no Massing step needed. */}
+                      {(selectedRoom.roomType === "floorplate-boundary" || selectedRoom.roomType === "basement-area") && (
+                        <div className="mt-2">
+                          <div title="Number of floors to extrude in 3D. Footprint Area extrudes upward; Basement Area extrudes downward. Writes floorsCount on the room; the 3D view reflects it immediately.">
+                            <span className="text-[10px] text-slate-400">
+                              Number of floors{selectedRoom.roomType === "basement-area" ? " (downward)" : ""}
+                            </span>
+                            <input
+                              key={`fc-input-${selectedRoom.id}`}
+                              type="number"
+                              min={1}
+                              max={50}
+                              step={1}
+                              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                              defaultValue={selectedRoom.floorsCount ?? 1}
+                              onBlur={(e) => {
+                                const v = Math.max(1, Math.min(50, Math.floor(+e.target.value)));
+                                if (!isFinite(v)) return;
+                                const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                                if (isAuto) {
+                                  const newId = createId();
+                                  history.set({
+                                    ...history.state,
+                                    rooms: [...history.state.rooms, { ...selectedRoom, id: newId, floorsCount: v }],
+                                  });
+                                  selection.selectOne(newId);
+                                } else {
+                                  history.set({
+                                    ...history.state,
+                                    rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, floorsCount: v } : r),
+                                  });
+                                }
+                              }}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                            />
+                          </div>
+                        </div>
+                      )}
                       {/* Min/Max area & Max ratio are validation constraints meant for Rooms —
                           hide them on Site Area, where the Space represents a plot and these
                           numbers don't apply. */}
@@ -25374,31 +26215,10 @@ User request: ${aiPrompt.trim()}`;
                           return next;
                         });
                         setMaxRectTargetLive(false);
-                        // Commit the optimised polygon to the canvas: emit footprint walls
-                        // along its boundary and materialise a floorplate-boundary room so
-                        // the user can click into the footprint area to select it.
+                        // Commit: the runner lays footprint-boundary walls AND materialises the
+                        // optimised polygon as a "Footprint Area" Space on the Footprint Area layer.
                         const committed = runRoomOptimiseRect(selectedRoom, false);
-                        if (committed) {
-                          const h = historyRef.current;
-                          const hasFootprintRoom = h.state.rooms.some(
-                            (r) => r.roomType === "floorplate-boundary"
-                          );
-                          if (!hasFootprintRoom) {
-                            const poly = optimiseUnionPolygonRef.current[selectedRoom.id];
-                            if (poly && poly.length >= 3) {
-                              const fpRoom: Room = {
-                                id: createId(),
-                                points: poly.map((p) => ({ x: p.x, y: p.y })),
-                                fill: "rgba(254, 226, 226, 0.55)",
-                                stroke: "#7f1d1d",
-                                label: "Footprint Area",
-                                roomType: "floorplate-boundary",
-                              };
-                              h.set({ ...h.state, rooms: [...h.state.rooms, fpRoom] });
-                            }
-                          }
-                        }
-                        toast.success(`OptRect target committed (${maxRectTargetArea.toFixed(1)} m² @ ${maxRectTargetTilt}°)`);
+                        if (committed) toast.success(`Footprint Area created (${maxRectTargetArea.toFixed(1)} m² @ ${maxRectTargetTilt}°)`);
                       }}
                       onTargetClear={() => {
                         setMaxRectTargetByRoom((prev) => {
@@ -26512,6 +27332,8 @@ User request: ${aiPrompt.trim()}`;
                               runRoomInset={runRoomInset}
                               unit={unit}
                               pixelsPerMeter={pixelsPerMeter}
+                              inside={insetInside}
+                              setInside={setInsetInside}
                               deductEnabled={insetDeductEnabled}
                               setDeductEnabled={setInsetDeductEnabled}
                               deductMode={insetDeductMode}
@@ -26854,28 +27676,10 @@ User request: ${aiPrompt.trim()}`;
                                   return next;
                                 });
                                 setMaxRectTargetLive(false);
+                                // Commit: the runner lays footprint-boundary walls AND materialises the
+                                // optimised polygon as a "Footprint Area" Space on the Footprint Area layer.
                                 const committed = runRoomOptimiseRect(selectedRoom, false);
-                                if (committed) {
-                                  const h = historyRef.current;
-                                  const hasFootprintRoom = h.state.rooms.some(
-                                    (r) => r.roomType === "floorplate-boundary"
-                                  );
-                                  if (!hasFootprintRoom) {
-                                    const poly = optimiseUnionPolygonRef.current[selectedRoom.id];
-                                    if (poly && poly.length >= 3) {
-                                      const fpRoom: Room = {
-                                        id: createId(),
-                                        points: poly.map((p) => ({ x: p.x, y: p.y })),
-                                        fill: "rgba(254, 226, 226, 0.55)",
-                                        stroke: "#7f1d1d",
-                                        label: "Footprint Area",
-                                        roomType: "floorplate-boundary",
-                                      };
-                                      h.set({ ...h.state, rooms: [...h.state.rooms, fpRoom] });
-                                    }
-                                  }
-                                }
-                                toast.success(`OptRect target committed (${maxRectTargetArea.toFixed(1)} m² @ ${maxRectTargetTilt}°)`);
+                                if (committed) toast.success(`Footprint Area created (${maxRectTargetArea.toFixed(1)} m² @ ${maxRectTargetTilt}°)`);
                               }}
                               onTargetClear={() => {
                                 setMaxRectTargetByRoom((prev) => {
@@ -27044,31 +27848,10 @@ User request: ${aiPrompt.trim()}`;
                                 const h = historyRef.current;
                                 h.replace({ ...h.state, walls: h.state.walls.filter((w) => !(w.isMassingPreview && w.massingSourceRoomId === roomId)) });
                               }}
-                              floorsFromFsi={massingFloorsFromFsi}
-                              setFloorsFromFsi={setMassingFloorsFromFsi}
                               showBlocks={massingShowBlocks}
                               setShowBlocks={setMassingShowBlocks}
-                              siteAreaSqm={(() => {
-                                void livePreviewTick;
-                                const a = Math.abs(polygonArea(selectedRoom.points)) / (pixelsPerMeter * pixelsPerMeter);
-                                return a > 0 ? a : null;
-                              })()}
-                              optimisedAreaSqm={(() => {
-                                void livePreviewTick;
-                                return optimiseTotalAreaRef.current[selectedRoom.id] ?? null;
-                              })()}
-                              maxFsi={(() => {
-                                const pb = visibleRooms.find((r) => r.roomType === "plot-boundary");
-                                return pb?.maxFsi ?? selectedRoom.maxFsi ?? 2.5;
-                              })()}
-                              maxHeightM={(() => {
-                                const pb = visibleRooms.find((r) => r.roomType === "plot-boundary");
-                                return pb?.maxHeightM ?? selectedRoom.maxHeightM ?? 15;
-                              })()}
-                              floorHeightM={(() => {
-                                const pb = visibleRooms.find((r) => r.roomType === "plot-boundary");
-                                return pb?.floorToFloorM ?? selectedRoom.floorToFloorM ?? 3.0;
-                              })()}
+                              extrudeUpwards={massingExtrudeUpwards}
+                              setExtrudeUpwards={setMassingExtrudeUpwards}
                             />
                             {/* Circular Setback Solver merged into BUA Calculator below. */}
                             {selectedRoom.roomType === "plot-boundary" && (
@@ -27083,7 +27866,78 @@ User request: ${aiPrompt.trim()}`;
                                     rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, ...updates } : r),
                                   });
                                 }}
-                                onShowOnCanvas={(room, distances, deductionM2) => {
+                                onCommitBasementArea={(sourceRoom, basementPolyM, nBasement) => {
+                                  // Convert metre coords → canvas pixels; replace any existing
+                                  // BUA-derived Basement Area for this source plot.
+                                  const basementPx = basementPolyM.map((q) => ({
+                                    x: q.x * pixelsPerMeter,
+                                    y: q.y * pixelsPerMeter,
+                                  }));
+                                  if (basementPx.length < 3) return;
+                                  const h = historyRef.current;
+                                  const filtered = h.state.rooms.filter(
+                                    (rr) => !(rr.customParams?.buaSourceRoomId === sourceRoom.id
+                                              && rr.customParams?.buaRole === "basement"),
+                                  );
+                                  const basementLayer = layerForRoomType("basement-area");
+                                  const newBasement: Room = {
+                                    id: createId(),
+                                    points: basementPx,
+                                    fill: "rgba(209, 250, 229, 0.45)",
+                                    stroke: "#065f46",
+                                    label: "Basement Area (BUA)",
+                                    roomType: "basement-area",
+                                    layerId: basementLayer,
+                                    floorsCount: Math.max(1, Math.floor(nBasement || 1)),
+                                    customParams: { buaSourceRoomId: sourceRoom.id, buaRole: "basement" },
+                                  };
+                                  // Re-layer any existing wall whose endpoints sit on the basement
+                                  // polygon's vertices — so segments AND nodes on the boundary share
+                                  // the room's layer.
+                                  const tolPx = 3;
+                                  const nextWalls = h.state.walls.map((w) => {
+                                    const startMatch = basementPx.some((pt) => Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < tolPx);
+                                    const endMatch = basementPx.some((pt) => Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < tolPx);
+                                    return startMatch && endMatch ? { ...w, layerId: basementLayer } : w;
+                                  });
+                                  history.set({ ...h.state, walls: nextWalls, rooms: [...filtered, newBasement] });
+                                }}
+                                onCommitFootprintArea={(sourceRoom, rectPolyM, nFsi) => {
+                                  // Convert metre coordinates to canvas pixels; replace any
+                                  // existing BUA-derived Footprint Area for this source plot.
+                                  const rectPx = rectPolyM.map((q) => ({
+                                    x: q.x * pixelsPerMeter,
+                                    y: q.y * pixelsPerMeter,
+                                  }));
+                                  if (rectPx.length < 3) return;
+                                  const h = historyRef.current;
+                                  const filtered = h.state.rooms.filter(
+                                    (rr) => !(rr.customParams?.buaSourceRoomId === sourceRoom.id
+                                              && rr.customParams?.buaRole === "footprint"),
+                                  );
+                                  const footprintLayer = layerForRoomType("floorplate-boundary");
+                                  const newFootprint: Room = {
+                                    id: createId(),
+                                    points: rectPx,
+                                    fill: "rgba(254, 226, 226, 0.45)",
+                                    stroke: "#7f1d1d",
+                                    label: "Footprint Area (BUA)",
+                                    roomType: "floorplate-boundary",
+                                    layerId: footprintLayer,
+                                    floorsCount: Math.max(1, Math.floor(nFsi || 1)),
+                                    customParams: { buaSourceRoomId: sourceRoom.id, buaRole: "footprint" },
+                                  };
+                                  // Re-layer any existing wall whose endpoints sit on the footprint
+                                  // rectangle's vertices.
+                                  const tolPx = 3;
+                                  const nextWalls = h.state.walls.map((w) => {
+                                    const startMatch = rectPx.some((pt) => Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < tolPx);
+                                    const endMatch = rectPx.some((pt) => Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < tolPx);
+                                    return startMatch && endMatch ? { ...w, layerId: footprintLayer } : w;
+                                  });
+                                  history.set({ ...h.state, walls: nextWalls, rooms: [...filtered, newFootprint] });
+                                }}
+                                onShowOnCanvas={(room, distances, deductionM2, stack) => {
                                   // Drive the Inset Polygon block end-to-end via its "Front And
                                   // Remaining" mode so the user sees the exact same preview the
                                   // Inset Polygon block would paint and the panel reflects what's
@@ -27122,18 +27976,155 @@ User request: ${aiPrompt.trim()}`;
                                   setInsetDeductEnabled(deductionM2 > 0);
                                   setInsetDeductMode("area");
                                   setInsetDeductAreaM2(Math.max(0, deductionM2));
-                                  setInsetLive(true);
-                                  insetSetbacksOverrideRef.current = distances;
-                                  try { runRoomInset(room, true); }
-                                  finally { insetSetbacksOverrideRef.current = null; }
+                                  // Show on Canvas commits the cascade as real Spaces (below) that each
+                                  // respect their own layer toggle. Turn the live inset preview OFF —
+                                  // that overlay (gated only on `insetLive`) draws the inset polygon
+                                  // independent of the Inset Area layer, so leaving it on made the inset
+                                  // keep showing even after the Inset Area layer was hidden.
+                                  setInsetLive(false);
+                                  delete livePreviewPolygonRef.current[room.id];
+
+                                  // Materialise the full BUA cascade as four committed Spaces, each
+                                  // on its dedicated layer (Site → Inset / Buildable / Footprint /
+                                  // Basement). All four are tagged customParams.buaSourceRoomId =
+                                  // sourceRoom.id so re-clicking refreshes in place. Perimeter walls
+                                  // of each polygon are re-stamped onto the matching layer so
+                                  // segments AND nodes track the polygon's layer visibility.
+                                  const h = historyRef.current;
+                                  const cleanedWalls = h.state.walls.filter(
+                                    (w) => !(w.isBasementOutlineWall && w.basementSourceRoomId === room.id)
+                                        && !(w.isInsetWall && w.insetSourceRoomId === room.id),
+                                  );
+                                  const toPx = (q: { x: number; y: number }) => ({
+                                    x: q.x * pixelsPerMeter,
+                                    y: q.y * pixelsPerMeter,
+                                  });
+                                  const insetPx = (stack?.insetPolyM ?? []).map(toPx);
+                                  const buildablePx = (stack?.buildablePolyM ?? []).map(toPx);
+                                  const footprintPx = (stack?.towerRectM ?? []).map(toPx);
+                                  const basementPx = (stack?.basementPolyM ?? []).map(toPx);
+                                  const deductionPx = (stack?.deductionPolyM ?? []).map(toPx);
+                                  const insetLayer     = layerForRoomType("inset-area");
+                                  const buildableLayer = layerForRoomType("buildable-area");
+                                  const footprintLayer = layerForRoomType("floorplate-boundary");
+                                  const basementLayer  = layerForRoomType("basement-area");
+                                  const deductionLayer = DEFAULT_DEDUCTION_LAYER_ID;
+
+                                  const existingRooms = h.state.rooms.filter(
+                                    (rr) => rr.customParams?.buaSourceRoomId !== room.id,
+                                  );
+                                  const derivedRooms: Room[] = [];
+                                  if (insetPx.length >= 3) {
+                                    derivedRooms.push({
+                                      id: createId(),
+                                      points: insetPx,
+                                      fill: "rgba(186, 230, 253, 0.35)",
+                                      stroke: "#0369a1",
+                                      label: "Inset Area (BUA)",
+                                      roomType: "inset-area",
+                                      layerId: insetLayer,
+                                      customParams: { buaSourceRoomId: room.id, buaRole: "inset" },
+                                    });
+                                  }
+                                  if (buildablePx.length >= 3) {
+                                    derivedRooms.push({
+                                      id: createId(),
+                                      points: buildablePx,
+                                      fill: "rgba(220, 252, 231, 0.45)",
+                                      stroke: "#16a34a",
+                                      label: "Buildable Area (BUA)",
+                                      roomType: "buildable-area",
+                                      layerId: buildableLayer,
+                                      customParams: { buaSourceRoomId: room.id, buaRole: "buildable" },
+                                    });
+                                  }
+                                  if (footprintPx.length >= 3 && stack) {
+                                    derivedRooms.push({
+                                      id: createId(),
+                                      points: footprintPx,
+                                      fill: "rgba(254, 226, 226, 0.45)",
+                                      stroke: "#7f1d1d",
+                                      label: "Footprint Area (BUA)",
+                                      roomType: "floorplate-boundary",
+                                      layerId: footprintLayer,
+                                      floorsCount: Math.max(1, Math.floor(stack.nFsi || 1)),
+                                      customParams: { buaSourceRoomId: room.id, buaRole: "footprint" },
+                                    });
+                                  }
+                                  if (basementPx.length >= 3 && stack && stack.nBasement > 0) {
+                                    derivedRooms.push({
+                                      id: createId(),
+                                      points: basementPx,
+                                      fill: "rgba(209, 250, 229, 0.45)",
+                                      stroke: "#065f46",
+                                      label: "Basement Area (BUA)",
+                                      roomType: "basement-area",
+                                      layerId: basementLayer,
+                                      floorsCount: Math.max(1, Math.floor(stack.nBasement || 1)),
+                                      customParams: { buaSourceRoomId: room.id, buaRole: "basement" },
+                                    });
+                                  }
+                                  if (deductionPx.length >= 3) {
+                                    derivedRooms.push({
+                                      id: createId(),
+                                      points: deductionPx,
+                                      fill: "rgba(254, 215, 170, 0.5)",
+                                      stroke: "#ea580c",
+                                      label: "Deduction Area (BUA)",
+                                      roomType: "area",
+                                      layerId: deductionLayer,
+                                      customParams: { buaSourceRoomId: room.id, buaRole: "deduction" },
+                                    });
+                                  }
+
+                                  // Re-layer walls so perimeter segments of each derived polygon
+                                  // sit on the matching layer. Later assignments override earlier
+                                  // (e.g. a wall that's on both the buildable and inset perimeter
+                                  // ends up on the buildable layer — the cascade's "narrower"
+                                  // polygon wins).
+                                  const tolPx = 3;
+                                  const reLayerBy = (
+                                    walls: Wall[],
+                                    polyPx: { x: number; y: number }[],
+                                    layerId: string,
+                                  ): Wall[] => {
+                                    if (polyPx.length < 3) return walls;
+                                    return walls.map((w) => {
+                                      const startMatch = polyPx.some((pt) => Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < tolPx);
+                                      const endMatch = polyPx.some((pt) => Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < tolPx);
+                                      return startMatch && endMatch ? { ...w, layerId } : w;
+                                    });
+                                  };
+                                  let nextWalls = cleanedWalls;
+                                  nextWalls = reLayerBy(nextWalls, insetPx,     insetLayer);
+                                  nextWalls = reLayerBy(nextWalls, buildablePx, buildableLayer);
+                                  nextWalls = reLayerBy(nextWalls, footprintPx, footprintLayer);
+                                  nextWalls = reLayerBy(nextWalls, basementPx,  basementLayer);
+
+                                  history.set({
+                                    ...h.state,
+                                    walls: nextWalls,
+                                    rooms: [...existingRooms, ...derivedRooms],
+                                  });
                                   setLivePreviewTick((t) => t + 1);
                                 }}
                                 onClearPreview={() => {
                                   const h = historyRef.current;
-                                  h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isInsetWall) });
+                                  const srcId = selectedRoom?.id;
+                                  history.set({
+                                    ...h.state,
+                                    walls: h.state.walls.filter(
+                                      (w) => !w.isInsetWall && !w.isBasementOutlineWall,
+                                    ),
+                                    rooms: srcId
+                                      ? h.state.rooms.filter((rr) => rr.customParams?.buaSourceRoomId !== srcId)
+                                      : h.state.rooms,
+                                  });
                                   setInsetLive(false);
                                   setInsetDeductEnabled(false);
-                                  if (selectedRoom) delete livePreviewPolygonRef.current[selectedRoom.id];
+                                  if (selectedRoom) {
+                                    delete livePreviewPolygonRef.current[selectedRoom.id];
+                                  }
                                   setLivePreviewTick((t) => t + 1);
                                 }}
                                 frontEdgeIndices={(() => {
@@ -27645,6 +28636,316 @@ User request: ${aiPrompt.trim()}`;
                             </div>
                           );
                         })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Image Tools ── Operates on the uploaded image underlay. */}
+            <div className="shrink-0 border-t border-slate-200">
+              <button
+                type="button"
+                className="sticky top-0 z-10 flex w-full items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2 text-left"
+                onClick={() => setImageToolsExpanded((v) => !v)}
+              >
+                <span className="text-sm font-semibold">Image Tools</span>
+                <span className="text-[11px] text-slate-400">{imageToolsExpanded ? "▼" : "▶"}</span>
+              </button>
+              {imageToolsExpanded && (
+                <div className="space-y-2 p-3 pr-4">
+                  {/* Vectorisation — raster → traced line segments. */}
+                  <div className="rounded border border-slate-200 bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                      onClick={() => setVectorizationExpanded((v) => !v)}
+                    >
+                      <span>Vectorisation</span>
+                      <span className="text-[10px] text-slate-400">{vectorizationExpanded ? "▼" : "▶"}</span>
+                    </button>
+                    {vectorizationExpanded && (
+                      <div className="space-y-2 border-t border-slate-100 p-2">
+                        {!history.state.imageUnderlay ? (
+                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
+                            Upload an image (drop a PNG/JPG onto the canvas) to vectorize it.
+                          </p>
+                        ) : (
+                          <>
+                            {/* Colour filter */}
+                            <div>
+                              <span className="text-[10px] text-slate-500">Colour filter — which lines to extract</span>
+                              <div className="mt-1 grid grid-cols-4 gap-1">
+                                {(["red", "black", "blue", "all"] as const).map((m) => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    className={`rounded border px-1 py-1 text-[10px] font-semibold capitalize transition-colors ${
+                                      vecColorMode === m
+                                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                    }`}
+                                    onClick={() => { setVecColorMode(m); if (vecLive) { vecParamsRef.current.colorMode = m; scheduleVectorPreview(); } }}
+                                  >
+                                    {m}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Colour tolerance */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500">Colour tolerance</span>
+                                <span className="font-mono text-[10px] text-slate-700">{vecTolerance}</span>
+                              </div>
+                              <input
+                                type="range"
+                                className="w-full"
+                                min={10}
+                                max={120}
+                                step={1}
+                                value={vecTolerance}
+                                onChange={(e) => { const v = +e.target.value; setVecTolerance(v); if (vecLive) { vecParamsRef.current.tolerance = v; scheduleVectorPreview(); } }}
+                              />
+                            </div>
+
+                            {/* Dilate / close gaps */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500">Dilate (bridge gaps)</span>
+                                <span className="font-mono text-[10px] text-slate-700">{vecDilate}</span>
+                              </div>
+                              <input
+                                type="range"
+                                className="w-full"
+                                min={1}
+                                max={9}
+                                step={2}
+                                value={vecDilate}
+                                onChange={(e) => { const v = +e.target.value; setVecDilate(v); if (vecLive) { vecParamsRef.current.dilate = v; scheduleVectorPreview(); } }}
+                              />
+                            </div>
+
+                            {/* Min line length */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500">Min line length (px)</span>
+                                <span className="font-mono text-[10px] text-slate-700">{vecMinLength}</span>
+                              </div>
+                              <input
+                                type="range"
+                                className="w-full"
+                                min={5}
+                                max={150}
+                                step={1}
+                                value={vecMinLength}
+                                onChange={(e) => { const v = +e.target.value; setVecMinLength(v); if (vecLive) { vecParamsRef.current.minLength = v; scheduleVectorPreview(); } }}
+                              />
+                            </div>
+
+                            {/* Simplify epsilon */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500">Simplify ε</span>
+                                <span className="font-mono text-[10px] text-slate-700">{vecSimplify.toFixed(1)}</span>
+                              </div>
+                              <input
+                                type="range"
+                                className="w-full"
+                                min={0.5}
+                                max={8}
+                                step={0.5}
+                                value={vecSimplify}
+                                onChange={(e) => { const v = +e.target.value; setVecSimplify(v); if (vecLive) { vecParamsRef.current.simplifyEpsilon = v; scheduleVectorPreview(); } }}
+                              />
+                            </div>
+
+                            {/* Snap tolerance */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500">Snap tolerance (px)</span>
+                                <span className="font-mono text-[10px] text-slate-700">{vecSnap}</span>
+                              </div>
+                              <input
+                                type="range"
+                                className="w-full"
+                                min={1}
+                                max={30}
+                                step={1}
+                                value={vecSnap}
+                                onChange={(e) => { const v = +e.target.value; setVecSnap(v); if (vecLive) { vecParamsRef.current.snapTolerance = v; scheduleVectorPreview(); } }}
+                              />
+                            </div>
+
+                            {vecStats && (
+                              <div className="rounded bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-600">
+                                {vecStats.lines} polylines · {vecStats.nodes} nodes · {vecStats.edges} edges
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between">
+                              <label className="flex items-center gap-1 text-[10px] text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={vecLive}
+                                  onChange={(e) => {
+                                    const on = e.target.checked;
+                                    setVecLive(on);
+                                    if (on) { void runVectorization(true); }
+                                    else { clearVectorPreview(); }
+                                  }}
+                                />
+                                Live
+                              </label>
+                              <span className="text-[9px] text-slate-400">{vecLive ? "previews on change" : "click Vectorize"}</span>
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-[11px]"
+                              disabled={vecBusy}
+                              onClick={() => { setVecLive(false); if (vecLiveTimerRef.current) clearTimeout(vecLiveTimerRef.current); void runVectorization(false); }}
+                            >
+                              {vecBusy ? "Vectorizing…" : "▶ Vectorize"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full text-[11px] text-slate-500"
+                              disabled={vecBusy}
+                              onClick={clearVectorWalls}
+                            >
+                              Clear segments
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Object Detection — Gemini spatial / Robotics-ER. */}
+                  <div className="rounded border border-slate-200 bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                      onClick={() => setObjectDetectionExpanded((v) => !v)}
+                    >
+                      <span>Object Detection</span>
+                      <span className="text-[10px] text-slate-400">{objectDetectionExpanded ? "▼" : "▶"}</span>
+                    </button>
+                    {objectDetectionExpanded && (
+                      <div className="space-y-2 border-t border-slate-100 p-2">
+                        {!history.state.imageUnderlay ? (
+                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
+                            Upload an image (drop a PNG/JPG onto the canvas) to detect objects.
+                          </p>
+                        ) : (
+                          <>
+                            {/* Model */}
+                            <div>
+                              <span className="text-[10px] text-slate-500">Model</span>
+                              <Input
+                                type="text"
+                                className="mt-1 h-7 text-[11px]"
+                                placeholder="gemini-robotics-er-1.6-preview"
+                                value={odModel}
+                                onChange={(e) => setOdModel(e.target.value)}
+                              />
+                            </div>
+
+                            {/* API key */}
+                            <div>
+                              <span className="text-[10px] text-slate-500">API key</span>
+                              <Input
+                                type="password"
+                                className="mt-1 h-7 text-[11px]"
+                                placeholder="Gemini API key"
+                                value={odApiKey}
+                                onChange={(e) => setOdApiKey(e.target.value)}
+                              />
+                            </div>
+
+                            {/* Detection mode */}
+                            <div>
+                              <span className="text-[10px] text-slate-500">Detect as</span>
+                              <div className="mt-1 grid grid-cols-2 gap-1">
+                                {([["box", "Bounding box"], ["point", "Point"]] as const).map(([m, lbl]) => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    className={`rounded border px-1 py-1 text-[10px] font-semibold transition-colors ${
+                                      odMode === m
+                                        ? "border-rose-400 bg-rose-50 text-rose-600"
+                                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                    }`}
+                                    onClick={() => setOdMode(m)}
+                                  >
+                                    {lbl}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* What to detect */}
+                            <div>
+                              <span className="text-[10px] text-slate-500">What to detect</span>
+                              <Input
+                                type="text"
+                                className="mt-1 h-7 text-[11px]"
+                                placeholder="e.g. doors, windows (blank = all)"
+                                value={odTargets}
+                                onChange={(e) => setOdTargets(e.target.value)}
+                              />
+                            </div>
+
+                            {/* Max items */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500">Max items</span>
+                                <span className="font-mono text-[10px] text-slate-700">{odMaxItems}</span>
+                              </div>
+                              <input
+                                type="range"
+                                className="w-full"
+                                min={1}
+                                max={50}
+                                step={1}
+                                value={odMaxItems}
+                                onChange={(e) => setOdMaxItems(+e.target.value)}
+                              />
+                            </div>
+
+                            {objectDetections.length > 0 && (
+                              <div className="rounded bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-600">
+                                {objectDetections.length} {odMode === "box" ? "boxes" : "points"} overlaid
+                              </div>
+                            )}
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-[11px]"
+                              disabled={odBusy}
+                              onClick={() => { void runObjectDetection(); }}
+                            >
+                              {odBusy ? "Detecting…" : "▶ Detect"}
+                            </Button>
+                            {objectDetections.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full text-[11px] text-slate-500"
+                                disabled={odBusy}
+                                onClick={() => setObjectDetections([])}
+                              >
+                                Clear detections
+                              </Button>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

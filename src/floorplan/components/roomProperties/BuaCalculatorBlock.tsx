@@ -5,8 +5,12 @@ import {
   DEFAULT_REGULATIONS,
   OCCUPANCY_LABELS,
   ROAD_LOCATION_LABELS,
+  insetPolygon,
   polygonArea,
   runCircularSetbackSolver,
+} from "../../algorithms/dcr/circularSetbackSolver";
+import { outsetRectangle } from "../../algorithms/layout/optimiseRect";
+import {
   type Occupancy,
   type Regulations,
   type RoadLocation,
@@ -41,6 +45,7 @@ export interface BuaCalculatorRoom {
   otherNonFsiSqm?: number;
   wingsPerFloor?: number;
   chosenPlateM2?: number;
+  podiumOffsetM?: number;
 }
 
 export interface BuaCalculatorBlockProps {
@@ -62,9 +67,52 @@ export interface BuaCalculatorBlockProps {
     room: { id: string; points: Point[] },
     perEdgeDistancesM: number[],
     deductionM2: number,
+    stack?: {
+      /** Uniform inward offset from plot boundary for the basement footprint (m). */
+      basementOffsetM: number;
+      /** FSI tower floor count (extrude upward). */
+      nFsi: number;
+      /** Basement floor count (extrude downward). */
+      nBasement: number;
+      /** Floor-to-floor height (m), used for both stacks in v1. */
+      floorHtM: number;
+      /** Max-rect tower footprint in METRE coordinates (4 corners). Caller scales
+       *  to pixels. Empty array when the solver didn't find a rectangle. */
+      towerRectM: Point[];
+      /** Raw setback inset polygon (m) — drives the Inset Area Space. */
+      insetPolyM: Point[];
+      /** Inset minus the amenity-deduction half-plane (m) — drives the
+       *  Buildable Area Space. Equals insetPolyM when deduction is zero. */
+      buildablePolyM: Point[];
+      /** The amenity-deduction piece carved out of the inset (m) — drives the
+       *  Deduction Area Space. Empty when the deduction is zero. */
+      deductionPolyM: Point[];
+      /** Basement polygon (m), max-rect outset by podium offset. Drives the
+       *  Basement Area Space. */
+      basementPolyM: Point[];
+    },
   ) => void;
   /** Remove any inset preview walls previously painted by onShowOnCanvas. */
   onClearPreview?: () => void;
+  /** Commit the converged max-rect as a Footprint Area Space tagged to this
+   *  source plot. Called automatically at the end of Calculate so the user
+   *  doesn't need a separate Show-on-Canvas click to materialise the tower.
+   *  `rectPolyM` is in METRES (caller scales to pixels). When `rectPolyM.length`
+   *  < 3, the parent should treat it as "no rectangle — clear any existing
+   *  derived footprint." */
+  onCommitFootprintArea?: (
+    sourceRoom: { id: string; points: Point[] },
+    rectPolyM: Point[],
+    nFsi: number,
+  ) => void;
+  /** Commit the basement polygon (max-rect outset by podium offset) as a
+   *  Basement Area Space tagged to this source plot. Mirrors
+   *  onCommitFootprintArea — called automatically at the end of Calculate. */
+  onCommitBasementArea?: (
+    sourceRoom: { id: string; points: Point[] },
+    basementPolyM: Point[],
+    nBasement: number,
+  ) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,9 +138,25 @@ interface ComputedStatement {
   floorsMaxHt: number; stairsPerCore: number;
   stairFootprintEach: number; liftLobby: number; corePerWing: number;
   totalCoreM2: number; corePctBua: number;
+  // Stack decomposition (simple v1): same plate for FSI and non-FSI; underground
+  // floor count = ceil(non-FSI area / plate area).
+  plateUsedM2: number;
+  nonFsiTotalM2: number;
+  nFsiFloors: number;
+  nBasementLevels: number;
+  podiumOffsetM: number;
+  podiumPlateM2: number;
+  /** Basement polygon (m), derived from max-rect outset by podium offset.
+   *  Empty until a Calculate run produces a max-rect. */
+  basementPolyM: Point[];
 }
 
-function computeStatement(room: BuaCalculatorRoom, pixelsPerMeter: number): ComputedStatement {
+function computeStatement(
+  room: BuaCalculatorRoom,
+  pixelsPerMeter: number,
+  solverPlateM2?: number,
+  maxRectCornersM?: Point[],
+): ComputedStatement {
   const ppm = pixelsPerMeter;
   const ppm2 = ppm * ppm;
   const pts = room.points;
@@ -154,6 +218,28 @@ function computeStatement(room: BuaCalculatorRoom, pixelsPerMeter: number): Comp
   const totalCoreM2 = corePerWing * wings * floorsMaxHt;
   const corePctBua = maxGrossBua > 0 ? totalCoreM2 / maxGrossBua : 0;
 
+  // Stack decomposition (v2): tower plate from the setback solver; basement
+  // footprint is the plot polygon inset uniformly by the podium offset (a
+  // minimum permissible setback, default 3.5 m). The basement plate is always
+  // larger than the tower plate because tower setbacks > podium offset.
+  const plateUsedM2 = (solverPlateM2 && solverPlateM2 > 0) ? solverPlateM2 : (room.chosenPlateM2 ?? 0);
+  const nonFsiTotalM2 = parkingM2 + otherNonFsi;
+  const nFsiFloors = plateUsedM2 > 0 ? Math.ceil(maxGrossBua / plateUsedM2) : 0;
+  const podiumOffsetM = room.podiumOffsetM ?? 3.5;
+  const plotPolygonM: Point[] = pts.map((q) => ({ x: q.x / ppm, y: q.y / ppm }));
+  // Basement polygon = max-rect tower OUTSET by the podium offset on all sides
+  // (preferred — keeps the same rotation as the tower, so basement is a clean
+  // rectangle slightly larger than the tower). Falls back to plot inset by
+  // podium offset when max-rect isn't available yet (first Calculate pass).
+  let podiumPoly: Point[] | null = null;
+  if (maxRectCornersM && maxRectCornersM.length === 4) {
+    podiumPoly = outsetRectangle(maxRectCornersM, podiumOffsetM);
+  } else if (plotPolygonM.length >= 3) {
+    podiumPoly = insetPolygon(plotPolygonM, plotPolygonM.map(() => podiumOffsetM));
+  }
+  const podiumPlateM2 = podiumPoly && podiumPoly.length >= 3 ? polygonArea(podiumPoly) : 0;
+  const nBasementLevels = podiumPlateM2 > 0 ? Math.ceil(nonFsiTotalM2 / podiumPlateM2) : 0;
+
   return {
     plotAreaM2, gcrPct, gcrCapM2, maxFsi, maxBuaM2,
     amenityOsRate, losRate, basicMult, premiumMult, tdrMult,
@@ -164,6 +250,9 @@ function computeStatement(room: BuaCalculatorRoom, pixelsPerMeter: number): Comp
     carParks, areaPerPark, otherNonFsi, parkingM2, totalConstM2, totalConstSqFt,
     maxHt, floorHt, wings, floorsMaxHt, stairsPerCore,
     stairFootprintEach, liftLobby, corePerWing, totalCoreM2, corePctBua,
+    plateUsedM2, nonFsiTotalM2, nFsiFloors, nBasementLevels,
+    podiumOffsetM, podiumPlateM2,
+    basementPolyM: podiumPoly ?? [],
   };
 }
 
@@ -246,7 +335,9 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
   }, [room.points, p.pixelsPerMeter]);
 
   const onCalculate = () => {
-    // 1. Existing BUA calc.
+    // 1. Existing BUA calc — solver plate is unknown on first pass, so pass
+    // undefined; the recompute below (after solver runs) refreshes the calc
+    // with the converged plate so n_fsi reflects it.
     const next = computeStatement(room, p.pixelsPerMeter);
     setCalc(next);
 
@@ -273,6 +364,11 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
       plotPolygonM: polygonM,
       frontEdgeIndices: frontSet,
       amenityDeductionM2: next.amenityOsM2,
+      // Default deduction half-plane angle = 99° (~vertical cut, leaning slightly
+      // east-of-north) — matches typical amenity-OS placement on the long side of
+      // an Indian residential plot, so the max-rect search excludes a strip on
+      // that side instead of cutting from the top.
+      amenityDeductionAngleDeg: 99,
       // Bounding-box dimensions are informational on the solver row; the real
       // buildable area comes from the inset of the actual polygon.
       plotWidthM: 0,
@@ -284,6 +380,26 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
       startPlateGuessM2: startPlate,
     });
     setSolverResult(res);
+
+    // Recompute with the solver's converged plate so n_fsi uses it as the
+    // default tower plate (unless the user overrode towerPlateM2 explicitly).
+    const finalRow = res.rows.find((r) => r.note === "CONVERGED") ?? res.rows[res.rows.length - 1];
+    const solvedPlate = finalRow && finalRow.floors > 0 ? res.totalBuaM2 / finalRow.floors : undefined;
+    const rectCorners = finalRow ? finalRow.maxRectCornersM : undefined;
+    let finalCalc = next;
+    if (solvedPlate && solvedPlate > 0) {
+      finalCalc = computeStatement(room, p.pixelsPerMeter, solvedPlate, rectCorners);
+      setCalc(finalCalc);
+    } else if (rectCorners && rectCorners.length >= 3) {
+      // No solver convergence but we still have a max-rect — recompute so the
+      // basement polygon (outset of the rect) is available for "Show on canvas".
+      finalCalc = computeStatement(room, p.pixelsPerMeter, undefined, rectCorners);
+      setCalc(finalCalc);
+    }
+
+    // Calculate is compute-only: it updates the panel numbers but draws nothing
+    // on the canvas. The Footprint / Basement / Inset / Buildable / Deduction
+    // Spaces are materialised solely by the "Show on canvas" button below.
   };
 
   // Shared row-style helpers (preserved from the original render).
@@ -352,6 +468,8 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                 field="otherNonFsiSqm" value={room.otherNonFsiSqm ?? 6000} min={0} step={100} onCommit={onCommit} />
               <NumCell roomId={room.id} label="Wings / Cores" title="Number of wings / cores per floor"
                 field="wingsPerFloor" value={room.wingsPerFloor ?? 5} min={1} step={1} onCommit={onCommit} />
+              <NumCell roomId={room.id} label="Podium Offset (m)" title="Uniform inward offset from plot boundary for the podium / basement footprint (default 3.5 m — the minimum setback at grade)."
+                field="podiumOffsetM" value={room.podiumOffsetM ?? 3.5} min={0} step={0.5} onCommit={onCommit} />
             </div>
           </div>
 
@@ -499,6 +617,51 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                 </div>
               </div>
 
+              {/* Stack Decomposition (v2) — tower plate from solver, basement plate from podium offset */}
+              <div className="border-t border-slate-100 pt-2">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Stack Decomposition</span>
+                <p className="text-[8px] italic text-slate-400">
+                  tower plate = solver inset · basement plate = plot inset by podium offset ({calc.podiumOffsetM} m) · n_basement = non-FSI / basement plate
+                </p>
+                <div className="mt-1.5 font-mono">
+                  <div className={`${rowBase} ${cols3} border-b border-slate-300 pb-0.5 mb-0.5 font-semibold text-slate-500`}>
+                    <span>Stack</span><span className={right}>Plate (m²)</span><span className={right}>Floors</span>
+                  </div>
+                  <div className={`${rowBase} ${cols3} text-slate-600`}>
+                    <span>FSI Tower (above grade)</span>
+                    <span className={right}>{calc.plateUsedM2 > 0 ? f(calc.plateUsedM2) : "—"}</span>
+                    <span className={`${right} font-semibold text-blue-700`}>{calc.nFsiFloors || "—"}</span>
+                  </div>
+                  <div className={`${rowBase} ${cols3} text-slate-600`}>
+                    <span>Basement (plot − {calc.podiumOffsetM} m offset)</span>
+                    <span className={right}>{calc.podiumPlateM2 > 0 ? f(calc.podiumPlateM2) : "—"}</span>
+                    <span className={`${right} font-semibold text-emerald-700`}>{calc.nBasementLevels || "—"}</span>
+                  </div>
+                  <div className={`${rowBase} ${cols2} ${bold} border-t border-slate-200 mt-1 pt-1 text-slate-700`}>
+                    <span>Non-FSI total (parking + other)</span>
+                    <span className={right}>{f(calc.nonFsiTotalM2)} m²</span>
+                  </div>
+                  <div className={`${rowBase} ${cols2} text-slate-500`}>
+                    <span className="pl-2">basement plate gain vs. tower</span>
+                    <span className={right}>
+                      {calc.plateUsedM2 > 0 && calc.podiumPlateM2 > 0
+                        ? `+${f(calc.podiumPlateM2 - calc.plateUsedM2)} m² (×${(calc.podiumPlateM2 / calc.plateUsedM2).toFixed(2)})`
+                        : "—"}
+                    </span>
+                  </div>
+                  {calc.plateUsedM2 <= 0 && (
+                    <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-1 text-[9px] text-amber-700">
+                      ⚠ No tower plate yet — run the Setback Solver (Calculate) to get a converged plate.
+                    </div>
+                  )}
+                  {calc.podiumPlateM2 <= 0 && (
+                    <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-1 text-[9px] text-amber-700">
+                      ⚠ Podium offset ({calc.podiumOffsetM} m) leaves no basement footprint — reduce the offset.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Core Estimate */}
               <div className="border-t border-slate-100 pt-2">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Core Estimate</span>
@@ -543,8 +706,11 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                         title="Paint the final-iteration setback as an Inset Polygon preview (no commit)"
                         onClick={() => {
                           if (!p.onShowOnCanvas) return;
-                          const lastRow = solverResult.rows[solverResult.rows.length - 1];
-                          const side = Number.isFinite(lastRow.sideSetbackM) ? lastRow.sideSetbackM : 0;
+                          // Prefer the converged row's setbacks + max-rect; fall back to last row.
+                          const finalRow =
+                            solverResult.rows.find((r) => r.note === "CONVERGED") ??
+                            solverResult.rows[solverResult.rows.length - 1];
+                          const side = Number.isFinite(finalRow.sideSetbackM) ? finalRow.sideSetbackM : 0;
                           const front = solverResult.frontSetbackUsedM;
                           const frontSet = new Set<number>(p.frontEdgeIndices ?? []);
                           const distances = room.points.map((_, i) => (frontSet.has(i) ? front : side));
@@ -552,7 +718,24 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                           // red half-plane overlay matches what the solver subtracted.
                           const deductionM2 = calc?.amenityOsM2 ?? 0;
                           p.onClearPreview?.();
-                          p.onShowOnCanvas({ id: room.id, points: room.points }, distances, deductionM2);
+                          p.onShowOnCanvas(
+                            { id: room.id, points: room.points },
+                            distances,
+                            deductionM2,
+                            calc
+                              ? {
+                                  basementOffsetM: calc.podiumOffsetM,
+                                  nFsi: calc.nFsiFloors,
+                                  nBasement: calc.nBasementLevels,
+                                  floorHtM: calc.floorHt,
+                                  towerRectM: finalRow.maxRectCornersM ?? [],
+                                  insetPolyM: finalRow.insetPolyM ?? [],
+                                  buildablePolyM: finalRow.buildablePolyM ?? [],
+                                  deductionPolyM: finalRow.deductionPolyM ?? [],
+                                  basementPolyM: calc.basementPolyM ?? [],
+                                }
+                              : undefined,
+                          );
                         }}
                       >
                         Show on Canvas
@@ -579,7 +762,9 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                             <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Height</th>
                             <th colSpan={2} className="px-1 py-0.5 text-center border-b border-slate-200">Setbacks</th>
                             <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Inset Area</th>
-                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Inset After Deduction</th>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom" title="Largest free-angle rectangle inscribed in the inset polygon — the actual tower footprint">Max Rect</th>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">W × D (m)</th>
+                            <th rowSpan={2} className="px-1 py-0.5 text-right align-bottom">Plate After Deduction</th>
                           </tr>
                           <tr>
                             <th className="px-1 py-0.5 text-right font-normal">Front</th>
@@ -595,6 +780,12 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                               <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.frontSetbackM) ? r.frontSetbackM.toFixed(2) : "—"}</td>
                               <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.sideSetbackM) ? r.sideSetbackM.toFixed(2) : "—"}</td>
                               <td className="px-1 py-0.5 text-right font-mono">{Number.isFinite(r.insetAreaM2) ? r.insetAreaM2.toFixed(1) : "—"}</td>
+                              <td className="px-1 py-0.5 text-right font-mono text-indigo-700">{Number.isFinite(r.maxRectAreaM2) && r.maxRectAreaM2 > 0 ? r.maxRectAreaM2.toFixed(1) : "—"}</td>
+                              <td className="px-1 py-0.5 text-right font-mono text-slate-500">
+                                {Number.isFinite(r.maxRectWidthM) && r.maxRectWidthM > 0
+                                  ? `${r.maxRectWidthM.toFixed(1)} × ${r.maxRectDepthM.toFixed(1)}`
+                                  : "—"}
+                              </td>
                               <td className={`px-1 py-0.5 text-right font-mono ${r.note === "CONVERGED" ? "font-semibold text-emerald-700" : ""}`}>
                                 {Number.isFinite(r.buildableM2) ? r.buildableM2.toFixed(1) : "—"}
                               </td>
@@ -604,8 +795,99 @@ export const BuaCalculatorBlock = (p: BuaCalculatorBlockProps) => {
                       </table>
                     </div>
                   )}
+                  {solverResult.rows.length > 0 && (() => {
+                    // Final plate area = Total BUA / Floors using the row that actually settled.
+                    // Prefer the converged row; fall back to the last row otherwise.
+                    const finalRow =
+                      solverResult.rows.find((r) => r.note === "CONVERGED") ??
+                      solverResult.rows[solverResult.rows.length - 1];
+                    const floors = finalRow.floors;
+                    const exactPlateM2 = floors > 0 ? solverResult.totalBuaM2 / floors : 0;
+                    const finalBuildable = Number.isFinite(finalRow.buildableM2) ? finalRow.buildableM2 : NaN;
+                    const tight = Number.isFinite(finalBuildable) && exactPlateM2 > finalBuildable + 0.5;
+                    return (
+                      <div className={`mt-1.5 rounded border px-2 py-1 text-[10px] ${
+                        tight ? "border-red-300 bg-red-50 text-red-700" : "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      }`}>
+                        <div className="font-semibold">
+                          Final plate area = Total BUA / Floors = {f(solverResult.totalBuaM2)} ÷ {floors} ={" "}
+                          <span className="font-mono">{f(exactPlateM2)} m²</span>
+                        </div>
+                        {Number.isFinite(finalRow.maxRectAreaM2) && finalRow.maxRectAreaM2 > 0 && (
+                          <div className="text-[9px] opacity-80">
+                            tower rectangle: <span className="font-mono">{f(finalRow.maxRectAreaM2)} m²</span>
+                            {" "}({finalRow.maxRectWidthM.toFixed(1)} × {finalRow.maxRectDepthM.toFixed(1)} m, {finalRow.maxRectAngleDeg.toFixed(0)}° from horizontal)
+                          </div>
+                        )}
+                        {Number.isFinite(finalBuildable) && (
+                          <div className="text-[9px] opacity-80">
+                            {tight
+                              ? `⚠ exceeds plate after deduction (${f(finalBuildable)} m²) — at the limit`
+                              : `fits within plate after deduction (${f(finalBuildable)} m²)`}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
+
+              {/* ── Final Summary ──────────────────────────────────────────
+                  Superstructure (FSI tower) + Substructure (basement) totals,
+                  built from the stack decomposition, then compared against the
+                  required total construction area. Floors are ceil'd so the
+                  built area is ≥ the requirement; the delta shows the slack. */}
+              {(() => {
+                const superFloors = calc.nFsiFloors;
+                const superPlateM2 = calc.plateUsedM2;
+                const superTotalM2 = superFloors * superPlateM2;
+                const subFloors = calc.nBasementLevels;
+                const subPlateM2 = calc.podiumPlateM2;
+                const subTotalM2 = subFloors * subPlateM2;
+                const finalAreaM2 = superTotalM2 + subTotalM2;
+                const reqM2 = calc.totalConstM2;
+                const deltaM2 = finalAreaM2 - reqM2;
+                const coveragePct = reqM2 > 0 ? (finalAreaM2 / reqM2) * 100 : 0;
+                const meets = finalAreaM2 + 0.5 >= reqM2;
+                return (
+                  <div className="border-t border-slate-200 pt-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Final Summary</span>
+                    <p className="text-[8px] italic text-slate-400">
+                      total area = floors × plate · final = superstructure + substructure
+                    </p>
+                    <div className="mt-1.5 font-mono">
+                      {/* Superstructure */}
+                      <div className="mb-0.5 text-[9px] font-semibold text-blue-700">Superstructure (above grade)</div>
+                      <div className={`${rowBase} ${cols2} text-slate-600`}><span>Number of floors</span><span className={right}>{superFloors || "—"}</span></div>
+                      <div className={`${rowBase} ${cols2} text-slate-600`}><span>Plate area</span><span className={right}>{superPlateM2 > 0 ? `${f(superPlateM2)} m²` : "—"}</span></div>
+                      <div className={`${rowBase} ${cols2} ${bold} border-t border-slate-200 text-slate-700`}><span>Total area</span><span className={right}>{superTotalM2 > 0 ? `${f(superTotalM2)} m²` : "—"}</span></div>
+
+                      {/* Substructure */}
+                      <div className="mt-1.5 mb-0.5 text-[9px] font-semibold text-emerald-700">Substructure (below grade)</div>
+                      <div className={`${rowBase} ${cols2} text-slate-600`}><span>Number of floors</span><span className={right}>{subFloors || "—"}</span></div>
+                      <div className={`${rowBase} ${cols2} text-slate-600`}><span>Plate area (plate + podium offset {calc.podiumOffsetM} m)</span><span className={right}>{subPlateM2 > 0 ? `${f(subPlateM2)} m²` : "—"}</span></div>
+                      <div className={`${rowBase} ${cols2} ${bold} border-t border-slate-200 text-slate-700`}><span>Total area</span><span className={right}>{subTotalM2 > 0 ? `${f(subTotalM2)} m²` : "—"}</span></div>
+
+                      {/* Final + comparison */}
+                      <div className={`${rowBase} ${cols2} ${bold} mt-1.5 rounded bg-blue-50 px-1 text-blue-800`}><span>Final area (super + sub)</span><span className={right}>{f(finalAreaM2)} m²</span></div>
+                      <div className={`${rowBase} ${cols2} text-slate-600`}><span>Total construction area (required)</span><span className={right}>{f(reqM2)} m²</span></div>
+                      <div className={`${rowBase} ${cols2} ${bold} ${meets ? "text-emerald-700" : "text-red-600"}`}>
+                        <span>{meets ? "Surplus vs. required" : "Shortfall vs. required"}</span>
+                        <span className={right}>{deltaM2 >= 0 ? "+" : ""}{f(deltaM2)} m²</span>
+                      </div>
+                      <div className={`${rowBase} ${cols2} text-slate-500`}>
+                        <span className="pl-2">coverage (final ÷ required)</span>
+                        <span className={right}>{reqM2 > 0 ? `${coveragePct.toFixed(1)}%` : "—"}</span>
+                      </div>
+                      {(superPlateM2 <= 0 || subPlateM2 <= 0) && (
+                        <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-1 text-[9px] text-amber-700">
+                          ⚠ Run Calculate (with a converged setback solver) so both plate areas are available — totals are incomplete otherwise.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
           )}

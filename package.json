@@ -47,6 +47,7 @@
     "@thatopen/components-front": "^3.2.16",
     "@thatopen/fragments": "^3.2.13",
     "@thatopen/ui": "^3.2.0",
+    "@xyflow/react": "^12.10.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

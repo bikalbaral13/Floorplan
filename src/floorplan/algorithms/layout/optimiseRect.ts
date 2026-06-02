@@ -212,6 +212,84 @@ function findRectAtAngle(
   return { corners, area: (rX1 - rX0) * (rY1 - rY0) };
 }
 
+// ─── Lightweight helper: free-angle largest inscribed rectangle ──────────────
+
+export interface LargestRectResult {
+  /** 4 corners in world-space, in polygon-coordinate units (caller decides px or m). */
+  corners: Point[];
+  /** Area in the same units squared. */
+  area: number;
+  /** Rectangle width / depth (longer / shorter sides), same units as `corners`. */
+  widthM: number;
+  depthM: number;
+  /** Rotation angle of the rectangle's long axis, radians in [0, π). */
+  angleRad: number;
+}
+
+/**
+ * Free-angle largest inscribed rectangle in an arbitrary polygon. Sweeps the
+ * rotation angle in `angleStepDeg` increments (default 4°) and picks the best.
+ * Reuses the same axis-aligned histogram routine as `computeOptimiseRect` —
+ * accuracy and runtime match. Returns `null` when no rectangle fits.
+ */
+export function largestInscribedRectangle(
+  polyPts: Point[],
+  opts?: { angleStepDeg?: number; lockAngleRad?: number },
+): LargestRectResult | null {
+  if (!polyPts || polyPts.length < 3) return null;
+  const xs = polyPts.map((p) => p.x), ys = polyPts.map((p) => p.y);
+  const cxPoly = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cyPoly = (Math.min(...ys) + Math.max(...ys)) / 2;
+
+  const angles: number[] = [];
+  if (opts?.lockAngleRad != null && Number.isFinite(opts.lockAngleRad)) {
+    angles.push(opts.lockAngleRad);
+  } else {
+    const stepDeg = opts?.angleStepDeg ?? 4;
+    for (let d = 0; d < 180; d += stepDeg) angles.push((d * Math.PI) / 180);
+  }
+
+  let best: { corners: Point[]; area: number; angleRad: number } | null = null;
+  for (const t of angles) {
+    const r = findRectAtAngle(t, polyPts, [], "rectangle", null, cxPoly, cyPoly);
+    if (r && (!best || r.area > best.area)) best = { ...r, angleRad: t };
+  }
+  if (!best) return null;
+
+  // Recover width / depth by measuring the corner spacing (long edge first).
+  const e0 = Math.hypot(best.corners[1].x - best.corners[0].x, best.corners[1].y - best.corners[0].y);
+  const e1 = Math.hypot(best.corners[2].x - best.corners[1].x, best.corners[2].y - best.corners[1].y);
+  const widthM = Math.max(e0, e1);
+  const depthM = Math.min(e0, e1);
+  return { corners: best.corners, area: best.area, widthM, depthM, angleRad: best.angleRad };
+}
+
+/**
+ * Outset a (possibly rotated) rectangle by `offset` on every side. The result
+ * keeps the same orientation and centre; width and depth each grow by 2×offset.
+ * Returns the corners in the same winding order as the input.
+ */
+export function outsetRectangle(corners: Point[], offset: number): Point[] {
+  if (!corners || corners.length !== 4) return corners ? corners.slice() : [];
+  if (Math.abs(offset) < 1e-9) return corners.slice();
+  const dx01 = corners[1].x - corners[0].x;
+  const dy01 = corners[1].y - corners[0].y;
+  const len = Math.hypot(dx01, dy01) || 1;
+  const ux = dx01 / len, uy = dy01 / len;        // long-axis unit vector
+  const vx = -uy, vy = ux;                       // perpendicular
+  const cx = (corners[0].x + corners[2].x) / 2;
+  const cy = (corners[0].y + corners[2].y) / 2;
+  return corners.map((c) => {
+    const dx = c.x - cx, dy = c.y - cy;
+    const su = Math.sign(dx * ux + dy * uy);
+    const sv = Math.sign(dx * vx + dy * vy);
+    return {
+      x: c.x + su * offset * ux + sv * offset * vx,
+      y: c.y + su * offset * uy + sv * offset * vy,
+    };
+  });
+}
+
 // ─── Core: hexagon lattice packing ───────────────────────────────────────────
 
 interface HexPackResult {

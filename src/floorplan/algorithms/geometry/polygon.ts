@@ -1,5 +1,19 @@
 import type { Point } from "../../types";
 
+/** Index of the polygon's longest edge (edge i = points[i]→points[i+1]). A common heuristic for the
+ *  street-/front-facing edge. Returns 0 for a degenerate polygon. */
+export const longestEdgeIndex = (points: Point[]): number => {
+  const n = points.length;
+  if (n < 2) return 0;
+  let best = 0, bestLen = -1;
+  for (let i = 0; i < n; i++) {
+    const a = points[i], b = points[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > bestLen) { bestLen = len; best = i; }
+  }
+  return best;
+};
+
 export const polygonArea = (points: Point[]) => {
   if (points.length < 3) {
     return 0;

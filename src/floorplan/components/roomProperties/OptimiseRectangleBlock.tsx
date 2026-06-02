@@ -7,6 +7,43 @@ import { computeOptimiseRect } from "../../algorithms/layout/optimiseRect";
 import { classifyRectilinearPolygon, scorePolygonAgainstShape } from "../../algorithms/geometry/rectilinearShapeClassifier";
 import { clipPolygonByHalfPlane } from "../../algorithms/partitioning/voronoi";
 
+/** Absolute polygon area (shoelace). */
+const polyAreaAbs = (c: Point[]): number => {
+  let a = 0;
+  for (let i = 0; i < c.length; i++) {
+    const p1 = c[i], p2 = c[(i + 1) % c.length];
+    a += p1.x * p2.y - p2.x * p1.y;
+  }
+  return Math.abs(a) / 2;
+};
+
+/** Compact, scrollable read-only list of polygon vertices (in metres). */
+const VertexList = ({
+  title,
+  pts,
+  fmtVertex,
+}: {
+  title: string;
+  pts: Point[];
+  fmtVertex: (q: Point) => string;
+}) => (
+  <div>
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-medium text-slate-600">{title}</span>
+      <span className="font-mono text-[9px] text-slate-400">{pts.length} pts</span>
+    </div>
+    {pts.length > 0 ? (
+      <div className="mt-0.5 max-h-20 overflow-y-auto rounded border border-slate-200 bg-white px-1 py-0.5 font-mono text-[9px] leading-tight text-slate-700">
+        {pts.map((q, i) => (
+          <div key={i}>{i + 1}: {fmtVertex(q)}</div>
+        ))}
+      </div>
+    ) : (
+      <div className="text-[9px] italic text-slate-400">—</div>
+    )}
+  </div>
+);
+
 /** Render a single variation to an offscreen Konva Stage and return a PNG data URL.
  *  Mirrors the main canvas's styling (dark room outline + light fill, amber placed
  *  rectangles with mitered joins) so the thumbnails feel like real canvas snapshots
@@ -295,6 +332,52 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.shape, p.reference, p.axisAngle, p.shrinkAngle, p.shrinkEnabled, p.shrinkSlide, p.selectedRoom.points]);
 
+  // Live readout of the optimised rectangle(s) for the current parameters — total
+  // area (m²) and the polygon vertices. Self-computed via the same pure algorithm
+  // the runner uses, so the numbers track the sliders without a commit round-trip.
+  const optReadout = useMemo<{ areaM2: number; polyPx: Point[]; count: number } | null>(() => {
+    if (p.selectedRoom.points.length < 3) return null;
+    const sourcePts = p.shrinkEnabled
+      ? applyShrinkClip(p.selectedRoom.points, p.shrinkAngle, p.shrinkSlide)
+      : p.selectedRoom.points;
+    if (sourcePts.length < 3) return null;
+    const result = computeOptimiseRect({
+      pts: sourcePts,
+      shape: p.shape,
+      reference: p.reference,
+      axisAngleDeg: p.axisAngle,
+      count: p.count,
+      minAreaPx: 0,
+      union: p.union,
+      silent: true,
+    }, { thickness: 1, mode: "line" });
+    if (!result.success || result.placed.length === 0) return null;
+    // True rectilinear union outline (traced from the rasterised mask) — this is
+    // the single merged polygon with all its corners (6 for an L, 8 for a T/cross,
+    // …), NOT the 4-corner AABB that `unionPolygon` carries. Prefer it whenever
+    // union is on and the trace succeeded.
+    const unionOutline =
+      p.union && result.unionOutlineWorld && result.unionOutlineWorld.length >= 3
+        ? result.unionOutlineWorld
+        : null;
+    const polyPx = unionOutline
+      ?? (p.union && result.unionPolygon && result.unionPolygon.length >= 3
+        ? result.unionPolygon
+        : result.placed[0]);
+    // Area follows the polygon shown: the union footprint (shoelace of the merged
+    // outline, so overlaps aren't double-counted) when merging, else the sum of
+    // the placed rectangles.
+    const areaPx2 = unionOutline
+      ? polyAreaAbs(unionOutline)
+      : result.placed.reduce((s, c) => s + polyAreaAbs(c), 0);
+    const areaM2 = areaPx2 / (p.pixelsPerMeter * p.pixelsPerMeter);
+    return { areaM2, polyPx, count: result.placed.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.shape, p.reference, p.axisAngle, p.count, p.union, p.shrinkEnabled, p.shrinkAngle, p.shrinkSlide, p.selectedRoom.points, p.pixelsPerMeter]);
+
+  const fmtRectVertex = (q: Point): string =>
+    `(${(q.x / p.pixelsPerMeter).toFixed(2)}, ${(q.y / p.pixelsPerMeter).toFixed(2)})`;
+
   // External trigger — Apply-JSON's `pickVariation: true` directive bumps the tick
   // to open the modal without simulating a click on the trigger button.
   useEffect(() => {
@@ -543,14 +626,6 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
               <input type="checkbox" checked={p.exactArea} onChange={(e) => p.setExactArea(e.target.checked)} />
               Exact area (post-scale to match target — may protrude slightly)
             </label>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-[11px]"
-              onClick={p.onTargetApply}
-            >
-              Apply
-            </Button>
             {p.hasCommittedTarget && (
               <Button
                 variant="outline"
@@ -563,6 +638,22 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
             )}
           </>
         )}
+      </div>
+      {/* Optimised rectangle readout — total area + polygon vertices (in metres). */}
+      <div className="space-y-1 rounded bg-slate-50 px-1.5 py-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold text-slate-700">
+            {optReadout && optReadout.count > 1 ? "Rectangles area" : "Rectangle area"}
+          </span>
+          <span className="font-mono text-[10px] font-semibold text-slate-900">
+            {optReadout ? `${optReadout.areaM2.toFixed(2)} m²` : "—"}
+          </span>
+        </div>
+        <VertexList
+          title={optReadout && p.union && optReadout.count > 1 ? "Union polygon" : "Rectangle polygon"}
+          pts={optReadout?.polyPx ?? []}
+          fmtVertex={fmtRectVertex}
+        />
       </div>
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
@@ -580,6 +671,19 @@ export const OptimiseRectangleBlock = (p: OptimiseRectangleBlockProps) => {
         </label>
         <span className="text-[9px] text-slate-400">{p.live ? "auto-updates on type change" : "click Optimise"}</span>
       </div>
+      {/* Apply (persist target area + tilt for the selected room). Only relevant when
+          Shrink-to-target is on, so it stays gated on that. Placed between Live and the
+          variations trigger per the panel layout. */}
+      {p.shrinkEnabled && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-[11px]"
+          onClick={p.onTargetApply}
+        >
+          Apply
+        </Button>
+      )}
       {/* Layout-seed variation trigger — opens a modal with bigger side-by-side thumbnails. */}
       <Button
         variant="outline"

@@ -310,21 +310,41 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             {/* Select tool — split popover. Active when Select is the current tool
              *  (regardless of scope). Dropdown chooses the scope filter: All / Node /
              *  Segment / Space, which gates what the user can click in the canvas. */}
-            <Popover open={selectPopoverOpen} onOpenChange={setSelectPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode ? "default" : "outline"}
-                  size="sm"
-                  className="relative h-9 w-9 shrink-0 p-0"
-                  title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : "Space only"})`}
-                  aria-label="Select"
-                  aria-expanded={selectPopoverOpen}
-                >
-                  <MousePointer2 className="h-6 w-6" />
-                  <ChevronDown className="absolute bottom-0.5 right-0.5 h-2 w-2 text-slate-400" aria-hidden />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent side="right" align="start" className="w-48 p-2 shadow-xl" sideOffset={10}>
+            <div className="relative h-9 w-9 shrink-0">
+              {/* Main button — a direct click activates the Select tool with scope "All".
+               *  The corner chevron opens the scope menu for a specific scope. */}
+              <Button
+                variant={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode ? "default" : "outline"}
+                size="sm"
+                className="h-9 w-9 p-0"
+                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : "Space only"})`}
+                aria-label="Select"
+                onClick={() => {
+                  p.onSelectFilterChange("all");
+                  p.onToolChange("select");
+                  p.onAddDoorModeChange(false);
+                  p.onAddWindowModeChange(false);
+                  p.onAddEdgeModeChange(null);
+                  p.onAddEdgeFirstRoomChange(null);
+                  p.onAddRoomModeChange(false);
+                  p.onAddFurnitureModeChange(false);
+                }}
+              >
+                <MousePointer2 className="h-6 w-6" />
+              </Button>
+              <Popover open={selectPopoverOpen} onOpenChange={setSelectPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70 hover:bg-white"
+                    title="Select scope"
+                    aria-label="Select scope"
+                    aria-expanded={selectPopoverOpen}
+                  >
+                    <ChevronDown className="h-2.5 w-2.5 text-slate-500" aria-hidden />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="right" align="start" className="w-48 p-2 shadow-xl" sideOffset={10}>
                 <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Select scope</h4>
                 <div className="flex flex-col gap-1">
                   {([
@@ -356,7 +376,8 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                   ))}
                 </div>
               </PopoverContent>
-            </Popover>
+              </Popover>
+            </div>
             <ToolButton
               active={p.tool === "pan"}
               icon={<Hand className="h-6 w-6" />}
