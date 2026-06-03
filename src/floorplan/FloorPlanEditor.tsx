@@ -84,6 +84,7 @@ import type {
   Point,
   Room,
   RoomConstraint,
+  SerializedFlow,
   Tool,
   Unit,
   Wall,
@@ -197,7 +198,8 @@ import { MassingBlock } from "./components/roomProperties/MassingBlock";
 import { PathSetterBlock } from "./components/roomProperties/PathSetterBlock";
 import { SplittingActionsBlock } from "./components/roomProperties/SplittingActionsBlock";
 import { FlowOverlay } from "./flow/FlowOverlay";
-import type { FlowPreviewItem } from "./flow/eval/evaluateFlow";
+import { FlowParamsPanel } from "./flow/FlowParamsPanel";
+import { evaluateFlow, type FlowPreviewItem } from "./flow/eval/evaluateFlow";
 import { evaluateSpaceCondition } from "./flow/conditional";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { NoiseTextureBlock } from "./components/roomProperties/NoiseTextureBlock";
@@ -1708,14 +1710,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [flowOpen, setFlowOpen] = useState<boolean>(false);
   /** Pure-evaluated Flow pipeline output polygons, rendered as a canvas overlay (preview). */
   const [flowPreview, setFlowPreview] = useState<FlowPreviewItem[]>([]);
-  /** Live massing previews (Flow "Massing" nodes) → extruded as buildings in the 3D view while the
-   *  Flow editor is open, so an Optimise Rectangle → Massing chain shows n floors before committing. */
-  const flowMassingPreview = useMemo(
-    () => (flowOpen
-      ? flowPreview.map((i) => i.massing).filter((m): m is NonNullable<FlowPreviewItem["massing"]> => !!m)
-      : undefined),
-    [flowOpen, flowPreview],
-  );
+  /** Live massing previews (Flow "Massing" nodes) → extruded as buildings in the 3D view. Driven by the
+   *  Flow editor while open, and by the Space-attached flow (Properties-tab params) while closed, so an
+   *  Optimise Rectangle → Massing chain shows n floors before committing. */
+  const flowMassingPreview = useMemo(() => {
+    const m = flowPreview.map((i) => i.massing).filter((x): x is NonNullable<FlowPreviewItem["massing"]> => !!x);
+    return m.length ? m : undefined;
+  }, [flowPreview]);
   /** Per-piece lengths in metres (used when splitMode === "length"). */
   const [splitLengths, setSplitLengths] = useState<number[]>([2]);
   /** "normal" runs the existing N-piece split; "strip" generates exactly two parallel cuts
@@ -2476,6 +2477,55 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     ?? (openingSourceRef.current?.id === selectedSingleId ? openingSourceRef.current : null);
   const selectedRoom = visibleRooms.find((r) => r.id === selectedSingleId) ?? null;
   selectedRoomIdRef.current = selectedRoom?.id ?? null;
+
+  // The ONE Flow graph (single, not per-room). The overlay only ever edits one graph; it operates on
+  // whichever Space is selected (its "Selected Space" node = current selection). Held here so the
+  // Properties tab can read it whenever any Space is selected. In-session only (not in the saved model).
+  const [liveFlowGraph, setLiveFlowGraph] = useState<SerializedFlow | null>(null);
+  const selectedFlow = selectedRoom ? liveFlowGraph : null;
+
+  // Flow → live preview while the overlay is CLOSED. Re-evaluates against the selected Space whenever
+  // the Space or the flow's params change, so editing the params in the Properties tab shows parametric
+  // behaviour without opening the overlay. While the overlay is OPEN it drives the preview itself.
+  useEffect(() => {
+    if (flowOpen) return;
+    const pts = selectedRoom?.points;
+    if (!selectedFlow?.nodes?.length || !pts || pts.length < 3) { setFlowPreview([]); return; }
+    try {
+      setFlowPreview(evaluateFlow(selectedFlow.nodes as never, (selectedFlow.edges ?? []) as never, pts, pixelsPerMeter));
+    } catch { setFlowPreview([]); }
+  }, [flowOpen, selectedRoom, selectedFlow, pixelsPerMeter]);
+
+  // Latest graph emitted by the open Flow overlay.
+  const flowGraphRef = useRef<SerializedFlow | null>(null);
+  // Bridge to set a flow node param from the Properties tab while the overlay is open (kept in sync).
+  const flowParamApiRef = useRef<((nodeId: string, key: string, value: unknown) => void) | null>(null);
+  // Last mirrored graph signature (structure + params, ignoring node positions) — skips re-mirroring on
+  // pure node drags so we don't churn state on every pixel.
+  const lastFlowSigRef = useRef<string>("");
+  // Mirror the open overlay's graph into the single live graph so the Properties tab reflects the current
+  // wiring/params live. Deduped on a position-independent signature.
+  const mirrorFlow = useCallback((g: SerializedFlow) => {
+    flowGraphRef.current = g;
+    const sig = JSON.stringify({
+      n: (g.nodes ?? []).map((n) => ({ id: n.id, t: n.data?.tool, p: n.data?.params })),
+      e: (g.edges ?? []).map((e) => ({ s: e.source, t: e.target, sh: e.sourceHandle ?? null, th: e.targetHandle ?? null })),
+    });
+    if (sig === lastFlowSigRef.current) return;
+    lastFlowSigRef.current = sig;
+    setLiveFlowGraph(g);
+  }, []);
+
+  // Patch one param of one node in the live flow (from the Properties-tab controls, overlay closed).
+  const updateFlowParam = useCallback((nodeId: string, key: string, value: unknown) => {
+    setLiveFlowGraph((f) => {
+      if (!f) return f;
+      return {
+        ...f,
+        nodes: f.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, params: { ...n.data.params, [key]: value } } } : n)),
+      };
+    });
+  }, []);
 
   // OptRect defaults: auto-enable Union whenever the rectangle count is ≥ 2.
   useEffect(() => {
@@ -24045,7 +24095,7 @@ User request: ${aiPrompt.trim()}`;
 
             {/* Flow pipeline preview — pure-evaluated output polygons (Inset / Optimise / Split
                 pieces). Final node(s) filled + solid; intermediates dashed outlines. */}
-            {flowOpen && flowPreview.length > 0 && (
+            {flowPreview.length > 0 && (
               <Layer listening={false}>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
                   {flowPreview.flatMap((item) =>
@@ -24495,7 +24545,13 @@ User request: ${aiPrompt.trim()}`;
           <Panel id="flow-panel" order={2} minSize={15} defaultSize={35} className="min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-inner">
             <FlowOverlay
               open={flowOpen}
-              onClose={() => { setFlowPreview([]); setFlowOpen(false); }}
+              onClose={() => {
+                if (flowGraphRef.current) mirrorFlow(flowGraphRef.current);
+                setFlowOpen(false);
+              }}
+              initialGraph={liveFlowGraph}
+              onGraphChange={mirrorFlow}
+              paramApiRef={flowParamApiRef}
               onRunCommit={(json) => { applyRecipeJson(json, "commit"); }}
               onPreview={setFlowPreview}
               sourcePolygon={selectedRoom?.points ?? []}
@@ -25696,6 +25752,18 @@ User request: ${aiPrompt.trim()}`;
                         </div>
                       )}
                       </div>)}
+                      {selectedFlow ? (
+                        <FlowParamsPanel
+                          flow={selectedFlow}
+                          onParamChange={(nodeId, key, value) => {
+                            // While the overlay is open, route through it (single source of truth) so the
+                            // node-graph stays in sync; otherwise patch the live flow directly.
+                            if (flowOpen && flowParamApiRef.current) flowParamApiRef.current(nodeId, key, value);
+                            else updateFlowParam(nodeId, key, value);
+                          }}
+                          onEdit={() => setFlowOpen(true)}
+                        />
+                      ) : null}
                     </div>
                     )}
 

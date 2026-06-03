@@ -466,6 +466,25 @@ export interface Room {
   customParams?: Record<string, string | number | boolean>;
 }
 
+/** Serialized Flow graph (the Flow overlay's export/import shape) persisted on a Room. */
+export interface SerializedFlowNode {
+  id: string;
+  position?: { x: number; y: number };
+  data: { tool: string; params: Record<string, unknown> };
+}
+export interface SerializedFlowEdge {
+  id?: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
+export interface SerializedFlow {
+  version: number;
+  nodes: SerializedFlowNode[];
+  edges: SerializedFlowEdge[];
+}
+
 export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "segment";
 
 /** Scope filter applied while the Select tool is active.

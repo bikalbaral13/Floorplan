@@ -217,18 +217,28 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     // `on` (produced-room targeting) is only meaningful on commit. In preview the ops run on the
     // selected space and chain via the live-preview cascade instead (see the JSDoc above).
     if (mode === "commit") {
+      // Resolve which committed room an incoming geometry edge targets. BUA/Math produce no op, but BUA
+      // forwards its input Space unchanged — so see through it to the real producer (recursively). The
+      // Source maps to the selected space (no `on`).
+      const resolveOn = (srcId: string, srcHandle?: string | null): string | null => {
+        const u = byId.get(srcId);
+        if (!u) return null;
+        const tool = dataOf(u).tool;
+        if (tool === "source") return null;
+        if (tool === "bua" || tool === "math") {
+          const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
+          return up ? resolveOn(up.source, up.sourceHandle) : null;
+        }
+        const base = producesName(srcId);
+        // Edge from a Split's `out-i` handle → target that single piece's name.
+        return srcHandle && srcHandle.startsWith("out-") && outCountOf(u) > 1 ? `${base}__${srcHandle.slice(4)}` : base;
+      };
       const onNames: string[] = [];
       for (const e of edges) {
         if (e.target !== id) continue;
-        const u = byId.get(e.source);
-        if (!u || dataOf(u).tool === "source") continue; // source = selected space → no `on`
-        const base = producesName(e.source);
-        // Edge from a Split's `out-i` handle → target that single piece's name.
-        if (e.sourceHandle && e.sourceHandle.startsWith("out-") && outCountOf(u) > 1) {
-          onNames.push(`${base}__${e.sourceHandle.slice(4)}`);
-        } else {
-          onNames.push(base);
-        }
+        if (e.targetHandle && e.targetHandle.startsWith("valin-")) continue; // value-input edge, not a geometry parent
+        const name = resolveOn(e.source, e.sourceHandle);
+        if (name) onNames.push(name);
       }
       if (onNames.length === 1) op.on = onNames[0];
       else if (onNames.length > 1) op.on = onNames;

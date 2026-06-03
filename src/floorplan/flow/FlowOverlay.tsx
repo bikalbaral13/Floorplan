@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import {
   ReactFlow,
   Background,
@@ -17,9 +17,9 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles } from "lucide-react";
+import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import type { Point } from "../types";
+import type { Point, SerializedFlow } from "../types";
 import { FLOW_TOOLS, type FlowNodeData, type FlowToolType } from "./flowTypes";
 import { compileFlow } from "./compileFlow";
 import { evaluateFlow, type FlowPreviewItem } from "./eval/evaluateFlow";
@@ -78,25 +78,71 @@ const OpNode = ({ id, data }: NodeProps) => {
   const updateNodeInternals = useUpdateNodeInternals();
   const handleSig = `${outN}|${def.valueInputs?.length ?? 0}|${def.valueOutputs?.length ?? 0}`;
   useEffect(() => { updateNodeInternals(id); }, [id, handleSig, updateNodeInternals]);
+  // Align each side handle to the vertical centre of its row: stash a ref per row, then measure
+  // offsetTop after layout. Keys are `field:<key>` (parameter rows) and `vout:<key>` (computed value-
+  // output readout rows). `rowTops[key]` is the px offset (relative to the node); a row hidden by
+  // showIf isn't measured, so its handle falls back to the default position.
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [rowTops, setRowTops] = useState<Record<string, number>>({});
+  // Fold the node down to its title bar. Stored as a transient `_collapsed` param so the toolbar's
+  // "Fold" toggle can drive every node while the per-node chevron stays in sync. `_`-prefixed params
+  // are stripped on export and ignored by eval, so this never affects geometry. When collapsed, only
+  // the main in/out handles show (centred on the title bar).
+  const collapsed = Boolean(d.params._collapsed);
+  useLayoutEffect(() => {
+    const next: Record<string, number> = {};
+    for (const [k, el] of Object.entries(rowRefs.current)) {
+      if (el) next[k] = el.offsetTop + el.offsetHeight / 2;
+    }
+    setRowTops((prev) => {
+      const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+      for (const k of keys) if (prev[k] !== next[k]) return next;
+      return prev;
+    });
+  });
+  // Re-route edges once the handles settle (measured rows, or collapse toggling the handle set).
+  useEffect(() => { updateNodeInternals(id); }, [id, rowTops, collapsed, updateNodeInternals]);
+  // Fields flagged `output` expose their own value as a `val-<key>` endpoint on the right (pass-through).
+  const outputFields = def.fields.filter((f) => f.output && (!f.showIf || f.showIf(d.params)));
   return (
     <div className={`relative rounded-md border border-slate-300 bg-white shadow-md ${d.tool === "render" ? "min-w-[230px]" : "min-w-[180px]"}`}>
-      {def.hasInput && <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !bg-slate-400" />}
-      {/* Scalar value INPUT endpoints (amber, left) — id `valin-<key>`. A wired value overrides the param. */}
-      {def.valueInputs?.map((vi, i) => {
-        const n = def.valueInputs!.length;
-        const top = n === 1 ? 80 : 64 + (i / (n - 1)) * 28;
-        return (
-          <span key={vi.key}>
-            <Handle id={`valin-${vi.key}`} type="target" position={Position.Left} style={{ top: `${top}%` }} className="!h-2.5 !w-2.5 !bg-amber-500" />
-            <span style={{ position: "absolute", left: 11, top: `${top}%`, transform: "translateY(-50%)" }} className="pointer-events-none whitespace-nowrap font-mono text-[8px] text-amber-500">
-              {vi.label}
-            </span>
-          </span>
-        );
-      })}
-      <div className="rounded-t-md px-2 py-1 text-[11px] font-semibold text-white" style={{ background: def.color }}>
-        {def.label}
+      {/* Main geometry input (Space / polygon): top-left below the title; centred when collapsed. */}
+      {def.hasInput && <Handle type="target" position={Position.Left} style={{ top: collapsed ? "50%" : 30 }} className="!h-2.5 !w-2.5 !bg-slate-400" />}
+      {/* Scalar value INPUT endpoints (amber, left) — id `valin-<key>`. A wired value overrides the param.
+          Each sits at its parameter row (measured into `valinTops`); the row's own label identifies it.
+          Hidden while collapsed (no rows to anchor to). */}
+      {!collapsed && def.valueInputs
+        ?.filter((vi) => {
+          // Show a value handle only when its parameter row is visible (same showIf as the field), so
+          // e.g. Inset's Front/Remaining/Edge-index endpoints appear only in Front & Remaining mode.
+          const f = def.fields.find((fld) => fld.key === vi.key);
+          return !f?.showIf || f.showIf(d.params);
+        })
+        .map((vi) => {
+          const top = rowTops[`field:${vi.key}`];
+          return (
+            <Handle
+              key={vi.key}
+              id={`valin-${vi.key}`}
+              type="target"
+              position={Position.Left}
+              style={top != null ? { top } : undefined}
+              className="!h-2.5 !w-2.5 !bg-amber-500"
+            />
+          );
+        })}
+      <div className={`flex items-center justify-between gap-1 px-2 py-1 text-[11px] font-semibold text-white ${collapsed ? "rounded-md" : "rounded-t-md"}`} style={{ background: def.color }}>
+        <span className="truncate">{def.label}</span>
+        <button
+          type="button"
+          onClick={() => d.onParamChange?.(id, "_collapsed", !collapsed)}
+          title={collapsed ? "Expand" : "Collapse"}
+          className="nodrag flex h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-white/20"
+        >
+          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
       </div>
+      {!collapsed && (
       <div className="space-y-1.5 px-2 py-1.5">
         {def.fields.length === 0 && (
           <div className="text-[9px] italic text-slate-400">{def.hint}</div>
@@ -109,7 +155,7 @@ const OpNode = ({ id, data }: NodeProps) => {
             if (f.kind === "range") {
               const num = typeof val === "number" ? val : 0;
               return (
-                <div key={f.key} className="space-y-0.5">
+                <div key={f.key} ref={(el) => { rowRefs.current[`field:${f.key}`] = el; }} className="space-y-0.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-slate-500">{f.label}</span>
                     <span className="font-mono text-[10px] text-slate-700">
@@ -132,7 +178,7 @@ const OpNode = ({ id, data }: NodeProps) => {
             if (f.kind === "text" || f.kind === "textarea") {
               const str = typeof val === "string" ? val : "";
               return (
-                <div key={f.key} className="space-y-0.5">
+                <div key={f.key} ref={(el) => { rowRefs.current[`field:${f.key}`] = el; }} className="space-y-0.5">
                   <span className="text-[10px] text-slate-500">{f.label}</span>
                   {f.kind === "textarea" ? (
                     <textarea
@@ -155,7 +201,7 @@ const OpNode = ({ id, data }: NodeProps) => {
               );
             }
             return (
-              <div key={f.key} className="flex items-center justify-between gap-2">
+              <div key={f.key} ref={(el) => { rowRefs.current[`field:${f.key}`] = el; }} className="flex items-center justify-between gap-2">
                 <span className="text-[10px] text-slate-500">{f.label}</span>
                 {f.kind === "number" && (
                   <input
@@ -237,7 +283,7 @@ const OpNode = ({ id, data }: NodeProps) => {
             {def.valueOutputs.map((vo) => {
               const v = (d.params._values as Record<string, number> | undefined)?.[vo.key];
               return (
-                <div key={vo.key} className="flex items-center justify-between rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
+                <div key={vo.key} ref={(el) => { rowRefs.current[`vout:${vo.key}`] = el; }} className="flex items-center justify-between rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
                   <span>{vo.label}</span>
                   <span className="font-mono">{v != null ? `${v.toFixed(2)}${vo.unit ? ` ${vo.unit}` : ""}` : "—"}</span>
                 </div>
@@ -246,8 +292,12 @@ const OpNode = ({ id, data }: NodeProps) => {
           </div>
         ) : null}
       </div>
-      {outN <= 1
-        ? def.hasOutput && <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !bg-slate-400" />
+      )}
+      {/* Main geometry output: top-right below the title; centred (single handle) when collapsed. */}
+      {collapsed
+        ? def.hasOutput && <Handle type="source" position={Position.Right} style={{ top: "50%" }} className="!h-2.5 !w-2.5 !bg-slate-400" />
+        : outN <= 1
+        ? def.hasOutput && <Handle type="source" position={Position.Right} style={{ top: 30 }} className="!h-2.5 !w-2.5 !bg-slate-400" />
         : Array.from({ length: outN }).map((_, i) => {
             const top = ((i + 1) / (outN + 1)) * 100;
             const label = def.outputLabels?.[i] ?? `P${i + 1}`;
@@ -270,17 +320,33 @@ const OpNode = ({ id, data }: NodeProps) => {
             );
           })}
       {/* Scalar value OUTPUT endpoints (amber, right) — id `val-<key>`. Direct children of the node so
-          React Flow registers them as connectable, like the geometry output handles. */}
-      {def.valueOutputs?.map((vo, i) => {
+          React Flow registers them as connectable, like the geometry output handles. Computed outputs
+          align to their readout rows; falls back to a stacked % when not yet measured. Hidden while collapsed. */}
+      {!collapsed && def.valueOutputs?.map((vo, i) => {
         const n = def.valueOutputs!.length;
-        const top = n === 1 ? 84 : 72 + (i / (n - 1)) * 22;
+        const measured = rowTops[`vout:${vo.key}`];
+        const style = measured != null ? { top: measured } : { top: `${n === 1 ? 84 : 72 + (i / (n - 1)) * 22}%` };
         return (
           <Handle
             key={vo.key}
             id={`val-${vo.key}`}
             type="source"
             position={Position.Right}
-            style={{ top: `${top}%` }}
+            style={style}
+            className="!h-2.5 !w-2.5 !bg-amber-500"
+          />
+        );
+      })}
+      {/* Pass-through field outputs — id `val-<key>` aligned to each flagged field's row (right edge). */}
+      {!collapsed && outputFields.map((f) => {
+        const top = rowTops[`field:${f.key}`];
+        return (
+          <Handle
+            key={`out-field-${f.key}`}
+            id={`val-${f.key}`}
+            type="source"
+            position={Position.Right}
+            style={top != null ? { top } : undefined}
             className="!h-2.5 !w-2.5 !bg-amber-500"
           />
         );
@@ -306,6 +372,13 @@ export interface FlowOverlayProps {
   selectedRoomLabel: string | null;
   /** Capture the 3D view's isometric snapshot as a PNG data URL (for the Render node). */
   onCaptureIsometric?: () => Promise<string | null>;
+  /** Stored Flow graph to seed the editor with on open (null/empty → fresh Source-only graph). */
+  initialGraph?: SerializedFlow | null;
+  /** Emitted whenever the graph changes, so the host can persist it onto the selected Space. */
+  onGraphChange?: (graph: SerializedFlow) => void;
+  /** Host-held bridge to set a node param from outside (e.g. the Properties tab) while the overlay is
+   *  open, so both stay in sync. Assigned while mounted, cleared on unmount. */
+  paramApiRef?: MutableRefObject<((nodeId: string, key: string, value: unknown) => void) | null>;
 }
 
 interface NodeCallbacks {
@@ -334,6 +407,16 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [initialised, setInitialised] = useState(false);
+  // Toolbar "Fold" toggle: when on, collapse every node to its title bar; when off, expand all. Drives
+  // the transient `_collapsed` param the nodes read, so it stays in sync with each node's own chevron.
+  const [foldAll, setFoldAll] = useState(false);
+  const toggleFoldAll = useCallback(() => {
+    setFoldAll((prev) => {
+      const next = !prev;
+      setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, params: { ...(n.data as FlowNodeData).params, _collapsed: next } } })));
+      return next;
+    });
+  }, [setNodes]);
 
   // Stable param-edit callback injected into every node's data.
   const onParamChange = useCallback((nodeId: string, key: string, value: unknown) => {
@@ -391,14 +474,6 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
 
   const nodeCb = useMemo<NodeCallbacks>(() => ({ onParamChange, onRunRender }), [onParamChange, onRunRender]);
 
-  // Seed the graph with a Source node the first time the overlay opens.
-  useEffect(() => {
-    if (props.open && !initialised) {
-      setNodes([makeNode("source", { x: 80, y: 200 }, nodeCb)]);
-      setInitialised(true);
-    }
-  }, [props.open, initialised, setNodes, nodeCb]);
-
   const addToolNode = useCallback((tool: FlowToolType) => {
     setNodes((ns) => {
       const x = 320 + (ns.length % 3) * 240;
@@ -415,17 +490,21 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   //    export and re-injected/recomputed on import. ──
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Serialize the live graph to the export/import shape (transient `_`-prefixed params stripped). Shared
+  // by file export, the per-Space persistence callback, and (indirectly) commit.
+  const buildGraph = useCallback((): SerializedFlow => ({
+    version: 1,
+    nodes: nodes.map((n) => {
+      const d = n.data as FlowNodeData;
+      const params: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(d.params)) if (!k.startsWith("_")) params[k] = v;
+      return { id: n.id, position: n.position, data: { tool: d.tool, params } };
+    }),
+    edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null })),
+  }), [nodes, edges]);
+
   const exportFlow = useCallback(() => {
-    const payload = {
-      version: 1,
-      nodes: nodes.map((n) => {
-        const d = n.data as FlowNodeData;
-        const params: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(d.params)) if (!k.startsWith("_")) params[k] = v;
-        return { id: n.id, position: n.position, data: { tool: d.tool, params } };
-      }),
-      edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null })),
-    };
+    const payload = buildGraph();
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -433,7 +512,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     a.download = "flow.json";
     a.click();
     URL.revokeObjectURL(url);
-  }, [nodes, edges]);
+  }, [buildGraph]);
 
   // Build live nodes/edges from a parsed flow object and load them into the graph. Throws on a bad
   // shape so callers can surface an error. Shared by file import and AI "Generate JSON".
@@ -476,6 +555,34 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     setInitialised(true);
     return importedNodes.length;
   }, [nodeCb, setNodes, setEdges]);
+
+  // Seed the graph when the overlay opens: from the Space's stored flow if present, else a lone Source.
+  useEffect(() => {
+    if (!props.open || initialised) return;
+    const g = props.initialGraph;
+    if (g && Array.isArray(g.nodes) && g.nodes.length) {
+      try { importFlowData(g); return; } catch { /* fall through to a fresh seed */ }
+    }
+    setNodes([makeNode("source", { x: 80, y: 200 }, nodeCb)]);
+    setInitialised(true);
+  }, [props.open, props.initialGraph, initialised, importFlowData, setNodes, nodeCb]);
+
+  // Emit graph changes so the host can persist them onto the selected Space.
+  const onGraphChangeRef = useRef(props.onGraphChange);
+  onGraphChangeRef.current = props.onGraphChange;
+  useEffect(() => {
+    if (!initialised) return;
+    onGraphChangeRef.current?.(buildGraph());
+  }, [buildGraph, initialised]);
+
+  // Expose a param-setter so the Properties tab can edit a node param while the overlay is open; the
+  // edit flows through the overlay's own state (single source of truth) and mirrors back out.
+  const paramApiRef = props.paramApiRef;
+  useEffect(() => {
+    if (!paramApiRef) return;
+    paramApiRef.current = (nodeId, key, value) => onParamChange(nodeId, key, value);
+    return () => { paramApiRef.current = null; };
+  }, [paramApiRef, onParamChange]);
 
   const importFlow = useCallback((file: File) => {
     const reader = new FileReader();
@@ -644,7 +751,11 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
           if (vin) {
             let diff = false;
             const merged: Record<string, unknown> = { ...data.params };
-            for (const [k, val] of Object.entries(vin)) { if (merged[k] !== val) { merged[k] = val; diff = true; } }
+            for (const [k, val] of Object.entries(vin)) {
+              // Split's `ratios` is a text list, so store the driven number as its string form.
+              const v: unknown = data.tool === "split" && k === "ratios" ? String(val) : val;
+              if (merged[k] !== v) { merged[k] = v; diff = true; }
+            }
             if (diff) { changed = true; return { ...n, data: { ...n.data, params: merged } }; }
           }
         }
@@ -694,6 +805,15 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importFlow(f); e.target.value = ""; }}
           />
+          <Button
+            variant={foldAll ? "default" : "outline"}
+            size="sm"
+            className="h-7 gap-1 px-2 text-[11px]"
+            onClick={toggleFoldAll}
+            title={foldAll ? "Unfold all nodes" : "Fold all nodes"}
+          >
+            {foldAll ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />} Fold
+          </Button>
           <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]" onClick={() => fileInputRef.current?.click()} title="Import a flow (.json)">
             <Upload className="h-3.5 w-3.5" /> Import
           </Button>

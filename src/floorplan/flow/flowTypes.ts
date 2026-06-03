@@ -42,6 +42,9 @@ export interface ParamField {
   placeholder?: string;
   /** Only render this field when the predicate (over the node's params) holds. */
   showIf?: (params: Record<string, unknown>) => boolean;
+  /** Expose this param's own value as a scalar `val-<key>` output endpoint aligned to its row
+   *  (pass-through). Checkbox → 1 | 0; text → its leading parsed number. */
+  output?: boolean;
 }
 
 export interface FlowToolDef {
@@ -91,6 +94,14 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     hasOutput: true,
     // Second output endpoint: the inset polygon's area (m²) as a scalar value.
     valueOutputs: [{ key: "area", label: "Area", unit: "m²" }],
+    // Scalar inputs (numbers): a wired value overrides the matching offset param. Each aligns to its
+    // own field row; hidden rows (the mode the field doesn't apply to) fall back to a default position.
+    valueInputs: [
+      { key: "uniformSetback", label: "Offset" },
+      { key: "front", label: "Front offset" },
+      { key: "remaining", label: "Remaining offset" },
+      { key: "frontEdgeIndex", label: "Edge index" },
+    ],
     // Mirrors the Inset Polygon block's parameters (Equal / Front & Remaining / Per-edge). Deduct
     // Area is intentionally omitted.
     defaultParams: {
@@ -170,6 +181,13 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     hasOutput: true,
     // Second output endpoint: total packed rectangle area (m²) — sum of all placed rects / union.
     valueOutputs: [{ key: "area", label: "Area", unit: "m²" }],
+    // Scalar inputs: a wired value overrides the matching param. axisAngle / count take the number
+    // directly; optimiseAxisTilt is a boolean, driven as 0 (off) | non-0 (on).
+    valueInputs: [
+      { key: "axisAngle", label: "Axis tilt" },
+      { key: "count", label: "Rectangles (n)" },
+      { key: "optimiseAxisTilt", label: "Optimise axis tilt" },
+    ],
     // Mirrors the Optimise Rectangle block (recipe-supported params). Per-edge reference and
     // the layout-variations modal aren't exposed on the node.
     defaultParams: {
@@ -242,6 +260,12 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       }
       return Math.max(1, Math.min(12, Math.round(Number(p.count) || 2)));
     },
+    // Scalar inputs: `angle` takes the wired number directly; `ratios` is a text list, so a wired
+    // number is coerced to its string form (and not echoed back to the text box).
+    valueInputs: [
+      { key: "ratios", label: "Ratios" },
+      { key: "angle", label: "Angle" },
+    ],
     // Mirrors the Splitting Actions block: Equal / Target area / Ratio sizing. (Grid + per-piece
     // Length arrays aren't exposed.) Principal Axes slices across the long (major) axis.
     defaultParams: {
@@ -596,9 +620,10 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     label: "BUA Calculator",
     color: "#0d9488",
     // Calculator: takes a space as input to read its plot area (falls back to the Plot area param when
-    // unconnected). No geometry output — just scalar BUA values out.
+    // unconnected). Emits scalar BUA values, and passes its input Space straight through on the main
+    // geometry output (no-op) so the same space can continue down the pipeline.
     hasInput: true,
-    hasOutput: false,
+    hasOutput: true,
     valueOutputs: [
       { key: "fsiBua", label: "FSI BUA", unit: "m²" },
       { key: "nonFsiBua", label: "Non-FSI BUA", unit: "m²" },
@@ -619,6 +644,16 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       otherNonFsiSqm: 6000,
       wingsPerFloor: 5,
       podiumOffsetM: 3.5,
+      // Pass-through layout knobs (each emitted as a value output for wiring into Inset / Split /
+      // Optimise Rectangle).
+      front: 0,
+      remaining: 0,
+      edgeIndex: 0,
+      ratio: "50, 50",
+      splitAngle: 0,
+      axisTilt: 0,
+      rectangles: 1,
+      optimiseAxisTilt: false,
     },
     fields: [
       { key: "amenityOsRate", label: "Amenity OS Rate", kind: "number", min: 0, max: 1, step: 0.01 },
@@ -633,7 +668,17 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "areaPerCarParkSqm", label: "Area/Car Park (m²)", kind: "number", min: 0, step: 1 },
       { key: "otherNonFsiSqm", label: "Other Non-FSI (m²)", kind: "number", min: 0, step: 100 },
       { key: "wingsPerFloor", label: "Wings / Cores", kind: "number", min: 1, step: 1 },
-      { key: "podiumOffsetM", label: "Podium Offset (m)", kind: "number", min: 0, step: 0.5 },
+      { key: "podiumOffsetM", label: "Podium Offset (m)", kind: "number", min: 0, step: 0.5, output: true },
+      // Pass-through layout knobs — each has its own value-output endpoint (right) to wire downstream.
+      { key: "front", label: "Front offset", kind: "range", min: 0, max: 6, step: 0.1, unit: "m", output: true },
+      { key: "remaining", label: "Remaining offset", kind: "range", min: 0, max: 6, step: 0.1, unit: "m", output: true },
+      { key: "edgeIndex", label: "Edge index", kind: "range", min: 0, max: 15, step: 1, output: true },
+      // Ratio: a list like "10, 90" passed through verbatim — wire into Split's Ratio input for a 10:90 cut.
+      { key: "ratio", label: "Ratio", kind: "text", placeholder: "10, 90", output: true },
+      { key: "splitAngle", label: "Split Angle", kind: "range", min: 0, max: 360, step: 1, unit: "°", output: true },
+      { key: "axisTilt", label: "Axis tilt", kind: "range", min: 0, max: 360, step: 1, unit: "°", output: true },
+      { key: "rectangles", label: "Rectangles", kind: "range", min: 1, max: 5, step: 1, output: true },
+      { key: "optimiseAxisTilt", label: "Optimise axis tilt", kind: "checkbox", output: true },
     ],
     hint: "Connect a space for plot area → FSI BUA (max permissible) + Non-FSI BUA.",
   },

@@ -67,10 +67,11 @@ export interface FlowPreviewItem {
    *  (non-Euclidean metrics render edges, not cells), so the host's handle-count bake stays correct. */
   cellCount?: number;
   /** Scalar value outputs (e.g. Inset's `area` in m²), one per the tool's `valueOutputs`. Surfaced
-   *  for the node's amber value endpoints + readout badge. */
-  values?: Record<string, number>;
+   *  for the node's amber value endpoints + readout badge. Mostly numbers; a few are string lists
+   *  (e.g. BUA's pass-through Ratio "10, 90"). */
+  values?: Record<string, number | string>;
   /** Resolved value INPUT overrides (param key → wired value), for the host to bake so commit matches. */
-  valueInputs?: Record<string, number>;
+  valueInputs?: Record<string, number | string>;
   /** Optimise Rectangle only: the auto-chosen axis tilt (°) when "Optimise axis tilt" is on — baked
    *  into the axisAngle param so the slider + commit match the previewed angle. */
   optimisedTilt?: number;
@@ -166,14 +167,16 @@ export function evaluateFlow(
     return null;
   };
 
-  // Scalar value outputs produced per node (populated as nodes are evaluated, in topo order).
-  const nodeValues = new Map<string, Record<string, number>>();
+  // Scalar value outputs produced per node (populated as nodes are evaluated, in topo order). Mostly
+  // numbers; a few are string lists (BUA's pass-through Ratio).
+  const nodeValues = new Map<string, Record<string, number | string>>();
   // Resolve a node's value INPUTS: each `valin-<key>` edge pulls the source's `val-<srcKey>` value and
-  // overrides the param `key`. Returns { paramKey: value } for the wired inputs.
-  const resolveValueInputs = (nodeId: string): Record<string, number> => {
+  // overrides the param `key`. Returns { paramKey: value } for the wired inputs (number, or a non-empty
+  // string for list params like Split's ratios).
+  const resolveValueInputs = (nodeId: string): Record<string, number | string> => {
     const def = FLOW_TOOLS[dataOf(byId.get(nodeId)!).tool];
     if (!def.valueInputs?.length) return {};
-    const out: Record<string, number> = {};
+    const out: Record<string, number | string> = {};
     for (const vi of def.valueInputs) {
       const edge = edges.find((e) => e.target === nodeId && e.targetHandle === `valin-${vi.key}`);
       if (!edge) continue;
@@ -182,6 +185,7 @@ export function evaluateFlow(
       const srcKey = edge.sourceHandle && edge.sourceHandle.startsWith("val-") ? edge.sourceHandle.slice(4) : undefined;
       const v = srcKey ? srcVals[srcKey] : Object.values(srcVals)[0];
       if (typeof v === "number" && isFinite(v)) out[vi.key] = v;
+      else if (typeof v === "string" && v.length) out[vi.key] = v;
     }
     return out;
   };
@@ -197,13 +201,23 @@ export function evaluateFlow(
     if (data.tool === "bua" || data.tool === "math") {
       const vin = resolveValueInputs(id);
       const params = { ...data.params, ...vin };
-      if (data.tool === "bua") {
-        const buaInput = inputOf(id);
-        if (buaInput && buaInput.length >= 3 && ppm > 0) params.plotArea = polygonArea(buaInput) / (ppm * ppm);
+      const buaInput = data.tool === "bua" ? inputOf(id) : null;
+      if (buaInput && buaInput.length >= 3 && ppm > 0) params.plotArea = polygonArea(buaInput) / (ppm * ppm);
+      const computed = data.tool === "bua" ? computeBua(params) : computeMath(params);
+      // Pass-through field outputs (fields flagged `output`): emit the control's own value as `val-<key>`.
+      // Checkbox → 1|0; text → the verbatim string (e.g. Ratio "10, 90"); range/number → the number.
+      const passthrough: Record<string, number | string> = {};
+      for (const f of FLOW_TOOLS[data.tool].fields) {
+        if (!f.output) continue;
+        const raw = params[f.key];
+        passthrough[f.key] = f.kind === "checkbox" ? (raw ? 1 : 0)
+          : f.kind === "text" ? String(raw ?? "")
+          : (typeof raw === "number" ? raw : parseFloat(String(raw)) || 0);
       }
-      const vals = data.tool === "bua" ? computeBua(params) : computeMath(params);
+      const vals = { ...computed, ...passthrough };
       nodeValues.set(id, vals);
-      outputs.set(id, []);
+      // BUA forwards its input Space unchanged on the main geometry output (Math has no geometry out).
+      outputs.set(id, buaInput && buaInput.length >= 3 ? [buaInput] : []);
       items.push({
         nodeId: id,
         tool: data.tool,
@@ -218,13 +232,32 @@ export function evaluateFlow(
     if (!reachable.has(id)) continue;
     const input = inputOf(id);
     if (!input || input.length < 3) { outputs.set(id, []); continue; }
-    // Optimise Rectangle "optimise axis tilt": auto-pick the Custom tilt that maximises packed area,
-    // use it for the geometry, and surface it so the host bakes it into axisAngle (slider + commit).
+    // Apply wired value inputs (amber endpoints) before geometry runs: each `valin-<key>` number
+    // overrides the matching param. `surfacedVin` is what the host bakes back onto the controls — only
+    // numeric/slider-backed keys (string-coerced ones like Split's ratios are applied but not echoed).
     let evalParams = data.params;
     let optimisedTilt: number | undefined;
-    if (data.tool === "optimise-rect" && data.params.reference === "custom" && Boolean(data.params.optimiseAxisTilt)) {
-      optimisedTilt = computeOptimalOptimiseTilt(input, data.params, ppm);
-      evalParams = { ...data.params, axisAngle: optimisedTilt };
+    let surfacedVin: Record<string, number | string> = {};
+    if (FLOW_TOOLS[data.tool].valueInputs?.length) {
+      const vin = resolveValueInputs(id);
+      if (Object.keys(vin).length) {
+        const merged: Record<string, unknown> = { ...data.params };
+        for (const [k, v] of Object.entries(vin)) {
+          if (data.tool === "optimise-rect" && k === "optimiseAxisTilt") merged[k] = Number(v) !== 0;
+          else if (data.tool === "optimise-rect" && k === "count") merged[k] = Math.max(1, Math.round(Number(v)));
+          else if (data.tool === "split" && k === "ratios") merged[k] = String(v);
+          else merged[k] = v; // numeric params (offsets, angle, axis tilt, edge index, …)
+        }
+        evalParams = merged;
+        surfacedVin = { ...vin }; // host bakes these back; Split's `ratios` is stringified there
+      }
+    }
+    // Optimise Rectangle "optimise axis tilt": auto-pick the Custom tilt that maximises packed area and
+    // use it for the geometry; it drives axisAngle, so drop a wired axisAngle from the bake-back.
+    if (data.tool === "optimise-rect" && evalParams.reference === "custom" && Boolean(evalParams.optimiseAxisTilt)) {
+      optimisedTilt = computeOptimalOptimiseTilt(input, evalParams, ppm);
+      evalParams = { ...evalParams, axisAngle: optimisedTilt };
+      delete surfacedVin.axisAngle;
     }
     const polys = evalNode(data.tool, input, evalParams, ppm);
     outputs.set(id, polys);
@@ -295,7 +328,7 @@ export function evaluateFlow(
       const isFinal = succs.get(id)!.length === 0;
       const values = computeNodeValues(data.tool, polys, ppm);
       if (values) nodeValues.set(id, values);
-      items.push({ nodeId: id, tool: data.tool, polygons: polys, color: FLOW_TOOLS[data.tool].color, isFinal, values, optimisedTilt });
+      items.push({ nodeId: id, tool: data.tool, polygons: polys, color: FLOW_TOOLS[data.tool].color, isFinal, values, optimisedTilt, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
     }
   }
   return items;
