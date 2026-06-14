@@ -1,0 +1,18 @@
+<svg width="64" height="48" viewBox="0 0 64 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Isometric wireframe shelving mark for BUILDERPLUSS -->
+  <g stroke="#1f2937" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none">
+    <!-- back-left cube -->
+    <path d="M6 18 L20 11 L34 18 L20 25 Z" />
+    <path d="M6 18 L6 30 L20 37 L20 25" />
+    <path d="M34 18 L34 30 L20 37" />
+    <!-- right cube -->
+    <path d="M34 18 L48 11 L62 18 L48 25 Z" />
+    <path d="M48 25 L48 37 L62 30 L62 18" />
+    <path d="M34 18 L34 30 L48 37" />
+    <!-- top stub cube -->
+    <path d="M20 11 L34 4 L48 11" />
+    <path d="M34 4 L34 18" />
+  </g>
+  <!-- green accent vertical -->
+  <path d="M34 4 L34 30" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" fill="none" />
+</svg>

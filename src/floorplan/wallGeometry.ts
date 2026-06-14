@@ -38,7 +38,13 @@ export const splitWallsAtIntersections = (walls: Wall[]): Wall[] => {
   const connectionWalls = walls.filter((w) => w.segmentType === "connection");
   const splittable = walls.filter((w) => w.segmentType !== "connection");
   const curvedWalls = splittable.filter((w) => Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4);
-  const straightWalls = splittable.filter((w) => !(Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4));
+  const nonCurved = splittable.filter((w) => !(Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4));
+  // Zero-length walls are intentional standalone "node" markers (placed via Add Node). They never
+  // intersect anything and must survive splitting — otherwise dragging/editing silently deletes the
+  // node. Keep them aside and pass them through untouched.
+  const isZeroLength = (w: Wall) => Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) < 0.1;
+  const nodeWalls = nonCurved.filter(isZeroLength);
+  const straightWalls = nonCurved.filter((w) => !isZeroLength(w));
 
   if (straightWalls.length === 0) {
     return walls;
@@ -127,14 +133,15 @@ export const splitWallsAtIntersections = (walls: Wall[]): Wall[] => {
     }
   }
 
-  return [...out, ...curvedWalls, ...connectionWalls];
+  return [...out, ...curvedWalls, ...connectionWalls, ...nodeWalls];
 };
 
 export const wallWithDefaults = (
   wall: Wall
 ): Wall & { mode: WallMode; method: WallMethod; thickness: number } => ({
   ...wall,
-  thickness: wall.thickness ?? 10,
+  // Default thickness 0.1 m (in px at the default 50 px/m scale).
+  thickness: wall.thickness ?? 5,
   mode: wall.mode ?? "fill",
   method: wall.method ?? "center",
 });

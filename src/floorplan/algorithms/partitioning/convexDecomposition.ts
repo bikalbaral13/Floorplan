@@ -1,7 +1,7 @@
 import type { Point } from "../../types";
 import { decomposeSteinerEdgeExtension } from "./steinerConvexDecomposition";
 
-export type ConvexDecompositionType = "hertel-mehlhorn" | "bayazit" | "acd" | "steiner";
+export type ConvexDecompositionType = "hertel-mehlhorn" | "bayazit" | "acd" | "steiner" | "neck-cut";
 
 const normalizeCounterClockwise = (points: Point[]): Point[] => {
   let signedArea = 0;
@@ -198,16 +198,98 @@ export const decomposeBayazit = (polygon: Point[], toleranceDeg: number, depth =
   ];
 };
 
+const polygonAreaAbs = (poly: Point[]): number => {
+  let a = 0;
+  for (let i = 0; i < poly.length; i += 1) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return Math.abs(a) / 2;
+};
+
+/** A CCW polygon's vertex is reflex (concave notch) when the turn there is a right turn (cross < 0). */
+const isReflexCCW = (poly: Point[], idx: number): boolean => {
+  const n = poly.length;
+  return crossAt(poly[(idx - 1 + n) % n], poly[idx], poly[(idx + 1) % n]) < 0;
+};
+
+/** Split a simple polygon along the diagonal between vertices i and j (i < j) into two sub-polygons,
+ *  each sharing the cut edge. */
+const splitAtDiagonal = (poly: Point[], i: number, j: number): [Point[], Point[]] => {
+  const a = poly.slice(i, j + 1);
+  const b = [...poly.slice(j), ...poly.slice(0, i + 1)];
+  return [a, b];
+};
+
+/** "Neck-cut" / part decomposition: instead of an exact convex partition (many slivers), cut the shape
+ *  only at its narrow waists — vertex-to-vertex diagonals whose straight length is far shorter than the
+ *  boundary arc they bridge (a pinch), with at least one reflex endpoint. Recurses, yielding a FEW large
+ *  (possibly non-convex) blocks. `neckRatio` = the minimum boundary-arc / chord-length to treat as a
+ *  neck (higher → fewer, only the deepest pinches). Pieces below ~3% of the total area aren't created. */
+const decomposeNeckCut = (polygon: Point[], neckRatio: number): Point[][] => {
+  const totalArea = polygonAreaAbs(polygon);
+  const minPieceArea = totalArea * 0.03;
+  const MAX_PIECES = 24;
+  const ratio = Math.max(1.2, neckRatio);
+  const out: Point[][] = [];
+
+  const findBestNeck = (poly: Point[]): { i: number; j: number } | null => {
+    const n = poly.length;
+    if (n < 4) return null;
+    const edge: number[] = [];
+    let perim = 0;
+    for (let k = 0; k < n; k += 1) {
+      const L = Math.hypot(poly[(k + 1) % n].x - poly[k].x, poly[(k + 1) % n].y - poly[k].y);
+      edge.push(L); perim += L;
+    }
+    const arcForward = (i: number, j: number): number => {
+      let s = 0, k = i;
+      while (k !== j) { s += edge[k]; k = (k + 1) % n; }
+      return s;
+    };
+    let best: { i: number; j: number } | null = null;
+    let bestScore = ratio; // only accept genuine necks (score ≥ ratio)
+    for (let i = 0; i < n; i += 1) {
+      for (let j = i + 2; j < n; j += 1) {
+        if (i === 0 && j === n - 1) continue; // adjacent across the wrap
+        if (!isReflexCCW(poly, i) && !isReflexCCW(poly, j)) continue; // necks sit at notches
+        if (!isDiagonalInterior(poly, i, j)) continue;
+        const eucl = Math.hypot(poly[i].x - poly[j].x, poly[i].y - poly[j].y) || 1e-9;
+        const arcF = arcForward(i, j);
+        const arcMin = Math.min(arcF, perim - arcF);
+        const score = arcMin / eucl;
+        if (score < bestScore) continue;
+        const [a, b] = splitAtDiagonal(poly, i, j);
+        if (polygonAreaAbs(a) < minPieceArea || polygonAreaAbs(b) < minPieceArea) continue;
+        bestScore = score; best = { i, j };
+      }
+    }
+    return best;
+  };
+
+  const rec = (poly: Point[]): void => {
+    if (out.length >= MAX_PIECES) { out.push(poly); return; }
+    const best = findBestNeck(poly);
+    if (!best) { out.push(poly); return; }
+    const [a, b] = splitAtDiagonal(poly, best.i, best.j);
+    rec(a); rec(b);
+  };
+  rec(polygon);
+  return out;
+};
+
 export const computeConvexDecomposition = (
   points: Point[],
   type: ConvexDecompositionType,
   tolerance: number,
+  neckRatio = 3,
 ): Point[][] => {
   if (points.length < 3) return [];
 
   const polygon = normalizeCounterClockwise(points);
   if (type === "hertel-mehlhorn") return decomposeHertelMehlhorn(polygon);
   if (type === "steiner") return decomposeSteinerEdgeExtension(polygon);
+  if (type === "neck-cut") return decomposeNeckCut(polygon, neckRatio);
 
   const toleranceDeg = type === "acd" ? Math.max(0, tolerance) : 0;
   return decomposeBayazit(polygon, toleranceDeg);

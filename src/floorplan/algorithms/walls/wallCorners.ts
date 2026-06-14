@@ -4,7 +4,8 @@ export const wallWithDefaults = (
   wall: Wall
 ): Wall & { mode: WallMode; method: WallMethod; thickness: number } => ({
   ...wall,
-  thickness: wall.thickness ?? 10,
+  // Default thickness 0.1 m (in px at the default 50 px/m scale).
+  thickness: wall.thickness ?? 5,
   mode: wall.mode ?? "fill",
   method: wall.method ?? "center",
 });

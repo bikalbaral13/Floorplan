@@ -129,7 +129,9 @@ export const computeSplitPolygons = (
     fracs = arr.map((v) => v / sum);
   } else if (mode === "target") {
     const polyAreaM2 = polygonArea(pts) / (ppm * ppm);
-    const firstFrac = polyAreaM2 > 0 ? Math.max(0.05, Math.min(0.95, params.target / polyAreaM2)) : 1 / count;
+    // Honour the requested first-piece area as closely as possible — only guard against a degenerate
+    // 0 / full-polygon cut (a 5% floor here used to silently inflate small targets, e.g. 131 m² → 5%).
+    const firstFrac = polyAreaM2 > 0 ? Math.max(1e-4, Math.min(0.9999, params.target / polyAreaM2)) : 1 / count;
     const remain = (1 - firstFrac) / Math.max(1, count - 1);
     fracs = [firstFrac, ...Array.from({ length: count - 1 }, () => remain)];
   } else {

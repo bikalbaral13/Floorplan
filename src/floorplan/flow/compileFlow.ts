@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import { FLOW_TOOLS, parseSplitRatios, parseNumberList, type FlowNodeData } from "./flowTypes";
+import { FLOW_TOOLS, parseSplitRatios, parseNumberList, placeObjectEntries, randomOptimiseRectParams, type FlowNodeData } from "./flowTypes";
 
 export interface CompileResult {
   /** Pretty-printed recipe JSON: { operations: [...] }. Empty object on error. */
@@ -50,6 +50,9 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   for (const n of nodes) { preds.set(n.id, []); succs.set(n.id, []); }
   for (const e of edges) {
     if (!byId.has(e.source) || !byId.has(e.target)) continue;
+    // A Parameter Manipulator's signal input is a FEEDBACK edge (closes a loop on purpose) — exclude it
+    // from the dependency graph so it isn't flagged as an illegal cycle.
+    if (dataOf(byId.get(e.target)!).tool === "param-manip" && e.targetHandle === "valin-signal") continue;
     preds.get(e.target)!.push(e.source);
     succs.get(e.source)!.push(e.target);
   }
@@ -75,7 +78,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   // A floating/unconnected tool node produces no op — so it never previews or runs until it's
   // wired to the Selected Space (or to another tool that is).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source").map((n) => n.id);
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
@@ -90,8 +93,48 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     const node = byId.get(id)!;
     const data = dataOf(node);
     if (data.tool === "source") continue;
+    if (data.tool === "space-creator") continue; // generator → emitted as a top-level `create`, not an op
+    if (data.tool === "graph-source") continue; // graph generator → preview-only (no recipe runner)
+    if (data.tool === "segment-source") continue; // segment generator → preview-only (no recipe runner)
+    if (data.tool === "node-source") continue; // node generator → preview-only (no recipe runner)
+    if (data.tool === "canvas-source") continue; // whole-canvas generator → preview-only (no recipe runner)
+    if (data.tool === "separate") continue; // fan-out pass-through → preview-only (no recipe runner)
     if (data.tool === "render") continue; // action node (AI image), not a recipe op — never compiled
-    if (data.tool === "bua" || data.tool === "math") continue; // value calculators — not recipe ops
+    if (data.tool === "analyse") continue; // action node (Gemini analysis), not a recipe op — never compiled
+    if (data.tool === "generate") continue; // action node (Gemini media generation), not a recipe op — never compiled
+    if (data.tool === "bua" || data.tool === "math" || data.tool === "random") continue; // value calculators — not recipe ops
+    if (data.tool === "conditional") continue; // pure value comparator → boolean — not a recipe op
+    if (data.tool === "file-upload") continue; // file path value source — not a recipe op
+    if (data.tool === "text") continue; // text value source / pass-through — not a recipe op
+    // Densify only adds collinear vertices (no shape change) and has no recipe runner, so on COMMIT it's a
+    // pass-through: downstream ops target the space through it (the live preview still shows the denser
+    // polygon, which is its purpose — feeding vertex-driven nodes).
+    if (data.tool === "densify") continue;
+    // Graph nodes (Mitered Join / Graph Smoothing) operate on polylines and have no recipe runner — on
+    // COMMIT they're preview-only pass-throughs (the live preview shows the ribbon / smoothed graph).
+    if (data.tool === "mitered-join" || data.tool === "graph-smooth") continue;
+    if (data.tool === "buffer") continue; // segment→Space buffer — preview-only (no recipe runner)
+    if (data.tool === "segment-split") continue; // segment splitter — preview-only (no recipe runner)
+    if (data.tool === "bloom") continue; // node→Space n-gon — preview-only (no recipe runner)
+    if (data.tool === "pull") continue; // two-Space pull — preview-only (no recipe runner)
+    if (data.tool === "transform") continue; // affine transform — preview-only (no recipe runner)
+    if (data.tool === "graph-metrics") continue; // value-only / graph pass-through — not a recipe op
+    if (data.tool === "show-direction") continue; // flow-direction overlay / graph pass-through — not a recipe op
+    if (data.tool === "merge") continue; // boolean union — preview-only (no recipe runner yet)
+    if (data.tool === "graph-to-spaces") continue; // face extraction — preview-only (no recipe runner)
+    if (data.tool === "longest-branch") continue; // graph longest-path — preview-only (no recipe runner)
+    if (data.tool === "graph-reduce") continue; // graph reduce/clean ops — preview-only (no recipe runner)
+    if (data.tool === "voronoi-bloom") continue; // graph node-grown Voronoi cells — preview-only (no recipe runner)
+    if (data.tool === "spring-layout") continue; // topology-preserving spring layout — preview-only (no recipe runner)
+    if (data.tool === "param-manip") continue; // feedback controller — preview-only (no recipe runner)
+    if (data.tool === "image" || data.tool === "vectorise" || data.tool === "object-detection") continue; // image nodes — preview-only (no recipe runner)
+    if (data.tool === "pipe-solver") continue; // pipe network solve — preview-only (results live on components)
+    if (data.tool === "schema" || data.tool === "output-schema") continue; // component-property schemas — data only, never recipe ops
+    if (data.tool === "mesh") continue; // meshing → cells — preview-only (no recipe runner)
+    if (data.tool === "circle-packing") continue; // inscribed-circle packing — preview-only (no recipe runner)
+    if (data.tool === "point" || data.tool === "visibility") continue; // point/visibility — preview-only (no recipe runner)
+    if (data.tool === "treemap") continue; // squarified treemap — preview-only (no recipe runner)
+    if (data.tool === "rect-pack") continue; // rectangle packing — preview-only (no recipe runner)
     if (!reachable.has(id)) continue; // not connected to a space → skip
 
     // NOTE: no per-op `commit` flag — that would override the recipe-level mode and force a
@@ -125,17 +168,20 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
       const ratios = parseSplitRatios(data.params.ratios);
       if (ratios.length >= 1) params = { ...params, ratios, count: ratios.length };
     }
-    // Place Object's recipe handler expects an `objects` array — wrap the node's flat params.
+    // Place Object's recipe handler expects an `objects` array. The node already stores its objects
+    // under params.objects (back-compat: an older flat single-object node is normalised here too).
     if (data.tool === "place-object") {
       params = {
-        objects: [{
-          kind: data.params.kind ?? "bed",
-          length: data.params.length ?? 1,
-          breadth: data.params.breadth ?? 0.6,
-          height: 1,
-          position: data.params.position ?? 25,
-          setback: data.params.setback ?? 0,
-        }],
+        objects: placeObjectEntries(data.params).map((o) => ({
+          kind: o.kind,
+          length: o.length,
+          breadth: o.breadth,
+          height: o.height,
+          position: o.position,
+          setback: o.setback,
+          clearance: o.clearance,
+          ...(o.locked ? { locked: true } : {}),
+        })),
       };
     }
     // BSP's recipe handler expects a `seeds` array; placeholder positions {x:i,y:0} are auto-spread
@@ -190,14 +236,26 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
         curveShortening: Number(data.params.curveShortening) || 0,
       };
     }
+    // Optimise Rectangle "Random": replace the tilt/count/union params with the seeded draw (first
+    // space, index 0) so commit matches the preview's first space.
+    if (data.tool === "optimise-rect" && data.params.random) {
+      const seed = Math.max(1, Math.round(Number(data.params.seed) || 1));
+      params = { ...params, ...randomOptimiseRectParams(seed, 0) };
+    }
     // Contour → the engine's "contour" tool (interval in current unit + max levels).
     if (data.tool === "contour") {
       params = { interval: Number(data.params.interval) || 0.5, maxLevels: Number(data.params.maxLevels) || 12 };
     }
     // Massing → the engine's "floor-massing" tool: direction (upward/downward) + floor count n.
-    // (A wired Floors value is baked into `n` by the host, so reading the param is enough.)
+    // (A wired Floors value is baked into `n` by the host, so reading the param is enough.) When "Random"
+    // is on, use the live random draw the preview baked under `_values.floors` so commit matches preview.
     if (data.tool === "floor-massing") {
-      params = { direction: data.params.direction === "downward" ? "downward" : "upward", n: Math.max(1, Math.round(Number(data.params.n) || 1)) };
+      let n = Math.max(1, Math.round(Number(data.params.n) || 1));
+      if (data.params.random) {
+        const baked = Number((data.params._values as Record<string, unknown> | undefined)?.floors);
+        if (Number.isFinite(baked) && baked >= 1) n = Math.round(baked);
+      }
+      params = { direction: data.params.direction === "downward" ? "downward" : "upward", n };
     }
     // Preview only: if this is a Split feeding a downstream tool from a specific piece handle,
     // tag which piece to publish so the downstream tool previews fitted inside THAT piece.
@@ -225,7 +283,8 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
         if (!u) return null;
         const tool = dataOf(u).tool;
         if (tool === "source") return null;
-        if (tool === "bua" || tool === "math") {
+        // See THROUGH pass-through nodes (BUA/Math forward their input space; Densify is commit-transparent).
+        if (tool === "bua" || tool === "math" || tool === "densify" || tool === "mitered-join" || tool === "graph-smooth") {
           const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
           return up ? resolveOn(up.source, up.sourceHandle) : null;
         }
@@ -242,15 +301,69 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
       }
       if (onNames.length === 1) op.on = onNames[0];
       else if (onNames.length > 1) op.on = onNames;
+      // Root ops (geometry parent is a Space/source node, possibly through BUA/Math) target THAT
+      // source's space by its entered id, so each Space node's chain commits to its own space.
+      const resolveSourceSpace = (srcId: string): string | null => {
+        const u = byId.get(srcId);
+        if (!u) return null;
+        const t = dataOf(u).tool;
+        if (t === "source") { const sid = String(dataOf(u).params.id ?? "").trim(); return sid || null; }
+        // A Space Creator commits as a `create`d room with a stable id — target it by that id.
+        if (t === "space-creator") return `flowcreate_${srcId}`;
+        if (t === "bua" || t === "math" || t === "densify" || t === "mitered-join" || t === "graph-smooth") {
+          const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
+          return up ? resolveSourceSpace(up.source) : null;
+        }
+        return null;
+      };
+      // Gather EVERY source space feeding this op (in edge order, matching the eval's per-input handle
+      // order). A single Space node can list several ids (comma/newline separated), so each contributes
+      // all of them. One → a string (unchanged single-space commit); several → an array the engine fans
+      // out, mapping the i-th space to the i-th `produces` / output handle.
+      const onSpaces: string[] = [];
+      for (const e of edges) {
+        if (e.target !== id) continue;
+        if (e.targetHandle && e.targetHandle.startsWith("valin-")) continue;
+        const sp = resolveSourceSpace(e.source);
+        if (sp) for (const one of sp.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean)) onSpaces.push(one);
+      }
+      // Only the multi-space-consuming tools fan out across several input spaces — every other tool takes
+      // ONE input space, so it commits to just the first (matching the preview, where single-input nodes
+      // read only the first of a bundle).
+      const MULTISPACE_TOOLS = new Set(["inset", "optimise-rect", "split", "bsp", "skeleton", "smoothing", "floor-massing"]);
+      const finalOnSpaces = !MULTISPACE_TOOLS.has(data.tool) && onSpaces.length > 1 ? [onSpaces[0]] : onSpaces;
+      if (finalOnSpaces.length === 1) op.onSpace = finalOnSpaces[0];
+      else if (finalOnSpaces.length > 1) op.onSpace = finalOnSpaces;
     }
     operations.push(op);
     opOrder.push(id);
   }
 
-  if (operations.length === 0) {
-    return { ...empty, error: "No tool nodes to run — connect a tool to the Selected Space." };
+  // Space Creator nodes → top-level `create` entries (polygon in METRES, baked into `_pointsM` by the
+  // host preview). Each gets a stable room id `flowcreate_<nodeId>` so downstream ops target it via onSpace.
+  const createEntries = nodes
+    .filter((n) => dataOf(n).tool === "space-creator" && reachable.has(n.id))
+    .map((n) => {
+      const ptsM = dataOf(n).params._pointsM;
+      if (!Array.isArray(ptsM) || ptsM.length < 3) return null;
+      const points = ptsM.map((p) => [Number((p as { x: number }).x), Number((p as { y: number }).y)]);
+      return { id: `flowcreate_${n.id}`, points };
+    })
+    .filter((e): e is { id: string; points: number[][] } => e !== null);
+
+  // Preview-only nodes (graph ribbon / smoothing / densify) produce no commit op but DO render live, so a
+  // flow containing them isn't an error — it just has 0 committable operations.
+  const hasPreviewOnly = nodes.some((n) => reachable.has(n.id) && ["mitered-join", "graph-smooth", "densify", "buffer", "bloom", "pull", "separate", "transform", "show-direction"].includes(dataOf(n).tool));
+  if (operations.length === 0 && createEntries.length === 0 && !hasPreviewOnly) {
+    return { ...empty, error: "No tool nodes to run — add a Space Creator or connect a tool to the Space node." };
   }
 
-  const recipe = { operations };
+  // Embed the Space (source) node's entered id so commit targets THAT space (by display id "Space001",
+  // room id, or label) instead of whatever happens to be selected on the canvas. Omitted when blank.
+  const srcNode = nodes.find((n) => dataOf(n).tool === "source" && String(dataOf(n).params.id ?? "").trim() !== "");
+  const sourceSpaceId = srcNode ? String(dataOf(srcNode).params.id).trim() : undefined;
+  const recipe: Record<string, unknown> = { operations };
+  if (sourceSpaceId) recipe.sourceSpaceId = sourceSpaceId;
+  if (createEntries.length) recipe.create = createEntries;
   return { json: JSON.stringify(recipe, null, 2), opCount: operations.length, order: opOrder };
 }

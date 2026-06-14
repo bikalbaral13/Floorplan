@@ -133,10 +133,54 @@ const tVertices = (t: TParams): Point[] => {
   }
 };
 
+/** 2D cross product of (a−o) × (b−o). Sign gives orientation of o→a→b. */
+const orient = (ox: number, oy: number, ax: number, ay: number, bx: number, by: number): number =>
+  (ax - ox) * (by - oy) - (ay - oy) * (bx - ox);
+
+/** Proper segment intersection: true only when the two open segments cross at an
+ *  interior point (shared endpoints / collinear touching don't count). */
+const segmentsProperlyCross = (a: Point, b: Point, c: Point, d: Point): boolean => {
+  const d1 = orient(c.x, c.y, d.x, d.y, a.x, a.y);
+  const d2 = orient(c.x, c.y, d.x, d.y, b.x, b.y);
+  const d3 = orient(a.x, a.y, b.x, b.y, c.x, c.y);
+  const d4 = orient(a.x, a.y, b.x, b.y, d.x, d.y);
+  return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0)) &&
+    d1 !== 0 && d2 !== 0 && d3 !== 0 && d4 !== 0;
+};
+
+/** True iff the T-shape lies *entirely* inside `poly` — correct for concave
+ *  containers, not just convex. Vertices inside + no edge crossings + no room
+ *  vertex trapped inside the T (concave notch poking in). */
 const tInside = (t: TParams, poly: Point[]): boolean => {
   const verts = tVertices(t);
   for (const v of verts) if (!pip(v.x, v.y, poly)) return false;
+  const n = verts.length, m = poly.length;
+  for (let i = 0; i < n; i++) {
+    const a = verts[i], b = verts[(i + 1) % n];
+    for (let j = 0; j < m; j++) {
+      const c = poly[j], d = poly[(j + 1) % m];
+      if (segmentsProperlyCross(a, b, c, d)) return false;
+    }
+  }
+  for (const p of poly) if (pip(p.x, p.y, verts)) return false;
   return true;
+};
+
+/** The two corner notches of a T flank the stem. This returns their depth (how
+ *  far they cut in from the bar-opposite side) and the two flank widths (the gaps
+ *  on either side of the stem along the bar). For a usable T every one of these
+ *  must be ≥ the minimum notch size. */
+const tNotchDims = (t: TParams): { depth: number; flank1: number; flank2: number } => {
+  const isVertical = t.orientation === "T-down" || t.orientation === "T-up";
+  const barAxis = isVertical ? t.h : t.w;   // along the stem
+  const stemSpan = isVertical ? t.w : t.h;  // along the bar
+  return { depth: barAxis - t.hBar, flank1: t.xStem, flank2: stemSpan - t.xStem - t.wStem };
+};
+
+const tNotchOk = (t: TParams, minNotch: number): boolean => {
+  if (minNotch <= 0) return true;
+  const { depth, flank1, flank2 } = tNotchDims(t);
+  return depth >= minNotch && flank1 >= minNotch && flank2 >= minNotch;
 };
 
 const tArea = (t: TParams): number => {
@@ -158,6 +202,10 @@ export interface OptimiseTShapeParams {
   refineIters?: number;
   /** Minimum allowed bar/stem thickness in pixels. Default 4. */
   minThicknessPx?: number;
+  /** Minimum notch size in pixels. A T removes two corner notches flanking the
+   *  stem; each notch's depth AND each flank width must be ≥ this, so a
+   *  too-shallow/narrow nick doesn't count as a T. Default 0 = no minimum. */
+  minNotchPx?: number;
 }
 
 export interface OptimiseTShapeResult {
@@ -174,6 +222,11 @@ export function computeOptimiseTShape(params: OptimiseTShapeParams): OptimiseTSh
   const N = params.randomSamples ?? 4000;
   const refineIters = params.refineIters ?? 200;
   const minT = params.minThicknessPx ?? 4;
+  const minNotch = Math.max(0, params.minNotchPx ?? 0);
+  // Lower bounds for the notch dimensions. With no minimum these collapse to
+  // `minT`, exactly reproducing the previous sampling/validity behaviour.
+  const flankMin = Math.max(minT, minNotch); // gap on each side of the stem
+  const depthMin = Math.max(minT, minNotch); // how far the notches cut in
 
   if (pts.length < 3) {
     return { outline: null, areaPx: 0, params: null, success: false, errorMessage: "polygon needs ≥ 3 vertices" };
@@ -192,8 +245,10 @@ export function computeOptimiseTShape(params: OptimiseTShapeParams): OptimiseTSh
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
   const span = Math.min(maxX - minX, maxY - minY);
-  if (span <= 3 * minT) {
-    return { outline: null, areaPx: 0, params: null, success: false, errorMessage: "polygon too small" };
+  // bbox needs to fit the stem (≥ minT) plus a notch flank (≥ flankMin) on each side.
+  const minSide = minT + 2 * flankMin;
+  if (span <= minSide) {
+    return { outline: null, areaPx: 0, params: null, success: false, errorMessage: "polygon too small for the minimum notch" };
   }
 
   // Deterministic PRNG seeded by polygon + angle.
@@ -207,7 +262,6 @@ export function computeOptimiseTShape(params: OptimiseTShapeParams): OptimiseTSh
 
   let best: TParams | null = null;
   let bestArea = 0;
-  const minSide = 3 * minT; // bbox needs to fit bar + 2 stem-flanks
 
   for (let k = 0; k < N; k++) {
     const x0 = minX + rand() * (maxX - minX);
@@ -219,17 +273,18 @@ export function computeOptimiseTShape(params: OptimiseTShapeParams): OptimiseTSh
     const h = minSide + Math.pow(rand(), 0.5) * (hMax - minSide);
     const orientation = ALL_ORIENTATIONS[(rand() * 4) | 0];
     const isVertical = orientation === "T-down" || orientation === "T-up";
-    // Bar thickness is perpendicular to the bar's long axis.
-    const hBarMax = (isVertical ? h : w) - minT; // leave room for stem
+    // Bar thickness is perpendicular to the bar's long axis; leave ≥ depthMin for the notch depth.
+    const hBarMax = (isVertical ? h : w) - depthMin;
     if (hBarMax <= minT) continue;
     const hBar = minT + rand() * (hBarMax - minT);
-    // Stem axis = the OTHER axis of the bbox.
+    // Stem axis = the OTHER axis of the bbox; leave ≥ flankMin on each side of the stem.
     const stemSpan = isVertical ? w : h;
-    const wStemMax = stemSpan - 2 * minT;
+    const wStemMax = stemSpan - 2 * flankMin;
     if (wStemMax <= minT) continue;
     const wStem = minT + rand() * (wStemMax - minT);
-    const xStem = minT + rand() * (stemSpan - wStem - 2 * minT);
+    const xStem = flankMin + rand() * (stemSpan - wStem - 2 * flankMin);
     const cand: TParams = { x: x0, y: y0, w, h, hBar, wStem, xStem, orientation };
+    if (!tNotchOk(cand, minNotch)) continue;
     if (!tInside(cand, rotPoly)) continue;
     const a = tArea(cand);
     if (a > bestArea) { bestArea = a; best = cand; }
@@ -261,11 +316,12 @@ export function computeOptimiseTShape(params: OptimiseTShapeParams): OptimiseTSh
       const isVertical = cand.orientation === "T-down" || cand.orientation === "T-up";
       const stemSpan = isVertical ? cand.w : cand.h;
       const barAxis = isVertical ? cand.h : cand.w;
-      // Validity constraints.
+      // Validity constraints. Bar/stem thickness ≥ minT; notch depth & flanks ≥ their minima.
       if (cand.w < minSide || cand.h < minSide) continue;
-      if (cand.hBar < minT || cand.hBar >= barAxis - minT) continue;
-      if (cand.wStem < minT || cand.wStem >= stemSpan - 2 * minT) continue;
-      if (cand.xStem < minT || cand.xStem + cand.wStem > stemSpan - minT) continue;
+      if (cand.hBar < minT || cand.hBar > barAxis - depthMin) continue;
+      if (cand.wStem < minT || cand.wStem > stemSpan - 2 * flankMin) continue;
+      if (cand.xStem < flankMin || cand.xStem + cand.wStem > stemSpan - flankMin) continue;
+      if (!tNotchOk(cand, minNotch)) continue;
       if (!tInside(cand, rotPoly)) continue;
       const a = tArea(cand);
       if (a > bestArea) { bestArea = a; best = cand; improved = true; }

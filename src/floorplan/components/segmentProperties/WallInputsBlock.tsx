@@ -1,4 +1,3 @@
-import { type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { AreaTypeDef, Room, Unit, Wall, WallMethod } from "../../types";
 
@@ -28,8 +27,6 @@ export interface WallInputsBlockProps {
   customSegmentTypes: Record<string, AreaTypeDef>;
   /** Visible rooms — used by the Connection segment to show linked-room badges. */
   visibleRooms: Room[];
-  /** Parent-provided JSX block for the Pull panel (room-pair adjacency edits). */
-  renderPullPanel: (aRoomId?: string, bRoomId?: string) => ReactNode;
   /** Mutate the selected wall by replacing it with the updater's return value. The
    *  parent wraps this in a `history.set` over `walls.map(...)`. */
   updateSelectedWall: (updater: (w: Wall) => Wall) => void;
@@ -203,7 +200,7 @@ export const WallInputsBlock = (p: WallInputsBlockProps) => {
                     <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">{roomB?.label ?? w.bRoomId ?? "—"}</span>
                   </div>
                 </div>
-                {p.renderPullPanel(w.aRoomId, w.bRoomId)}
+                {/* Pull moved to the Flow editor (Space → Pull node); the inline panel was removed. */}
               </div>
             );
           })()}

@@ -1,6 +1,6 @@
-﻿import { forwardRef, useImperativeHandle, useMemo, type ComponentProps, type ReactNode, type MutableRefObject } from "react";
+﻿import { forwardRef, Suspense, useImperativeHandle, useMemo, type ComponentProps, type ReactNode, type MutableRefObject } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Edges, OrbitControls } from "@react-three/drei";
+import { Edges, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
 import { computeMiteredUnion, computeMiteredWallPolygons } from "../wallGeometry";
@@ -52,6 +52,9 @@ interface Props {
    *  planes instead of extruded volumes â€” massive triangle-count reduction at the cost of visual
    *  thickness. Doors and windows are flat wood-coloured planes; floors are flat polygons (no slab). */
   lowPoly?: boolean;
+  /** Architectural view: omit the top roof/ceiling slab of each room so the interior (furniture,
+   *  objects) is visible from above. Floor plates and inter-floor seams are still drawn. */
+  architectural?: boolean;
   /** Floor-to-floor height in metres. Drives the per-floor stack offset and the wall-plane
    *  height so the 3D view matches the Massing block's regulatory floor-height parameter. */
   floorHeightM?: number;
@@ -65,7 +68,24 @@ interface Props {
   /** Live (uncommitted) massing preview from the Flow editor — solid stacked prisms extruded from an
    *  arbitrary polygon (e.g. an Optimise Rectangle output) by `floors`. Upward = Footprint-style,
    *  downward = Basement-style. Rendered translucent so it reads as a preview, not committed geometry. */
-  massingPreview?: { points: Point[]; floors: number; direction: "upward" | "downward" }[];
+  massingPreview?: { points: Point[]; floors: number; direction: "upward" | "downward"; floorPolys?: Point[][] }[];
+  /** Georeferenced map underlay → a flat ground plane textured with the image at y≈0 (Approach A). `src`
+   *  is the image URL/data-URL; `x,y` is the underlay box origin (plan px), `w,h` its intrinsic pixel size,
+   *  `scale` the plan-units-per-image-pixel. Omitted → no ground map. */
+  mapUnderlay?: { src: string; x: number; y: number; w: number; h: number; scale: number };
+}
+
+/** Ground plane textured with the map underlay. Loads the texture (suspends) and draws the pre-built
+ *  georeferenced quad geometry just below grade. */
+function MapGround({ src, geometry }: { src: string; geometry: THREE.BufferGeometry }) {
+  const tex = useTexture(src);
+  tex.flipY = false; // image data top-left = UV (0,0), matching the quad's UVs
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return (
+    <mesh geometry={geometry} renderOrder={-1}>
+      <meshBasicMaterial map={tex} side={THREE.DoubleSide} toneMapped={false} depthWrite={false} />
+    </mesh>
+  );
 }
 
 type PlacementKind =
@@ -390,7 +410,7 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -580,6 +600,26 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     (planY - cy) / ppm,
   ];
 
+  // Map-underlay ground: a georeferenced quad at y≈0 matching the 2D underlay box exactly. Corners map
+  // plan px → world (x, z) via toScene; UVs (0,0)→top-left so the texture aligns with the 2D placement.
+  const mapGroundGeom = useMemo<THREE.BufferGeometry | null>(() => {
+    if (!mapUnderlay || mapUnderlay.w <= 0 || mapUnderlay.h <= 0) return null;
+    const { x, y, w, h, scale } = mapUnderlay;
+    const corners: Array<[number, number]> = [
+      [x, y], [x + w * scale, y], [x + w * scale, y + h * scale], [x, y + h * scale],
+    ].map(([px, py]) => toScene(px, py)) as Array<[number, number]>;
+    const Y = -0.02; // just below grade → under the floor slabs (avoids z-fighting)
+    const pos = new Float32Array(corners.flatMap(([sx, sz]) => [sx, Y, sz]));
+    const uv = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    g.computeVertexNormals();
+    return g;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapUnderlay?.x, mapUnderlay?.y, mapUnderlay?.w, mapUnderlay?.h, mapUnderlay?.scale, cx, cy, ppm]);
+
   // Direction-aware floor base Y. Upward: fi * h. Downward: -(fi+1) * h, so floor 0
   // (ground / B1) sits just below grade and deeper floors stack downward.
   const massingFloorBaseY = (fi: number, h: number): number =>
@@ -607,20 +647,31 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
       <directionalLight position={[-15, 20, -10]} intensity={0.35} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[0, 1, 0]} />
 
+      {/* Georeferenced map underlay as a ground plane (Approach A) — the building/massing sits on the map. */}
+      {mapUnderlay && mapGroundGeom && (
+        <Suspense fallback={null}>
+          <MapGround src={mapUnderlay.src} geometry={mapGroundGeom} />
+        </Suspense>
+      )}
+
       {/* Live massing preview (Flow editor) — solid stacked prisms extruded from an uncommitted polygon
-           by its floor count. Upward = Footprint (orange), downward = Basement (blue). Translucent so it
-           reads as a preview. Updates as the Flow's floor slider / upstream geometry changes. */}
+           by its floor count. Rendered as OPAQUE greyish blocks (upward = lighter grey, downward/basement
+           = darker grey) so towers read cleanly without see-through meshy edges from overlapping floors.
+           Updates as the Flow's floor slider / upstream geometry changes. */}
       {(massingPreview ?? []).map((mp, mi) => {
         if (!Array.isArray(mp.points) || mp.points.length < 3) return null;
-        const shape = new THREE.Shape(mp.points.map((p) => {
-          const [sx, sz] = toScene(p.x, p.y);
-          return new THREE.Vector2(sx, -sz);
-        }));
-        const floors = Math.max(1, Math.floor(mp.floors));
+        // Per-floor footprints (tapered/setback towers) when supplied; else the constant base on every floor.
+        const floors = Math.max(1, mp.floorPolys?.length ?? Math.floor(mp.floors));
         const up = mp.direction !== "downward";
         const prismH = FLOOR_H * 0.985; // tiny gap → visible floor seam
-        const color = up ? "#f97316" : "#2563eb";
+        const color = up ? "#9ca3af" : "#64748b";
         return Array.from({ length: floors }, (_, i) => {
+          const fp = mp.floorPolys?.[i] ?? mp.points;
+          if (!Array.isArray(fp) || fp.length < 3) return null;
+          const shape = new THREE.Shape(fp.map((p) => {
+            const [sx, sz] = toScene(p.x, p.y);
+            return new THREE.Vector2(sx, -sz);
+          }));
           const baseY = up ? i * FLOOR_H : -(i + 1) * FLOOR_H;
           return (
             <EdgedMesh
@@ -629,7 +680,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               position={[0, baseY + (FLOOR_H - prismH) / 2, 0]}
             >
               <extrudeGeometry args={[shape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
-              <meshStandardMaterial color={color} transparent opacity={0.55} />
+              <meshStandardMaterial color={color} />
             </EdgedMesh>
           );
         });
@@ -794,6 +845,9 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         // elsewhere — which is what gives the upward tower its "solid + seam" look.
         const slabT = ROOM_SLAB_THICKNESS_M;
         return Array.from({ length: floors + 1 }, (_, i) => {
+          // Architectural view: drop the topmost slab (the roof/ceiling cap) so the room interior is
+          // visible from above. Floor base (i=0) and inter-floor seams (1..floors-1) are kept.
+          if (architectural && i === floors) return null;
           const y = i === 0
             ? slabBumpY
             : i === floors
@@ -1353,19 +1407,23 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           const handleColor = "#fbbf24";
           const innerLen = Math.max(0.1, lenM - frameW * 2);
 
-          // Hinge end: "left" = wall start (-x), "right" = wall end (+x). The slab pivots around
-          // its hinge edge, so we position a sub-group AT the hinge and let it rotate around Y.
-          // Swing side: doorPlacement "left" = perpendicular -z half, "right" = +z half. The open
-          // angle's direction depends on both hinge end and swing side (open into the requested side).
-          const hingeSign = w.doorHinge === "right" ? -1 : 1; // +1 â†’ slab extends in +x from hinge; -1 â†’ in -x
-          const placementSign = w.doorPlacement === "right" ? 1 : -1; // +1 â†’ swings into +z half
-          const OPEN_ANGLE = (Math.PI / 180) * 75; // visual open angle (75Â°)
-          const swingAngle = -hingeSign * placementSign * OPEN_ANGLE;
-          const hingeX = hingeSign * (lenM / 2 - frameW);
-          // Slab body's centre, in the hinge-group's local frame, before rotation: half its length
-          // away from the hinge along the wall.
-          const slabCx = hingeSign * innerLen / 2;
-          const handleX = hingeSign * (innerLen - 0.08);
+          // Match the 2D door symbol EXACTLY. `toScene` has no axis flip and the group is rotated by
+          // -atan2(dy,dx), so in this local frame +x = the wall direction (start→end) and +z = the 2D
+          // "perpendicular-left" side. Therefore, mirroring the 2D logic:
+          //  • hinge "left" = wall START (local -x); hinge "right" = wall END (local +x).
+          //  • swing "left" opens toward +z (perpendicular left); swing "right" toward -z.
+          // The closed leaf runs from the hinge to the opposite jamb, then pivots toward the swing side.
+          const hSign = w.doorHinge === "left" ? -1 : 1;     // hinge end along local x
+          const zSign = w.doorPlacement === "left" ? 1 : -1; // swing side along local z
+          const freeSign = -hSign;                            // hinge → opposite jamb direction
+          const OPEN_ANGLE = (Math.PI / 180) * 75;            // visual open angle (75°)
+          // Pivot the hinge group so the free end ends up on the +zSign side (verified: free-end z after
+          // the Y-rotation = innerLen·zSign·sin(OPEN_ANGLE)).
+          const swingAngle = zSign * hSign * OPEN_ANGLE;
+          const hingeX = hSign * (lenM / 2 - frameW);
+          // Closed slab is centred in the opening (hinge at one jamb, slab spans to the other).
+          const slabCx = freeSign * innerLen / 2;
+          const handleX = freeSign * (innerLen - 0.08);
 
           return (
             <group key={`door-prim-${w.id}`} position={[sx, 0, sz]} rotation={[0, rotY, 0]}>
@@ -1391,7 +1449,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
                   <meshStandardMaterial color={wood} />
                 </EdgedMesh>
                 {/* Handle sits near the latch end (opposite the hinge) on the swing-side face */}
-                <EdgedMesh position={[handleX, slabH * 0.5, placementSign * (slabD / 2 + 0.005)]}>
+                <EdgedMesh position={[handleX, slabH * 0.5, zSign * (slabD / 2 + 0.005)]}>
                   <boxGeometry args={[0.04, 0.06, 0.04]} />
                   <meshStandardMaterial color={handleColor} metalness={0.7} roughness={0.3} />
                 </EdgedMesh>

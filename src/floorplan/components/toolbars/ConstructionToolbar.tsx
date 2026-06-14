@@ -72,7 +72,7 @@ export const ConstructionToolbar = (p: ConstructionToolbarProps) => {
                 p.onAddEdgeFirstRoomChange(null);
                 p.onAddRoomModeChange(false);
                 p.onSelectedGenElementChange(null);
-                toast.info("Click a wall segment to place a door — press Esc to exit");
+                toast.info("Set the door width, then click a wall segment to place it");
               }
             }}
           />
@@ -91,7 +91,7 @@ export const ConstructionToolbar = (p: ConstructionToolbarProps) => {
                 p.onAddEdgeFirstRoomChange(null);
                 p.onAddRoomModeChange(false);
                 p.onSelectedGenElementChange(null);
-                toast.info("Click a wall segment to place a window — press Esc to exit");
+                toast.info("Set the window width, then click a wall segment to place it");
               }
             }}
           />

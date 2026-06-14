@@ -27,7 +27,12 @@ const isPointStrictlyBetweenSegment = (p: Point, a: Point, b: Point) => {
 export const splitWallsAtIntersections = (walls: Wall[]): Wall[] => {
   if (walls.length === 0) return walls;
   const curvedWalls = walls.filter((w) => Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4);
-  const straightWalls = walls.filter((w) => !(Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4));
+  // Zero-length walls are intentional standalone "node" markers (placed via Add Node). They never
+  // participate in intersections and must survive splitting — otherwise dragging/editing near them
+  // silently deletes the node. Pass them through untouched.
+  const isZeroLength = (w: Wall) => Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) < 0.1;
+  const nodeWalls = walls.filter((w) => !(Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4) && isZeroLength(w));
+  const straightWalls = walls.filter((w) => !(Array.isArray(w.spinePoints) && (w.spinePoints?.length ?? 0) >= 4) && !isZeroLength(w));
 
   if (straightWalls.length === 0) {
     return walls;
@@ -109,5 +114,5 @@ export const splitWallsAtIntersections = (walls: Wall[]): Wall[] => {
     }
   }
 
-  return [...out, ...curvedWalls];
+  return [...out, ...curvedWalls, ...nodeWalls];
 };

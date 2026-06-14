@@ -7,7 +7,7 @@
 import type { Point } from "../types";
 import { polygonArea } from "../algorithms/geometry/polygon";
 
-export type ConditionMetric = "area" | "perimeter" | "vertices" | "width" | "height" | "aspect";
+export type ConditionMetric = "area" | "perimeter" | "vertices" | "width" | "height" | "aspect" | "value";
 export type ConditionOp = "gt" | "gte" | "eq" | "lte" | "lt" | "ne";
 
 export interface SpaceMetrics {
@@ -33,6 +33,7 @@ export const CONDITION_METRIC_OPTIONS: { value: ConditionMetric; label: string }
   { value: "width", label: "Width (m)" },
   { value: "height", label: "Height (m)" },
   { value: "aspect", label: "Aspect ratio" },
+  { value: "value", label: "Value (input)" }, // compare a wired number directly, not a space metric
 ];
 
 /** Comparison-operator dropdown options. */
@@ -78,21 +79,25 @@ export const computeSpaceMetrics = (pts: Point[], ppm: number): SpaceMetrics => 
 };
 
 const asMetric = (v: unknown): ConditionMetric =>
-  (typeof v === "string" && ["area", "perimeter", "vertices", "width", "height", "aspect"].includes(v))
+  (typeof v === "string" && ["area", "perimeter", "vertices", "width", "height", "aspect", "value"].includes(v))
     ? (v as ConditionMetric)
     : "area";
 const asOp = (v: unknown): ConditionOp =>
   (typeof v === "string" && ["gt", "gte", "eq", "lte", "lt", "ne"].includes(v)) ? (v as ConditionOp) : "gt";
 
-/** The live value of the chosen metric for a polygon — used for the node's status badge. */
-export const conditionMetricValue = (pts: Point[], ppm: number, params: Record<string, unknown>): number =>
-  computeSpaceMetrics(pts, ppm)[asMetric(params.metric)];
+/** The live LHS of the condition: the chosen space metric for a polygon, OR — in "value" mode — the wired
+ *  number `a` directly (no geometry needed). Used both to evaluate the gate and for the node's badge. */
+export const conditionMetricValue = (pts: Point[], ppm: number, params: Record<string, unknown>): number => {
+  if (asMetric(params.metric) === "value") return typeof params.a === "number" && isFinite(params.a) ? params.a : Number(params.a) || 0;
+  return computeSpaceMetrics(pts, ppm)[asMetric(params.metric)];
+};
 
 /** Evaluate the node's condition against a polygon → does it route to the TRUE output?
  *  `=` / `≠` use a small tolerance (max(0.5, 1% of the value)) so floating-point areas/lengths can
  *  realistically match an integer target; `vertices` (always integral) effectively compares exactly. */
 export const evaluateSpaceCondition = (pts: Point[], ppm: number, params: Record<string, unknown>): boolean => {
-  if (pts.length < 3) return false;
+  // "value" mode compares the wired number directly, so it needs no polygon; space metrics require ≥3 pts.
+  if (asMetric(params.metric) !== "value" && pts.length < 3) return false;
   const lhs = conditionMetricValue(pts, ppm, params);
   const op = asOp(params.op);
   const value = typeof params.value === "number" && isFinite(params.value) ? params.value : 0;

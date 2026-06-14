@@ -1,5 +1,10 @@
 import { FLOW_TOOLS, type FlowToolType, type ParamField } from "./flowTypes";
+import { PlaceObjectEditor } from "./PlaceObjectEditor";
+import { InputPropsEditor } from "./InputPropsEditor";
 import type { SerializedFlow, SerializedFlowNode } from "../types";
+
+/** Tools that have a custom editor (no static `fields`) but should still surface in the Properties tab. */
+const CUSTOM_EDITOR_TOOLS = new Set<FlowToolType>(["place-object", "input-props"]);
 
 /** Properties-tab renderer for a Space's attached Flow. Surfaces the parameters of whatever node(s)
  *  the "Selected Space" (source) node is wired to — so editing them here is equivalent to editing that
@@ -17,17 +22,22 @@ const connectedInputNodes = (flow: SerializedFlow): SerializedFlowNode[] => {
   const sourceIds = new Set(nodes.filter((n) => n.data?.tool === "source").map((n) => n.id));
   if (sourceIds.size === 0) return [];
   const targetIds = new Set((flow.edges ?? []).filter((e) => sourceIds.has(e.source)).map((e) => e.target));
-  return nodes.filter((n) => targetIds.has(n.id) && (FLOW_TOOLS[n.data?.tool as FlowToolType]?.fields?.length ?? 0) > 0);
+  return nodes.filter((n) => {
+    const tool = n.data?.tool as FlowToolType;
+    return targetIds.has(n.id) && ((FLOW_TOOLS[tool]?.fields?.length ?? 0) > 0 || CUSTOM_EDITOR_TOOLS.has(tool));
+  });
 };
 
 const Field = ({
   field,
   value,
   onChange,
+  params,
 }: {
   field: ParamField;
   value: unknown;
   onChange: (v: unknown) => void;
+  params?: Record<string, unknown>;
 }) => {
   if (field.kind === "range") {
     const num = typeof value === "number" ? value : 0;
@@ -90,17 +100,22 @@ const Field = ({
           onChange={(e) => onChange(+e.target.value)}
         />
       )}
-      {field.kind === "select" && (
-        <select
-          className="h-6 w-28 rounded border border-slate-200 px-1 text-[10px]"
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {field.options?.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      )}
+      {field.kind === "select" && (() => {
+        const dyn = field.optionsFromParam ? (params?.[field.optionsFromParam] as { value: string; label: string }[] | undefined) : undefined;
+        const opts = dyn ?? field.options ?? [];
+        return (
+          <select
+            className="h-6 w-28 rounded border border-slate-200 px-1 text-[10px]"
+            value={typeof value === "string" ? value : ""}
+            onChange={(e) => onChange(e.target.value)}
+          >
+            {field.optionsFromParam && <option value="">{opts.length ? "— select —" : "— connect a node —"}</option>}
+            {opts.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        );
+      })()}
       {field.kind === "checkbox" && (
         <input
           type="checkbox"
@@ -136,14 +151,28 @@ export const FlowParamsPanel = ({ flow, onParamChange, onEdit }: FlowParamsPanel
         return (
           <div key={node.id} className="space-y-1.5 rounded-md border border-slate-200 bg-slate-50/60 p-2">
             <span className="text-[10px] font-semibold text-slate-600">{def.label}</span>
-            {fields.map((f) => (
-              <Field
-                key={f.key}
-                field={f}
-                value={params[f.key]}
-                onChange={(v) => onParamChange(node.id, f.key, v)}
+            {node.data.tool === "place-object" ? (
+              <PlaceObjectEditor
+                params={params}
+                onParamChange={(key, val) => onParamChange(node.id, key, val)}
               />
-            ))}
+            ) : node.data.tool === "input-props" ? (
+              <InputPropsEditor
+                params={params}
+                onParamChange={(key, val) => onParamChange(node.id, key, val)}
+                valuesOnly
+              />
+            ) : (
+              fields.map((f) => (
+                <Field
+                  key={f.key}
+                  field={f}
+                  value={params[f.key]}
+                  onChange={(v) => onParamChange(node.id, f.key, v)}
+                  params={params}
+                />
+              ))
+            )}
           </div>
         );
       })}

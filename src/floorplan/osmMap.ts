@@ -86,6 +86,48 @@ export const loadTileImage = (url: string): Promise<HTMLImageElement | null> => 
   });
 };
 
+/**
+ * Stitch the OSM basemap for a world-coordinate rectangle into a single PNG data URL. Uses the same
+ * anchor/zoom tile model as MapTileLayer (anchor lat/lon pins to world (0,0)). Tiles are CORS-enabled
+ * (`crossOrigin="anonymous"`), so the canvas isn't tainted and `toDataURL` succeeds. Returns the data URL
+ * + canvas pixel size, or null. Used to texture the 3D ground with the real map clipped to a site region.
+ */
+export async function stitchOsmRegion(
+  anchorLat: number, anchorLon: number, zoom: number,
+  rMinX: number, rMinY: number, rMaxX: number, rMaxY: number,
+  maxPx = 1600,
+): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  const z = Math.max(0, Math.min(19, Math.round(zoom)));
+  const at = latLonToTile(anchorLat, anchorLon, z);
+  const offX = -at.x * TILE_SIZE, offY = -at.y * TILE_SIZE;
+  const regW = rMaxX - rMinX, regH = rMaxY - rMinY;
+  if (regW <= 0 || regH <= 0) return null;
+  const s = Math.min(1, maxPx / Math.max(regW, regH));
+  const cw = Math.max(1, Math.round(regW * s)), ch = Math.max(1, Math.round(regH * s));
+  const canvas = document.createElement("canvas");
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#e8e8e3";
+  ctx.fillRect(0, 0, cw, ch);
+  const tMinX = Math.floor((rMinX - offX) / TILE_SIZE), tMaxX = Math.ceil((rMaxX - offX) / TILE_SIZE);
+  const tMinY = Math.floor((rMinY - offY) / TILE_SIZE), tMaxY = Math.ceil((rMaxY - offY) / TILE_SIZE);
+  const grid = 2 ** z;
+  const jobs: Promise<void>[] = [];
+  for (let tx = tMinX; tx < tMaxX; tx++) {
+    for (let ty = tMinY; ty < tMaxY; ty++) {
+      if (ty < 0 || ty >= grid) continue;
+      const wx = ((tx % grid) + grid) % grid;
+      const worldX = offX + tx * TILE_SIZE, worldY = offY + ty * TILE_SIZE;
+      jobs.push(loadTileImage(osmTileUrl(z, wx, ty)).then((img) => {
+        if (img) ctx.drawImage(img, (worldX - rMinX) * s, (worldY - rMinY) * s, TILE_SIZE * s, TILE_SIZE * s);
+      }));
+    }
+  }
+  await Promise.all(jobs);
+  try { return { dataUrl: canvas.toDataURL("image/png"), w: cw, h: ch }; } catch { return null; }
+}
+
 /** Nominatim geocoding result (only the fields we use). */
 export interface NominatimHit {
   lat: number;

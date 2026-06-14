@@ -57,6 +57,11 @@ export interface OptimiseRectParams {
   count: number;
   /** Minimum area threshold in px² — shapes smaller than this are discarded. */
   minAreaPx: number;
+  /** Minimum spacing (px) enforced between placed rectangles when count > 1.
+   *  Each already-placed rect is inflated by this amount before it blocks the
+   *  next one, so consecutive rectangles sit at least `gapPx` apart. Default 0
+   *  (touching). Ignored for hexagons. */
+  gapPx?: number;
   /** When true, build the union outline of all placed rectangles instead of separate outlines. */
   union: boolean;
   /** Whether this is a live-preview call (affects wall flag: isMaxRectPreview vs isMaxRectComputed). */
@@ -644,6 +649,7 @@ export function computeOptimiseRect(
   wallStyle: { thickness: number; mode: WallMode },
 ): OptimiseRectResult {
   const { pts, shape, reference, axisAngleDeg, count, minAreaPx, union, silent } = params;
+  const gapPx = Math.max(0, params.gapPx ?? 0);
 
   if (pts.length < 3) {
     return { newWalls: [], placed: [], unionPolygon: null, unionOutlineLocal: null, unionOutlineWorld: null, success: false, errorMessage: "Need at least 3 vertices" };
@@ -753,8 +759,11 @@ export function computeOptimiseRect(
     const xRangeForIter = iter === 0 ? refXRange : null;
     let best: { corners: Point[]; area: number } | null = null;
 
+    // Enforce a gap by inflating each already-placed rect before it blocks the next one. The real
+    // (un-inflated) rects stay in `placed` for the union raster, so the gap shows through in the union.
+    const blockers = gapPx > 0 ? placed.map((c) => outsetRectangle(c, gapPx)) : placed;
     for (const t of angles) {
-      const r = findRectAtAngle(t, pts, placed, shape, xRangeForIter, cxPoly, cyPoly);
+      const r = findRectAtAngle(t, pts, blockers, shape, xRangeForIter, cxPoly, cyPoly);
       if (r && (!best || r.area > best.area)) best = r;
     }
     if (!best || best.area < minAreaPx) break;

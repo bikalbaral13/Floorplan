@@ -470,6 +470,13 @@ export interface Room {
 export interface SerializedFlowNode {
   id: string;
   position?: { x: number; y: number };
+  /** React Flow node type. Omitted/"op" for tool nodes; "group" for a container box. */
+  type?: string;
+  /** Parent group id (for nodes inside a group); their `position` is parent-relative. */
+  parentId?: string;
+  /** Group container box size (only for `type: "group"`). */
+  width?: number;
+  height?: number;
   data: { tool: string; params: Record<string, unknown> };
 }
 export interface SerializedFlowEdge {
@@ -492,8 +499,10 @@ export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "
  *  - "node": only wall endpoints / corner nodes are selectable.
  *  - "segment": only walls / segment lines are selectable.
  *  - "space": only Room polygons are selectable.
+ *  - "graph": clicking any segment selects its whole connected component (links + shared-endpoint
+ *    nodes) — a flood-fill across junctions, so a drawn network selects as one unit.
  *  Doors/windows/objects always fall back to "all" — only available without a scope. */
-export type SelectFilter = "all" | "node" | "segment" | "space";
+export type SelectFilter = "all" | "node" | "segment" | "space" | "graph" | "image";
 
 export type Tool =
   | "select"
@@ -623,6 +632,107 @@ export interface MapOverlayState {
   zoom: number;
 }
 
+/** Per-node metadata edited in the Node properties tab. Persisted in the model, keyed by the
+ *  node's stableKey (its connected wall ids/ends) so it sticks to the node as it moves. When
+ *  `type` is "column", `columnShape` chooses a circular column (radius) or rectangular one
+ *  (dimX × dimY). Geometry values are in METRES (canonical, unit-independent). */
+export interface NodeMeta {
+  label?: string;
+  /** Node classification. "point" (default) is a plain node with no footprint; "column" / "tree"
+   *  render a semantic footprint in Architectural view; "object" tags a furniture/fixture item
+   *  whose specific kind is given by `objectKind`. */
+  type?: "point" | "column" | "tree" | "object";
+  columnShape?: "circular" | "rectangular";
+  radius?: number;
+  dimX?: number;
+  dimY?: number;
+  /** Furniture/fixture kind when `type` is "object" (e.g. "bed", "sofa"). See NODE_OBJECT_KINDS. */
+  objectKind?: string;
+  /** Object symbol footprint in METRES: width (along x), height (along y, plan depth). When unset,
+   *  the kind's default size is used. */
+  objWidth?: number;
+  objHeight?: number;
+  /** Distance in METRES from the symbol's bottom edge up to the node anchor (vertical placement).
+   *  0 = the node sits on the object's bottom edge. */
+  objOffsetBottom?: number;
+  /** Symbol rotation in degrees (clockwise), pivoting about the anchor point. Default 0. */
+  objRotation?: number;
+  /** Which point of the object's box coincides with the node. Default "center". */
+  objAnchor?: ObjectAnchor;
+}
+
+/** Placement point of an object symbol relative to the node. */
+export type ObjectAnchor = "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+/** Options for the Anchor dropdown, in display order. */
+export const OBJECT_ANCHORS: { value: ObjectAnchor; label: string }[] = [
+  { value: "center", label: "Center" },
+  { value: "top-left", label: "Top-Left" },
+  { value: "top-right", label: "Top-Right" },
+  { value: "bottom-left", label: "Bottom-Left" },
+  { value: "bottom-right", label: "Bottom-Right" },
+];
+
+/** Selectable kinds for an "object" node, shown in the Node properties Kind dropdown. `w`/`h` are
+ *  default plan sizes in metres, used until the user overrides width/height. */
+export const NODE_OBJECT_KINDS: { value: string; label: string; w: number; h: number }[] = [
+  { value: "bed", label: "Bed", w: 1.5, h: 2.0 },
+  { value: "sofa", label: "Sofa", w: 2.0, h: 0.9 },
+  { value: "table", label: "Table", w: 1.2, h: 0.8 },
+  { value: "chair", label: "Chair", w: 0.5, h: 0.5 },
+  { value: "desk", label: "Desk", w: 1.4, h: 0.7 },
+  { value: "wardrobe", label: "Wardrobe", w: 1.2, h: 0.6 },
+  { value: "bookshelf", label: "Bookshelf", w: 1.0, h: 0.3 },
+  { value: "cabinet", label: "Cabinet", w: 0.8, h: 0.5 },
+  { value: "refrigerator", label: "Refrigerator", w: 0.7, h: 0.7 },
+  { value: "stove", label: "Stove", w: 0.6, h: 0.6 },
+  { value: "sink", label: "Sink", w: 0.6, h: 0.5 },
+  { value: "toilet", label: "Toilet", w: 0.4, h: 0.7 },
+  { value: "bathtub", label: "Bathtub", w: 1.7, h: 0.75 },
+  { value: "washbasin", label: "Washbasin", w: 0.6, h: 0.45 },
+  { value: "tv-unit", label: "TV Unit", w: 1.6, h: 0.4 },
+];
+
+/** Default plan size (metres) for an object kind; falls back to a 1×1 box for unknown kinds. */
+export const objectKindDefaultSize = (kind?: string): { w: number; h: number } => {
+  const k = NODE_OBJECT_KINDS.find((o) => o.value === kind);
+  return k ? { w: k.w, h: k.h } : { w: 1, h: 1 };
+};
+
+// ── Graph schema (imported JSON) — user-defined properties for canvas graph nodes & segments ──
+/** One user-defined property from an imported graph schema. Rendered in the Properties tab for
+ *  every canvas graph node ("node" set) or segment ("segment" set), ALONGSIDE the built-in
+ *  properties (the schema only adds; it never replaces). `role` binds the property to a solver
+ *  input — e.g. the pipe solver reads node "elevation"/"demand"/"fixedHead"/"head" and segment
+ *  "diameter"/"roughness"/"minorLoss"/"length" — so the JSON decides which key feeds what. */
+export interface GraphPropDef {
+  key: string;
+  label?: string;
+  kind?: "number" | "select" | "checkbox" | "text";
+  unit?: string;
+  default?: number | string | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: { value: string; label?: string }[];
+  /** Solver binding (see above). Properties without a role are carried but not consumed. */
+  role?: string;
+  decimals?: number;
+}
+
+/** One read-only result row a solver publishes per component (shown in the Metrics tab). */
+export interface GraphResultDef { key: string; label?: string; unit?: string; decimals?: number }
+
+/** An imported graph schema: extra node/segment properties + the result rows to display. */
+export interface GraphSchema {
+  name?: string;
+  node?: GraphPropDef[];
+  segment?: GraphPropDef[];
+  results?: { node?: GraphResultDef[]; segment?: GraphResultDef[] };
+}
+
+export type GraphAttrValue = number | string | boolean;
+
 export interface FloorPlanModel {
   walls: Wall[];
   rooms: Room[];
@@ -648,6 +758,19 @@ export interface FloorPlanModel {
   /** Canvas scale: pixels per metre. Persisted so an imported file renders at the same scale
    *  it was authored at. Defaults to 50 when absent. */
   pixelsPerMeter?: number;
+  /** Per-node metadata (label / column / tree), keyed by node stableKey. See {@link NodeMeta}. */
+  nodeMeta?: Record<string, NodeMeta>;
+  /** Schema-defined attribute values for canvas components, edited in the Properties tab.
+   *  `nodes` is keyed by node stableKey, `segments` by wall id, `spaces` by room id and
+   *  `graphs` by graph display id; each entry maps a schema property key → its value. Only
+   *  user-edited values are stored (defaults come from the schema), so loading a schema never
+   *  disturbs existing data. */
+  graphAttrs?: {
+    nodes: Record<string, Record<string, GraphAttrValue>>;
+    segments: Record<string, Record<string, GraphAttrValue>>;
+    spaces?: Record<string, Record<string, GraphAttrValue>>;
+    graphs?: Record<string, Record<string, GraphAttrValue>>;
+  };
 }
 
 /** AutoCAD-style layer. Every drawable entity carries a `layerId` referencing one of these. */

@@ -121,12 +121,45 @@ const lVertices = (l: LParams): Point[] => {
   }
 };
 
-/** True if every L-vertex is strictly inside `poly`. For convex containers this
- *  also implies edge containment, since the L's edges are axis-aligned and any
- *  axis-aligned segment between two interior points of a convex set stays inside. */
+/** 2D cross product of (a−o) × (b−o). Sign gives orientation of o→a→b. */
+const orient = (ox: number, oy: number, ax: number, ay: number, bx: number, by: number): number =>
+  (ax - ox) * (by - oy) - (ay - oy) * (bx - ox);
+
+/** Proper segment intersection: true only when the two open segments cross at an
+ *  interior point. Shared endpoints or collinear touching do NOT count, so edges
+ *  that merely graze the polygon boundary are allowed. */
+const segmentsProperlyCross = (a: Point, b: Point, c: Point, d: Point): boolean => {
+  const d1 = orient(c.x, c.y, d.x, d.y, a.x, a.y);
+  const d2 = orient(c.x, c.y, d.x, d.y, b.x, b.y);
+  const d3 = orient(a.x, a.y, b.x, b.y, c.x, c.y);
+  const d4 = orient(a.x, a.y, b.x, b.y, d.x, d.y);
+  return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0)) &&
+    d1 !== 0 && d2 !== 0 && d3 !== 0 && d4 !== 0;
+};
+
+/** True iff the L-shape lies *entirely* inside `poly` — correct for concave
+ *  containers, not just convex ones. Three conditions, cheapest first:
+ *   1. Every L-vertex is inside the polygon.
+ *   2. No L-edge properly crosses any polygon edge (so no arm bulges out across
+ *      a concave edge).
+ *   3. No polygon vertex sits strictly inside the L (so a concave notch of the
+ *      room can't poke into the L while leaving all the L-vertices inside).
+ *  Together these guarantee containment for any simple polygon. */
 const lInside = (l: LParams, poly: Point[]): boolean => {
   const verts = lVertices(l);
+  // 1. all L corners inside the room
   for (const v of verts) if (!pip(v.x, v.y, poly)) return false;
+  // 2. no L edge crosses a room edge
+  const n = verts.length, m = poly.length;
+  for (let i = 0; i < n; i++) {
+    const a = verts[i], b = verts[(i + 1) % n];
+    for (let j = 0; j < m; j++) {
+      const c = poly[j], d = poly[(j + 1) % m];
+      if (segmentsProperlyCross(a, b, c, d)) return false;
+    }
+  }
+  // 3. no room vertex trapped inside the L (concave notch poking in)
+  for (const p of poly) if (pip(p.x, p.y, verts)) return false;
   return true;
 };
 
@@ -145,6 +178,10 @@ export interface OptimiseLShapeParams {
   refineIters?: number;
   /** Minimum allowed arm width in pixels (rejects sliver-arm L's). Default 4. */
   minArmPx?: number;
+  /** Minimum notch leg length in pixels. The removed corner (wN × hN) must be at
+   *  least this on BOTH sides, so a too-shallow nick doesn't count as an L (you
+   *  couldn't make a room out of it). Default 0 = no minimum. */
+  minNotchPx?: number;
 }
 
 export interface OptimiseLShapeResult {
@@ -163,15 +200,19 @@ export interface OptimiseLShapeResult {
  *
  * Strategy: rotate the polygon to an axis-aligned frame, then random-search
  * 7 parameters (x, y, w, h, wN, hN, corner) and hill-climb the best candidate.
- * Containment is verified by point-in-polygon on the 6 L-vertices — exact for
- * convex polygons, approximate for non-convex (a future improvement is to also
- * check edge intersection against the polygon's edges).
+ * Containment is verified by `lInside`, a full polygon-in-polygon test (vertices
+ * inside + no edge crossings + no room vertex trapped in the L), so the result
+ * stays inside concave rooms too — not just convex ones.
  */
 export function computeOptimiseLShape(params: OptimiseLShapeParams): OptimiseLShapeResult {
   const { pts, axisAngleDeg } = params;
   const N = params.randomSamples ?? 4000;
   const refineIters = params.refineIters ?? 200;
   const minArm = params.minArmPx ?? 4;
+  const minNotch = Math.max(0, params.minNotchPx ?? 0);
+  // Notch legs must be ≥ this. When no minimum is set this collapses to `minArm`,
+  // exactly reproducing the previous sampling/validity behaviour.
+  const notchMin = Math.max(minArm, minNotch);
 
   if (pts.length < 3) {
     return { outline: null, areaPx: 0, params: null, success: false, errorMessage: "polygon needs ≥ 3 vertices" };
@@ -191,8 +232,9 @@ export function computeOptimiseLShape(params: OptimiseLShapeParams): OptimiseLSh
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
   const span = Math.min(maxX - minX, maxY - minY);
-  if (span <= 2 * minArm) {
-    return { outline: null, areaPx: 0, params: null, success: false, errorMessage: "polygon too small" };
+  const minSide = notchMin + minArm; // bbox side must fit a notch leg + the remaining arm
+  if (span <= minSide) {
+    return { outline: null, areaPx: 0, params: null, success: false, errorMessage: "polygon too small for the minimum notch" };
   }
 
   // Deterministic PRNG: seed combines polygon vertices + angle so the same input
@@ -207,7 +249,6 @@ export function computeOptimiseLShape(params: OptimiseLShapeParams): OptimiseLSh
   // ─── Random search ───────────────────────────────────────────────────────
   let best: LParams | null = null;
   let bestArea = 0;
-  const minSide = 2 * minArm; // bbox side must accommodate notch + arm
 
   for (let k = 0; k < N; k++) {
     // Random bbox top-left and size, biased toward larger boxes.
@@ -219,8 +260,10 @@ export function computeOptimiseLShape(params: OptimiseLShapeParams): OptimiseLSh
     // Bias: sample side length from a distribution favouring larger sides.
     const w = minSide + Math.pow(rand(), 0.5) * (wMax - minSide);
     const h = minSide + Math.pow(rand(), 0.5) * (hMax - minSide);
-    const wN = minArm + rand() * (w - 2 * minArm);
-    const hN = minArm + rand() * (h - 2 * minArm);
+    // Notch leg ∈ [notchMin, side − minArm] so the notch is ≥ the minimum and the
+    // remaining arm is ≥ minArm.
+    const wN = notchMin + rand() * (w - minArm - notchMin);
+    const hN = notchMin + rand() * (h - minArm - notchMin);
     const corner = ALL_CORNERS[(rand() * 4) | 0];
     const cand: LParams = { x: x0, y: y0, w, h, wN, hN, corner };
     if (!lInside(cand, rotPoly)) continue;
@@ -245,9 +288,9 @@ export function computeOptimiseLShape(params: OptimiseLShapeParams): OptimiseLSh
       (l, s) => ({ ...l, w: l.w + s }),                              // expand right
       (l, s) => ({ ...l, y: l.y - s, h: l.h + s }),                  // expand up
       (l, s) => ({ ...l, h: l.h + s }),                              // expand down
-      // Shrink the notch (always increases area when valid).
-      (l, s) => ({ ...l, wN: Math.max(minArm, l.wN - s) }),
-      (l, s) => ({ ...l, hN: Math.max(minArm, l.hN - s) }),
+      // Shrink the notch (always increases area when valid) — but not below the min notch.
+      (l, s) => ({ ...l, wN: Math.max(notchMin, l.wN - s) }),
+      (l, s) => ({ ...l, hN: Math.max(notchMin, l.hN - s) }),
       // Grow the notch (sometimes needed to keep the L inside a non-convex polygon).
       (l, s) => ({ ...l, wN: Math.min(l.w - minArm, l.wN + s) }),
       (l, s) => ({ ...l, hN: Math.min(l.h - minArm, l.hN + s) }),
@@ -255,7 +298,9 @@ export function computeOptimiseLShape(params: OptimiseLShapeParams): OptimiseLSh
     for (const tweak of tweaks) {
       const cand = tweak(best, step);
       if (cand.w < minSide || cand.h < minSide) continue;
-      if (cand.wN <= 0 || cand.hN <= 0 || cand.wN >= cand.w || cand.hN >= cand.h) continue;
+      // Notch legs ≥ the minimum, and the remaining arms ≥ minArm.
+      if (cand.wN < notchMin || cand.hN < notchMin) continue;
+      if (cand.w - cand.wN < minArm || cand.h - cand.hN < minArm) continue;
       if (!lInside(cand, rotPoly)) continue;
       const a = lArea(cand);
       if (a > bestArea) { bestArea = a; best = cand; improved = true; }

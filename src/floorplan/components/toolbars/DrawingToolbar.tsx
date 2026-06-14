@@ -5,6 +5,7 @@ import {
   Combine,
   FilePlus2,
   Hand,
+  Image as ImageIcon,
   MapPin,
   MousePointer2,
   Pencil,
@@ -16,6 +17,7 @@ import {
   Hexagon,
   Dot,
   Spline,
+  Waypoints,
   Square,
   Trash2,
   Type,
@@ -93,6 +95,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
   const [setScalePopoverOpen, setSetScalePopoverOpen] = useState<boolean>(false);
   // "Select" dropdown — chooses scope for the Select tool: All / Node / Segment / Space.
   const [selectPopoverOpen, setSelectPopoverOpen] = useState<boolean>(false);
+  const [segmentModeOpen, setSegmentModeOpen] = useState<boolean>(false);
 
   const resetModes = () => {
     p.onAddDoorModeChange(false);
@@ -178,14 +181,57 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               label="Add Node"
               onClick={() => p.onToolChange("point")}
             />
-            <ToolButton
-              active={p.tool === "single-segment"}
-              icon={<Slash className="h-6 w-6 text-teal-700" />}
-              label="Add Segment"
-              onClick={() => {
-                p.onSingleSegmentClick?.();
-              }}
-            />
+            {/* Add Segment — split button. Main click starts the single-segment (line) tool; the corner
+             *  chevron offers "Segment" (plain line) or "Path" (Draw Path dialog → path segments). */}
+            <div className="relative h-9 w-9 shrink-0">
+              <Button
+                variant={p.tool === "single-segment" ? "default" : "outline"}
+                size="sm"
+                className="h-9 w-9 p-0"
+                title="Add Segment"
+                aria-label="Add Segment"
+                onClick={() => { p.onSingleSegmentClick?.(); }}
+              >
+                <Slash className="h-6 w-6 text-teal-700" />
+              </Button>
+              <Popover open={segmentModeOpen} onOpenChange={setSegmentModeOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70 hover:bg-white"
+                    title="Segment type"
+                    aria-label="Segment type"
+                    aria-expanded={segmentModeOpen}
+                  >
+                    <ChevronDown className="h-2.5 w-2.5 text-slate-500" aria-hidden />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
+                  <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Add Segment as</h4>
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant={p.tool === "single-segment" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                      onClick={() => { p.onSingleSegmentClick?.(); setSegmentModeOpen(false); }}
+                    >
+                      <Slash className="h-4 w-4" />
+                      Segment
+                    </Button>
+                    {/* Path — opens the Draw Path dialog (thickness / type / style); draws PATH SEGMENTS. */}
+                    <Button
+                      variant={p.drawingPath ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                      onClick={() => { p.onDrawPathClick(); setSegmentModeOpen(false); }}
+                    >
+                      <Spline className="h-4 w-4 text-violet-600" />
+                      Path
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
           {/* Row 3 — Add Space (popover) + Freehand. */}
           <div className="grid grid-cols-2 place-items-center gap-2">
@@ -281,19 +327,6 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                   </svg>
                   Polygon
                 </Button>
-                {/* 3) Path — opens the Draw Path dialog (moved here from the main toolbar). */}
-                <Button
-                  variant={p.drawingPath ? "default" : "ghost"}
-                  size="sm"
-                  className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
-                  onClick={() => {
-                    p.onDrawPathClick();
-                    setAddSpaceOpen(false);
-                  }}
-                >
-                  <Spline className="h-4 w-4 text-violet-600" />
-                  Path
-                </Button>
               </div>
             </PopoverContent>
             </Popover>
@@ -317,7 +350,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 variant={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode ? "default" : "outline"}
                 size="sm"
                 className="h-9 w-9 p-0"
-                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : "Space only"})`}
+                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : p.selectFilter === "graph" ? "Graph (connected)" : p.selectFilter === "image" ? "Image only" : "Space only"})`}
                 aria-label="Select"
                 onClick={() => {
                   p.onSelectFilterChange("all");
@@ -352,6 +385,8 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                     { v: "node", label: "Node", Icon: Dot },
                     { v: "segment", label: "Segment", Icon: Slash },
                     { v: "space", label: "Space", Icon: Hexagon },
+                    { v: "graph", label: "Graph (connected)", Icon: Waypoints },
+                    { v: "image", label: "Image", Icon: ImageIcon },
                   ] as const).map(({ v, label, Icon }) => (
                     <Button
                       key={v}
