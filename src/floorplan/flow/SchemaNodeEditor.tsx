@@ -10,6 +10,15 @@ import {
 let schemaSeq = 1;
 const nextEntryId = () => `sp_${schemaSeq++}_${Math.random().toString(36).slice(2, 6)}`;
 
+/** Read an uploaded file (SVG icon) as a data URL for storage in the schema. */
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+
 const KIND_OPTIONS: { value: SchemaPropEntry["kind"]; label: string }[] = [
   { value: "number", label: "Number" },
   { value: "select", label: "Options" },
@@ -119,6 +128,53 @@ export const SchemaNodeEditor = ({
                       update(e.id, { options, def });
                     }}
                   />
+                )}
+                {/* Per-option SVG icons — give each type (wall / door / window, furniture kind, …) a custom
+                    icon. Stored as a data URL under optionIcons[value]. */}
+                {e.kind === "select" && e.options.length > 0 && (
+                  <div className="space-y-1 rounded border border-slate-100 bg-slate-50/60 p-1">
+                    <span className="text-[9px] uppercase tracking-wide text-slate-400">Type icons (SVG)</span>
+                    {e.options.map((opt) => {
+                      const icon = e.optionIcons?.[opt];
+                      return (
+                        <div key={opt} className="flex items-center gap-1.5">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 bg-white">
+                            {icon ? <img src={icon} alt="" className="h-4 w-4 object-contain" /> : <span className="text-[8px] text-slate-300">—</span>}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[10px] text-slate-600" title={opt}>{opt}</span>
+                          <label className={`flex h-5 cursor-pointer items-center rounded border border-slate-200 bg-white px-1.5 text-[9px] text-slate-600 hover:bg-slate-100${nd}`}>
+                            {icon ? "Replace" : "Upload SVG"}
+                            <input
+                              type="file"
+                              accept=".svg,image/svg+xml"
+                              className="hidden"
+                              onChange={async (ev) => {
+                                const file = ev.target.files?.[0];
+                                ev.target.value = "";
+                                if (!file) return;
+                                const dataUrl = await readFileAsDataUrl(file);
+                                update(e.id, { optionIcons: { ...(e.optionIcons ?? {}), [opt]: dataUrl } });
+                              }}
+                            />
+                          </label>
+                          {icon && (
+                            <button
+                              type="button"
+                              title="Remove icon"
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600${nd}`}
+                              onClick={() => {
+                                const next = { ...(e.optionIcons ?? {}) };
+                                delete next[opt];
+                                update(e.id, { optionIcons: Object.keys(next).length ? next : undefined });
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
                 {/* Default value (applies to every component until it's edited individually). */}
                 {e.kind === "number" && (

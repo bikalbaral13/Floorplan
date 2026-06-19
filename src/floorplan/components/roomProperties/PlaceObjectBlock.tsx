@@ -19,6 +19,9 @@ export type PlacedObject = {
   kind?: PlacedObjectKind;
   locked?: boolean;
   accountWallThickness?: boolean;
+  /** When true the placement runner emits a selectable "object" NODE (point + NodeMeta) instead of a
+   *  footprint quad of walls. Set by the Flow Place Object node's compiled recipe (`asObjectNodes`). */
+  asNode?: boolean;
 };
 
 const createId = () => Math.random().toString(36).slice(2, 10);

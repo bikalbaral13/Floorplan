@@ -41,6 +41,18 @@ export interface Wall {
   thickness: number;
   color: string;
   dashed?: boolean;
+  /** Stroke style for the segment in 2D. Overrides the legacy `dashed` flag when set. */
+  lineStyle?: "solid" | "dashed" | "dotted";
+  /** Fill the segment's interior with a hatch pattern (Display block) instead of a solid colour. */
+  hatch?: boolean;
+  /** Hatch pattern kind. Default "diagonal". */
+  hatchStyle?: "diagonal" | "dots";
+  /** Hatch spacing in world pixels (line gap / dot pitch). Default 8. */
+  hatchSpacing?: number;
+  /** Hatch rotation in degrees (diagonal only). Default 45. */
+  hatchAngle?: number;
+  /** Hatch line thickness / dot radius factor. Default 1. */
+  hatchWeight?: number;
   /** fill = solid wall; outline = hollow rectangle stroke only */
   mode?: WallMode;
   /** How the start→end spine aligns to the wall thickness */
@@ -298,6 +310,13 @@ export interface Wall {
   sillHeightM?: number;
   /** Window only: when true, the 3D primitive renders the sash swung open; 2D is unaffected. */
   isOpen?: boolean;
+  /** Flow "Segment to 3D": custom 3D extrusion height (m) overriding the default storey height for this
+   *  wall, and the extrude direction. Transient — set when building the 3D model, not persisted. */
+  extrude3dHeightM?: number;
+  extrude3dDir?: "up" | "down";
+  /** Flow "Node to Object": a placement-preview wall that must ALWAYS render as its 3D primitive (by
+   *  kind), independent of the 2D-Symbol placement mode. Transient — set when building the 3D model. */
+  objectPrimitive3d?: boolean;
   /** Plot boundary only: sub-type. */
   plotBoundaryType?: "road" | "plot" | "open" | "reservation" | "water" | "row";
   /** Plot boundary only: computed setback in meters. */
@@ -398,6 +417,8 @@ export interface Room {
   holes?: Point[][];
   fill: string;
   stroke: string;
+  /** Fill opacity 0–1 (Display block). When unset the raw `fill` colour is used as-is. */
+  fillOpacity?: number;
   label?: string;
   netArea?: number;
   /** Area type: built-in (`room` / `floorplate-boundary` / `plot-boundary`) or a custom slug
@@ -502,7 +523,7 @@ export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "
  *  - "graph": clicking any segment selects its whole connected component (links + shared-endpoint
  *    nodes) — a flood-fill across junctions, so a drawn network selects as one unit.
  *  Doors/windows/objects always fall back to "all" — only available without a scope. */
-export type SelectFilter = "all" | "node" | "segment" | "space" | "graph" | "image";
+export type SelectFilter = "all" | "node" | "segment" | "space" | "graph" | "image" | "grid";
 
 export type Tool =
   | "select"
@@ -659,6 +680,31 @@ export interface NodeMeta {
   objRotation?: number;
   /** Which point of the object's box coincides with the node. Default "center". */
   objAnchor?: ObjectAnchor;
+  /** Space this object node is associated with (display id, e.g. "Space003"). When set, the object is
+   *  placed ON that space's boundary at `boundaryPosition` and drag is constrained to the perimeter. */
+  connectedSpaceId?: string;
+  /** Position 0–100 along the connected space's perimeter (boundary-placed objects). Default 50. */
+  boundaryPosition?: number;
+  /** Inward setback (metres) from the connected space's boundary. Default 0. */
+  boundarySetback?: number;
+  /** 2D node-marker shape (Display block). Default "dot". */
+  dispShape?: "dot" | "circle" | "square" | "triangle";
+  /** 2D node-marker stroke/fill treatment (Display block). Default "solid". */
+  dispStyle?: "solid" | "dashed" | "dotted";
+  /** Node-marker stroke/fill colour (Display block). Falls back to the default slate when unset. */
+  dispColor?: string;
+  /** Node-marker size multiplier on the base radius (Display block). Default 1. */
+  dispSize?: number;
+  /** Fill the node marker with a hatch pattern (Display block) instead of a solid fill. */
+  hatch?: boolean;
+  /** Hatch pattern kind. Default "diagonal". */
+  hatchStyle?: "diagonal" | "dots";
+  /** Hatch spacing in world pixels (line gap / dot pitch). Default 8. */
+  hatchSpacing?: number;
+  /** Hatch rotation in degrees (diagonal only). Default 45. */
+  hatchAngle?: number;
+  /** Hatch line thickness / dot radius factor. Default 1. */
+  hatchWeight?: number;
 }
 
 /** Placement point of an object symbol relative to the node. */
@@ -708,7 +754,7 @@ export const objectKindDefaultSize = (kind?: string): { w: number; h: number } =
 export interface GraphPropDef {
   key: string;
   label?: string;
-  kind?: "number" | "select" | "checkbox" | "text";
+  kind?: "number" | "select" | "checkbox" | "text" | "color";
   unit?: string;
   default?: number | string | boolean;
   min?: number;
@@ -718,6 +764,11 @@ export interface GraphPropDef {
   /** Solver binding (see above). Properties without a role are carried but not consumed. */
   role?: string;
   decimals?: number;
+  /** Conditional visibility: only render this property when another property's current value matches.
+   *  `when` is the discriminator property's key; the row shows when its value `equals` the given value,
+   *  or is `in` the given list. Used for type-driven schemas (e.g. door fields shown only when
+   *  type === "door"). Omitted → always shown. */
+  showIf?: { when: string; equals?: string | number | boolean; in?: (string | number | boolean)[] };
 }
 
 /** One read-only result row a solver publishes per component (shown in the Metrics tab). */
@@ -733,11 +784,61 @@ export interface GraphSchema {
 
 export type GraphAttrValue = number | string | boolean;
 
+/** A parametric construction grid placed on the canvas (Create Grid tool). Stores its definition; the
+ *  lattice lines are derived for rendering. `x,y` is the top-left origin (world px); cells are cellW×cellH
+ *  px (= cell size in metres × pixelsPerMeter at creation). */
+export interface GridDef {
+  id: string;
+  x: number;
+  y: number;
+  cols: number;
+  rows: number;
+  cellW: number;
+  cellH: number;
+  rotation?: number;
+  color?: string;
+  layerId?: string;
+  /** Optional per-cell value generation: each cell (reading order) gets min, min+delta, … cycling up to
+   *  max. When `delta` > 0 and `max` > `min`, the generated value is drawn in each cell. */
+  minValue?: number;
+  maxValue?: number;
+  delta?: number;
+  /** When set, each cell gets a (deterministic) random value in [min, max] instead of the cycling
+   *  sequence. Snapped to the `delta` grid when `delta` > 0. */
+  randomValues?: boolean;
+  /** Seed for the deterministic random-value hash — kept stable across renders; reshuffle bumps it. */
+  randomSeed?: number;
+}
+
+/** Per-cell value for a grid's "Range of values". `ordinal` is the row-major cell index (j*cols + i).
+ *  Random mode: deterministic hash of (seed, ordinal) mapped into [min, max], snapped to the `delta`
+ *  grid when delta > 0. Sequential mode: min, min+delta, … cycling up to max. Returns null when no
+ *  value applies (e.g. delta = 0 in sequential mode, or max ≤ min). */
+export function gridCellValue(g: GridDef, ordinal: number): number | null {
+  const gMin = g.minValue ?? 0, gMax = g.maxValue ?? 0, gDelta = g.delta ?? 0;
+  if (g.randomValues) {
+    if (gMax <= gMin) return null;
+    let h = ((ordinal + 1) * 2654435761 + (g.randomSeed ?? 1) * 40503) >>> 0;
+    h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h ^= h >>> 13;
+    const r = (h >>> 0) / 4294967296;
+    let v = gMin + r * (gMax - gMin);
+    if (gDelta > 0) v = gMin + Math.round((v - gMin) / gDelta) * gDelta;
+    return Math.min(gMax, Math.max(gMin, v));
+  }
+  if (gDelta > 0 && gMax > gMin) {
+    const steps = Math.floor((gMax - gMin) / gDelta) + 1;
+    return gMin + (ordinal % steps) * gDelta;
+  }
+  return null;
+}
+
 export interface FloorPlanModel {
   walls: Wall[];
   rooms: Room[];
   objects: FloorObject[];
   furniture: FurnitureItem[];
+  /** Parametric construction grids (Create Grid tool). */
+  grids?: GridDef[];
   imageUnderlay: ImageUnderlay | null;
   /** Optional OSM overlay configuration. Renders only when the "map" layer is visible. */
   mapOverlay?: MapOverlayState | null;
@@ -770,6 +871,10 @@ export interface FloorPlanModel {
     segments: Record<string, Record<string, GraphAttrValue>>;
     spaces?: Record<string, Record<string, GraphAttrValue>>;
     graphs?: Record<string, Record<string, GraphAttrValue>>;
+    /** Non-geometric "Information" records (e.g. the Layout title block), keyed by record id.
+     *  Like `graphs`, these carry no canvas geometry — they hold schema-driven sheet metadata
+     *  (consultancy / project / scale / …) fed to the Layout sheet. */
+    information?: Record<string, Record<string, GraphAttrValue>>;
   };
 }
 
@@ -816,31 +921,20 @@ export const SITE_GROUP_LAYER_IDS: ReadonlySet<string> = new Set([
   DEFAULT_INSET_LAYER_ID,
   DEFAULT_DEDUCTION_LAYER_ID,
 ]);
+/** The seed layer table. Intentionally MINIMAL — only the built-in Layer "0". All type layers
+ *  (Wall / Door / Window / Node / Segment …) are now SCHEMA-DRIVEN: load a workflow template whose
+ *  Schema feeds a "Schema to Layers" node and the matching foldable Node / Segment layer blocks appear
+ *  live in the Layers panel. With no template loaded, the panel shows just Layer 0.
+ *
+ *  The DEFAULT_*_LAYER_ID constants below remain exported (entities still carry these layerIds for
+ *  auto-stamping / color-by-type), but unknown layerIds resolve to visible, so nothing disappears. */
 export const defaultLayerTable = (): Layer[] => [
-  { id: DEFAULT_LAYER_ID,             name: "0",              color: "#000000", visible: true,  locked: false, order: 0 },
-  { id: DEFAULT_WALL_LAYER_ID,        name: "Wall",           color: "#475569", visible: true,  locked: false, order: 1 },
-  { id: DEFAULT_DOOR_LAYER_ID,        name: "Door",           color: "#b45309", visible: true,  locked: false, order: 2 },
-  { id: DEFAULT_WINDOW_LAYER_ID,      name: "Window",         color: "#0ea5e9", visible: true,  locked: false, order: 3 },
-  { id: DEFAULT_FURNITURE_LAYER_ID,   name: "Furniture",      color: "#22c55e", visible: true,  locked: false, order: 4 },
-  { id: DEFAULT_IMAGE_LAYER_ID,       name: "Image",          color: "#a855f7", visible: true,  locked: false, order: 5 },
-  { id: DEFAULT_SPACE_LAYER_ID,       name: "Space",          color: "#f59e0b", visible: true,  locked: false, order: 6 },
-  // Partitions — interior dividers/partition walls. Always seeded by default and
-  // listed directly beneath the Space layer in the Layers panel.
-  { id: DEFAULT_PARTITION_LAYER_ID,   name: "Partitions",     color: "#0d9488", visible: true,  locked: false, order: 7 },
-  // Dedicated layers for the urban-design Space types — Spaces are auto-assigned
-  // to the matching layer when their roomType is set, so visibility / locking
-  // can be toggled per stage of the cascade (site → buildable → footprint →
-  // basement) without hunting through the Spaces collection. Ordered so Site
-  // Area paints beneath Buildable, which paints beneath Footprint, etc.
-  { id: DEFAULT_SITE_LAYER_ID,        name: "Site Area",      color: "#dc2626", visible: true,  locked: false, order: 8 },
-  { id: DEFAULT_BUILDABLE_LAYER_ID,   name: "Buildable Area", color: "#16a34a", visible: true,  locked: false, order: 9 },
-  { id: DEFAULT_FOOTPRINT_LAYER_ID,   name: "Footprint Area", color: "#7f1d1d", visible: true,  locked: false, order: 10 },
-  { id: DEFAULT_BASEMENT_LAYER_ID,    name: "Basement Area",  color: "#065f46", visible: true,  locked: false, order: 11 },
-  { id: DEFAULT_INSET_LAYER_ID,       name: "Inset Area",     color: "#0ea5e9", visible: true,  locked: false, order: 12 },
-  // Amenity-deduction piece carved out of the inset (BUA "Show in canvas").
-  { id: DEFAULT_DEDUCTION_LAYER_ID,   name: "Deduction Area", color: "#ea580c", visible: true,  locked: false, order: 13 },
-  // Map layer is hidden by default — toggling it visible opens the OSM search panel.
-  { id: DEFAULT_MAP_LAYER_ID,         name: "Map",            color: "#0284c7", visible: false, locked: false, order: 14 },
+  { id: DEFAULT_LAYER_ID,       name: "0",     color: "#000000", visible: true,  locked: false, order: 0 },
+  // Image underlay layer — seeded so the imported reference image can be toggled / locked.
+  { id: DEFAULT_IMAGE_LAYER_ID, name: "Image", color: "#a855f7", visible: true,  locked: false, order: 1 },
+  // Map is a system layer (not a drawing-type layer): seeded but hidden. Toggling it visible opens the
+  // OSM search panel; an imported GeoJSON / OSM overlay renders under the drawing when it's visible.
+  { id: DEFAULT_MAP_LAYER_ID,   name: "Map",   color: "#0284c7", visible: false, locked: false, order: 2 },
 ];
 
 /** Layer for a given Space (room) type. Drives the auto-assignment in the

@@ -8,6 +8,9 @@ export interface CompileResult {
   opCount: number;
   /** Execution order (node ids), for display. */
   order: string[];
+  /** Node ids the recipe engine commits (op nodes + Space Creator). Lets the host commit the geometry
+   *  of OTHER (preview-only) terminal nodes — e.g. Split Segment pieces — without double-committing. */
+  committedNodeIds: string[];
   error?: string;
 }
 
@@ -33,7 +36,7 @@ const producesName = (nodeId: string): string => `n_${nodeId}`;
  * The graph is linearised by a topological sort (Kahn). Cycles are rejected.
  */
 export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "preview" = "commit"): CompileResult {
-  const empty: CompileResult = { json: "{}", opCount: 0, order: [] };
+  const empty: CompileResult = { json: "{}", opCount: 0, order: [], committedNodeIds: [] };
   if (nodes.length === 0) return { ...empty, error: "Empty flow — add at least one tool node." };
 
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -78,7 +81,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   // A floating/unconnected tool node produces no op — so it never previews or runs until it's
   // wired to the Selected Space (or to another tool that is).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source").map((n) => n.id);
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "grid-source").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
@@ -95,6 +98,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "source") continue;
     if (data.tool === "space-creator") continue; // generator → emitted as a top-level `create`, not an op
     if (data.tool === "graph-source") continue; // graph generator → preview-only (no recipe runner)
+    if (data.tool === "grid-source") continue; // canvas grid reference → preview-only (no recipe runner)
     if (data.tool === "segment-source") continue; // segment generator → preview-only (no recipe runner)
     if (data.tool === "node-source") continue; // node generator → preview-only (no recipe runner)
     if (data.tool === "canvas-source") continue; // whole-canvas generator → preview-only (no recipe runner)
@@ -115,13 +119,35 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "mitered-join" || data.tool === "graph-smooth") continue;
     if (data.tool === "buffer") continue; // segment→Space buffer — preview-only (no recipe runner)
     if (data.tool === "segment-split") continue; // segment splitter — preview-only (no recipe runner)
+    if (data.tool === "segment-to-door") continue; // door symbol from a segment — preview-only (no recipe runner)
+    if (data.tool === "segment-to-window") continue; // window symbol from a segment — preview-only (no recipe runner)
+    if (data.tool === "node-to-object") continue; // furniture symbol from a node — preview-only (no recipe runner)
+    if (data.tool === "node-to-staircase") continue; // 2D staircase from a node — preview-only (no recipe runner)
+    if (data.tool === "node-to-footing") continue; // column-footing section from a node — preview-only (no recipe runner)
     if (data.tool === "bloom") continue; // node→Space n-gon — preview-only (no recipe runner)
     if (data.tool === "pull") continue; // two-Space pull — preview-only (no recipe runner)
     if (data.tool === "transform") continue; // affine transform — preview-only (no recipe runner)
+    if (data.tool === "hatching") continue; // visual fill/hatch styling — preview-only pass-through (no recipe op)
+    if (data.tool === "display-segment") continue; // segment stroke styling — preview-only pass-through (no recipe op)
+    if (data.tool === "display-node") continue; // node-marker styling — preview-only pass-through (no recipe op)
     if (data.tool === "graph-metrics") continue; // value-only / graph pass-through — not a recipe op
     if (data.tool === "show-direction") continue; // flow-direction overlay / graph pass-through — not a recipe op
+    if (data.tool === "dimension") continue; // dimension-string overlay / graph pass-through — not a recipe op
+    if (data.tool === "area-dimension") continue; // centroid area annotation — not a recipe op
     if (data.tool === "merge") continue; // boolean union — preview-only (no recipe runner yet)
     if (data.tool === "graph-to-spaces") continue; // face extraction — preview-only (no recipe runner)
+    if (data.tool === "graph-to-grid") continue; // grid generator — preview-only (emits a graph, no recipe op)
+    if (data.tool === "grid-field") continue; // synthetic elevation grid-field — preview-only (no recipe op)
+    if (data.tool === "cellular-automaton") continue; // cellular-automaton grid-field — preview-only (no recipe op)
+    if (data.tool === "laplace-solver") continue; // Laplace potential grid-field — preview-only (no recipe op)
+    if (data.tool === "fill-depressions") continue; // DEM sink-fill grid-field — preview-only (no recipe op)
+    if (data.tool === "flow-direction") continue; // D8 flow-direction grid-field — preview-only (no recipe op)
+    if (data.tool === "flow-accumulation") continue; // flow-accumulation grid-field — preview-only (no recipe op)
+    if (data.tool === "watershed") continue; // watershed delineation grid-field — preview-only (no recipe op)
+    if (data.tool === "morphology") continue; // morphological grid-field op — preview-only (no recipe op)
+    if (data.tool === "grid-distance") continue; // grid-field heatmap — preview-only (no recipe op)
+    if (data.tool === "grid-threshold") continue; // grid-field mask — preview-only (no recipe op)
+    if (data.tool === "marching-squares") continue; // iso-contours → graph — preview-only (no recipe op)
     if (data.tool === "longest-branch") continue; // graph longest-path — preview-only (no recipe runner)
     if (data.tool === "graph-reduce") continue; // graph reduce/clean ops — preview-only (no recipe runner)
     if (data.tool === "voronoi-bloom") continue; // graph node-grown Voronoi cells — preview-only (no recipe runner)
@@ -129,6 +155,8 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "param-manip") continue; // feedback controller — preview-only (no recipe runner)
     if (data.tool === "image" || data.tool === "vectorise" || data.tool === "object-detection") continue; // image nodes — preview-only (no recipe runner)
     if (data.tool === "pipe-solver") continue; // pipe network solve — preview-only (results live on components)
+    if (data.tool === "frame-builder") continue; // structural footprint generator — preview-only (no recipe runner)
+    if (data.tool === "wall-builder") continue; // schema-driven mitred walls — preview-only (no recipe runner)
     if (data.tool === "schema" || data.tool === "output-schema") continue; // component-property schemas — data only, never recipe ops
     if (data.tool === "mesh") continue; // meshing → cells — preview-only (no recipe runner)
     if (data.tool === "circle-packing") continue; // inscribed-circle packing — preview-only (no recipe runner)
@@ -172,6 +200,9 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     // under params.objects (back-compat: an older flat single-object node is normalised here too).
     if (data.tool === "place-object") {
       params = {
+        // Flow Place Object drops selectable "object" NODES (point + NodeMeta) on the canvas — not the
+        // dummy footprint-quad walls the Space-tool block emits. The recipe handler reads this flag.
+        asObjectNodes: true,
         objects: placeObjectEntries(data.params).map((o) => ({
           kind: o.kind,
           length: o.length,
@@ -284,7 +315,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
         const tool = dataOf(u).tool;
         if (tool === "source") return null;
         // See THROUGH pass-through nodes (BUA/Math forward their input space; Densify is commit-transparent).
-        if (tool === "bua" || tool === "math" || tool === "densify" || tool === "mitered-join" || tool === "graph-smooth") {
+        if (tool === "bua" || tool === "math" || tool === "densify" || tool === "mitered-join" || tool === "graph-smooth" || tool === "hatching") {
           const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
           return up ? resolveOn(up.source, up.sourceHandle) : null;
         }
@@ -310,7 +341,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
         if (t === "source") { const sid = String(dataOf(u).params.id ?? "").trim(); return sid || null; }
         // A Space Creator commits as a `create`d room with a stable id — target it by that id.
         if (t === "space-creator") return `flowcreate_${srcId}`;
-        if (t === "bua" || t === "math" || t === "densify" || t === "mitered-join" || t === "graph-smooth") {
+        if (t === "bua" || t === "math" || t === "densify" || t === "mitered-join" || t === "graph-smooth" || t === "hatching") {
           const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
           return up ? resolveSourceSpace(up.source) : null;
         }
@@ -351,11 +382,14 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     })
     .filter((e): e is { id: string; points: number[][] } => e !== null);
 
-  // Preview-only nodes (graph ribbon / smoothing / densify) produce no commit op but DO render live, so a
-  // flow containing them isn't an error — it just has 0 committable operations.
-  const hasPreviewOnly = nodes.some((n) => reachable.has(n.id) && ["mitered-join", "graph-smooth", "densify", "buffer", "bloom", "pull", "separate", "transform", "show-direction"].includes(dataOf(n).tool));
+  // Preview-only nodes (Split Segment, graph ribbon, smoothing, densify, …) produce no commit op but DO
+  // render live and can be committed as canvas geometry, so a flow built on any root (Space / Space
+  // Creator / Graph / Segment / Node / Image / Canvas) with at least one tool connected isn't an error —
+  // it just has 0 RECIPE operations. Any reachable non-root tool node counts.
+  const ROOT_TOOLS = new Set(["source", "space-creator", "graph-source", "segment-source", "node-source", "canvas-source", "image", "grid-source"]);
+  const hasPreviewOnly = nodes.some((n) => reachable.has(n.id) && !ROOT_TOOLS.has(dataOf(n).tool));
   if (operations.length === 0 && createEntries.length === 0 && !hasPreviewOnly) {
-    return { ...empty, error: "No tool nodes to run — add a Space Creator or connect a tool to the Space node." };
+    return { ...empty, error: "Nothing to run — connect a tool node to a Space / Segment / Graph / Node / Image / Canvas source." };
   }
 
   // Embed the Space (source) node's entered id so commit targets THAT space (by display id "Space001",
@@ -365,5 +399,8 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   const recipe: Record<string, unknown> = { operations };
   if (sourceSpaceId) recipe.sourceSpaceId = sourceSpaceId;
   if (createEntries.length) recipe.create = createEntries;
-  return { json: JSON.stringify(recipe, null, 2), opCount: operations.length, order: opOrder };
+  // Op nodes + Space Creator nodes are committed by the recipe engine; everything else terminal is
+  // committed by the host from the live preview (so Split Segment etc. produce real geometry).
+  const createdNodeIds = nodes.filter((n) => dataOf(n).tool === "space-creator" && reachable.has(n.id)).map((n) => n.id);
+  return { json: JSON.stringify(recipe, null, 2), opCount: operations.length, order: opOrder, committedNodeIds: [...opOrder, ...createdNodeIds] };
 }

@@ -20,7 +20,7 @@
 import type { GraphAttrValue, GraphPropDef, GraphResultDef, GraphSchema } from "../../types";
 
 export interface PipeGraphNode { id: string; x: number; y: number }
-export interface PipeGraphEdge { id: string; a: string; b: string; lengthM: number }
+export interface PipeGraphEdge { id: string; a: string; b: string; lengthM: number; /** Canvas segment thickness (px) — used by Mitered Join's per-segment width mode. */ widthPx?: number; /** Door/window segment — kept for Mitered Join continuity + width, but skipped by the pipe solver. */ opening?: boolean }
 
 /** The canvas graph + schema attribute values, prepared by the host. */
 export interface PipeGraphInput {
@@ -29,6 +29,9 @@ export interface PipeGraphInput {
   attrs: {
     nodes: Record<string, Record<string, GraphAttrValue>>;
     segments: Record<string, Record<string, GraphAttrValue>>;
+    /** Graph-level schema attribute values (keyed by graph display id) — consumed by the Frame Builder
+     *  for the graph-wide "subtract" flag. Carried through verbatim; the pipe solver ignores it. */
+    graphs?: Record<string, Record<string, GraphAttrValue>>;
   };
   /** Change signature (geometry + attrs) for eval caching. */
   key: string;
@@ -187,6 +190,7 @@ export const solvePipeNetwork = (
   type Pipe = { id: string; a: number; b: number; L: number; d: number; rough: number; mK: number; area: number };
   const pipes: Pipe[] = [];
   for (const e of graph.edges) {
+    if (e.opening) continue; // door/window opening — not a pipe
     const a = nodeIdx.get(e.a);
     const b = nodeIdx.get(e.b);
     if (a == null || b == null || a === b) continue;

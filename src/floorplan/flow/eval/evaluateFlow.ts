@@ -8,15 +8,183 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 import type { Point } from "../../types";
-import { FLOW_TOOLS, outputSlots, inputProps, placeObjectRng, randomOptimiseRectParams, schemaNodeToSchemas, schemaNodeToResultDefs, type FlowNodeData, type FlowToolType } from "../flowTypes";
+import { FLOW_TOOLS, outputSlots, inputProps, placeObjectRng, randomOptimiseRectParams, schemaNodeToSchemas, schemaNodeToResultDefs, schemaEntries, type FlowNodeData, type FlowToolType } from "../flowTypes";
 import { computePull, type PullParams } from "../../algorithms/geometry/pull";
-import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalSkeletonRegions, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, voronoiSeeds, computeOptimalOptimiseTilt } from "./evalNodes";
+import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalSkeletonRegions, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, voronoiSeeds, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow } from "./evalNodes";
+import { toFootingSpec, footingElevationPolys, footingPlanPolys, footingMeshPrisms } from "./footing";
+import { toStaircaseSpec, staircaseElevationPolys, staircaseMeshPrisms, type ElevationView } from "./staircase";
+import { floorplanElevationPolys, type ElevSeg, type ElevKind, type ElevationView as FloorElevView } from "./floorplanElevation";
+import type { FlowMesh, FlowMeshPrism } from "./meshTypes";
 import { conditionMetricValue, evaluateSpaceCondition } from "../conditional";
 import { computeVoronoiEdges, type VoronoiMetric } from "../../algorithms/partitioning/voronoi";
 import { polygonArea } from "../../algorithms/geometry/polygon";
 import { computeBua } from "../bua";
 
 const num = (v: unknown, d: number): number => (typeof v === "number" && isFinite(v) ? v : Number(v) || d);
+
+/** Build a 2D plan staircase anchored at node point `p`. Returns filled flight/landing rectangles
+ *  (`fill`) and stroked tread lines + per-flight direction arrows (`lines`), in world-pixel coords.
+ *  `config` selects the shape: "straight" (one going + a top landing), "u-shape" (half-turn: a flight, a
+ *  landing, the rest returning the other way, split at `midSteps`), or "u-shape-mid" (two 90° turns: a
+ *  flight → landing → a perpendicular `midSteps` flight → landing → a flight returning opposite the first).
+ *  The first flight runs along ±x (direction), width along +y; the whole assembly is then rotated about
+ *  the node by `rotation`°. */
+export function computeNodeStaircase(p: Point, params: Record<string, unknown>, ppm: number): { fill: Point[][]; lines: Point[][] } {
+  const steps = Math.max(2, Math.round(num(params.steps, 14)));
+  const T = Math.max(0.05, num(params.tread, 0.28)) * ppm;          // going (tread depth) in px
+  const W = Math.max(0.1, num(params.width, 1)) * ppm;              // flight width in px
+  const dir = params.direction === "rtl" ? -1 : 1;
+  const midSteps = Math.round(num(params.midSteps, 0));
+  const L = Math.max(0, num(params.landingWidth, 1)) * ppm;
+  const G = Math.max(0, num(params.midSpace, 0.1)) * ppm;
+  const rotDeg = num(params.rotation, 0);
+  const config = params.config === "u-shape" ? "u-shape" : params.config === "u-shape-mid" ? "u-shape-mid" : "straight";
+  const fillLocal: Point[][] = [];
+  const lineLocal: Point[][] = [];
+  const rect = (x0: number, y0: number, x1: number, y1: number): Point[] =>
+    [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  // Tread lines spanning [lo,hi] of the cross axis, one per step boundary along the run.
+  const treadsX = (xAt: (i: number) => number, n: number, lo: number, hi: number) => {
+    for (let i = 1; i < n; i++) { const x = xAt(i); lineLocal.push([{ x, y: lo }, { x, y: hi }]); }
+  };
+  const treadsY = (yAt: (i: number) => number, n: number, lo: number, hi: number) => {
+    for (let i = 1; i < n; i++) { const y = yAt(i); lineLocal.push([{ x: lo, y }, { x: hi, y }]); }
+  };
+  // A line a→b plus a small chevron arrowhead at b (marks the ascent direction of a flight).
+  const arrow = (ax: number, ay: number, bx: number, by: number) => {
+    lineLocal.push([{ x: ax, y: ay }, { x: bx, y: by }]);
+    const ang = Math.atan2(by - ay, bx - ax);
+    const hl = Math.min(W * 0.3, T * 1.5);
+    for (const da of [Math.PI * 0.82, -Math.PI * 0.82])
+      lineLocal.push([{ x: bx, y: by }, { x: bx + hl * Math.cos(ang + da), y: by + hl * Math.sin(ang + da) }]);
+  };
+
+  if (config === "straight") {
+    // Single going (flight) ending in a landing. Flight: x 0 → dir*steps*T, width along +y.
+    const xEnd = dir * steps * T;
+    fillLocal.push(rect(0, 0, xEnd, W));
+    treadsX((i) => dir * i * T, steps, 0, W);
+    if (L > 0) fillLocal.push(rect(xEnd, 0, xEnd + dir * L, W));    // top landing
+    arrow(dir * steps * T * 0.08, W / 2, dir * steps * T * 0.92, W / 2);
+  } else if (config === "u-shape") {
+    // Half-turn: flight 1 (y 0..W) ascends to the landing; flight 2 (y W+G..2W+G) returns the other way.
+    const n1 = midSteps > 0 && midSteps < steps ? midSteps : Math.floor(steps / 2);
+    const n2 = steps - n1;
+    const x1 = dir * n1 * T;          // end of flight 1 / near edge of landing
+    const xL = x1 + dir * L;          // far edge of landing
+    fillLocal.push(rect(0, 0, x1, W));                              // flight 1
+    fillLocal.push(rect(x1, 0, xL, 2 * W + G));                     // landing (spans both flights + gap)
+    // Flight 2 begins at the landing's near edge (x1) and returns parallel to flight 1 — so the upper
+    // steps start right where the landing ends, instead of overlapping inside it.
+    fillLocal.push(rect(x1, W + G, x1 - dir * n2 * T, 2 * W + G));  // flight 2 (returns from the landing edge)
+    treadsX((i) => dir * i * T, n1, 0, W);
+    treadsX((j) => x1 - dir * j * T, n2, W + G, 2 * W + G);
+    arrow(x1 * 0.1, W / 2, x1 * 0.9, W / 2);                        // up flight 1
+    arrow(x1 - dir * n2 * T * 0.1, W + G + W / 2, x1 - dir * n2 * T * 0.9, W + G + W / 2); // up flight 2
+    // Landing winder cuts: (cuts − 1) lines fanning from the inner corner (where the flights meet, at the
+    // landing's near-mid point) to `cuts` equally-spaced points on the landing's far edge. 1 → no cuts.
+    const cuts = Math.max(1, Math.round(num(params.landingCuts, 1)));
+    for (let k = 1; k < cuts; k++) {
+      const y = (2 * W + G) * (k / cuts);
+      lineLocal.push([{ x: x1, y: W + G / 2 }, { x: xL, y }]);
+    }
+  } else {
+    // Two 90° turns: flight 1 (→) → landing 1 (square) → flight 2 (↑, perpendicular, `mid` steps) →
+    // landing 2 (square) → flight 3 (←, opposite flight 1). Square landings keep the perpendicular
+    // flights aligned, so all flights share the width W.
+    const mid = midSteps > 0 && midSteps < steps - 1 ? midSteps : Math.max(1, Math.round(steps / 3));
+    const rem = Math.max(2, steps - mid);
+    const a = Math.ceil(rem / 2), b = rem - a;       // outer flights
+    const x1 = dir * a * T;            // end of flight 1
+    const xR = x1 + dir * W;           // far x edge of the landings / mid flight column
+    const y2 = W + mid * T;            // top of flight 2
+    const y3 = y2 + W;                 // top of landing 2
+    const x3 = x1 - dir * b * T;       // end of flight 3
+    fillLocal.push(rect(0, 0, x1, W));                 // flight 1
+    fillLocal.push(rect(x1, 0, xR, W));                // landing 1 (square)
+    fillLocal.push(rect(x1, W, xR, y2));               // flight 2 (perpendicular, +y)
+    fillLocal.push(rect(x1, y2, xR, y3));              // landing 2 (square)
+    fillLocal.push(rect(x1, y2, x3, y3));              // flight 3 (returns, opposite flight 1)
+    treadsX((i) => dir * i * T, a, 0, W);
+    treadsY((k) => W + k * T, mid, x1, xR);
+    treadsX((j) => x1 - dir * j * T, b, y2, y3);
+    arrow(x1 * 0.1, W / 2, x1 * 0.9, W / 2);                                       // flight 1 →
+    arrow(x1 + dir * W / 2, W + mid * T * 0.1, x1 + dir * W / 2, W + mid * T * 0.9); // flight 2 ↑
+    arrow(x1 - dir * b * T * 0.1, y2 + W / 2, x1 - dir * b * T * 0.9, y2 + W / 2);   // flight 3 ←
+  }
+
+  // Rotate about the node + translate into world coords.
+  const th = (rotDeg * Math.PI) / 180, cs = Math.cos(th), sn = Math.sin(th);
+  const xf = (q: Point): Point => ({ x: p.x + q.x * cs - q.y * sn, y: p.y + q.x * sn + q.y * cs });
+  return { fill: fillLocal.map((poly) => poly.map(xf)), lines: lineLocal.map((ln) => ln.map(xf)) };
+}
+
+/** Build a column-footing SECTION anchored at node point `p` (the column centre). Returns the layer
+ *  outlines as filled polygons (`fill`) — column above, then the structural footing (a flat pad / a
+ *  frustum / a step stack) and the PCC + soling beds below — in world-pixel coords. `type` picks the
+ *  footing shape; `skew` offsets the footing under the column (eccentric). The section is drawn with +y
+ *  going DOWN (column at the node, foundation below) and rotated about the node by `rotation`°. */
+function computeNodeFooting(p: Point, params: Record<string, unknown>, ppm: number): { fill: Point[][]; lines: Point[][] } {
+  const type = params.type === "spread" ? "spread" : params.type === "stepped" ? "stepped" : "sloped";
+  const cwM = Math.max(0.02, num(params.columnWidth, 0.3));   // column width in METRES
+  const cw = cwM * ppm;
+  const colH = Math.max(0.05, num(params.columnHeight, 1.0)) * ppm;
+  // Base must be at least the column width — compare in metres, then convert ONCE (cw is already pixels).
+  const bw = Math.max(cwM, num(params.baseWidth, 1.5)) * ppm;
+  const rcc = Math.max(0.01, num(params.rccThickness, 0.2)) * ppm;
+  const pcc = Math.max(0, num(params.pccThickness, 0.1)) * ppm;
+  const sol = Math.max(0, num(params.solingThickness, 0.1)) * ppm;
+  const fh = Math.max(0.01, num(params.frustumHeight, 0.2)) * ppm;
+  const ftw = Math.min(bw, Math.max(cw, num(params.frustumTopWidth, 0.6) * ppm));
+  const nSteps = Math.max(1, Math.round(num(params.steps, 3)));
+  const rotDeg = num(params.rotation, 0);
+  const skew = params.skew === "left" ? -1 : params.skew === "right" ? 1 : 0;
+
+  const fillLocal: Point[][] = [];
+  // Eccentric skew: when skewed, ONE face of the footing is vertical and flush with the column's outer
+  // face on that side, and every layer grows from there toward the opposite side. Centre → symmetric
+  // about the node. `span(w)` gives the [left, right] x-extent of a layer of width `w` accordingly. The
+  // column (width `cw`) is always inside that span, so the frustum-top width counts the column too.
+  const span = (w: number): [number, number] =>
+    skew < 0 ? [cw / 2 - w, cw / 2] : skew > 0 ? [-cw / 2, -cw / 2 + w] : [-w / 2, w / 2];
+  // Rectangle of width `w` centred on `cx`, spanning vertical [y0, y1] (used for the column stem).
+  const rect = (cx: number, w: number, y0: number, y1: number): Point[] =>
+    [{ x: cx - w / 2, y: y0 }, { x: cx + w / 2, y: y0 }, { x: cx + w / 2, y: y1 }, { x: cx - w / 2, y: y1 }];
+  // Rectangle from an explicit x-span [l, r], spanning vertical [y0, y1].
+  const rectS = ([l, r]: [number, number], y0: number, y1: number): Point[] =>
+    [{ x: l, y: y0 }, { x: r, y: y0 }, { x: r, y: y1 }, { x: l, y: y1 }];
+  // Trapezoid from a top x-span and a bottom x-span (the vertical face lands on the skew side).
+  const trapS = (top: [number, number], bot: [number, number], y0: number, y1: number): Point[] =>
+    [{ x: top[0], y: y0 }, { x: top[1], y: y0 }, { x: bot[1], y: y1 }, { x: bot[0], y: y1 }];
+
+  // Column stem (at the node, x = 0) from the node down to the top of the footing body.
+  fillLocal.push(rect(0, cw, 0, colH));
+  let y = colH;
+
+  if (type === "spread") {
+    fillLocal.push(rectS(span(bw), y, y + rcc)); y += rcc;              // flat RCC pad
+  } else if (type === "sloped") {
+    fillLocal.push(trapS(span(ftw), span(bw), y, y + fh)); y += fh;     // tapering frustum (vertical face on skew side)
+    fillLocal.push(rectS(span(bw), y, y + rcc)); y += rcc;             // RCC slab under the frustum
+  } else {
+    // Stepped: nSteps stacked layers widening from the frustum-top width up to the base width; their
+    // combined height is the RCC thickness. Each step flushes to the skew side too.
+    const stepH = rcc / nSteps;
+    for (let i = 0; i < nSteps; i++) {
+      const w = ftw + (bw - ftw) * ((i + 1) / nSteps);
+      fillLocal.push(rectS(span(w), y, y + stepH));
+      y += stepH;
+    }
+  }
+  // PCC + soling beds below the structural footing (full base width).
+  if (pcc > 0) { fillLocal.push(rectS(span(bw), y, y + pcc)); y += pcc; }
+  if (sol > 0) { fillLocal.push(rectS(span(bw), y, y + sol)); y += sol; }
+
+  // Rotate about the node + translate into world coords.
+  const th = (rotDeg * Math.PI) / 180, cs = Math.cos(th), sn = Math.sin(th);
+  const xf = (q: Point): Point => ({ x: p.x + q.x * cs - q.y * sn, y: p.y + q.x * sn + q.y * cs });
+  return { fill: fillLocal.map((poly) => poly.map(xf)), lines: [] };
+}
 
 /** Generic Math node: result = A <op> B, optionally rounded. */
 function computeMath(params: Record<string, unknown>): Record<string, number> {
@@ -83,6 +251,27 @@ import { rasterUnion } from "./rasterUnion";
 import { polygonUnionVector } from "./vectorUnion";
 import { vectorizeImage, type VectorizeParams, type VectorizeColorMode } from "../../algorithms/vector/vectorizeImage";
 import { solvePipeNetwork, normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "../../algorithms/network/pipeNetworkSolver";
+import { computeFrame, type FrameGraphInput, type FrameSchema } from "../../algorithms/structure/frameBuilder";
+import { computeMiteredWalls } from "../../algorithms/structure/wallBuilder";
+import { findDef, resolveStr, resolveNum, resolveBool, ROLES } from "./attrResolve";
+
+/** Shift a polyline perpendicular to itself by `d` px (signed; left-hand normal (-dy, dx)). Each vertex
+ *  moves along its averaged edge normal. Used by Display Segment's buffered justification to push the
+ *  ribbon to one side of the centerline. A lone point / zero offset is returned unchanged. */
+function offsetPolyline(pts: Point[], d: number): Point[] {
+  const n = pts.length;
+  if (n < 2 || d === 0) return pts;
+  const normals: Point[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = i > 0 ? pts[i - 1] : null, next = i < n - 1 ? pts[i + 1] : null;
+    let nx = 0, ny = 0;
+    if (prev) { const dx = pts[i].x - prev.x, dy = pts[i].y - prev.y, L = Math.hypot(dx, dy) || 1; nx += -dy / L; ny += dx / L; }
+    if (next) { const dx = next.x - pts[i].x, dy = next.y - pts[i].y, L = Math.hypot(dx, dy) || 1; nx += -dy / L; ny += dx / L; }
+    const L = Math.hypot(nx, ny) || 1;
+    normals.push({ x: nx / L, y: ny / L });
+  }
+  return pts.map((p, i) => ({ x: p.x + normals[i].x * d, y: p.y + normals[i].y * d }));
+}
 
 /** The imported underlay image fed into the flow (RGBA buffer + its world placement box). */
 export interface FlowImage { data: Uint8ClampedArray; w: number; h: number; box: { x: number; y: number; scale: number }; key: string }
@@ -108,6 +297,27 @@ export interface FlowPreviewItem {
   massing?: { points: Point[]; floors: number; direction: "upward" | "downward"; floorPolys?: Point[][] };
   /** Graph nodes (Graph Smoothing) only: render the polygons as OPEN polylines (not closed/filled). */
   openPath?: boolean;
+  /** Dimension node only: the witness lines, dimension line and arrow ticks — drawn as open polylines. */
+  dimLines?: Point[][];
+  /** Dimension node only: positioned dimension text (world-pixel anchor + preformatted value + rotation°). */
+  dimLabels?: { x: number; y: number; text: string; rotation: number }[];
+  /** Dimension node only: filled end-marker dots (style "dot"), world-pixel centre + radius. */
+  dimDots?: { x: number; y: number; r: number }[];
+  /** Dimension node only: the input Space's edge count — baked into params so the Edgewise mode can show
+   *  one checkbox per edge. */
+  edgeCount?: number;
+  /** Area Dimension node only: a centred annotation block (Label / Area / L×B) per Space at its centroid. */
+  areaLabels?: { x: number; y: number; lines: string[] }[];
+  /** Graph to Grid node only: the generated lattice — segments + intersection nodes, with the px sizes
+   *  given to segments (line width) and nodes (dot radius), plus optional occupancy-coloured cells. */
+  grid?: {
+    segments: Point[][];
+    nodes: { x: number; y: number }[];
+    nodeR: number;
+    segW: number;
+    cells?: { poly: Point[]; color: string; value: number }[];
+    showValues?: boolean;
+  };
   /** Voronoi node only: the true cell count (= seed/vertex count), independent of what's rendered
    *  (non-Euclidean metrics render edges, not cells), so the host's handle-count bake stays correct. */
   cellCount?: number;
@@ -117,13 +327,25 @@ export interface FlowPreviewItem {
   values?: Record<string, number | string>;
   /** Resolved value INPUT overrides (param key → wired value), for the host to bake so commit matches. */
   valueInputs?: Record<string, number | string>;
+  /** Mesh to 3D only: the resolved 3D meshes (from upstream … to 3D Mesh nodes) for the host to render
+   *  in the 3D view. Serializable lofted-prism descriptions — see {@link FlowMesh}. */
+  meshes?: FlowMesh[];
+  /** Schema to Drawing Tools only: segment & node TYPES (value + label + optional SVG icon data URL) read
+   *  from the attached Schema, for the host to surface in the Add Segment / Add Node drawing dropdowns. */
+  drawingTools?: {
+    segments: { value: string; label: string; icon?: string }[];
+    nodes: { value: string; label: string; icon?: string }[];
+  };
   /** Optimise Rectangle only: the auto-chosen axis tilt (°) when "Optimise axis tilt" is on — baked
    *  into the axisAngle param so the slider + commit match the previewed angle. */
   optimisedTilt?: number;
   /** Place Object only: the kind + height/clearance of each placed footprint, index-aligned with
    *  `polygons`, so the host can draw the 2D furniture symbol AND extrude the 3D primitive live
    *  (matching the committed placement) instead of a bare box. */
-  placeObjects?: { kind: string; heightM: number; clearanceM: number }[];
+  placeObjects?: { kind: string; heightM: number; clearanceM: number; srcIndex: number }[];
+  /** Place Object only: the input Space boundary polygon (world-pixel coords) these objects were placed
+   *  along — used by the host to constrain dragging each object to the perimeter and update its position%. */
+  sourcePolygon?: Point[];
   /** Open 2-point polylines to draw INSTEAD of the closed `polygons` (e.g. BSP openings → the partition
    *  outline with a gap on each opening). When present the host draws these unclosed and skips the
    *  closed-cell render; `polygons` is still threaded downstream unchanged. */
@@ -136,7 +358,7 @@ export interface FlowPreviewItem {
   metrics?: { slotId: string; label: string; value: number | string | null }[];
   /** Mitered Join only: the input graph's centerline polylines + the Width / joint, so on COMMIT the host
    *  creates real Path walls (segmentType "path") from them in the document. */
-  miteredPath?: { segments: Point[][]; widthM: number; join: string };
+  miteredPath?: { segments: Point[][]; widthM: number; join: string; /** Per-segment width (m), index-aligned with `segments`, when "Use same width for all" is OFF. */ segWidthsM?: number[] };
   /** Pipe Network Solver only: the full per-component results (nodes keyed by stableKey, segments by
    *  wall id) — the host stores these so each component's Metrics tab can show its own numbers. */
   pipeResults?: PipeSolveResult;
@@ -144,6 +366,46 @@ export interface FlowPreviewItem {
   pipeStatus?: string;
   /** Pipe Network Solver only: the name/source of the schema in use (baked under `_schemaName`). */
   pipeSchemaName?: string;
+  /** Hatching node only: the visual fill style to paint over the (passed-through) space — a solid colour
+   *  at `opacity`, or a diagonal-line / random-dots hatch pattern when `hatch` is on. The host renders it. */
+  hatch?: { color: string; opacity: number; hatch: boolean; style: "diagonal" | "dots"; spacing: number; angle: number; weight: number };
+  /** Display Segment node only: the stroke style to draw the (passed-through) segment polyline(s) with,
+   *  plus whether to show a source→target direction arrow at the midpoint. */
+  segStyle?: { lineStyle: "solid" | "dashed" | "dotted"; color: string; weight: number; showDirection: boolean };
+  /** Display Segment (buffered) only: the centerline segment(s) to draw a source→target direction arrow
+   *  on, over the buffered ribbon. World-pixel coords. */
+  arrowSegs?: Point[][];
+  /** Display Segment only: PER-SEGMENT display, so a schema can style each segment differently. Each
+   *  entry is one input segment with its resolved style. World-pixel coords. */
+  dispSegs?: {
+    mode: "line" | "buffered";
+    /** Line mode: the centerline polyline. */
+    poly?: Point[];
+    /** Buffered mode: the ribbon ring polygon. */
+    ring?: Point[];
+    /** Buffered mode: the centerline for the direction arrow. */
+    center?: Point[];
+    color: string;
+    lineStyle: "solid" | "dashed" | "dotted";
+    weight: number;
+    showDirection: boolean;
+    /** Buffered mode: hatch fill (omitted → solid colour fill). */
+    hatch?: { style: "diagonal" | "dots"; spacing: number; angle: number; weight: number };
+  }[];
+  /** Display Node node only: the marker style to draw the (passed-through) node point(s) with. */
+  nodeStyle?: { shape: "dot" | "circle" | "square" | "triangle"; style: "solid" | "dashed" | "dotted"; color: string; size: number; hatch: boolean; hatchStyle: "diagonal" | "dots"; hatchSpacing: number; hatchAngle: number; hatchWeight: number };
+  /** Display Node only: PER-NODE marker style (schema-driven), one per input point. World-pixel coords. */
+  dispNodes?: { x: number; y: number; shape: "dot" | "circle" | "square" | "triangle"; style: "solid" | "dashed" | "dotted"; color: string; size: number; hatch: boolean; hatchStyle: "diagonal" | "dots"; hatchSpacing: number; hatchAngle: number; hatchWeight: number }[];
+  /** Frame Builder / Wall Builder only: the structural footprint polygons (column boxes / beam ribbons /
+   *  mitred walls) to draw, each with its kind + hatch flag. World-pixel coords. */
+  framePieces?: { poly: Point[]; kind: "column" | "beam" | "wall"; hatch: boolean }[];
+  /** Segment to Door / Window only: filled symbol polygons (door leaf / window frame) + open symbol lines
+   *  (swing arc + leaves / frame edges + glass + mullions). World-pixel coords. */
+  doorFill?: Point[][];
+  doorLines?: Point[][];
+  /** Node to Object only: a furniture symbol per input node — its footprint quad (world-pixel) plus the
+   *  anchor/size/rotation the host feeds to the shared ObjectSymbol renderer. */
+  objectPlacements?: { quad: Point[]; x: number; y: number; kind: string; widthPx: number; heightPx: number; rotationDeg: number; anchor: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" }[];
 }
 
 /** Evaluate one node given its input polygon. Returns its output polygon(s). */
@@ -169,6 +431,7 @@ function evalNode(tool: FlowToolType, input: Point[], params: Record<string, unk
     case "contour": return evalContour(input, params, ppm);
     case "floor-massing": return evalMassing(input, params, ppm);
     case "space-geometry": return input.length >= 3 ? [input] : []; // pass-through; values via computeNodeValues
+    case "hatching": return input.length >= 3 ? [input] : []; // styling pass-through; the host paints the fill/hatch
     default: return []; // source (no polygon output) → nothing to thread
   }
 }
@@ -198,6 +461,9 @@ export function evaluateFlow(
   /** The canvas graph WITH component identity (nodes keyed by stableKey, segments by wall id) plus the
    *  schema attribute values — input for the Pipe Network Solver node. */
   pipeGraph?: PipeGraphInput,
+  /** Per Grid (grid-source) NODE id → the construction grid as a typed grid-field (cells + per-cell
+   *  values), so a Grid node can feed Grid Threshold / Grid Distance directly. */
+  gridFieldsBySourceNode: Map<string, GridField> = new Map(),
 ): FlowPreviewItem[] {
   if (nodes.length === 0 || ppm <= 0) return [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -210,7 +476,7 @@ export function evaluateFlow(
   // Space Creator (which always generates one).
   const hasValidSource = nodes.some((n) => dataOf(n).tool === "source" && polysForSource(n.id).some((p) => p.length >= 3));
   const hasCreator = nodes.some((n) => dataOf(n).tool === "space-creator");
-  const hasGraph = nodes.some((n) => (dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source") &&
+  const hasGraph = nodes.some((n) => (dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "grid-source") &&
     ((graphsBySourceNode.get(n.id)?.some((g) => g.length > 0)) || graphSegments.length > 0));
   const hasImage = !!flowImage && nodes.some((n) => dataOf(n).tool === "image");
   const cc = canvasContent;
@@ -286,7 +552,7 @@ export function evaluateFlow(
 
   // Reachability from source nodes (only connected tools are active).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "pipe-solver").map((n) => n.id);
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "pipe-solver" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "footing" || dataOf(n).tool === "staircase" || dataOf(n).tool === "schema-to-drawing").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
@@ -299,6 +565,13 @@ export function evaluateFlow(
   // several input spaces): handleGroups[node][handleIndex] = the list of pieces on that handle.
   const outputs = new Map<string, Point[][]>();
   const handleGroups = new Map<string, Point[][][]>();
+  // Grid-field channel (parallel to geometry): a node that produces a grid field publishes it here; a
+  // downstream grid node reads its upstream field by source-node id.
+  const fields = new Map<string, GridField>();
+  const fieldInputOf = (nodeId: string): GridField | null => {
+    for (const e of edges) if (e.target === nodeId) { const f = fields.get(e.source); if (f) return f; }
+    return null;
+  };
 
   // All polygons an edge carries from its source handle. Normally one polygon (out-i → outs[i], or the
   // single output handle → outs[0]); a bundle handle (grouped node, or a node in "single" output mode)
@@ -356,6 +629,66 @@ export function evaluateFlow(
       if (ps.length) return ps[0];
     }
     return null;
+  };
+
+  // Resolve the Node/Segment/Graph schema attached to a processor: a Schema node wired DIRECTLY into it
+  // (any handle, e.g. gin-schema), else a Schema node attached to a graph/canvas/source node (the general
+  // attachment path). Shared by all schema-driven Building nodes (Wall Builder, Segment to Door, …).
+  const resolveSchemaFor = (nodeId: string): FrameSchema => {
+    let schema: FrameSchema = {};
+    const apply = (n: Node): boolean => {
+      const s = schemaNodeToSchemas(dataOf(n).params);
+      if (!s.node.length && !s.segment.length && !s.graph.length) return false;
+      schema = { node: s.node, segment: s.segment, graph: s.graph };
+      return true;
+    };
+    const direct = nodes.find((n) => dataOf(n).tool === "schema" && edges.some((e) => e.source === n.id && e.target === nodeId));
+    if (!(direct && apply(direct))) {
+      const targets = new Set(["graph-source", "segment-source", "node-source", "canvas-source", "source"]);
+      for (const n of nodes) {
+        if (dataOf(n).tool !== "schema") continue;
+        if (edges.some((e) => e.source === n.id && byId.has(e.target) && targets.has(dataOf(byId.get(e.target)!).tool)) && apply(n)) break;
+      }
+    }
+    return schema;
+  };
+
+  // Component-identity index, built ONCE per eval (lazily) from `pipeGraph` and reused by every
+  // schema-driven Building node — instead of each processor re-scanning all nodes/edges per input element.
+  // A node is registered in its ~3px cell + 8 neighbours, so a point within 3px lands in one of them
+  // (O(1) lookup). Edges are keyed by their (unordered) node-id pair → wall id.
+  const IDX_TOL = 3;
+  const cellOf = (x: number, y: number) => `${Math.round(x / IDX_TOL)},${Math.round(y / IDX_TOL)}`;
+  let nodeCells: Map<string, string> | null = null;   // cell → node id
+  let edgePairs: Map<string, string> | null = null;   // "a|b" (both orders) → wall id
+  const ensureIndex = (): boolean => {
+    if (!pipeGraph) return false;
+    if (nodeCells) return true;
+    nodeCells = new Map();
+    for (const n of pipeGraph.nodes) {
+      const cx = Math.round(n.x / IDX_TOL), cy = Math.round(n.y / IDX_TOL);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) nodeCells.set(`${cx + dx},${cy + dy}`, n.id);
+    }
+    edgePairs = new Map();
+    for (const e of pipeGraph.edges) { edgePairs.set(`${e.a}|${e.b}`, e.id); edgePairs.set(`${e.b}|${e.a}`, e.id); }
+    return true;
+  };
+
+  // Match an input point to a canvas node stableKey (O(1) via the index) so node-based schema-driven nodes
+  // can read that node's per-component values from `pipeGraph.attrs.nodes`. Null if unmatched.
+  const nodeKeyForPt = (p: { x: number; y: number }): string | null => {
+    if (!ensureIndex()) return null;
+    return nodeCells!.get(cellOf(p.x, p.y)) ?? null;
+  };
+
+  // Match an input segment polyline to a canvas wall id: resolve both endpoints to node ids, then look up
+  // the edge between them. Null if unmatched.
+  const wallIdForSeg = (s: Point[]): string | null => {
+    if (s.length < 2 || !ensureIndex()) return null;
+    const a = nodeCells!.get(cellOf(s[0].x, s[0].y));
+    const b = nodeCells!.get(cellOf(s[s.length - 1].x, s[s.length - 1].y));
+    if (!a || !b) return null;
+    return edgePairs!.get(`${a}|${b}`) ?? null;
   };
 
   // ALL input polygons across a node's incoming geometry edges (multi-space). Every edge contributes the
@@ -420,6 +753,81 @@ export function evaluateFlow(
   // Scalar value outputs produced per node (populated as nodes are evaluated, in topo order). Mostly
   // numbers; a few are string lists (BUA's pass-through Ratio).
   const nodeValues = new Map<string, Record<string, number | string>>();
+
+  // Footing data channel — a `footing` node (pure, location-free definition) publishes its resolved params
+  // here; the Footing → 2D Plan / Elevation / 3D Mesh view nodes read the nearest upstream entry.
+  const nodeFootings = new Map<string, { params: Record<string, unknown> }>();
+  // Staircase data channel — a `staircase` node (pure definition) publishes its params here; the Staircase
+  // view nodes read the nearest upstream entry.
+  const nodeStaircases = new Map<string, { params: Record<string, unknown> }>();
+  // Stamp channel — a view node publishes an ORIGIN-RELATIVE drawing/mesh here (2D fill/lines in px around
+  // origin; mesh footprints in px around origin, Y in metres). A Node with a `gin-stamp` input stamps a
+  // copy of the nearest upstream entry at each of its point(s) — placement-by-location.
+  const nodeStamps = new Map<string, { fill: Point[][]; lines: Point[][]; prisms: FlowMeshPrism[]; color: string }>();
+  // 3D-mesh channel — `… to 3D Mesh` nodes also publish meshes here so `Mesh to 3D` can show an unplaced
+  // (origin) preview without a placement Node.
+  const meshOutputs = new Map<string, FlowMesh[]>();
+  // Walk back through a node's main (non-value, non-gin) input edges to the nearest upstream entry of a
+  // channel map. Used to resolve a view node's source Footing / the terminal's source meshes.
+  const isMainEdge = (e: Edge): boolean => !(e.targetHandle && (e.targetHandle.startsWith("valin-") || e.targetHandle.startsWith("gin-")));
+  const upstreamFooting = (nodeId: string) => {
+    const seen = new Set<string>();
+    const stack: string[] = [];
+    for (const e of edges) if (e.target === nodeId && isMainEdge(e)) stack.push(e.source);
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const f = nodeFootings.get(cur);
+      if (f) return f;
+      for (const e of edges) if (e.target === cur && isMainEdge(e)) stack.push(e.source);
+    }
+    return undefined;
+  };
+  const upstreamStaircase = (nodeId: string) => {
+    const seen = new Set<string>();
+    const stack: string[] = [];
+    for (const e of edges) if (e.target === nodeId && isMainEdge(e)) stack.push(e.source);
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const f = nodeStaircases.get(cur);
+      if (f) return f;
+      for (const e of edges) if (e.target === cur && isMainEdge(e)) stack.push(e.source);
+    }
+    return undefined;
+  };
+  const upstreamMeshes = (nodeId: string): FlowMesh[] => {
+    const out: FlowMesh[] = [];
+    const seen = new Set<string>();
+    const stack: string[] = [];
+    for (const e of edges) if (e.target === nodeId && isMainEdge(e)) stack.push(e.source);
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const m = meshOutputs.get(cur);
+      if (m) { out.push(...m); continue; }
+      for (const e of edges) if (e.target === cur && isMainEdge(e)) stack.push(e.source);
+    }
+    return out;
+  };
+  // Resolve the stamp payload wired into a Node's `gin-stamp` input (walk back through the view chain).
+  const upstreamStamp = (nodeId: string) => {
+    const seen = new Set<string>();
+    const stack: string[] = [];
+    for (const e of edges) if (e.target === nodeId && e.targetHandle === "gin-stamp") stack.push(e.source);
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const s = nodeStamps.get(cur);
+      if (s) return s;
+      for (const e of edges) if (e.target === cur && isMainEdge(e)) stack.push(e.source);
+    }
+    return undefined;
+  };
   // Resolve a node's value INPUTS: each `valin-<key>` edge pulls the source's `val-<srcKey>` value and
   // overrides the param `key`. Returns { paramKey: value } for the wired inputs (number, or a non-empty
   // string for list params like Split's ratios).
@@ -520,7 +928,7 @@ export function evaluateFlow(
     }
     // Graph (generator): emit the referenced graph(s) as polylines. A node may reference several graphs
     // (by id, or the live selection when grabbing) → one output handle per graph, or a single bundle.
-    if (data.tool === "graph-source" || data.tool === "segment-source") {
+    if (data.tool === "graph-source" || data.tool === "segment-source" || data.tool === "grid-source") {
       const resolved = (graphsBySourceNode.get(id) ?? [])
         .map((g) => g.filter((s) => s.length >= 2)).filter((g) => g.length > 0);
       // The live-selection fallback (graphSegments) only applies to graph-source; a segment-source with no
@@ -532,6 +940,9 @@ export function evaluateFlow(
       outputs.set(id, all);
       const handles: Point[][][] = data.params.outputMode === "single" ? [all] : graphs;
       handleGroups.set(id, handles);
+      // A Grid node also publishes its lattice as a typed grid-field, so downstream grid nodes
+      // (Grid Threshold, Grid Distance, …) can classify/recolour the cells.
+      if (data.tool === "grid-source") { const gf = gridFieldsBySourceNode.get(id); if (gf) fields.set(id, gf); }
       if (all.length > 0) items.push({ nodeId: id, tool: data.tool, polygons: all, color: FLOW_TOOLS[data.tool].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: handles.length });
       continue;
     }
@@ -544,6 +955,32 @@ export function evaluateFlow(
       outputs.set(id, all);
       const handles: Point[][][] = data.params.outputMode === "single" ? [all] : pts;
       handleGroups.set(id, handles);
+      // STAMP mode: a drawing/mesh wired into `gin-stamp` is an origin-relative representation; copy it to
+      // each of this node's point(s). Renders the stamped drawing (2D) and/or mesh (3D) instead of the bare
+      // node markers.
+      const stamp = upstreamStamp(id);
+      const anchors = all.map((pl) => pl[0]).filter((p): p is Point => !!p);
+      if (stamp && anchors.length) {
+        const shift = (poly: Point[], a: Point): Point[] => poly.map((q) => ({ x: q.x + a.x, y: q.y + a.y }));
+        const fill: Point[][] = [];
+        const lines: Point[][] = [];
+        const meshes: FlowMesh[] = [];
+        anchors.forEach((a, i) => {
+          for (const poly of stamp.fill) fill.push(shift(poly, a));
+          for (const poly of stamp.lines) lines.push(shift(poly, a));
+          if (stamp.prisms.length) {
+            meshes.push({ id: `${id}-${i}`, prisms: stamp.prisms.map((pr) => ({ ...pr, bottom: shift(pr.bottom, a), top: shift(pr.top, a) })) });
+          }
+        });
+        items.push({
+          nodeId: id, tool: "node-source", polygons: [], color: stamp.color,
+          isFinal: succs.get(id)!.length === 0,
+          doorFill: fill.length ? fill : undefined,
+          doorLines: lines.length ? lines : undefined,
+          meshes: meshes.length ? meshes : undefined,
+        });
+        continue;
+      }
       if (all.length > 0) items.push({ nodeId: id, tool: "node-source", polygons: all, color: FLOW_TOOLS["node-source"].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: handles.length });
       continue;
     }
@@ -734,6 +1171,183 @@ export function evaluateFlow(
       });
       continue;
     }
+    // Frame Builder: columns at nodes (width×height boxes) + beams along segments (width ribbons), with
+    // an optional graph-wide subtract (beams cut to column faces). Reads per-component sizing/hatch from
+    // a wired Schema node by role; emits the footprints as Spaces and per-component results to Metrics.
+    if (data.tool === "frame-builder") {
+      if (!pipeGraph || pipeGraph.nodes.length === 0) { outputs.set(id, []); continue; }
+      // Resolve the schema sections (Node / Segment / Graph) from a Schema node wired directly into this
+      // node, or attached to a Graph/source node (the general attachment path) — mirrors the solver.
+      let schema: FrameSchema = {};
+      let schemaName = "";
+      const applySchema = (n: Node): boolean => {
+        const s = schemaNodeToSchemas(dataOf(n).params);
+        if (!s.node.length && !s.segment.length && !s.graph.length) return false;
+        schema = { node: s.node, segment: s.segment, graph: s.graph };
+        schemaName = s.name ?? "Schema node";
+        return true;
+      };
+      const direct = nodes.find((n) => dataOf(n).tool === "schema" && edges.some((e) => e.source === n.id && e.target === id));
+      if (!(direct && applySchema(direct))) {
+        const schemaTargets = new Set(["graph-source", "segment-source", "node-source", "canvas-source", "source"]);
+        for (const n of nodes) {
+          if (dataOf(n).tool !== "schema") continue;
+          const wired = edges.some((e) => e.source === n.id && byId.has(e.target) && schemaTargets.has(dataOf(byId.get(e.target)!).tool));
+          if (wired && applySchema(n)) break;
+        }
+      }
+      // Restrict to the input graph's segments when a Graph node feeds the main input (else whole canvas).
+      let graphInput: FrameGraphInput = pipeGraph;
+      const inputSegs = inputPolylinesOf(id, 2);
+      if (inputSegs.length > 0) {
+        const ptById0 = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
+        const d2 = (p: { x: number; y: number }, q: { x: number; y: number }) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+        const TOL2 = 9;
+        const matches = (A: { x: number; y: number }, B: { x: number; y: number }): boolean =>
+          inputSegs.some((pl) => {
+            for (let i = 0; i + 1 < pl.length; i++) {
+              const p = pl[i], q = pl[i + 1];
+              if ((d2(p, A) < TOL2 && d2(q, B) < TOL2) || (d2(p, B) < TOL2 && d2(q, A) < TOL2)) return true;
+            }
+            return false;
+          });
+        const filtered = pipeGraph.edges.filter((e) => { const A = ptById0.get(e.a), B = ptById0.get(e.b); return !!A && !!B && matches(A, B); });
+        if (filtered.length > 0 && filtered.length < pipeGraph.edges.length) graphInput = { ...pipeGraph, edges: filtered };
+      }
+      const res = computeFrame(graphInput, schema, ppm, {
+        columnWidthMm: num(data.params.columnWidthMm, 300),
+        columnHeightMm: num(data.params.columnHeightMm, 450),
+        beamWidthMm: num(data.params.beamWidthMm, 230),
+        subtract: Boolean(data.params.subtract),
+      });
+      const polys = res.pieces.map((p) => p.poly).filter((p) => p.length >= 3);
+      outputs.set(id, polys);
+      handleGroups.set(id, [polys]);
+      const vals = {
+        columns: res.summary.columns ?? 0,
+        beams: res.summary.beams ?? 0,
+        totalBeamLength: res.summary.totalBeamLength ?? 0,
+        totalColumnArea: res.summary.totalColumnArea ?? 0,
+      };
+      nodeValues.set(id, vals);
+      // Per-component results ride the same plumbing as the solver (pipeResults) → Metrics tab.
+      const frameResults: PipeSolveResult = {
+        nodeResults: res.nodeResults, segmentResults: res.segmentResults,
+        summary: res.summary, converged: true, iterations: 0, status: res.status,
+      };
+      items.push({
+        nodeId: id, tool: "frame-builder", polygons: [], color: FLOW_TOOLS["frame-builder"].color,
+        isFinal: succs.get(id)!.length === 0, values: vals,
+        framePieces: res.pieces.map((p) => ({ poly: p.poly, kind: p.kind, hatch: p.hatch })),
+        pipeResults: frameResults, pipeStatus: res.status, pipeSchemaName: schemaName,
+      });
+      continue;
+    }
+    // Wall Builder: schema-driven mitred walls — strokes the input graph's segments into wall ribbons,
+    // taking each wall's thickness/justification from the Segment schema (role wall-thickness / -justification)
+    // rather than the canvas. Same schema-resolution + graph-restriction as the Frame Builder.
+    if (data.tool === "wall-builder") {
+      if (!pipeGraph || pipeGraph.nodes.length === 0) { outputs.set(id, []); continue; }
+      let schema: FrameSchema = {};
+      let schemaName = "";
+      const applySchema = (n: Node): boolean => {
+        const s = schemaNodeToSchemas(dataOf(n).params);
+        if (!s.node.length && !s.segment.length && !s.graph.length) return false;
+        schema = { node: s.node, segment: s.segment, graph: s.graph };
+        schemaName = s.name ?? "Schema node";
+        return true;
+      };
+      const direct = nodes.find((n) => dataOf(n).tool === "schema" && edges.some((e) => e.source === n.id && e.target === id));
+      if (!(direct && applySchema(direct))) {
+        const schemaTargets = new Set(["graph-source", "segment-source", "node-source", "canvas-source", "source"]);
+        for (const n of nodes) {
+          if (dataOf(n).tool !== "schema") continue;
+          const wired = edges.some((e) => e.source === n.id && byId.has(e.target) && schemaTargets.has(dataOf(byId.get(e.target)!).tool));
+          if (wired && applySchema(n)) break;
+        }
+      }
+      let graphInput: FrameGraphInput = pipeGraph;
+      const inputSegs = inputPolylinesOf(id, 2);
+      if (inputSegs.length > 0) {
+        const ptById0 = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
+        const d2 = (p: { x: number; y: number }, q: { x: number; y: number }) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+        const TOL2 = 9;
+        const matches = (A: { x: number; y: number }, B: { x: number; y: number }): boolean =>
+          inputSegs.some((pl) => {
+            for (let i = 0; i + 1 < pl.length; i++) {
+              const p = pl[i], q = pl[i + 1];
+              if ((d2(p, A) < TOL2 && d2(q, B) < TOL2) || (d2(p, B) < TOL2 && d2(q, A) < TOL2)) return true;
+            }
+            return false;
+          });
+        const filtered = pipeGraph.edges.filter((e) => { const A = ptById0.get(e.a), B = ptById0.get(e.b); return !!A && !!B && matches(A, B); });
+        if (filtered.length > 0 && filtered.length < pipeGraph.edges.length) graphInput = { ...pipeGraph, edges: filtered };
+      }
+      const justification = data.params.justification === "left" ? "left" : data.params.justification === "right" ? "right" : "center";
+      const res = computeMiteredWalls(graphInput, schema, ppm, { thicknessMm: num(data.params.thicknessMm, 230), justification });
+      const polys = res.pieces.map((p) => p.poly).filter((p) => p.length >= 3);
+      outputs.set(id, polys);
+      handleGroups.set(id, [polys]);
+      const vals = { walls: res.summary.walls ?? 0, totalLength: res.summary.totalLength ?? 0, totalArea: res.summary.totalArea ?? 0 };
+      nodeValues.set(id, vals);
+      const wallResults: PipeSolveResult = {
+        nodeResults: {}, segmentResults: res.segmentResults,
+        summary: res.summary, converged: true, iterations: 0, status: res.status,
+      };
+      items.push({
+        nodeId: id, tool: "wall-builder", polygons: [], color: FLOW_TOOLS["wall-builder"].color,
+        isFinal: succs.get(id)!.length === 0, values: vals,
+        framePieces: res.pieces.map((p) => ({ poly: p.poly, kind: "wall" as const, hatch: p.hatch })),
+        pipeResults: wallResults, pipeStatus: res.status, pipeSchemaName: schemaName,
+      });
+      // Inner / outer face dimensions (toggled on the Walls node). For each band quad the two LONGEST
+      // edges are its faces; the one farther from the overall plan centre is "outer", the nearer "inner".
+      // Each face's dimension is offset away from its own band so outer reads outside, inner reads in-room.
+      // Per-wall dimension toggles: each segment's schema value (role show-outer-dim / show-inner-dim)
+      // wins, falling back to the node-level checkbox. So you can dimension some walls and not others.
+      const segAttrsWD = pipeGraph.attrs.segments ?? {};
+      if (res.pieces.length) {
+        let gx = 0, gy = 0, gn = 0;
+        for (const piece of res.pieces) for (const p of piece.poly) { gx += p.x; gy += p.y; gn++; }
+        if (gn) { gx /= gn; gy /= gn; }
+        const gapPx = Math.max(0, num(data.params.dimGap, 0.18)) * ppm;
+        const labelPx = gapPx + 0.12 * ppm;
+        const dLines: Point[][] = [];
+        const dLabels: { x: number; y: number; text: string; rotation: number }[] = [];
+        for (const piece of res.pieces) {
+          const showOuter = resolveBool(schema.segment, segAttrsWD, piece.id, "showOuterDim", ROLES.showOuterDim, data.params.showOuterDim === true);
+          const showInner = resolveBool(schema.segment, segAttrsWD, piece.id, "showInnerDim", ROLES.showInnerDim, data.params.showInnerDim === true);
+          if (!showOuter && !showInner) continue;
+          const poly = piece.poly;
+          if (poly.length < 4) continue;
+          let cx = 0, cy = 0;
+          for (const p of poly) { cx += p.x; cy += p.y; }
+          cx /= poly.length; cy /= poly.length;
+          const ed = poly.map((p, i) => {
+            const q = poly[(i + 1) % poly.length];
+            return { a: p, b: q, len: Math.hypot(q.x - p.x, q.y - p.y), mx: (p.x + q.x) / 2, my: (p.y + q.y) / 2 };
+          }).sort((u, v) => v.len - u.len).slice(0, 2);
+          // Classify by distance to the global centre: [0] = outer (farther), [1] = inner (nearer).
+          ed.sort((u, v) => Math.hypot(v.mx - gx, v.my - gy) - Math.hypot(u.mx - gx, u.my - gy));
+          const faces: typeof ed = [];
+          if (showOuter && ed[0]) faces.push(ed[0]);
+          if (showInner && ed[1]) faces.push(ed[1]);
+          for (const e of faces) {
+            const L = e.len || 1;
+            const ux = (e.b.x - e.a.x) / L, uy = (e.b.y - e.a.y) / L;
+            let nx = -uy, ny = ux;
+            if ((e.mx - cx) * nx + (e.my - cy) * ny < 0) { nx = -nx; ny = -ny; } // offset away from THIS band
+            dLines.push([{ x: e.a.x + nx * gapPx, y: e.a.y + ny * gapPx }, { x: e.b.x + nx * gapPx, y: e.b.y + ny * gapPx }]);
+            let rot = Math.atan2(e.b.y - e.a.y, e.b.x - e.a.x) * 180 / Math.PI;
+            if (rot > 90 || rot < -90) rot += 180;
+            dLabels.push({ x: e.mx + nx * labelPx, y: e.my + ny * labelPx, text: `${(L / ppm).toFixed(2)} m`, rotation: rot });
+          }
+        }
+        // Separate item so the band (framePieces) and the dimensions (dimLines) both render.
+        if (dLines.length) items.push({ nodeId: id, tool: "wall-builder", polygons: [], color: FLOW_TOOLS["wall-builder"].color, isFinal: false, dimLines: dLines, dimLabels: dLabels });
+      }
+      continue;
+    }
     // Vectorisation: trace the imported image's lines into world-space polylines (a graph). Heavy, so the
     // result is cached per (image, params); maps image-pixel coords onto the underlay's world box.
     if (data.tool === "vectorise") {
@@ -803,6 +1417,367 @@ export function evaluateFlow(
       if (polys.length > 0) items.push({ nodeId: id, tool: "bloom", polygons: polys, color: FLOW_TOOLS.bloom.color, isFinal: succs.get(id)!.length === 0, cellCount: polys.length });
       continue;
     }
+    // Segment to Door: draw a door symbol on each incoming segment (the door opening). Schema-driven:
+    // when a Schema is attached, each matched canvas segment reads its OWN shape / hinge / swing / thickness
+    // by role from graphAttrs (node params are the fallback), and only "door"-typed segments are drawn.
+    if (data.tool === "segment-to-door") {
+      const schema = resolveSchemaFor(id);
+      const segDefs = schema.segment;
+      const segAttrs = pipeGraph?.attrs.segments ?? {};
+      const typeDef = findDef(segDefs, ROLES.segType);
+      const np = data.params;
+      const npColor = typeof np.color === "string" && np.color ? np.color : FLOW_TOOLS["segment-to-door"].color;
+      let drawColor = npColor;
+      const fill: Point[][] = [];
+      const lines: Point[][] = [];
+      for (const s of inputPolylinesOf(id, 2)) {
+        const wallId = wallIdForSeg(s);
+        // Self-filter by the schema's type discriminator (only doors). With no schema/type, draw all.
+        if (typeDef && wallId && resolveStr(segDefs, segAttrs, wallId, "type", ROLES.segType, "door") !== "door") continue;
+        // Per-element values via the single resolver: this segment's OWN value → schema role → param.
+        const dStr = (pk: string, roles: readonly string[], fb: string) => resolveStr(segDefs, segAttrs, wallId, pk, roles, fb);
+        const dNum = (pk: string, roles: readonly string[], fb: number) => resolveNum(segDefs, segAttrs, wallId, pk, roles, fb);
+        const perSeg = {
+          shape: dStr("shape", ROLES.doorShape, typeof np.shape === "string" ? np.shape : "arc"),
+          thickness: dNum("thickness", ROLES.doorThickness, num(np.thickness, 0.05)),
+          hinge: dStr("hinge", ROLES.doorHinge, np.hinge === "right" ? "right" : "left"),
+          swing: dStr("swing", ROLES.doorPlacement, np.swing === "right" ? "right" : "left"),
+        };
+        // Symbol colour: per-segment schema value (role door-color) wins; node param is the fallback.
+        drawColor = dStr("color", ROLES.doorColor, npColor);
+        const d = computeSegmentDoor(s, perSeg, ppm);
+        fill.push(...d.fill);
+        lines.push(...d.lines);
+      }
+      const all = [...fill, ...lines];
+      outputs.set(id, fill.length ? fill : all);
+      handleGroups.set(id, [all]);
+      if (all.length > 0) {
+        items.push({
+          nodeId: id, tool: "segment-to-door", polygons: [], color: drawColor,
+          isFinal: succs.get(id)!.length === 0,
+          doorFill: fill.length ? fill : undefined,
+          doorLines: lines.length ? lines : undefined,
+        });
+      }
+      continue;
+    }
+    // Node to Object: place a furniture symbol on each incoming node — Width × Depth footprint, Rotation,
+    // and which footprint corner sits on the node (Anchor). Schema-driven: when a Schema is attached, each
+    // matched canvas node reads its OWN kind / size / rotation / anchor by role (node params are the
+    // fallback), and only "object"-typed nodes are placed.
+    if (data.tool === "node-to-object") {
+      const schema = resolveSchemaFor(id);
+      const nodeDefs = schema.node;
+      const nodeAttrs = pipeGraph?.attrs.nodes ?? {};
+      const typeDef = findDef(nodeDefs, ROLES.nodeType);
+      const np = data.params;
+      const placements: NonNullable<FlowPreviewItem["objectPlacements"]> = [];
+      const quads: Point[][] = [];
+      for (const pl of inputPolylinesOf(id, 1)) {
+        const p = pl[0];
+        if (!p) continue;
+        const nodeKey = nodeKeyForPt(p);
+        if (typeDef && nodeKey && resolveStr(nodeDefs, nodeAttrs, nodeKey, "type", ROLES.nodeType, "object") !== "object") continue;
+        // Per-element values via the single resolver: this node's OWN value → schema role → node param.
+        const rStr = (pk: string, roles: readonly string[], fb: string) => resolveStr(nodeDefs, nodeAttrs, nodeKey, pk, roles, fb);
+        const rNum = (pk: string, roles: readonly string[], fb: number) => resolveNum(nodeDefs, nodeAttrs, nodeKey, pk, roles, fb);
+        const kind = rStr("kind", ROLES.objectKind, typeof np.kind === "string" ? np.kind : "bed");
+        const wPx = Math.max(0.05, rNum("width", ROLES.objWidth, num(np.width, 1))) * ppm;
+        const hPx = Math.max(0.05, rNum("height", ROLES.objHeight, num(np.height, 1))) * ppm;
+        const rot = rNum("rotation", ROLES.objRotation, num(np.rotation, 0));
+        const ax = rStr("anchor", ROLES.objAnchor, typeof np.anchor === "string" ? np.anchor : "center");
+        const anchor = (ax === "top-left" || ax === "top-right" || ax === "bottom-left" || ax === "bottom-right") ? ax : "center";
+        // Local anchor offset within the w×h box (origin = top-left, y down), matching ObjectSymbol.
+        const ox = anchor === "top-left" || anchor === "bottom-left" ? 0 : anchor === "center" ? wPx / 2 : wPx;
+        const oy = anchor === "top-left" || anchor === "top-right" ? 0 : anchor === "center" ? hPx / 2 : hPx;
+        const th = (rot * Math.PI) / 180, cs = Math.cos(th), sn = Math.sin(th);
+        const quad: Point[] = ([[0, 0], [wPx, 0], [wPx, hPx], [0, hPx]] as const).map(([lx, ly]) => {
+          const dx = lx - ox, dy = ly - oy;
+          return { x: p.x + dx * cs - dy * sn, y: p.y + dx * sn + dy * cs };
+        });
+        quads.push(quad);
+        placements.push({ quad, x: p.x, y: p.y, kind, widthPx: wPx, heightPx: hPx, rotationDeg: rot, anchor });
+      }
+      outputs.set(id, quads);
+      handleGroups.set(id, [quads]);
+      if (placements.length > 0) {
+        items.push({
+          nodeId: id, tool: "node-to-object", polygons: [], color: FLOW_TOOLS["node-to-object"].color,
+          isFinal: succs.get(id)!.length === 0, objectPlacements: placements,
+        });
+      }
+      continue;
+    }
+    // Node to Staircase: draw a 2D plan staircase on each incoming node — a run of treads (straight, or a
+    // half-turn with a mid-landing when Mid steps > 0) plus a direction arrow. Param-driven; reuses the
+    // door/window fill+lines preview channel (filled flight/landing rects + stroked treads/arrow).
+    if (data.tool === "node-to-staircase") {
+      const np = data.params;
+      const drawColor = typeof np.color === "string" && np.color ? np.color : FLOW_TOOLS["node-to-staircase"].color;
+      // Schema self-filter: when a Schema is attached, only place staircases on "staircase"-typed nodes
+      // (so feeding the whole Canvas Nodes bundle doesn't stamp a stair on every junction/object).
+      const scSchema = resolveSchemaFor(id);
+      const scNodeDefs = scSchema.node;
+      const scNodeAttrs = pipeGraph?.attrs.nodes ?? {};
+      const scTypeDef = findDef(scNodeDefs, ROLES.nodeType);
+      const fill: Point[][] = [];
+      const lines: Point[][] = [];
+      for (const pl of inputPolylinesOf(id, 1)) {
+        const p = pl[0];
+        if (!p) continue;
+        const nodeKey = nodeKeyForPt(p);
+        if (scTypeDef && nodeKey && resolveStr(scNodeDefs, scNodeAttrs, nodeKey, "type", ROLES.nodeType, "staircase") !== "staircase") continue;
+        const s = computeNodeStaircase(p, np, ppm);
+        fill.push(...s.fill);
+        lines.push(...s.lines);
+      }
+      const all = [...fill, ...lines];
+      outputs.set(id, fill.length ? fill : all);
+      handleGroups.set(id, [all]);
+      if (all.length > 0) {
+        items.push({
+          nodeId: id, tool: "node-to-staircase", polygons: [], color: drawColor,
+          isFinal: succs.get(id)!.length === 0,
+          doorFill: fill.length ? fill : undefined,
+          doorLines: lines.length ? lines : undefined,
+        });
+      }
+      continue;
+    }
+    // Node to Footing: draw a column-footing section on each incoming node — spread (flat pad), sloped
+    // (frustum) or stepped, with RCC / PCC / soling layers. Param-driven; reuses the door fill+lines channel.
+    if (data.tool === "node-to-footing") {
+      // Wired value inputs (base width, column dims, layer thicknesses, …) override the sliders.
+      const vin = resolveValueInputs(id);
+      const np = Object.keys(vin).length ? { ...data.params, ...vin } : data.params;
+      const drawColor = typeof np.color === "string" && np.color ? np.color : FLOW_TOOLS["node-to-footing"].color;
+      const fill: Point[][] = [];
+      const lines: Point[][] = [];
+      for (const pl of inputPolylinesOf(id, 1)) {
+        const p = pl[0];
+        if (!p) continue;
+        const s = computeNodeFooting(p, np, ppm);
+        fill.push(...s.fill);
+        lines.push(...s.lines);
+      }
+      const all = [...fill, ...lines];
+      outputs.set(id, fill.length ? fill : all);
+      handleGroups.set(id, [all]);
+      if (all.length > 0) {
+        items.push({
+          nodeId: id, tool: "node-to-footing", polygons: [], color: drawColor,
+          isFinal: succs.get(id)!.length === 0,
+          doorFill: fill.length ? fill : undefined,
+          doorLines: lines.length ? lines : undefined,
+          valueInputs: Object.keys(vin).length ? vin : undefined,
+        });
+      }
+      continue;
+    }
+    // Footing (data node): a pure, location-free definition. Resolve params (+ wired value inputs) and
+    // publish to the footing channel for the view nodes. No geometry, no location.
+    if (data.tool === "footing") {
+      const vin = resolveValueInputs(id);
+      const params = Object.keys(vin).length ? { ...data.params, ...vin } : data.params;
+      nodeFootings.set(id, { params });
+      outputs.set(id, []);
+      if (Object.keys(vin).length) {
+        items.push({ nodeId: id, tool: "footing", polygons: [], color: FLOW_TOOLS.footing.color, isFinal: false, valueInputs: vin });
+      }
+      continue;
+    }
+    // Footing to 2D Elevation / Plan: build the section (filled layers) or footprint outlines (closed
+    // strokes) of the upstream Footing, ORIGIN-RELATIVE (around 0,0). Published to the stamp channel; a
+    // downstream Node places it. Renders nothing on its own.
+    if (data.tool === "footing-to-elevation" || data.tool === "footing-to-plan") {
+      const f = upstreamFooting(id);
+      const drawColor = typeof data.params.color === "string" && data.params.color ? data.params.color : FLOW_TOOLS[data.tool].color;
+      const fill: Point[][] = [];
+      const lines: Point[][] = [];
+      if (f) {
+        const spec = toFootingSpec(f.params);
+        const o = { x: 0, y: 0 };
+        if (data.tool === "footing-to-elevation") fill.push(...footingElevationPolys(o, spec, ppm));
+        else for (const ring of footingPlanPolys(o, spec, ppm)) lines.push([...ring, ring[0]]); // close the outline
+      }
+      nodeStamps.set(id, { fill, lines, prisms: [], color: drawColor });
+      outputs.set(id, []);
+      continue;
+    }
+    // Footing to 3D Mesh: build the upstream Footing as an ORIGIN-RELATIVE mesh. Published to the stamp
+    // channel (a Node places it at its point(s)) AND to the mesh channel (Mesh to 3D shows it at origin).
+    if (data.tool === "footing-to-3d-mesh") {
+      const f = upstreamFooting(id);
+      const drawColor = typeof data.params.color === "string" && data.params.color ? data.params.color : FLOW_TOOLS[data.tool].color;
+      let prisms: FlowMeshPrism[] = [];
+      if (f) {
+        const spec = toFootingSpec({ ...f.params, color: drawColor });
+        prisms = footingMeshPrisms({ x: 0, y: 0 }, spec, ppm);
+      }
+      nodeStamps.set(id, { fill: [], lines: [], prisms, color: drawColor });
+      meshOutputs.set(id, prisms.length ? [{ id: `${id}-0`, prisms }] : []);
+      outputs.set(id, []);
+      continue;
+    }
+    // Mesh to 3D (terminal): collect upstream meshes and surface them for the host's 3D renderer.
+    if (data.tool === "mesh-to-3d") {
+      const meshes = upstreamMeshes(id);
+      outputs.set(id, []);
+      if (meshes.length) {
+        items.push({ nodeId: id, tool: "mesh-to-3d", polygons: [], color: FLOW_TOOLS["mesh-to-3d"].color, isFinal: true, meshes });
+      }
+      continue;
+    }
+    // Staircase (data node): pure, location-free definition. Publish params to the staircase channel.
+    if (data.tool === "staircase") {
+      const vin = resolveValueInputs(id);
+      const params = Object.keys(vin).length ? { ...data.params, ...vin } : data.params;
+      nodeStaircases.set(id, { params });
+      outputs.set(id, []);
+      if (Object.keys(vin).length) {
+        items.push({ nodeId: id, tool: "staircase", polygons: [], color: FLOW_TOOLS.staircase.color, isFinal: false, valueInputs: vin });
+      }
+      continue;
+    }
+    // Staircase to 2D Plan: the top-down plan (reuses computeNodeStaircase), ORIGIN-RELATIVE. Stamp channel.
+    if (data.tool === "staircase-to-plan") {
+      const f = upstreamStaircase(id);
+      const drawColor = typeof data.params.color === "string" && data.params.color ? data.params.color : FLOW_TOOLS["staircase-to-plan"].color;
+      let fill: Point[][] = [];
+      let lines: Point[][] = [];
+      if (f) {
+        const s = computeNodeStaircase({ x: 0, y: 0 }, f.params, ppm);
+        fill = s.fill; lines = s.lines;
+      }
+      nodeStamps.set(id, { fill, lines, prisms: [], color: drawColor });
+      outputs.set(id, []);
+      continue;
+    }
+    // Staircase to Left/Right/Front/Back Elevation: a side projection (stepped profile), ORIGIN-RELATIVE.
+    if (data.tool === "staircase-to-left-elevation" || data.tool === "staircase-to-right-elevation" || data.tool === "staircase-to-front-elevation" || data.tool === "staircase-to-back-elevation") {
+      const f = upstreamStaircase(id);
+      const drawColor = typeof data.params.color === "string" && data.params.color ? data.params.color : FLOW_TOOLS[data.tool].color;
+      const view: ElevationView = data.tool === "staircase-to-left-elevation" ? "left" : data.tool === "staircase-to-right-elevation" ? "right" : data.tool === "staircase-to-front-elevation" ? "front" : "back";
+      const lines: Point[][] = f ? staircaseElevationPolys(toStaircaseSpec(f.params), ppm, view) : [];
+      nodeStamps.set(id, { fill: [], lines, prisms: [], color: drawColor });
+      outputs.set(id, []);
+      continue;
+    }
+    // Staircase to 3D Mesh: stacked step boxes, ORIGIN-RELATIVE. Stamp channel + mesh channel (origin preview).
+    if (data.tool === "staircase-to-3d-mesh") {
+      const f = upstreamStaircase(id);
+      const drawColor = typeof data.params.color === "string" && data.params.color ? data.params.color : FLOW_TOOLS["staircase-to-3d-mesh"].color;
+      let prisms: FlowMeshPrism[] = [];
+      if (f) prisms = staircaseMeshPrisms({ x: 0, y: 0 }, toStaircaseSpec({ ...f.params, color: drawColor }), ppm);
+      nodeStamps.set(id, { fill: [], lines: [], prisms, color: drawColor });
+      meshOutputs.set(id, prisms.length ? [{ id: `${id}-0`, prisms }] : []);
+      outputs.set(id, []);
+      continue;
+    }
+    // Schema to Drawing Tools: read the attached Schema's segment `type` (seg-type) and node `type`
+    // (node-type) discriminators — options + per-option icons — and surface them for the host's drawing
+    // dropdowns. No geometry.
+    if (data.tool === "schema-to-drawing") {
+      const schemaNode = nodes.find((nd) => dataOf(nd).tool === "schema" && edges.some((e) => e.source === nd.id && e.target === id))
+        ?? nodes.find((nd) => dataOf(nd).tool === "schema");
+      const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+      const toolsFor = (entries: ReturnType<typeof schemaEntries>, roles: readonly string[]) => {
+        const disc = entries.find((e) => roles.includes(e.role)) ?? entries.find((e) => e.kind === "select" && e.key === "type");
+        if (!disc) return [] as { value: string; label: string; icon?: string }[];
+        return disc.options.map((v) => ({ value: v, label: cap(v), icon: disc.optionIcons?.[v] }));
+      };
+      let segments: { value: string; label: string; icon?: string }[] = [];
+      let nodeTools: { value: string; label: string; icon?: string }[] = [];
+      if (schemaNode) {
+        const p = dataOf(schemaNode).params;
+        segments = toolsFor(schemaEntries(p, "segmentProps"), ["seg-type"]);
+        nodeTools = toolsFor(schemaEntries(p, "nodeProps"), ["node-type"]);
+      }
+      outputs.set(id, []);
+      if (segments.length || nodeTools.length) {
+        items.push({ nodeId: id, tool: "schema-to-drawing", polygons: [], color: FLOW_TOOLS["schema-to-drawing"].color, isFinal: false, drawingTools: { segments, nodes: nodeTools } });
+      }
+      continue;
+    }
+    // Floorplan to {Front,Back,Left,Right} Elevation (Tier A): project the wall / door / window graph onto a
+    // cardinal plane as a schematic elevation. Reads each segment's type + wall height / opening sill+lintel
+    // from the attached Schema (Canvas-attached). Origin-relative; published to the stamp channel for a Node.
+    if (data.tool === "floorplan-to-front-elevation" || data.tool === "floorplan-to-back-elevation" || data.tool === "floorplan-to-left-elevation" || data.tool === "floorplan-to-right-elevation") {
+      const schema = resolveSchemaFor(id);
+      const segDefs = schema.segment;
+      const segAttrs = pipeGraph?.attrs.segments ?? {};
+      const drawColor = typeof data.params.color === "string" && data.params.color ? data.params.color : FLOW_TOOLS[data.tool].color;
+      const view: FloorElevView = data.tool === "floorplan-to-front-elevation" ? "front" : data.tool === "floorplan-to-back-elevation" ? "back" : data.tool === "floorplan-to-left-elevation" ? "left" : "right";
+      const defaultH = Math.max(0.1, num(data.params.height, 3));
+      const segs: ElevSeg[] = [];
+      for (const s of inputPolylinesOf(id, 2)) {
+        const p0 = s[0], p1 = s[s.length - 1];
+        if (!p0 || !p1) continue;
+        const wallId = wallIdForSeg(s);
+        const segType = resolveStr(segDefs, segAttrs, wallId, "type", ROLES.segType, "wall");
+        const kind: ElevKind | null = segType === "door" ? "door" : segType === "window" ? "window" : (segType === "wall" || segType === "") ? "wall" : null;
+        if (!kind) continue; // skip non-building segments (e.g. "line", "connection")
+        const height = resolveNum(segDefs, segAttrs, wallId, "wall-height", ROLES.wallHeight, defaultH);
+        const lintel = resolveNum(segDefs, segAttrs, wallId, "lintel-height", ["lintel-height"], 2.1);
+        const sill = resolveNum(segDefs, segAttrs, wallId, "sill-height", ["sill-height"], 0.9);
+        segs.push({ p0, p1, kind, height, sill, lintel });
+      }
+      const lines = floorplanElevationPolys(segs, view, ppm);
+      nodeStamps.set(id, { fill: [], lines, prisms: [], color: drawColor });
+      outputs.set(id, []);
+      continue;
+    }
+    // Views Layout (terminal): a wiring anchor read by the host's "Views" canvas mode. No geometry here —
+    // the host resolves the wired Plan / elevations from the live graph and renders them in the panels.
+    if (data.tool === "views-layout") {
+      outputs.set(id, []);
+      continue;
+    }
+    // Segment to Window: draw a window symbol on each incoming segment — polygon (filled frame), lines
+    // (frame + glass), or detailed (frame + panes / mullions). Schema-driven: when a Schema is attached,
+    // each matched segment reads its OWN shape / thickness / panes by role (node params are the fallback),
+    // and only "window"-typed segments are drawn.
+    if (data.tool === "segment-to-window") {
+      const schema = resolveSchemaFor(id);
+      const segDefs = schema.segment;
+      const segAttrs = pipeGraph?.attrs.segments ?? {};
+      const typeDef = findDef(segDefs, ROLES.segType);
+      const np = data.params;
+      const npColor = typeof np.color === "string" && np.color ? np.color : FLOW_TOOLS["segment-to-window"].color;
+      let drawColor = npColor;
+      const fill: Point[][] = [];
+      const lines: Point[][] = [];
+      for (const s of inputPolylinesOf(id, 2)) {
+        const wallId = wallIdForSeg(s);
+        if (typeDef && wallId && resolveStr(segDefs, segAttrs, wallId, "type", ROLES.segType, "window") !== "window") continue;
+        // Per-element values via the single resolver: this segment's OWN value → schema role → param.
+        const dStr = (pk: string, roles: readonly string[], fb: string) => resolveStr(segDefs, segAttrs, wallId, pk, roles, fb);
+        const dNum = (pk: string, roles: readonly string[], fb: number) => resolveNum(segDefs, segAttrs, wallId, pk, roles, fb);
+        const perSeg = {
+          shape: dStr("shape", ROLES.windowShape, typeof np.shape === "string" ? np.shape : "lines"),
+          thickness: dNum("thickness", ROLES.windowThickness, num(np.thickness, 0.1)),
+          panes: dNum("panes", ROLES.windowPanes, num(np.panes, 2)),
+        };
+        // Symbol colour: per-segment schema value (role window-color) wins; node param is the fallback.
+        drawColor = dStr("color", ROLES.windowColor, npColor);
+        const d = computeSegmentWindow(s, perSeg, ppm);
+        fill.push(...d.fill);
+        lines.push(...d.lines);
+      }
+      const all = [...fill, ...lines];
+      outputs.set(id, fill.length ? fill : all);
+      handleGroups.set(id, [all]);
+      if (all.length > 0) {
+        items.push({
+          nodeId: id, tool: "segment-to-window", polygons: [], color: drawColor,
+          isFinal: succs.get(id)!.length === 0,
+          doorFill: fill.length ? fill : undefined,
+          doorLines: lines.length ? lines : undefined,
+        });
+      }
+      continue;
+    }
     // Split Segment: cut each incoming segment (polyline) into pieces (length / ratio / strip). One
     // output handle per piece, or a single bundle. Wired Piece/Strip length, Position, Ratios override.
     if (data.tool === "segment-split") {
@@ -815,6 +1790,125 @@ export function evaluateFlow(
       const surfaced = { ...vin };
       delete surfaced.ratios; // string list — applied but not echoed to the box
       if (pieces.length > 0) items.push({ nodeId: id, tool: "segment-split", polygons: pieces, color: FLOW_TOOLS["segment-split"].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: pieces.length, valueInputs: Object.keys(surfaced).length ? surfaced : undefined });
+      continue;
+    }
+    // Display Segment: two modes — "line" restyles each segment's stroke; "buffered" thickens it into a
+    // ribbon Space. Schema-driven + PER-SEGMENT: each matched segment reads its OWN colour / line style /
+    // show-direction (and, buffered, thickness / justification / hatch) by role, node params as fallback.
+    if (data.tool === "display-segment") {
+      const p = data.params;
+      const schema = resolveSchemaFor(id);
+      const segDefs = schema.segment;
+      const segAttrs = pipeGraph?.attrs.segments ?? {};
+      const typeDef = findDef(segDefs, ROLES.segType);
+      const applyTo = typeof p.applyTo === "string" ? p.applyTo : "any";
+      const vin = resolveValueInputs(id);
+      const mode = p.mode === "buffered" ? "buffered" : "line";
+      const npColor = typeof p.color === "string" ? p.color : "#334155";
+      const npLine = p.lineStyle === "dashed" ? "dashed" : p.lineStyle === "dotted" ? "dotted" : "solid";
+      const npWeight = Math.max(0.5, num(p.weight, 2));
+      const dispSegs: NonNullable<FlowPreviewItem["dispSegs"]> = [];
+      const outPolys: Point[][] = [];
+      for (const s of inputPolylinesOf(id, 2)) {
+        const wallId = wallIdForSeg(s);
+        // Type self-filter: skip segments whose schema type doesn't match (only when a type role exists).
+        if (applyTo !== "any" && wallId && typeDef && resolveStr(segDefs, segAttrs, wallId, "type", ROLES.segType, applyTo) !== applyTo) continue;
+        // Per-element values via the single resolver: this segment's OWN value → schema role → param.
+        const rStr = (pk: string, roles: readonly string[], fb: string) => resolveStr(segDefs, segAttrs, wallId, pk, roles, fb);
+        const rNum = (pk: string, roles: readonly string[], fb: number) => resolveNum(segDefs, segAttrs, wallId, pk, roles, fb);
+        const rBool = (pk: string, roles: readonly string[], fb: boolean) => resolveBool(segDefs, segAttrs, wallId, pk, roles, fb);
+        const color = rStr("color", ROLES.wallColor, npColor);
+        const lsRaw = rStr("lineStyle", ROLES.wallLineStyle, npLine);
+        const lineStyle: "solid" | "dashed" | "dotted" = lsRaw === "dashed" ? "dashed" : lsRaw === "dotted" ? "dotted" : "solid";
+        const showDirection = rBool("showDirection", ROLES.showDirection, Boolean(p.showDirection));
+        if (mode === "buffered") {
+          const thickness = Math.max(0.01, rNum("thickness", ROLES.bufferThickness, num(vin.thickness ?? p.thickness, 0.2)));
+          const just = rStr("justification", ROLES.wallJustification, typeof p.justification === "string" ? p.justification : "center");
+          const halfPx = (thickness / 2) * ppm;
+          const off = just === "left" ? halfPx : just === "right" ? -halfPx : 0;
+          const src = off !== 0 ? offsetPolyline(s, off) : s;
+          const bp = { radius: thickness / 2, capStyle: typeof p.bufferStyle === "string" ? p.bufferStyle : "capsule" };
+          const ring = evalBuffer([src], bp, ppm).find((q) => q.length >= 3);
+          if (ring) {
+            outPolys.push(ring);
+            const hatchOn = rBool("hatch", ROLES.hatch, Boolean(p.hatch));
+            const hsRaw = rStr("hatchStyle", ROLES.hatchStyle, p.hatchStyle === "dots" ? "dots" : "diagonal");
+            dispSegs.push({
+              mode: "buffered", ring, color, lineStyle, weight: npWeight, showDirection,
+              center: showDirection ? s : undefined,
+              hatch: hatchOn ? {
+                style: hsRaw === "dots" ? "dots" : "diagonal",
+                spacing: Math.max(3, rNum("hatchSpacing", ROLES.hatchSpacing, num(p.hatchSpacing, 8))),
+                angle: rNum("hatchAngle", ROLES.hatchAngle, num(p.hatchAngle, 45)),
+                weight: Math.max(0.5, num(p.hatchWeight, 1)),
+              } : undefined,
+            });
+          }
+        } else {
+          outPolys.push(s);
+          dispSegs.push({ mode: "line", poly: s, color, lineStyle, weight: npWeight, showDirection });
+        }
+      }
+      outputs.set(id, outPolys);
+      handleGroups.set(id, [outPolys]);
+      if (dispSegs.length > 0) {
+        items.push({
+          nodeId: id, tool: "display-segment", polygons: [],
+          color: npColor, isFinal: succs.get(id)!.length === 0,
+          valueInputs: Object.keys(vin).length ? vin : undefined,
+          dispSegs,
+        });
+      }
+      continue;
+    }
+    // Display Node: styling pass-through — draw each incoming node as a marker. Schema-driven + PER-NODE:
+    // each matched canvas node reads its OWN shape / style / colour / size / hatch by role; node params
+    // are the fallback.
+    if (data.tool === "display-node") {
+      const p = data.params;
+      const schema = resolveSchemaFor(id);
+      const nodeDefs = schema.node;
+      const nodeAttrs = pipeGraph?.attrs.nodes ?? {};
+      const typeDef = findDef(nodeDefs, ROLES.nodeType);
+      const applyTo = typeof p.applyTo === "string" ? p.applyTo : "any";
+      const dispNodes: NonNullable<FlowPreviewItem["dispNodes"]> = [];
+      const outPts: Point[][] = [];
+      for (const pl of inputPolylinesOf(id, 1)) {
+        const pt = pl[0];
+        if (!pt) continue;
+        const k = nodeKeyForPt(pt);
+        // Type self-filter: skip nodes whose schema type doesn't match (only when a type role exists).
+        if (applyTo !== "any" && k && typeDef && resolveStr(nodeDefs, nodeAttrs, k, "type", ROLES.nodeType, applyTo) !== applyTo) continue;
+        // Per-element values via the single resolver: this node's OWN value → schema role → node param.
+        const rStr = (pk: string, roles: readonly string[], fb: string) => resolveStr(nodeDefs, nodeAttrs, k, pk, roles, fb);
+        const rNum = (pk: string, roles: readonly string[], fb: number) => resolveNum(nodeDefs, nodeAttrs, k, pk, roles, fb);
+        const rBool = (pk: string, roles: readonly string[], fb: boolean) => resolveBool(nodeDefs, nodeAttrs, k, pk, roles, fb);
+        const shRaw = rStr("shape", ROLES.nodeShape, typeof p.shape === "string" ? p.shape : "dot");
+        const stRaw = rStr("style", ROLES.nodeStyle, typeof p.style === "string" ? p.style : "solid");
+        const hsRaw = rStr("hatchStyle", ROLES.nodeHatchStyle, p.hatchStyle === "dots" ? "dots" : "diagonal");
+        dispNodes.push({
+          x: pt.x, y: pt.y,
+          shape: shRaw === "circle" ? "circle" : shRaw === "square" ? "square" : shRaw === "triangle" ? "triangle" : "dot",
+          style: stRaw === "dashed" ? "dashed" : stRaw === "dotted" ? "dotted" : "solid",
+          color: rStr("color", ROLES.nodeColor, typeof p.color === "string" ? p.color : "#475569"),
+          size: Math.max(0.1, rNum("size", ROLES.nodeSize, num(p.size, 1))),
+          hatch: rBool("hatch", ROLES.nodeHatch, Boolean(p.hatch)),
+          hatchStyle: hsRaw === "dots" ? "dots" : "diagonal",
+          hatchSpacing: Math.max(3, rNum("spacing", ROLES.nodeHatchSpacing, num(p.spacing, 8))),
+          hatchAngle: rNum("angle", ROLES.nodeHatchAngle, num(p.angle, 45)),
+          hatchWeight: Math.max(0.5, num(p.weight, 1)),
+        });
+        outPts.push(pl);
+      }
+      outputs.set(id, outPts);
+      handleGroups.set(id, [outPts]);
+      if (dispNodes.length > 0) {
+        items.push({
+          nodeId: id, tool: "display-node", polygons: [],
+          color: typeof p.color === "string" ? p.color : FLOW_TOOLS["display-node"].color,
+          isFinal: succs.get(id)!.length === 0, dispNodes,
+        });
+      }
       continue;
     }
     // Separate: fan one multi-item input bundle out to one output endpoint per item.
@@ -863,33 +1957,244 @@ export function evaluateFlow(
       if (arrows.length > 0) items.push({ nodeId: id, tool: "show-direction", polygons: arrows, color: FLOW_TOOLS["show-direction"].color, isFinal: succs.get(id)!.length === 0, cellCount: arrows.length });
       continue;
     }
+    // Dimension (Space node): dimension the EDGES of the incoming Space(s). The Space is forwarded
+    // unchanged downstream; `edgeCount` (first space's edge count) drives the Edgewise checkbox grid.
+    if (data.tool === "dimension") {
+      const spaces = inputsOf(id).filter((p) => p.length >= 3);
+      const { lines, labels, dots } = evalDimensions(spaces, { ...data.params, ...resolveValueInputs(id) }, ppm);
+      outputs.set(id, spaces);
+      handleGroups.set(id, [spaces]);
+      if (spaces.length > 0) items.push({ nodeId: id, tool: "dimension", polygons: [], color: FLOW_TOOLS.dimension.color, isFinal: succs.get(id)!.length === 0, dimLines: lines, dimLabels: labels, dimDots: dots, edgeCount: spaces[0].length });
+      continue;
+    }
+    // Graph to Grid: m×n lattice over the input's bbox, emitted as a graph (segments) to chain on.
+    if (data.tool === "graph-to-grid") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const { segments, nodes, cells, field } = evalGraphToGrid(inputPolylinesOf(id, 2), gp);
+      outputs.set(id, segments);
+      handleGroups.set(id, [segments]);
+      if (field) fields.set(id, field); // publish the grid-field for downstream grid nodes
+      if (segments.length > 0) {
+        const nodeR = Math.max(0, num(gp.nodeValue, 3));
+        const segW = Math.max(0.1, num(gp.segmentValue, 1));
+        items.push({ nodeId: id, tool: "graph-to-grid", polygons: [], color: FLOW_TOOLS["graph-to-grid"].color, isFinal: succs.get(id)!.length === 0, grid: { segments, nodes, nodeR, segW, cells, showValues: gp.showCellValues === true } });
+      }
+      continue;
+    }
+    // Grid Distance: heatmap an incoming grid-field by distance to occupied cells; pass the field on.
+    if (data.tool === "grid-distance") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalGridDistance(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "grid-distance", polygons: [], color: FLOW_TOOLS["grid-distance"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Grid Field: generate a synthetic elevation field (ramp + noise, optional river incision) over the
+    // incoming lattice; publish the DEM on.
+    if (data.tool === "grid-field") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalGridField(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "grid-field", polygons: [], color: FLOW_TOOLS["grid-field"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Cellular Automaton: evolve a binary lattice N generations under a Birth/Survive rule; publish state.
+    if (data.tool === "cellular-automaton") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalCellularAutomaton(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "cellular-automaton", polygons: [], color: FLOW_TOOLS["cellular-automaton"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Laplace Solver: relax ∇²φ = 0 over the lattice → a smooth potential field; publish φ on.
+    if (data.tool === "laplace-solver") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalLaplaceSolver(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "laplace-solver", polygons: [], color: FLOW_TOOLS["laplace-solver"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Fill Depressions: Priority-Flood condition the incoming DEM field; publish the filled field on.
+    if (data.tool === "fill-depressions") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalFillDepressions(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "fill-depressions", polygons: [], color: FLOW_TOOLS["fill-depressions"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Flow Direction: D8 steepest-descent receiver per cell; publish the dir-carrying field, draw arrows.
+    if (data.tool === "flow-direction") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells, segments } = evalFlowDirection(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0 || segments.length > 0) {
+          items.push({ nodeId: id, tool: "flow-direction", polygons: [], color: FLOW_TOOLS["flow-direction"].color, isFinal: succs.get(id)!.length === 0, grid: { segments, nodes: [], nodeR: 0, segW: 1, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Flow Accumulation: upstream contributing cells/area per cell along the dir channel; publish + heatmap.
+    if (data.tool === "flow-accumulation") {
+      const gp = { ...data.params, ...resolveValueInputs(id), ppm };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalFlowAccumulation(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "flow-accumulation", polygons: [], color: FLOW_TOOLS["flow-accumulation"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Watershed: flood upstream over the dir channel from an outlet cell; publish the basin mask + outline.
+    if (data.tool === "watershed") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells, segments } = evalWatershed(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0 || segments.length > 0) {
+          items.push({ nodeId: id, tool: "watershed", polygons: [], color: FLOW_TOOLS.watershed.color, isFinal: succs.get(id)!.length === 0, grid: { segments, nodes: [], nodeR: 0, segW: 1.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Morphology: erosion / dilation (+ compositions) over the incoming field; publish the result.
+    if (data.tool === "morphology") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalMorphology(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "morphology", polygons: [], color: FLOW_TOOLS.morphology.color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Grid Threshold: value op X → a 0/1 mask field; publish the mask, fill passing cells.
+    if (data.tool === "grid-threshold") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      if (inField) {
+        const { field, cells } = evalGridThreshold(inField, gp);
+        fields.set(id, field);
+        if (cells.length > 0) {
+          items.push({ nodeId: id, tool: "grid-threshold", polygons: [], color: FLOW_TOOLS["grid-threshold"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Marching Squares: iso-contours from a grid field → contour lines (a graph) to chain on.
+    if (data.tool === "marching-squares") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      const inField = fieldInputOf(id);
+      const segs = inField ? evalMarchingSquares(inField, gp) : [];
+      outputs.set(id, segs);
+      handleGroups.set(id, [segs]);
+      if (segs.length > 0) items.push({ nodeId: id, tool: "marching-squares", polygons: segs, openPath: true, color: FLOW_TOOLS["marching-squares"].color, isFinal: succs.get(id)!.length === 0 });
+      continue;
+    }
+    // Area Dimension (Space node): centroid annotation (Label / Area / L×B) per Space; Space forwarded on.
+    if (data.tool === "area-dimension") {
+      const spaces = inputsOf(id).filter((p) => p.length >= 3);
+      const areaLabels = evalAreaDimension(spaces, data.params, ppm);
+      outputs.set(id, spaces);
+      handleGroups.set(id, [spaces]);
+      if (areaLabels.length > 0) items.push({ nodeId: id, tool: "area-dimension", polygons: [], color: FLOW_TOOLS["area-dimension"].color, isFinal: succs.get(id)!.length === 0, areaLabels });
+      continue;
+    }
     if (data.tool === "mitered-join") {
       const gp = { ...data.params, ...resolveValueInputs(id) };
       const inSegs = inputPolylinesOf(id);
-      let polys = evalMiteredJoin(inSegs, gp, ppm);
-      // Clip the ribbon to its source boundary so leaf-branch ends don't poke outside the space (the
-      // half-width end-caps overshoot the polygon at the corners they reach). The boundary is the input
-      // polygon of the upstream Skeleton feeding this graph; with none found (e.g. a raw Graph source)
-      // there's nothing to clip to, so leave the ribbon untouched.
-      if (gp.clipToBoundary !== false) {
-        // Prefer the explicitly-wired clip Space (gin-boundary); else auto-detect the upstream Skeleton's space.
-        const explicit = geomInputOf(id, "boundary").filter((p) => p.length >= 3);
-        const bounds = explicit.length ? explicit : upstreamBoundaries(id);
-        if (bounds.length) polys = polys.map((r) => clipRibbonToBoundaries(r, bounds)).filter((p) => p.length >= 3);
-      }
-      // Union: fuse the per-segment ribbons into a single Space (exact vector union for the abutting miter
-      // joints; raster fallback if any overlap). Unchecked → keep one polygon per segment.
-      if (gp.union && polys.length > 1) {
-        const merged = polygonUnionVector(polys) ?? rasterUnion(polys);
-        if (merged && merged.length >= 3) polys = [merged];
+      // "Use same width for all" OFF → stroke each centerline edge at its source segment's own canvas
+      // thickness (matched to a canvas wall by endpoints via pipeGraph); unmatched edges use the slider.
+      const segWidthPx = (() => {
+        if (gp.useSameWidth !== false || !pipeGraph) return undefined;
+        const xy = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
+        const TOL = Math.max(1, 0.05 * ppm);
+        const edges = pipeGraph.edges
+          .map((e) => { const A = xy.get(e.a), B = xy.get(e.b); return A && B && e.widthPx != null ? { ax: A.x, ay: A.y, bx: B.x, by: B.y, w: e.widthPx } : null; })
+          .filter((e): e is { ax: number; ay: number; bx: number; by: number; w: number } => e !== null);
+        if (edges.length === 0) return undefined;
+        return (a: Point, b: Point): number | undefined => {
+          for (const e of edges) {
+            const fwd = Math.hypot(a.x - e.ax, a.y - e.ay) < TOL && Math.hypot(b.x - e.bx, b.y - e.by) < TOL;
+            const rev = Math.hypot(a.x - e.bx, a.y - e.by) < TOL && Math.hypot(b.x - e.ax, b.y - e.ay) < TOL;
+            if (fwd || rev) return e.w;
+          }
+          return undefined;
+        };
+      })();
+      let polys = evalMiteredJoin(inSegs, gp, ppm, segWidthPx);
+      // Get Outer Boundary: dissolve the joined ribbon into the single closed Space bounded by its OUTER
+      // edge (largest union loop). Clipping/Union are skipped — clipping to the centerline would shave off
+      // the outer half. Works for Sharp / Rectangular alike (their tiles abut, so the vector union is clean).
+      if (gp.getOuterBoundary) {
+        // Rectangular joints butt with flat junction boxes whose outer edge is COLLINEAR with the wall —
+        // keep those collinear breakpoints so each partition's wall thickness reads as its own segment when
+        // the outer boundary is dimensioned (room · wall · room). Sharp/curved miter to real corners, so
+        // there's nothing collinear to keep.
+        const keepColl = gp.join === "rectangular";
+        const outer = polygonUnionVector(polys, 0.5, keepColl) ?? rasterUnion(polys);
+        if (outer && outer.length >= 3) polys = [outer];
+      } else {
+        // Clip the ribbon to its source boundary so leaf-branch ends don't poke outside the space (the
+        // half-width end-caps overshoot the polygon at the corners they reach). The boundary is the input
+        // polygon of the upstream Skeleton feeding this graph; with none found (e.g. a raw Graph source)
+        // there's nothing to clip to, so leave the ribbon untouched.
+        if (gp.clipToBoundary !== false) {
+          // Prefer the explicitly-wired clip Space (gin-boundary); else auto-detect the upstream Skeleton's space.
+          const explicit = geomInputOf(id, "boundary").filter((p) => p.length >= 3);
+          const bounds = explicit.length ? explicit : upstreamBoundaries(id);
+          if (bounds.length) polys = polys.map((r) => clipRibbonToBoundaries(r, bounds)).filter((p) => p.length >= 3);
+        }
+        // Union: fuse the per-segment ribbons into a single Space (exact vector union for the abutting miter
+        // joints; raster fallback if any overlap). Unchecked → keep one polygon per segment.
+        if (gp.union && polys.length > 1) {
+          const merged = polygonUnionVector(polys) ?? rasterUnion(polys);
+          if (merged && merged.length >= 3) polys = [merged];
+        }
       }
       outputs.set(id, polys);
-      // Output handles: "single" → one endpoint carrying every ribbon Space; otherwise one endpoint per
-      // Space (Union already collapsed polys to a single Space). So downstream gets every Space, not just one.
-      handleGroups.set(id, gp.outputMode === "single" ? [polys] : polys.map((p) => [p]));
+      // Output handles: Get Outer Boundary / "single" → one endpoint carrying the resulting Space(s);
+      // otherwise one endpoint per Space (Union already collapsed polys to a single Space).
+      handleGroups.set(id, (gp.getOuterBoundary || gp.outputMode === "single") ? [polys] : polys.map((p) => [p]));
       // Carry the input centerlines + width/joint so COMMIT can lay down real Path walls in the document.
-      const miteredPath = { segments: inSegs.filter((s) => s.length >= 2), widthM: num(gp.width, 2), join: typeof gp.join === "string" ? gp.join : "sharp" };
-      if (polys.length > 0) items.push({ nodeId: id, tool: "mitered-join", polygons: polys, color: FLOW_TOOLS["mitered-join"].color, isFinal: succs.get(id)!.length === 0, cellCount: polys.length, miteredPath });
+      // Skipped for Get Outer Boundary — that commits the outer-boundary polygon as a closed Space instead
+      // (handled by the host's generic terminal-geometry commit, since there's no miteredPath here).
+      const commitSegs = inSegs.filter((s) => s.length >= 2);
+      const baseWidthM = num(gp.width, 2);
+      const segWidthsM = segWidthPx ? commitSegs.map((s) => { const w = segWidthPx(s[0], s[1]); return w != null ? w / ppm : baseWidthM; }) : undefined;
+      const miteredPath = gp.getOuterBoundary ? undefined : { segments: commitSegs, widthM: baseWidthM, join: typeof gp.join === "string" ? gp.join : "sharp", segWidthsM };
+      if (polys.length > 0) items.push({ nodeId: id, tool: "mitered-join", polygons: polys, color: FLOW_TOOLS["mitered-join"].color, isFinal: succs.get(id)!.length === 0, cellCount: polys.length, ...(miteredPath ? { miteredPath } : {}) });
       continue;
     }
     if (data.tool === "graph-smooth") {
@@ -1011,7 +2316,9 @@ export function evaluateFlow(
           polygons,
           color: FLOW_TOOLS["place-object"].color,
           isFinal,
-          placeObjects: placed.map((p) => ({ kind: p.kind, heightM: p.heightM, clearanceM: p.clearanceM })),
+          placeObjects: placed.map((p) => ({ kind: p.kind, heightM: p.heightM, clearanceM: p.clearanceM, srcIndex: p.srcIndex })),
+          // Boundary the objects ride — lets the host drag each object along the perimeter (updates position%).
+          sourcePolygon: input,
         });
       }
       continue;
@@ -1368,6 +2675,31 @@ export function evaluateFlow(
           ? bspWalls.filter((w) => w.kind === "wall").map((w) => [w.a, w.b])
           : undefined;
         items.push({ nodeId: id, tool: "bsp", polygons: polys, color: FLOW_TOOLS.bsp.color, isFinal, displayPolygons, bspWalls });
+      }
+      continue;
+    }
+    // Hatching: styling pass-through — thread the space downstream unchanged and carry the fill/hatch
+    // style so the host paints it over the polygon (solid colour, or diagonal/dots pattern).
+    if (data.tool === "hatching") {
+      if (polys.length > 0) {
+        const isFinal = succs.get(id)!.length === 0;
+        const p = evalParams;
+        items.push({
+          nodeId: id,
+          tool: "hatching",
+          polygons: polys,
+          color: typeof p.color === "string" ? p.color : FLOW_TOOLS.hatching.color,
+          isFinal,
+          hatch: {
+            color: typeof p.color === "string" ? p.color : "#0ea5e9",
+            opacity: Math.max(0, Math.min(1, num(p.opacity, 0.5))),
+            hatch: Boolean(p.hatch),
+            style: p.hatchStyle === "dots" ? "dots" : "diagonal",
+            spacing: Math.max(3, num(p.spacing, 8)),
+            angle: num(p.angle, 45),
+            weight: Math.max(0.5, num(p.weight, 1)),
+          },
+        });
       }
       continue;
     }

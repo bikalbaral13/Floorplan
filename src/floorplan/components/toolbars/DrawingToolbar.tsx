@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import {
+  AppWindow,
+  BrickWall,
   ChevronDown,
   Circle as CircleIcon,
   Combine,
-  FilePlus2,
+  DoorOpen,
   Hand,
   Image as ImageIcon,
-  MapPin,
   MousePointer2,
   Pencil,
   Plus,
@@ -16,6 +18,8 @@ import {
   Slash,
   Hexagon,
   Dot,
+  Sofa,
+  Grid3x3,
   Spline,
   Waypoints,
   Square,
@@ -47,7 +51,19 @@ export interface DrawingToolbarProps {
   onAddEdgeModeChange: (value: EdgeMode) => void;
   onAddEdgeFirstRoomChange: (value: null) => void;
   onAddRoomModeChange: (value: boolean) => void;
+  addFurnitureMode: boolean;
   onAddFurnitureModeChange: (value: boolean) => void;
+  onAddFurnitureHoverRoomChange: (value: null) => void;
+  /** Open the Add Furniture dialog (Add Node ▸ Furniture) — drops an object node directly. */
+  onAddFurniture: () => void;
+  /** Open the Create Grid dialog (Add Node ▸ Grid) — drops a construction grid on the canvas. */
+  onCreateGrid: () => void;
+  /** Clears any currently-selected generated element when starting a Door/Window/Connection tool. */
+  onSelectedGenElementChange: (value: null) => void;
+  /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
+  onAddWallClick: () => void;
+  /** True while the dialog-configured polyline wall draw mode is active (drives the Wall item highlight). */
+  drawingWall: boolean;
   onClearCanvas: () => void;
   /** Begin the "By Segment" scale calibration — pick two points + type real distance. */
   onSetScale: () => void;
@@ -76,8 +92,27 @@ export interface DrawingToolbarProps {
   onAddSpaceRectClick?: () => void;
   /** Starts the "Add Space → Shapes → Circle" trace tool (click center, drag/type radius). */
   onAddSpaceCircleClick?: () => void;
-  /** Starts the "Add Segment" tool (click-click for a single straight line). */
-  onSingleSegmentClick?: () => void;
+  /** Starts the "Add Segment" tool (click-click for a single straight line). Pass a seg-type
+   *  ("door"/"window"/"wall"/schema type) to draw the segment as that element instead of a plain line. */
+  onSingleSegmentClick?: (segType?: string) => void;
+  /** The segment type the single-segment tool will commit — drives button highlight. */
+  singleSegType?: string;
+  /** Schema-driven segment TYPES (from a "Schema to Drawing Tools" node) — value + label + SVG icon.
+   *  When present these drive the Add Segment "draw as type" list (overriding the built-in door/window). */
+  schemaSegmentTools?: { value: string; label: string; icon?: string }[];
+  /** Schema-driven node TYPES — added to the Add Node dropdown (object / junction / custom), with icons. */
+  schemaNodeTools?: { value: string; label: string; icon?: string }[];
+  /** Start placing nodes tagged with a schema node-type (object / junction / custom). */
+  onAddNodeType?: (nodeType: string) => void;
+  /** Pick a schema segment TYPE — the host pops the type's parameter dialog, then starts the draw. When
+   *  set this supersedes the inline onSingleSegmentClick for schema types. */
+  onAddSegmentType?: (segType: string, label: string) => void;
+  /** Schema-driven space TYPES — added to the Add Space dropdown (room / open-space / custom), with icons. */
+  schemaSpaceTools?: { value: string; label: string; icon?: string }[];
+  /** Start drawing a Space tagged with a schema space-type (room / open-space / custom). */
+  onAddSpaceType?: (spaceType: string) => void;
+  /** Start the plain Add Node (point) tool, clearing any pending schema node-type tag. */
+  onPlainNodeClick?: () => void;
   /** Opens the GeoJSON file picker and imports polygons onto the OSM map.
    *  Requires the Map layer to be visible with an anchor already set. */
   onImportGeojson?: () => void;
@@ -96,6 +131,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
   // "Select" dropdown — chooses scope for the Select tool: All / Node / Segment / Space.
   const [selectPopoverOpen, setSelectPopoverOpen] = useState<boolean>(false);
   const [segmentModeOpen, setSegmentModeOpen] = useState<boolean>(false);
+  const [addNodeModeOpen, setAddNodeModeOpen] = useState<boolean>(false);
 
   const resetModes = () => {
     p.onAddDoorModeChange(false);
@@ -105,13 +141,32 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
     p.onAddRoomModeChange(false);
   };
 
+  // Built-in fallback Lucide icons per type value (used when a schema type has no SVG icon).
+  const SEG_LUCIDE: Record<string, ReactNode> = {
+    wall: <BrickWall className="h-4 w-4 text-amber-600" />, door: <DoorOpen className="h-4 w-4" />,
+    window: <AppWindow className="h-4 w-4" />, line: <Slash className="h-4 w-4" />,
+  };
+  const NODE_LUCIDE: Record<string, ReactNode> = {
+    object: <Sofa className="h-4 w-4" />, junction: <CircleIcon className="h-4 w-4 fill-current text-slate-700" />,
+  };
+  const SPACE_LUCIDE: Record<string, ReactNode> = {
+    room: <Square className="h-4 w-4 text-green-700" />, "open-space": <Shapes className="h-4 w-4 text-lime-700" />,
+  };
+  const typeIcon = (icon: string | undefined, fallback: ReactNode): ReactNode =>
+    icon ? <img src={icon} alt="" className="h-4 w-4 object-contain" /> : (fallback ?? <Slash className="h-4 w-4" />);
+  // Schema-driven type lists — populated ONLY when a "Schema to Drawing Tools" node is active. When empty,
+  // the Add Segment / Add Node buttons have NO dropdown (main click = draw line / drop a point).
+  const segTypeList = p.schemaSegmentTools ?? [];
+  const nodeTypeList = p.schemaNodeTools ?? [];
+  const spaceTypeList = p.schemaSpaceTools ?? [];
+
   return (
     <div className="flex flex-col gap-1 px-1">
       <SectionHeader label="Drawing" open={open} onToggle={() => setOpen((v) => !v)} />
       {open && (
         <div className="flex flex-col gap-2 pt-1">
           {/* Row 1 — Image Overlay (from parent slot) + Set Scale. */}
-          <div className="grid grid-cols-2 place-items-center gap-2">
+          <div className="flex flex-col items-center gap-2">
             {p.topToolSlots}
             {/* Set Scale — split into "By Segment" (2-point line + distance) and
              *  "By Area" (click polygon + target area). Active when either calibration
@@ -161,80 +216,124 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               </PopoverContent>
             </Popover>
           </div>
-          {/* Row 1b — Import GeoJSON (icon-only, tooltip on hover). Drops site polygons onto
-           *  the OSM map by projecting lat/lon onto world pixels using the current map anchor + zoom. */}
-          <div className="grid grid-cols-2 place-items-center gap-2">
-            <ToolButton
-              active={false}
-              icon={<MapPin className="h-6 w-6 text-sky-600" />}
-              label="Import Geojson"
-              onClick={() => p.onImportGeojson?.()}
-              disabled={!p.onImportGeojson}
-            />
-          </div>
+          {/* Import Image + Import Map (GeoJSON) moved to the top-right Files dropdown. */}
           <hr className="border-slate-200" />
           {/* Row 2 — Add Node + Add Segment. */}
-          <div className="grid grid-cols-2 place-items-center gap-2">
-            <ToolButton
-              active={p.tool === "point"}
-              icon={<CircleIcon className="h-6 w-6 fill-current text-slate-700" />}
-              label="Add Node"
-              onClick={() => p.onToolChange("point")}
-            />
+          <div className="flex flex-col items-center gap-2">
+            {/* Add Node — split button. Main click starts the Add Node (point) tool; the corner chevron
+             *  offers "Node" (same as the main button) or "Furniture" (place a furniture object). */}
+            <div className="relative h-9 w-9 shrink-0">
+              <Button
+                variant={p.tool === "point" ? "default" : "outline"}
+                size="sm"
+                className="h-9 w-9 p-0"
+                title="Add Node"
+                aria-label="Add Node"
+                onClick={() => { if (p.onPlainNodeClick) p.onPlainNodeClick(); else p.onToolChange("point"); }}
+              >
+                <CircleIcon className="h-6 w-6 fill-current text-slate-700" />
+              </Button>
+              {/* Dropdown appears ONLY when a schema supplies node TYPES (e.g. Floorplan Tracer → object /
+                  junction). With no schema the main button just drops a plain point. */}
+              {nodeTypeList.length > 0 && (
+                <Popover open={addNodeModeOpen} onOpenChange={setAddNodeModeOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70 hover:bg-white"
+                      title="Add Node type"
+                      aria-label="Add Node type"
+                      aria-expanded={addNodeModeOpen}
+                    >
+                      <ChevronDown className="h-2.5 w-2.5 text-slate-500" aria-hidden />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
+                    <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Add Node as</h4>
+                    <div className="flex flex-col gap-1">
+                      {/* Schema node TYPES (from a Schema to Drawing Tools node) — place tagged nodes with icons. */}
+                      {nodeTypeList.map((t) => (
+                        <Button
+                          key={t.value}
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                          onClick={() => { setAddNodeModeOpen(false); p.onAddNodeType?.(t.value); }}
+                        >
+                          {typeIcon(t.icon, NODE_LUCIDE[t.value])}
+                          {t.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
             {/* Add Segment — split button. Main click starts the single-segment (line) tool; the corner
              *  chevron offers "Segment" (plain line) or "Path" (Draw Path dialog → path segments). */}
             <div className="relative h-9 w-9 shrink-0">
               <Button
-                variant={p.tool === "single-segment" ? "default" : "outline"}
+                variant={p.tool === "single-segment" && (p.singleSegType ?? "line") === "line" ? "default" : "outline"}
                 size="sm"
                 className="h-9 w-9 p-0"
                 title="Add Segment"
                 aria-label="Add Segment"
-                onClick={() => { p.onSingleSegmentClick?.(); }}
+                onClick={() => { p.onSingleSegmentClick?.("line"); }}
               >
                 <Slash className="h-6 w-6 text-teal-700" />
               </Button>
-              <Popover open={segmentModeOpen} onOpenChange={setSegmentModeOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70 hover:bg-white"
-                    title="Segment type"
-                    aria-label="Segment type"
-                    aria-expanded={segmentModeOpen}
-                  >
-                    <ChevronDown className="h-2.5 w-2.5 text-slate-500" aria-hidden />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
-                  <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Add Segment as</h4>
-                  <div className="flex flex-col gap-1">
-                    <Button
-                      variant={p.tool === "single-segment" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
-                      onClick={() => { p.onSingleSegmentClick?.(); setSegmentModeOpen(false); }}
+              {/* Dropdown appears ONLY when a schema supplies segment TYPES (e.g. Floorplan Tracer → wall /
+                  door / window / line). With no schema the main button just draws a plain line. */}
+              {segTypeList.length > 0 && (
+                <Popover open={segmentModeOpen} onOpenChange={setSegmentModeOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70 hover:bg-white"
+                      title="Segment type"
+                      aria-label="Segment type"
+                      aria-expanded={segmentModeOpen}
                     >
-                      <Slash className="h-4 w-4" />
-                      Segment
-                    </Button>
-                    {/* Path — opens the Draw Path dialog (thickness / type / style); draws PATH SEGMENTS. */}
-                    <Button
-                      variant={p.drawingPath ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
-                      onClick={() => { p.onDrawPathClick(); setSegmentModeOpen(false); }}
-                    >
-                      <Spline className="h-4 w-4 text-violet-600" />
-                      Path
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+                      <ChevronDown className="h-2.5 w-2.5 text-slate-500" aria-hidden />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
+                    <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Add Segment as</h4>
+                    <div className="flex flex-col gap-1">
+                      {/* Draw-as-type buttons from the active schema's segment types, with their icons. */}
+                      {segTypeList.map((t) => (
+                        <Button
+                          key={t.value}
+                          variant={p.tool === "single-segment" && p.singleSegType === t.value ? "default" : "ghost"}
+                          size="sm"
+                          className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                          onClick={() => {
+                            setSegmentModeOpen(false);
+                            p.onAddDoorModeChange(false);
+                            p.onAddWindowModeChange(false);
+                            p.onAddEdgeModeChange(null);
+                            p.onAddEdgeFirstRoomChange(null);
+                            p.onAddRoomModeChange(false);
+                            p.onSelectedGenElementChange(null);
+                            // Schema types pop a parameter dialog first (set once, reuse for the run); the
+                            // host starts the draw on confirm. Without the handler, draw immediately.
+                            if (p.onAddSegmentType) { p.onAddSegmentType(t.value, t.label); return; }
+                            p.onSingleSegmentClick?.(t.value);
+                            toast.info(`Draw a segment to place the ${t.label.toLowerCase()} — click start, then end`);
+                          }}
+                        >
+                          {typeIcon(t.icon, SEG_LUCIDE[t.value])}
+                          {t.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
           </div>
           {/* Row 3 — Add Space (popover) + Freehand. */}
-          <div className="grid grid-cols-2 place-items-center gap-2">
+          <div className="flex flex-col items-center gap-2">
             {/* "Add Space" popover — Shapes ▸ (Rectangle / Circle), Polygon, Path. */}
             <Popover open={addSpaceOpen} onOpenChange={setAddSpaceOpen}>
             <PopoverTrigger asChild>
@@ -258,6 +357,21 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             <PopoverContent side="right" align="start" className="w-48 p-2 shadow-xl" sideOffset={10}>
               <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Add Space</h4>
               <div className="flex flex-col gap-1">
+                {/* Schema space TYPES (from a Schema to Drawing Tools node) — draw a Space tagged with that
+                    type (e.g. Floorplan Tracer → Room / Open Space), with icons. */}
+                {spaceTypeList.map((t) => (
+                  <Button
+                    key={t.value}
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                    onClick={() => { setAddSpaceOpen(false); p.onAddSpaceType?.(t.value); }}
+                  >
+                    {typeIcon(t.icon, SPACE_LUCIDE[t.value])}
+                    {t.label}
+                  </Button>
+                ))}
+                {spaceTypeList.length > 0 && <div className="my-1 border-t border-slate-200" />}
                 {/* 1) Shapes — nested popover containing Rectangle + Circle. */}
                 <Popover open={addSpaceShapesOpen} onOpenChange={setAddSpaceShapesOpen}>
                   <PopoverTrigger asChild>
@@ -330,6 +444,45 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               </div>
             </PopoverContent>
             </Popover>
+            {/* Grid — moved out of the Add Node dropdown; opens the Create Grid dialog (columns × rows + cell size). */}
+            <ToolButton
+              active={false}
+              icon={<Grid3x3 className="h-6 w-6" />}
+              label="Grid"
+              onClick={p.onCreateGrid}
+            />
+            {/* Path — moved out of the Add Segment dropdown; opens the Draw Path dialog (thickness / type / style). */}
+            <ToolButton
+              active={p.drawingPath}
+              icon={<Spline className="h-6 w-6 text-violet-600" />}
+              label="Path"
+              onClick={() => p.onDrawPathClick()}
+            />
+            {/* Connection — moved out of the Add Segment dropdown; links two rooms with a connection edge. */}
+            <ToolButton
+              active={p.addEdgeMode === "connection"}
+              icon={(
+                <span className="relative inline-flex h-6 w-6 items-center justify-center">
+                  <Slash className="h-6 w-6 text-green-600" />
+                  <Plus className="absolute -right-0.5 -top-0.5 h-3 w-3 text-green-600" strokeWidth={3} />
+                </span>
+              )}
+              label="Connection"
+              onClick={() => {
+                if (p.addEdgeMode === "connection") { p.onAddEdgeModeChange(null); p.onAddEdgeFirstRoomChange(null); return; }
+                p.onToolChange("select");
+                p.onNextWallSegmentTypeChange("wall");
+                p.onAddEdgeModeChange("connection");
+                p.onAddEdgeFirstRoomChange(null);
+                p.onAddDoorModeChange(false);
+                p.onAddWindowModeChange(false);
+                p.onAddRoomModeChange(false);
+                p.onSelectedGenElementChange(null);
+                toast.info("Click two rooms to add a connection — press Esc to cancel");
+              }}
+            />
+            {/* Wall & Furniture are no longer standalone — they come from the schema-driven Add Segment /
+                Add Node dropdowns (e.g. Floorplan Tracer → wall / object). */}
             <ToolButton
               active={p.tool === "freehand"}
               icon={<Pencil className="h-6 w-6" />}
@@ -339,7 +492,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
           </div>
           <hr className="border-slate-200" />
           {/* Remaining tools — Select, Pan, Measure, Text, New, Merge spaces, Delete selection. */}
-          <div className="grid grid-cols-2 place-items-center gap-2">
+          <div className="flex flex-col items-center gap-2">
             {/* Select tool — split popover. Active when Select is the current tool
              *  (regardless of scope). Dropdown chooses the scope filter: All / Node /
              *  Segment / Space, which gates what the user can click in the canvas. */}
@@ -350,7 +503,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 variant={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode ? "default" : "outline"}
                 size="sm"
                 className="h-9 w-9 p-0"
-                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : p.selectFilter === "graph" ? "Graph (connected)" : p.selectFilter === "image" ? "Image only" : "Space only"})`}
+                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : p.selectFilter === "graph" ? "Graph (connected)" : p.selectFilter === "image" ? "Image only" : p.selectFilter === "grid" ? "Grid only" : "Space only"})`}
                 aria-label="Select"
                 onClick={() => {
                   p.onSelectFilterChange("all");
@@ -387,6 +540,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                     { v: "space", label: "Space", Icon: Hexagon },
                     { v: "graph", label: "Graph (connected)", Icon: Waypoints },
                     { v: "image", label: "Image", Icon: ImageIcon },
+                    { v: "grid", label: "Grid", Icon: Grid3x3 },
                   ] as const).map(({ v, label, Icon }) => (
                     <Button
                       key={v}
@@ -439,12 +593,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               label="Text"
               onClick={() => p.onToolChange("text")}
             />
-            <ToolButton
-              active={false}
-              icon={<FilePlus2 className="h-6 w-6 text-emerald-600" />}
-              label="New"
-              onClick={p.onClearCanvas}
-            />
+            {/* "New" moved to the top-right Files dropdown (File ▸ New). */}
             <ToolButton
               active={false}
               icon={<Combine className="h-6 w-6 text-sky-600" />}

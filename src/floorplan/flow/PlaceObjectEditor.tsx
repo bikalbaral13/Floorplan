@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Plus, Trash2, Lock, Unlock, Dices } from "lucide-react";
 import {
   FLOW_TOOLS,
@@ -17,16 +18,26 @@ export const PlaceObjectEditor = ({
   params,
   onParamChange,
   nodrag,
+  highlightIndex,
 }: {
   params: Record<string, unknown>;
   onParamChange: (key: string, value: unknown) => void;
   nodrag?: boolean;
+  /** Index of the object to emphasise (ring + scroll into view) — set while that object is dragged
+   *  along its Space boundary on the canvas, so its properties are surfaced here live. */
+  highlightIndex?: number;
 }) => {
   const entries = placeObjectEntries(params);
   const fields = FLOW_TOOLS["place-object"].fields;
   const seed = Number.isFinite(Number(params.seed)) ? Math.max(1, Math.round(Number(params.seed))) : 1;
   const nd = nodrag ? " nodrag" : "";
   const hasUnlocked = entries.some((e) => !e.locked);
+
+  // Scroll the highlighted object's card into view when it changes (e.g. when a different object is dragged).
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (highlightIndex != null) highlightRef.current?.scrollIntoView({ block: "nearest" });
+  }, [highlightIndex]);
 
   const setObjects = (next: PlaceObjectEntry[]) => onParamChange("objects", next);
   const setField = (i: number, key: keyof PlaceObjectEntry, value: unknown) =>
@@ -46,7 +57,11 @@ export const PlaceObjectEditor = ({
   return (
     <div className="space-y-1.5">
       {entries.map((entry, i) => (
-        <div key={i} className="space-y-1 rounded-md border border-slate-200 bg-slate-50/60 p-1.5">
+        <div
+          key={i}
+          ref={i === highlightIndex ? highlightRef : undefined}
+          className={`space-y-1 rounded-md border bg-slate-50/60 p-1.5 ${i === highlightIndex ? "border-sky-300 ring-2 ring-sky-400" : "border-slate-200"}`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold text-slate-600">
               Object {i + 1}

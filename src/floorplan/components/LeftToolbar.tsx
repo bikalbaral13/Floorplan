@@ -2,7 +2,6 @@ import { type Dispatch, type SetStateAction, type ReactNode } from "react";
 import type { SelectFilter, Tool } from "../types";
 import { DrawingToolbar } from "./toolbars/DrawingToolbar";
 import { FilesToolbar } from "./toolbars/FilesToolbar";
-import { ConstructionToolbar } from "./toolbars/ConstructionToolbar";
 import { OptimisationToolbar } from "./toolbars/OptimisationToolbar";
 import { ViewToolbar } from "./toolbars/ViewToolbar";
 import { AddSemanticsToolbar } from "./toolbars/AddSemanticsToolbar";
@@ -32,6 +31,8 @@ interface LeftToolbarProps {
   addFurnitureMode: boolean;
   onAddFurnitureModeChange: (value: boolean) => void;
   onAddFurnitureHoverRoomChange: (value: null) => void;
+  onAddFurniture: () => void;
+  onCreateGrid: () => void;
   onSelectedGenElementChange: (value: null) => void;
 
   shapesPopoverOpen: boolean;
@@ -88,8 +89,24 @@ interface LeftToolbarProps {
   onAddSpaceRectClick?: () => void;
   /** Starts the "Add Space → Shapes → Circle" trace tool (click center, drag/type radius). */
   onAddSpaceCircleClick?: () => void;
-  /** Starts the "Add Segment" tool (single straight line via click-click). */
-  onSingleSegmentClick?: () => void;
+  /** Starts the "Add Segment" tool (single straight line via click-click). Pass a seg-type to draw a
+   *  door / window / schema segment instead of a plain line. */
+  onSingleSegmentClick?: (segType?: string) => void;
+  /** The seg-type the single-segment tool will commit (drives button highlight). */
+  singleSegType?: string;
+  /** Schema-driven segment / node TYPES (from a "Schema to Drawing Tools" node) — drive the Add Segment /
+   *  Add Node dropdowns (with icons). Empty / absent → the buttons have no dropdown. */
+  schemaSegmentTools?: { value: string; label: string; icon?: string }[];
+  schemaNodeTools?: { value: string; label: string; icon?: string }[];
+  schemaSpaceTools?: { value: string; label: string; icon?: string }[];
+  /** Start placing nodes tagged with a schema node-type (object / junction / custom). */
+  onAddNodeType?: (nodeType: string) => void;
+  /** Pick a schema segment TYPE — host pops the type's parameter dialog, then starts the draw. */
+  onAddSegmentType?: (segType: string, label: string) => void;
+  /** Start drawing a Space tagged with a schema space-type (room / open-space / custom). */
+  onAddSpaceType?: (spaceType: string) => void;
+  /** Start the plain Add Node (point) tool, clearing any pending schema node-type tag. */
+  onPlainNodeClick?: () => void;
   /** Opens the GeoJSON file picker and imports polygons onto the OSM map. */
   onImportGeojson?: () => void;
 }
@@ -116,6 +133,8 @@ export const LeftToolbar = ({
   addFurnitureMode,
   onAddFurnitureModeChange,
   onAddFurnitureHoverRoomChange,
+  onAddFurniture,
+  onCreateGrid,
   onSelectedGenElementChange,
   shapesPopoverOpen,
   onShapesPopoverOpenChange,
@@ -146,6 +165,14 @@ export const LeftToolbar = ({
   onAddSpaceRectClick,
   onAddSpaceCircleClick,
   onSingleSegmentClick,
+  singleSegType,
+  schemaSegmentTools,
+  schemaNodeTools,
+  schemaSpaceTools,
+  onAddNodeType,
+  onAddSegmentType,
+  onAddSpaceType,
+  onPlainNodeClick,
   onImportGeojson,
 }: LeftToolbarProps) => (
   <div className="flex w-full flex-col items-stretch gap-2">
@@ -164,7 +191,14 @@ export const LeftToolbar = ({
       onAddEdgeModeChange={onAddEdgeModeChange}
       onAddEdgeFirstRoomChange={onAddEdgeFirstRoomChange}
       onAddRoomModeChange={onAddRoomModeChange}
+      addFurnitureMode={addFurnitureMode}
       onAddFurnitureModeChange={onAddFurnitureModeChange}
+      onAddFurnitureHoverRoomChange={onAddFurnitureHoverRoomChange}
+      onAddFurniture={onAddFurniture}
+      onCreateGrid={onCreateGrid}
+      onSelectedGenElementChange={onSelectedGenElementChange}
+      onAddWallClick={onAddWallClick}
+      drawingWall={drawingWall}
       onClearCanvas={onClearCanvas}
       onSetScale={onSetScale}
       onSetScaleArea={onSetScaleArea}
@@ -179,32 +213,21 @@ export const LeftToolbar = ({
       onAddSpaceRectClick={onAddSpaceRectClick}
       onAddSpaceCircleClick={onAddSpaceCircleClick}
       onSingleSegmentClick={onSingleSegmentClick}
+      singleSegType={singleSegType}
+      schemaSegmentTools={schemaSegmentTools}
+      schemaNodeTools={schemaNodeTools}
+      schemaSpaceTools={schemaSpaceTools}
+      onAddNodeType={onAddNodeType}
+      onAddSegmentType={onAddSegmentType}
+      onAddSpaceType={onAddSpaceType}
+      onPlainNodeClick={onPlainNodeClick}
       onImportGeojson={onImportGeojson}
     />
 
     {/* Files toolbar moved to the top-right bar. */}
 
-    <ConstructionToolbar
-      tool={tool}
-      onToolChange={onToolChange}
-      onNextWallSegmentTypeChange={onNextWallSegmentTypeChange}
-      addDoorMode={addDoorMode}
-      onAddDoorModeChange={onAddDoorModeChange}
-      addWindowMode={addWindowMode}
-      onAddWindowModeChange={onAddWindowModeChange}
-      addEdgeMode={addEdgeMode}
-      onAddEdgeModeChange={onAddEdgeModeChange}
-      onAddEdgeFirstRoomChange={onAddEdgeFirstRoomChange}
-      onAddRoomModeChange={onAddRoomModeChange}
-      addFurnitureMode={addFurnitureMode}
-      onAddFurnitureModeChange={onAddFurnitureModeChange}
-      onAddFurnitureHoverRoomChange={onAddFurnitureHoverRoomChange}
-      onSelectedGenElementChange={onSelectedGenElementChange}
-      shapesPopoverOpen={shapesPopoverOpen}
-      onShapesPopoverOpenChange={onShapesPopoverOpenChange}
-      onAddWallClick={onAddWallClick}
-      drawingWall={drawingWall}
-    />
+    {/* Building section removed — Door / Window / Connection / Wall live in the Add Segment dropdown
+        and Furniture lives in the Add Node dropdown (both in the Drawing toolbar). */}
 
     {/* Optimisation toolbar moved to Space Tools → Layout Generation. */}
 

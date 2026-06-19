@@ -21,7 +21,7 @@ const segmentsProperlyCross = (p1: Point, p2: Point, p3: Point, p4: Point, eps =
          ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps));
 };
 
-export function polygonUnionVector(polysIn: Point[][], tol = 0.5): Point[] | null {
+export function polygonUnionVector(polysIn: Point[][], tol = 0.5, keepCollinear = false): Point[] | null {
   const polys = polysIn.filter((p) => p.length >= 3).map((p) => (signedArea(p) < 0 ? [...p].reverse() : p.slice()));
   if (polys.length === 0) return null;
   if (polys.length === 1) return polys[0];
@@ -123,9 +123,13 @@ export function polygonUnionVector(polysIn: Point[][], tol = 0.5): Point[] | nul
   }
   if (loops.length === 0) return null;
 
-  // Largest-area loop = the outer union boundary; collapse collinear runs to one vertex per corner.
+  // Largest-area loop = the outer union boundary.
   let best = loops[0], bestA = -Infinity;
   for (const lp of loops) { const ar = Math.abs(signedArea(lp)); if (ar > bestA) { bestA = ar; best = lp; } }
+  // keepCollinear: retain the collinear breakpoints where abutting pieces meet (e.g. a partition wall's
+  // faces along a straight outer edge → the wall thickness reads as its own segment when dimensioned).
+  if (keepCollinear) return best;
+  // Otherwise collapse collinear runs to one vertex per corner.
   const compact: Point[] = [];
   for (let i = 0; i < best.length; i++) {
     const a = best[(i - 1 + best.length) % best.length], b = best[i], c = best[(i + 1) % best.length];

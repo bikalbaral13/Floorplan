@@ -22,7 +22,17 @@ export const parseNumberList = (v: unknown): number[] => {
   return [];
 };
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate";
+/** Parse the Dimension node's selected-edge list (0-based indices, e.g. "0, 2, 3" or an array) → a sorted
+ *  unique list of non-negative integers. Used by the Edgewise mode to pick which edges to dimension. */
+export const parseDimEdges = (v: unknown): number[] => {
+  const raw = Array.isArray(v) ? v : typeof v === "string" ? v.split(/[\s,]+/) : [];
+  const set = new Set<number>();
+  for (const x of raw) { const n = Number(x); if (Number.isInteger(n) && n >= 0) set.add(n); }
+  return [...set].sort((a, b) => a - b);
+};
+export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
+
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d";
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
@@ -73,7 +83,7 @@ export interface SchemaPropEntry {
   /** Storage key for the attribute value. Blank → derived from the label (slug). */
   key: string;
   label: string;
-  kind: "number" | "select" | "checkbox" | "text";
+  kind: "number" | "select" | "checkbox" | "text" | "color";
   unit: string;
   /** Default value (applies until the user edits the component's own value). */
   def: number | string | boolean;
@@ -83,6 +93,11 @@ export interface SchemaPropEntry {
   options: string[];
   /** Optional solver binding (e.g. "demand", "diameter") — consumed by solver nodes. */
   role: string;
+  /** Optional type-driven visibility (e.g. show door fields only when the "type" prop === "door"). */
+  showIf?: import("../types").GraphPropDef["showIf"];
+  /** Per-option SVG icons for a "select" entry: option value → SVG data URL. Used to give each segment /
+   *  node TYPE (wall / door / window / furniture kind …) a custom icon (e.g. in the drawing toolbars). */
+  optionIcons?: Record<string, string>;
 }
 
 /** The four Schema-node sections, in display order. `param` is the params key holding the list. */
@@ -91,6 +106,7 @@ export const SCHEMA_SECTIONS = [
   { param: "segmentProps", title: "Segment Schema" },
   { param: "spaceProps", title: "Space Schema" },
   { param: "graphProps", title: "Graph Schema" },
+  { param: "informationProps", title: "Information Schema" },
 ] as const;
 export type SchemaSectionParam = (typeof SCHEMA_SECTIONS)[number]["param"];
 
@@ -100,11 +116,20 @@ export const schemaEntries = (params: Record<string, unknown>, param: SchemaSect
   if (!Array.isArray(raw)) return [];
   return raw.map((r, i) => {
     const o = (r ?? {}) as Record<string, unknown>;
-    const kind = (["number", "select", "checkbox", "text"].includes(o.kind as string) ? o.kind : "number") as SchemaPropEntry["kind"];
+    const kind = (["number", "select", "checkbox", "text", "color"].includes(o.kind as string) ? o.kind : "number") as SchemaPropEntry["kind"];
     const def: string | number | boolean =
       kind === "checkbox" ? o.def === true
       : kind === "number" ? (Number(o.def) || 0)
       : typeof o.def === "string" ? o.def : String(o.def ?? "");
+    // Conditional visibility (type-driven schemas) — passed through verbatim when well-formed.
+    const siRaw = o.showIf as Record<string, unknown> | undefined;
+    const showIf = siRaw && typeof siRaw.when === "string"
+      ? {
+          when: siRaw.when,
+          ...(siRaw.equals !== undefined ? { equals: siRaw.equals as string | number | boolean } : {}),
+          ...(Array.isArray(siRaw.in) ? { in: siRaw.in as (string | number | boolean)[] } : {}),
+        }
+      : undefined;
     return {
       id: typeof o.id === "string" && o.id ? o.id : `${param}_${i + 1}`,
       key: typeof o.key === "string" ? o.key : "",
@@ -117,11 +142,19 @@ export const schemaEntries = (params: Record<string, unknown>, param: SchemaSect
       step: Number(o.step) || 1,
       options: Array.isArray(o.options) ? o.options.map(String) : [],
       role: typeof o.role === "string" ? o.role : "",
+      ...(showIf ? { showIf } : {}),
+      // Per-option SVG icons (value → data URL); keep only string entries.
+      ...(o.optionIcons && typeof o.optionIcons === "object"
+        ? { optionIcons: Object.fromEntries(Object.entries(o.optionIcons as Record<string, unknown>).filter(([, v]) => typeof v === "string" && v)) as Record<string, string> }
+        : {}),
     };
   });
 };
 
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+/** Display label for a select option value: "wall" → "Wall", "open-space" → "Open Space". The stored
+ *  value stays as-is (logic keys off it) — only the visible label is title-cased. */
+const optLabel = (s: string): string => s.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 
 /** Convert one Schema-node section into Properties-tab definitions ({@link GraphPropDef}s). */
 const sectionToDefs = (entries: SchemaPropEntry[]): import("../types").GraphPropDef[] =>
@@ -136,8 +169,9 @@ const sectionToDefs = (entries: SchemaPropEntry[]): import("../types").GraphProp
       min: e.kind === "number" ? e.min : undefined,
       max: e.kind === "number" ? e.max : undefined,
       step: e.kind === "number" ? e.step : undefined,
-      options: e.kind === "select" ? e.options.map((v) => ({ value: v })) : undefined,
+      options: e.kind === "select" ? e.options.map((v) => ({ value: v, label: optLabel(v) })) : undefined,
       role: e.role.trim() || undefined,
+      showIf: e.showIf,
     }));
 
 /** Convert one Output-Schema section into Metrics-tab result rows. Decimals derive from the row's
@@ -159,12 +193,14 @@ export const schemaNodeToResultDefs = (params: Record<string, unknown>): {
   segment: import("../types").GraphResultDef[];
   space: import("../types").GraphResultDef[];
   graph: import("../types").GraphResultDef[];
+  information: import("../types").GraphResultDef[];
 } => ({
   name: typeof params.name === "string" && params.name.trim() ? params.name.trim() : undefined,
   node: sectionToResultDefs(schemaEntries(params, "nodeProps")),
   segment: sectionToResultDefs(schemaEntries(params, "segmentProps")),
   space: sectionToResultDefs(schemaEntries(params, "spaceProps")),
   graph: sectionToResultDefs(schemaEntries(params, "graphProps")),
+  information: sectionToResultDefs(schemaEntries(params, "informationProps")),
 });
 
 /** All four sections of a Schema node as Properties-tab definitions. */
@@ -174,12 +210,14 @@ export const schemaNodeToSchemas = (params: Record<string, unknown>): {
   segment: import("../types").GraphPropDef[];
   space: import("../types").GraphPropDef[];
   graph: import("../types").GraphPropDef[];
+  information: import("../types").GraphPropDef[];
 } => ({
   name: typeof params.name === "string" && params.name.trim() ? params.name.trim() : undefined,
   node: sectionToDefs(schemaEntries(params, "nodeProps")),
   segment: sectionToDefs(schemaEntries(params, "segmentProps")),
   space: sectionToDefs(schemaEntries(params, "spaceProps")),
   graph: sectionToDefs(schemaEntries(params, "graphProps")),
+  information: sectionToDefs(schemaEntries(params, "informationProps")),
 });
 
 /** One named metric slot on the Output node. Each slot exposes a value-input endpoint (`valin-<id>`)
@@ -311,7 +349,11 @@ export const placeObjectEntries = (params: Record<string, unknown>): PlaceObject
 export interface ParamField {
   key: string;
   label: string;
-  kind: "number" | "range" | "select" | "checkbox" | "text" | "textarea";
+  kind: "number" | "range" | "select" | "checkbox" | "text" | "textarea" | "color";
+  /** Canonical role this field maps to. When set, the per-element Properties-tab params panel stores the
+   *  value in graphAttrs under this ROLE (the same key the Schema block + processors use) instead of the
+   *  field key — so editing here and in the Schema block no longer desync. */
+  role?: string;
   options?: { value: string; label: string }[];
   /** For a `select`: read its options at render time from this params key (an array of {value,label})
    *  instead of the static `options` — e.g. the Loop node's parameter dropdown, populated by the host
@@ -370,6 +412,21 @@ export interface FlowToolDef {
   /** One-line description shown in the palette + node. */
   hint: string;
 }
+
+/** Default Metrics-tab result rows for the Frame Builder, used when no Output Schema node overrides
+ *  them. Keys match the result keys {@link computeFrame} writes per component. */
+export const FRAME_DEFAULT_RESULTS: { node: import("../types").GraphResultDef[]; segment: import("../types").GraphResultDef[] } = {
+  node: [
+    { key: "columnWidth", label: "Column width", unit: "mm", decimals: 0 },
+    { key: "columnHeight", label: "Column height", unit: "mm", decimals: 0 },
+    { key: "columnArea", label: "Column area", unit: "m²", decimals: 3 },
+  ],
+  segment: [
+    { key: "beamWidth", label: "Beam width", unit: "mm", decimals: 0 },
+    { key: "beamLength", label: "Beam length", unit: "m", decimals: 3 },
+    { key: "beamArea", label: "Beam area", unit: "m²", decimals: 3 },
+  ],
+};
 
 export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   source: {
@@ -1546,8 +1603,11 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // mirroring Segment but for points (Select → Node scope). References nodes by display id (NodeNNN,
     // comma-separated for several); with grab on, the host keeps `id` synced to the node selection.
     // Outputs one handle per node ("single" → one bundle). Feeds Buffer (point → disk Space).
+    // STAMP input: wire a Footing → Footing to 2D Plan / Elevation / 3D Mesh (or any origin-relative
+    // drawing/mesh) here and the node STAMPS a copy at each of its point(s) — placement by location.
     hasInput: false,
     hasOutput: true,
+    geomInputs: [{ key: "stamp", label: "Stamp" }],
     outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
     defaultParams: { id: "", grabFromSelection: true, outputMode: "single" },
     fields: [
@@ -1569,10 +1629,12 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     type: "canvas-source",
     label: "Canvas",
     color: "#0891b2",
-    // Generator (no input): the whole canvas, exposed as five typed output endpoints. Each endpoint carries
-    // EVERY item of its kind (multiple), so downstream nodes can consume all spaces / nodes / segments /
-    // graphs / image footprints at once. Independent of the current selection.
-    hasInput: false,
+    // Generator: the whole canvas, exposed as five typed output endpoints. Each endpoint carries EVERY
+    // item of its kind (multiple), so downstream nodes can consume all spaces / nodes / segments / graphs
+    // / image footprints at once. Independent of the current selection. The input endpoint accepts a
+    // Schema node (attaches Node/Segment/Graph Schema properties to the canvas components); geometry still
+    // comes from the canvas — any incoming geometry is ignored.
+    hasInput: true,
     hasOutput: true,
     outputCount: () => 5,
     outputLabels: ["Spaces", "Nodes", "Segments", "Graph", "Images"],
@@ -1818,7 +1880,7 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "mitered-join": {
     type: "mitered-join",
     label: "Mitered Join",
-    color: "#7c2d12",
+    color: "#b45309",
     // Graph node: strokes an incoming GRAPH (polylines — e.g. Skeleton in Branches mode) into a closed
     // ribbon of `width` metres, mitred at shared endpoints (junctions). Output = the ribbon polygons.
     hasInput: true,
@@ -1826,26 +1888,30 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     valueInputs: [{ key: "width", label: "Width" }],
     // Output handles: "single" → one endpoint carrying every ribbon Space; "perCell" → one endpoint per
     // ribbon Space (baked live into `handleCount`). Union collapses to a single Space → one handle either way.
-    outputCount: (p) => (p.union || p.outputMode === "single") ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
+    outputCount: (p) => (p.getOuterBoundary || p.union || p.outputMode === "single") ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
     // Optional second geometry input: the Space to clip the ribbon to (id `gin-boundary`). Unwired →
     // falls back to auto-detecting the upstream Skeleton's source space.
     geomInputs: [{ key: "boundary", label: "Clip space" }],
-    defaultParams: { width: 2, join: "sharp", clipToBoundary: true, union: false, outputMode: "perCell" },
+    defaultParams: { width: 2, useSameWidth: true, join: "sharp", clipToBoundary: true, union: false, getOuterBoundary: false, outputMode: "perCell" },
     fields: [
-      { key: "width", label: "Width", kind: "range", min: 0.1, max: 20, step: 0.1, unit: "m" },
+      // Use same width for all: checked → the Width slider drives every segment; unchecked → each segment
+      // is stroked at its own canvas thickness (segment properties), and the slider is hidden.
+      { key: "useSameWidth", label: "Use same width for all", kind: "checkbox" },
+      { key: "width", label: "Width", kind: "range", min: 0.1, max: 20, step: 0.1, unit: "m", showIf: (p) => p.useSameWidth !== false },
       // Output style: separate per-Space handles, or a single bundle handle carrying every ribbon Space.
       // Hidden when Union is on (the result is already a single Space).
       {
         key: "outputMode",
         label: "Outputs",
         kind: "select",
-        showIf: (p) => !p.union,
+        showIf: (p) => !p.union && !p.getOuterBoundary,
         options: [
           { value: "perCell", label: "Per cell (one each)" },
           { value: "single", label: "Single (all)" },
         ],
       },
-      // Joint type at junctions/corners: Sharp = mitred corners; Curved = rounded (Chaikin) corners.
+      // Joint type at junctions/corners: Sharp = mitred corners; Curved = rounded (Chaikin) corners;
+      // Rectangular = plain segment rectangles + a square box at each junction (no mitre).
       {
         key: "join",
         label: "Joint type",
@@ -1853,15 +1919,19 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
         options: [
           { value: "sharp", label: "Sharp (mitred)" },
           { value: "curved", label: "Curved (rounded)" },
+          { value: "rectangular", label: "Rectangular (boxed joints)" },
         ],
       },
       // Trim the ribbon to the source space so leaf-branch end-caps don't poke past the boundary.
-      { key: "clipToBoundary", label: "Clip to boundary", kind: "checkbox" },
+      { key: "clipToBoundary", label: "Clip to boundary", kind: "checkbox", showIf: (p) => !p.getOuterBoundary },
       // Union: fuse the per-segment ribbon polygons into ONE Space (single outline) instead of emitting
       // each segment separately.
-      { key: "union", label: "Union", kind: "checkbox" },
+      { key: "union", label: "Union", kind: "checkbox", showIf: (p) => !p.getOuterBoundary },
+      // Get Outer Boundary: instead of the ribbon, output the single closed Space bounded by the OUTER
+      // edge of the joined segments (one space on the endpoint). Works for Sharp and Rectangular joints.
+      { key: "getOuterBoundary", label: "Get Outer Boundary", kind: "checkbox" },
     ],
-    hint: "Stroke a graph (polylines / Skeleton branches) into a ribbon of a set width — sharp or curved joints. Clip to boundary trims ends to the source space; Union merges the segments into a single Space.",
+    hint: "Stroke a graph (polylines / Skeleton branches) into a ribbon of a set width — sharp, curved, or rectangular (boxed) joints. Clip to boundary trims ends to the source space; Union merges the segments into a single Space; Get Outer Boundary returns the single space bounded by the joined ribbon's outer edge.",
   },
   "graph-smooth": {
     type: "graph-smooth",
@@ -1943,6 +2013,512 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "scaleByLevel", label: "Scale by level", kind: "checkbox" },
     ],
     hint: "Show flow direction on a graph — Diverging out of / Converging into a root, with arrows whose size tracks the flow level (downstream accumulation or depth). Forwards the graph on.",
+  },
+  dimension: {
+    type: "dimension",
+    label: "Linear Dimension",
+    color: "#1d4ed8",
+    // Space node: dimension the EDGES of the incoming Space — each edge gets its own length dimension,
+    // placed Outer (outside the space) or inner, standing off by Offset. Mode "All edges" dimensions every
+    // edge; "Edgewise" dimensions only the ticked edges. The Space is forwarded unchanged downstream.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "offset", label: "Offset" }],
+    defaultParams: { outer: true, offset: 1, mode: "all", edges: "", style: "ticks", units: "metric", extension: 0.3, precision: 2 },
+    fields: [
+      // Outer = place the dimension OUTSIDE the space's edge; unchecked = inside.
+      { key: "outer", label: "Outer", kind: "checkbox" },
+      // Standoff from the edge to the dimension line (m).
+      { key: "offset", label: "Offset", kind: "range", min: 0, max: 10, step: 0.1, unit: "m" },
+      // End-marker style at each dimension-line end.
+      {
+        key: "style",
+        label: "Style",
+        kind: "select",
+        options: [
+          { value: "ticks", label: "Ticks (45°)" },
+          { value: "arrowhead", label: "Arrowheads" },
+          { value: "dot", label: "Dots" },
+        ],
+      },
+      // All edges → dimension every edge; Edgewise → only the ticked edges (checkbox grid, rendered on the node).
+      {
+        key: "mode",
+        label: "Mode",
+        kind: "select",
+        options: [
+          { value: "all", label: "All edges" },
+          { value: "edgewise", label: "Edgewise (pick edges)" },
+        ],
+      },
+      // Dimension text format: metric metres or architectural feet-inches (to nearest 1/8").
+      {
+        key: "units",
+        label: "Units",
+        kind: "select",
+        options: [
+          { value: "metric", label: "Metric (m)" },
+          { value: "imperial", label: "Feet-inches" },
+        ],
+      },
+      // How far the witness lines overrun the dimension line (m).
+      { key: "extension", label: "Witness overrun", kind: "range", min: 0, max: 2, step: 0.05, unit: "m" },
+      // Decimal places on metric dimension text.
+      { key: "precision", label: "Decimals", kind: "range", min: 0, max: 4, step: 1, showIf: (p) => p.units !== "imperial" },
+    ],
+    hint: "Dimension a Space's edges — Outer/inner placement at an Offset. All edges, or Edgewise to tick which edges. Forwards the Space on.",
+  },
+  "graph-to-grid": {
+    type: "graph-to-grid",
+    label: "Graph to Grid",
+    color: "#7c3aed",
+    // Grid generator: lays an m × n lattice over the input graph's (or space's) bounding box and emits it
+    // as a graph (segments) that chains downstream. The grid's nodes are drawn at "Node size" px and its
+    // segments stroked at "Segment width" px (the two values given to nodes vs segments).
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [
+      { key: "m", label: "Columns" },
+      { key: "n", label: "Rows" },
+      { key: "nodeValue", label: "Node size" },
+      { key: "segmentValue", label: "Segment width" },
+    ],
+    defaultParams: {
+      m: 4, n: 3, nodeValue: 3, segmentValue: 1,
+      colorCells: false, nodeCellValue: 1, segmentCellValue: 0.5,
+      nodeCellColor: "#ef4444", segmentCellColor: "#3b82f6", showCellValues: false,
+    },
+    fields: [
+      { key: "m", label: "Columns (m)", kind: "range", min: 1, max: 60, step: 1 },
+      { key: "n", label: "Rows (n)", kind: "range", min: 1, max: 60, step: 1 },
+      // The value given to grid NODES (intersection dot size, px) and to grid SEGMENTS (line width, px).
+      { key: "nodeValue", label: "Node size (px)", kind: "range", min: 0, max: 12, step: 0.5 },
+      { key: "segmentValue", label: "Segment width (px)", kind: "range", min: 0.5, max: 8, step: 0.5 },
+      // Cell occupancy colouring: classify each cell by what falls in it — a graph NODE (vertex) or a
+      // graph SEGMENT passing through — and fill it with the matching value/colour.
+      { key: "colorCells", label: "Colour cells", kind: "checkbox" },
+      { key: "nodeCellValue", label: "Node-cell value", kind: "number", showIf: (p) => p.colorCells === true },
+      { key: "nodeCellColor", label: "Node-cell colour", kind: "color", showIf: (p) => p.colorCells === true },
+      { key: "segmentCellValue", label: "Segment-cell value", kind: "number", showIf: (p) => p.colorCells === true },
+      { key: "segmentCellColor", label: "Segment-cell colour", kind: "color", showIf: (p) => p.colorCells === true },
+      { key: "showCellValues", label: "Show cell values", kind: "checkbox", showIf: (p) => p.colorCells === true },
+    ],
+    hint: "Convert a graph/space into an m × n grid over its bounding box. Nodes drawn at Node size, segments at Segment width. Colour cells classifies each cell by node/segment occupancy with its own value+colour. Emits the grid as a graph to chain on.",
+  },
+  "grid-distance": {
+    type: "grid-distance",
+    label: "Grid Distance",
+    color: "#9333ea",
+    // Grid-field node: recolours an incoming grid (from Graph to Grid) by each cell's distance to the
+    // nearest occupied cell — a heatmap. Consumes the grid-field; passes the distance field on.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { from: "any", metric: "manhattan", normalize: true, lowColor: "#1e3a8a", highColor: "#ef4444", showCellValues: false },
+    fields: [
+      {
+        key: "from",
+        label: "Distance from",
+        kind: "select",
+        options: [
+          { value: "any", label: "Any occupied" },
+          { value: "node", label: "Node cells" },
+          { value: "segment", label: "Segment cells" },
+        ],
+      },
+      {
+        key: "metric",
+        label: "Metric",
+        kind: "select",
+        options: [
+          { value: "manhattan", label: "Manhattan (4-nbr)" },
+          { value: "chebyshev", label: "Chebyshev (8-nbr)" },
+          { value: "euclidean", label: "Euclidean" },
+        ],
+      },
+      { key: "normalize", label: "Normalize", kind: "checkbox" },
+      { key: "lowColor", label: "Near colour", kind: "color" },
+      { key: "highColor", label: "Far colour", kind: "color" },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Heatmap each grid cell by its distance to the nearest occupied (node/segment) cell — Manhattan / Chebyshev / Euclidean, coloured Near→Far. Feed it from Graph to Grid.",
+  },
+  "grid-field": {
+    type: "grid-field",
+    label: "Grid Field",
+    color: "#9333ea",
+    // Grid-field node: generate a synthetic elevation field over an incoming lattice — a directional ramp
+    // (top→bottom, etc.) between High and Low + per-cell random jitter, optionally incising occupied
+    // (river) cells lower. Publishes the DEM (values + elev) for Fill Depressions.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "high", label: "High" }, { key: "low", label: "Low" }],
+    defaultParams: { direction: "top-bottom", high: 100, low: 0, randomness: 0.2, seed: 1, inciseOccupied: false, inciseDepth: 20, lowColor: "#1e3a8a", highColor: "#ef4444", showCellValues: false },
+    fields: [
+      {
+        key: "direction",
+        label: "Ramp direction",
+        kind: "select",
+        options: [
+          { value: "top-bottom", label: "Top → Bottom" },
+          { value: "bottom-top", label: "Bottom → Top" },
+          { value: "left-right", label: "Left → Right" },
+          { value: "right-left", label: "Right → Left" },
+          { value: "radial", label: "Radial (centre high)" },
+        ],
+      },
+      { key: "high", label: "High value", kind: "number" },
+      { key: "low", label: "Low value", kind: "number" },
+      { key: "randomness", label: "Randomness", kind: "range", min: 0, max: 1, step: 0.05 },
+      { key: "seed", label: "Seed", kind: "number" },
+      { key: "inciseOccupied", label: "Incise occupied (rivers)", kind: "checkbox" },
+      { key: "inciseDepth", label: "Incise depth", kind: "number", showIf: (p) => p.inciseOccupied === true },
+      { key: "lowColor", label: "Low colour", kind: "color" },
+      { key: "highColor", label: "High colour", kind: "color" },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Generate a synthetic elevation field over an incoming lattice — a directional ramp (High→Low) plus random jitter, optionally incising occupied (river) cells lower. Feed from Graph to Grid; chain into Fill Depressions for the watershed pipeline.",
+  },
+  "laplace-solver": {
+    type: "laplace-solver",
+    label: "Laplace Solver",
+    color: "#9333ea",
+    // Grid-field node: solve ∇²φ = 0 by iterative relaxation → a smooth harmonic potential field. Dirichlet
+    // boundaries from the grid edges and/or occupied cells; free cells relax to the neighbour average.
+    // Feed φ into Marching Squares for equipotentials / flow nets.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "highValue", label: "High" }, { key: "lowValue", label: "Low" }],
+    defaultParams: { method: "sor", iterations: 300, tolerance: 0.001, omega: 1.8, pinEdges: "top-bottom", pinOccupied: false, highValue: 1, lowValue: 0, lowColor: "#1e3a8a", highColor: "#ef4444", showCellValues: false },
+    fields: [
+      {
+        key: "method",
+        label: "Solver",
+        kind: "select",
+        options: [
+          { value: "sor", label: "SOR (fastest)" },
+          { value: "gauss-seidel", label: "Gauss-Seidel" },
+          { value: "jacobi", label: "Jacobi" },
+        ],
+      },
+      { key: "iterations", label: "Max iterations", kind: "range", min: 10, max: 2000, step: 10 },
+      { key: "tolerance", label: "Tolerance", kind: "number" },
+      { key: "omega", label: "Over-relaxation (ω)", kind: "range", min: 1, max: 1.99, step: 0.01, showIf: (p) => p.method === "sor" },
+      {
+        key: "pinEdges",
+        label: "Pin edges",
+        kind: "select",
+        options: [
+          { value: "top-bottom", label: "Top → Bottom" },
+          { value: "left-right", label: "Left → Right" },
+          { value: "all", label: "All borders (low)" },
+          { value: "none", label: "None" },
+        ],
+      },
+      { key: "pinOccupied", label: "Pin occupied (sources)", kind: "checkbox" },
+      { key: "highValue", label: "High potential", kind: "number" },
+      { key: "lowValue", label: "Low potential", kind: "number" },
+      { key: "lowColor", label: "Low colour", kind: "color" },
+      { key: "highColor", label: "High colour", kind: "color" },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Solve Laplace's equation ∇²φ = 0 over the grid (Jacobi / Gauss-Seidel / SOR relaxation) → a smooth harmonic potential. Pin boundaries from the edges (top→bottom battery) and/or occupied cells. Feed φ into Marching Squares for equipotentials / streamlines.",
+  },
+  "fill-depressions": {
+    type: "fill-depressions",
+    label: "Fill Depressions",
+    color: "#9333ea",
+    // Grid-field node: hydrologically condition a DEM (treat cell values as elevations) by Priority-Flood
+    // so every cell drains to the border. epsilon > 0 forces a tiny slope across flats (Priority-Flood+ε).
+    // Publishes the filled elevation field downstream (→ Flow Direction).
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "epsilon", label: "Min slope (ε)" }],
+    defaultParams: { epsilon: 0, edgesAreOutlets: true, highlightFilled: false, fillColor: "#0ea5e9", lowColor: "#1e3a8a", highColor: "#ef4444", showCellValues: false },
+    fields: [
+      { key: "epsilon", label: "Min slope (ε)", kind: "number" },
+      { key: "edgesAreOutlets", label: "Edges drain off-grid", kind: "checkbox" },
+      { key: "highlightFilled", label: "Show only raised cells", kind: "checkbox" },
+      { key: "fillColor", label: "Raised colour", kind: "color", showIf: (p) => p.highlightFilled === true },
+      { key: "lowColor", label: "Low colour", kind: "color", showIf: (p) => p.highlightFilled !== true },
+      { key: "highColor", label: "High colour", kind: "color", showIf: (p) => p.highlightFilled !== true },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Fill sinks/pits in a DEM grid-field (Priority-Flood) so every cell drains to the border. Set Min slope (ε) > 0 to also resolve flats (Priority-Flood+ε). Feed from Grid / Graph to Grid; chain into Flow Direction.",
+  },
+  "flow-direction": {
+    type: "flow-direction",
+    label: "Flow Direction",
+    color: "#9333ea",
+    // Grid-field node: D8 steepest-descent receiver per cell → a direction code (the field's `dir`
+    // channel). Elevations pass through. Feed it a filled DEM (Fill Depressions); chain into Flow
+    // Accumulation / Watershed. Rho8 randomises the receiver among downslope neighbours (deterministic).
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { method: "d8", showArrows: true, colorByDirection: false, showCellValues: false },
+    fields: [
+      {
+        key: "method",
+        label: "Method",
+        kind: "select",
+        options: [
+          { value: "d8", label: "D8 (steepest)" },
+          { value: "rho8", label: "Rho8 (stochastic)" },
+        ],
+      },
+      { key: "showArrows", label: "Show arrows", kind: "checkbox" },
+      { key: "colorByDirection", label: "Colour cells by direction", kind: "checkbox" },
+      { key: "showCellValues", label: "Show direction codes", kind: "checkbox", showIf: (p) => p.colorByDirection === true },
+    ],
+    hint: "D8 flow direction — each cell points to its steepest-descent neighbour (code 0..7). Feed a filled DEM (Fill Depressions); emits arrows + a dir-carrying field for Flow Accumulation / Watershed. Rho8 randomises among downslope neighbours.",
+  },
+  "flow-accumulation": {
+    type: "flow-accumulation",
+    label: "Flow Accumulation",
+    color: "#9333ea",
+    // Grid-field node: how many upstream cells (or how much area) drain through each cell, following the
+    // incoming dir channel (Flow Direction). High accumulation = channels. Passes the count field + dir on.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { asArea: false, logDisplay: true, lowColor: "#f1f5f9", highColor: "#1d4ed8", showCellValues: false },
+    fields: [
+      { key: "asArea", label: "Contributing area (m²)", kind: "checkbox" },
+      { key: "logDisplay", label: "Log colour scale", kind: "checkbox" },
+      { key: "lowColor", label: "Low colour", kind: "color" },
+      { key: "highColor", label: "High colour", kind: "color" },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Flow accumulation — upstream contributing cells (or area) per cell, following Flow Direction. High values trace the channel network. Feed from Flow Direction; chain into Grid Threshold (streams) / Watershed.",
+  },
+  "watershed": {
+    type: "watershed",
+    label: "Watershed",
+    color: "#9333ea",
+    // Grid-field node: delineate the catchment draining to an outlet by flooding upstream over the dir
+    // channel. Outlet = lowest-value cell (feed elevations from Flow Direction) or an explicit (col, row).
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "col", label: "Outlet col" }, { key: "row", label: "Outlet row" }],
+    defaultParams: { useLowestCell: true, col: 0, row: 0, fillColor: "#0ea5e9", showBoundary: true, showCellValues: false },
+    fields: [
+      { key: "useLowestCell", label: "Outlet = lowest cell", kind: "checkbox" },
+      { key: "col", label: "Outlet column (m)", kind: "number", showIf: (p) => p.useLowestCell !== true },
+      { key: "row", label: "Outlet row (n)", kind: "number", showIf: (p) => p.useLowestCell !== true },
+      { key: "fillColor", label: "Basin colour", kind: "color" },
+      { key: "showBoundary", label: "Show boundary", kind: "checkbox" },
+    ],
+    hint: "Delineate the watershed draining to an outlet cell — floods upstream over the Flow Direction dir channel. Outlet = the lowest-value cell, or an explicit (col, row) address. Emits a basin mask + outline. Feed from Flow Direction.",
+  },
+  "morphology": {
+    type: "morphology",
+    label: "Morphology",
+    color: "#9333ea",
+    // Grid-field node: morphological erosion / dilation and their compositions over a binary mask
+    // (threshold the input) or grayscale field (min/max filters). Structuring element = cross / square /
+    // disk of the given radius; iterations repeat the primitive. Passes the processed field on.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "radius", label: "Radius" }, { key: "iterations", label: "Iterations" }],
+    defaultParams: { operation: "erode", shape: "cross", radius: 1, iterations: 1, grayscale: false, threshold: 0.5, clampEdges: true, showBackground: false, fgColor: "#22c55e", bgColor: "#475569", lowColor: "#1e3a8a", highColor: "#ef4444", showCellValues: false },
+    fields: [
+      {
+        key: "operation",
+        label: "Operation",
+        kind: "select",
+        options: [
+          { value: "erode", label: "Erode (shrink)" },
+          { value: "dilate", label: "Dilate (grow)" },
+          { value: "open", label: "Open (erode→dilate)" },
+          { value: "close", label: "Close (dilate→erode)" },
+          { value: "gradient", label: "Gradient (edges)" },
+          { value: "tophat", label: "Top-hat" },
+          { value: "blackhat", label: "Black-hat" },
+          { value: "boundary", label: "Boundary" },
+        ],
+      },
+      {
+        key: "shape",
+        label: "Element",
+        kind: "select",
+        options: [
+          { value: "cross", label: "Cross (4-nbr)" },
+          { value: "square", label: "Square (8-nbr)" },
+          { value: "disk", label: "Disk (radius)" },
+        ],
+      },
+      { key: "radius", label: "Radius", kind: "range", min: 1, max: 10, step: 1 },
+      { key: "iterations", label: "Iterations", kind: "range", min: 1, max: 10, step: 1 },
+      { key: "grayscale", label: "Grayscale (min/max)", kind: "checkbox" },
+      { key: "threshold", label: "Binarise threshold", kind: "number", showIf: (p) => p.grayscale !== true },
+      { key: "clampEdges", label: "Preserve edges", kind: "checkbox" },
+      { key: "showBackground", label: "Show background", kind: "checkbox", showIf: (p) => p.grayscale !== true },
+      { key: "fgColor", label: "Foreground colour", kind: "color", showIf: (p) => p.grayscale !== true },
+      { key: "bgColor", label: "Background colour", kind: "color", showIf: (p) => p.grayscale !== true && p.showBackground === true },
+      { key: "lowColor", label: "Low colour", kind: "color", showIf: (p) => p.grayscale === true },
+      { key: "highColor", label: "High colour", kind: "color", showIf: (p) => p.grayscale === true },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Morphological erosion / dilation and compositions (open, close, gradient, top-hat, black-hat, boundary) over a grid field — binary (threshold the input) or grayscale (min/max). Feed from Grid Threshold / Watershed / Flow Accumulation; chain into Marching Squares.",
+  },
+  "cellular-automaton": {
+    type: "cellular-automaton",
+    label: "Cellular Automaton",
+    color: "#9333ea",
+    // Grid-field node: evolve a binary lattice N generations under a Birth/Survive rule — Conway's Game of
+    // Life (B3/S23) and friends (HighLife, Maze, Cave, custom). Seed from the input mask or a random fill.
+    // Publishes the final 0/1 state for downstream masking / vectorisation.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "generations", label: "Generations" }],
+    defaultParams: { preset: "conway", birth: "3", survive: "23", neighborhood: "moore", boundary: "toroidal", generations: 10, seedSource: "random", threshold: 0.5, density: 0.35, seed: 1, colorByAge: false, aliveColor: "#22c55e", showDead: false, deadColor: "#1e293b", lowColor: "#1e3a8a", highColor: "#ef4444", showCellValues: false },
+    fields: [
+      {
+        key: "preset",
+        label: "Rule (Game of Life)",
+        kind: "select",
+        options: [
+          { value: "conway", label: "Conway B3/S23" },
+          { value: "highlife", label: "HighLife B36/S23" },
+          { value: "daynight", label: "Day & Night" },
+          { value: "seeds", label: "Seeds B2/S" },
+          { value: "replicator", label: "Replicator" },
+          { value: "maze", label: "Maze B3/S12345" },
+          { value: "cave", label: "Cave B678/S345678" },
+          { value: "custom", label: "Custom B/S" },
+        ],
+      },
+      { key: "birth", label: "Birth (B)", kind: "text", placeholder: "3", showIf: (p) => p.preset === "custom" },
+      { key: "survive", label: "Survive (S)", kind: "text", placeholder: "23", showIf: (p) => p.preset === "custom" },
+      {
+        key: "neighborhood",
+        label: "Neighbourhood",
+        kind: "select",
+        options: [
+          { value: "moore", label: "Moore (8)" },
+          { value: "vonneumann", label: "von Neumann (4)" },
+        ],
+      },
+      {
+        key: "boundary",
+        label: "Boundary",
+        kind: "select",
+        options: [
+          { value: "toroidal", label: "Toroidal (wrap)" },
+          { value: "dead", label: "Dead edges" },
+          { value: "mirror", label: "Mirror" },
+        ],
+      },
+      { key: "generations", label: "Generations", kind: "range", min: 0, max: 200, step: 1 },
+      {
+        key: "seedSource",
+        label: "Seed from",
+        kind: "select",
+        options: [
+          { value: "random", label: "Random fill" },
+          { value: "mask", label: "Input mask" },
+        ],
+      },
+      { key: "density", label: "Fill density", kind: "range", min: 0, max: 1, step: 0.05, showIf: (p) => p.seedSource === "random" },
+      { key: "seed", label: "Seed", kind: "number", showIf: (p) => p.seedSource === "random" },
+      { key: "threshold", label: "Mask threshold", kind: "number", showIf: (p) => p.seedSource === "mask" },
+      { key: "colorByAge", label: "Colour by age", kind: "checkbox" },
+      { key: "aliveColor", label: "Alive colour", kind: "color", showIf: (p) => p.colorByAge !== true },
+      { key: "lowColor", label: "Young colour", kind: "color", showIf: (p) => p.colorByAge === true },
+      { key: "highColor", label: "Old colour", kind: "color", showIf: (p) => p.colorByAge === true },
+      { key: "showDead", label: "Show dead cells", kind: "checkbox" },
+      { key: "deadColor", label: "Dead colour", kind: "color", showIf: (p) => p.showDead === true },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Cellular automaton — evolve a grid N generations under a Birth/Survive rule (Conway's Game of Life B3/S23, HighLife, Maze, Cave, or custom). Seed from the input mask or a random fill. Moore/von-Neumann neighbours, wrap/dead/mirror edges. Emits the 0/1 state → Morphology / Marching Squares / Graph to Spaces.",
+  },
+  "grid-source": {
+    type: "grid-source",
+    label: "Grid",
+    color: "#7c3aed",
+    // Pipeline input — a construction Grid on the canvas (Create Grid). Like the Space node: references a
+    // grid by display id, or tracks the grid currently selected on the canvas. Emits its lattice lines.
+    hasInput: false,
+    hasOutput: true,
+    defaultParams: { id: "", grabFromSelection: true },
+    fields: [
+      { key: "grabFromSelection", label: "Grab ID from selection", kind: "checkbox" },
+      { key: "id", label: "ID", kind: "text", placeholder: "Grid001", showIf: (p) => !p.grabFromSelection },
+    ],
+    hint: "Pipeline input — a Grid on the canvas (by id, or the current selection). Emits its lattice lines.",
+  },
+  "grid-threshold": {
+    type: "grid-threshold",
+    label: "Grid Threshold",
+    color: "#9333ea",
+    // Grid-field node: pass each cell's value through `value op threshold` → a 0/1 MASK field. Publishes
+    // the mask downstream (Marching Squares / Cells→Spaces); fills passing cells (and optionally failing).
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "threshold", label: "Threshold" }],
+    defaultParams: { op: ">", threshold: 0, passColor: "#22c55e", failColor: "#475569", showFail: false, showCellValues: false },
+    fields: [
+      {
+        key: "op",
+        label: "Test",
+        kind: "select",
+        options: [
+          { value: ">", label: "value > X" },
+          { value: ">=", label: "value ≥ X" },
+          { value: "<", label: "value < X" },
+          { value: "<=", label: "value ≤ X" },
+          { value: "==", label: "value = X" },
+          { value: "!=", label: "value ≠ X" },
+        ],
+      },
+      { key: "threshold", label: "Threshold (X)", kind: "number" },
+      { key: "passColor", label: "Pass colour", kind: "color" },
+      { key: "showFail", label: "Show fail cells", kind: "checkbox" },
+      { key: "failColor", label: "Fail colour", kind: "color", showIf: (p) => p.showFail === true },
+      { key: "showCellValues", label: "Show values", kind: "checkbox" },
+    ],
+    hint: "Threshold a grid field — keep cells where value passes the test → a 0/1 mask. Feed from Graph to Grid / Grid Distance; chain into Marching Squares.",
+  },
+  "marching-squares": {
+    type: "marching-squares",
+    label: "Marching Squares",
+    color: "#9333ea",
+    // Grid-field node: extract iso-contours from the field (cell-centre samples) → contour line segments
+    // emitted as a graph (chains into Dimension / Mitered Join).
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "levels", label: "Levels" }],
+    defaultParams: { levels: 5 },
+    fields: [
+      { key: "levels", label: "Contour levels", kind: "range", min: 1, max: 12, step: 1 },
+    ],
+    hint: "Extract iso-contours from a grid field — N evenly-spaced levels between min and max. Emits contour lines (a graph) to chain on. Feed from Graph to Grid / Grid Distance / Grid Threshold.",
+  },
+  "area-dimension": {
+    type: "area-dimension",
+    label: "Area Dimension",
+    color: "#0e7490",
+    // Space node: writes a centred annotation block in each incoming Space — Label, Area and the
+    // bounding L×B dimension — in the chosen unit. The Space is forwarded unchanged downstream.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { unit: "m", label: "", showLabel: true, showArea: true, showDimension: true },
+    fields: [
+      {
+        key: "unit",
+        label: "Unit",
+        kind: "select",
+        options: [
+          { value: "m", label: "Metres (m)" },
+          { value: "cm", label: "Centimetres (cm)" },
+          { value: "ft", label: "Feet (ft)" },
+        ],
+      },
+      // Optional label text shown on the first line (when Show label is on).
+      { key: "label", label: "Label", kind: "text", placeholder: "e.g. Living", showIf: (p) => p.showLabel !== false },
+      { key: "showLabel", label: "Show label", kind: "checkbox" },
+      { key: "showArea", label: "Show area", kind: "checkbox" },
+      { key: "showDimension", label: "Show dimension (L×B)", kind: "checkbox" },
+    ],
+    hint: "Annotate each Space at its centroid with Label · Area · L×B dimension, in m / cm / ft. Forwards the Space on.",
   },
   "graph-to-spaces": {
     type: "graph-to-spaces",
@@ -2106,11 +2682,14 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // then appear in each component's Properties tab (added to the built-ins, never replacing them).
     hasInput: false,
     hasOutput: true,
+    // PILOT: a params INPUT endpoint (violet `pin`, left side near the Node Schema section). Wire a
+    // node's params OUTPUT (e.g. Display Node) into it to derive the schema from that node's fields.
+    acceptsParams: true,
     defaultParams: { name: "", nodeProps: [], segmentProps: [], spaceProps: [], graphProps: [] },
     fields: [
       { key: "name", label: "Name", kind: "text", placeholder: "Schema name (optional)" },
     ],
-    hint: "Define per-component input properties (Node / Segment / Space / Graph). Wire the output into a Graph or Space node to attach them — they surface in each component's Properties tab.",
+    hint: "Define per-component input properties (Node / Segment / Space / Graph). Wire the output into a Graph or Space node to attach them — they surface in each component's Properties tab. The left params input can take a node's params (e.g. Display Node) to derive a schema from its fields.",
   },
   "output-schema": {
     type: "output-schema",
@@ -2163,6 +2742,750 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "tolerance", label: "Tolerance", kind: "range", min: 0.0001, max: 0.05, step: 0.0001 },
     ],
     hint: "Solve a pipe network (Todini global gradient). Wire a Graph node into the main input (unconnected = whole canvas graph) and a Schema node into the Schema input to define node/segment properties; edit them per component in the Properties tab; per-component results appear in the Metrics tab.",
+  },
+  "frame-builder": {
+    type: "frame-builder",
+    label: "Frame Builder",
+    color: "#9a3412",
+    // Structural footprint generator (sibling of the Pipe Network Solver). Two inputs: the MAIN
+    // (geometry) input takes a Graph node — it then frames only that graph; unconnected, it frames the
+    // whole canvas segment graph. The "Schema" input (gin-schema) takes a Schema node whose Node /
+    // Segment / Graph sections define the per-component inputs (column width/height, beam width, hatch,
+    // and a graph-level "subtract"), shown + editable in each component's Properties tab. Reads them by
+    // role: each node → a width×height column box; each segment → a beam ribbon; if the graph's
+    // "subtract" is on, beams are cut back to the column faces. Emits the footprints as Spaces; wire its
+    // output into an Output Schema node to choose which per-component results show in the Metrics tab.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    valueOutputs: [
+      { key: "columns", label: "Columns" },
+      { key: "beams", label: "Beams" },
+      { key: "totalBeamLength", label: "Beam length", unit: "m" },
+      { key: "totalColumnArea", label: "Column area", unit: "m²" },
+    ],
+    // Fallbacks used only when the wired Schema doesn't define the matching property (so the node still
+    // produces a sensible frame on its own). The schema's per-component values override these.
+    defaultParams: { columnWidthMm: 300, columnHeightMm: 450, beamWidthMm: 230, subtract: true },
+    fields: [
+      { key: "columnWidthMm", label: "Column width", kind: "range", min: 0, max: 2000, step: 10, unit: "mm" },
+      { key: "columnHeightMm", label: "Column height", kind: "range", min: 0, max: 3000, step: 10, unit: "mm" },
+      { key: "beamWidthMm", label: "Beam width", kind: "range", min: 0, max: 1000, step: 10, unit: "mm" },
+      { key: "subtract", label: "Subtract beams from columns", kind: "checkbox" },
+    ],
+    hint: "Frame a graph: nodes → column boxes (width×height), segments → beam ribbons (width); optionally subtract beams from columns. Wire a Schema node for per-component sizing/hatch; wire Output Schema for Metrics.",
+  },
+  "wall-builder": {
+    type: "wall-builder",
+    label: "Graph to Walls",
+    color: "#b45309",
+    // Schema-driven mitred walls. Two inputs: the MAIN (geometry) input takes a Graph/Canvas node — it
+    // strokes that graph's segments into mitred wall ribbons (junctions mitre cleanly via the canvas
+    // mitering engine). The "Schema" input (gin-schema) takes a Schema node whose Segment section defines
+    // per-segment Thickness / Justification / Hatch (and a Type discriminator); the wall width is read
+    // straight from each segment's schema THICKNESS (role "wall-thickness"), not the canvas thickness.
+    // Only "wall"-typed segments are stroked (doors / windows are openings). Emits the wall footprints.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    valueOutputs: [
+      { key: "walls", label: "Walls" },
+      { key: "totalLength", label: "Wall length", unit: "m" },
+      { key: "totalArea", label: "Wall area", unit: "m²" },
+    ],
+    // Fallbacks used only when the schema doesn't define the property for a segment.
+    defaultParams: { thicknessMm: 230, justification: "center", height: 3, showOuterDim: false, showInnerDim: false, dimGap: 0.18 },
+    fields: [
+      { key: "thicknessMm", label: "Thickness", kind: "range", min: 0, max: 1000, step: 10, unit: "mm", role: "wall-thickness" },
+      {
+        key: "justification",
+        label: "Justification",
+        kind: "select",
+        role: "wall-justification",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ],
+      },
+      // Wall height (m) — no plan-view effect; consumed by 3D / elevation. Per-element via role "wall-height".
+      { key: "height", label: "Height", kind: "range", min: 0, max: 10, step: 0.05, unit: "m", role: "wall-height" },
+      // Dimension the wall band's faces: outer (away from the plan centre) and/or inner (room side).
+      { key: "showOuterDim", label: "Show Outer Dimension", kind: "checkbox" },
+      { key: "showInnerDim", label: "Show Inner Dimension", kind: "checkbox" },
+      { key: "dimGap", label: "Dimension Offset", kind: "number", min: 0, max: 2, step: 0.02, unit: "m", showIf: (p) => p.showOuterDim === true || p.showInnerDim === true },
+    ],
+    hint: "Stroke a graph into mitred walls, taking each wall's thickness from the Segment schema (role wall-thickness). Wire a Schema node into the Schema input; only wall-typed segments are drawn. Toggle inner / outer face dimensions.",
+  },
+  "segment-to-door": {
+    type: "segment-to-door",
+    label: "Segment to Door",
+    color: "#9333ea",
+    // Draws a door symbol on each input segment (the door opening). Shape:
+    //  • polygon  — fills the opening as a rectangle of the given Thickness (a solid leaf block);
+    //  • arc      — a simple swing arc plus two lines (the open leaf + the closed position);
+    //  • detailed — the leaf drawn as a thin panel plus the swing arc, placed by Hinge (left/right end)
+    //               and Swing (which side of the wall it opens).
+    // Schema-driven: wire a Schema node into "gin-schema" (or attach one to the canvas/graph) and each
+    // segment's shape / hinge / swing / thickness come from its own schema values by role (door-shape /
+    // door-hinge / door-placement / door-thickness); only "door"-typed segments are drawn. The params
+    // below are the fallback when no schema value is set.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { shape: "arc", thickness: 0.05, hinge: "left", swing: "left", lintelHeight: 2.1, color: "#9333ea" },
+    fields: [
+      {
+        key: "shape",
+        label: "Shape",
+        kind: "select",
+        role: "door-shape",
+        options: [
+          { value: "polygon", label: "Polygon (filled)" },
+          { value: "arc", label: "Arc + lines" },
+          { value: "detailed", label: "Detailed (leaf + swing)" },
+        ],
+      },
+      // Leaf / fill thickness (m): the polygon block depth, or the detailed leaf panel thickness.
+      { key: "thickness", label: "Thickness", kind: "range", min: 0.01, max: 0.5, step: 0.01, unit: "m", role: "door-thickness", showIf: (p) => p.shape === "polygon" || p.shape === "detailed" },
+      // Hinge end + swing side — the door's main-line parameters (arc / detailed only).
+      {
+        key: "hinge",
+        label: "Hinge",
+        kind: "select",
+        role: "door-hinge",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" },
+        ],
+        showIf: (p) => p.shape !== "polygon",
+      },
+      {
+        key: "swing",
+        label: "Swing",
+        kind: "select",
+        role: "door-placement",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" },
+        ],
+        showIf: (p) => p.shape !== "polygon",
+      },
+      // Door opening height (3D) — moved here from the native segment Properties so a door's lintel lives
+      // with the rest of its parameters. Per-element via role "lintel-height".
+      { key: "lintelHeight", label: "Lintel height", kind: "range", min: 0, max: 5, step: 0.05, unit: "m", role: "lintel-height" },
+      // Symbol colour (fill + stroke). Per-element via role "door-color"; node param is the fallback.
+      { key: "color", label: "Color", kind: "color", role: "door-color" },
+    ],
+    hint: "Draw a door on each input segment — polygon (filled), arc + two lines, or detailed (leaf + swing with hinge/swing side).",
+  },
+  "segment-to-window": {
+    type: "segment-to-window",
+    label: "Segment to Window",
+    color: "#0891b2",
+    // Draws a window symbol on each input segment (the window opening). Shape:
+    //  • polygon  — fills the opening as a rectangle of the given Thickness (a solid frame block);
+    //  • lines    — the classic window: the two frame edges + a centre glass line + jamb caps;
+    //  • detailed — a frame rectangle + centre glass line + (Panes − 1) mullion dividers.
+    // Schema-driven: wire a Schema into "gin-schema" (or attach one to the canvas/graph) and each segment's
+    // shape / thickness / panes come from its own schema values by role (window-shape / window-thickness /
+    // window-panes); only "window"-typed segments are drawn. The params below are the fallback.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { shape: "lines", thickness: 0.1, panes: 2, sillHeight: 0.9, lintelHeight: 2.1, color: "#0891b2" },
+    fields: [
+      {
+        key: "shape",
+        label: "Shape",
+        kind: "select",
+        role: "window-shape",
+        options: [
+          { value: "polygon", label: "Polygon (filled)" },
+          { value: "lines", label: "Lines (frame + glass)" },
+          { value: "detailed", label: "Detailed (panes)" },
+        ],
+      },
+      // Frame / wall thickness (m): the opening depth across the wall (drives all three shapes).
+      { key: "thickness", label: "Thickness", kind: "range", min: 0.02, max: 0.6, step: 0.01, unit: "m", role: "window-thickness" },
+      // Glass divisions — the number of panes the window is split into (detailed only).
+      { key: "panes", label: "Panes", kind: "range", min: 1, max: 8, step: 1, role: "window-panes", showIf: (p) => p.shape === "detailed" },
+      // Opening heights (3D) — moved here from the native segment Properties. Per-element via roles
+      // sill-height / lintel-height (metres); they drive the 3D window opening band.
+      { key: "sillHeight", label: "Sill height", kind: "range", min: 0, max: 3, step: 0.05, unit: "m", role: "sill-height" },
+      { key: "lintelHeight", label: "Lintel height", kind: "range", min: 0, max: 5, step: 0.05, unit: "m", role: "lintel-height" },
+      // Symbol colour (fill + stroke). Per-element via role "window-color"; node param is the fallback.
+      { key: "color", label: "Color", kind: "color", role: "window-color" },
+    ],
+    hint: "Draw a window on each input segment — polygon (filled), lines (frame + glass), or detailed (panes / mullions).",
+  },
+  "node-to-object": {
+    type: "node-to-object",
+    label: "Node to Object",
+    color: "#db2777",
+    // Places a furniture/fixture symbol (bed / sofa / table / …) on each input node. Mirrors the canvas
+    // Node Properties tab with Type = Object: Width × Depth footprint (m), Rotation (°), and which point
+    // of the footprint sits ON the node (Anchor). The chosen Kind drives the 2D plan symbol.
+    // Schema-driven: wire a Schema into "gin-schema" (or attach one to the canvas/graph) and each node's
+    // kind / width / depth / rotation / anchor come from its own schema values by role (object-kind /
+    // obj-width / obj-height / obj-rotation / obj-anchor); only "object"-typed nodes are placed.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { kind: "bed", width: 1.5, height: 2.0, rotation: 0, anchor: "center" },
+    fields: [
+      { key: "kind", label: "Kind", kind: "select", role: "object-kind", options: PLACE_OBJECT_KIND_OPTIONS },
+      { key: "width", label: "Width", kind: "range", min: 0.1, max: 6, step: 0.05, unit: "m", role: "obj-width" },
+      { key: "height", label: "Depth", kind: "range", min: 0.1, max: 6, step: 0.05, unit: "m", role: "obj-height" },
+      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°", role: "obj-rotation" },
+      {
+        key: "anchor",
+        label: "Anchor",
+        kind: "select",
+        role: "obj-anchor",
+        options: [
+          { value: "center", label: "Center" },
+          { value: "top-left", label: "Top-left" },
+          { value: "top-right", label: "Top-right" },
+          { value: "bottom-left", label: "Bottom-left" },
+          { value: "bottom-right", label: "Bottom-right" },
+        ],
+      },
+    ],
+    hint: "Place a furniture symbol (bed / sofa / …) on each input node — Width × Depth, Rotation, Anchor and Kind.",
+  },
+  "node-to-staircase": {
+    type: "node-to-staircase",
+    label: "Node to Staircase",
+    color: "#0f766e",
+    // Draws a 2D plan staircase anchored at each input node, in one of three Configurations:
+    //  • straight     — a single going (flight of N steps) ending in a landing;
+    //  • u-shape      — a half-turn: a flight, a landing, then the remaining steps returning the other way
+    //                   (the two parallel flights separated by Mid space; split at Mid steps);
+    //  • u-shape-mid  — two 90° turns: a flight → landing → a perpendicular Mid flight (Mid steps) →
+    //                   landing → a flight returning opposite the first.
+    // Each flight gets a direction arrow showing the ascent. Param-driven (no schema): wire the Nodes
+    // bundle (canvas out-1) or a Node source into the input.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { config: "straight", steps: 14, tread: 0.28, width: 1.0, direction: "ltr", midSteps: 0, landingWidth: 1.0, midSpace: 0.1, landingCuts: 1, rotation: 0, color: "#0f766e" },
+    fields: [
+      // Overall stair shape.
+      {
+        key: "config",
+        label: "Configuration",
+        kind: "select",
+        options: [
+          { value: "straight", label: "Straight (going + landing)" },
+          { value: "u-shape", label: "U-shape (180° turn)" },
+          { value: "u-shape-mid", label: "U-shape + mid flight (2 × 90°)" },
+        ],
+      },
+      // Total number of treads in the stair (distributed across the flights for the multi-flight configs).
+      { key: "steps", label: "Number of steps", kind: "range", min: 2, max: 60, step: 1 },
+      // Going — the depth of each tread along the run (m).
+      { key: "tread", label: "Tread (going)", kind: "range", min: 0.2, max: 0.45, step: 0.005, unit: "m" },
+      // Flight width across the run (m).
+      { key: "width", label: "Width", kind: "range", min: 0.6, max: 3, step: 0.05, unit: "m" },
+      // Run direction of the FIRST flight: ascent along +x (Left → Right) or -x (Right → Left).
+      {
+        key: "direction",
+        label: "Direction",
+        kind: "select",
+        options: [
+          { value: "ltr", label: "Left → Right" },
+          { value: "rtl", label: "Right → Left" },
+        ],
+      },
+      // Multi-flight split. U-shape: steps in the FIRST flight (before the landing; rest return). U-shape +
+      // mid: steps in the perpendicular MIDDLE flight (the rest split between the two outer flights). 0 →
+      // auto (half for U-shape, ~a third for U-shape + mid).
+      { key: "midSteps", label: "Mid / split steps", kind: "range", min: 0, max: 40, step: 1, showIf: (p) => p.config !== "straight" },
+      // Landing depth along the run (m). Straight: the top landing. U-shape: the turn landing. (U-shape +
+      // mid uses square width-sized landings so the perpendicular flights align, so it's hidden there.)
+      { key: "landingWidth", label: "Landing depth", kind: "range", min: 0.5, max: 3, step: 0.05, unit: "m", showIf: (p) => p.config !== "u-shape-mid" },
+      // Gap between the two parallel flights of a U-shape (half-turn) stair (m).
+      { key: "midSpace", label: "Mid space (between flights)", kind: "range", min: 0, max: 1, step: 0.05, unit: "m", showIf: (p) => p.config === "u-shape" },
+      // Divide the half-turn landing into n winder slices: lines fan from the inner corner (where the
+      // flights meet) to n equally-spaced points on the landing's far edge → (n − 1) lines. 1 = no cuts;
+      // 2 = a single mid line; 3 = two diagonals; 4 = two diagonals + a mid line; etc.
+      { key: "landingCuts", label: "Landing cuts", kind: "range", min: 1, max: 10, step: 1, showIf: (p) => p.config === "u-shape" },
+      // Rotate the whole assembly about the node (°).
+      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Draw a 2D staircase on each input node — Straight (going + landing), U-shape (180°), or U-shape with a perpendicular mid flight (2 × 90°). Steps, Tread, Width, Direction.",
+  },
+  "node-to-footing": {
+    type: "node-to-footing",
+    label: "Node to Footing",
+    color: "#7c3aed",
+    // Draws a column-footing SECTION anchored at each input node (column above, foundation layers below):
+    //  • spread  — a flat wide RCC pad (T-section);
+    //  • sloped  — a frustum (trapezoid) tapering from the frustum-top width to the base width;
+    //  • stepped — a stack of widening steps.
+    // Below the structural footing sit the PCC and soling beds. Skew offsets the footing under the column
+    // (eccentric footing) — Left / Centre / Right. Defaults are the listed imperial sizes in metres
+    // (12" col, 60" base, 8" RCC, 4" PCC, 4" soling, 8" frustum height, 24" frustum top). Param-driven (no
+    // schema): wire the Nodes bundle (canvas out-1) or a Node source into the input.
+    hasInput: true,
+    hasOutput: true,
+    // Numeric dims are wirable: drive any of them from a Math / Random / Metrics value (e.g. base width
+    // computed from the column load). A wired value overrides the slider for that param.
+    valueInputs: [
+      { key: "baseWidth", label: "Base width" },
+      { key: "columnWidth", label: "Column width" },
+      { key: "columnHeight", label: "Column height" },
+      { key: "rccThickness", label: "RCC thickness" },
+      { key: "pccThickness", label: "PCC thickness" },
+      { key: "solingThickness", label: "Soling thickness" },
+      { key: "frustumHeight", label: "Frustum height" },
+      { key: "frustumTopWidth", label: "Frustum top width" },
+      { key: "steps", label: "Steps" },
+      { key: "rotation", label: "Rotation" },
+    ],
+    defaultParams: {
+      type: "sloped", columnWidth: 0.3, columnHeight: 1.0, baseWidth: 1.5,
+      rccThickness: 0.2, pccThickness: 0.1, solingThickness: 0.1,
+      frustumHeight: 0.2, frustumTopWidth: 0.6, steps: 3, skew: "center", rotation: 0, color: "#7c3aed",
+    },
+    fields: [
+      {
+        key: "type",
+        label: "Footing type",
+        kind: "select",
+        options: [
+          { value: "spread", label: "Spread (flat pad)" },
+          { value: "sloped", label: "Sloped (frustum)" },
+          { value: "stepped", label: "Stepped" },
+        ],
+      },
+      // Column (drawn above the footing). Width = the column section; Height = how much stem to show.
+      { key: "columnWidth", label: "Column width", kind: "range", min: 0.1, max: 1.5, step: 0.01, unit: "m" },
+      { key: "columnHeight", label: "Column height (shown)", kind: "range", min: 0.2, max: 4, step: 0.05, unit: "m" },
+      // Footing base (the widest layer at the bottom of the structural footing).
+      { key: "baseWidth", label: "Base width", kind: "range", min: 0.3, max: 5, step: 0.05, unit: "m" },
+      // RCC = the structural footing thickness (the pad for spread; total step height for stepped; the
+      // slab below the frustum for sloped).
+      { key: "rccThickness", label: "RCC thickness", kind: "range", min: 0.05, max: 1, step: 0.01, unit: "m" },
+      // PCC + soling beds below the structural footing.
+      { key: "pccThickness", label: "PCC thickness", kind: "range", min: 0, max: 0.6, step: 0.01, unit: "m" },
+      { key: "solingThickness", label: "Soling thickness", kind: "range", min: 0, max: 0.6, step: 0.01, unit: "m" },
+      // Sloped only: the tapering frustum between the column and the RCC slab.
+      { key: "frustumHeight", label: "Frustum height", kind: "range", min: 0.05, max: 1, step: 0.01, unit: "m", showIf: (p) => p.type === "sloped" },
+      { key: "frustumTopWidth", label: "Frustum top width", kind: "range", min: 0.1, max: 3, step: 0.01, unit: "m", showIf: (p) => p.type === "sloped" },
+      // Stepped only: how many steps the pad is built from.
+      { key: "steps", label: "Steps", kind: "range", min: 1, max: 8, step: 1, showIf: (p) => p.type === "stepped" },
+      // Eccentricity — shift the footing under the column (the node stays the column centre).
+      {
+        key: "skew",
+        label: "Skew",
+        kind: "select",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Centre" },
+          { value: "right", label: "Right" },
+        ],
+      },
+      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Draw a column-footing section on each input node — Spread (flat pad), Sloped (frustum), or Stepped, with RCC / PCC / soling layers and an eccentric Skew.",
+  },
+  footing: {
+    type: "footing",
+    label: "Footing",
+    color: "#6d28d9",
+    // DATA node (pure definition, location-free): holds the full engineering definition of a column
+    // footing — section type, column W×D×H, base W×D, RCC / PCC / soling depths, frustum dims, step count,
+    // eccentric skew. Carries NO view params and NO location; feed its output into Footing → 2D Plan / 2D
+    // Elevation / 3D Mesh, then place the result by wiring the view into a Node. Every numeric dim is wirable.
+    hasInput: false,
+    hasOutput: true,
+    valueInputs: [
+      { key: "baseWidth", label: "Base width" },
+      { key: "baseDepth", label: "Base depth" },
+      { key: "columnWidth", label: "Column width" },
+      { key: "columnDepth", label: "Column depth" },
+      { key: "columnHeight", label: "Column height" },
+      { key: "rccThickness", label: "RCC thickness" },
+      { key: "pccThickness", label: "PCC thickness" },
+      { key: "solingThickness", label: "Soling thickness" },
+      { key: "frustumHeight", label: "Frustum height" },
+      { key: "frustumTopWidth", label: "Frustum top width" },
+      { key: "frustumTopDepth", label: "Frustum top depth" },
+      { key: "steps", label: "Steps" },
+      { key: "rotation", label: "Rotation" },
+    ],
+    defaultParams: {
+      type: "sloped", columnWidth: 0.3, columnDepth: 0.3, columnHeight: 1.0,
+      baseWidth: 1.5, baseDepth: 1.5, rccThickness: 0.2, pccThickness: 0.1, solingThickness: 0.1,
+      frustumHeight: 0.2, frustumTopWidth: 0.6, frustumTopDepth: 0.6, steps: 3, skew: "center", rotation: 0, color: "#7c3aed",
+    },
+    fields: [
+      {
+        key: "type",
+        label: "Footing type",
+        kind: "select",
+        options: [
+          { value: "spread", label: "Spread (flat pad)" },
+          { value: "sloped", label: "Sloped (frustum)" },
+          { value: "stepped", label: "Stepped" },
+        ],
+      },
+      // Column (above the footing). Width = X, Depth = Z, Height = stem shown.
+      { key: "columnWidth", label: "Column width", kind: "range", min: 0.1, max: 1.5, step: 0.01, unit: "m" },
+      { key: "columnDepth", label: "Column depth", kind: "range", min: 0.1, max: 1.5, step: 0.01, unit: "m" },
+      { key: "columnHeight", label: "Column height (shown)", kind: "range", min: 0.2, max: 4, step: 0.05, unit: "m" },
+      // Base pad (the widest layer at the bottom of the structural footing).
+      { key: "baseWidth", label: "Base width", kind: "range", min: 0.3, max: 5, step: 0.05, unit: "m" },
+      { key: "baseDepth", label: "Base depth", kind: "range", min: 0.3, max: 5, step: 0.05, unit: "m" },
+      // Layers below the structural footing.
+      { key: "rccThickness", label: "RCC thickness", kind: "range", min: 0.05, max: 1, step: 0.01, unit: "m" },
+      { key: "pccThickness", label: "PCC thickness", kind: "range", min: 0, max: 0.6, step: 0.01, unit: "m" },
+      { key: "solingThickness", label: "Soling thickness", kind: "range", min: 0, max: 0.6, step: 0.01, unit: "m" },
+      // Sloped only: the tapering frustum between the column and the RCC slab.
+      { key: "frustumHeight", label: "Frustum height", kind: "range", min: 0.05, max: 1, step: 0.01, unit: "m", showIf: (p) => p.type === "sloped" },
+      { key: "frustumTopWidth", label: "Frustum top width", kind: "range", min: 0.1, max: 3, step: 0.01, unit: "m", showIf: (p) => p.type === "sloped" || p.type === "stepped" },
+      { key: "frustumTopDepth", label: "Frustum top depth", kind: "range", min: 0.1, max: 3, step: 0.01, unit: "m", showIf: (p) => p.type === "sloped" || p.type === "stepped" },
+      // Stepped only: how many steps the pad is built from.
+      { key: "steps", label: "Steps", kind: "range", min: 1, max: 8, step: 1, showIf: (p) => p.type === "stepped" },
+      // Eccentricity — shift the footing under the column along its width (X) axis.
+      {
+        key: "skew",
+        label: "Skew",
+        kind: "select",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Centre" },
+          { value: "right", label: "Right" },
+        ],
+      },
+      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Define a column footing on each input node (type, column/base dimensions, RCC/PCC/soling, frustum, skew). Feed into Footing → 2D Plan / 2D Elevation / 3D Mesh.",
+  },
+  "footing-to-plan": {
+    type: "footing-to-plan",
+    label: "Footing to 2D Plan",
+    color: "#7c3aed",
+    // Draws the top-down PLAN of each footing from an upstream Footing node — concentric footprint
+    // outlines (base, steps, column) in the X–Z plane.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#7c3aed" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Build the 2D plan (footprint outlines) of an upstream Footing. Wire into a Node to stamp it at that node's point(s).",
+  },
+  "footing-to-elevation": {
+    type: "footing-to-elevation",
+    label: "Footing to 2D Elevation",
+    color: "#7c3aed",
+    // Draws the column-footing SECTION (elevation) of each footing from an upstream Footing node — column
+    // above, then the structural footing and the PCC / soling beds below.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#7c3aed" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Build the 2D elevation (section) of an upstream Footing. Wire into a Node to stamp it at that node's point(s).",
+  },
+  "footing-to-3d-mesh": {
+    type: "footing-to-3d-mesh",
+    label: "Footing to 3D Mesh",
+    color: "#0d9488",
+    // Converts each footing from an upstream Footing node into a generic 3D MESH (a stack of lofted prisms
+    // — boxes + frustum). Feed the output into Mesh to 3D to view it.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#7c3aed" },
+    fields: [{ key: "color", label: "Color (column)", kind: "color" }],
+    hint: "Convert an upstream Footing into a 3D mesh (boxes + frustum). Wire into a Node to place it at the structural point(s), or into Mesh to 3D for an unplaced preview.",
+  },
+  "mesh-to-3d": {
+    type: "mesh-to-3d",
+    label: "Mesh to 3D",
+    color: "#0891b2",
+    // TERMINAL: renders any incoming Mesh (from a … to 3D Mesh node) into the 3D view. Generic — every
+    // future element that produces a Mesh feeds this one node.
+    hasInput: true,
+    hasOutput: false,
+    defaultParams: {},
+    fields: [],
+    hint: "Render any incoming 3D Mesh in the 3D view. The single terminal for all … to 3D Mesh nodes.",
+  },
+  staircase: {
+    type: "staircase",
+    label: "Staircase",
+    color: "#0f766e",
+    // DATA node (pure definition, location-free): holds the full definition of a staircase — configuration
+    // (straight / u-shape / u-shape-mid), step count, tread, riser, width, direction, landing & mid-flight
+    // params. Carries NO view params and NO location; feed into Staircase → 2D Plan / Elevations / 3D Mesh,
+    // then place the result by wiring the view into a Node.
+    hasInput: false,
+    hasOutput: true,
+    valueInputs: [
+      { key: "steps", label: "Steps" },
+      { key: "tread", label: "Tread" },
+      { key: "riser", label: "Riser" },
+      { key: "width", label: "Width" },
+      { key: "midSteps", label: "Mid steps" },
+      { key: "landingWidth", label: "Landing depth" },
+      { key: "rotation", label: "Rotation" },
+    ],
+    defaultParams: { config: "straight", steps: 14, tread: 0.28, riser: 0.17, width: 1.0, direction: "ltr", midSteps: 0, landingWidth: 1.0, midSpace: 0.1, landingCuts: 1, rotation: 0, color: "#0f766e" },
+    fields: [
+      {
+        key: "config",
+        label: "Configuration",
+        kind: "select",
+        options: [
+          { value: "straight", label: "Straight (going + landing)" },
+          { value: "u-shape", label: "U-shape (180° turn)" },
+          { value: "u-shape-mid", label: "U-shape + mid flight (2 × 90°)" },
+        ],
+      },
+      { key: "steps", label: "Number of steps", kind: "range", min: 2, max: 60, step: 1 },
+      { key: "tread", label: "Tread (going)", kind: "range", min: 0.2, max: 0.45, step: 0.005, unit: "m" },
+      { key: "riser", label: "Riser (rise)", kind: "range", min: 0.1, max: 0.25, step: 0.005, unit: "m" },
+      { key: "width", label: "Width", kind: "range", min: 0.6, max: 3, step: 0.05, unit: "m" },
+      {
+        key: "direction",
+        label: "Direction",
+        kind: "select",
+        options: [
+          { value: "ltr", label: "Left → Right" },
+          { value: "rtl", label: "Right → Left" },
+        ],
+      },
+      { key: "midSteps", label: "Mid / split steps", kind: "range", min: 0, max: 40, step: 1, showIf: (p) => p.config !== "straight" },
+      { key: "landingWidth", label: "Landing depth", kind: "range", min: 0.5, max: 3, step: 0.05, unit: "m", showIf: (p) => p.config !== "u-shape-mid" },
+      { key: "midSpace", label: "Mid space (between flights)", kind: "range", min: 0, max: 1, step: 0.05, unit: "m", showIf: (p) => p.config === "u-shape" },
+      { key: "landingCuts", label: "Landing cuts", kind: "range", min: 1, max: 10, step: 1, showIf: (p) => p.config === "u-shape" },
+      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Define a staircase (config, steps, tread, riser, width, landings). Feed into Staircase → 2D Plan / Elevations / 3D Mesh, then place via a Node.",
+  },
+  "staircase-to-plan": {
+    type: "staircase-to-plan",
+    label: "Staircase to 2D Plan",
+    color: "#0f766e",
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#0f766e" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Build the 2D plan (flights, landings, tread lines, ascent arrows) of an upstream Staircase. Wire into a Node to stamp it at that node's point(s).",
+  },
+  "staircase-to-left-elevation": {
+    type: "staircase-to-left-elevation",
+    label: "Staircase to Left Elevation",
+    color: "#0f766e",
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#0f766e" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Build the LEFT side elevation (run × height, stepped profile) of an upstream Staircase. Wire into a Node to place it.",
+  },
+  "staircase-to-right-elevation": {
+    type: "staircase-to-right-elevation",
+    label: "Staircase to Right Elevation",
+    color: "#0f766e",
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#0f766e" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Build the RIGHT side elevation (run × height) of an upstream Staircase. Wire into a Node to place it.",
+  },
+  "staircase-to-front-elevation": {
+    type: "staircase-to-front-elevation",
+    label: "Staircase to Front Elevation",
+    color: "#0f766e",
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#0f766e" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Build the FRONT elevation (width × height) of an upstream Staircase. Wire into a Node to place it.",
+  },
+  "staircase-to-back-elevation": {
+    type: "staircase-to-back-elevation",
+    label: "Staircase to Back Elevation",
+    color: "#0f766e",
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#0f766e" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Build the BACK elevation (width × height) of an upstream Staircase. Wire into a Node to place it.",
+  },
+  "staircase-to-3d-mesh": {
+    type: "staircase-to-3d-mesh",
+    label: "Staircase to 3D Mesh",
+    color: "#0d9488",
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#0f766e" },
+    fields: [{ key: "color", label: "Color", kind: "color" }],
+    hint: "Convert an upstream Staircase into a 3D mesh (stacked step boxes). Wire into a Node to place it at the structural point(s), or into Mesh to 3D for an unplaced preview.",
+  },
+  "schema-to-drawing": {
+    type: "schema-to-drawing",
+    label: "Schema to Drawing Tools",
+    color: "#9333ea",
+    // Reads an attached Schema's segment `type` (role seg-type) and node `type` (role node-type)
+    // discriminators — their options + per-option icons — and surfaces them to the host so they appear as
+    // tools in the Add Segment / Add Node drawing dropdowns (augmenting & overriding the built-ins by value).
+    hasInput: true,
+    hasOutput: false,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: {},
+    fields: [],
+    hint: "Bring an attached Schema's segment & node TYPES (with icons) into the Add Segment / Add Node drawing dropdowns.",
+  },
+  "schema-to-layers": {
+    type: "schema-to-layers",
+    label: "Schema to Layers",
+    color: "#9333ea",
+    // Reads an attached Schema's segment `type` (role seg-type) and node `type` (role node-type)
+    // discriminators — their options — and surfaces them to the host as live LAYER blocks: a foldable
+    // "Segment" block (Wall / Door / Window / Line) and "Node" block (Junction / Object) in the Layers
+    // panel. Live-derived (not saved); removing the node returns the panel to just Layer 0. No geometry.
+    hasInput: true,
+    hasOutput: false,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: {},
+    fields: [],
+    hint: "Bring an attached Schema's segment & node TYPES into the Layers panel as foldable Segment / Node layer blocks.",
+  },
+  "floorplan-to-front-elevation": {
+    type: "floorplan-to-front-elevation",
+    label: "Floorplan to Front Elevation",
+    color: "#9333ea",
+    // Projects the wall / door / window graph onto the FRONT plane (X × height) as a schematic elevation
+    // (outline rects + openings at sill/lintel + a ground line). Fed the Canvas Segments bundle; reads
+    // wall heights + opening sill/lintel from the attached Schema. Wire into a Node to place it.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { height: 3, color: "#0f172a" },
+    fields: [
+      { key: "height", label: "Storey height (fallback)", kind: "range", min: 1, max: 12, step: 0.1, unit: "m" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Project the plan's walls / openings onto the FRONT elevation. Wire into a Node to place it.",
+  },
+  "floorplan-to-back-elevation": {
+    type: "floorplan-to-back-elevation",
+    label: "Floorplan to Back Elevation",
+    color: "#9333ea",
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { height: 3, color: "#0f172a" },
+    fields: [
+      { key: "height", label: "Storey height (fallback)", kind: "range", min: 1, max: 12, step: 0.1, unit: "m" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Project the plan's walls / openings onto the BACK elevation. Wire into a Node to place it.",
+  },
+  "floorplan-to-left-elevation": {
+    type: "floorplan-to-left-elevation",
+    label: "Floorplan to Left Elevation",
+    color: "#9333ea",
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { height: 3, color: "#0f172a" },
+    fields: [
+      { key: "height", label: "Storey height (fallback)", kind: "range", min: 1, max: 12, step: 0.1, unit: "m" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Project the plan's walls / openings onto the LEFT elevation. Wire into a Node to place it.",
+  },
+  "floorplan-to-right-elevation": {
+    type: "floorplan-to-right-elevation",
+    label: "Floorplan to Right Elevation",
+    color: "#9333ea",
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { height: 3, color: "#0f172a" },
+    fields: [
+      { key: "height", label: "Storey height (fallback)", kind: "range", min: 1, max: 12, step: 0.1, unit: "m" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "Project the plan's walls / openings onto the RIGHT elevation. Wire into a Node to place it.",
+  },
+  "views-layout": {
+    type: "views-layout",
+    label: "Views Layout",
+    color: "#0891b2",
+    // TERMINAL: routes wired views into the canvas "Views" mode panels instead of placing them at Nodes.
+    // Wire a Plan into Top/Plan and the four elevations into Front / Back / Left / Right. The host reads
+    // this node from the live flow and renders the panels (plan centre, Back top / Front bottom / L / R).
+    hasInput: false,
+    hasOutput: false,
+    geomInputs: [
+      { key: "plan", label: "Plan (top)" },
+      { key: "front", label: "Front" },
+      { key: "back", label: "Back" },
+      { key: "left", label: "Left" },
+      { key: "right", label: "Right" },
+    ],
+    defaultParams: {},
+    fields: [],
+    hint: "Route a Plan + the four elevations into the canvas \"Views\" mode panels (instead of placing them at Nodes).",
+  },
+  "segment-to-3d": {
+    type: "segment-to-3d",
+    label: "Segment to 3D",
+    color: "#0d9488",
+    // Extrudes each input segment (wall) vertically in the 3D view to a custom Height, Up from the floor
+    // plane or Down below it. Per-element via roles extrude-height / extrude-direction (graphAttrs); the
+    // 3D canvas resolves them, overriding the default storey height for that wall.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { height: 2.7, direction: "up" },
+    fields: [
+      { key: "height", label: "Height", kind: "range", min: 0, max: 12, step: 0.1, unit: "m", role: "extrude-height" },
+      {
+        key: "direction",
+        label: "Direction",
+        kind: "select",
+        role: "extrude-direction",
+        options: [
+          { value: "up", label: "Upwards" },
+          { value: "down", label: "Downwards" },
+        ],
+      },
+    ],
+    hint: "Extrude each input segment into a 3D wall of the given Height, Upwards from the floor or Downwards below it.",
+  },
+  "space-to-3d": {
+    type: "space-to-3d",
+    label: "Space to 3D",
+    color: "#0891b2",
+    // Extrudes each input space polygon into a solid 3D mass of the given Height, Up from the floor plane
+    // or Down below it (massing / basements). Per-element via roles extrude-height / extrude-direction
+    // (graphAttrs.spaces); the 3D canvas renders the mass.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    defaultParams: { height: 3.0, direction: "up" },
+    fields: [
+      { key: "height", label: "Height", kind: "range", min: 0, max: 60, step: 0.1, unit: "m", role: "extrude-height" },
+      {
+        key: "direction",
+        label: "Direction",
+        kind: "select",
+        role: "extrude-direction",
+        options: [
+          { value: "up", label: "Upwards" },
+          { value: "down", label: "Downwards" },
+        ],
+      },
+    ],
+    hint: "Extrude each input space into a solid 3D mass of the given Height, Upwards from the floor or Downwards below it.",
   },
   image: {
     type: "image",
@@ -2283,6 +3606,249 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "prompt", label: "Prompt", kind: "textarea", placeholder: "Describe the render style…" },
     ],
     hint: "Render the 3D isometric view into a photorealistic image (Google AI).",
+  },
+  hatching: {
+    type: "hatching",
+    label: "Display Space",
+    color: "#475569",
+    // Pure styling node: takes a Space, passes its geometry straight through (so the pipeline can
+    // continue), and paints a coloured fill / hatch pattern over it in the live preview. When "Hatch"
+    // is off it's a flat colour fill at the given opacity; when on, a diagonal-line or random-dot
+    // pattern (with spacing / angle / line-weight controls). Mirrors the Display block's hatch styling.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: {
+      color: "#0ea5e9",
+      opacity: 0.5,
+      hatch: true,
+      hatchStyle: "diagonal",
+      spacing: 8,
+      angle: 45,
+      weight: 1,
+    },
+    fields: [
+      { key: "color", label: "Color", kind: "color" },
+      { key: "opacity", label: "Opacity", kind: "range", min: 0, max: 1, step: 0.05 },
+      { key: "hatch", label: "Hatch", kind: "checkbox" },
+      {
+        key: "hatchStyle",
+        label: "Style",
+        kind: "select",
+        options: [
+          { value: "diagonal", label: "Diagonal lines" },
+          { value: "dots", label: "Random dots" },
+        ],
+        showIf: (p) => Boolean(p.hatch),
+      },
+      // Stripe period / dot density (px). Drives both diagonal-line spacing and the dot tile period.
+      { key: "spacing", label: "Spacing", kind: "range", min: 3, max: 40, step: 1, unit: "px", showIf: (p) => Boolean(p.hatch) },
+      // Diagonal only: rotation of the stripes (dots have no orientation).
+      { key: "angle", label: "Angle", kind: "range", min: 0, max: 180, step: 1, unit: "°", showIf: (p) => Boolean(p.hatch) && p.hatchStyle === "diagonal" },
+      // Line thickness (diagonal) / dot radius (dots), in px.
+      { key: "weight", label: "Weight", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "px", showIf: (p) => Boolean(p.hatch) },
+    ],
+    hint: "Paint the input Space with a colour fill or diagonal/dots hatch (passes the space through).",
+  },
+  "display-segment": {
+    type: "display-segment",
+    label: "Display Segment",
+    color: "#b45309",
+    // Two modes (the Buffer node is folded in here):
+    //  • "line"     — restyle the incoming segment's stroke (line style / colour) + optional direction
+    //                 arrow; the centerline is threaded downstream unchanged.
+    //  • "buffered" — thicken the segment into a Space by `thickness` m (full ribbon width), with a buffer
+    //                 Style (capsule / square / flat). Output is a Space → feeds the Space pipeline.
+    // Schema-driven: wire a Schema into "gin-schema" (or attach one) and each segment styles per its own
+    // schema values by role (wall-color / wall-linestyle / show-direction / wall-thickness / wall-
+    // justification / hatch…); node params are the fallback. Styling is per-segment.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    valueInputs: [{ key: "thickness", label: "Thickness" }],
+    defaultParams: {
+      applyTo: "any",
+      mode: "line",
+      lineStyle: "solid",
+      color: "#334155",
+      weight: 2,
+      showDirection: false,
+      thickness: 0.2,
+      justification: "center",
+      bufferStyle: "capsule",
+      hatch: false,
+      hatchStyle: "diagonal",
+      hatchSpacing: 8,
+      hatchAngle: 45,
+      hatchWeight: 1,
+    },
+    fields: [
+      // Type self-filter (when a schema type discriminator is present): style only matching segments, so
+      // it can coexist with Segment to Door / Window in the same flow without restyling them.
+      {
+        key: "applyTo",
+        label: "Apply to",
+        kind: "select",
+        options: [
+          { value: "any", label: "Any segment" },
+          { value: "wall", label: "Walls only" },
+          { value: "door", label: "Doors only" },
+          { value: "window", label: "Windows only" },
+        ],
+      },
+      {
+        key: "mode",
+        label: "Mode",
+        kind: "select",
+        options: [
+          { value: "line", label: "Line" },
+          { value: "buffered", label: "Buffered" },
+        ],
+      },
+      {
+        key: "lineStyle",
+        label: "Line Style",
+        kind: "select",
+        role: "wall-linestyle",
+        options: [
+          { value: "solid", label: "Solid" },
+          { value: "dashed", label: "Dashed" },
+          { value: "dotted", label: "Dotted" },
+        ],
+        showIf: (p) => p.mode !== "buffered",
+      },
+      { key: "color", label: "Color", kind: "color", role: "wall-color" },
+      // Arrow at the segment midpoint, pointing source → target — shown in both Line and Buffered modes.
+      { key: "showDirection", label: "Show Direction", kind: "checkbox", role: "show-direction" },
+      // Buffered mode — thickness (the full ribbon width, replaces the old Buffer radius) + cap style.
+      { key: "thickness", label: "Thickness", kind: "range", min: 0.02, max: 10, step: 0.02, unit: "m", role: "buffer-thickness", showIf: (p) => p.mode === "buffered" },
+      // Which side of the centerline the ribbon sits on: Center = symmetric; Left / Right = entirely on
+      // that side (inner edge on the centerline).
+      {
+        key: "justification",
+        label: "Justification",
+        kind: "select",
+        role: "wall-justification",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ],
+        showIf: (p) => p.mode === "buffered",
+      },
+      {
+        key: "bufferStyle",
+        label: "Buffer Style",
+        kind: "select",
+        options: [
+          { value: "capsule", label: "Capsule (round)" },
+          { value: "square", label: "Square (extended)" },
+          { value: "flat", label: "Flat (butt)" },
+        ],
+        showIf: (p) => p.mode === "buffered",
+      },
+      // Hatch — fill the buffered ribbon with a pattern instead of a solid colour (mirrors the Segment
+      // Display block's hatch in the canvas Properties tab). Buffered mode only (line has no fill area).
+      { key: "hatch", label: "Hatch", kind: "checkbox", role: "hatch", showIf: (p) => p.mode === "buffered" },
+      {
+        key: "hatchStyle",
+        label: "Hatch Style",
+        kind: "select",
+        role: "hatch-style",
+        options: [
+          { value: "diagonal", label: "Diagonal lines" },
+          { value: "dots", label: "Random dots" },
+        ],
+        showIf: (p) => p.mode === "buffered" && Boolean(p.hatch),
+      },
+      { key: "hatchSpacing", label: "Spacing", kind: "range", min: 3, max: 40, step: 1, unit: "px", role: "hatch-spacing", showIf: (p) => p.mode === "buffered" && Boolean(p.hatch) },
+      { key: "hatchAngle", label: "Angle", kind: "range", min: 0, max: 180, step: 1, unit: "°", role: "hatch-angle", showIf: (p) => p.mode === "buffered" && Boolean(p.hatch) && p.hatchStyle === "diagonal" },
+      { key: "hatchWeight", label: "Weight", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "px", showIf: (p) => p.mode === "buffered" && Boolean(p.hatch) },
+    ],
+    hint: "Display a segment — Line (restyle stroke + direction arrow) or Buffered (thicken to a Space by Thickness, with a buffer style + optional hatch fill). Buffered output feeds the Space pipeline.",
+  },
+  "display-node": {
+    type: "display-node",
+    label: "Display Node",
+    color: "#475569",
+    // Styling pass-through for nodes (points): draw the incoming node as a marker — shape, stroke style,
+    // colour, size and an optional diagonal/dots hatch fill — and thread it downstream unchanged. Mirrors
+    // the Node Display block in the canvas Properties tab.
+    // Schema-driven: wire a Schema into "gin-schema" (or attach one) and each node styles per its own
+    // schema values by role (node-shape / node-style / node-color / node-size / node-hatch…); node params
+    // are the fallback. Styling is per-node.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    // PILOT: a params OUTPUT endpoint (violet `pout`, right side) so this node's fields can be wired into
+    // an Input Schema node's params input to derive a Node schema from them.
+    exposesParams: true,
+    defaultParams: {
+      applyTo: "any",
+      shape: "dot",
+      style: "solid",
+      color: "#475569",
+      size: 1,
+      hatch: false,
+      hatchStyle: "diagonal",
+      spacing: 8,
+      angle: 45,
+      weight: 1,
+    },
+    fields: [
+      // Type self-filter (when a schema type discriminator is present): mark only matching nodes, so it
+      // can coexist with Node to Object without re-marking object nodes.
+      {
+        key: "applyTo",
+        label: "Apply to",
+        kind: "select",
+        options: [
+          { value: "any", label: "Any node" },
+          { value: "node", label: "Nodes only" },
+          { value: "object", label: "Objects only" },
+        ],
+      },
+      {
+        key: "shape",
+        label: "Shape",
+        kind: "select",
+        role: "node-shape",
+        options: [
+          { value: "dot", label: "Dot" },
+          { value: "circle", label: "Circle" },
+          { value: "square", label: "Square" },
+          { value: "triangle", label: "Triangle" },
+        ],
+      },
+      {
+        key: "style",
+        label: "Style",
+        kind: "select",
+        role: "node-style",
+        options: [
+          { value: "solid", label: "Solid" },
+          { value: "dashed", label: "Dashed" },
+          { value: "dotted", label: "Dotted" },
+        ],
+      },
+      { key: "color", label: "Color", kind: "color", role: "node-color" },
+      { key: "size", label: "Size", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "×", role: "node-size" },
+      { key: "hatch", label: "Hatch", kind: "checkbox", role: "node-hatch" },
+      {
+        key: "hatchStyle",
+        label: "Hatch Style",
+        kind: "select",
+        role: "node-hatch-style",
+        options: [
+          { value: "diagonal", label: "Diagonal lines" },
+          { value: "dots", label: "Random dots" },
+        ],
+        showIf: (p) => Boolean(p.hatch),
+      },
+      { key: "spacing", label: "Spacing", kind: "range", min: 3, max: 40, step: 1, unit: "px", role: "node-hatch-spacing", showIf: (p) => Boolean(p.hatch) },
+      { key: "angle", label: "Angle", kind: "range", min: 0, max: 180, step: 1, unit: "°", role: "node-hatch-angle", showIf: (p) => Boolean(p.hatch) && p.hatchStyle === "diagonal" },
+      { key: "weight", label: "Weight", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "px", showIf: (p) => Boolean(p.hatch) },
+    ],
+    hint: "Draw the input node as a marker — shape / style / colour / size / hatch (passes the node through).",
   },
   bua: {
     type: "bua",

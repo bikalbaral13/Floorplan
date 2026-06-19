@@ -1,13 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  AppWindow,
-  BrickWall,
   Circle as CircleIcon,
-  DoorOpen,
-  Plus,
   Shapes,
-  Slash,
   Sofa,
   Square,
 } from "lucide-react";
@@ -37,10 +32,6 @@ export interface ConstructionToolbarProps {
   onSelectedGenElementChange: (value: null) => void;
   shapesPopoverOpen: boolean;
   onShapesPopoverOpenChange: (value: boolean) => void;
-  /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
-  onAddWallClick: () => void;
-  /** True while the dialog-configured polyline wall draw mode is active. */
-  drawingWall: boolean;
 }
 
 /** Construction primitives — Door, Window, Furniture, Connection, Shapes — laid out
@@ -57,44 +48,9 @@ export const ConstructionToolbar = (p: ConstructionToolbarProps) => {
       />
       {open && (
         <div className="grid grid-cols-2 place-items-center gap-2 pt-1">
-          <ToolButton
-            active={p.addDoorMode}
-            icon={<DoorOpen className="h-6 w-6" />}
-            label="Door"
-            onClick={() => {
-              if (p.addDoorMode) {
-                p.onAddDoorModeChange(false);
-              } else {
-                p.onToolChange("select");
-                p.onAddDoorModeChange(true);
-                p.onAddWindowModeChange(false);
-                p.onAddEdgeModeChange(null);
-                p.onAddEdgeFirstRoomChange(null);
-                p.onAddRoomModeChange(false);
-                p.onSelectedGenElementChange(null);
-                toast.info("Set the door width, then click a wall segment to place it");
-              }
-            }}
-          />
-          <ToolButton
-            active={p.addWindowMode}
-            icon={<AppWindow className="h-6 w-6" />}
-            label="Window"
-            onClick={() => {
-              if (p.addWindowMode) {
-                p.onAddWindowModeChange(false);
-              } else {
-                p.onToolChange("select");
-                p.onAddWindowModeChange(true);
-                p.onAddDoorModeChange(false);
-                p.onAddEdgeModeChange(null);
-                p.onAddEdgeFirstRoomChange(null);
-                p.onAddRoomModeChange(false);
-                p.onSelectedGenElementChange(null);
-                toast.info("Set the window width, then click a wall segment to place it");
-              }
-            }}
-          />
+          {/* Door / Window / Connection / Wall moved to the Drawing toolbar's "Add Segment" dropdown —
+           *  they are openings, links and walls hosted on / drawn as segments, so they belong with
+           *  Segment / Path. Building tools now holds only Furniture. */}
           <ToolButton
             active={p.addFurnitureMode}
             icon={<Sofa className="h-6 w-6" />}
@@ -117,44 +73,6 @@ export const ConstructionToolbar = (p: ConstructionToolbarProps) => {
               }
             }}
           />
-          <ToolButton
-            active={p.addEdgeMode === "connection"}
-            icon={
-              <span className="relative inline-flex h-6 w-6 items-center justify-center">
-                <Slash className="h-6 w-6 text-green-600" />
-                <Plus className="absolute -right-0.5 -top-0.5 h-3 w-3 text-green-600" strokeWidth={3} />
-              </span>
-            }
-            label="Add Connection"
-            onClick={() => {
-              if (p.addEdgeMode === "connection") {
-                p.onAddEdgeModeChange(null);
-                p.onAddEdgeFirstRoomChange(null);
-              } else {
-                p.onToolChange("select");
-                p.onNextWallSegmentTypeChange("wall");
-                p.onAddEdgeModeChange("connection");
-                p.onAddEdgeFirstRoomChange(null);
-                p.onAddDoorModeChange(false);
-                p.onAddWindowModeChange(false);
-                p.onAddRoomModeChange(false);
-                p.onSelectedGenElementChange(null);
-                toast.info("Click two rooms to add a connection — press Esc to cancel");
-              }
-            }}
-          />
-          <ToolButton
-            active={p.drawingWall}
-            icon={
-              <span className="relative inline-flex h-6 w-6 items-center justify-center">
-                <BrickWall className="h-6 w-6 text-amber-600" />
-                <Plus className="absolute -right-0.5 -top-0.5 h-3 w-3 text-amber-600" strokeWidth={3} />
-              </span>
-            }
-            label="Add Wall"
-            onClick={p.onAddWallClick}
-          />
-          {/* Shapes popover moved to Drawing toolbar. */}
         </div>
       )}
     </div>

@@ -6,7 +6,8 @@
  * algorithms and return vertex lists. This is what makes the Flow DAG deterministic and
  * order-independent (function composition can't have feedback or stale-state bugs).
  */
-import type { Point, Wall } from "../../types";
+import type { Point, Wall, GridDef } from "../../types";
+import { gridCellValue } from "../../types";
 import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
 import { detectAutoRoomsFromWalls } from "../../algorithms/walls/detectAutoRooms";
 import { computeMiteredWallPolygons } from "../../wallGeometry";
@@ -28,7 +29,7 @@ import { computePolygonPrincipalAxes, type PrincipalAxesMethod } from "../../alg
 import { evaluateSpaceCondition } from "../conditional";
 import { computeBoundingCircle, computeBoundingEllipse, computeBoundingNGon } from "../../algorithms/geometry/boundingShapes";
 import { computeConvexHull } from "../../algorithms/partitioning/convexHull";
-import { parseSplitRatios, parseNumberList, placeObjectEntries, placeObjectRng } from "../flowTypes";
+import { parseSplitRatios, parseNumberList, placeObjectEntries, placeObjectRng, parseDimEdges } from "../flowTypes";
 import { computePerimeterPlacement } from "../../algorithms/placement/runPlacement";
 import { computeConvexDecomposition, type ConvexDecompositionType } from "../../algorithms/partitioning/convexDecomposition";
 import { computeSmoothedPolygon, type SmoothingType } from "../../algorithms/geometry/smoothPolygon";
@@ -45,6 +46,117 @@ import { computeInCircles } from "../../algorithms/layout/inCircles";
 import { computeVisibilityPolygon, sampleSegmentInside } from "../../algorithms/geometry/visibilityPolygon";
 
 const num = (v: unknown, d: number): number => (typeof v === "number" && isFinite(v) ? v : d);
+
+/** Door symbol from a wall segment (the door opening). `shape`:
+ *   • "polygon"  → fills the opening as a rectangle of `thickness` m (a solid leaf block);
+ *   • "arc"      → the swing arc + two lines (the open leaf + the closed-position line);
+ *   • "detailed" → the leaf as a thin panel + the swing arc, placed by `hinge` (which END) and `swing`
+ *                  (which side of the wall it opens).
+ * Returns filled polygons + open polylines, in world-pixel coords. */
+export function computeSegmentDoor(
+  seg: Point[],
+  params: Record<string, unknown>,
+  ppm: number,
+): { fill: Point[][]; lines: Point[][] } {
+  if (seg.length < 2) return { fill: [], lines: [] };
+  const A = seg[0], B = seg[seg.length - 1];
+  const dx = B.x - A.x, dy = B.y - A.y, w = Math.hypot(dx, dy);
+  if (w < 1e-6) return { fill: [], lines: [] };
+  const ux = dx / w, uy = dy / w;
+  const npx = -uy, npy = ux; // left-hand perpendicular to the wall
+  const shape = typeof params.shape === "string" ? params.shape : "arc";
+  const tPx = Math.max(0.005, num(params.thickness, 0.05)) * ppm;
+
+  if (shape === "polygon") {
+    const h = tPx / 2;
+    const rect: Point[] = [
+      { x: A.x + npx * h, y: A.y + npy * h },
+      { x: B.x + npx * h, y: B.y + npy * h },
+      { x: B.x - npx * h, y: B.y - npy * h },
+      { x: A.x - npx * h, y: A.y - npy * h },
+    ];
+    return { fill: [rect], lines: [] };
+  }
+
+  // Hinge at one END; the door swings to one SIDE of the wall.
+  const hingeRight = params.hinge === "right";
+  const swingRight = params.swing === "right";
+  const H = hingeRight ? B : A;          // hinge point
+  const latch = hingeRight ? A : B;      // free (latch) end — closed leaf lies here
+  const sgn = swingRight ? -1 : 1;
+  const sx = npx * sgn, sy = npy * sgn;  // perpendicular in the swing direction
+  const openEnd: Point = { x: H.x + sx * w, y: H.y + sy * w }; // leaf tip when fully open
+  const leaf: Point[] = [H, openEnd];
+
+  // Swing arc: centre H, radius w, sweeping the short (90°) way from closed → open.
+  const a0 = Math.atan2(latch.y - H.y, latch.x - H.x);
+  const a1 = Math.atan2(openEnd.y - H.y, openEnd.x - H.x);
+  let da = a1 - a0;
+  while (da > Math.PI) da -= 2 * Math.PI;
+  while (da < -Math.PI) da += 2 * Math.PI;
+  const N = 18;
+  const arc: Point[] = [];
+  for (let i = 0; i <= N; i++) {
+    const a = a0 + (da * i) / N;
+    arc.push({ x: H.x + w * Math.cos(a), y: H.y + w * Math.sin(a) });
+  }
+
+  if (shape === "detailed") {
+    // Leaf as a thin panel (rectangle) along the open leaf, plus the swing arc.
+    const h = tPx / 2;
+    const ppx = -sy, ppy = sx;           // perpendicular to the (unit) leaf direction (sx,sy)
+    const panel: Point[] = [
+      { x: H.x + ppx * h, y: H.y + ppy * h },
+      { x: openEnd.x + ppx * h, y: openEnd.y + ppy * h },
+      { x: openEnd.x - ppx * h, y: openEnd.y - ppy * h },
+      { x: H.x - ppx * h, y: H.y - ppy * h },
+    ];
+    return { fill: [panel], lines: [arc] };
+  }
+
+  // "arc": a simple swing arc + two lines (the open leaf and the closed-position line along the wall).
+  return { fill: [], lines: [leaf, [H, latch], arc] };
+}
+
+/** Window symbol from a wall segment (the window opening). `shape`:
+ *   • "polygon"  → fills the opening as a rectangle of `thickness` m (a solid frame block);
+ *   • "lines"    → the classic window: the two frame edges + a centre glass line + jamb caps;
+ *   • "detailed" → a frame rectangle + centre glass line + (panes − 1) mullion dividers.
+ * Returns filled polygons + open polylines, in world-pixel coords. */
+export function computeSegmentWindow(
+  seg: Point[],
+  params: Record<string, unknown>,
+  ppm: number,
+): { fill: Point[][]; lines: Point[][] } {
+  if (seg.length < 2) return { fill: [], lines: [] };
+  const A = seg[0], B = seg[seg.length - 1];
+  const dx = B.x - A.x, dy = B.y - A.y, w = Math.hypot(dx, dy);
+  if (w < 1e-6) return { fill: [], lines: [] };
+  const ux = dx / w, uy = dy / w;
+  const npx = -uy, npy = ux; // left-hand perpendicular to the wall
+  const shape = typeof params.shape === "string" ? params.shape : "lines";
+  const h = Math.max(0.01, num(params.thickness, 0.1)) * ppm / 2;
+  // Frame rectangle corners (opening width × wall thickness).
+  const tA: Point = { x: A.x + npx * h, y: A.y + npy * h }, tB: Point = { x: B.x + npx * h, y: B.y + npy * h };
+  const bA: Point = { x: A.x - npx * h, y: A.y - npy * h }, bB: Point = { x: B.x - npx * h, y: B.y - npy * h };
+  const rect: Point[] = [tA, tB, bB, bA];
+  const centre: Point[] = [A, B];
+
+  if (shape === "polygon") return { fill: [rect], lines: [] };
+  if (shape === "lines") {
+    // Two frame edges + centre glass line + jamb caps at each end.
+    return { fill: [], lines: [[tA, tB], [bA, bB], centre, [tA, bA], [tB, bB]] };
+  }
+  // "detailed": frame rectangle + centre glass + evenly-spaced mullion dividers.
+  const panes = Math.max(1, Math.round(num(params.panes, 2)));
+  const lines: Point[][] = [centre];
+  for (let i = 1; i < panes; i++) {
+    const t = i / panes;
+    const cx = A.x + (B.x - A.x) * t, cy = A.y + (B.y - A.y) * t;
+    lines.push([{ x: cx + npx * h, y: cy + npy * h }, { x: cx - npx * h, y: cy - npy * h }]);
+  }
+  return { fill: [rect], lines };
+}
 
 /** Space Creator (generator): synthesise a polygon from parameters — shape (rectangle / regular polygon /
  *  circle / L-shape), dimensions (metres), rotation, and a regular/irregular toggle. "Irregular" jitters
@@ -481,24 +593,1132 @@ export function evalShowDirection(polylines: Point[][], params: Record<string, u
   return arrows;
 }
 
-export function evalMiteredJoin(polylines: Point[][], params: Record<string, unknown>, ppm: number): Point[][] {
-  const widthPx = Math.max(0.02, num(params.width, 2)) * ppm;
+/** Result of the Dimension node: open polylines (witness lines, dimension lines, ticks) plus positioned
+ *  text labels (rotation in degrees — 0 for horizontal sides, -90 for vertical so the text reads up the
+ *  page). Geometry is in world-pixel coords; label `text` is preformatted (metric or feet-inches). */
+export interface DimensionResult {
+  lines: Point[][];
+  labels: { x: number; y: number; text: string; rotation: number }[];
+  /** Filled marker dots (style "dot") at each dimension-line end. */
+  dots?: { x: number; y: number; r: number }[];
+}
+
+const DIM_FRAC_8 = ["", "⅛", "¼", "⅜", "½", "⅝", "¾", "⅞"]; // eighths → unicode fraction
+
+/** Format a length (metres) as architectural feet-inches to the nearest 1/8" — e.g. 3.49 → `11'-5½"`. */
+function formatFeetInches(meters: number): string {
+  let eighths = Math.round(meters * 39.3700787 * 8); // total eighth-inches
+  const sign = eighths < 0 ? "-" : "";
+  eighths = Math.abs(eighths);
+  const feet = Math.floor(eighths / 96); // 96 eighths = 12"
+  const remEighths = eighths - feet * 96;
+  const inches = Math.floor(remEighths / 8);
+  const frac = DIM_FRAC_8[remEighths - inches * 8];
+  return `${sign}${feet}'-${inches}${frac}"`;
+}
+
+/** Dimension (Space node): dimension the EDGES of each incoming Space polygon. Every edge (mode "all") or
+ *  only the ticked edges (mode "edgewise" via `params.edges`) gets its own length dimension — a dimension
+ *  line parallel to the edge, offset OUTSIDE (params.outer) or inside by `offset`, with witness lines from
+ *  the edge corners, 45° ticks, and the metric / feet-inches length label. The Space is forwarded on. */
+export function evalDimensions(polygons: Point[][], params: Record<string, unknown>, ppm: number): DimensionResult {
+  const lines: Point[][] = [];
+  const labels: { x: number; y: number; text: string; rotation: number }[] = [];
+  const dots: { x: number; y: number; r: number }[] = [];
+
+  const offsetPx = Math.max(0, num(params.offset, 1)) * ppm;
+  const extPx = Math.max(0, num(params.extension, 0.3)) * ppm;
+  const tickPx = Math.max(4, 0.12 * ppm);
+  const precision = Math.max(0, Math.min(4, Math.round(num(params.precision, 2))));
+  const imperial = params.units === "imperial";
+  const fmt = (m: number) => (imperial ? formatFeetInches(m) : `${m.toFixed(precision)} m`);
+  const outer = params.outer !== false; // default: place outside the space
+  const edgewise = params.mode === "edgewise";
+  const selected = new Set(parseDimEdges(params.edges));
+  // End-marker style at each dimension-line end: 45° tick (default), arrowhead, or filled dot.
+  const style = params.style === "arrowhead" ? "arrowhead" : params.style === "dot" ? "dot" : "ticks";
+  /** Draw the chosen marker at end `c`; `dirX/dirY` = OUTWARD unit direction along the dim line (the way
+   *  an arrowhead points). */
+  const endMarker = (c: Point, dirX: number, dirY: number) => {
+    if (style === "dot") { dots.push({ x: c.x, y: c.y, r: tickPx * 0.32 }); return; }
+    if (style === "arrowhead") {
+      const L = tickPx, w = tickPx * 0.42;
+      const bx = -dirX, by = -dirY;       // back along the line
+      const px = -dirY, py = dirX;         // perpendicular
+      lines.push([
+        { x: c.x + bx * L + px * w, y: c.y + by * L + py * w },
+        { x: c.x, y: c.y },
+        { x: c.x + bx * L - px * w, y: c.y + by * L - py * w },
+      ]);
+      return;
+    }
+    // ticks: 45° cross through the end point.
+    lines.push([{ x: c.x - tickPx * 0.5, y: c.y - tickPx * 0.5 }, { x: c.x + tickPx * 0.5, y: c.y + tickPx * 0.5 }]);
+  };
+
+  for (const poly of polygons) {
+    if (poly.length < 3) continue;
+    // Signed area → orientation + centroid (used to point the offset normal away from / into the space).
+    let area2 = 0, cxA = 0, cyA = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const cr = a.x * b.y - b.x * a.y; area2 += cr; cxA += (a.x + b.x) * cr; cyA += (a.y + b.y) * cr;
+    }
+    const centroid = Math.abs(area2) > 1e-6
+      ? { x: cxA / (3 * area2), y: cyA / (3 * area2) }
+      : { x: poly.reduce((s, p) => s + p.x, 0) / poly.length, y: poly.reduce((s, p) => s + p.y, 0) / poly.length };
+
+    for (let i = 0; i < poly.length; i++) {
+      if (edgewise && !selected.has(i)) continue;
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      const ux = dx / len, uy = dy / len;
+      // Outward unit normal (away from the centroid); flip for inner placement.
+      let nx = -uy, ny = ux;
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      if ((centroid.x - mx) * nx + (centroid.y - my) * ny > 0) { nx = -nx; ny = -ny; }
+      const ox = (outer ? nx : -nx), oy = (outer ? ny : -ny);
+      const da = { x: a.x + ox * offsetPx, y: a.y + oy * offsetPx };
+      const db = { x: b.x + ox * offsetPx, y: b.y + oy * offsetPx };
+      // Dimension line + witness lines (corner → just past the dim line) + end markers (per style).
+      lines.push([da, db]);
+      lines.push([{ ...a }, { x: da.x + ox * extPx, y: da.y + oy * extPx }]);
+      lines.push([{ ...b }, { x: db.x + ox * extPx, y: db.y + oy * extPx }]);
+      // Arrowheads point OUTWARD along the dim line at each end (−u at the start, +u at the end).
+      endMarker(da, -ux, -uy);
+      endMarker(db, ux, uy);
+      // Length label at the dim-line midpoint, nudged outward, rotated to the edge (kept upright).
+      let rot = Math.atan2(dy, dx) * 180 / Math.PI;
+      if (rot > 90 || rot < -90) rot += 180;
+      labels.push({ x: (da.x + db.x) / 2 + ox * tickPx * 1.2, y: (da.y + db.y) / 2 + oy * tickPx * 1.2, text: fmt(len / ppm), rotation: rot });
+    }
+  }
+
+  return { lines, labels, dots: dots.length ? dots : undefined };
+}
+
+/** A grid field: an m×n lattice (cols × rows cells) with a per-cell classification + scalar value. Flows
+ *  between grid nodes (Graph to Grid → Grid Distance → …) as a typed field payload. */
+export interface GridField {
+  cols: number; rows: number;
+  minX: number; minY: number; cellW: number; cellH: number;
+  /** Per cell (index = i*rows + j): 0 = empty, 1 = segment, 2 = node. */
+  kind: number[];
+  /** Per-cell scalar value (classification value from Graph to Grid; distance from Grid Distance; …). */
+  values: number[];
+  /** Per-cell D8 flow-direction code (index = i*rows + j): 0..7 = the receiver neighbour (E,SE,S,SW,W,
+   *  NW,N,NE), -1 = no downslope receiver (sink / off-grid outlet). Set by Flow Direction; consumed by
+   *  Flow Accumulation / Watershed. Absent on fields that don't carry directions. */
+  dir?: number[];
+  /** Per-cell elevation, captured by Fill Depressions / Flow Direction and passed through downstream so
+   *  nodes like Watershed can still read the DEM after `values` has been overwritten (e.g. by Flow
+   *  Accumulation). Absent on non-DEM fields. */
+  elev?: number[];
+}
+
+/** D8 neighbour offsets in receiver-code order (matches GridField.dir). +y is screen-down. Even codes are
+ *  orthogonal (step 1), odd codes diagonal (step √2). */
+export const D8_DIRS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1],
+];
+
+/** Build a downstream grid-field from a construction GridDef so a Grid (grid-source) node can feed the
+ *  grid pipeline (Grid Threshold, Grid Distance, …). Every cell is classified as occupied (kind = 1) and
+ *  carries its "Range of values" scalar (cells with no generated value default to 0). */
+export function gridDefToField(g: GridDef): GridField {
+  const cols = Math.max(1, g.cols), rows = Math.max(1, g.rows);
+  const kind: number[] = new Array(cols * rows).fill(1);
+  const values: number[] = new Array(cols * rows).fill(0);
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const v = gridCellValue(g, j * cols + i); // row-major ordinal, matching canvas render
+    values[i * rows + j] = v == null ? 0 : v;
+  }
+  return { cols, rows, minX: g.x, minY: g.y, cellW: g.cellW, cellH: g.cellH, kind, values };
+}
+
+export interface GridResult {
+  segments: Point[][];
+  nodes: { x: number; y: number }[];
+  /** Cell-occupancy fills (only when params.colorCells) — node/segment-classified cells with value+colour. */
+  cells?: { poly: Point[]; color: string; value: number }[];
+  /** The grid as a field (cells + classification + value) — consumed by downstream grid nodes. */
+  field?: GridField;
+}
+
+/** Parse "#rrggbb" → {r,g,b}; fallback on bad input. */
+const parseHex = (s: unknown, fallback: string): { r: number; g: number; b: number } => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(typeof s === "string" ? s : "");
+  const hex = m ? m[1] : fallback.replace("#", "");
+  return { r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16) };
+};
+/** Linear blend of two hex colours at t∈[0,1] → "#rrggbb". */
+const hexLerp = (a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }, t: number): string => {
+  const u = Math.max(0, Math.min(1, t));
+  const c = (x: number, y: number) => Math.round(x + (y - x) * u).toString(16).padStart(2, "0");
+  return `#${c(a.r, b.r)}${c(a.g, b.g)}${c(a.b, b.b)}`;
+};
+
+/** Liang–Barsky: does segment a→b intersect the axis-aligned box [x0,x1]×[y0,y1]? */
+const segHitsRect = (a: Point, b: Point, x0: number, y0: number, x1: number, y1: number): boolean => {
+  let t0 = 0, t1 = 1;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const clip = (p: number, q: number): boolean => {
+    if (p === 0) return q >= 0;
+    const r = q / p;
+    if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+    else { if (r < t0) return false; if (r < t1) t1 = r; }
+    return true;
+  };
+  return clip(-dx, a.x - x0) && clip(dx, x1 - a.x) && clip(-dy, a.y - y0) && clip(dy, y1 - a.y) && t0 <= t1;
+};
+
+/** Graph to Grid: lay an m × n lattice over the input geometry's bounding box. Returns the grid as a
+ *  list of unit segments (one per edge between adjacent intersections — a grid graph) plus the
+ *  intersection node points. `m`/`n` are the column/row divisions → (m+1)×(n+1) nodes. */
+export function evalGraphToGrid(polylines: Point[][], params: Record<string, unknown>): GridResult {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
+  for (const pl of polylines) for (const p of pl) {
+    if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+    any = true;
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  if (!any || maxX - minX < 1e-6 || maxY - minY < 1e-6) return { segments: [], nodes: [] };
+  const m = Math.max(1, Math.min(100, Math.round(num(params.m, 4))));
+  const n = Math.max(1, Math.min(100, Math.round(num(params.n, 3))));
+  const dx = (maxX - minX) / m, dy = (maxY - minY) / n;
+  const at = (i: number, j: number) => ({ x: minX + i * dx, y: minY + j * dy });
+  const nodes: { x: number; y: number }[] = [];
+  for (let i = 0; i <= m; i++) for (let j = 0; j <= n; j++) nodes.push(at(i, j));
+  const segments: Point[][] = [];
+  for (let j = 0; j <= n; j++) for (let i = 0; i < m; i++) segments.push([at(i, j), at(i + 1, j)]); // horizontals
+  for (let i = 0; i <= m; i++) for (let j = 0; j < n; j++) segments.push([at(i, j), at(i, j + 1)]); // verticals
+
+  // Classify every cell into the field: a graph vertex (node) takes precedence, else an edge passing
+  // through (segment), else empty. The field always flows downstream; the coloured render-cells are
+  // built from it only when params.colorCells is on.
+  const nodeVal = num(params.nodeCellValue, 1), segVal = num(params.segmentCellValue, 0.5);
+  const verts: Point[] = [];
+  const edges: [Point, Point][] = [];
+  for (const pl of polylines) {
+    for (const p of pl) if (p && isFinite(p.x) && isFinite(p.y)) verts.push(p);
+    for (let k = 0; k + 1 < pl.length; k++) edges.push([pl[k], pl[k + 1]]);
+  }
+  const eps = Math.min(dx, dy) * 1e-6;
+  const kind = new Array(m * n).fill(0);
+  const values = new Array(m * n).fill(0);
+  for (let i = 0; i < m; i++) for (let j = 0; j < n; j++) {
+    const x0 = minX + i * dx, x1 = minX + (i + 1) * dx, y0 = minY + j * dy, y1 = minY + (j + 1) * dy;
+    const hasNode = verts.some((v) => v.x >= x0 - eps && v.x <= x1 + eps && v.y >= y0 - eps && v.y <= y1 + eps);
+    const hasSeg = hasNode || edges.some(([a, b]) => segHitsRect(a, b, x0, y0, x1, y1));
+    const k = hasNode ? 2 : hasSeg ? 1 : 0;
+    kind[i * n + j] = k;
+    values[i * n + j] = k === 2 ? nodeVal : k === 1 ? segVal : 0;
+  }
+  const field: GridField = { cols: m, rows: n, minX, minY, cellW: dx, cellH: dy, kind, values };
+
+  let cells: GridResult["cells"];
+  if (params.colorCells === true) {
+    const nodeColor = typeof params.nodeCellColor === "string" ? params.nodeCellColor : "#ef4444";
+    const segColor = typeof params.segmentCellColor === "string" ? params.segmentCellColor : "#3b82f6";
+    cells = [];
+    for (let i = 0; i < m; i++) for (let j = 0; j < n; j++) {
+      const k = kind[i * n + j];
+      if (k === 0) continue;
+      const x0 = minX + i * dx, y0 = minY + j * dy;
+      const poly = [{ x: x0, y: y0 }, { x: x0 + dx, y: y0 }, { x: x0 + dx, y: y0 + dy }, { x: x0, y: y0 + dy }];
+      cells.push(k === 2 ? { poly, color: nodeColor, value: nodeVal } : { poly, color: segColor, value: segVal });
+    }
+  }
+  return { segments, nodes, cells, field };
+}
+
+/** Grid Distance: recolour a grid field by each cell's distance to the nearest occupied (node/segment)
+ *  cell — multi-source BFS for manhattan (4-nbr) / chebyshev (8-nbr), brute nearest for euclidean.
+ *  Returns the distance field (values = distances) + render cells coloured along a low→high ramp. */
+export function evalGridDistance(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const { cols, rows, minX, minY, cellW, cellH, kind } = inField;
+  const from = params.from === "node" ? "node" : params.from === "segment" ? "segment" : "any";
+  const isSrc = (k: number) => (from === "node" ? k === 2 : from === "segment" ? k === 1 : k >= 1);
+  const metric = params.metric === "chebyshev" ? "chebyshev" : params.metric === "euclidean" ? "euclidean" : "manhattan";
+  const idx = (i: number, j: number) => i * rows + j;
+  const dist = new Array(cols * rows).fill(Infinity);
+  const srcs: [number, number][] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) if (isSrc(kind[idx(i, j)])) srcs.push([i, j]);
+
+  if (metric === "euclidean") {
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      let best = Infinity;
+      for (const [si, sj] of srcs) { const d = Math.hypot(i - si, j - sj); if (d < best) best = d; }
+      dist[idx(i, j)] = best;
+    }
+  } else {
+    const dirs = metric === "chebyshev"
+      ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]
+      : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const q: [number, number][] = [];
+    for (const [si, sj] of srcs) { dist[idx(si, sj)] = 0; q.push([si, sj]); }
+    let head = 0;
+    while (head < q.length) {
+      const [ci, cj] = q[head++];
+      const cd = dist[idx(ci, cj)];
+      for (const [di, dj] of dirs) {
+        const ni = ci + di, nj = cj + dj;
+        if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+        if (dist[idx(ni, nj)] > cd + 1) { dist[idx(ni, nj)] = cd + 1; q.push([ni, nj]); }
+      }
+    }
+  }
+
+  let maxD = 0;
+  for (const d of dist) if (isFinite(d) && d > maxD) maxD = d;
+  const normalize = params.normalize !== false;
+  const low = parseHex(params.lowColor, "#1e3a8a"), high = parseHex(params.highColor, "#ef4444");
+  const values = new Array(cols * rows).fill(0);
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const d = dist[idx(i, j)];
+    const dv = isFinite(d) ? d : maxD;
+    values[idx(i, j)] = dv;
+    const t = maxD > 0 ? dv / maxD : 0;
+    const x0 = minX + i * cellW, y0 = minY + j * cellH;
+    const poly = [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }];
+    cells.push({ poly, color: hexLerp(low, high, t), value: normalize ? Math.round(t * 100) / 100 : Math.round(dv) });
+  }
+  return { field: { ...inField, values }, cells };
+}
+
+/** Grid Field: generate a synthetic elevation field over an incoming lattice — a directional ramp
+ *  (top→bottom / bottom→top / left→right / right→left / radial) between `high` and `low`, plus a
+ *  deterministic per-cell random jitter (stable across renders). Optionally incises occupied cells
+ *  (kind ≥ 1, e.g. river segments from Graph to Grid) by `inciseDepth` so channels sit lower. Writes both
+ *  `values` and `elev`, ready for Fill Depressions. */
+export function evalGridField(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const { cols, rows, minX, minY, cellW, cellH, kind } = inField;
+  const N = cols * rows;
+  const idx = (i: number, j: number) => i * rows + j;
+  const dir = typeof params.direction === "string" ? params.direction : "top-bottom";
+  const high = num(params.high, 100), low = num(params.low, 0);
+  const randomness = Math.max(0, Math.min(1, num(params.randomness, 0.2)));
+  const seed = Math.round(num(params.seed, 1));
+  const incise = params.inciseOccupied === true;
+  const inciseDepth = num(params.inciseDepth, 0);
+  const range = high - low;
+  const denomC = Math.max(1, cols - 1), denomR = Math.max(1, rows - 1);
+  const cx = (cols - 1) / 2, cy = (rows - 1) / 2, maxR = Math.max(1e-6, Math.hypot(cx, cy));
+  const hash01 = (c: number): number => {
+    let h = ((c + 1) * 2654435761 + seed * 40503) >>> 0;
+    h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h ^= h >>> 13;
+    return (h >>> 0) / 4294967296;
+  };
+
+  const values = new Array<number>(N);
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    let t: number; // 0 → high end, 1 → low end
+    switch (dir) {
+      case "bottom-top": t = 1 - j / denomR; break;
+      case "left-right": t = i / denomC; break;
+      case "right-left": t = 1 - i / denomC; break;
+      case "radial": t = Math.hypot(i - cx, j - cy) / maxR; break;
+      case "top-bottom": default: t = j / denomR; break;
+    }
+    let v = high - t * range; // lerp(high, low, t)
+    v += (hash01(idx(i, j)) * 2 - 1) * randomness * Math.abs(range) * 0.5; // ± jitter
+    const lo = Math.min(high, low), hi = Math.max(high, low);
+    v = Math.min(hi, Math.max(lo, v));
+    if (incise && kind[idx(i, j)] >= 1) v -= inciseDepth; // carve channels below the surface
+    values[idx(i, j)] = v;
+  }
+
+  let lo = Infinity, hi = -Infinity;
+  for (const v of values) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const span = hi - lo || 1;
+  const lowC = parseHex(params.lowColor, "#1e3a8a"), highC = parseHex(params.highColor, "#ef4444");
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j), x0 = minX + i * cellW, y0 = minY + j * cellH;
+    cells.push({ poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }], color: hexLerp(lowC, highC, (values[c] - lo) / span), value: Math.round(values[c] * 100) / 100 });
+  }
+  return { field: { ...inField, values, elev: values.slice() }, cells };
+}
+
+/** Laplace Solver: solve ∇²φ = 0 over the lattice by iterative relaxation (Jacobi / Gauss-Seidel / SOR),
+ *  producing a smooth harmonic potential field. Dirichlet boundaries are pinned from the grid edges
+ *  (top→bottom battery, all borders, or left→right) and/or occupied cells (kind ≥ 1, e.g. rivers) held at
+ *  `highValue`; free cells relax to the neighbour average; off-grid edges are zero-flux (Neumann). Feed the
+ *  φ field into Marching Squares for equipotentials. */
+export function evalLaplaceSolver(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const { cols, rows, minX, minY, cellW, cellH, kind } = inField;
+  const N = cols * rows;
+  const idx = (i: number, j: number) => i * rows + j;
+  const method = params.method === "jacobi" ? "jacobi" : params.method === "gauss-seidel" ? "gauss-seidel" : "sor";
+  const maxIter = Math.max(1, Math.min(5000, Math.round(num(params.iterations, 300))));
+  const tol = Math.max(0, num(params.tolerance, 1e-3));
+  const omega = method === "sor" ? Math.max(1, Math.min(1.99, num(params.omega, 1.8))) : 1;
+  const highV = num(params.highValue, 1), lowV = num(params.lowValue, 0);
+  const pinOccupied = params.pinOccupied === true;
+  const pinEdges = typeof params.pinEdges === "string" ? params.pinEdges : "top-bottom";
+
+  // Assign fixed (Dirichlet) cells + seed free cells at the midpoint for faster convergence.
+  const fixed = new Uint8Array(N);
+  const phi = new Float64Array(N);
+  const mid = (highV + lowV) / 2;
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j); let f = false, val = mid;
+    if (pinEdges === "top-bottom") { if (j === 0) { f = true; val = highV; } else if (j === rows - 1) { f = true; val = lowV; } }
+    else if (pinEdges === "all") { if (i === 0 || j === 0 || i === cols - 1 || j === rows - 1) { f = true; val = lowV; } }
+    else if (pinEdges === "left-right") { if (i === 0) { f = true; val = highV; } else if (i === cols - 1) { f = true; val = lowV; } }
+    if (pinOccupied && kind[c] >= 1) { f = true; val = highV; } // occupied cells = sources (override)
+    fixed[c] = f ? 1 : 0; phi[c] = val;
+  }
+
+  const at = (a: Float64Array, i: number, j: number): number => a[idx(i < 0 ? 0 : i >= cols ? cols - 1 : i, j < 0 ? 0 : j >= rows ? rows - 1 : j)]; // clamp = zero-flux
+  const jacobiBuf = method === "jacobi" ? new Float64Array(N) : null;
+  for (let it = 0; it < maxIter; it++) {
+    let maxDelta = 0;
+    const read = phi;
+    if (jacobiBuf) jacobiBuf.set(phi);
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const c = idx(i, j); if (fixed[c]) continue;
+      const avg = 0.25 * (at(read, i + 1, j) + at(read, i - 1, j) + at(read, i, j + 1) + at(read, i, j - 1));
+      const newV = jacobiBuf ? avg : read[c] + omega * (avg - read[c]); // omega = 1 → Gauss-Seidel
+      const d = Math.abs(newV - read[c]); if (d > maxDelta) maxDelta = d;
+      (jacobiBuf ?? phi)[c] = newV;
+    }
+    if (jacobiBuf) phi.set(jacobiBuf);
+    if (maxDelta < tol) break;
+  }
+
+  let lo = Infinity, hi = -Infinity;
+  for (let c = 0; c < N; c++) { if (phi[c] < lo) lo = phi[c]; if (phi[c] > hi) hi = phi[c]; }
+  const span = hi - lo || 1;
+  const lowC = parseHex(params.lowColor, "#1e3a8a"), highC = parseHex(params.highColor, "#ef4444");
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j), x0 = minX + i * cellW, y0 = minY + j * cellH;
+    cells.push({ poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }], color: hexLerp(lowC, highC, (phi[c] - lo) / span), value: Math.round(phi[c] * 1000) / 1000 });
+  }
+  return { field: { ...inField, values: Array.from(phi) }, cells };
+}
+
+/** Fill Depressions: hydrologically condition a DEM grid-field so every cell drains to the boundary —
+ *  Priority-Flood (Barnes et al. 2014). Pits/sinks are raised to their spill elevation; with `epsilon` > 0
+ *  it becomes Priority-Flood+Epsilon, forcing a tiny monotone gradient across flats so flow direction is
+ *  well-defined everywhere. `values` are treated as elevations. Returns the filled field + render cells
+ *  (elevation heatmap, or only the raised cells when `highlightFilled`). */
+export function evalFillDepressions(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const { cols, rows, minX, minY, cellW, cellH } = inField;
+  const N = cols * rows;
+  const elev = inField.values;
+  const eps = Math.max(0, num(params.epsilon, 0));
+  const edgesOutlets = params.edgesAreOutlets !== false;
+  const idx = (i: number, j: number) => i * rows + j;
+  const filled = new Float64Array(N);
+  const closed = new Uint8Array(N);
+
+  // Binary min-heap of cell indices, ordered by their assigned (filled) elevation.
+  const heap: number[] = [];
+  const less = (a: number, b: number) => filled[a] < filled[b];
+  const hpush = (c: number) => {
+    heap.push(c);
+    let k = heap.length - 1;
+    while (k > 0) { const p = (k - 1) >> 1; if (less(heap[k], heap[p])) { [heap[k], heap[p]] = [heap[p], heap[k]]; k = p; } else break; }
+  };
+  const hpop = (): number => {
+    const top = heap[0]; const last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last; let k = 0; const n = heap.length;
+      for (;;) { let s = k; const l = 2 * k + 1, r = 2 * k + 2; if (l < n && less(heap[l], heap[s])) s = l; if (r < n && less(heap[r], heap[s])) s = r; if (s === k) break; [heap[k], heap[s]] = [heap[s], heap[k]]; k = s; }
+    }
+    return top;
+  };
+  const pit: number[] = []; let pitHead = 0; // FIFO for flat/pit interiors (preserves monotone routing)
+
+  // Seed outlets: the grid border drains off-grid (standard), or — when borders aren't outlets — the
+  // single lowest cell acts as the sole drain (a closed basin).
+  if (edgesOutlets) {
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      if (i === 0 || j === 0 || i === cols - 1 || j === rows - 1) { const c = idx(i, j); filled[c] = elev[c]; closed[c] = 1; hpush(c); }
+    }
+  } else {
+    let lo = 0; for (let c = 1; c < N; c++) if (elev[c] < elev[lo]) lo = c;
+    filled[lo] = elev[lo]; closed[lo] = 1; hpush(lo);
+  }
+
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  while (pitHead < pit.length || heap.length) {
+    const c = pitHead < pit.length ? pit[pitHead++] : hpop();
+    const ci = Math.floor(c / rows), cj = c % rows;
+    for (const [di, dj] of dirs) {
+      const ni = ci + di, nj = cj + dj;
+      if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+      const n = idx(ni, nj);
+      if (closed[n]) continue;
+      closed[n] = 1;
+      if (elev[n] <= filled[c] + eps) { filled[n] = filled[c] + eps; pit.push(n); } // pit / flat → raise to spill (+ε)
+      else { filled[n] = elev[n]; hpush(n); }
+    }
+  }
+
+  let lo = Infinity, hi = -Infinity;
+  for (let c = 0; c < N; c++) { if (filled[c] < lo) lo = filled[c]; if (filled[c] > hi) hi = filled[c]; }
+  const span = hi - lo || 1;
+  const lowCol = parseHex(params.lowColor, "#1e3a8a"), highCol = parseHex(params.highColor, "#ef4444");
+  const highlight = params.highlightFilled === true;
+  const fillCol = typeof params.fillColor === "string" ? params.fillColor : "#0ea5e9";
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j);
+    const raised = filled[c] - elev[c] > 1e-9;
+    if (highlight && !raised) continue;
+    const x0 = minX + i * cellW, y0 = minY + j * cellH;
+    const poly = [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }];
+    const color = highlight ? fillCol : hexLerp(lowCol, highCol, (filled[c] - lo) / span);
+    const value = highlight ? Math.round((filled[c] - elev[c]) * 100) / 100 : Math.round(filled[c] * 100) / 100;
+    cells.push({ poly, color, value });
+  }
+  const filledArr = Array.from(filled);
+  return { field: { ...inField, values: filledArr, elev: filledArr }, cells };
+}
+
+/** Per-direction hue (D8 receiver code → colour) for the Flow Direction cell overlay. */
+const DIR_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899"];
+
+/** Flow Direction: for each cell pick the receiver neighbour by steepest descent (D8), encoding it as a
+ *  0..7 code (-1 = sink / off-grid outlet) in the field's `dir` channel. `values` (elevations) pass
+ *  through. Rho8 breaks ties / picks among downslope neighbours via a deterministic per-cell hash (stable
+ *  across renders). Returns the dir-carrying field + arrow segments + optional direction-hue cells. */
+export function evalFlowDirection(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[]; segments: Point[][] } {
+  const { cols, rows, minX, minY, cellW, cellH } = inField;
+  const N = cols * rows;
+  const elev = inField.values;
+  const method = params.method === "rho8" ? "rho8" : "d8";
+  const idx = (i: number, j: number) => i * rows + j;
+  const dir = new Array<number>(N).fill(-1);
+  const SQRT2 = Math.SQRT2;
+
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j);
+    const ec = elev[c];
+    let best = -1, bestSlope = 0;
+    // Candidate downslope neighbours (slope > 0) — for Rho8 we collect them and pick by weighted hash.
+    const cand: number[] = [], wts: number[] = [];
+    for (let k = 0; k < 8; k++) {
+      const ni = i + D8_DIRS[k][0], nj = j + D8_DIRS[k][1];
+      if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+      const drop = ec - elev[idx(ni, nj)];
+      if (drop <= 0) continue;
+      const slope = drop / (k % 2 === 0 ? 1 : SQRT2);
+      if (method === "d8") { if (slope > bestSlope) { bestSlope = slope; best = k; } }
+      else { cand.push(k); wts.push(slope); }
+    }
+    if (method === "rho8" && cand.length) {
+      const total = wts.reduce((s, w) => s + w, 0);
+      // Deterministic hash of the cell index → [0,1), used to draw a weighted choice.
+      let h = ((c + 1) * 2654435761) >>> 0; h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h ^= h >>> 13;
+      let r = ((h >>> 0) / 4294967296) * total;
+      best = cand[cand.length - 1];
+      for (let t = 0; t < cand.length; t++) { r -= wts[t]; if (r <= 0) { best = cand[t]; break; } }
+    }
+    dir[c] = best;
+  }
+
+  const showArrows = params.showArrows !== false;
+  const colorCells = params.colorByDirection === true;
+  const segments: Point[][] = [];
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  const L = Math.min(cellW, cellH) * 0.32, head = Math.min(cellW, cellH) * 0.16;
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j), k = dir[c];
+    const cx = minX + (i + 0.5) * cellW, cy = minY + (j + 0.5) * cellH;
+    if (colorCells) {
+      const x0 = minX + i * cellW, y0 = minY + j * cellH;
+      cells.push({
+        poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }],
+        color: k >= 0 ? DIR_COLORS[k] : "#94a3b8", value: k,
+      });
+    }
+    if (showArrows && k >= 0) {
+      const len = Math.hypot(D8_DIRS[k][0], D8_DIRS[k][1]);
+      const ux = D8_DIRS[k][0] / len, uy = D8_DIRS[k][1] / len;
+      const tip = { x: cx + ux * L, y: cy + uy * L }, base = { x: cx - ux * L, y: cy - uy * L };
+      segments.push([base, tip]);
+      const ang = Math.atan2(uy, ux);
+      for (const s of [1, -1]) segments.push([tip, { x: tip.x + Math.cos(ang + s * 2.6) * head, y: tip.y + Math.sin(ang + s * 2.6) * head }]);
+    }
+  }
+  // Capture elevation here (values are still the DEM) so it survives downstream once Accumulation
+  // overwrites `values`.
+  return { field: { ...inField, dir, elev: inField.elev ?? inField.values.slice() }, cells, segments };
+}
+
+/** Flow Accumulation: for each cell, how many upstream cells (or how much contributing area) drain
+ *  through it — Kahn-style topological propagation along the field's D8 `dir` channel. `asArea`
+ *  multiplies the cell count by the real cell area (needs `ppm`). Returns the accumulation field
+ *  (values = counts/area, dir passed through) + a low→high heatmap (log-scaled display optional). */
+export function evalFlowAccumulation(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const { cols, rows, minX, minY, cellW, cellH, dir } = inField;
+  const N = cols * rows;
+  const idx = (i: number, j: number) => i * rows + j;
+  const ppm = num(params.ppm, 0);
+  const asArea = params.asArea === true && ppm > 0;
+  const cellArea = asArea ? (cellW / ppm) * (cellH / ppm) : 1; // m² per cell, else unit weight
+  const acc = new Float64Array(N).fill(cellArea);
+
+  // Receiver (downstream cell) per cell from the dir channel; -1 = terminal (sink / off-grid outlet).
+  const recv = new Int32Array(N).fill(-1);
+  const indeg = new Int32Array(N);
+  if (dir) {
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const k = dir[idx(i, j)];
+      if (k < 0) continue;
+      const ni = i + D8_DIRS[k][0], nj = j + D8_DIRS[k][1];
+      if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+      const r = idx(ni, nj);
+      recv[idx(i, j)] = r; indeg[r]++;
+    }
+  }
+  // Process cells with no upstream first, pushing their load downstream as each receiver empties.
+  const q: number[] = []; let head = 0;
+  for (let c = 0; c < N; c++) if (indeg[c] === 0) q.push(c);
+  while (head < q.length) {
+    const c = q[head++]; const r = recv[c];
+    if (r >= 0) { acc[r] += acc[c]; if (--indeg[r] === 0) q.push(r); }
+  }
+
+  const logDisplay = params.logDisplay === true;
+  let lo = Infinity, hi = -Infinity;
+  for (let c = 0; c < N; c++) { const v = logDisplay ? Math.log1p(acc[c]) : acc[c]; if (v < lo) lo = v; if (v > hi) hi = v; }
+  const span = hi - lo || 1;
+  const lowCol = parseHex(params.lowColor, "#f1f5f9"), highCol = parseHex(params.highColor, "#1d4ed8");
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j);
+    const t = ((logDisplay ? Math.log1p(acc[c]) : acc[c]) - lo) / span;
+    const x0 = minX + i * cellW, y0 = minY + j * cellH;
+    cells.push({
+      poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }],
+      color: hexLerp(lowCol, highCol, t), value: asArea ? Math.round(acc[c] * 100) / 100 : Math.round(acc[c]),
+    });
+  }
+  return { field: { ...inField, values: Array.from(acc) }, cells };
+}
+
+/** Watershed: delineate the catchment that drains to a chosen outlet cell by flooding UPSTREAM over the
+ *  field's D8 `dir` channel (every cell whose flow path reaches the outlet). The outlet is the lowest-value
+ *  cell (`useLowestCell` — feed elevations from Flow Direction) or an explicit (col, row) address. Returns
+ *  a 0/1 basin-mask field + filled basin cells + the basin outline as boundary segments. */
+export function evalWatershed(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[]; segments: Point[][] } {
+  const { cols, rows, minX, minY, cellW, cellH, dir } = inField;
+  const N = cols * rows;
+  const idx = (i: number, j: number) => i * rows + j;
+
+  // Choose the outlet cell.
+  let outlet: number;
+  if (params.useLowestCell === true) {
+    // Pick the minimum-elevation cell — prefer the dedicated elev channel (survives Flow Accumulation,
+    // which replaces `values` with counts); fall back to `values` when fed a raw DEM.
+    const v = inField.elev ?? inField.values; let lo = 0; for (let c = 1; c < N; c++) if (v[c] < v[lo]) lo = c; outlet = lo;
+  } else {
+    const ci = Math.max(0, Math.min(cols - 1, Math.round(num(params.col, 0))));
+    const cj = Math.max(0, Math.min(rows - 1, Math.round(num(params.row, 0))));
+    outlet = idx(ci, cj);
+  }
+
+  // Flood upstream: build donor lists (inverse of the receiver graph), then DFS from the outlet.
+  const basin = new Uint8Array(N);
+  if (dir) {
+    const donors: number[][] = Array.from({ length: N }, () => []);
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const k = dir[idx(i, j)]; if (k < 0) continue;
+      const ni = i + D8_DIRS[k][0], nj = j + D8_DIRS[k][1];
+      if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+      donors[idx(ni, nj)].push(idx(i, j));
+    }
+    const stack = [outlet]; basin[outlet] = 1;
+    while (stack.length) { const c = stack.pop()!; for (const d of donors[c]) if (!basin[d]) { basin[d] = 1; stack.push(d); } }
+  } else {
+    basin[outlet] = 1;
+  }
+
+  const basinColor = typeof params.fillColor === "string" ? params.fillColor : "#0ea5e9";
+  const outletColor = typeof params.outletColor === "string" ? params.outletColor : "#ef4444";
+  const showBoundary = params.showBoundary !== false;
+  const values = new Array<number>(N).fill(0);
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  const segments: Point[][] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j); if (!basin[c]) continue;
+    values[c] = 1;
+    const x0 = minX + i * cellW, y0 = minY + j * cellH, x1 = x0 + cellW, y1 = y0 + cellH;
+    cells.push({ poly: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], color: c === outlet ? outletColor : basinColor, value: 1 });
+    if (showBoundary) {
+      // A shared edge with any orthogonal non-basin (or off-grid) neighbour is part of the outline.
+      if (!(i + 1 < cols && basin[idx(i + 1, j)])) segments.push([{ x: x1, y: y0 }, { x: x1, y: y1 }]);
+      if (!(i - 1 >= 0 && basin[idx(i - 1, j)])) segments.push([{ x: x0, y: y0 }, { x: x0, y: y1 }]);
+      if (!(j + 1 < rows && basin[idx(i, j + 1)])) segments.push([{ x: x0, y: y1 }, { x: x1, y: y1 }]);
+      if (!(j - 1 >= 0 && basin[idx(i, j - 1)])) segments.push([{ x: x0, y: y0 }, { x: x1, y: y0 }]);
+    }
+  }
+  return { field: { ...inField, values }, cells, segments };
+}
+
+/** Morphology: erosion / dilation and their compositions over a grid-field, on a binary mask (threshold
+ *  the input) or grayscale (true min/max filters). Erode = min over the structuring element, Dilate = max;
+ *  open/close/gradient/top-hat/black-hat/boundary are built from those. Structuring element is a cross
+ *  (4-conn), square (8-conn) or disk of the given radius; `iterations` repeats the primitive. Returns the
+ *  processed field (dir/elev passed through) + render cells. */
+export function evalMorphology(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const { cols, rows, minX, minY, cellW, cellH } = inField;
+  const N = cols * rows;
+  const idx = (i: number, j: number) => i * rows + j;
+  const shape = params.shape === "square" ? "square" : params.shape === "disk" ? "disk" : "cross";
+  const r = Math.max(1, Math.round(num(params.radius, 1)));
+  const iters = Math.max(1, Math.round(num(params.iterations, 1)));
+  const grayscale = params.grayscale === true;
+  const clampEdges = params.clampEdges !== false; // default true → off-grid neighbours ignored (borders kept)
+  const op = typeof params.operation === "string" ? params.operation : "erode";
+
+  // Structuring-element offsets.
+  const offs: [number, number][] = [];
+  for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) {
+    const inside = shape === "square" ? Math.max(Math.abs(di), Math.abs(dj)) <= r
+      : shape === "disk" ? di * di + dj * dj <= r * r
+      : Math.abs(di) + Math.abs(dj) <= r;
+    if (inside) offs.push([di, dj]);
+  }
+
+  // Source array: grayscale values, or a 0/1 binarisation of the input.
+  const thr = num(params.threshold, 0.5);
+  const src = grayscale ? inField.values.slice() : inField.values.map((v) => (v >= thr ? 1 : 0));
+  let bgVal = 0; // off-grid "background" used by erosion when edges aren't clamped
+  if (grayscale) { bgVal = Infinity; for (const v of src) if (v < bgVal) bgVal = v; }
+
+  const erodeOnce = (a: number[]): number[] => {
+    const out = new Array<number>(N);
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      let m = Infinity, offGrid = false;
+      for (const [di, dj] of offs) {
+        const ni = i + di, nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) { offGrid = true; continue; }
+        const v = a[idx(ni, nj)]; if (v < m) m = v;
+      }
+      if (offGrid && !clampEdges && bgVal < m) m = bgVal;
+      out[idx(i, j)] = m === Infinity ? a[idx(i, j)] : m;
+    }
+    return out;
+  };
+  const dilateOnce = (a: number[]): number[] => {
+    const out = new Array<number>(N);
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      let m = -Infinity;
+      for (const [di, dj] of offs) {
+        const ni = i + di, nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
+        const v = a[idx(ni, nj)]; if (v > m) m = v;
+      }
+      out[idx(i, j)] = m === -Infinity ? a[idx(i, j)] : m;
+    }
+    return out;
+  };
+  const erode = (a: number[], k: number) => { let x = a; for (let t = 0; t < k; t++) x = erodeOnce(x); return x; };
+  const dilate = (a: number[], k: number) => { let x = a; for (let t = 0; t < k; t++) x = dilateOnce(x); return x; };
+  // Cellwise difference: grayscale → clamped subtraction; binary → set difference (a AND NOT b).
+  const sub = (a: number[], b: number[]) => a.map((v, i) => (grayscale ? Math.max(0, v - b[i]) : (v > 0.5 && b[i] <= 0.5 ? 1 : 0)));
+
+  let out: number[];
+  switch (op) {
+    case "dilate": out = dilate(src, iters); break;
+    case "open": out = dilate(erode(src, iters), iters); break;
+    case "close": out = erode(dilate(src, iters), iters); break;
+    case "gradient": out = sub(dilate(src, iters), erode(src, iters)); break;
+    case "tophat": out = sub(src, dilate(erode(src, iters), iters)); break;
+    case "blackhat": out = sub(erode(dilate(src, iters), iters), src); break;
+    case "boundary": out = sub(src, erode(src, iters)); break;
+    case "erode": default: out = erode(src, iters); break;
+  }
+
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  if (grayscale) {
+    let lo = Infinity, hi = -Infinity; for (const v of out) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    const span = hi - lo || 1;
+    const lowC = parseHex(params.lowColor, "#1e3a8a"), highC = parseHex(params.highColor, "#ef4444");
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const c = idx(i, j), x0 = minX + i * cellW, y0 = minY + j * cellH;
+      cells.push({ poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }], color: hexLerp(lowC, highC, (out[c] - lo) / span), value: Math.round(out[c] * 100) / 100 });
+    }
+  } else {
+    const fg = typeof params.fgColor === "string" ? params.fgColor : "#22c55e";
+    const bg = typeof params.bgColor === "string" ? params.bgColor : "#475569";
+    const showBg = params.showBackground === true;
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const c = idx(i, j), on = out[c] > 0.5;
+      if (!on && !showBg) continue;
+      const x0 = minX + i * cellW, y0 = minY + j * cellH;
+      cells.push({ poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }], color: on ? fg : bg, value: on ? 1 : 0 });
+    }
+  }
+  return { field: { ...inField, values: out }, cells };
+}
+
+/** Birth/Survive rule presets (B/S notation) for the Cellular Automaton node. */
+const CA_PRESETS: Record<string, [string, string]> = {
+  conway: ["3", "23"], highlife: ["36", "23"], daynight: ["3678", "34678"],
+  seeds: ["2", ""], replicator: ["1357", "1357"], maze: ["3", "12345"], cave: ["678", "345678"],
+};
+/** Parse a B/S digit string ("23") → a 0..8 membership table. */
+const caDigits = (s: string): boolean[] => { const set = new Array(9).fill(false); for (const ch of String(s)) { const d = +ch; if (d >= 0 && d <= 8) set[d] = true; } return set; };
+
+/** Cellular Automaton: evolve a binary lattice N generations under a Birth/Survive rule (Conway's Game of
+ *  Life B3/S23 by default, plus HighLife / Maze / Cave / custom). Seed from the input mask (threshold) or
+ *  a deterministic random fill. Moore/von-Neumann neighbourhood, toroidal/dead/mirror edges. Outputs the
+ *  final 0/1 state field; cells optionally tinted by each live cell's age (generations survived). */
+export function evalCellularAutomaton(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const { cols, rows, minX, minY, cellW, cellH } = inField;
+  const N = cols * rows;
+  const idx = (i: number, j: number) => i * rows + j;
+  const preset = typeof params.preset === "string" ? params.preset : "conway";
+  const [bStr, sStr] = preset === "custom"
+    ? [String(params.birth ?? "3"), String(params.survive ?? "23")]
+    : (CA_PRESETS[preset] ?? CA_PRESETS.conway);
+  const birth = caDigits(bStr), survive = caDigits(sStr);
+  const moore = params.neighborhood !== "vonneumann";
+  const boundary = params.boundary === "dead" ? "dead" : params.boundary === "mirror" ? "mirror" : "toroidal";
+  const gens = Math.max(0, Math.min(200, Math.round(num(params.generations, 10))));
+  const offs: [number, number][] = moore
+    ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]
+    : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  // Seed: binarise the input mask, or a deterministic random fill at `density`.
+  const seed = Math.round(num(params.seed, 1));
+  const density = Math.max(0, Math.min(1, num(params.density, 0.35)));
+  const thr = num(params.threshold, 0.5);
+  const hash01 = (c: number): number => { let h = ((c + 1) * 2654435761 + seed * 40503) >>> 0; h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h ^= h >>> 13; return (h >>> 0) / 4294967296; };
+  let cur = new Uint8Array(N);
+  if (params.seedSource === "random") { for (let c = 0; c < N; c++) cur[c] = hash01(c) < density ? 1 : 0; }
+  else { for (let c = 0; c < N; c++) cur[c] = inField.values[c] >= thr ? 1 : 0; }
+  const age = new Int32Array(N); for (let c = 0; c < N; c++) age[c] = cur[c];
+
+  const sample = (cur: Uint8Array, x: number, y: number): number => {
+    let ni = x, nj = y;
+    if (boundary === "dead") { if (x < 0 || y < 0 || x >= cols || y >= rows) return 0; }
+    else if (boundary === "toroidal") { ni = ((x % cols) + cols) % cols; nj = ((y % rows) + rows) % rows; }
+    else { ni = x < 0 ? -x - 1 : x >= cols ? 2 * cols - x - 1 : x; nj = y < 0 ? -y - 1 : y >= rows ? 2 * rows - y - 1 : y; ni = Math.max(0, Math.min(cols - 1, ni)); nj = Math.max(0, Math.min(rows - 1, nj)); }
+    return cur[idx(ni, nj)];
+  };
+
+  for (let g = 0; g < gens; g++) {
+    const next = new Uint8Array(N);
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      let count = 0; for (const [di, dj] of offs) count += sample(cur, i + di, j + dj);
+      const c = idx(i, j);
+      const alive = cur[c] ? survive[count] : birth[count];
+      next[c] = alive ? 1 : 0;
+      age[c] = alive ? age[c] + 1 : 0;
+    }
+    cur = next;
+  }
+
+  const colorByAge = params.colorByAge === true;
+  const aliveCol = typeof params.aliveColor === "string" ? params.aliveColor : "#22c55e";
+  const deadCol = typeof params.deadColor === "string" ? params.deadColor : "#1e293b";
+  const showDead = params.showDead === true;
+  const lowC = parseHex(params.lowColor, "#1e3a8a"), highC = parseHex(params.highColor, "#ef4444");
+  let maxAge = 1; if (colorByAge) for (let c = 0; c < N; c++) if (age[c] > maxAge) maxAge = age[c];
+  const values = new Array<number>(N);
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j), on = cur[c] === 1;
+    values[c] = on ? 1 : 0;
+    if (!on && !showDead) continue;
+    const x0 = minX + i * cellW, y0 = minY + j * cellH;
+    const color = !on ? deadCol : colorByAge ? hexLerp(lowC, highC, age[c] / maxAge) : aliveCol;
+    cells.push({ poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }], color, value: on ? (colorByAge ? age[c] : 1) : 0 });
+  }
+  return { field: { ...inField, values }, cells };
+}
+
+/** Grid Threshold: pass each cell's value through `value op threshold` → a 0/1 mask field. Returns the
+ *  mask field (values 0/1) + render cells (pass colour, optional fail colour). */
+export function evalGridThreshold(
+  inField: GridField,
+  params: Record<string, unknown>,
+): { field: GridField; cells: { poly: Point[]; color: string; value: number }[] } {
+  const op = typeof params.op === "string" ? params.op : ">";
+  const thr = num(params.threshold, 0);
+  const pass = (v: number): boolean => {
+    switch (op) {
+      case ">=": return v >= thr;
+      case "<": return v < thr;
+      case "<=": return v <= thr;
+      case "==": return v === thr;
+      case "!=": return v !== thr;
+      default: return v > thr;
+    }
+  };
+  const { cols, rows, minX, minY, cellW, cellH } = inField;
+  const passColor = typeof params.passColor === "string" ? params.passColor : "#22c55e";
+  const failColor = typeof params.failColor === "string" ? params.failColor : "#475569";
+  const showFail = params.showFail === true;
+  const values = inField.values.map((v) => (pass(v) ? 1 : 0));
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const m = values[i * rows + j];
+    if (m === 0 && !showFail) continue;
+    const x0 = minX + i * cellW, y0 = minY + j * cellH;
+    const poly = [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }];
+    cells.push({ poly, color: m === 1 ? passColor : failColor, value: m });
+  }
+  return { field: { ...inField, values }, cells };
+}
+
+// Marching-squares case table — segments (edge-id pairs) per corner-mask. Corners a=TL(8) b=TR(4)
+// c=BR(2) d=BL(1); edges 0=top 1=right 2=bottom 3=left. Saddles (5,10) emit two segments.
+const MS_TABLE: number[][] = [
+  [], [3, 2], [2, 1], [3, 1], [0, 1], [3, 0, 2, 1], [0, 2], [3, 0],
+  [3, 0], [0, 2], [3, 2, 0, 1], [0, 1], [3, 1], [2, 1], [3, 2], [],
+];
+
+/** Marching Squares: extract iso-contours from a grid field (samples = cell centres). `levels` evenly
+ *  spaced iso values between the field's min and max → contour line segments (a graph to chain on). */
+export function evalMarchingSquares(inField: GridField, params: Record<string, unknown>): Point[][] {
+  const { cols, rows, minX, minY, cellW, cellH, values } = inField;
+  if (cols < 2 || rows < 2) return [];
+  let mn = Infinity, mx = -Infinity;
+  for (const v of values) { if (v < mn) mn = v; if (v > mx) mx = v; }
+  if (mx - mn < 1e-9) return [];
+  const levels = Math.max(1, Math.min(12, Math.round(num(params.levels, 5))));
+  const isos: number[] = [];
+  for (let k = 0; k < levels; k++) isos.push(mn + ((k + 1) / (levels + 1)) * (mx - mn));
+  const val = (i: number, j: number) => values[i * rows + j];
+  const ctr = (i: number, j: number) => ({ x: minX + (i + 0.5) * cellW, y: minY + (j + 0.5) * cellH });
+  const lerp = (u: Point, vu: number, w: Point, vw: number, iso: number): Point => {
+    const t = Math.abs(vw - vu) < 1e-12 ? 0.5 : Math.max(0, Math.min(1, (iso - vu) / (vw - vu)));
+    return { x: u.x + t * (w.x - u.x), y: u.y + t * (w.y - u.y) };
+  };
+  const segs: Point[][] = [];
+  for (const iso of isos) {
+    for (let i = 0; i < cols - 1; i++) for (let j = 0; j < rows - 1; j++) {
+      const TL = ctr(i, j), TR = ctr(i + 1, j), BR = ctr(i + 1, j + 1), BL = ctr(i, j + 1);
+      const vA = val(i, j), vB = val(i + 1, j), vC = val(i + 1, j + 1), vD = val(i, j + 1);
+      const bit = (vA >= iso ? 8 : 0) | (vB >= iso ? 4 : 0) | (vC >= iso ? 2 : 0) | (vD >= iso ? 1 : 0);
+      const tbl = MS_TABLE[bit];
+      if (tbl.length === 0) continue;
+      const edge = (e: number): Point =>
+        e === 0 ? lerp(TL, vA, TR, vB, iso)
+        : e === 1 ? lerp(TR, vB, BR, vC, iso)
+        : e === 2 ? lerp(BR, vC, BL, vD, iso)
+        : lerp(BL, vD, TL, vA, iso);
+      for (let p = 0; p + 1 < tbl.length; p += 2) segs.push([edge(tbl[p]), edge(tbl[p + 1])]);
+    }
+  }
+  return segs;
+}
+
+export interface AreaLabel { x: number; y: number; lines: string[] }
+
+/** Area Dimension (Space node): a centred annotation block per Space — Label, Area, and the bounding
+ *  L×B dimension — in the chosen unit (m / cm / ft). Positions are world-pixel; the host stacks the
+ *  text lines (scale-aware) at the polygon centroid. */
+export function evalAreaDimension(polygons: Point[][], params: Record<string, unknown>, ppm: number): AreaLabel[] {
+  const unit = params.unit === "cm" ? "cm" : params.unit === "ft" ? "ft" : "m";
+  const lenK = unit === "cm" ? 100 : unit === "ft" ? 3.28084 : 1;       // m → unit
+  const areaK = unit === "cm" ? 10000 : unit === "ft" ? 10.7639 : 1;    // m² → unit²
+  const showLabel = params.showLabel !== false;
+  const showArea = params.showArea !== false;
+  const showDim = params.showDimension !== false;
+  const label = typeof params.label === "string" ? params.label.trim() : "";
+  const pp = Math.max(1e-6, ppm);
+  return polygons.flatMap((poly): AreaLabel[] => {
+    if (poly.length < 3) return [];
+    // Shoelace area + centroid (pixel space) and axis-aligned bbox for L×B.
+    let area2 = 0, cxA = 0, cyA = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const cr = a.x * b.y - b.x * a.y; area2 += cr; cxA += (a.x + b.x) * cr; cyA += (a.y + b.y) * cr;
+      if (a.x < minX) minX = a.x; if (a.x > maxX) maxX = a.x; if (a.y < minY) minY = a.y; if (a.y > maxY) maxY = a.y;
+    }
+    const centroid = Math.abs(area2) > 1e-6
+      ? { x: cxA / (3 * area2), y: cyA / (3 * area2) }
+      : { x: poly.reduce((s, p) => s + p.x, 0) / poly.length, y: poly.reduce((s, p) => s + p.y, 0) / poly.length };
+    const Lm = (maxX - minX) / pp, Bm = (maxY - minY) / pp, areaM2 = Math.abs(area2) / 2 / (pp * pp);
+    const lines: string[] = [];
+    if (showLabel && label) lines.push(label);
+    if (showArea) lines.push(`Area: ${(areaM2 * areaK).toFixed(2)} ${unit}²`);
+    if (showDim) lines.push(`${(Lm * lenK).toFixed(2)} × ${(Bm * lenK).toFixed(2)} ${unit}`);
+    return lines.length ? [{ x: centroid.x, y: centroid.y, lines }] : [];
+  });
+}
+
+export function evalMiteredJoin(
+  polylines: Point[][],
+  params: Record<string, unknown>,
+  ppm: number,
+  /** Per-segment width (px) lookup — when provided (Mitered Join's "Use same width for all" OFF), each
+   *  centerline edge is stroked at its source segment's own thickness; unmatched edges fall back to the
+   *  Width slider. Omitted → uniform Width for every segment. */
+  segWidthPx?: (a: Point, b: Point) => number | undefined,
+): Point[][] {
+  const defaultWidthPx = Math.max(0.02, num(params.width, 2)) * ppm;
   const walls: Wall[] = [];
   let i = 0;
   for (const pl of polylines) {
     for (let k = 0; k + 1 < pl.length; k++) {
       const a = pl[k], b = pl[k + 1];
       if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue;
-      walls.push({ id: `mj${i++}`, start: a, end: b, thickness: widthPx, color: "#000", mode: "fill", method: "center", segmentType: "wall" });
+      const t = segWidthPx ? Math.max(0.02 * ppm, segWidthPx(a, b) ?? defaultWidthPx) : defaultWidthPx;
+      walls.push({ id: `mj${i++}`, start: a, end: b, thickness: t, color: "#000", mode: "fill", method: "center", segmentType: "wall" });
     }
   }
   if (walls.length === 0) return [];
-  const half = widthPx / 2;
+  // Per-wall half-width (segments may differ when per-segment widths are supplied).
+  const halfOf = (w: Wall): number => w.thickness / 2;
+  const maxHalf = walls.reduce((m, w) => Math.max(m, halfOf(w)), 0);
+  // Plain offset rectangle for one segment (centered on the centerline, half-width each side).
+  const segRect = (w: Wall): Point[] => {
+    const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const half = halfOf(w);
+    const nx = (-dy / len) * half, ny = (dx / len) * half;
+    return [
+      { x: w.start.x + nx, y: w.start.y + ny }, { x: w.end.x + nx, y: w.end.y + ny },
+      { x: w.end.x - nx, y: w.end.y - ny }, { x: w.start.x - nx, y: w.start.y - ny },
+    ];
+  };
+  // "Rectangular" = a NON-OVERLAPPING tiling: each segment is a pure rectangle whose junction ends are
+  // TRIMMED back to the MITER DEPTH (so it clears the node at any angle, not just 90°), and each junction
+  // is filled by its own polygon — a quadrilateral for a 2-way corner (generally not a rectangle: outer
+  // corner cut · outer miter point · other outer corner cut · inner miter point), and a larger convex
+  // polygon for T / X. The cut depth = the projection of the wall-face intersection (miter) points onto
+  // each segment, so the trimmed rectangle's end edge butts EXACTLY against the junction hull: no overlaps,
+  // no gaps, at acute or obtuse corners alike. Free ends and straight-through points stay untrimmed.
+  if (params.join === "rectangular") {
+    const TOL = Math.max(1, 0.01 * ppm);
+    const keyOf = (p: Point) => `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+    // Per node: the outward unit direction of every incident segment-end (along the segment, away from J),
+    // each carrying its own segment half-width so junctions resolve correctly with mixed widths.
+    type Dir = { x: number; y: number; half: number };
+    const nodes = new Map<string, { J: Point; dirs: Dir[] }>();
+    const addHalf = (J: Point, u: Dir) => {
+      const k = keyOf(J), cur = nodes.get(k);
+      if (cur) cur.dirs.push(u); else nodes.set(k, { J, dirs: [u] });
+    };
+    for (const w of walls) {
+      const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const hw = halfOf(w);
+      addHalf(w.start, { x: dx / len, y: dy / len, half: hw });
+      addHalf(w.end, { x: -dx / len, y: -dy / len, half: hw });
+    }
+    const lineInt = (p1: Point, d1: Point, p2: Point, d2: Point): Point | null => {
+      const den = d1.x * d2.y - d1.y * d2.x;
+      if (Math.abs(den) < 1e-9) return null; // parallel faces (collinear through-wall) → no near miter
+      const t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / den;
+      return { x: p1.x + d1.x * t, y: p1.y + d1.y * t };
+    };
+    const maxMiter = 16 * maxHalf; // clamp far miters on shallow angles so they don't spike
+    // The wall-face intersection (miter) points at each node — shared by both the cut-depth calc and fill.
+    const miters = new Map<string, Point[]>();
+    // A node is a real junction unless it's a free end (deg 1) or a straight-through point (two opposite dirs).
+    const isJunctionKey = (k: string): boolean => {
+      const node = nodes.get(k);
+      if (!node || node.dirs.length < 2) return false;
+      if (node.dirs.length === 2 && node.dirs[0].x * node.dirs[1].x + node.dirs[0].y * node.dirs[1].y < -0.999) return false;
+      return true;
+    };
+    for (const [k, { J, dirs }] of nodes) {
+      if (!isJunctionKey(k)) { miters.set(k, []); continue; }
+      const pts: Point[] = [];
+      for (let i = 0; i < dirs.length; i++) for (let j = i + 1; j < dirs.length; j++) {
+        const a = dirs[i], b = dirs[j];
+        const na = { x: -a.y, y: a.x }, nb = { x: -b.y, y: b.x };
+        for (const sa of [1, -1]) for (const sb of [1, -1]) {
+          // Offset each face by ITS OWN segment half-width so mixed-width junctions miter correctly.
+          const m = lineInt({ x: J.x + sa * a.half * na.x, y: J.y + sa * a.half * na.y }, a,
+                            { x: J.x + sb * b.half * nb.x, y: J.y + sb * b.half * nb.y }, b);
+          if (m && Math.hypot(m.x - J.x, m.y - J.y) <= maxMiter) pts.push(m);
+        }
+      }
+      miters.set(k, pts);
+    }
+    // Cut depth for a segment end leaving node J along u: the deepest miter projection ahead of J, floored
+    // at half-width (so even a near-straight bend leaves a clean butt) and capped at maxMiter.
+    const cutDepth = (J: Point, u: Point, hw: number): number => {
+      const k = keyOf(J);
+      if (!isJunctionKey(k)) return 0; // free end / straight-through → no trim
+      let d = hw;
+      for (const p of miters.get(k) ?? []) {
+        const proj = (p.x - J.x) * u.x + (p.y - J.y) * u.y;
+        if (proj > d) d = proj;
+      }
+      return Math.min(d, maxMiter);
+    };
+
+    const polys: Point[][] = [];
+    // Trimmed segment rectangles (pure rectangles, ends cut at the miter depth).
+    for (const w of walls) {
+      const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const hw = halfOf(w);
+      const ux = dx / len, uy = dy / len, nx = -uy * hw, ny = ux * hw;
+      let tA = cutDepth(w.start, { x: ux, y: uy }, hw), tB = cutDepth(w.end, { x: -ux, y: -uy }, hw);
+      if (tA + tB > len * 0.95) { const f = (len * 0.95) / (tA + tB); tA *= f; tB *= f; } // don't invert short segs
+      const s = { x: w.start.x + ux * tA, y: w.start.y + uy * tA };
+      const e = { x: w.end.x - ux * tB, y: w.end.y - uy * tB };
+      polys.push([
+        { x: s.x + nx, y: s.y + ny }, { x: e.x + nx, y: e.y + ny },
+        { x: e.x - nx, y: e.y - ny }, { x: s.x - nx, y: s.y - ny },
+      ]);
+    }
+    // Junction fill = convex hull of each incident segment's end-edge corners (at the cut depth) + the
+    // miter points. The corners sit on the rectangles' cut edges, so the hull butts exactly against them.
+    for (const [k, { J, dirs }] of nodes) {
+      if (!isJunctionKey(k)) continue;
+      const pts: Point[] = [...(miters.get(k) ?? [])];
+      for (const u of dirs) {
+        const d = cutDepth(J, u, u.half), n = { x: -u.y, y: u.x };
+        pts.push({ x: J.x + d * u.x + u.half * n.x, y: J.y + d * u.y + u.half * n.y });
+        pts.push({ x: J.x + d * u.x - u.half * n.x, y: J.y + d * u.y - u.half * n.y });
+      }
+      const hull = computeConvexHull(pts);
+      if (hull.length >= 3) polys.push(hull);
+    }
+    return polys;
+  }
   // "Curved" = Minkowski sum of each segment with a disk → a STADIUM (rectangle + semicircular caps).
   // Straight runs stay straight; only the corners/junctions round off where the caps overlap.
   if (params.join === "curved") {
     const steps = 10;
     return walls.map((w) => {
+      const half = halfOf(w);
       const ang = Math.atan2(w.end.y - w.start.y, w.end.x - w.start.x);
       const pts: Point[] = [];
       for (let i = 0; i <= steps; i++) { const a = ang - Math.PI / 2 + (Math.PI * i) / steps; pts.push({ x: w.end.x + half * Math.cos(a), y: w.end.y + half * Math.sin(a) }); }
@@ -511,15 +1731,7 @@ export function evalMiteredJoin(polylines: Point[][], params: Record<string, unk
   if (mitred.length > 0) return mitred;
   // Fallback (robust): a plain offset rectangle per segment — guarantees a visible thickened ribbon
   // even when the mitre solver returns nothing for an unusual graph.
-  return walls.map((w) => {
-    const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = (-dy / len) * half, ny = (dx / len) * half;
-    return [
-      { x: w.start.x + nx, y: w.start.y + ny }, { x: w.end.x + nx, y: w.end.y + ny },
-      { x: w.end.x - nx, y: w.end.y - ny }, { x: w.start.x - nx, y: w.start.y - ny },
-    ];
-  });
+  return walls.map(segRect);
 }
 
 /** Chaikin corner-cutting on an OPEN polyline (endpoints fixed). */
@@ -1296,6 +2508,10 @@ export interface PlacedFootprint {
   heightM: number;
   /** Clearance above the floor (m) — lifts wall-hung objects. */
   clearanceM: number;
+  /** Index of this object in the node's `objects` param (skipped/unplaceable objects leave gaps, so this
+   *  is NOT the same as the position in the returned array). Lets the host map a dragged footprint back
+   *  to the right entry to update its position%. */
+  srcIndex: number;
 }
 
 export function evalPlaceObjectDetailed(
@@ -1328,6 +2544,7 @@ export function evalPlaceObjectDetailed(
       kind: entries[i].kind,
       heightM: Math.max(0.05, entries[i].height),
       clearanceM: Math.max(0, entries[i].clearance),
+      srcIndex: i,
     });
   });
   return out;

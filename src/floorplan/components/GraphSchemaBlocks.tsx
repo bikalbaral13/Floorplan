@@ -27,22 +27,77 @@ export interface SchemaPropsBlockProps {
   onChange: (key: string, value: GraphAttrValue | null) => void;
 }
 
+/** The canonical graphAttrs storage key for a prop — its `role` (so values are shared with the flow
+ *  processors / params panel), falling back to its `key`. */
+const storeKey = (d: { role?: string; key: string }): string => d.role ?? d.key;
+
+/** Current value of a prop (stored value → schema default), for evaluating `showIf` discriminators.
+ *  `key` is the discriminator's prop KEY (showIf.when); we resolve it to that prop's storage key. */
+const valueOf = (defs: GraphPropDef[], attrs: Record<string, GraphAttrValue> | undefined, key: string): GraphAttrValue | undefined => {
+  const d = defs.find((x) => x.key === key);
+  return (attrs?.[d ? storeKey(d) : key] ?? d?.default) as GraphAttrValue | undefined;
+};
+
+/** A field label that, when this element has its OWN stored value (an override of the schema default),
+ *  shows a tiny "default" badge + a one-click reset (clears the override back to the schema default). */
+const Lab = ({ text, overridden, onReset }: { text: string; overridden: boolean; onReset: () => void }) => (
+  <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+    {text}
+    {overridden && (
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReset(); }}
+        title="Overridden for this element — click to reset to the schema default"
+        className="rounded bg-cyan-100 px-1 text-[8px] font-semibold uppercase tracking-wide text-cyan-700 hover:bg-cyan-200"
+      >
+        reset
+      </button>
+    )}
+  </span>
+);
+
 export const SchemaPropsBlock = ({ title, defs, attrs, onChange }: SchemaPropsBlockProps) => {
-  if (!defs.length) return null;
+  // Type-driven visibility: drop rows whose `showIf` discriminator doesn't match the current value.
+  const visible = defs.filter((def) => {
+    if (!def.showIf) return true;
+    const cur = valueOf(defs, attrs, def.showIf.when);
+    if (def.showIf.in) return def.showIf.in.some((v) => String(v) === String(cur));
+    if (def.showIf.equals !== undefined) return String(def.showIf.equals) === String(cur);
+    return true;
+  });
+  if (!visible.length) return null;
   return (
     <div className="mt-2 rounded border border-cyan-200 bg-cyan-50/40 p-2 space-y-1.5">
       <span className="text-[9px] font-semibold uppercase tracking-wide text-cyan-700">
         {title ?? "Schema properties"}
       </span>
-      {defs.map((def) => {
+      {visible.map((def) => {
         const label = def.label ?? def.key;
-        const raw = attrs?.[def.key];
+        const sk = storeKey(def);
+        const raw = attrs?.[sk];
+        if (def.kind === "color") {
+          const value = String(raw ?? def.default ?? "#334155");
+          return (
+            <div key={def.key}>
+              <Lab text={label} overridden={raw != null} onReset={() => onChange(sk, null)} />
+              <div className="mt-0.5 flex items-center gap-2">
+                <input
+                  type="color"
+                  value={value}
+                  onChange={(e) => onChange(sk, e.target.value)}
+                  className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+                />
+                <span className="text-[10px] text-slate-500">{value}</span>
+              </div>
+            </div>
+          );
+        }
         if (def.kind === "checkbox") {
           const checked = (raw ?? def.default) === true || (raw ?? def.default) === 1 || (raw ?? def.default) === "true";
           return (
             <label key={def.key} className="flex items-center justify-between gap-2 text-[10px] text-slate-600">
-              <span>{label}</span>
-              <input type="checkbox" checked={checked} onChange={(e) => onChange(def.key, e.target.checked)} />
+              <Lab text={label} overridden={raw != null} onReset={() => onChange(sk, null)} />
+              <input type="checkbox" checked={checked} onChange={(e) => onChange(sk, e.target.checked)} />
             </label>
           );
         }
@@ -50,11 +105,11 @@ export const SchemaPropsBlock = ({ title, defs, attrs, onChange }: SchemaPropsBl
           const value = String(raw ?? def.default ?? def.options?.[0]?.value ?? "");
           return (
             <div key={def.key}>
-              <span className="text-[10px] text-slate-400">{label}</span>
+              <Lab text={label} overridden={raw != null} onReset={() => onChange(sk, null)} />
               <select
                 className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
                 value={value}
-                onChange={(e) => onChange(def.key, e.target.value)}
+                onChange={(e) => onChange(sk, e.target.value)}
               >
                 {(def.options ?? []).map((o) => (
                   <option key={o.value} value={o.value}>{o.label ?? o.value}</option>
@@ -66,12 +121,12 @@ export const SchemaPropsBlock = ({ title, defs, attrs, onChange }: SchemaPropsBl
         if (def.kind === "text") {
           return (
             <div key={def.key}>
-              <span className="text-[10px] text-slate-400">{label}</span>
+              <Lab text={label} overridden={raw != null} onReset={() => onChange(sk, null)} />
               <input
                 type="text"
                 className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
                 value={String(raw ?? def.default ?? "")}
-                onChange={(e) => onChange(def.key, e.target.value)}
+                onChange={(e) => onChange(sk, e.target.value)}
               />
             </div>
           );
@@ -80,9 +135,7 @@ export const SchemaPropsBlock = ({ title, defs, attrs, onChange }: SchemaPropsBl
         const placeholder = def.default != null ? String(def.default) : "";
         return (
           <div key={def.key}>
-            <span className="text-[10px] text-slate-400">
-              {label}{def.unit ? ` (${def.unit})` : ""}
-            </span>
+            <Lab text={`${label}${def.unit ? ` (${def.unit})` : ""}`} overridden={raw != null} onReset={() => onChange(sk, null)} />
             <input
               type="number"
               step={def.step ?? "any"}
@@ -93,9 +146,9 @@ export const SchemaPropsBlock = ({ title, defs, attrs, onChange }: SchemaPropsBl
               value={typeof raw === "number" ? raw : typeof raw === "string" && raw !== "" ? raw : ""}
               onChange={(e) => {
                 const v = e.target.value;
-                if (v === "") { onChange(def.key, null); return; }
+                if (v === "") { onChange(sk, null); return; }
                 const n = parseFloat(v);
-                onChange(def.key, Number.isFinite(n) ? n : null);
+                onChange(sk, Number.isFinite(n) ? n : null);
               }}
             />
           </div>

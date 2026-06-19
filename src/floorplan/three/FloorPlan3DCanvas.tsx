@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
 import { computeMiteredUnion, computeMiteredWallPolygons } from "../wallGeometry";
 import type { Point } from "../types";
+import type { FlowMesh, FlowMeshPrism } from "../flow/eval/meshTypes";
 
 /** A `<mesh>` that automatically adds dark edge lines to any geometry it contains.
  *  Drop-in replacement for `<mesh>`. Improves visual separation between adjacent meshes. */
@@ -14,6 +15,50 @@ function EdgedMesh(props: ComponentProps<"mesh">) {
       {props.children}
       <Edges color="#0f172a" threshold={15} lineWidth={1} />
     </mesh>
+  );
+}
+
+/** Build a THREE geometry for one lofted prism (bottom + top outlines in plan-px world coords, y in
+ *  metres). Side quads between corresponding edges + fan-triangulated caps (convex outlines). `toScene`
+ *  maps plan px → world XZ (metres). Returns null for degenerate prisms. */
+function buildPrismGeometry(pr: FlowMeshPrism, toScene: (x: number, y: number) => [number, number]): THREE.BufferGeometry | null {
+  const N = Math.min(pr.bottom.length, pr.top.length);
+  if (N < 3) return null;
+  const b = pr.bottom.slice(0, N).map((p) => toScene(p.x, p.y));
+  const t = pr.top.slice(0, N).map((p) => toScene(p.x, p.y));
+  const vB = (i: number): number[] => [b[i][0], pr.yBottom, b[i][1]];
+  const vT = (i: number): number[] => [t[i][0], pr.yTop, t[i][1]];
+  const pos: number[] = [];
+  const tri = (a: number[], c: number[], d: number[]) => pos.push(a[0], a[1], a[2], c[0], c[1], c[2], d[0], d[1], d[2]);
+  for (let i = 0; i < N; i++) {            // side faces
+    const j = (i + 1) % N;
+    tri(vB(i), vB(j), vT(j));
+    tri(vB(i), vT(j), vT(i));
+  }
+  for (let i = 1; i < N - 1; i++) tri(vB(0), vB(i + 1), vB(i));   // bottom cap (downward)
+  for (let i = 1; i < N - 1; i++) tri(vT(0), vT(i), vT(i + 1));   // top cap (upward)
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geom.computeVertexNormals();
+  return geom;
+}
+
+/** Flow "Mesh to 3D" output — render each incoming mesh's lofted prisms (e.g. a column footing). */
+function FlowMeshes({ meshes, cx, cy, ppm }: { meshes: FlowMesh[]; cx: number; cy: number; ppm: number }) {
+  const built = useMemo(() => {
+    const toScene = (x: number, y: number): [number, number] => [(x - cx) / ppm, (y - cy) / ppm];
+    return meshes
+      .flatMap((m) => m.prisms.map((pr, pi) => ({ key: `${m.id}-${pi}`, geom: buildPrismGeometry(pr, toScene), color: pr.color })))
+      .filter((x): x is { key: string; geom: THREE.BufferGeometry; color: string } => !!x.geom);
+  }, [meshes, cx, cy, ppm]);
+  return (
+    <group>
+      {built.map((x) => (
+        <EdgedMesh key={x.key} geometry={x.geom}>
+          <meshStandardMaterial color={x.color} side={THREE.DoubleSide} />
+        </EdgedMesh>
+      ))}
+    </group>
   );
 }
 
@@ -73,6 +118,12 @@ interface Props {
    *  is the image URL/data-URL; `x,y` is the underlay box origin (plan px), `w,h` its intrinsic pixel size,
    *  `scale` the plan-units-per-image-pixel. Omitted → no ground map. */
   mapUnderlay?: { src: string; x: number; y: number; w: number; h: number; scale: number };
+  /** Flow "Space to 3D" output — each input space extruded into a solid mass of `heightM`, Up from the
+   *  floor plane (baseY 0 → +height) or Down below it (−height → 0). Rendered as opaque blocks. */
+  spaceMasses?: { id: string; points: Point[]; heightM: number; direction: "up" | "down"; color?: string }[];
+  /** Flow "Mesh to 3D" output — generic 3D meshes (e.g. column footings) to render. Each is a set of
+   *  lofted prisms in plan-px world coords + metre heights (see {@link FlowMesh}). */
+  meshPreview?: FlowMesh[];
 }
 
 /** Ground plane textured with the map underlay. Loads the texture (suspends) and draws the pre-built
@@ -410,7 +461,7 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, meshPreview, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -441,7 +492,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     const all = new Map<string, Point[]>();
     for (const w of model.walls) {
       if (w.mode !== "mitered" && w.mode !== "mitered-union") continue;
-      if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) continue;
+      if ((useSymbol || w.objectPrimitive3d) && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) continue;
       const poly = miteredPolygons.get(w.id);
       if (poly && poly.length >= 3) all.set(w.id, poly);
     }
@@ -481,7 +532,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     for (const w of model.walls) {
       if (w.mode !== "mitered-union") continue;
       if ((w.segmentType ?? "wall") !== "wall") continue;
-      if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) continue;
+      if ((useSymbol || w.objectPrimitive3d) && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) continue;
       const poly = miteredPolygons.get(w.id);
       if (poly && poly.length >= 3) filtered.set(w.id, poly);
     }
@@ -522,9 +573,11 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
   }, [model.walls, miteredPolygons, useSymbol]);
 
   const placementGroups = useMemo(() => {
-    if (!useSymbol) return [];
     const map = new Map<string, { walls: Wall[]; kind: PlacementKind; heightM: number; clearanceM: number; roomId?: string }>();
     for (const w of model.walls) {
+      // Place Object placements need 2D-Symbol mode; Node-to-Object placements (objectPrimitive3d) render
+      // as primitives in any mode.
+      if (!(useSymbol || w.objectPrimitive3d)) continue;
       if ((w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) {
         const g = map.get(w.placementObjectId) ?? {
           walls: [],
@@ -583,11 +636,19 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
       expand(w.end.x, w.end.y);
     }
     for (const f of model.furniture) expand(f.x, f.y);
+    // Flow "Mesh to 3D" footprints — so the camera frames meshes even when there's no wall/furniture
+    // geometry (e.g. a bare Footing/Staircase → 3D Mesh → Mesh to 3D preview placed at the plan origin).
+    for (const mesh of meshPreview ?? []) {
+      for (const pr of mesh.prisms) {
+        for (const p of pr.bottom) expand(p.x, p.y);
+        for (const p of pr.top) expand(p.x, p.y);
+      }
+    }
     if (!isFinite(minX)) {
       minX = 0; minY = 0; maxX = ppm * 10; maxY = ppm * 10;
     }
     return { minX, minY, maxX, maxY };
-  }, [model.walls, model.furniture, ppm]);
+  }, [model.walls, model.furniture, ppm, meshPreview]);
 
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cy = (bounds.minY + bounds.maxY) / 2;
@@ -685,6 +746,34 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           );
         });
       })}
+
+      {/* Flow "Space to 3D" masses — extrude each input space polygon into a solid block of its height,
+           Up from the floor plane or Down below it. */}
+      {(spaceMasses ?? []).map((sm) => {
+        if (!Array.isArray(sm.points) || sm.points.length < 3 || sm.heightM <= 0) return null;
+        const shape = new THREE.Shape(sm.points.map((p) => {
+          const [sx, sz] = toScene(p.x, p.y);
+          return new THREE.Vector2(sx, -sz);
+        }));
+        const up = sm.direction !== "down";
+        const baseY = up ? 0 : -sm.heightM;
+        return (
+          <EdgedMesh
+            key={`space-mass-${sm.id}`}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, baseY, 0]}
+            onClick={handleWallClick(sm.id)}
+          >
+            <extrudeGeometry args={[shape, { depth: sm.heightM, bevelEnabled: false, steps: 1 }]} />
+            <meshStandardMaterial color={sm.color ?? "#94a3b8"} />
+          </EdgedMesh>
+        );
+      })}
+
+      {/* Flow "Mesh to 3D" — generic meshes (column footings, …) built from lofted prisms. */}
+      {meshPreview && meshPreview.length > 0 && (
+        <FlowMeshes meshes={meshPreview} cx={cx} cy={cy} ppm={ppm} />
+      )}
 
       {/* Room slabs â€” extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
            selection list is shared with walls (a single id list keyed by room.id or wall.id).
@@ -1228,7 +1317,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           <group key={`walls-floor-${fi}`} position={[0, massingFloorBaseY(fi, floorH), 0]}>
       {model.walls.filter((w) => {
         if (!isExtrudableWall(w)) return false;
-        if (useSymbol && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) return false;
+        if ((useSymbol || w.objectPrimitive3d) && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) return false;
         // Union mode: plain walls are absorbed into the union extrusion above. Doors/windows still
         // need per-wall band extrusion so the lintel/sill show.
         if (w.mode === "mitered-union" && (w.segmentType ?? "wall") === "wall") return false;
@@ -1251,6 +1340,11 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const segType = w.segmentType ?? "wall";
         const isSharp = (w.mode === "mitered" || w.mode === "mitered-union");
         const polyPlan = miteredPolygons.get(w.id);
+        // Flow "Segment to 3D": custom extrude height (m) + direction for this wall (plain walls only —
+        // doors/windows keep their lintel/sill bands). Down extrudes below the floor plane (baseY < 0).
+        const seg3dH = segType === "wall" && w.extrude3dHeightM != null && w.extrude3dHeightM > 0 ? w.extrude3dHeightM : null;
+        const wallTopH = seg3dH ?? FLOOR_H;
+        const wallBaseY = seg3dH != null && w.extrude3dDir === "down" ? -seg3dH : 0;
 
         // Sharp-mode extrusion using the mitered footprint polygon â€” corners join seamlessly
         // because adjacent walls share the same vertex coordinates at junctions. Only available
@@ -1266,8 +1360,8 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
             })
           );
           return [
-            <EdgedMesh key={`${w.id}:sharp`} rotation={[-Math.PI / 2, 0, 0]} onClick={handleWallClick(w.id)}>
-              <extrudeGeometry args={[shape, { depth: FLOOR_H, bevelEnabled: false, steps: 1 }]} />
+            <EdgedMesh key={`${w.id}:sharp`} rotation={[-Math.PI / 2, 0, 0]} position={[0, wallBaseY, 0]} onClick={handleWallClick(w.id)}>
+              <extrudeGeometry args={[shape, { depth: wallTopH, bevelEnabled: false, steps: 1 }]} />
               <meshStandardMaterial color={wallColor(w.id)} />
             </EdgedMesh>,
           ];
@@ -1357,10 +1451,10 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const midY = (w.start.y + w.end.y) / 2;
         const [sx, sz] = toScene(midX, midY);
         const rotY = -Math.atan2(dy, dx);
-        return wallBands(w, FLOOR_H).map((band, i) => {
+        return wallBands(w, wallTopH).map((band, i) => {
           const h = band.yMax - band.yMin;
           if (h <= 0) return null;
-          const yCenter = (band.yMin + band.yMax) / 2;
+          const yCenter = (band.yMin + band.yMax) / 2 + wallBaseY;
           return (
             <EdgedMesh key={`${w.id}:${i}`} position={[sx, yCenter, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
               <boxGeometry args={[lenM, h, thicknessM]} />
