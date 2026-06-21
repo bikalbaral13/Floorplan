@@ -129,10 +129,12 @@ const FLOORPLAN_SCHEMA_PARAMS = {
   segmentProps: [
     xProp("s_type", "type", "Type", "select", "line", { role: "seg-type", options: ["wall", "door", "window", "line"], optionIcons: SEG_TYPE_ICONS }),
     xProp("s_wt", "wallThickness", "Wall Thickness", "number", 0.23, { unit: "m", min: 0.05, max: 0.6, step: 0.01, role: "wall-thickness", showIf: { when: "type", equals: "wall" } }),
-    xProp("s_wjust", "wallJustification", "Justification", "select", "center", { role: "wall-justification", options: ["left", "center", "right"], showIf: { when: "type", equals: "wall" } }),
+    xProp("s_wjust", "wallJustification", "Justification", "select", "center", { role: "wall-justification", options: ["inner", "center", "outer"], showIf: { when: "type", equals: "wall" } }),
     xProp("s_wh", "wallHeight", "Wall Height", "number", 3, { unit: "m", min: 0, max: 10, step: 0.05, role: "wall-height", showIf: { when: "type", equals: "wall" } }),
+    xProp("s_wunion", "wallUnion", "Union", "checkbox", false, { role: "wall-union", showIf: { when: "type", equals: "wall" } }),
     xProp("s_wodim", "showOuterDim", "Show Outer Dimension", "checkbox", true, { role: "show-outer-dim", showIf: { when: "type", equals: "wall" } }),
     xProp("s_widim", "showInnerDim", "Show Inner Dimension", "checkbox", true, { role: "show-inner-dim", showIf: { when: "type", equals: "wall" } }),
+    xProp("s_wcdim", "showCenterDim", "Show Center Dimension", "checkbox", false, { role: "show-center-dim", showIf: { when: "type", equals: "wall" } }),
     xProp("s_dshape", "doorShape", "Shape", "select", "arc", { role: "door-shape", options: ["polygon", "arc", "detailed"], showIf: { when: "type", equals: "door" } }),
     xProp("s_dthk", "doorThickness", "Leaf Thickness", "number", 0.05, { unit: "m", min: 0.01, max: 0.5, step: 0.01, role: "door-thickness", showIf: { when: "type", equals: "door" } }),
     xProp("s_dhinge", "doorHinge", "Hinge", "select", "left", { role: "door-hinge", options: ["left", "right"], showIf: { when: "type", equals: "door" } }),
@@ -153,6 +155,18 @@ const FLOORPLAN_SCHEMA_PARAMS = {
     xProp("n_h", "objHeight", "Depth", "number", 1, { unit: "m", min: 0.1, max: 5, step: 0.05, role: "obj-height", showIf: { when: "type", equals: "object" } }),
     xProp("n_rot", "objRotation", "Rotation", "number", 0, { unit: "°", min: 0, max: 360, step: 5, role: "obj-rotation", showIf: { when: "type", equals: "object" } }),
     xProp("n_anchor", "objAnchor", "Anchor", "select", "center", { role: "obj-anchor", options: ["center", "top-left", "top-right", "bottom-left", "bottom-right"], showIf: { when: "type", equals: "object" } }),
+    // Staircase (type = staircase) — per-node Node-to-Staircase parameters.
+    xProp("n_sconfig", "stairConfig", "Configuration", "select", "straight", { role: "stair-config", options: ["straight", "u-shape", "u-shape-mid"], showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_ssteps", "stairSteps", "Number of steps", "number", 14, { min: 2, max: 60, step: 1, role: "stair-steps", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_stread", "stairTread", "Tread (going)", "number", 0.28, { unit: "m", min: 0.2, max: 0.45, step: 0.005, role: "stair-tread", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_swidth", "stairWidth", "Width", "number", 1, { unit: "m", min: 0.6, max: 3, step: 0.05, role: "stair-width", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_sdir", "stairDirection", "Direction", "select", "ltr", { role: "stair-direction", options: ["ltr", "rtl"], showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_smid", "stairMidSteps", "Mid / split steps", "number", 0, { min: 0, max: 40, step: 1, role: "stair-mid-steps", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_sland", "stairLandingWidth", "Landing depth", "number", 1, { unit: "m", min: 0.5, max: 3, step: 0.05, role: "stair-landing-width", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_sspace", "stairMidSpace", "Mid space", "number", 0.1, { unit: "m", min: 0, max: 1, step: 0.05, role: "stair-mid-space", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_scuts", "stairLandingCuts", "Landing cuts", "number", 1, { min: 1, max: 10, step: 1, role: "stair-landing-cuts", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_srot", "stairRotation", "Rotation", "number", 0, { unit: "°", min: 0, max: 360, step: 1, role: "stair-rotation", showIf: { when: "type", equals: "staircase" } }),
+    xProp("n_scol", "stairColor", "Color", "color", "#0f766e", { role: "stair-color", showIf: { when: "type", equals: "staircase" } }),
     xProp("n_col", "nodeColor", "Color", "color", "#475569", { role: "node-color" }),
   ],
   spaceProps: [
@@ -164,6 +178,11 @@ const FLOORPLAN_SCHEMA_PARAMS = {
     xProp("sp_maxr", "maxRatio", "Maximum Ratio", "number", 0, { min: 0, max: 100, step: 0.1, role: "max-ratio", showIf: { when: "type", equals: "room" } }),
   ],
   graphProps: [],
+  // Canvas-wide Settings — shown in the Properties tab when nothing is selected. Ortho drives the canvas
+  // Ortho draw lock (horizontal / vertical only). Default on.
+  settingsProps: [
+    xProp("set_ortho", "ortho", "Ortho", "checkbox", true, { role: "ortho" }),
+  ],
   // Layout title-block fields — role-bound to the LayoutSheet (see INFO_ROLE_TO_PROP). Edit these in
   // the Properties tab (View Mode → Layout) and the sheet's title block updates live.
   informationProps: [
@@ -216,7 +235,7 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { id: "windows", tool: "segment-to-window", x: 945, y: -1104, params: { shape: "lines", thickness: 0.1, panes: 2, sillHeight: 0.9, lintelHeight: 2.1, color: "#0891b2" } },
           // Walls — schema-driven mitred walls: the Wall Builder strokes the canvas graph's wall segments
           // into a mitred ribbon, taking each wall's THICKNESS from the Segment schema (role wall-thickness).
-          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, showOuterDim: true, showInnerDim: true, dimGap: 0.18 } },
+          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: false, showOuterDim: true, showInnerDim: true, showCenterDim: false, dimGap: 0.18 } },
           // Objects — schema-driven furniture symbols on object-typed nodes (roles object-kind / obj-width /
           // obj-height / obj-rotation / obj-anchor). Self-filters to "object"-typed nodes. Fed from Nodes (out-1).
           { id: "objects", tool: "node-to-object", x: 894, y: -764, params: { kind: "bed", width: 1.5, height: 2, rotation: 0, anchor: "center" } },
@@ -255,7 +274,7 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { id: "canvas", tool: "canvas-source", x: 540, y: -1160, params: {} },
           { id: "doors", tool: "segment-to-door", x: 988, y: -1336, params: { shape: "arc", thickness: 0.05, hinge: "left", swing: "left", lintelHeight: 2.1, color: "#9333ea" } },
           { id: "windows", tool: "segment-to-window", x: 945, y: -1104, params: { shape: "lines", thickness: 0.1, panes: 2, sillHeight: 0.9, lintelHeight: 2.1, color: "#0891b2" } },
-          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, showOuterDim: true, showInnerDim: true, dimGap: 0.18 } },
+          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: false, showOuterDim: true, showInnerDim: true, showCenterDim: false, dimGap: 0.18 } },
           { id: "objects", tool: "node-to-object", x: 894, y: -764, params: { kind: "bed", width: 1.5, height: 2, rotation: 0, anchor: "center" } },
           { id: "schemaTools", tool: "schema-to-drawing", x: 540, y: -980, params: {} },
           // Elevations — project the wall / door / window graph onto each cardinal plane (Tier-A).

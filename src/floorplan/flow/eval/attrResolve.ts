@@ -52,10 +52,17 @@ export const readBool = (defs: GraphPropDef[] | undefined, attrs: Attrs, id: str
 // they no longer desync. `id` may be null (input geometry matched no canvas component) → fallback only.
 const pick = (attrs: Attrs, id: string | null, paramKey: string, roles: readonly string[]): GraphAttrValue | undefined => {
   if (!id) return undefined;
-  const a = attrs[id];
-  if (!a) return undefined;
-  for (const r of roles) { if (a[r] != null) return a[r]; }   // canonical role-keyed value (preferred)
-  return a[paramKey];                                          // legacy field-key value (back-compat)
+  // A split wall's sub-pieces get ids like "<originalId>~x,y_x,y" (splitWallsAtIntersections). Their own
+  // attrs only carry the seeded seg-type, so for every other property fall back to the ORIGINAL wall's
+  // attrs — a split segment keeps the same thickness / justification / etc. as the unsplit wall.
+  const ids = id.includes("~") ? [id, id.slice(0, id.indexOf("~"))] : [id];
+  for (const tid of ids) {
+    const a = attrs[tid];
+    if (!a) continue;
+    for (const r of roles) { if (a[r] != null) return a[r]; }   // canonical role-keyed value (preferred)
+    if (a[paramKey] != null) return a[paramKey];                // legacy field-key value (back-compat)
+  }
+  return undefined;
 };
 export const resolveStr = (defs: GraphPropDef[] | undefined, attrs: Attrs, id: string | null, paramKey: string, roles: readonly string[], fallback: string): string => {
   const v = pick(attrs, id, paramKey, roles);
@@ -93,8 +100,12 @@ export const ROLES = {
   // Per-wall dimension toggles (Wall Builder draws the inner / outer face dimension when on).
   showOuterDim: ["show-outer-dim"],
   showInnerDim: ["show-inner-dim"],
+  showCenterDim: ["show-center-dim"],
   wallColor: ["wall-color", "color"],
   wallLineStyle: ["wall-linestyle", "line-style"],
+  // Union is a whole-network merge (drops internal mitre-seam diagonals); surfaced per-wall in the schema
+  // for convenience — any wall resolving true turns it on for the whole wall set.
+  wallUnion: ["wall-union"],
   showDirection: ["show-direction"],
   hatch: ["hatch"],
   hatchStyle: ["hatch-style"],
@@ -111,6 +122,18 @@ export const ROLES = {
   windowThickness: ["window-thickness", "thickness"],
   windowPanes: ["window-panes", "panes"],
   windowColor: ["window-color", "color"],
+  // staircase (node-to-staircase) — per-node via the schema's Node section
+  stairConfig: ["stair-config"],
+  stairSteps: ["stair-steps"],
+  stairTread: ["stair-tread"],
+  stairWidth: ["stair-width"],
+  stairDirection: ["stair-direction"],
+  stairMidSteps: ["stair-mid-steps"],
+  stairLandingWidth: ["stair-landing-width"],
+  stairMidSpace: ["stair-mid-space"],
+  stairLandingCuts: ["stair-landing-cuts"],
+  stairRotation: ["stair-rotation"],
+  stairColor: ["stair-color"],
   // node discriminator + object
   nodeType: ["node-type"],
   objectKind: ["object-kind"],

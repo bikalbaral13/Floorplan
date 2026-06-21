@@ -252,7 +252,8 @@ import { polygonUnionVector } from "./vectorUnion";
 import { vectorizeImage, type VectorizeParams, type VectorizeColorMode } from "../../algorithms/vector/vectorizeImage";
 import { solvePipeNetwork, normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "../../algorithms/network/pipeNetworkSolver";
 import { computeFrame, type FrameGraphInput, type FrameSchema } from "../../algorithms/structure/frameBuilder";
-import { computeMiteredWalls } from "../../algorithms/structure/wallBuilder";
+import { computeMiteredWalls, computeWallDimensions } from "../../algorithms/structure/wallBuilder";
+import { computeMiteredUnion } from "../../wallGeometry";
 import { findDef, resolveStr, resolveNum, resolveBool, ROLES } from "./attrResolve";
 
 /** Shift a polyline perpendicular to itself by `d` px (signed; left-hand normal (-dy, dx)). Each vertex
@@ -399,6 +400,9 @@ export interface FlowPreviewItem {
   /** Frame Builder / Wall Builder only: the structural footprint polygons (column boxes / beam ribbons /
    *  mitred walls) to draw, each with its kind + hatch flag. World-pixel coords. */
   framePieces?: { poly: Point[]; kind: "column" | "beam" | "wall"; hatch: boolean }[];
+  /** Wall Builder "Union" on: render the band fills WITHOUT per-piece strokes and stroke this merged
+   *  outline instead (outer + inner faces only) — so the internal mitre-seam diagonals disappear. */
+  frameUnionOutline?: Point[][];
   /** Segment to Door / Window only: filled symbol polygons (door leaf / window frame) + open symbol lines
    *  (swing arc + leaves / frame edges + glass + mullions). World-pixel coords. */
   doorFill?: Point[][];
@@ -1283,7 +1287,7 @@ export function evaluateFlow(
         const filtered = pipeGraph.edges.filter((e) => { const A = ptById0.get(e.a), B = ptById0.get(e.b); return !!A && !!B && matches(A, B); });
         if (filtered.length > 0 && filtered.length < pipeGraph.edges.length) graphInput = { ...pipeGraph, edges: filtered };
       }
-      const justification = data.params.justification === "left" ? "left" : data.params.justification === "right" ? "right" : "center";
+      const justification = typeof data.params.justification === "string" ? data.params.justification : "center";
       const res = computeMiteredWalls(graphInput, schema, ppm, { thicknessMm: num(data.params.thicknessMm, 230), justification });
       const polys = res.pieces.map((p) => p.poly).filter((p) => p.length >= 3);
       outputs.set(id, polys);
@@ -1294,57 +1298,36 @@ export function evaluateFlow(
         nodeResults: {}, segmentResults: res.segmentResults,
         summary: res.summary, converged: true, iterations: 0, status: res.status,
       };
+      // Union: drop the internal mitre-seam diagonals at junctions by stroking only the merged outline
+      // (edges not shared between two band polygons = the outer + inner wall faces). Architectural look.
+      // On if the node param is set OR any wall resolves union=true (schema role wall-union / its default).
+      const segAttrsU = pipeGraph.attrs.segments ?? {};
+      const unionOn = data.params.union === true
+        || res.pieces.some((p) => resolveBool(schema.segment, segAttrsU, p.id, "union", ROLES.wallUnion, false));
+      let frameUnionOutline: Point[][] | undefined;
+      if (unionOn && res.pieces.length) {
+        const polyMap = new Map(res.pieces.filter((p) => p.poly.length >= 3).map((p) => [p.id, p.poly]));
+        frameUnionOutline = computeMiteredUnion(polyMap).outerEdges.map((e) => [e.a, e.b]);
+      }
       items.push({
         nodeId: id, tool: "wall-builder", polygons: [], color: FLOW_TOOLS["wall-builder"].color,
         isFinal: succs.get(id)!.length === 0, values: vals,
         framePieces: res.pieces.map((p) => ({ poly: p.poly, kind: "wall" as const, hatch: p.hatch })),
+        ...(frameUnionOutline ? { frameUnionOutline } : {}),
         pipeResults: wallResults, pipeStatus: res.status, pipeSchemaName: schemaName,
       });
-      // Inner / outer face dimensions (toggled on the Walls node). For each band quad the two LONGEST
-      // edges are its faces; the one farther from the overall plan centre is "outer", the nearer "inner".
-      // Each face's dimension is offset away from its own band so outer reads outside, inner reads in-room.
-      // Per-wall dimension toggles: each segment's schema value (role show-outer-dim / show-inner-dim)
-      // wins, falling back to the node-level checkbox. So you can dimension some walls and not others.
-      const segAttrsWD = pipeGraph.attrs.segments ?? {};
+      // Inner / outer / center face dimensions — the SAME pure helper the live trace preview uses, so the
+      // hovered preview matches the committed result exactly. Inner vs outer is decided from the enclosed
+      // room geometry (room-facing face = inner); center uses the centerline.
       if (res.pieces.length) {
-        let gx = 0, gy = 0, gn = 0;
-        for (const piece of res.pieces) for (const p of piece.poly) { gx += p.x; gy += p.y; gn++; }
-        if (gn) { gx /= gn; gy /= gn; }
-        const gapPx = Math.max(0, num(data.params.dimGap, 0.18)) * ppm;
-        const labelPx = gapPx + 0.12 * ppm;
-        const dLines: Point[][] = [];
-        const dLabels: { x: number; y: number; text: string; rotation: number }[] = [];
-        for (const piece of res.pieces) {
-          const showOuter = resolveBool(schema.segment, segAttrsWD, piece.id, "showOuterDim", ROLES.showOuterDim, data.params.showOuterDim === true);
-          const showInner = resolveBool(schema.segment, segAttrsWD, piece.id, "showInnerDim", ROLES.showInnerDim, data.params.showInnerDim === true);
-          if (!showOuter && !showInner) continue;
-          const poly = piece.poly;
-          if (poly.length < 4) continue;
-          let cx = 0, cy = 0;
-          for (const p of poly) { cx += p.x; cy += p.y; }
-          cx /= poly.length; cy /= poly.length;
-          const ed = poly.map((p, i) => {
-            const q = poly[(i + 1) % poly.length];
-            return { a: p, b: q, len: Math.hypot(q.x - p.x, q.y - p.y), mx: (p.x + q.x) / 2, my: (p.y + q.y) / 2 };
-          }).sort((u, v) => v.len - u.len).slice(0, 2);
-          // Classify by distance to the global centre: [0] = outer (farther), [1] = inner (nearer).
-          ed.sort((u, v) => Math.hypot(v.mx - gx, v.my - gy) - Math.hypot(u.mx - gx, u.my - gy));
-          const faces: typeof ed = [];
-          if (showOuter && ed[0]) faces.push(ed[0]);
-          if (showInner && ed[1]) faces.push(ed[1]);
-          for (const e of faces) {
-            const L = e.len || 1;
-            const ux = (e.b.x - e.a.x) / L, uy = (e.b.y - e.a.y) / L;
-            let nx = -uy, ny = ux;
-            if ((e.mx - cx) * nx + (e.my - cy) * ny < 0) { nx = -nx; ny = -ny; } // offset away from THIS band
-            dLines.push([{ x: e.a.x + nx * gapPx, y: e.a.y + ny * gapPx }, { x: e.b.x + nx * gapPx, y: e.b.y + ny * gapPx }]);
-            let rot = Math.atan2(e.b.y - e.a.y, e.b.x - e.a.x) * 180 / Math.PI;
-            if (rot > 90 || rot < -90) rot += 180;
-            dLabels.push({ x: e.mx + nx * labelPx, y: e.my + ny * labelPx, text: `${(L / ppm).toFixed(2)} m`, rotation: rot });
-          }
-        }
+        const dim = computeWallDimensions(graphInput, schema, ppm, res.pieces, {
+          showOuterDim: data.params.showOuterDim === true,
+          showInnerDim: data.params.showInnerDim === true,
+          showCenterDim: data.params.showCenterDim === true,
+          dimGap: num(data.params.dimGap, 0.18),
+        });
         // Separate item so the band (framePieces) and the dimensions (dimLines) both render.
-        if (dLines.length) items.push({ nodeId: id, tool: "wall-builder", polygons: [], color: FLOW_TOOLS["wall-builder"].color, isFinal: false, dimLines: dLines, dimLabels: dLabels });
+        if (dim.dimLines.length) items.push({ nodeId: id, tool: "wall-builder", polygons: [], color: FLOW_TOOLS["wall-builder"].color, isFinal: false, dimLines: dim.dimLines, dimLabels: dim.dimLabels });
       }
       continue;
     }
@@ -1514,13 +1497,15 @@ export function evaluateFlow(
     // door/window fill+lines preview channel (filled flight/landing rects + stroked treads/arrow).
     if (data.tool === "node-to-staircase") {
       const np = data.params;
-      const drawColor = typeof np.color === "string" && np.color ? np.color : FLOW_TOOLS["node-to-staircase"].color;
+      const npColor = typeof np.color === "string" && np.color ? np.color : FLOW_TOOLS["node-to-staircase"].color;
       // Schema self-filter: when a Schema is attached, only place staircases on "staircase"-typed nodes
       // (so feeding the whole Canvas Nodes bundle doesn't stamp a stair on every junction/object).
       const scSchema = resolveSchemaFor(id);
       const scNodeDefs = scSchema.node;
       const scNodeAttrs = pipeGraph?.attrs.nodes ?? {};
       const scTypeDef = findDef(scNodeDefs, ROLES.nodeType);
+      // Colour is node-level (one item) — take the schema's Stair Color default, else the node param.
+      const drawColor = resolveStr(scNodeDefs, scNodeAttrs, null, "color", ROLES.stairColor, npColor);
       const fill: Point[][] = [];
       const lines: Point[][] = [];
       for (const pl of inputPolylinesOf(id, 1)) {
@@ -1528,7 +1513,21 @@ export function evaluateFlow(
         if (!p) continue;
         const nodeKey = nodeKeyForPt(p);
         if (scTypeDef && nodeKey && resolveStr(scNodeDefs, scNodeAttrs, nodeKey, "type", ROLES.nodeType, "staircase") !== "staircase") continue;
-        const s = computeNodeStaircase(p, np, ppm);
+        // Per-node staircase params: this node's own schema value → schema default → the node param.
+        const nk = nodeKey ?? null;
+        const sp: Record<string, unknown> = {
+          config: resolveStr(scNodeDefs, scNodeAttrs, nk, "config", ROLES.stairConfig, typeof np.config === "string" ? np.config : "straight"),
+          steps: resolveNum(scNodeDefs, scNodeAttrs, nk, "steps", ROLES.stairSteps, num(np.steps, 14)),
+          tread: resolveNum(scNodeDefs, scNodeAttrs, nk, "tread", ROLES.stairTread, num(np.tread, 0.28)),
+          width: resolveNum(scNodeDefs, scNodeAttrs, nk, "width", ROLES.stairWidth, num(np.width, 1)),
+          direction: resolveStr(scNodeDefs, scNodeAttrs, nk, "direction", ROLES.stairDirection, typeof np.direction === "string" ? np.direction : "ltr"),
+          midSteps: resolveNum(scNodeDefs, scNodeAttrs, nk, "midSteps", ROLES.stairMidSteps, num(np.midSteps, 0)),
+          landingWidth: resolveNum(scNodeDefs, scNodeAttrs, nk, "landingWidth", ROLES.stairLandingWidth, num(np.landingWidth, 1)),
+          midSpace: resolveNum(scNodeDefs, scNodeAttrs, nk, "midSpace", ROLES.stairMidSpace, num(np.midSpace, 0.1)),
+          landingCuts: resolveNum(scNodeDefs, scNodeAttrs, nk, "landingCuts", ROLES.stairLandingCuts, num(np.landingCuts, 1)),
+          rotation: resolveNum(scNodeDefs, scNodeAttrs, nk, "rotation", ROLES.stairRotation, num(np.rotation, 0)),
+        };
+        const s = computeNodeStaircase(p, sp, ppm);
         fill.push(...s.fill);
         lines.push(...s.lines);
       }

@@ -124,6 +124,8 @@ import {
   wallPolygonPoints,
   wallWithDefaults,
 } from "./wallGeometry";
+import { computeMiteredWalls, computeWallDimensions, wallsToGraphInput } from "./algorithms/structure/wallBuilder";
+import type { FrameSchema } from "./algorithms/structure/frameBuilder";
 import { generateFloorPlan, DEFAULT_GENERATE_CONFIG, type GenerateConfig, type ConnectionEntry, type DoorPosition } from "./floorplanAlgorithms";
 import { runSimulatedAnnealing, DEFAULT_SA_PARAMS, type SAProgress, type SAHandle, type SAResult } from "./simulatedAnnealing";
 import {
@@ -754,6 +756,8 @@ interface SnapSettings {
   endpoints: boolean;
   midpoints: boolean;
   objectEdges: boolean;
+  /** Project the pointer onto the nearest point along a segment's spine while drawing. */
+  segmentPoints: boolean;
   /** Snap radius in pixels for endpoint (node) detection. Lower = easier to draw short segments near existing nodes. */
   endpointRadius: number;
   /** Snap radius in pixels for projecting onto the nearest wall spine while drawing. */
@@ -960,11 +964,13 @@ const findTouchDistance = (A: Point[], B: Point[], d: { x: number; y: number }) 
 
 const snapValue = (value: number, grid: number) => Math.round(value / grid) * grid;
 
-/** When drawing walls/rooms/measures, project the pointer onto a nearby wall spine so clicks on the wall face count. */
+/** When drawing walls/segments/rooms/measures, project the pointer onto a nearby wall spine so clicks on the
+ *  wall face count. `single-segment` ("Add Segment") draws typed wall segments for the Graph-to-Walls flow,
+ *  so it needs spine projection too — otherwise segment-point snapping silently never engages there. */
 const withNearestWallSpine = (p: Point, walls: Wall[], tool: Tool, maxDistance: number = WALL_OPENING_PLACE_MAX_DIST): Point => {
   if (
     walls.length === 0 ||
-    (tool !== "wall" && tool !== "segment" && tool !== "room" && tool !== "measure")
+    (tool !== "wall" && tool !== "segment" && tool !== "single-segment" && tool !== "room" && tool !== "measure")
   ) {
     return p;
   }
@@ -973,8 +979,11 @@ const withNearestWallSpine = (p: Point, walls: Wall[], tool: Tool, maxDistance: 
   return hit ? { x: hit.x, y: hit.y } : p;
 };
 
-const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings: SnapSettings, rooms?: Room[]) => {
+/** All radii in `settings`/below are SCREEN pixels; `scale` (zoom) converts them to world units so the
+ *  snap tolerance stays constant on screen at any zoom. Grid snapping stays in world units (unaffected). */
+const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings: SnapSettings, rooms?: Room[], scale: number = 1) => {
   let next: Point = { ...point };
+  const s = scale > 0 ? scale : 1;
 
   if (settings.grid) {
     next = {
@@ -985,7 +994,7 @@ const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings
 
   if (settings.endpoints) {
     const endpoints = walls.flatMap((wall) => [wall.start, wall.end]);
-    const radius = Math.max(0, settings.endpointRadius ?? 14);
+    const radius = Math.max(0, settings.endpointRadius ?? 14) / s;
     endpoints.forEach((endpoint) => {
       if (Math.hypot(endpoint.x - point.x, endpoint.y - point.y) < radius) {
         next = endpoint;
@@ -994,18 +1003,20 @@ const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings
   }
 
   if (settings.midpoints) {
+    const radius = 12 / s;
     walls.forEach((wall) => {
       const midpoint = {
         x: (wall.start.x + wall.end.x) / 2,
         y: (wall.start.y + wall.end.y) / 2,
       };
-      if (Math.hypot(midpoint.x - point.x, midpoint.y - point.y) < 12) {
+      if (Math.hypot(midpoint.x - point.x, midpoint.y - point.y) < radius) {
         next = midpoint;
       }
     });
   }
 
   if (settings.objectEdges) {
+    const radius = 12 / s;
     objects.forEach((objectItem) => {
       if (objectItem.kind === "rect") {
         const corners = [
@@ -1015,7 +1026,7 @@ const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings
           { x: objectItem.x + objectItem.width, y: objectItem.y + objectItem.height },
         ];
         corners.forEach((corner) => {
-          if (Math.hypot(corner.x - point.x, corner.y - point.y) < 12) {
+          if (Math.hypot(corner.x - point.x, corner.y - point.y) < radius) {
             next = corner;
           }
         });
@@ -1025,10 +1036,11 @@ const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings
 
   // Highest priority: snap to all vertices of plot-boundary and floorplate-boundary rooms
   if (rooms) {
+    const radius = 16 / s;
     rooms.forEach((room) => {
       if (room.roomType === "plot-boundary" || room.roomType === "floorplate-boundary") {
         room.points.forEach((v) => {
-          if (Math.hypot(v.x - point.x, v.y - point.y) < 16) {
+          if (Math.hypot(v.x - point.x, v.y - point.y) < radius) {
             next = v;
           }
         });
@@ -1666,6 +1678,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** "Add Segment" (single-line) trace state — click sets start, second click commits one segment. */
   const [singleSegStart, setSingleSegStart] = useState<Point | null>(null);
   const [singleSegPreview, setSingleSegPreview] = useState<Point | null>(null);
+  /** Hover span for click-to-place door/window on a wall (Add Segment → Door/Window): the opening's
+   *  two endpoints on the host wall + whether it fits, so the preview shows where the click lands. */
+  const [openingPlacePreview, setOpeningPlacePreview] = useState<{ ds: Point; de: Point } | null>(null);
   // Refs so the global keydown handler can read the live single-segment anchor/preview (for the
   // direct-distance "type a length while hovering" entry, mirroring the Wall tool).
   const singleSegStartRef = useRef<Point | null>(null);
@@ -1692,6 +1707,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // The segment type the single-segment ("Add Segment") tool commits — plain line, a door / window
   // opening, or any schema-defined seg-type (rendered via its flow symbol). Drawn directly as a segment.
   const [singleSegType, setSingleSegType] = useState<string>("line");
+  // Clear the door/window click-to-place hover span when leaving that mode.
+  useEffect(() => {
+    if (!(tool === "single-segment" && (singleSegType === "door" || singleSegType === "window"))) setOpeningPlacePreview(null);
+  }, [tool, singleSegType]);
   // The node-type to tag the next point placement with (schema-driven Add Node, e.g. object / junction).
   const pendingNodeTypeRef = useRef<string | null>(null);
   // The schema space-type to tag the next drawn Space with (Add Space → Room / Open Space).
@@ -1737,6 +1756,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     endpoints: true,
     midpoints: true,
     objectEdges: true,
+    segmentPoints: true,
     endpointRadius: 14,
     wallSpineRadius: 14,
   });
@@ -1745,7 +1765,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     drawing: true,
     objects: true,
     guides: true,
-    measure: true,
+    measure: false,
     measureArrows: false,
     text: false,
     underlay: true,
@@ -3391,6 +3411,23 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return schemaNodeToSchemas(schemaNode.data?.params ?? {}).segment;
   }, [liveFlowGraph]);
 
+  // Canvas-wide Settings defs from the active schema node (e.g. Ortho) — shown in the Properties tab when
+  // nothing is selected.
+  const activeSchemaSettingsDefs = useMemo<import("./types").GraphPropDef[]>(() => {
+    const schemaNode = liveFlowGraph?.nodes?.find((n) => n.data?.tool === "schema");
+    if (!schemaNode) return [];
+    return schemaNodeToSchemas(schemaNode.data?.params ?? {}).settings;
+  }, [liveFlowGraph]);
+  // The schema's Ortho default → drives the canvas Ortho lock. Re-applied whenever the default changes
+  // (e.g. on workflow load or when edited in the flow); the user can still toggle it in Properties after.
+  const schemaOrthoDefault = useMemo<boolean | null>(() => {
+    const def = activeSchemaSettingsDefs.find((d) => d.role === "ortho" || d.key === "ortho");
+    return def ? def.default === true : null;
+  }, [activeSchemaSettingsDefs]);
+  useEffect(() => {
+    if (schemaOrthoDefault != null) setOrthoMode(schemaOrthoDefault);
+  }, [schemaOrthoDefault]);
+
   // Schema-driven LAYERS — derived live from the flow graph (mirrors extractDrawTools). When a "Schema to
   // Layers" node is present, read its attached Schema's segment `type` (seg-type) and node `type`
   // (node-type) discriminators → foldable "Segment" (Wall/Door/Window/Line) and "Node" (Junction/Object)
@@ -3427,6 +3464,27 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     () => !!liveFlowGraph?.nodes?.some((n) => n.data?.tool === "wall-builder"),
     [liveFlowGraph],
   );
+  // Wall Builder node params + attached Schema — so the live trace preview can run the SAME mitre +
+  // dimension pipeline the committed flow does, on the hypothetical (committed + preview) wall set.
+  const wallBuilderDimParams = useMemo(() => {
+    const n = liveFlowGraph?.nodes?.find((nd) => nd.data?.tool === "wall-builder");
+    const p = (n?.data?.params ?? {}) as Record<string, unknown>;
+    return {
+      thicknessMm: typeof p.thicknessMm === "number" ? p.thicknessMm : 230,
+      justification: typeof p.justification === "string" ? p.justification : "center",
+      showOuterDim: p.showOuterDim === true,
+      showInnerDim: p.showInnerDim === true,
+      showCenterDim: p.showCenterDim === true,
+      dimGap: typeof p.dimGap === "number" ? p.dimGap : 0.18,
+    };
+  }, [liveFlowGraph]);
+  const wallBuilderSchema = useMemo<FrameSchema>(() => {
+    const f = liveFlowGraph;
+    const schemaNode = f?.nodes?.find((n) => n.data?.tool === "schema");
+    if (!schemaNode) return {};
+    const s = schemaNodeToSchemas(schemaNode.data?.params ?? {});
+    return { node: s.node, segment: s.segment, graph: s.graph };
+  }, [liveFlowGraph]);
   // Per-type visibility for the schema layer blocks. Keys: `seg:<type>` / `node:<type>`. Live (not saved).
   const [hiddenSchemaTypes, setHiddenSchemaTypes] = useState<Set<string>>(() => new Set());
   const [schemaSegBlockOpen, setSchemaSegBlockOpen] = useState(true);
@@ -16948,6 +17006,59 @@ User request: ${aiPrompt.trim()}`;
     return best;
   };
 
+  /** For Add Segment → Door/Window: snap `p` to the nearest WALL-typed segment and compute the opening
+   *  span — a segment of the configured width centred on the snap point, clamped to stay inside the host.
+   *  Returns null when no wall is in range or the host is too short to hold the opening (click ignored). */
+  const openingSpanOnWall = (p: Point): { host: Wall; ds: Point; de: Point } | null => {
+    const Wpx = (singleSegType === "window" ? windowWidthM : doorWidthM) * pixelsPerMeter;
+    if (!(Wpx > 0)) return null;
+    const hit = snapPointerToNearestWall(p, history.state.walls, WALL_OPENING_PLACE_MAX_DIST);
+    if (!hit) return null;
+    const host = history.state.walls.find((w) => w.id === hit.wallId);
+    if (!host) return null;
+    // Only embed openings in solid WALL segments (not in another door / window / line).
+    const hostType = String(history.state.graphAttrs?.segments?.[host.id]?.["seg-type"] ?? host.segmentType ?? "wall");
+    if (hostType !== "wall") return null;
+    const len = Math.hypot(host.end.x - host.start.x, host.end.y - host.start.y);
+    if (len <= Wpx) return null; // host too short to hold the opening → ignore the click
+    const ux = (host.end.x - host.start.x) / len, uy = (host.end.y - host.start.y) / len;
+    const half = Wpx / 2;
+    const c = Math.min(Math.max(hit.t * len, half), len - half); // centre along the wall, clamped to fit
+    return {
+      host,
+      ds: { x: host.start.x + ux * (c - half), y: host.start.y + uy * (c - half) },
+      de: { x: host.start.x + ux * (c + half), y: host.start.y + uy * (c + half) },
+    };
+  };
+
+  /** Commit a click-to-place door/window: split the host wall into wall · opening · wall, tagging the
+   *  middle as the door/window type (+ its schema defaults) and giving the remnants the host's own props. */
+  const placeOpeningOnWall = (p: Point) => {
+    const span = openingSpanOnWall(p);
+    if (!span) return;
+    const { host, ds, de } = span;
+    const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
+    const segs: Record<string, Record<string, import("./types").GraphAttrValue>> = { ...(ga0.segments ?? {}) };
+    const hostAttrs = segs[host.id];
+    const openId = createId(), w1Id = createId(), w2Id = createId();
+    if (hostAttrs) { segs[w1Id] = { ...hostAttrs, "seg-type": "wall" }; segs[w2Id] = { ...hostAttrs, "seg-type": "wall" }; }
+    const segDefaults = activeSegDefaultsRef.current?.type === singleSegType ? activeSegDefaultsRef.current.vals : {};
+    segs[openId] = { ...(segs[openId] ?? {}), "seg-type": singleSegType, ...segDefaults };
+    delete segs[host.id];
+    const base = (id: string, start: Point, end: Point, segType: string): Wall => ({
+      id, start, end,
+      thickness: layerVisibility.viewGraph ? 0.01 : (host.thickness ?? wallThickness),
+      color: host.color ?? wallColor, dashed: host.dashed, mode: host.mode ?? "line", method: host.method ?? "center",
+      segmentType: segType,
+      ...(segType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}),
+    });
+    const rest = history.state.walls.filter((w) => w.id !== host.id);
+    const fresh = [base(w1Id, host.start, ds, "wall"), base(openId, ds, de, singleSegType), base(w2Id, de, host.end, "wall")]
+      .filter((w) => Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) > 0.1);
+    history.set({ ...history.state, walls: splitWallsAtIntersections([...rest, ...fresh]), graphAttrs: { ...ga0, segments: segs } });
+    setOpeningPlacePreview(null);
+  };
+
   const onStageMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
     const clickedNode = event.target;
     const clickedOnStage = clickedNode === clickedNode.getStage();
@@ -17145,8 +17256,13 @@ User request: ${aiPrompt.trim()}`;
       }
       return;
     }
-    const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
-    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
+    // Add Segment → Door/Window: click-to-place on a wall (snap → split host into wall · opening · wall).
+    if (tool === "single-segment" && (singleSegType === "door" || singleSegType === "window")) {
+      placeOpeningOnWall(pointer);
+      return;
+    }
+    const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
+    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
     setGuideLines([snapped.x, snapped.y]);
     applyWorldDrawDown(snapped, event.evt.detail, event.evt.shiftKey);
   };
@@ -17825,12 +17941,18 @@ User request: ${aiPrompt.trim()}`;
       setEdgePreviewPoint(null);
     }
     if (pointer) {
-      if (tool === "door" || tool === "window") {
+      // Add Segment → Door/Window hover: show where the opening would split the wall + its span.
+      if (tool === "single-segment" && (singleSegType === "door" || singleSegType === "window")) {
+        const span = openingSpanOnWall(pointer);
+        setOpeningPlacePreview(span ? { ds: span.ds, de: span.de } : null);
+        const hit = snapPointerToNearestWall(pointer, history.state.walls, WALL_OPENING_PLACE_MAX_DIST);
+        setGuideLines(hit ? [hit.x, hit.y] : [pointer.x, pointer.y]);
+      } else if (tool === "door" || tool === "window") {
         const hit = snapPointerToNearestWall(pointer, history.state.walls, WALL_OPENING_PLACE_MAX_DIST);
         setGuideLines(hit ? [hit.x, hit.y] : [pointer.x, pointer.y]);
       } else {
-        const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
-        const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
+        const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
+        const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
         // Wall rubber-band: lock the guide to the active draw constraint (Ortho / Shift) once an anchor
         // is placed, so the preview matches what a click commits. Rect/spline keep the raw cursor.
         const wallGuide = tool === "wall" && currentWallStart && wallDrawType !== "rect" && wallDrawType !== "spline"
@@ -17882,8 +18004,8 @@ User request: ${aiPrompt.trim()}`;
     if (!pointer) {
       return;
     }
-    const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
-    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
+    const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
+    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
     setFreehandDraft((prev) => [...prev, snapped.x, snapped.y]);
   };
 
@@ -17971,8 +18093,8 @@ User request: ${aiPrompt.trim()}`;
           if (!pointer) {
             return null;
           }
-          const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
-          return snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
+          const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
+          return snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
         })();
       pendingMeasureFinishSnapRef.current = null;
       if (!end) {
@@ -19365,6 +19487,9 @@ User request: ${aiPrompt.trim()}`;
         <Button size="sm" variant={snapSettings.objectEdges ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, objectEdges: !prev.objectEdges }))}>
           Object edges
         </Button>
+        <Button size="sm" variant={snapSettings.segmentPoints ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, segmentPoints: !prev.segmentPoints }))}>
+          Segment Points
+        </Button>
       </div>
       <div className="mt-3">
         <div className="flex items-center justify-between">
@@ -19396,8 +19521,9 @@ User request: ${aiPrompt.trim()}`;
           step={1}
           value={snapSettings.wallSpineRadius}
           onChange={(e) => setSnapSettings((prev) => ({ ...prev, wallSpineRadius: +e.target.value }))}
+          disabled={!snapSettings.segmentPoints}
         />
-        <span className="text-[9px] text-slate-400">Pointer is projected onto the nearest wall's spine within this radius while drawing. 0 disables.</span>
+        <span className="text-[9px] text-slate-400">Pointer is projected onto the nearest wall's spine within this radius while drawing. Requires Segment Points; 0 disables.</span>
       </div>
     </div>
   );
@@ -20736,8 +20862,8 @@ User request: ${aiPrompt.trim()}`;
                         }
                         return;
                       }
-                      const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.wallSpineRadius);
-                      const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms);
+                      const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
+                      const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
                       setGuideLines([snapped.x, snapped.y]);
                       applyWorldDrawDown(snapped, e.evt.detail);
                     }}
@@ -23983,7 +24109,8 @@ User request: ${aiPrompt.trim()}`;
                                   history.state.walls.filter((entry) => entry.id !== wall.id),
                                   history.state.objects,
                                   snapSettings,
-                                  visibleRooms
+                                  visibleRooms,
+                                  scale
                                 );
                                 const snappedWithWall =
                                   wallExtendMode === "wall-only"
@@ -23991,7 +24118,7 @@ User request: ${aiPrompt.trim()}`;
                                       const hit = snapPointerToNearestWall(
                                         snapped,
                                         history.state.walls.filter((entry) => entry.id !== wall.id),
-                                        14
+                                        14 / scale
                                       );
                                       return hit ? { x: hit.x, y: hit.y } : snapped;
                                     })()
@@ -24104,7 +24231,8 @@ User request: ${aiPrompt.trim()}`;
                                   history.state.walls.filter((entry) => entry.id !== wall.id),
                                   history.state.objects,
                                   snapSettings,
-                                  visibleRooms
+                                  visibleRooms,
+                                  scale
                                 );
                                 const snappedWithWall =
                                   wallExtendMode === "wall-only"
@@ -24112,7 +24240,7 @@ User request: ${aiPrompt.trim()}`;
                                       const hit = snapPointerToNearestWall(
                                         snapped,
                                         history.state.walls.filter((entry) => entry.id !== wall.id),
-                                        14
+                                        14 / scale
                                       );
                                       return hit ? { x: hit.x, y: hit.y } : snapped;
                                     })()
@@ -24245,7 +24373,8 @@ User request: ${aiPrompt.trim()}`;
                                     history.state.walls.filter(w => w.id !== wall.id),
                                     history.state.objects,
                                     snapSettings,
-                                    visibleRooms
+                                    visibleRooms,
+                                    scale
                                   );
                                   event.target.position(snapped);
                                   offset = { x: snapped.x - iX, y: snapped.y - iY };
@@ -24258,7 +24387,8 @@ User request: ${aiPrompt.trim()}`;
                                     history.state.walls.filter(w => w.id !== wall.id),
                                     history.state.objects,
                                     snapSettings,
-                                    visibleRooms
+                                    visibleRooms,
+                                    scale
                                   );
                                   dist = (snapped.x - iX) * nx + (snapped.y - iY) * ny;
                                   event.target.position({ x: iX + nx * dist, y: iY + ny * dist });
@@ -26191,6 +26321,24 @@ User request: ${aiPrompt.trim()}`;
                       ) : null}
                     </>
                   ) : null}
+                  {/* Add-Segment Door/Window click-to-place preview: the opening span on the host wall. */}
+                  {tool === "single-segment" && (singleSegType === "door" || singleSegType === "window") && openingPlacePreview ? (() => {
+                    const { ds, de } = openingPlacePreview;
+                    const col = singleSegType === "window" ? "#0891b2" : "#9333ea";
+                    const dx = de.x - ds.x, dy = de.y - ds.y, L = Math.hypot(dx, dy) || 1;
+                    const nx = -dy / L, ny = dx / L;
+                    const tick = 6 / Math.max(1, scale);
+                    const fontPx = Math.max(10, 12 / Math.max(1, scale));
+                    const mid = { x: (ds.x + de.x) / 2, y: (ds.y + de.y) / 2 };
+                    return (
+                      <>
+                        <Line points={[ds.x, ds.y, de.x, de.y]} stroke={col} strokeWidth={Math.max(2, 3 / Math.max(1, scale))} lineCap="round" listening={false} />
+                        <Line points={[ds.x + nx * tick, ds.y + ny * tick, ds.x - nx * tick, ds.y - ny * tick]} stroke={col} strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))} listening={false} />
+                        <Line points={[de.x + nx * tick, de.y + ny * tick, de.x - nx * tick, de.y - ny * tick]} stroke={col} strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))} listening={false} />
+                        <Text x={mid.x + nx * (tick + 4 / Math.max(1, scale))} y={mid.y + ny * (tick + 4 / Math.max(1, scale))} text={`${unitValueFromPixels(L, unit, pixelsPerMeter).toFixed(2)} ${unit}`} fontSize={fontPx} fill={col} listening={false} />
+                      </>
+                    );
+                  })() : null}
                   {/* Add-Segment single-line preview: dashed line + live length label. */}
                   {tool === "single-segment" && singleSegStart && singleSegPreview ? (() => {
                     const a = singleSegStart;
@@ -26211,34 +26359,57 @@ User request: ${aiPrompt.trim()}`;
                     const text = wallLengthInput !== ""
                       ? `${wallLengthInput}▏ ${unit}`
                       : `${distanceInUnit(a, b, unit, pixelsPerMeter).toFixed(2)} ${unit}`;
-                    // For a WALL-typed trace, preview the actual band (perimeter) using the thickness +
-                    // justification set in the Wall popup (role-keyed; metres → px), so it reads as a wall,
-                    // not a bare line. Other types keep the thin dashed rubber-band.
                     const segDef = activeSegDefaultsRef.current?.type === singleSegType ? activeSegDefaultsRef.current.vals : null;
-                    let bandPts: number[] | null = null;
+                    // For a WALL trace, preview EXACTLY what placement produces: build the hypothetical
+                    // (committed + this segment) wall set, split it as mouse-release would, and run the SAME
+                    // mitre + dimension pipeline as the committed flow. So the new wall reads mitred at BOTH
+                    // ends with its real post-placement inner / outer / center dimensions (including once it
+                    // closes a room) — not the isolated segment's length.
+                    const PREVIEW_ID = "__wall_preview__";
+                    let bandPolys: number[][] = [];
+                    let pvDimLines: { x: number; y: number }[][] = [];
+                    let pvDimLabels: { x: number; y: number; text: string; rotation: number }[] = [];
                     if (singleSegType === "wall") {
                       const thM = segDef ? Number(segDef["wall-thickness"]) : NaN;
-                      const T = (Number.isFinite(thM) && thM > 0 ? thM : 0.23) * pixelsPerMeter;
-                      const just = segDef && typeof segDef["wall-justification"] === "string" ? segDef["wall-justification"] : "center";
-                      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
-                      const nlx = -dy / L, nly = dx / L; // left normal
-                      const hwL = just === "left" ? 0 : just === "right" ? T : T / 2;
-                      const hwR = just === "left" ? T : just === "right" ? 0 : T / 2;
-                      bandPts = [
-                        a.x + nlx * hwL, a.y + nly * hwL,
-                        b.x + nlx * hwL, b.y + nly * hwL,
-                        b.x - nlx * hwR, b.y - nly * hwR,
-                        a.x - nlx * hwR, a.y - nly * hwR,
-                      ];
+                      const thMOk = Number.isFinite(thM) && thM > 0 ? thM : wallBuilderDimParams.thicknessMm / 1000;
+                      const just = segDef && typeof segDef["wall-justification"] === "string" ? String(segDef["wall-justification"]) : wallBuilderDimParams.justification;
+                      const preview: Wall = { id: PREVIEW_ID, start: a, end: b, thickness: 0.01 * pixelsPerMeter, color: "#0F766E", segmentType: "wall" };
+                      const hypo = splitWallsAtIntersections([...history.state.walls, preview]);
+                      const segAttrs: Record<string, Record<string, import("./types").GraphAttrValue>> = { ...(history.state.graphAttrs?.segments ?? {}) };
+                      segAttrs[PREVIEW_ID] = { ...(segDef ?? {}), "seg-type": "wall", "wall-thickness": thMOk, "wall-justification": just };
+                      const graph = wallsToGraphInput(hypo, segAttrs, pixelsPerMeter);
+                      const res = computeMiteredWalls(graph, wallBuilderSchema, pixelsPerMeter, { thicknessMm: wallBuilderDimParams.thicknessMm, justification: wallBuilderDimParams.justification });
+                      const isPv = (pid: string) => pid === PREVIEW_ID || pid.startsWith(`${PREVIEW_ID}~`);
+                      // Bands: only the new wall's pieces (existing bands are already drawn by the committed
+                      // flow). Dimensions: the WHOLE prospective result, so existing walls this segment splits
+                      // re-dimension live too — the committed wall dimensions are suppressed during the trace.
+                      bandPolys = res.pieces.filter((p) => isPv(p.id)).map((p) => p.poly.flatMap((pt) => [pt.x, pt.y]));
+                      const dim = computeWallDimensions(graph, wallBuilderSchema, pixelsPerMeter, res.pieces, {
+                        showOuterDim: wallBuilderDimParams.showOuterDim,
+                        showInnerDim: wallBuilderDimParams.showInnerDim,
+                        showCenterDim: wallBuilderDimParams.showCenterDim,
+                        dimGap: wallBuilderDimParams.dimGap,
+                      });
+                      pvDimLines = dim.dimLines;
+                      pvDimLabels = dim.dimLabels;
                     }
                     return (
                       <>
-                        {bandPts ? (
+                        {bandPolys.length ? (
                           <>
-                            {/* Wall band perimeter (filled + outlined). */}
-                            <Line points={bandPts} closed fill="rgba(15,118,110,0.12)" stroke="#0F766E" strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))} dash={[6, 4]} listening={false} />
+                            {/* Mitred wall band(s) the segment becomes on release (filled + outlined). */}
+                            {bandPolys.map((bp, i) => (
+                              <Line key={`pvb${i}`} points={bp} closed fill="rgba(15,118,110,0.12)" stroke="#0F766E" strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))} dash={[6, 4]} listening={false} />
+                            ))}
                             {/* Faint centerline for reference. */}
                             <Line points={[a.x, a.y, b.x, b.y]} stroke="#0F766E" strokeWidth={Math.max(0.5, 1 / Math.max(1, scale))} dash={[4, 4]} opacity={0.5} lineCap="round" listening={false} />
+                            {/* Post-placement inner / outer / center dimensions. */}
+                            {pvDimLines.map((ln, i) => (
+                              <Line key={`pvdl${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#EA580C" strokeWidth={Math.max(0.75, 1 / Math.max(1, scale))} listening={false} />
+                            ))}
+                            {pvDimLabels.map((lb, i) => (
+                              <Text key={`pvdt${i}`} x={lb.x} y={lb.y} text={lb.text} fontSize={fontPx} fill="#EA580C" rotation={lb.rotation} listening={false} />
+                            ))}
                           </>
                         ) : (
                           <Line
@@ -26496,6 +26667,14 @@ User request: ${aiPrompt.trim()}`;
                     // Schema-layer visibility: hide this node's symbols when its Segment/Node layer is
                     // hidden (e.g. Door layer eye closed → Segment-to-Door symbols vanish; segment stays).
                     if (isFlowSymbolHidden(item.tool)) return [];
+                    // The Canvas source's raw-geometry overlay (the segment centerlines drawn under the
+                    // flow's walls) follows the Segments display layer — so unchecking it hides the
+                    // centerlines, matching the native-wall behaviour when no workflow is loaded.
+                    if (item.tool === "canvas-source" && !layerVisibility.segments) return [];
+                    // While actively tracing a wall, the live preview renders the FULL prospective wall
+                    // dimensions (including the walls this segment splits), so suppress the committed
+                    // wall-builder dimensions to avoid showing stale duplicates next to the live ones.
+                    if (item.dimLines && item.tool === "wall-builder" && tool === "single-segment" && !!singleSegStart && singleSegType === "wall") return [];
                     // Dimension node: witness lines + dimension line + ticks (open polylines) and the
                     // positioned value labels. Geometry-less (polygons is empty) — drawn from dimLines.
                     if (item.dimLines) {
@@ -26676,7 +26855,10 @@ User request: ${aiPrompt.trim()}`;
                     // mitred walls. Each kind gets a distinct accent colour; "hatch" pieces use a pattern.
                     if (item.framePieces) {
                       const sw = 1.2 / scale;
-                      return item.framePieces.map((fp, fi) => {
+                      // Union on: fill the bands WITHOUT per-piece strokes (so the internal mitre-seam
+                      // diagonals vanish) and stroke only the merged outline (outer + inner faces).
+                      const union = item.frameUnionOutline;
+                      const fills = item.framePieces.map((fp, fi) => {
                         const col = fp.kind === "column" ? "#9a3412" : fp.kind === "wall" ? "#334155" : "#b45309";
                         const faceProps: Record<string, unknown> = fp.hatch
                           ? {
@@ -26692,13 +26874,25 @@ User request: ${aiPrompt.trim()}`;
                             points={fp.poly.flatMap((p) => [p.x, p.y])}
                             closed
                             {...faceProps}
-                            stroke={col}
-                            strokeWidth={sw}
+                            stroke={union ? undefined : col}
+                            strokeWidth={union ? 0 : sw}
                             lineJoin="round"
                             listening={false}
                           />
                         );
                       });
+                      if (!union) return fills;
+                      const outline = union.map((seg, oi) => (
+                        <Line
+                          key={`flow-${item.nodeId}-uout-${oi}`}
+                          points={seg.flatMap((p) => [p.x, p.y])}
+                          stroke="#334155"
+                          strokeWidth={sw}
+                          lineCap="round"
+                          listening={false}
+                        />
+                      ));
+                      return [...fills, ...outline];
                     }
                     // Display Segment: per-segment styling. Line mode → styled stroke (+ optional direction
                     // arrow); Buffered mode → filled/hatched ribbon (+ optional arrow). Each segment can look
@@ -29151,6 +29345,25 @@ User request: ${aiPrompt.trim()}`;
                         </div>
                       </div>
                     )}
+                  </div>
+                ) : activeSchemaSettingsDefs.length ? (
+                  // Nothing selected: show the workflow's canvas-wide Settings (e.g. Ortho).
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-500">Settings</p>
+                    <div className="rounded border border-cyan-200 bg-cyan-50/40 p-2 space-y-1.5">
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-cyan-700">Settings</span>
+                      {activeSchemaSettingsDefs.map((def) => {
+                        if (def.kind === "checkbox" && (def.role === "ortho" || def.key === "ortho")) {
+                          return (
+                            <label key={def.key} className="flex items-center justify-between gap-2 text-[10px] text-slate-600">
+                              <span className="text-[10px] text-slate-500">{def.label ?? "Ortho"}</span>
+                              <input type="checkbox" checked={orthoMode} onChange={(e) => setOrthoMode(e.target.checked)} />
+                            </label>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
                   </div>
                 ) : null}
 

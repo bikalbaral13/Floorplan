@@ -107,6 +107,9 @@ export const SCHEMA_SECTIONS = [
   { param: "spaceProps", title: "Space Schema" },
   { param: "graphProps", title: "Graph Schema" },
   { param: "informationProps", title: "Information Schema" },
+  // Canvas-wide settings (not per-element) — e.g. Ortho. Surfaced in the Properties tab when nothing
+  // is selected; the editor reads them via `schemaNodeToSchemas().settings`.
+  { param: "settingsProps", title: "Settings" },
 ] as const;
 export type SchemaSectionParam = (typeof SCHEMA_SECTIONS)[number]["param"];
 
@@ -211,6 +214,7 @@ export const schemaNodeToSchemas = (params: Record<string, unknown>): {
   space: import("../types").GraphPropDef[];
   graph: import("../types").GraphPropDef[];
   information: import("../types").GraphPropDef[];
+  settings: import("../types").GraphPropDef[];
 } => ({
   name: typeof params.name === "string" && params.name.trim() ? params.name.trim() : undefined,
   node: sectionToDefs(schemaEntries(params, "nodeProps")),
@@ -218,6 +222,7 @@ export const schemaNodeToSchemas = (params: Record<string, unknown>): {
   space: sectionToDefs(schemaEntries(params, "spaceProps")),
   graph: sectionToDefs(schemaEntries(params, "graphProps")),
   information: sectionToDefs(schemaEntries(params, "informationProps")),
+  settings: sectionToDefs(schemaEntries(params, "settingsProps")),
 });
 
 /** One named metric slot on the Output node. Each slot exposes a value-input endpoint (`valin-<id>`)
@@ -2794,28 +2799,37 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "totalArea", label: "Wall area", unit: "m²" },
     ],
     // Fallbacks used only when the schema doesn't define the property for a segment.
-    defaultParams: { thicknessMm: 230, justification: "center", height: 3, showOuterDim: false, showInnerDim: false, dimGap: 0.18 },
+    defaultParams: { thicknessMm: 230, justification: "center", height: 3, union: false, showOuterDim: false, showInnerDim: false, showCenterDim: false, dimGap: 0.18 },
     fields: [
       { key: "thicknessMm", label: "Thickness", kind: "range", min: 0, max: 1000, step: 10, unit: "mm", role: "wall-thickness" },
+      // Justification is which side of the (always-snappable) centerline the SOLID sits on. Inner / Outer
+      // are decided from the enclosed room geometry (Inner = room side, Outer = street side) — so they read
+      // sensibly while tracing; Center splits T/2 each side and keeps editing cleanest.
       {
         key: "justification",
         label: "Justification",
         kind: "select",
         role: "wall-justification",
         options: [
-          { value: "left", label: "Left" },
+          { value: "inner", label: "Inner" },
           { value: "center", label: "Center" },
-          { value: "right", label: "Right" },
+          { value: "outer", label: "Outer" },
         ],
       },
       // Wall height (m) — no plan-view effect; consumed by 3D / elevation. Per-element via role "wall-height".
       { key: "height", label: "Height", kind: "range", min: 0, max: 10, step: 0.05, unit: "m", role: "wall-height" },
-      // Dimension the wall band's faces: outer (away from the plan centre) and/or inner (room side).
+      // Union: merge the band fills and stroke only the outer / inner faces — removes the internal
+      // mitre-seam diagonals at junctions for a clean architectural drawing.
+      { key: "union", label: "Union", kind: "checkbox" },
+      // Dimension the wall band's faces. Which face is OUTER vs INNER is decided from the enclosed room
+      // geometry (the room-facing face is "inner"), not the draw direction.
       { key: "showOuterDim", label: "Show Outer Dimension", kind: "checkbox" },
       { key: "showInnerDim", label: "Show Inner Dimension", kind: "checkbox" },
+      // Center dimension = the wall's centerline (spine) length, drawn on the centerline.
+      { key: "showCenterDim", label: "Show Center Dimension", kind: "checkbox" },
       { key: "dimGap", label: "Dimension Offset", kind: "number", min: 0, max: 2, step: 0.02, unit: "m", showIf: (p) => p.showOuterDim === true || p.showInnerDim === true },
     ],
-    hint: "Stroke a graph into mitred walls, taking each wall's thickness from the Segment schema (role wall-thickness). Wire a Schema node into the Schema input; only wall-typed segments are drawn. Toggle inner / outer face dimensions.",
+    hint: "Stroke a graph into mitred walls, taking each wall's thickness from the Segment schema (role wall-thickness). The wall solid follows Justification (default center); the centerline is always what you snap to. Show Inner / Outer Dimension dimension the room-facing and street-facing faces — inner vs outer is decided from the enclosed room geometry; Show Center Dimension dimensions the centerline. Wire a Schema node into the Schema input; only wall-typed segments are drawn.",
   },
   "segment-to-door": {
     type: "segment-to-door",
