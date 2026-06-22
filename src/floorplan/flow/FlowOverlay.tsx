@@ -124,7 +124,7 @@ const xProp = (
 
 // Shared "Element Schema" — the type-driven Segment (wall/door/window/line) + Node (object/junction)
 // property schema. Reused by the Floorplan Tracer and Parametric Floorplan templates.
-const FLOORPLAN_SCHEMA_PARAMS = {
+export const FLOORPLAN_SCHEMA_PARAMS = {
   name: "Element Schema",
   segmentProps: [
     xProp("s_type", "type", "Type", "select", "line", { role: "seg-type", options: ["wall", "door", "window", "line"], optionIcons: SEG_TYPE_ICONS }),

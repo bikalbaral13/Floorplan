@@ -7,12 +7,11 @@ import {
   Circle as CircleIcon,
   Combine,
   DoorOpen,
-  Hand,
   Image as ImageIcon,
+  MoreHorizontal,
   MousePointer2,
   Pencil,
   Plus,
-  Proportions,
   Ruler,
   Shapes,
   Slash,
@@ -20,6 +19,7 @@ import {
   Dot,
   Sofa,
   Grid3x3,
+  LayoutTemplate,
   Spline,
   Waypoints,
   Square,
@@ -29,7 +29,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToolButton } from "@/components/toolbutton";
-import { SectionHeader } from "./SectionHeader";
 import type { SelectFilter, Tool } from "../../types";
 
 type EdgeMode = "connection" | null;
@@ -58,6 +57,11 @@ export interface DrawingToolbarProps {
   onAddFurniture: () => void;
   /** Open the Create Grid dialog (Add Node ▸ Grid) — drops a construction grid on the canvas. */
   onCreateGrid: () => void;
+  /** Open the Template dialog — load a schema/semantics template (Node / Segment / Space types +
+   *  properties + icons) into the drawing tools, Layers, and Properties tab. No flow / geometry. */
+  onOpenTemplate?: () => void;
+  /** True when a template is currently loaded (drives the Template button highlight). */
+  templateActive?: boolean;
   /** Clears any currently-selected generated element when starting a Door/Window/Connection tool. */
   onSelectedGenElementChange: (value: null) => void;
   /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
@@ -122,16 +126,15 @@ export interface DrawingToolbarProps {
  *  Measure, Freehand, Text — plus a parent-provided slot for view-control buttons
  *  (Image underlay, Undo, Redo, Reset view, Zoom extents). Rendered in a 2-col grid. */
 export const DrawingToolbar = (p: DrawingToolbarProps) => {
-  const [open, setOpen] = useState<boolean>(true);
   // "Add Space" dropdown — UI-only for now (no actions wired).
   const [addSpaceOpen, setAddSpaceOpen] = useState<boolean>(false);
   const [addSpaceShapesOpen, setAddSpaceShapesOpen] = useState<boolean>(false);
-  // "Set Scale" dropdown — chooses between "By Segment" (default) and "By Area" workflows.
-  const [setScalePopoverOpen, setSetScalePopoverOpen] = useState<boolean>(false);
   // "Select" dropdown — chooses scope for the Select tool: All / Node / Segment / Space.
   const [selectPopoverOpen, setSelectPopoverOpen] = useState<boolean>(false);
   const [segmentModeOpen, setSegmentModeOpen] = useState<boolean>(false);
   const [addNodeModeOpen, setAddNodeModeOpen] = useState<boolean>(false);
+  // "Miscellaneous" dropdown — groups the Text / Freehand / Measure tools.
+  const [miscOpen, setMiscOpen] = useState<boolean>(false);
 
   const resetModes = () => {
     p.onAddDoorModeChange(false);
@@ -162,62 +165,25 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
 
   return (
     <div className="flex flex-col gap-1 px-1">
-      <SectionHeader label="Drawing" open={open} onToggle={() => setOpen((v) => !v)} />
-      {open && (
-        <div className="flex flex-col gap-2 pt-1">
-          {/* Row 1 — Image Overlay (from parent slot) + Set Scale. */}
-          <div className="flex flex-col items-center gap-2">
-            {p.topToolSlots}
-            {/* Set Scale — split into "By Segment" (2-point line + distance) and
-             *  "By Area" (click polygon + target area). Active when either calibration
-             *  tool is current; chevron indicates the dropdown. */}
-            <Popover open={setScalePopoverOpen} onOpenChange={setSetScalePopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={p.tool === "scale" || p.tool === "scale-area" ? "default" : "outline"}
-                  size="sm"
-                  className="relative h-9 w-9 shrink-0 p-0"
-                  title="Set scale"
-                  aria-label="Set scale"
-                  aria-expanded={setScalePopoverOpen}
-                >
-                  <Proportions className="h-6 w-6" />
-                  <ChevronDown className="absolute bottom-0.5 right-0.5 h-2 w-2 text-slate-400" aria-hidden />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
-                <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Set Scale</h4>
-                <div className="flex flex-col gap-1">
-                  <Button
-                    variant={p.tool === "scale" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
-                    onClick={() => {
-                      p.onSetScale();
-                      setSetScalePopoverOpen(false);
-                    }}
-                  >
-                    <Ruler className="h-4 w-4" />
-                    By Segment
-                  </Button>
-                  <Button
-                    variant={p.tool === "scale-area" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
-                    onClick={() => {
-                      p.onSetScaleArea();
-                      setSetScalePopoverOpen(false);
-                    }}
-                  >
-                    <Square className="h-4 w-4" />
-                    By Area
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          {/* Import Image + Import Map (GeoJSON) moved to the top-right Files dropdown. */}
-          <hr className="border-slate-200" />
+      {/* The "Drawing" section header was removed — the toolbar is a floating, draggable panel now
+          (the parent provides the drag handle). Tools always render. */}
+      <div className="flex flex-col gap-2 pt-1">
+          {/* Set Scale moved to Preferences (top-right). Import Image + Map live in the top-right Files
+              dropdown. The parent-provided top-tool slot (if any) still renders first. */}
+          {p.topToolSlots && <div className="flex flex-col items-center gap-2">{p.topToolSlots}</div>}
+          {/* Template — load a schema/semantics template (segment / node / space TYPES + properties +
+              icons) into the drawing tools, Layers, and Properties. No geometry pipeline. */}
+          {p.onOpenTemplate && (
+            <div className="flex flex-col items-center gap-2">
+              <ToolButton
+                active={!!p.templateActive}
+                icon={<LayoutTemplate className="h-6 w-6 text-indigo-600" />}
+                label="Template"
+                onClick={p.onOpenTemplate}
+              />
+              <hr className="w-full border-slate-200" />
+            </div>
+          )}
           {/* Row 2 — Add Node + Add Segment. */}
           <div className="flex flex-col items-center gap-2">
             {/* Add Node — split button. Main click starts the Add Node (point) tool; the corner chevron
@@ -341,21 +307,22 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 variant="outline"
                 size="sm"
                 className="relative h-9 w-9 shrink-0 p-0"
-                title="Add Space"
-                aria-label="Add Space"
+                title="Space"
+                aria-label="Space"
                 aria-expanded={addSpaceOpen}
               >
                 {/* Irregular-polygon glyph — matches the Polygon sub-item to signal "this menu adds spaces". */}
                 <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <polygon points="4,7 11,3 20,8 17,18 8,20 3,14" />
                 </svg>
-                {/* Dropdown indicator — lucide ChevronDown at slate-400, sized + coloured
-                 *  to match the section-header chevrons (DRAWING / BUILDING). */}
-                <ChevronDown className="absolute bottom-0.5 right-0.5 h-2 w-2 text-slate-400" aria-hidden />
+                {/* Dropdown indicator — corner chevron box matching the Select-scope split button. */}
+                <span className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70" aria-hidden>
+                  <ChevronDown className="h-2.5 w-2.5 text-slate-500" />
+                </span>
               </Button>
             </PopoverTrigger>
             <PopoverContent side="right" align="start" className="w-48 p-2 shadow-xl" sideOffset={10}>
-              <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Add Space</h4>
+              <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Space</h4>
               <div className="flex flex-col gap-1">
                 {/* Schema space TYPES (from a Schema to Drawing Tools node) — draw a Space tagged with that
                     type (e.g. Floorplan Tracer → Room / Open Space), with icons. */}
@@ -441,16 +408,45 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                   </svg>
                   Polygon
                 </Button>
+                <div className="my-1 border-t border-slate-200" />
+                {/* Connection — links two rooms with a connection edge (space-to-space relationship). */}
+                <Button
+                  variant={p.addEdgeMode === "connection" ? "default" : "ghost"}
+                  size="sm"
+                  className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                  onClick={() => {
+                    setAddSpaceOpen(false);
+                    if (p.addEdgeMode === "connection") { p.onAddEdgeModeChange(null); p.onAddEdgeFirstRoomChange(null); return; }
+                    p.onToolChange("select");
+                    p.onNextWallSegmentTypeChange("wall");
+                    p.onAddEdgeModeChange("connection");
+                    p.onAddEdgeFirstRoomChange(null);
+                    p.onAddDoorModeChange(false);
+                    p.onAddWindowModeChange(false);
+                    p.onAddRoomModeChange(false);
+                    p.onSelectedGenElementChange(null);
+                    toast.info("Click two rooms to add a connection — press Esc to cancel");
+                  }}
+                >
+                  <span className="relative inline-flex h-4 w-4 items-center justify-center">
+                    <Slash className="h-4 w-4 text-green-600" />
+                    <Plus className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 text-green-600" strokeWidth={3} />
+                  </span>
+                  Connection
+                </Button>
+                {/* Merge Spaces — combine ≥2 selected spaces into one. */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                  onClick={() => { setAddSpaceOpen(false); p.onMergeSpaces(); }}
+                >
+                  <Combine className="h-4 w-4 text-sky-600" />
+                  Merge Spaces
+                </Button>
               </div>
             </PopoverContent>
             </Popover>
-            {/* Grid — moved out of the Add Node dropdown; opens the Create Grid dialog (columns × rows + cell size). */}
-            <ToolButton
-              active={false}
-              icon={<Grid3x3 className="h-6 w-6" />}
-              label="Grid"
-              onClick={p.onCreateGrid}
-            />
             {/* Path — moved out of the Add Segment dropdown; opens the Draw Path dialog (thickness / type / style). */}
             <ToolButton
               active={p.drawingPath}
@@ -458,40 +454,13 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               label="Path"
               onClick={() => p.onDrawPathClick()}
             />
-            {/* Connection — moved out of the Add Segment dropdown; links two rooms with a connection edge. */}
-            <ToolButton
-              active={p.addEdgeMode === "connection"}
-              icon={(
-                <span className="relative inline-flex h-6 w-6 items-center justify-center">
-                  <Slash className="h-6 w-6 text-green-600" />
-                  <Plus className="absolute -right-0.5 -top-0.5 h-3 w-3 text-green-600" strokeWidth={3} />
-                </span>
-              )}
-              label="Connection"
-              onClick={() => {
-                if (p.addEdgeMode === "connection") { p.onAddEdgeModeChange(null); p.onAddEdgeFirstRoomChange(null); return; }
-                p.onToolChange("select");
-                p.onNextWallSegmentTypeChange("wall");
-                p.onAddEdgeModeChange("connection");
-                p.onAddEdgeFirstRoomChange(null);
-                p.onAddDoorModeChange(false);
-                p.onAddWindowModeChange(false);
-                p.onAddRoomModeChange(false);
-                p.onSelectedGenElementChange(null);
-                toast.info("Click two rooms to add a connection — press Esc to cancel");
-              }}
-            />
-            {/* Wall & Furniture are no longer standalone — they come from the schema-driven Add Segment /
+            {/* Grid moved to Preferences (top-right). Connection moved into the Space dropdown.
+                Freehand moved into the Miscellaneous dropdown.
+                Wall & Furniture are no longer standalone — they come from the schema-driven Add Segment /
                 Add Node dropdowns (e.g. Floorplan Tracer → wall / object). */}
-            <ToolButton
-              active={p.tool === "freehand"}
-              icon={<Pencil className="h-6 w-6" />}
-              label="Freehand"
-              onClick={() => p.onToolChange("freehand")}
-            />
           </div>
           <hr className="border-slate-200" />
-          {/* Remaining tools — Select, Pan, Measure, Text, New, Merge spaces, Delete selection. */}
+          {/* Remaining tools — Select, Miscellaneous (Text / Freehand / Measure), Delete selection. */}
           <div className="flex flex-col items-center gap-2">
             {/* Select tool — split popover. Active when Select is the current tool
              *  (regardless of scope). Dropdown chooses the scope filter: All / Node /
@@ -567,39 +536,61 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               </PopoverContent>
               </Popover>
             </div>
-            <ToolButton
-              active={p.tool === "pan"}
-              icon={<Hand className="h-6 w-6" />}
-              label="Pan"
-              onClick={() => {
-                p.onToolChange("pan");
-                p.onAddDoorModeChange(false);
-                p.onAddWindowModeChange(false);
-                p.onAddEdgeModeChange(null);
-                p.onAddEdgeFirstRoomChange(null);
-                p.onAddRoomModeChange(false);
-                p.onAddFurnitureModeChange(false);
-              }}
-            />
-            <ToolButton
-              active={p.tool === "measure"}
-              icon={<Ruler className="h-6 w-6" />}
-              label="Measure"
-              onClick={() => p.onToolChange("measure")}
-            />
-            <ToolButton
-              active={p.tool === "text"}
-              icon={<Type className="h-6 w-6" />}
-              label="Text"
-              onClick={() => p.onToolChange("text")}
-            />
-            {/* "New" moved to the top-right Files dropdown (File ▸ New). */}
-            <ToolButton
-              active={false}
-              icon={<Combine className="h-6 w-6 text-sky-600" />}
-              label="Merge spaces"
-              onClick={p.onMergeSpaces}
-            />
+            {/* Pan moved to the top-center toolbar. */}
+            {/* Miscellaneous — a dropdown grouping Text / Freehand / Measure. The corner chevron matches
+                the Select-scope split button. Active while any of its tools is current. */}
+            <Popover open={miscOpen} onOpenChange={setMiscOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={p.tool === "text" || p.tool === "freehand" || p.tool === "measure" ? "default" : "outline"}
+                  size="sm"
+                  className="relative h-9 w-9 shrink-0 p-0"
+                  title="Miscellaneous"
+                  aria-label="Miscellaneous"
+                  aria-expanded={miscOpen}
+                >
+                  <MoreHorizontal className="h-6 w-6" />
+                  {/* Dropdown indicator — corner chevron box matching the Select-scope split button. */}
+                  <span className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70" aria-hidden>
+                    <ChevronDown className="h-2.5 w-2.5 text-slate-500" />
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
+                <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Miscellaneous</h4>
+                <div className="flex flex-col gap-1">
+                  <Button
+                    variant={p.tool === "text" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                    onClick={() => { setMiscOpen(false); p.onToolChange("text"); }}
+                  >
+                    <Type className="h-4 w-4" />
+                    Text
+                  </Button>
+                  <Button
+                    variant={p.tool === "freehand" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                    onClick={() => { setMiscOpen(false); p.onToolChange("freehand"); }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Freehand
+                  </Button>
+                  <Button
+                    variant={p.tool === "measure" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                    onClick={() => { setMiscOpen(false); p.onToolChange("measure"); }}
+                  >
+                    <Ruler className="h-4 w-4" />
+                    Measure
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {/* "New" moved to the top-right Files dropdown (File ▸ New). Merge spaces moved into the
+                Space dropdown. */}
             <ToolButton
               active={false}
               icon={<Trash2 className="h-6 w-6 text-red-600" />}
@@ -607,8 +598,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               onClick={p.onDeleteSelection}
             />
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };

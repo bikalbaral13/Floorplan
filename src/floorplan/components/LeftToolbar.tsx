@@ -33,6 +33,10 @@ interface LeftToolbarProps {
   onAddFurnitureHoverRoomChange: (value: null) => void;
   onAddFurniture: () => void;
   onCreateGrid: () => void;
+  /** Opens the Template dialog (load schema/semantics template — types + properties + icons, no flow). */
+  onOpenTemplate: () => void;
+  /** True when a template is currently loaded (drives the Template button highlight). */
+  templateActive?: boolean;
   onSelectedGenElementChange: (value: null) => void;
 
   shapesPopoverOpen: boolean;
@@ -135,6 +139,8 @@ export const LeftToolbar = ({
   onAddFurnitureHoverRoomChange,
   onAddFurniture,
   onCreateGrid,
+  onOpenTemplate,
+  templateActive,
   onSelectedGenElementChange,
   shapesPopoverOpen,
   onShapesPopoverOpenChange,
@@ -196,6 +202,8 @@ export const LeftToolbar = ({
       onAddFurnitureHoverRoomChange={onAddFurnitureHoverRoomChange}
       onAddFurniture={onAddFurniture}
       onCreateGrid={onCreateGrid}
+      onOpenTemplate={onOpenTemplate}
+      templateActive={templateActive}
       onSelectedGenElementChange={onSelectedGenElementChange}
       onAddWallClick={onAddWallClick}
       drawingWall={drawingWall}

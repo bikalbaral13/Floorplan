@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 const FloorPlan3DCanvas = lazy(() => import("./three/FloorPlan3DCanvas"));
 import type { SnapshotApi } from "./three/FloorPlan3DCanvas";
@@ -46,6 +46,7 @@ import {
   FilePlus2,
   Folder,
   FolderOpen,
+  GripHorizontal,
   Hand,
   Image,
   Info,
@@ -174,7 +175,6 @@ import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/Ad
 import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/SegmentTypeParamsDialog";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
-import { ToolsPanel } from "./components/ToolsPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
 import { ElevationPanels } from "./components/ElevationPanels";
 import { AlignedElevations } from "./components/AlignedElevations";
@@ -208,7 +208,6 @@ import { OptimiseRectangleBlock } from "./components/roomProperties/OptimiseRect
 import { InflationAlgorithmBlock, type InflationAngleMode } from "./components/roomProperties/InflationAlgorithmBlock";
 import { WallOutputsBlock } from "./components/segmentProperties/WallOutputsBlock";
 import { WallExtendBlock, type WallExtendMode } from "./components/segmentProperties/WallExtendBlock";
-import { WallSplitBlock } from "./components/segmentProperties/WallSplitBlock";
 import { WallInputsBlock } from "./components/segmentProperties/WallInputsBlock";
 import { SchemaPropsBlock, SchemaMetricsBlock } from "./components/GraphSchemaBlocks";
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "./algorithms/network/pipeNetworkSolver";
@@ -224,7 +223,8 @@ import { BoundingShapesBlock } from "./components/roomProperties/BoundingShapesB
 import { MassingBlock } from "./components/roomProperties/MassingBlock";
 import { PathSetterBlock } from "./components/roomProperties/PathSetterBlock";
 import { SplittingActionsBlock } from "./components/roomProperties/SplittingActionsBlock";
-import { FlowOverlay } from "./flow/FlowOverlay";
+import { FlowOverlay, FLOORPLAN_SCHEMA_PARAMS } from "./flow/FlowOverlay";
+import { TemplateDialog, type TemplateParams, type TemplateSample } from "./components/dialogs/TemplateDialog";
 import { FlowParamsPanel } from "./flow/FlowParamsPanel";
 import { evaluateFlow, type FlowPreviewItem } from "./flow/eval/evaluateFlow";
 import { evalGraphMetrics, gridDefToField } from "./flow/eval/evalNodes";
@@ -1693,6 +1693,51 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  vertical (whichever axis the cursor is farther along) from its anchor — without holding Shift. Shift
    *  still gives the finer 8-way (45°) lock and overrides Ortho while held. */
   const [orthoMode, setOrthoMode] = useState<boolean>(false);
+  /** Show Center Dimension (Preferences): when on, the live wall-trace preview also dimensions the
+   *  centerline (spine) length in addition to the inner / outer faces. Off by default. */
+  const [showCenterDimPref, setShowCenterDimPref] = useState<boolean>(false);
+  /** Active "template" — the schema/semantics (Node / Segment / Space / Settings property definitions +
+   *  type names + icons), independent of the Flow graph. Loading one wires its types + properties into the
+   *  drawing tools, Layers, and Properties tab WITHOUT running any geometry pipeline. Persisted to
+   *  localStorage so it survives reloads. */
+  const [activeTemplate, setActiveTemplateState] = useState<TemplateParams | null>(() => {
+    try { const raw = localStorage.getItem("floorplan-active-template-v1"); return raw ? (JSON.parse(raw) as TemplateParams) : null; } catch { return null; }
+  });
+  const setActiveTemplate = useCallback((t: TemplateParams | null) => {
+    setActiveTemplateState(t);
+    try {
+      if (t) localStorage.setItem("floorplan-active-template-v1", JSON.stringify(t));
+      else localStorage.removeItem("floorplan-active-template-v1");
+    } catch { /* ignore quota / privacy-mode errors */ }
+  }, []);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState<boolean>(false);
+  const templateSamples = useMemo<TemplateSample[]>(() => [{ name: "Floorplan Tracer", params: FLOORPLAN_SCHEMA_PARAMS as TemplateParams }], []);
+  /** The active template converted to Properties-tab definitions (same converter the flow Schema node
+   *  uses). Null when no template is loaded. */
+  const templateSchemas = useMemo(() => (activeTemplate ? schemaNodeToSchemas(activeTemplate) : null), [activeTemplate]);
+  /** Floating Drawing toolbar position (viewport px). The toolbar is a SketchUp-style floating panel
+   *  draggable anywhere by its top grip handle. Initial spot: top-left, just under the header. */
+  const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number }>({ x: 12, y: 76 });
+  const toolbarDragOffset = useRef<{ x: number; y: number } | null>(null);
+  const handleToolbarDragMove = useCallback((e: PointerEvent) => {
+    const off = toolbarDragOffset.current;
+    if (!off) return;
+    // Clamp so the grip handle stays on-screen (keep ≥40px of the panel reachable on each edge).
+    const x = Math.max(0, Math.min(window.innerWidth - 40, e.clientX - off.x));
+    const y = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - off.y));
+    setToolbarPos({ x, y });
+  }, []);
+  const handleToolbarDragEnd = useCallback(() => {
+    toolbarDragOffset.current = null;
+    window.removeEventListener("pointermove", handleToolbarDragMove);
+    window.removeEventListener("pointerup", handleToolbarDragEnd);
+  }, [handleToolbarDragMove]);
+  const handleToolbarDragStart = useCallback((e: ReactPointerEvent) => {
+    e.preventDefault();
+    toolbarDragOffset.current = { x: e.clientX - toolbarPos.x, y: e.clientY - toolbarPos.y };
+    window.addEventListener("pointermove", handleToolbarDragMove);
+    window.addEventListener("pointerup", handleToolbarDragEnd);
+  }, [toolbarPos, handleToolbarDragMove, handleToolbarDragEnd]);
   /** Manual L×B input for the Rect wall-draw mode. Anchor = currentWallStart (last click). */
   const [rectLenInput, setRectLenInput] = useState<string>("");
   const [rectBreInput, setRectBreInput] = useState<string>("");
@@ -3403,15 +3448,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // the Add Segment / Add Node drawing dropdowns.
   type DrawToolList = { value: string; label: string; icon?: string }[];
   type DrawTools = { segments: DrawToolList; nodes: DrawToolList; spaces: DrawToolList } | undefined;
-  const extractDrawTools = (f: SerializedFlow | null): DrawTools => {
-    const toolsNode = f?.nodes?.find((n) => n.data?.tool === "schema-to-drawing");
-    if (!toolsNode) return undefined;
-    const schemaNode = f!.nodes.find((n) => n.data?.tool === "schema" && (f!.edges ?? []).some((e) => e.source === n.id && e.target === toolsNode.id))
-      ?? f!.nodes.find((n) => n.data?.tool === "schema");
-    if (!schemaNode) return undefined;
+  // Core: derive Add Segment / Add Node / Add Space type lists (+icons) from a schema params object. Shared
+  // by the flow-graph path and the standalone Template path.
+  const drawToolsFromParams = (params: Record<string, unknown>): DrawTools => {
     const label = (s: string) => s.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
     const toolsFor = (param: "segmentProps" | "nodeProps" | "spaceProps", roles: readonly string[]): DrawToolList => {
-      const entries = schemaEntries(schemaNode.data?.params ?? {}, param);
+      const entries = schemaEntries(params, param);
       const disc = entries.find((e) => roles.includes(e.role)) ?? entries.find((e) => e.kind === "select" && e.key === "type");
       return disc ? disc.options.map((v) => ({ value: v, label: label(v), icon: disc.optionIcons?.[v] })) : [];
     };
@@ -3420,16 +3462,27 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const spaces = toolsFor("spaceProps", ["space-type"]);
     return (segments.length || nodes.length || spaces.length) ? { segments, nodes, spaces } : undefined;
   };
+  const extractDrawTools = (f: SerializedFlow | null): DrawTools => {
+    const toolsNode = f?.nodes?.find((n) => n.data?.tool === "schema-to-drawing");
+    if (!toolsNode) return undefined;
+    const schemaNode = f!.nodes.find((n) => n.data?.tool === "schema" && (f!.edges ?? []).some((e) => e.source === n.id && e.target === toolsNode.id))
+      ?? f!.nodes.find((n) => n.data?.tool === "schema");
+    if (!schemaNode) return undefined;
+    return drawToolsFromParams(schemaNode.data?.params ?? {});
+  };
   // Live drawing tools emitted by the open overlay (its internal nodes are always current). Persists after
   // close. Falls back to deriving from the mirrored liveFlowGraph (closed / never-opened).
   const [flowDrawTools, setFlowDrawTools] = useState<DrawTools>(undefined);
   const schemaToolsFromGraph = useMemo(() => extractDrawTools(liveFlowGraph), [liveFlowGraph]);
-  const schemaDrawTools = flowDrawTools ?? schemaToolsFromGraph;
+  // A loaded Template takes priority — it drives the Add Segment / Add Node type names + icons with no flow.
+  const templateDrawTools = useMemo(() => (activeTemplate ? drawToolsFromParams(activeTemplate) : undefined), [activeTemplate]);
+  const schemaDrawTools = templateDrawTools ?? flowDrawTools ?? schemaToolsFromGraph;
 
   // Full segment property defs of the active schema node — the SAME source the Add Segment dropdown uses
   // (not graphSchema, which only populates when the schema is wired to a graph node). Drives the
   // per-type "set params first" dialog so it appears whenever a schema segment type is offered.
   const activeSchemaSegmentDefs = useMemo<import("./types").GraphPropDef[]>(() => {
+    if (templateSchemas) return templateSchemas.segment;
     const f = liveFlowGraph;
     if (!f?.nodes) return [];
     const toolsNode = f.nodes.find((n) => n.data?.tool === "schema-to-drawing");
@@ -3438,15 +3491,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       ?? f.nodes.find((n) => n.data?.tool === "schema");
     if (!schemaNode) return [];
     return schemaNodeToSchemas(schemaNode.data?.params ?? {}).segment;
-  }, [liveFlowGraph]);
+  }, [liveFlowGraph, templateSchemas]);
 
-  // Canvas-wide Settings defs from the active schema node (e.g. Ortho) — shown in the Properties tab when
-  // nothing is selected.
+  // Canvas-wide Settings defs from the active template / schema node (e.g. Ortho / Units) — shown in the
+  // Properties tab when nothing is selected.
   const activeSchemaSettingsDefs = useMemo<import("./types").GraphPropDef[]>(() => {
+    if (templateSchemas) return templateSchemas.settings;
     const schemaNode = liveFlowGraph?.nodes?.find((n) => n.data?.tool === "schema");
     if (!schemaNode) return [];
     return schemaNodeToSchemas(schemaNode.data?.params ?? {}).settings;
-  }, [liveFlowGraph]);
+  }, [liveFlowGraph, templateSchemas]);
   // The schema's Ortho default → drives the canvas Ortho lock. Re-applied whenever the default changes
   // (e.g. on workflow load or when edited in the flow); the user can still toggle it in Properties after.
   const schemaOrthoDefault = useMemo<boolean | null>(() => {
@@ -3527,14 +3581,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const SPACE_LAYER_COLORS: Record<string, string> = { room: "#16a34a", "open-space": "#65a30d" };
   // Title-case a slug for display: "open-space" → "Open Space".
   const titleize = (s: string) => s.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-  const extractSchemaLayers = (f: SerializedFlow | null): SchemaLayerGroups => {
-    const layersNode = f?.nodes?.find((n) => n.data?.tool === "schema-to-layers");
-    if (!layersNode) return undefined;
-    const schemaNode = f!.nodes.find((n) => n.data?.tool === "schema" && (f!.edges ?? []).some((e) => e.source === n.id && e.target === layersNode.id))
-      ?? f!.nodes.find((n) => n.data?.tool === "schema");
-    if (!schemaNode) return undefined;
+  // Core: derive the segment / node / space type layer blocks from a schema params object. Shared by the
+  // flow-graph path and the standalone Template path.
+  const layersFromParams = (params: Record<string, unknown>): SchemaLayerGroups => {
     const optsFor = (param: "segmentProps" | "nodeProps" | "spaceProps", roles: readonly string[]): string[] => {
-      const entries = schemaEntries(schemaNode.data?.params ?? {}, param);
+      const entries = schemaEntries(params, param);
       const disc = entries.find((e) => roles.includes(e.role)) ?? entries.find((e) => e.kind === "select" && e.key === "type");
       return disc ? disc.options : [];
     };
@@ -3543,7 +3594,19 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const spaces = optsFor("spaceProps", ["space-type"]).map((v) => ({ key: v, label: titleize(v), color: SPACE_LAYER_COLORS[v] ?? "#16a34a" }));
     return segments.length || nodes.length || spaces.length ? { segments, nodes, spaces } : undefined;
   };
-  const schemaLayers = useMemo(() => extractSchemaLayers(liveFlowGraph), [liveFlowGraph]);
+  const extractSchemaLayers = (f: SerializedFlow | null): SchemaLayerGroups => {
+    const layersNode = f?.nodes?.find((n) => n.data?.tool === "schema-to-layers");
+    if (!layersNode) return undefined;
+    const schemaNode = f!.nodes.find((n) => n.data?.tool === "schema" && (f!.edges ?? []).some((e) => e.source === n.id && e.target === layersNode.id))
+      ?? f!.nodes.find((n) => n.data?.tool === "schema");
+    if (!schemaNode) return undefined;
+    return layersFromParams(schemaNode.data?.params ?? {});
+  };
+  // A loaded Template drives the Layers blocks directly (no flow). Else fall back to the flow graph.
+  const schemaLayers = useMemo(
+    () => (activeTemplate ? layersFromParams(activeTemplate) : extractSchemaLayers(liveFlowGraph)),
+    [liveFlowGraph, activeTemplate],
+  );
   // When a Wall Builder is in the flow (e.g. Floorplan Tracer), it strokes wall-typed segments into a
   // mitred perimeter band on the canvas. The raw segment's own centerline / mitred rectangle is then
   // redundant, so we suppress it for wall-typed segments — leaving only the band's outer/inner edges
@@ -3758,6 +3821,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       graphSchemaDefs: [] as import("./types").GraphPropDef[],
       infoSchemaDefs: [] as import("./types").GraphPropDef[],
     };
+    // A loaded Template provides the per-element Node / Segment / Space / Information property defs
+    // directly (semantics only — no solver, so default Metrics rows). Takes priority over the flow.
+    if (templateSchemas) {
+      const t = templateSchemas;
+      if (t.node.length || t.segment.length) out.graphSchema = { name: t.name, node: t.node, segment: t.segment, results: PIPE_DEFAULT_RESULTS };
+      out.spaceSchemaDefs = t.space;
+      out.graphSchemaDefs = t.graph;
+      out.infoSchemaDefs = t.information;
+      return out;
+    }
     if (!f?.nodes) return out;
     const solverNode = f.nodes.find((nd) => nd.data?.tool === "pipe-solver" && nd.data?.params?.schema);
     const loaded = solverNode ? normalizeGraphSchema(solverNode.data.params.schema) : null;
@@ -3799,7 +3872,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
     if (!out.graphSchema && loaded) out.graphSchema = { ...loaded, results };
     return out;
-  }, [liveFlowGraph]);
+  }, [liveFlowGraph, templateSchemas]);
 
   // Resolve the Information record → Layout title-block props (role-bound values from graphAttrs,
   // falling back to schema/component defaults). Drives the LayoutSheet in "layout" view mode.
@@ -19676,6 +19749,150 @@ User request: ${aiPrompt.trim()}`;
             />
             <p className="mt-1 text-[11px] text-slate-400">Tip: click Set Scale and pick two points, then enter real distance.</p>
           </div>
+          {/* Set Scale — calibrate px/m by a known segment length or a selected space's area.
+              Moved here from the Drawing toolbar. */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Set Scale</p>
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                variant={tool === "scale" ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => {
+                  setTool("scale");
+                  setUnderlayCalibrationMode(false);
+                  setCalibrationDraft(null);
+                  setCalibrationPreviewPoint(null);
+                  setCalibrationEndPoint(null);
+                  setCalibrationPixelDistance(null);
+                }}
+              >
+                <Ruler className="h-4 w-4" /> By Segment
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => {
+                  if (!selectedRoom || (selectedRoom.points?.length ?? 0) < 3) {
+                    toast.error("Select a Space (≥3 vertices) before using Set Scale → By Area");
+                    return;
+                  }
+                  const pts = selectedRoom.points;
+                  let a = 0;
+                  for (let i = 0; i < pts.length; i++) {
+                    const j = (i + 1) % pts.length;
+                    a += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+                  }
+                  const areaPx = Math.abs(a) / 2;
+                  const areaM2 = areaPx / (pixelsPerMeter * pixelsPerMeter);
+                  const areaUnit = m2InUnit(areaM2);
+                  setAreaCalibrationPickedRoomId(selectedRoom.id);
+                  setAreaCalibrationCurrentAreaPx(areaPx);
+                  setAreaCalibrationCurrentAreaUnit(areaUnit);
+                  setAreaCalibrationInput(areaUnit.toFixed(2));
+                  setAreaCalibrationDialogOpen(true);
+                }}
+              >
+                <Square className="h-4 w-4" /> By Area
+              </Button>
+            </div>
+          </div>
+          {/* Grid — drop a construction grid (columns × rows + cell size). Moved here from the Drawing toolbar. */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Grid</p>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setGridDialogOpen(true)}>
+              <LayoutGrid className="h-4 w-4" /> Create Grid
+            </Button>
+          </div>
+          {/* Show Center Dimension: while tracing a wall, also dimension the centerline (spine) length,
+              not just the inner / outer faces. */}
+          <label className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-medium text-slate-700">Show Center Dimension</span>
+              <p className="text-[9px] text-slate-400">Dimension the wall centerline while drawing (in addition to inner / outer).</p>
+            </div>
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0"
+              checked={showCenterDimPref}
+              onChange={(e) => setShowCenterDimPref(e.target.checked)}
+            />
+          </label>
+          {/* Wall Extend Behavior — global drag/extend settings (direction + connection constraints).
+              Moved here from Segment Tools: these are app-wide, not per-segment. */}
+          <WallExtendBlock
+            expanded={wallExtendExpanded}
+            setExpanded={setWallExtendExpanded}
+            directionConstraint={wallDirectionConstraint}
+            setDirectionConstraint={setWallDirectionConstraint}
+            extendMode={wallExtendMode}
+            setExtendMode={setWallExtendMode}
+          />
+          {/* Area Extend Behaviour — global connection constraint for the Space centroid move gizmo.
+              Moved here from Space Tools → UI Tools. */}
+          <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setAreaExtendExpanded((v) => !v)}
+            >
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Area Extend Behaviour</span>
+              <span className="text-[11px] text-slate-400">{areaExtendExpanded ? "▼" : "▶"}</span>
+            </button>
+            {areaExtendExpanded && (
+              <div>
+                <span className="text-[10px] text-slate-400">Connection Constraints</span>
+                <div className="mt-0.5 flex flex-wrap gap-1.5">
+                  <Button size="sm" variant={areaConnectionConstraint === "with-walls" ? "default" : "outline"} onClick={() => setAreaConnectionConstraint("with-walls")}>
+                    Move Connected edges as well
+                  </Button>
+                  <Button size="sm" variant={areaConnectionConstraint === "polygon-only" ? "default" : "outline"} onClick={() => setAreaConnectionConstraint("polygon-only")}>
+                    Move Independently
+                  </Button>
+                </div>
+                <p className="mt-0.5 text-[9px] text-slate-400">Applies to the centroid move gizmo.</p>
+              </div>
+            )}
+          </div>
+          {/* Layout Generation — moved here from Space Tools (formerly the left sidebar's Optimisation toolbar). */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Layout Generation</p>
+            <div className="grid grid-cols-2 place-items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Add Room" disabled={!generatedLayout}>
+                    <Plus className="h-5 w-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent side="left" align="start" className="w-40 p-1 shadow-xl" sideOffset={10}>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-slate-100"
+                    onClick={() => {
+                      setAddRoomMode(true);
+                      setAddEdgeMode(null);
+                      setAddEdgeFirstRoom(null);
+                      setSelectedGenElement(null);
+                      toast.info("Click on the floorplan to place a new room");
+                    }}
+                  >
+                    <LandPlot className="h-4 w-4 text-green-600" /> Room
+                  </button>
+                </PopoverContent>
+              </Popover>
+              <ToolButton active={false} icon={<LandPlot className="h-6 w-6" />} label="Auto Generate Floor Plan" onClick={() => setAutoGenDialogOpen(true)} />
+              <ToolButton
+                active={saRunning}
+                icon={<Play className="h-6 w-6" />}
+                label="Simulated Annealing"
+                onClick={() => {
+                  if (!generatedLayout) { toast.error("Generate a floor plan first before running SA"); return; }
+                  setSaDialogOpen(true);
+                }}
+              />
+              <ToolButton active={false} icon={<Proportions className="h-6 w-6" />} label="Compute floorplate from plot boundary" onClick={handleComputeFloorplate} />
+            </div>
+          </div>
           {/* Draw type (Polyline / Single / NURBS / Rect) + Rect-by-dimensions removed from Preferences.
               Draw mode / View / Filling / Placement / wall styling are set elsewhere (toolbar / Flow).
               Ortho moved to the Floorplan Tracer schema's Settings block (Properties tab). */}
@@ -20279,9 +20496,23 @@ User request: ${aiPrompt.trim()}`;
             BUILDER<span className="font-extrabold text-slate-900">PLUSS</span>
           </p>
         </div>
-        {/* Top-center toolbar: Undo / Redo / Reset view / Zoom extents — navigation
+        {/* Top-center toolbar: Pan / Undo / Redo / Reset view / Zoom extents — navigation
             actions moved out of the Drawing left-sidebar group. */}
         <div className="flex shrink-0 items-center gap-1">
+          <ToolButton
+            active={tool === "pan"}
+            icon={<Hand className="h-4 w-4" />}
+            label="Pan"
+            onClick={() => {
+              setTool("pan");
+              setAddDoorMode(false);
+              setAddWindowMode(false);
+              setAddEdgeMode(null);
+              setAddEdgeFirstRoom(null);
+              setAddRoomMode(false);
+              setAddFurnitureMode(false);
+            }}
+          />
           <ToolButton active={false} icon={<Undo2 className="h-4 w-4" />} label="Undo" onClick={history.undo} disabled={!history.canUndo} />
           <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} />
           <ToolButton
@@ -20366,10 +20597,21 @@ User request: ${aiPrompt.trim()}`;
       </div>
 
       <div className="flex h-[calc(100%-64px)] gap-2 p-2">
+        {/* Floating, draggable Drawing toolbar (SketchUp-style). Fixed-positioned over the canvas; drag
+            it anywhere by the top grip handle. */}
         <div
-          className={`${sidePanelClass} flex h-full min-h-0 w-16 shrink-0 flex-col items-center border-slate-200/80 bg-white/90 py-2 shadow-md backdrop-blur-md`}
+          className="fixed z-30 flex max-h-[calc(100vh-96px)] w-16 flex-col items-center rounded-xl border border-slate-200/80 bg-white/95 shadow-lg backdrop-blur-md"
+          style={{ left: toolbarPos.x, top: toolbarPos.y }}
         >
-          <ScrollArea className="h-full min-h-0 w-full">
+          <div
+            onPointerDown={handleToolbarDragStart}
+            className="flex w-full shrink-0 cursor-grab touch-none items-center justify-center rounded-t-xl py-1 hover:bg-slate-100 active:cursor-grabbing"
+            title="Drag toolbar"
+            aria-label="Drag toolbar"
+          >
+            <GripHorizontal className="h-4 w-4 text-slate-400" />
+          </div>
+          <ScrollArea className="min-h-0 w-full flex-1">
             <div className="flex flex-col items-center gap-2 px-1 pb-2">
               <LeftToolbar
                 tool={tool}
@@ -20400,6 +20642,8 @@ User request: ${aiPrompt.trim()}`;
                   toast.info("Click to drop a furniture node — press Esc when done");
                 }}
                 onCreateGrid={() => setGridDialogOpen(true)}
+                onOpenTemplate={() => setTemplateDialogOpen(true)}
+                templateActive={!!activeTemplate}
                 onSelectedGenElementChange={setSelectedGenElement}
                 shapesPopoverOpen={shapesPopoverOpen}
                 onShapesPopoverOpenChange={setShapesPopoverOpen}
@@ -26480,7 +26724,9 @@ User request: ${aiPrompt.trim()}`;
                       const dim = computeWallDimensions(graph, wallBuilderSchema, pixelsPerMeter, res.pieces, {
                         showOuterDim: wallBuilderDimParams.showOuterDim,
                         showInnerDim: wallBuilderDimParams.showInnerDim,
-                        showCenterDim: wallBuilderDimParams.showCenterDim,
+                        // Center (spine) dimension during the live trace preview is off unless the
+                        // "Show Center Dimension" canvas preference is on — otherwise only inner / outer.
+                        showCenterDim: showCenterDimPref,
                         offsetDim: wallBuilderDimParams.offsetDim,
                         defaultThicknessMm: wallBuilderDimParams.thicknessMm,
                         dimGap: wallBuilderDimParams.dimGap,
@@ -26517,7 +26763,12 @@ User request: ${aiPrompt.trim()}`;
                           />
                         )}
                         <Circle x={a.x} y={a.y} radius={Math.max(3, 4 / Math.max(1, scale))} fill="#0F766E" stroke="#fff" strokeWidth={1} />
-                        <Text x={mid.x + 6 / Math.max(1, scale)} y={mid.y - fontPx - 4 / Math.max(1, scale)} text={text} fontSize={fontPx} fill="#0F766E" listening={false} />
+                        {/* Midpoint (centerline) length label. Suppressed for a wall trace that produced
+                            face dimensions — there we only show the inner / outer dimensions. Kept for
+                            door / window / line previews (their only length readout). */}
+                        {!(singleSegType === "wall" && bandPolys.length > 0) && (
+                          <Text x={mid.x + 6 / Math.max(1, scale)} y={mid.y - fontPx - 4 / Math.max(1, scale)} text={text} fontSize={fontPx} fill="#0F766E" listening={false} />
+                        )}
                       </>
                     );
                   })() : null}
@@ -27548,29 +27799,17 @@ User request: ${aiPrompt.trim()}`;
           {/* Properties panel fold toggle — sits at the right edge of the canvas, in the
               gutter against the right panel. "<" collapses the Properties block (Properties
               | Metrics tab + body); ">" reopens it. */}
+          {/* Tools-column chevron removed — the right-edge Tools column was dissolved. */}
           {!isRightPanelCollapsed && (
-            <>
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 z-10 -translate-y-1/2 -translate-y-[20px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
-                onClick={() => setPropertiesPanelExpanded((v) => !v)}
-                title={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
-                aria-label={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
-                style={{ transform: "translateY(calc(-50% - 20px))" }}
-              >
-                {propertiesPanelExpanded ? "<" : ">"}
-              </button>
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
-                onClick={() => setToolsPanelExpandedColumn((v) => !v)}
-                title={toolsPanelExpandedColumn ? "Hide Tools" : "Show Tools"}
-                aria-label={toolsPanelExpandedColumn ? "Hide Tools" : "Show Tools"}
-                style={{ transform: "translateY(calc(-50% + 20px))" }}
-              >
-                {toolsPanelExpandedColumn ? "<" : ">"}
-              </button>
-            </>
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 z-10 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
+              onClick={() => setPropertiesPanelExpanded((v) => !v)}
+              title={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
+              aria-label={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
+            >
+              {propertiesPanelExpanded ? "<" : ">"}
+            </button>
           )}
         </div>
         </Panel>
@@ -27995,6 +28234,14 @@ User request: ${aiPrompt.trim()}`;
                         <WallInputsBlock
                           selectedWall={selectedWall}
                           wallIndex={history.state.walls.findIndex((w) => w.id === selectedWall.id)}
+                          sourceNodeId={(() => {
+                            const i = wallNodes.findIndex((n) => n.stableKey.split("|").includes(`${selectedWall.id}:start`));
+                            return i >= 0 ? `Node${String(i + 1).padStart(3, "0")}` : "—";
+                          })()}
+                          targetNodeId={(() => {
+                            const i = wallNodes.findIndex((n) => n.stableKey.split("|").includes(`${selectedWall.id}:end`));
+                            return i >= 0 ? `Node${String(i + 1).padStart(3, "0")}` : "—";
+                          })()}
                           unit={unit}
                           pixelsPerMeter={pixelsPerMeter}
                           expanded={true}
@@ -30427,744 +30674,9 @@ User request: ${aiPrompt.trim()}`;
           ) : null}
         </div>
 
-        {/* Tools panel — independent sibling, anchored at the right edge. Foldable via
-            its own canvas-edge chevron. Independent of Properties so toggling either
-            chevron never affects the other panel's position. */}
-        <div
-          className={
-            isRightPanelCollapsed || !toolsPanelExpandedColumn
-              ? "w-0 min-w-0 shrink-0 overflow-hidden border-0 bg-transparent p-0 shadow-none"
-              : `w-72 ${sidePanelClass}`
-          }
-        >
-          {!isRightPanelCollapsed && toolsPanelExpandedColumn ? (
-            <div className="flex h-full w-72 shrink-0 flex-col min-h-0 overflow-y-auto">
-
-            {/* ── Space Tools ── Hierarchical algorithm tree for the selected Space.
-                Algorithm blocks moved here from the Properties panel in category groups.
-                The blocks themselves still gate on `selectedRoom`; when nothing is
-                selected the category shows a hint instead of disabled controls. */}
-            <div className="shrink-0 border-t border-slate-200">
-              <button
-                type="button"
-                className="sticky top-0 z-10 flex w-full items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2 text-left"
-                onClick={() => setSpaceToolsExpanded((v) => !v)}
-              >
-                <span className="text-sm font-semibold">Space Tools</span>
-                <span className="text-[11px] text-slate-400">{spaceToolsExpanded ? "▼" : "▶"}</span>
-              </button>
-              {spaceToolsExpanded && (
-                <div className="space-y-2 p-3 pr-4">
-                  {/* Partitioning — split a space into sub-spaces. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsPartitioningExpanded((v) => !v)}
-                    >
-                      <span>Partitioning</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsPartitioningExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsPartitioningExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <>
-                            <BspBlock
-                              selectedRoom={selectedRoom}
-                              scale={scale}
-                              expanded={bspExpanded}
-                              setExpanded={setBspExpanded}
-                              live={bspLive}
-                              setLive={setBspLive}
-                              seedsByRoom={bspSeedsByRoom}
-                              setSeedsByRoom={setBspSeedsByRoom}
-                              seedMetricsByRoom={bspSeedMetricsByRoom}
-                              connectionsByRoom={bspConnectionsByRoom}
-                              setConnectionsByRoom={setBspConnectionsByRoom}
-                              corridorsByRoom={bspCorridorsByRoom}
-                              setCorridorsByRoom={setBspCorridorsByRoom}
-                              pixelsPerMeter={pixelsPerMeter}
-                              unit={unit}
-                              tiltAngle={bspTiltAngle}
-                              setTiltAngle={setBspTiltAngle}
-                              useAreaPercent={bspUseAreaPercent}
-                              setUseAreaPercent={setBspUseAreaPercent}
-                              areaConstraintActive={bspAreaConstraintActive}
-                              setAreaConstraintActive={setBspAreaConstraintActive}
-                              useConnection={bspUseConnection}
-                              setUseConnection={setBspUseConnection}
-                              saAvailable={true}
-                              saRunning={saRunning}
-                              onSimulatedAnnealingClick={() => {
-                                if (saRunning) {
-                                  bspSaStopRef.current.stop = true;
-                                  return;
-                                }
-                                startBspSimulatedAnnealing();
-                              }}
-                              runRoomBsp={runRoomBsp}
-                              runRoomBspConnection={runRoomBspConnection}
-                              onClearAllPreview={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isBspPreview) });
-                              }}
-                              onClearRoomPreview={(roomId) => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !(w.isBspPreview && w.bspSourceRoomId === roomId)) });
-                              }}
-                            />
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Boundary & Offset — transform a polygon's boundary. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsBoundaryExpanded((v) => !v)}
-                    >
-                      <span>Boundary &amp; Offset</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsBoundaryExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsBoundaryExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <>
-                            <PolygonUnrollBlock
-                              selectedRoom={selectedRoom}
-                              unit={unit}
-                              unitFromPixels={(px) => unitValueFromPixels(px, unit, pixelsPerMeter)}
-                              expanded={unrollExpanded}
-                              setExpanded={setUnrollExpanded}
-                              live={unrollLive}
-                              setLive={setUnrollLive}
-                              startEdge={unrollStartEdge}
-                              setStartEdge={setUnrollStartEdge}
-                              slider={unrollSlider}
-                              setSlider={setUnrollSlider}
-                              runRoomUnroll={runRoomUnroll}
-                              onClearAllPreview={() => {
-                                const h = historyRef.current;
-                                h.replace({ ...h.state, walls: h.state.walls.filter((w) => !w.isUnrollPreview) });
-                              }}
-                            />
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-
-
-                  {/* Placement — populate the space with objects or generated paths. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsPlacementExpanded((v) => !v)}
-                    >
-                      <span>Placement</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsPlacementExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsPlacementExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <>
-                            {/* "Place Object Along Boundary" is intentionally removed from the right tab —
-                                object placement now lives in the Flow editor's Place Object node, which drops
-                                selectable object nodes. The placement runner (runRoomPlacement) is still used
-                                by that flow path; only this UI entry point is gone. */}
-                            <PathSetterBlock
-                              selectedRoom={selectedRoom}
-                              expanded={pathSetterExpanded}
-                              setExpanded={setPathSetterExpanded}
-                              runRoomPathSpace={runRoomPathSpace}
-                              onClearRoomPreview={(roomId) => {
-                                const h = historyRef.current;
-                                h.replace({
-                                  ...h.state,
-                                  walls: h.state.walls.filter((w) => !(w.isPathSpacePreview && w.pathSpaceSourceRoomId === roomId)),
-                                  rooms: h.state.rooms.filter((r) => !((r as { isPathSpacePreview?: boolean }).isPathSpacePreview && (r as { pathSpaceSourceRoomId?: string }).pathSpaceSourceRoomId === roomId)),
-                                });
-                              }}
-                              drawingPath={tool === "wall" && nextWallSegmentType === "path"}
-                              onStartDrawPath={() => {
-                                if (tool === "wall" && nextWallSegmentType === "path") {
-                                  setNextWallSegmentType("wall");
-                                  setTool("select");
-                                } else {
-                                  setTool("wall");
-                                  setWallDrawType("polyline");
-                                  setNextWallSegmentType("path");
-                                }
-                              }}
-                            />
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-
-                  {/* UI Tools — non-algorithmic per-Space settings (drag behaviour, display flags). */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsUiToolsExpanded((v) => !v)}
-                    >
-                      <span>UI Tools</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsUiToolsExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsUiToolsExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedRoom ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Space on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <>
-                            {/* Area Extend Behaviour — connection constraint for the centroid move gizmo */}
-                            <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-between text-left"
-                                onClick={() => setAreaExtendExpanded((v) => !v)}
-                              >
-                                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Area Extend Behaviour</span>
-                                <span className="text-[11px] text-slate-400">{areaExtendExpanded ? "▼" : "▶"}</span>
-                              </button>
-                              {areaExtendExpanded && (
-                                <div>
-                                  <span className="text-[10px] text-slate-400">Connection Constraints</span>
-                                  <div className="mt-0.5 flex flex-wrap gap-1.5">
-                                    <Button
-                                      size="sm"
-                                      variant={areaConnectionConstraint === "with-walls" ? "default" : "outline"}
-                                      onClick={() => setAreaConnectionConstraint("with-walls")}
-                                    >
-                                      Move Connected edges as well
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={areaConnectionConstraint === "polygon-only" ? "default" : "outline"}
-                                      onClick={() => setAreaConnectionConstraint("polygon-only")}
-                                    >
-                                      Move Independently
-                                    </Button>
-                                  </div>
-                                  <p className="mt-0.5 text-[9px] text-slate-400">Applies to the centroid move gizmo.</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Display — direction winding icon + flip */}
-                            <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-between text-left"
-                                onClick={() => setAreaDisplayExpanded((v) => !v)}
-                              >
-                                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Display</span>
-                                <span className="text-[11px] text-slate-400">{areaDisplayExpanded ? "▼" : "▶"}</span>
-                              </button>
-                              {areaDisplayExpanded && (() => {
-                                const TOL = 3;
-                                const pts = selectedRoom.points;
-                                const N = pts.length;
-                                let forward = 0, backward = 0;
-                                const edgeWallIds: string[] = [];
-                                const edgeWallAligned: boolean[] = [];
-                                for (let i = 0; i < N; i++) {
-                                  const a = pts[i], b = pts[(i + 1) % N];
-                                  const match = history.state.walls.find((w) => {
-                                    const fwd = Math.hypot(w.start.x - a.x, w.start.y - a.y) < TOL &&
-                                                Math.hypot(w.end.x - b.x, w.end.y - b.y) < TOL;
-                                    const rev = Math.hypot(w.start.x - b.x, w.start.y - b.y) < TOL &&
-                                                Math.hypot(w.end.x - a.x, w.end.y - a.y) < TOL;
-                                    return fwd || rev;
-                                  });
-                                  if (!match) continue;
-                                  const fwd = Math.hypot(match.start.x - a.x, match.start.y - a.y) < TOL &&
-                                              Math.hypot(match.end.x - b.x, match.end.y - b.y) < TOL;
-                                  edgeWallIds.push(match.id);
-                                  edgeWallAligned.push(fwd);
-                                  if (fwd) forward++; else backward++;
-                                }
-                                let signedArea = 0;
-                                for (let i = 0; i < N; i++) {
-                                  const a = pts[i], b = pts[(i + 1) % N];
-                                  signedArea += a.x * b.y - b.x * a.y;
-                                }
-                                let windingLabel: string;
-                                if (Math.abs(signedArea) < 1e-3) {
-                                  windingLabel = "Degenerate";
-                                } else if (forward === 0 && backward === 0) {
-                                  windingLabel = signedArea > 0 ? "Clockwise" : "Counter-Clockwise";
-                                } else if (forward > 0 && backward > 0) {
-                                  windingLabel = "Mixed (segments disagree)";
-                                } else {
-                                  const effectiveSign = backward > 0 ? -signedArea : signedArea;
-                                  windingLabel = effectiveSign > 0 ? "Clockwise" : "Counter-Clockwise";
-                                }
-                                return (
-                                  <>
-                                    <label className="flex items-center gap-1 text-[10px] text-slate-600">
-                                      <input
-                                        type="checkbox"
-                                        checked={!!selectedRoom.showDirection}
-                                        onChange={(e) => {
-                                          const show = e.target.checked;
-                                          const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
-                                          if (isAuto) {
-                                            const newId = createId();
-                                            history.set({
-                                              ...history.state,
-                                              rooms: [...history.state.rooms, { ...selectedRoom, id: newId, showDirection: show }],
-                                            });
-                                            selection.selectOne(newId);
-                                          } else {
-                                            history.set({
-                                              ...history.state,
-                                              rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, showDirection: show } : r),
-                                            });
-                                          }
-                                        }}
-                                      />
-                                      Show Direction
-                                      <span className="text-[9px] text-slate-400">(winding icon at centroid)</span>
-                                    </label>
-                                    <div className="text-[10px] text-slate-500">Current winding: <span className="font-mono text-slate-700">{windingLabel}</span></div>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="w-full text-[11px]"
-                                      onClick={() => {
-                                        const newPts = selectedRoom.points.slice();
-                                        if (newPts.length >= 2) {
-                                          const first = newPts[0];
-                                          const last = newPts[newPts.length - 1];
-                                          if (Math.hypot(first.x - last.x, first.y - last.y) < 0.5) newPts.pop();
-                                        }
-                                        newPts.reverse();
-                                        const mixed = forward > 0 && backward > 0;
-                                        const flipIds = new Set(edgeWallIds);
-                                        const alignSet = mixed
-                                          ? new Set(edgeWallIds.filter((_, i) => edgeWallAligned[i]))
-                                          : flipIds;
-                                        const nextWalls = history.state.walls.map((w) =>
-                                          alignSet.has(w.id)
-                                            ? { ...w, start: { ...w.end }, end: { ...w.start } }
-                                            : w
-                                        );
-                                        const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
-                                        if (isAuto) {
-                                          const newId = createId();
-                                          history.set({
-                                            ...history.state,
-                                            walls: nextWalls,
-                                            rooms: [...history.state.rooms, { ...selectedRoom, id: newId, points: newPts }],
-                                          });
-                                          selection.selectOne(newId);
-                                        } else {
-                                          history.set({
-                                            ...history.state,
-                                            walls: nextWalls,
-                                            rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, points: newPts } : r),
-                                          });
-                                        }
-                                        toast.success(mixed ? "Segments aligned and flipped" : "Room direction flipped");
-                                      }}
-                                    >
-                                      Flip Direction
-                                    </Button>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Layout Generation — moved from the left sidebar's Optimisation toolbar. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSpaceToolsLayoutGenExpanded((v) => !v)}
-                    >
-                      <span>Layout Generation</span>
-                      <span className="text-[10px] text-slate-400">{spaceToolsLayoutGenExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {spaceToolsLayoutGenExpanded && (
-                      <div className="grid grid-cols-2 place-items-center gap-2 border-t border-slate-100 p-2">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-9 w-9 shrink-0 p-0"
-                              title="Add Room"
-                              disabled={!generatedLayout}
-                            >
-                              <Plus className="h-5 w-5" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent side="left" align="start" className="w-40 p-1 shadow-xl" sideOffset={10}>
-                            <button
-                              className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-slate-100"
-                              onClick={() => {
-                                setAddRoomMode(true);
-                                setAddEdgeMode(null);
-                                setAddEdgeFirstRoom(null);
-                                setSelectedGenElement(null);
-                                toast.info("Click on the floorplan to place a new room");
-                              }}
-                            >
-                              <LandPlot className="h-4 w-4 text-green-600" /> Room
-                            </button>
-                          </PopoverContent>
-                        </Popover>
-                        <ToolButton
-                          active={false}
-                          icon={<LandPlot className="h-6 w-6" />}
-                          label="Auto Generate Floor Plan"
-                          onClick={() => setAutoGenDialogOpen(true)}
-                        />
-                        <ToolButton
-                          active={saRunning}
-                          icon={<Play className="h-6 w-6" />}
-                          label="Simulated Annealing"
-                          onClick={() => {
-                            if (!generatedLayout) {
-                              toast.error("Generate a floor plan first before running SA");
-                              return;
-                            }
-                            setSaDialogOpen(true);
-                          }}
-                        />
-                        <ToolButton
-                          active={false}
-                          icon={<Proportions className="h-6 w-6" />}
-                          label="Compute floorplate from plot boundary"
-                          onClick={handleComputeFloorplate}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── Segment Tools ── Hierarchical algorithm tree for the selected Wall/Segment. */}
-            <div className="shrink-0 border-t border-slate-200">
-              <button
-                type="button"
-                className="sticky top-0 z-10 flex w-full items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2 text-left"
-                onClick={() => setSegmentToolsExpanded((v) => !v)}
-              >
-                <span className="text-sm font-semibold">Segment Tools</span>
-                <span className="text-[11px] text-slate-400">{segmentToolsExpanded ? "▼" : "▶"}</span>
-              </button>
-              {segmentToolsExpanded && (
-                <div className="space-y-2 p-3 pr-4">
-                  {/* Inputs/Outputs moved to Properties|Metrics tab inside the Properties column. */}
-
-                  {/* Extend */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSegmentToolsExtendExpanded((v) => !v)}
-                    >
-                      <span>Extend</span>
-                      <span className="text-[10px] text-slate-400">{segmentToolsExtendExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {segmentToolsExtendExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedWall ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Segment on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <WallExtendBlock
-                            expanded={wallExtendExpanded}
-                            setExpanded={setWallExtendExpanded}
-                            directionConstraint={wallDirectionConstraint}
-                            setDirectionConstraint={setWallDirectionConstraint}
-                            extendMode={wallExtendMode}
-                            setExtendMode={setWallExtendMode}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Display moved to the segment's Properties tab (left panel). */}
-
-                  {/* Split */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSegmentToolsSplitExpanded((v) => !v)}
-                    >
-                      <span>Split</span>
-                      <span className="text-[10px] text-slate-400">{segmentToolsSplitExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {segmentToolsSplitExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedWall ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a Segment on the canvas to use these tools.
-                          </p>
-                        ) : (
-                          <WallSplitBlock
-                            selectedWall={selectedWall}
-                            unit={unit}
-                            pixelsPerMeter={pixelsPerMeter}
-                            expanded={wallSplitExpanded}
-                            setExpanded={setWallSplitExpanded}
-                            count={wallSplitCount}
-                            setCount={setWallSplitCount}
-                            type={wallSplitType}
-                            setType={setWallSplitType}
-                            percents={wallSplitPercents}
-                            setPercents={setWallSplitPercents}
-                            lengths={wallSplitLengths}
-                            setLengths={setWallSplitLengths}
-                            onApplySplit={splitSelectedWallByParams}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Add Openings — split a wall/site-boundary segment into pre / opening / post. */}
-                  <div className="rounded border border-slate-200 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      onClick={() => setSegmentToolsOpeningsExpanded((v) => !v)}
-                    >
-                      <span>Add Openings</span>
-                      <span className="text-[10px] text-slate-400">{segmentToolsOpeningsExpanded ? "▼" : "▶"}</span>
-                    </button>
-                    {segmentToolsOpeningsExpanded && (
-                      <div className="space-y-1.5 border-t border-slate-100 p-2">
-                        {!selectedWall || !((selectedWall.segmentType ?? "wall") === "wall" || selectedWall.segmentType === "plot-boundary") ? (
-                          <p className="px-1 py-2 text-[11px] italic text-slate-400">
-                            Select a wall or plot-boundary segment to add openings.
-                          </p>
-                        ) : (() => {
-                          const segLenPx = Math.hypot(selectedWall.end.x - selectedWall.start.x, selectedWall.end.y - selectedWall.start.y);
-                          const segLenM = segLenPx / pixelsPerMeter;
-                          const maxLen = Math.max(0.1, segLenM - 0.1);
-                          const clampedLen = Math.max(0.1, Math.min(openingLength, maxLen));
-                          const centerM = clampedLen / 2 + (openingPos / 100) * (segLenM - clampedLen);
-                          return (
-                            <div className="space-y-2">
-                              <div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] text-slate-500">Length</span>
-                                  <span className="font-mono text-[10px] text-slate-700">{mInUnit(clampedLen).toFixed(unitDecimals())} {unit}</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  className="w-full"
-                                  min={mInUnit(0.1)}
-                                  max={mInUnit(maxLen)}
-                                  step={unit === "cm" ? 5 : unit === "ft" ? 0.1 : 0.05}
-                                  value={mInUnit(clampedLen)}
-                                  onChange={(e) => setOpeningLength(unitToM(+e.target.value))}
-                                />
-                              </div>
-                              <div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] text-slate-500">Position</span>
-                                  <span className="font-mono text-[10px] text-slate-700">{openingPos}% · {mInUnit(centerM).toFixed(unitDecimals())} {unit}</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  className="w-full"
-                                  min={0}
-                                  max={100}
-                                  step={1}
-                                  value={openingPos}
-                                  onChange={(e) => setOpeningPos(+e.target.value)}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <label className="flex items-center gap-1 text-[10px] text-slate-600">
-                                  <input
-                                    type="checkbox"
-                                    checked={openingLive}
-                                    onChange={(e) => {
-                                      const on = e.target.checked;
-                                      setOpeningLive(on);
-                                      if (on) {
-                                        openingSourceRef.current = { ...selectedWall };
-                                        runSegmentOpening(selectedWall, true);
-                                      } else {
-                                        const h = historyRef.current;
-                                        const src = openingSourceRef.current;
-                                        const cleaned = h.state.walls.filter((w) => !(w.isOpeningPreview && w.openingSourceWallId === (src?.id ?? selectedWall.id)));
-                                        const restored = src && !cleaned.some((w) => w.id === src.id) ? [...cleaned, src] : cleaned;
-                                        h.replace({ ...h.state, walls: restored });
-                                        openingSourceRef.current = null;
-                                      }
-                                    }}
-                                  />
-                                  Live
-                                </label>
-                                <span className="text-[9px] text-slate-400">{openingLive ? "auto-updates on slide" : "click Apply Opening"}</span>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full text-[11px]"
-                                onClick={() => {
-                                  if (!openingSourceRef.current) openingSourceRef.current = { ...selectedWall };
-                                  runSegmentOpening(selectedWall, false);
-                                  openingSourceRef.current = null;
-                                  setOpeningLive(false);
-                                }}
-                              >
-                                Apply Opening
-                              </Button>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-
-            {/* Tools panel: Apply JSON, Commands, AI Chat */}
-            <ToolsPanel
-              panelExpanded={toolsPanelExpanded}
-              onPanelExpandedChange={setToolsPanelExpanded}
-              areaSemanticsExpanded={areaSemanticsExpanded}
-              onAreaSemanticsExpandedChange={setAreaSemanticsExpanded}
-              jsonExpanded={jsonExpanded}
-              onJsonExpandedChange={setJsonExpanded}
-              aiChatExpanded={aiChatExpanded}
-              onAiChatExpandedChange={setAiChatExpanded}
-              commandsExpanded={commandsExpanded}
-              onCommandsExpandedChange={setCommandsExpanded}
-              visibleRooms={visibleRooms}
-              regionSemanticsById={regionSemanticsById}
-              onComputeSemantics={() => {
-                const roomsToCompute = visibleRoomsRef.current.filter((r) => (r.roomType ?? "room") === "room");
-                if (roomsToCompute.length === 0) { toast.error("No rooms to compute"); return; }
-                const walls = historyRef.current.state.walls;
-                const next: Record<string, RegionSemantics> = {};
-                for (const r of roomsToCompute) {
-                  next[r.id] = computeRegionSemantics(r, walls, roomsToCompute, pixelsPerMeter);
-                }
-                setRegionSemanticsById(next);
-                toast.success(`Computed semantics for ${roomsToCompute.length} room${roomsToCompute.length === 1 ? "" : "s"}`);
-              }}
-              onCleanWalls={() => {
-                const h = historyRef.current;
-                const before = h.state.walls.length;
-                const result = cleanWalls(h.state.walls);
-                h.set({ ...h.state, walls: result.walls });
-                const after = result.walls.length;
-                toast.success(
-                  `Clean Walls: ${result.tJunctions} T-junction split${result.tJunctions === 1 ? "" : "s"}, ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} removed (${before} → ${after})`
-                );
-              }}
-              onTestDrawPolygon={handleTestDrawPolygon}
-              onCaptureCanvasPng={async () => {
-                if (viewMode === "3d") {
-                  const canvas = containerRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
-                  if (!canvas) return null;
-                  try { return canvas.toDataURL("image/png"); } catch { return null; }
-                }
-                const stage = stageRef.current;
-                if (!stage) return null;
-                try { return stage.toDataURL({ pixelRatio: 2, mimeType: "image/png" }); } catch { return null; }
-              }}
-              onCaptureSnapshots={async () => {
-                if (viewMode !== "3d" && viewMode !== "both") {
-                  toast.info("Switch to 3D view to capture snapshots");
-                  setViewMode("3d");
-                  // Wait one frame for the 3D canvas to mount + render.
-                  await new Promise((r) => setTimeout(r, 350));
-                }
-                const api = snapshotApiRef.current;
-                if (!api) {
-                  toast.error("3D canvas not ready yet — try again");
-                  return null;
-                }
-                try {
-                  return await api.captureAll();
-                } catch (e) {
-                  console.error("captureAll failed", e);
-                  return null;
-                }
-              }}
-              aiPrompt={aiPrompt}
-              onAiPromptChange={setAiPrompt}
-              aiApiKey={aiApiKey}
-              onAiApiKeyChange={setAiApiKey}
-              aiModel={aiModel}
-              onAiModelChange={setAiModel}
-              aiBusy={aiBusy}
-              onAiGenerate={() => { applyAiChat("generate"); }}
-              jsonText={jsonText}
-              onJsonTextChange={setJsonText}
-              jsonDragOver={jsonDragOver}
-              onJsonDragOverChange={setJsonDragOver}
-              onApplyJsonPreview={() => { applyRecipeJson(jsonText, "preview"); }}
-              onApplyJsonCommit={() => { applyRecipeJson(jsonText, "commit"); }}
-              commandsInput={commandsInput}
-              onCommandsInputChange={setCommandsInput}
-              commandsFocused={commandsFocused}
-              onCommandsFocusedChange={setCommandsFocused}
-              commandSuggestions={commandSuggestions}
-              commandCatalogue={commandCatalogue}
-              semanticState={semanticState}
-              onLoadSemanticLayer={loadSemanticLayer}
-              onCommandsPreview={async () => {
-                const recipe = await parseCommandsToRecipe(commandsInput);
-                if (recipe.operations.length === 0) { toast.error("No commands matched"); return; }
-                setJsonText(JSON.stringify(recipe, null, 2));
-                applyRecipeJson(JSON.stringify(recipe), "preview");
-              }}
-              onCommandsRun={async () => {
-                const recipe = await parseCommandsToRecipe(commandsInput);
-                if (recipe.operations.length === 0) { toast.error("No commands matched"); return; }
-                setJsonText(JSON.stringify(recipe, null, 2));
-                applyRecipeJson(JSON.stringify(recipe), "commit");
-              }}
-            />
-
-            {/* Info panel removed at user request. */}
-            </div>
-          ) : null}
-        </div>
+        {/* Right-edge Tools column dissolved at user request: Space Tools removed entirely (Layout
+            Generation + Area Extend Behaviour moved to Preferences; Partitioning / Boundary & Offset /
+            Placement / UI Tools deleted). Segment Tools and Global Tools were removed earlier. */}
       </div>
 
       {false && wallOptionsOverlayOpen && tool === "wall" ? (
@@ -31520,6 +31032,17 @@ User request: ${aiPrompt.trim()}`;
         open={gridDialogOpen}
         onOpenChange={setGridDialogOpen}
         onConfirm={(draft) => { addGridFromDraft(draft); setGridDialogOpen(false); }}
+      />
+
+      {/* Template — load a schema/semantics template (Node / Segment / Space types + properties + icons)
+          into the drawing tools, Layers, and Properties tab, with no flow / geometry pipeline. */}
+      <TemplateDialog
+        open={templateDialogOpen}
+        initial={activeTemplate}
+        samples={templateSamples}
+        onApply={(params) => { setActiveTemplate(params); setTemplateDialogOpen(false); toast.success(`Template loaded${typeof params.name === "string" && params.name ? `: ${params.name}` : ""}`); }}
+        onClear={() => { setActiveTemplate(null); setTemplateDialogOpen(false); toast.info("Template cleared"); }}
+        onCancel={() => setTemplateDialogOpen(false)}
       />
 
       {/* Segment-type parameters — set once when a schema draw tool (e.g. Wall) is picked; the values are

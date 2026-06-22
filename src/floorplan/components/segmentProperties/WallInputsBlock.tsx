@@ -4,6 +4,10 @@ export interface WallInputsBlockProps {
   selectedWall: Wall;
   /** Index of `selectedWall` in the global walls array (drives the read-only ID readout). */
   wallIndex: number;
+  /** Display id of the node at the segment's START endpoint (e.g. "Node003"), or "—" if none. */
+  sourceNodeId: string;
+  /** Display id of the node at the segment's END endpoint (e.g. "Node004"), or "—" if none. */
+  targetNodeId: string;
   unit: Unit;
   pixelsPerMeter: number;
   expanded: boolean;
@@ -57,6 +61,27 @@ export const WallInputsBlock = (p: WallInputsBlockProps) => {
               value={displayId}
               readOnly
             />
+          </div>
+          {/* Source / target node ids — the junction nodes at the segment's start / end endpoints. */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <span className="text-[10px] text-slate-400">Source Node</span>
+              <input
+                type="text"
+                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-slate-50 px-1.5 text-xs font-mono text-slate-700"
+                value={p.sourceNodeId}
+                readOnly
+              />
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400">Target Node</span>
+              <input
+                type="text"
+                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-slate-50 px-1.5 text-xs font-mono text-slate-700"
+                value={p.targetNodeId}
+                readOnly
+              />
+            </div>
           </div>
           <div>
             <span className="text-[10px] text-slate-400">Label</span>
