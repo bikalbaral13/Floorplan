@@ -254,6 +254,8 @@ import { solvePipeNetwork, normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type Pipe
 import { computeFrame, type FrameGraphInput, type FrameSchema } from "../../algorithms/structure/frameBuilder";
 import { computeMiteredWalls, computeWallDimensions } from "../../algorithms/structure/wallBuilder";
 import { computeMiteredUnion } from "../../wallGeometry";
+import { insetMassFootprint } from "../../algorithms/mass/inset3d";
+import { smoothMassFootprint } from "../../algorithms/mass/smooth3d";
 import { findDef, resolveStr, resolveNum, resolveBool, ROLES } from "./attrResolve";
 
 /** Shift a polyline perpendicular to itself by `d` px (signed; left-hand normal (-dy, dx)). Each vertex
@@ -1324,11 +1326,27 @@ export function evaluateFlow(
           showOuterDim: data.params.showOuterDim === true,
           showInnerDim: data.params.showInnerDim === true,
           showCenterDim: data.params.showCenterDim === true,
+          offsetDim: data.params.offsetDim === true,
+          defaultThicknessMm: num(data.params.thicknessMm, 230),
           dimGap: num(data.params.dimGap, 0.18),
         });
         // Separate item so the band (framePieces) and the dimensions (dimLines) both render.
         if (dim.dimLines.length) items.push({ nodeId: id, tool: "wall-builder", polygons: [], color: FLOW_TOOLS["wall-builder"].color, isFinal: false, dimLines: dim.dimLines, dimLabels: dim.dimLabels });
       }
+      continue;
+    }
+    // Graph to Room: the inner (clear) rooms. The canvas auto-room detector does the per-wall inset when
+    // THIS node is present (so the rooms stay selectable Spaces with the Schema's Space props injected); the
+    // resulting rooms arrive here as the Canvas Spaces. Forward them + emit count / total area downstream.
+    if (data.tool === "graph-to-room") {
+      const rooms = (cc?.spaces ?? []).filter((p) => p.length >= 3);
+      outputs.set(id, rooms);
+      handleGroups.set(id, rooms.map((p) => [p]));
+      let totalArea = 0;
+      for (const p of rooms) totalArea += Math.abs(polygonArea(p)) / (ppm * ppm || 1);
+      const vals = { rooms: rooms.length, totalArea };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "graph-to-room", polygons: [], color: FLOW_TOOLS["graph-to-room"].color, isFinal: succs.get(id)!.length === 0, values: vals });
       continue;
     }
     // Vectorisation: trace the imported image's lines into world-space polylines (a graph). Heavy, so the
@@ -2269,6 +2287,36 @@ export function evaluateFlow(
       const out = merged && merged.length >= 3 ? [merged] : [];
       outputs.set(id, out);
       if (out.length) items.push({ nodeId: id, tool: "merge", polygons: out, color: FLOW_TOOLS.merge.color, isFinal: succs.get(id)!.length === 0 });
+      continue;
+    }
+    // Inset 3D (Mass): inset each incoming Mass footprint by Offset — Inside shrinks it, Outside grows it —
+    // emitting a new Mass footprint. The host extrudes the result in 3D (gated on this node's presence).
+    if (data.tool === "inset-3d") {
+      const off = Math.max(0, num(data.params.offset, 0.2)) * ppm;
+      const signed = data.params.direction === "outside" ? -off : off;
+      const out: Point[][] = [];
+      for (const poly of inputsOf(id)) {
+        if (poly.length < 3) continue;
+        const ins = off > 0 ? insetMassFootprint(poly, signed) : poly;
+        out.push(ins && ins.length >= 3 ? ins : poly);
+      }
+      outputs.set(id, out);
+      handleGroups.set(id, out.map((p) => [p]));
+      if (out.length) items.push({ nodeId: id, tool: "inset-3d", polygons: out, color: FLOW_TOOLS["inset-3d"].color, isFinal: succs.get(id)!.length === 0 });
+      continue;
+    }
+    // Smoothing 3D (Mass): round each incoming Mass footprint (Chaikin) → a new smoothed Mass footprint.
+    // The host extrudes the result in 3D (gated on this node's presence).
+    if (data.tool === "smooth-3d") {
+      const iters = Math.max(0, Math.round(num(data.params.iterations, 2)));
+      const out: Point[][] = [];
+      for (const poly of inputsOf(id)) {
+        if (poly.length < 3) continue;
+        out.push(iters > 0 ? smoothMassFootprint(poly, iters) : poly);
+      }
+      outputs.set(id, out);
+      handleGroups.set(id, out.map((p) => [p]));
+      if (out.length) items.push({ nodeId: id, tool: "smooth-3d", polygons: out, color: FLOW_TOOLS["smooth-3d"].color, isFinal: succs.get(id)!.length === 0 });
       continue;
     }
     const input = inputOf(id);

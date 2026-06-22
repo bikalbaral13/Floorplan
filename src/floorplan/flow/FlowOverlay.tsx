@@ -49,10 +49,10 @@ const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Image", tools: ["image", "vectorise", "object-detection"] },
   { title: "Logic", tools: ["conditional", "param-manip"] },
   { title: "Build", tools: ["floor-massing", "place-object", "frame-builder"] },
-  { title: "Building", tools: ["wall-builder", "segment-to-door", "segment-to-window", "node-to-object", "node-to-staircase", "node-to-footing", "segment-to-3d", "space-to-3d"] },
-  { title: "Floorplan Views", tools: ["floorplan-to-front-elevation", "floorplan-to-back-elevation", "floorplan-to-left-elevation", "floorplan-to-right-elevation", "views-layout"] },
-  { title: "Footing", tools: ["footing", "footing-to-plan", "footing-to-elevation", "footing-to-3d-mesh", "mesh-to-3d"] },
-  { title: "Staircase", tools: ["staircase", "staircase-to-plan", "staircase-to-left-elevation", "staircase-to-right-elevation", "staircase-to-front-elevation", "staircase-to-back-elevation", "staircase-to-3d-mesh"] },
+  { title: "Building", tools: ["wall-builder", "graph-to-room", "segment-to-door", "segment-to-window", "node-to-object", "node-to-staircase", "node-to-footing", "segment-to-3d", "space-to-3d"] },
+  { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d"] },
+  { title: "Footing", tools: ["footing", "footing-to-3d-mesh", "mesh-to-3d"] },
+  { title: "Staircase", tools: ["staircase", "staircase-to-3d-mesh"] },
   { title: "Calculate", tools: ["math", "random", "bua", "point", "file-upload", "text"] },
   { title: "Output", tools: ["output", "render", "analyse", "generate"] },
 ];
@@ -131,10 +131,11 @@ const FLOORPLAN_SCHEMA_PARAMS = {
     xProp("s_wt", "wallThickness", "Wall Thickness", "number", 0.23, { unit: "m", min: 0.05, max: 0.6, step: 0.01, role: "wall-thickness", showIf: { when: "type", equals: "wall" } }),
     xProp("s_wjust", "wallJustification", "Justification", "select", "center", { role: "wall-justification", options: ["inner", "center", "outer"], showIf: { when: "type", equals: "wall" } }),
     xProp("s_wh", "wallHeight", "Wall Height", "number", 3, { unit: "m", min: 0, max: 10, step: 0.05, role: "wall-height", showIf: { when: "type", equals: "wall" } }),
-    xProp("s_wunion", "wallUnion", "Union", "checkbox", false, { role: "wall-union", showIf: { when: "type", equals: "wall" } }),
+    xProp("s_wunion", "wallUnion", "Union", "checkbox", true, { role: "wall-union", showIf: { when: "type", equals: "wall" } }),
     xProp("s_wodim", "showOuterDim", "Show Outer Dimension", "checkbox", true, { role: "show-outer-dim", showIf: { when: "type", equals: "wall" } }),
     xProp("s_widim", "showInnerDim", "Show Inner Dimension", "checkbox", true, { role: "show-inner-dim", showIf: { when: "type", equals: "wall" } }),
     xProp("s_wcdim", "showCenterDim", "Show Center Dimension", "checkbox", false, { role: "show-center-dim", showIf: { when: "type", equals: "wall" } }),
+    xProp("s_woffdim", "offsetDim", "Offsetted Dimension", "checkbox", false, { role: "offset-dim", showIf: { when: "type", equals: "wall" } }),
     xProp("s_dshape", "doorShape", "Shape", "select", "arc", { role: "door-shape", options: ["polygon", "arc", "detailed"], showIf: { when: "type", equals: "door" } }),
     xProp("s_dthk", "doorThickness", "Leaf Thickness", "number", 0.05, { unit: "m", min: 0.01, max: 0.5, step: 0.01, role: "door-thickness", showIf: { when: "type", equals: "door" } }),
     xProp("s_dhinge", "doorHinge", "Hinge", "select", "left", { role: "door-hinge", options: ["left", "right"], showIf: { when: "type", equals: "door" } }),
@@ -182,6 +183,16 @@ const FLOORPLAN_SCHEMA_PARAMS = {
   // Ortho draw lock (horizontal / vertical only). Default on.
   settingsProps: [
     xProp("set_ortho", "ortho", "Ortho", "checkbox", true, { role: "ortho" }),
+    // Display unit for all dimensions / areas — drives the canvas unit (mirrors the m / ft / cm toolbar).
+    xProp("set_units", "units", "Units", "select", "m", { role: "units", options: ["m", "ft", "cm"] }),
+    // Snap radii (px) — pointer snapping while drawing. Node = snap to existing endpoints; Wall-spine =
+    // project the pointer onto the nearest wall centerline. 0 disables each.
+    xProp("set_nsnap", "nodeSnapRadius", "Node Snap Radius", "number", 14, { unit: "px", min: 0, max: 30, step: 1, role: "node-snap-radius" }),
+    xProp("set_ssnap", "spineSnapRadius", "Wall-Spine Snap Radius", "number", 14, { unit: "px", min: 0, max: 56, step: 1, role: "spine-snap-radius" }),
+    // Layer-visibility toggles — each hides / unhides the matching default Layer in the Layers panel.
+    // The imported Image defaults on; the Map system layer defaults off.
+    xProp("set_vimage", "showImage", "Image", "checkbox", true, { role: "show-image" }),
+    xProp("set_vmap", "showMap", "Map", "checkbox", false, { role: "show-map" }),
   ],
   // Layout title-block fields — role-bound to the LayoutSheet (see INFO_ROLE_TO_PROP). Edit these in
   // the Properties tab (View Mode → Layout) and the sheet's title block updates live.
@@ -235,7 +246,11 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { id: "windows", tool: "segment-to-window", x: 945, y: -1104, params: { shape: "lines", thickness: 0.1, panes: 2, sillHeight: 0.9, lintelHeight: 2.1, color: "#0891b2" } },
           // Walls — schema-driven mitred walls: the Wall Builder strokes the canvas graph's wall segments
           // into a mitred ribbon, taking each wall's THICKNESS from the Segment schema (role wall-thickness).
-          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: false, showOuterDim: true, showInnerDim: true, showCenterDim: false, dimGap: 0.18 } },
+          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: true, showOuterDim: true, showInnerDim: true, showCenterDim: false, offsetDim: false, dimGap: 0.18 } },
+          // Rooms — inner (clear) rooms: its presence makes the canvas auto-rooms inset to the inner wall
+          // faces by half each wall's schema thickness, so room area excludes the walls. Fed the Canvas
+          // Graph (out-3) + the Schema (per-wall thickness). The rooms stay selectable Spaces.
+          { id: "rooms", tool: "graph-to-room", x: 1240, y: -874, params: {} },
           // Objects — schema-driven furniture symbols on object-typed nodes (roles object-kind / obj-width /
           // obj-height / obj-rotation / obj-anchor). Self-filters to "object"-typed nodes. Fed from Nodes (out-1).
           { id: "objects", tool: "node-to-object", x: 894, y: -764, params: { kind: "bed", width: 1.5, height: 2, rotation: 0, anchor: "center" } },
@@ -255,6 +270,9 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { source: "canvas", target: "doors", sourceHandle: "out-2" },
           { source: "canvas", target: "windows", sourceHandle: "out-2" },
           { source: "canvas", target: "walls", sourceHandle: "out-2" },
+          // Canvas Graph (out-3) → Rooms (inner clear rooms); Schema → Rooms for per-wall thickness.
+          { source: "canvas", target: "rooms", sourceHandle: "out-3" },
+          { source: "schema", target: "rooms", targetHandle: "gin-schema" },
           // Canvas Nodes bundle (out-1) → objects (self-filters to "object"-typed nodes).
           { source: "canvas", target: "objects", sourceHandle: "out-1" },
           // Canvas Nodes bundle (out-1) → staircases (self-filters to "staircase"-typed nodes).
@@ -274,7 +292,7 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { id: "canvas", tool: "canvas-source", x: 540, y: -1160, params: {} },
           { id: "doors", tool: "segment-to-door", x: 988, y: -1336, params: { shape: "arc", thickness: 0.05, hinge: "left", swing: "left", lintelHeight: 2.1, color: "#9333ea" } },
           { id: "windows", tool: "segment-to-window", x: 945, y: -1104, params: { shape: "lines", thickness: 0.1, panes: 2, sillHeight: 0.9, lintelHeight: 2.1, color: "#0891b2" } },
-          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: false, showOuterDim: true, showInnerDim: true, showCenterDim: false, dimGap: 0.18 } },
+          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: true, showOuterDim: true, showInnerDim: true, showCenterDim: false, offsetDim: false, dimGap: 0.18 } },
           { id: "objects", tool: "node-to-object", x: 894, y: -764, params: { kind: "bed", width: 1.5, height: 2, rotation: 0, anchor: "center" } },
           { id: "schemaTools", tool: "schema-to-drawing", x: 540, y: -980, params: {} },
           // Elevations — project the wall / door / window graph onto each cardinal plane (Tier-A).
@@ -439,6 +457,44 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { source: "schema", target: "pipe", targetHandle: "gin-schema" },
           { source: "graph", target: "pipe" },
           { source: "pipe", target: "out" },
+        ],
+      },
+    ],
+  },
+  {
+    title: "Hydrology",
+    workflows: [
+      {
+        id: "watershed-delineation",
+        title: "Watershed Delineation",
+        description: "Grid → synthetic DEM (Grid Field) → Fill Depressions → Flow Direction → Flow Accumulation → Grid Threshold (streams) → Marching Squares (stream lines); Flow Direction → Watershed (basin). Create a Grid on the canvas (its lattice is the DEM extent); tune the DEM ramp + stream threshold and the channel network + catchment update live.",
+        nodes: [
+          // Grid (grid-source) — grabs the Grid currently selected on the canvas; its lattice is the DEM extent.
+          { id: "grid", tool: "grid-source", x: 0, y: 0, params: { id: "", grabFromSelection: true } },
+          // Synthetic DEM — a directional elevation ramp + random jitter over the lattice (the terrain).
+          { id: "dem", tool: "grid-field", x: 260, y: 0, params: { direction: "top-bottom", high: 100, low: 0, randomness: 0.35, seed: 7, inciseOccupied: false, showCellValues: false } },
+          // Hydrologically condition the DEM so every cell drains to the border (Priority-Flood + ε).
+          { id: "filled", tool: "fill-depressions", x: 520, y: 0, params: { epsilon: 0.01, edgesAreOutlets: true, highlightFilled: false, showCellValues: false } },
+          // D8 steepest-descent flow direction per cell.
+          { id: "flowdir", tool: "flow-direction", x: 780, y: 0, params: { method: "d8", showArrows: true, colorByDirection: false } },
+          // Upstream contributing cells per cell — high values are channels.
+          { id: "flowacc", tool: "flow-accumulation", x: 1040, y: -130, params: { asArea: false, logDisplay: true, showCellValues: false } },
+          // Threshold the accumulation → a 0/1 stream mask (raise the threshold for fewer / larger channels).
+          { id: "streams", tool: "grid-threshold", x: 1300, y: -130, params: { op: ">", threshold: 20, passColor: "#1d4ed8", showFail: false } },
+          // Vectorise the stream mask into channel polylines.
+          { id: "streamlines", tool: "marching-squares", x: 1560, y: -130, params: { levels: 1 } },
+          // Delineate the catchment draining to the lowest cell, over the flow-direction field.
+          { id: "basin", tool: "watershed", x: 1040, y: 150, params: { useLowestCell: true, fillColor: "#0ea5e9", showBoundary: true } },
+        ],
+        edges: [
+          { source: "grid", target: "dem" },
+          { source: "dem", target: "filled" },
+          { source: "filled", target: "flowdir" },
+          { source: "flowdir", target: "flowacc" },
+          { source: "flowacc", target: "streams" },
+          { source: "streams", target: "streamlines" },
+          // Branch: the basin is delineated straight from the flow-direction field.
+          { source: "flowdir", target: "basin" },
         ],
       },
     ],

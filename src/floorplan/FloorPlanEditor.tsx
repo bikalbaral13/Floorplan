@@ -99,7 +99,7 @@ import type {
   WallMethod,
   WallMode,
 } from "./types";
-import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, layerForRoomType, gridCellValue } from "./types";
+import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue } from "./types";
 import { rasterizePdfFirstPage } from "./pdfRaster";
 import { vectorizeImage, type VectorizeColorMode } from "./algorithms/vector/vectorizeImage";
 import { detectObjects, splitDataUrl, DEFAULT_DETECTION_MODEL, type Detection, type DetectionMode } from "./algorithms/vision/geminiObjectDetection";
@@ -126,6 +126,8 @@ import {
 } from "./wallGeometry";
 import { computeMiteredWalls, computeWallDimensions, wallsToGraphInput } from "./algorithms/structure/wallBuilder";
 import type { FrameSchema } from "./algorithms/structure/frameBuilder";
+import { insetMassFootprint } from "./algorithms/mass/inset3d";
+import { smoothMassFootprint } from "./algorithms/mass/smooth3d";
 import { generateFloorPlan, DEFAULT_GENERATE_CONFIG, type GenerateConfig, type ConnectionEntry, type DoorPosition } from "./floorplanAlgorithms";
 import { runSimulatedAnnealing, DEFAULT_SA_PARAMS, type SAProgress, type SAHandle, type SAResult } from "./simulatedAnnealing";
 import {
@@ -1134,6 +1136,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const { containerRef, size, scale, setScale, position, setPosition } = useCanvas();
   const history = useHistory<FloorPlanModel>(initialModel);
   const selection = useSelection();
+  // Declared early (before the auto-room memo) so room detection can read the live flow + scale: when a
+  // "Graph to Room" node is present, auto-rooms are inset to the inner (clear) room by each wall's schema
+  // thickness. (Both are also referenced widely below.)
+  const [pixelsPerMeter, setPixelsPerMeter] = useState(50);
+  const [liveFlowGraph, setLiveFlowGraph] = useState<SerializedFlow | null>(null);
   const autoRooms = useMemo(
     // BSP preview walls (isBspPreview) are excluded — same as inset preview walls — so the partition
     // shows only as ephemeral cut strokes during Live, never as real auto-rooms. The cells become
@@ -1153,9 +1160,32 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (!knownLayerIds.has(id)) return true;
         return visibleLayerIds.has(id);
       };
-      return detectAutoRoomsFromWalls(history.state.walls.filter((w) => isWallLayerVisible(w) && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview && !w.isVectorWall && !w.isVectorPreview));
+      const detectWalls = history.state.walls.filter((w) => isWallLayerVisible(w) && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview && !w.isVectorWall && !w.isVectorPreview);
+      // "Graph to Room" node present → inset each room face to the inner (clear) room by half each bounding
+      // wall's SCHEMA thickness (graphAttrs role wall-thickness → schema default → 0.23 m). Rooms stay
+      // auto-rooms, so they remain selectable Spaces with the schema's Space properties injected.
+      const roomInsetActive = !!liveFlowGraph?.nodes?.some((n) => n.data?.tool === "graph-to-room");
+      if (roomInsetActive) {
+        const schemaNode = liveFlowGraph?.nodes?.find((n) => n.data?.tool === "schema");
+        const segDefs = schemaNode ? schemaNodeToSchemas(schemaNode.data?.params ?? {}).segment : [];
+        const thDef = segDefs.find((d) => d.role === "wall-thickness" || d.key === "wall-thickness" || d.key === "wallThickness");
+        const schemaDefM = thDef && Number.isFinite(Number(thDef.default)) ? Number(thDef.default) : 0.23;
+        const segAttrs = history.state.graphAttrs?.segments ?? {};
+        const thicknessM = (w: Wall): number => {
+          // Split pieces get ids like "<origId>~x,y" with no own attrs → fall back to the ORIGINAL wall's
+          // thickness (same rule the schema resolver uses), so each wall keeps its width when subtracting.
+          const own = segAttrs[w.id]?.["wall-thickness"];
+          const base = own == null && w.id.includes("~") ? segAttrs[w.id.slice(0, w.id.indexOf("~"))]?.["wall-thickness"] : undefined;
+          const v = own ?? base;
+          return Number.isFinite(Number(v)) ? Number(v) : schemaDefM;
+        };
+        // Force center so the inner offset reads each wall's half-thickness symmetrically into the room.
+        const sized = detectWalls.map((w) => ({ ...w, thickness: thicknessM(w) * pixelsPerMeter, method: "center" as const }));
+        return detectAutoRoomsFromWalls(sized, { innerOffset: true });
+      }
+      return detectAutoRoomsFromWalls(detectWalls);
     },
-    [history.state.walls, history.state.layers]
+    [history.state.walls, history.state.layers, history.state.graphAttrs, liveFlowGraph, pixelsPerMeter]
   );
   const manualRooms = useMemo(
     () => history.state.rooms.filter((room) => !room.id.startsWith(ROOM_AUTO_ID_PREFIX)),
@@ -1787,7 +1817,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     placement2dSymbol: false,
     placementRenderedSymbol: false,
   });
-  const [pixelsPerMeter, setPixelsPerMeter] = useState(50);
   /** Architectural view: the wall band (non-opening walls) physically clipped by column footprints,
    *  so no wall material is drawn inside a column. Empty unless Architectural view is on AND there is
    *  at least one column overlapping the walls — when empty, walls render normally (unchanged). */
@@ -1848,6 +1877,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  Site-related layers (Buildable / Footprint / Basement / Inset Area) hide
    *  under a single header row. Default expanded so users see them on first run. */
   const [siteLayerGroupExpanded, setSiteLayerGroupExpanded] = useState<boolean>(true);
+  const [defaultLayerGroupExpanded, setDefaultLayerGroupExpanded] = useState<boolean>(true);
   const [measureDraft, setMeasureDraft] = useState<Point | null>(null);
   const [measurePreviewPoint, setMeasurePreviewPoint] = useState<Point | null>(null);
   const [measureSegments, setMeasureSegments] = useState<{ id: string; start: Point; end: Point }[]>([]);
@@ -3365,7 +3395,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // The ONE Flow graph (single, not per-room). The overlay only ever edits one graph; it operates on
   // whichever Space is selected (its "Selected Space" node = current selection). Held here so the
   // Properties tab can read it whenever any Space is selected. In-session only (not in the saved model).
-  const [liveFlowGraph, setLiveFlowGraph] = useState<SerializedFlow | null>(null);
   const selectedFlow = selectedRoom ? liveFlowGraph : null;
 
   // Schema-driven drawing tools — derived DIRECTLY from the live flow graph (independent of the preview
@@ -3427,6 +3456,65 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   useEffect(() => {
     if (schemaOrthoDefault != null) setOrthoMode(schemaOrthoDefault);
   }, [schemaOrthoDefault]);
+  // The schema's Units default → drives the canvas display unit (m / ft / cm). Re-applied whenever the
+  // default changes (workflow load / flow edit); the user can still switch it in Properties or the toolbar.
+  const schemaUnitsDefault = useMemo<Unit | null>(() => {
+    const def = activeSchemaSettingsDefs.find((d) => d.role === "units" || d.key === "units");
+    const v = def?.default;
+    return v === "m" || v === "ft" || v === "cm" ? v : null;
+  }, [activeSchemaSettingsDefs]);
+  useEffect(() => {
+    if (schemaUnitsDefault != null) setUnit(schemaUnitsDefault);
+  }, [schemaUnitsDefault]);
+  // The schema's snap-radius defaults → drive the canvas snapping radii. Re-applied whenever a default
+  // changes (workflow load / flow edit); the user can still adjust them in Properties afterward.
+  const schemaSnapDefaults = useMemo<{ node: number | null; spine: number | null }>(() => {
+    const num = (roles: string[]): number | null => {
+      const def = activeSchemaSettingsDefs.find((d) => roles.includes(d.role ?? "") || roles.includes(d.key));
+      return def != null && Number.isFinite(Number(def.default)) ? Number(def.default) : null;
+    };
+    return { node: num(["node-snap-radius"]), spine: num(["spine-snap-radius"]) };
+  }, [activeSchemaSettingsDefs]);
+  useEffect(() => {
+    setSnapSettings((prev) => ({
+      ...prev,
+      ...(schemaSnapDefaults.node != null ? { endpointRadius: schemaSnapDefaults.node } : {}),
+      ...(schemaSnapDefaults.spine != null ? { wallSpineRadius: schemaSnapDefaults.spine } : {}),
+    }));
+  }, [schemaSnapDefaults]);
+
+  /** Set a default Layer entity's visibility in the layer table by id — mirrors that row's eye in the
+   *  Layers panel, so the schema's Image / Map Settings and those rows stay in sync. */
+  const setLayerEntityVisible = useCallback((layerId: string, visible: boolean) => {
+    const h = historyRef.current;
+    h.set({ ...h.state, layers: (h.state.layers ?? []).map((l) => l.id === layerId ? { ...l, visible } : l) });
+  }, []);
+  // Floorplan Tracer default: when the schema-driven layer workflow first loads (it uniquely carries a
+  // "Schema to Layers" node), seed the default-Layer visibility. The raw Nodes / Segments / Space display
+  // layers are hidden (the schema-driven walls / rooms read cleaner without them); Image / Map / Grid come
+  // from the schema's Settings. Applied ONCE per load (a ref guard), so the user can re-toggle afterward.
+  const tracerLayerDefaultsRef = useRef(false);
+  useEffect(() => {
+    const isTracer = !!liveFlowGraph?.nodes?.some((n) => n.data?.tool === "schema-to-layers");
+    if (isTracer && !tracerLayerDefaultsRef.current) {
+      tracerLayerDefaultsRef.current = true;
+      const defs = activeSchemaSettingsDefs;
+      const defBool = (role: string, fallback: boolean): boolean => {
+        const d = defs.find((x) => (x.role ?? x.key) === role || x.key === role);
+        return d ? d.default === true : fallback;
+      };
+      setLayerVisibility((prev) => ({
+        ...prev,
+        nodes: false,
+        segments: false,
+        rooms: false,
+      }));
+      if (defs.some((x) => (x.role ?? x.key) === "show-image")) setLayerEntityVisible(DEFAULT_IMAGE_LAYER_ID, defBool("show-image", true));
+      if (defs.some((x) => (x.role ?? x.key) === "show-map")) setLayerEntityVisible(DEFAULT_MAP_LAYER_ID, defBool("show-map", true));
+    } else if (!isTracer) {
+      tracerLayerDefaultsRef.current = false;
+    }
+  }, [liveFlowGraph, activeSchemaSettingsDefs, setLayerEntityVisible]);
 
   // Schema-driven LAYERS — derived live from the flow graph (mirrors extractDrawTools). When a "Schema to
   // Layers" node is present, read its attached Schema's segment `type` (seg-type) and node `type`
@@ -3475,6 +3563,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       showOuterDim: p.showOuterDim === true,
       showInnerDim: p.showInnerDim === true,
       showCenterDim: p.showCenterDim === true,
+      offsetDim: p.offsetDim === true,
       dimGap: typeof p.dimGap === "number" ? p.dimGap : 0.18,
     };
   }, [liveFlowGraph]);
@@ -3587,7 +3676,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // overrides come from graphAttrs by role extrude-height / extrude-direction (read at the use sites).
   const flow3dExtrude = useMemo(() => {
     const norm = (n: SerializedFlowNode | undefined) =>
-      n ? { height: Number(n.data.params.height) || 0, dir: n.data.params.direction === "down" ? ("down" as const) : ("up" as const) } : null;
+      n ? {
+        height: Number(n.data.params.height) || 0,
+        dir: n.data.params.direction === "down" ? ("down" as const) : ("up" as const),
+        color: typeof n.data.params.color === "string" ? n.data.params.color : "#94a3b8",
+        opacity: typeof n.data.params.opacity === "number" ? n.data.params.opacity : 1,
+        showEdges: n.data.params.showEdges !== false,
+      } : null;
     return {
       seg: norm(liveFlowGraph?.nodes.find((n) => n.data.tool === "segment-to-3d")),
       space: norm(liveFlowGraph?.nodes.find((n) => n.data.tool === "space-to-3d")),
@@ -3601,18 +3696,53 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // node) height, Up from the floor or Down below it.
   const spaceMasses = useMemo(() => {
     const s = flow3dExtrude.space;
-    if (!s) return [] as { id: string; points: Point[]; heightM: number; direction: "up" | "down" }[];
+    if (!s) return [] as { id: string; points: Point[]; heightM: number; direction: "up" | "down"; color: string; opacity: number; showEdges: boolean }[];
     const ga = history.state.graphAttrs?.spaces;
+    // Inset 3D (Mass) node present → inset each Mass footprint before extruding via insetMassFootprint.
+    // Inside shrinks (positive inward distance), Outside grows (negative).
+    const insetNode = liveFlowGraph?.nodes?.find((n) => n.data?.tool === "inset-3d");
+    const insetOffM = insetNode ? Math.max(0, Number(insetNode.data.params.offset) || 0) : 0;
+    const insetPx = insetOffM * pixelsPerMeter * (insetNode?.data.params.direction === "outside" ? -1 : 1);
+    // Smoothing 3D node present → round each footprint (after any inset) before extruding.
+    const smoothNode = liveFlowGraph?.nodes?.find((n) => n.data?.tool === "smooth-3d");
+    const smoothIters = smoothNode ? Math.max(0, Math.round(Number(smoothNode.data.params.iterations) || 0)) : 0;
     return visibleRooms
       .filter((r) => r.points && r.points.length >= 3)
       .map((r) => {
         const a = ga?.[r.id];
         const heightM = attrNum(a?.["extrude-height"]) ?? s.height;
         const dir = a?.["extrude-direction"] === "down" ? "down" : a?.["extrude-direction"] === "up" ? "up" : s.dir;
-        return { id: r.id, points: r.points, heightM, direction: dir as "up" | "down" };
+        const color = typeof a?.["extrude-color"] === "string" && a["extrude-color"] ? String(a["extrude-color"]) : s.color;
+        const opacity = attrNum(a?.["extrude-opacity"]) ?? s.opacity;
+        const showEdges = a?.["extrude-edges"] != null ? (a["extrude-edges"] === true || a["extrude-edges"] === 1 || a["extrude-edges"] === "true") : s.showEdges;
+        let points = r.points;
+        if (insetNode && insetOffM > 0) {
+          const ins = insetMassFootprint(points, insetPx);
+          if (ins && ins.length >= 3) points = ins;
+        }
+        if (smoothNode && smoothIters > 0) points = smoothMassFootprint(points, smoothIters);
+        return { id: r.id, points, heightM, direction: dir as "up" | "down", color, opacity, showEdges };
       })
       .filter((m) => m.heightM > 0);
-  }, [flow3dExtrude.space, visibleRooms, history.state.graphAttrs]);
+  }, [flow3dExtrude.space, visibleRooms, history.state.graphAttrs, liveFlowGraph, pixelsPerMeter]);
+
+  // Primitive 3D masses from "Mass" generator nodes — Cube / Cuboid / Sphere / Cone / Cylinder rendered
+  // directly in the 3D view (no canvas footprint; a standalone primitive per node).
+  const primitiveMasses = useMemo(() => {
+    const nodes = liveFlowGraph?.nodes?.filter((n) => n.data?.tool === "mass") ?? [];
+    return nodes.map((n) => {
+      const p = n.data.params as Record<string, unknown>;
+      return {
+        id: n.id,
+        shape: typeof p.shape === "string" ? p.shape : "cube",
+        length: Number(p.length) || 3,
+        breadth: Number(p.breadth) || 2,
+        height: Number(p.height) || 3,
+        radius: Number(p.radius) || 1.5,
+        color: typeof p.color === "string" ? p.color : "#94a3b8",
+      };
+    });
+  }, [liveFlowGraph]);
 
   // Resolve the active component schemas from the live flow. Two sources, schema NODE first:
   //  • A Schema node wired into a Graph node activates its Node/Segment/Graph sections; wired into a
@@ -17043,7 +17173,17 @@ User request: ${aiPrompt.trim()}`;
     const openId = createId(), w1Id = createId(), w2Id = createId();
     if (hostAttrs) { segs[w1Id] = { ...hostAttrs, "seg-type": "wall" }; segs[w2Id] = { ...hostAttrs, "seg-type": "wall" }; }
     const segDefaults = activeSegDefaultsRef.current?.type === singleSegType ? activeSegDefaultsRef.current.vals : {};
-    segs[openId] = { ...(segs[openId] ?? {}), "seg-type": singleSegType, ...segDefaults };
+    // The opening's thickness defaults to the HOST WALL's thickness so the door / window symbol spans the
+    // full wall (no gap). Read the host's schema thickness (split pieces inherit the original wall's value).
+    const hostOwn = segs[host.id]?.["wall-thickness"];
+    const hostBase = hostOwn == null && host.id.includes("~") ? segs[host.id.slice(0, host.id.indexOf("~"))]?.["wall-thickness"] : undefined;
+    const hostThM = Number(hostOwn ?? hostBase);
+    const openThM = Number.isFinite(hostThM) && hostThM > 0 ? hostThM : (wallBuilderDimParams.thicknessMm ?? 230) / 1000;
+    const thicknessRole = singleSegType === "window" ? "window-thickness" : "door-thickness";
+    // Also carry the host wall's wall-thickness on the opening so the Graph to Room inset offsets the
+    // opening edge by the SAME amount as the surrounding wall — otherwise the room boundary tilts/steps
+    // at the door/window. (The symbol uses door/window-thickness; the room inset uses wall-thickness.)
+    segs[openId] = { ...(segs[openId] ?? {}), "seg-type": singleSegType, ...segDefaults, [thicknessRole]: openThM, "wall-thickness": openThM };
     delete segs[host.id];
     const base = (id: string, start: Point, end: Point, segType: string): Wall => ({
       id, start, end,
@@ -19250,7 +19390,22 @@ User request: ${aiPrompt.trim()}`;
             };
 
             const siteLayers = allLayers.filter((l) => SITE_GROUP_LAYER_IDS.has(l.id));
-            const nonSiteLayers = allLayers.filter((l) => !SITE_GROUP_LAYER_IDS.has(l.id));
+            // "Default" group: built-in Layer 0. The Image underlay and Map system layer are hidden from
+            // this list — their visibility is controlled by the Floorplan Tracer schema's Settings block.
+            const DEFAULT_ROW_HIDDEN_IDS = new Set<string>([DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID]);
+            const defaultGroupLayers = allLayers.filter((l) => DEFAULT_GROUP_LAYER_IDS.has(l.id) && !DEFAULT_ROW_HIDDEN_IDS.has(l.id));
+            const nonSiteLayers = allLayers.filter((l) => !SITE_GROUP_LAYER_IDS.has(l.id) && !DEFAULT_GROUP_LAYER_IDS.has(l.id));
+            const allDefaultVisible = defaultGroupLayers.length > 0 && defaultGroupLayers.every((l) => l.visible);
+            const setAllDefaultVisible = (visible: boolean) => {
+              const h = history;
+              const ids = new Set(defaultGroupLayers.map((l) => l.id));
+              h.set({
+                ...h.state,
+                layers: (h.state.layers ?? []).map((l) =>
+                  ids.has(l.id) ? { ...l, visible } : l,
+                ),
+              });
+            };
             // "Site" group header: clicking the eye toggles visibility on all four site
             // layers at once; the caret folds the list of individual rows.
             const allSiteVisible = siteLayers.length > 0 && siteLayers.every((l) => l.visible);
@@ -19265,6 +19420,53 @@ User request: ${aiPrompt.trim()}`;
             };
             return (
               <>
+                {defaultGroupLayers.length > 0 && (
+                  <div className="rounded border border-slate-200 bg-slate-50">
+                    <div className="flex items-center gap-1 px-1.5 py-1 text-[11px]">
+                      <button
+                        type="button"
+                        title={allDefaultVisible ? "Hide all Default layers" : "Show all Default layers"}
+                        onClick={() => setAllDefaultVisible(!allDefaultVisible)}
+                        className="rounded p-0.5 hover:bg-slate-200"
+                      >
+                        {allDefaultVisible ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDefaultLayerGroupExpanded((v) => !v)}
+                        className="flex flex-1 items-center justify-between rounded px-1 py-0.5 text-left font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-200"
+                      >
+                        <span>Default</span>
+                        <span className="text-[10px] text-slate-400">{defaultLayerGroupExpanded ? "▼" : "▶"} {defaultGroupLayers.length}</span>
+                      </button>
+                    </div>
+                    {defaultLayerGroupExpanded && (
+                      <div className="space-y-1 border-t border-slate-200 bg-white p-1">
+                        {defaultGroupLayers.map(renderRow)}
+                        {/* Display layers (Grid / Space / Nodes / Segments) — visibility only (no entities,
+                            so no color / active / delete). Undeletable; live below Map. */}
+                        {([
+                          { label: "Grid", key: "grid" as const },
+                          { label: "Space", key: "rooms" as const },
+                          { label: "Nodes", key: "nodes" as const },
+                          { label: "Segments", key: "segments" as const },
+                        ]).map(({ label, key }) => (
+                          <div key={key} className="flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px]">
+                            <button
+                              type="button"
+                              title={layerVisibility[key] ? `Hide ${label}` : `Show ${label}`}
+                              onClick={() => setLayerVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
+                              className="rounded p-0.5 hover:bg-slate-100"
+                            >
+                              {layerVisibility[key] ? <Eye className="h-3.5 w-3.5 text-slate-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+                            </button>
+                            <span className="min-w-0 flex-1 px-1 py-0 text-[11px] text-slate-600">{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {nonSiteLayers.map(renderRow)}
                 {siteLayers.length > 0 && (
                   <div className="rounded border border-slate-200 bg-slate-50">
@@ -19340,68 +19542,6 @@ User request: ${aiPrompt.trim()}`;
               Move sel → active
             </Button>
           </div>
-        </div>
-        <div className="my-2 border-t border-slate-200" />
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Display Layers</p>
-        <div className="grid grid-cols-2 gap-2">
-          <Button size="sm" variant={layerVisibility.grid ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, grid: !prev.grid }))}>
-            Grid
-          </Button>
-          <Button size="sm" variant={layerVisibility.drawing ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, drawing: !prev.drawing }))}>
-            Drawing
-          </Button>
-          <Button size="sm" variant={layerVisibility.objects ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, objects: !prev.objects }))}>
-            Objects
-          </Button>
-          <Button size="sm" variant={layerVisibility.guides ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, guides: !prev.guides }))}>
-            Guides
-          </Button>
-          <Button
-            size="sm"
-            variant={layerVisibility.measure && !layerVisibility.measureArrows ? "default" : "outline"}
-            onClick={() => setLayerVisibility((prev) => (
-              prev.measure && !prev.measureArrows
-                ? { ...prev, measure: false, measureArrows: false }
-                : { ...prev, measure: true, measureArrows: false }
-            ))}
-          >
-            Measure only
-          </Button>
-          <Button
-            size="sm"
-            variant={layerVisibility.measure && layerVisibility.measureArrows ? "default" : "outline"}
-            onClick={() => setLayerVisibility((prev) => (
-              prev.measure && prev.measureArrows
-                ? { ...prev, measure: false, measureArrows: false }
-                : { ...prev, measure: true, measureArrows: true }
-            ))}
-          >
-            Measure with arrows
-          </Button>
-          <Button size="sm" variant={layerVisibility.text ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, text: !prev.text }))}>
-            Text
-          </Button>
-          <Button size="sm" variant={layerVisibility.underlay ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, underlay: !prev.underlay }))}>
-            Underlay
-          </Button>
-          <Button size="sm" variant={layerVisibility.adjacencies ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, adjacencies: !prev.adjacencies }))}>
-            Adjacencies
-          </Button>
-          {/* Doors / Windows removed from Display Layers — they're now schema-driven entries in the
-              Layers panel (Segment block from a Schema-to-Layers node). "Space" toggles the green Space
-              fill (same flag the old "Rooms" button used). */}
-          <Button size="sm" variant={layerVisibility.rooms ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, rooms: !prev.rooms }))}>
-            Space
-          </Button>
-          <Button size="sm" variant={layerVisibility.seeds ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, seeds: !prev.seeds }))}>
-            Seeds
-          </Button>
-          <Button size="sm" variant={layerVisibility.nodes ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, nodes: !prev.nodes }))}>
-            Nodes
-          </Button>
-          <Button size="sm" variant={layerVisibility.segments ? "default" : "outline"} onClick={() => setLayerVisibility((prev) => ({ ...prev, segments: !prev.segments }))}>
-            Segments
-          </Button>
         </div>
       </PopoverContent>
     </Popover>
@@ -19491,40 +19631,8 @@ User request: ${aiPrompt.trim()}`;
           Segment Points
         </Button>
       </div>
-      <div className="mt-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-slate-500">Node snap radius</span>
-          <span className="font-mono text-[11px] text-slate-700">{snapSettings.endpointRadius} px</span>
-        </div>
-        <input
-          type="range"
-          className="mt-1 w-full"
-          min={0}
-          max={30}
-          step={1}
-          value={snapSettings.endpointRadius}
-          onChange={(e) => setSnapSettings((prev) => ({ ...prev, endpointRadius: +e.target.value }))}
-          disabled={!snapSettings.endpoints}
-        />
-        <span className="text-[9px] text-slate-400">Lower = easier to draw short segments near existing nodes. 0 disables endpoint snapping.</span>
-      </div>
-      <div className="mt-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-slate-500">Wall-spine snap radius</span>
-          <span className="font-mono text-[11px] text-slate-700">{snapSettings.wallSpineRadius} px</span>
-        </div>
-        <input
-          type="range"
-          className="mt-1 w-full"
-          min={0}
-          max={56}
-          step={1}
-          value={snapSettings.wallSpineRadius}
-          onChange={(e) => setSnapSettings((prev) => ({ ...prev, wallSpineRadius: +e.target.value }))}
-          disabled={!snapSettings.segmentPoints}
-        />
-        <span className="text-[9px] text-slate-400">Pointer is projected onto the nearest wall's spine within this radius while drawing. Requires Segment Points; 0 disables.</span>
-      </div>
+      {/* Node snap radius & Wall-spine snap radius moved to the Floorplan Tracer schema's Settings block
+          (Properties tab). */}
     </div>
   );
   const settingsPopover = null;
@@ -19555,14 +19663,7 @@ User request: ${aiPrompt.trim()}`;
 
         <div className="flex flex-col gap-3">
           {snappingSection}
-          <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Units</p>
-            <div className="flex flex-wrap gap-1.5">
-              <Button size="sm" variant={unit === "m" ? "default" : "outline"} onClick={() => setUnit("m")}>m</Button>
-              <Button size="sm" variant={unit === "ft" ? "default" : "outline"} onClick={() => setUnit("ft")}>ft</Button>
-              <Button size="sm" variant={unit === "cm" ? "default" : "outline"} onClick={() => setUnit("cm")}>cm</Button>
-            </div>
-          </div>
+          {/* Units moved to the Floorplan Tracer schema's Settings block (Properties tab). */}
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Scale calibration (px per meter)</p>
             <p className="text-xs font-medium text-slate-700">{pixelsPerMeter.toFixed(2)} px/m</p>
@@ -19576,17 +19677,8 @@ User request: ${aiPrompt.trim()}`;
             <p className="mt-1 text-[11px] text-slate-400">Tip: click Set Scale and pick two points, then enter real distance.</p>
           </div>
           {/* Draw type (Polyline / Single / NURBS / Rect) + Rect-by-dimensions removed from Preferences.
-              Draw mode / View / Filling / Placement / wall styling are set elsewhere (toolbar / Flow). */}
-          {/* Ortho: lock new Wall/Segment edges to horizontal or vertical (no need to hold Shift). */}
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <span className="text-[11px] font-medium text-slate-700">Ortho</span>
-              <p className="text-[9px] text-slate-400">Lock walls &amp; segments to horizontal / vertical (Shift = 45°).</p>
-            </div>
-            <Button size="sm" variant={orthoMode ? "default" : "outline"} onClick={() => setOrthoMode((v) => !v)}>
-              {orthoMode ? "On" : "Off"}
-            </Button>
-          </div>
+              Draw mode / View / Filling / Placement / wall styling are set elsewhere (toolbar / Flow).
+              Ortho moved to the Floorplan Tracer schema's Settings block (Properties tab). */}
         </div>
       </PopoverContent>
     </Popover>
@@ -20621,6 +20713,7 @@ User request: ${aiPrompt.trim()}`;
                   }}
                   rooms={visibleRooms}
                   spaceMasses={spaceMasses}
+                  primitiveMasses={primitiveMasses}
                   pixelsPerMeter={pixelsPerMeter}
                   placementMode={
                     // Union fill mode forces primitive rendering for placement objects so they don't
@@ -26388,6 +26481,8 @@ User request: ${aiPrompt.trim()}`;
                         showOuterDim: wallBuilderDimParams.showOuterDim,
                         showInnerDim: wallBuilderDimParams.showInnerDim,
                         showCenterDim: wallBuilderDimParams.showCenterDim,
+                        offsetDim: wallBuilderDimParams.offsetDim,
+                        defaultThicknessMm: wallBuilderDimParams.thicknessMm,
                         dimGap: wallBuilderDimParams.dimGap,
                       });
                       pvDimLines = dim.dimLines;
@@ -29353,7 +29448,51 @@ User request: ${aiPrompt.trim()}`;
                     <div className="rounded border border-cyan-200 bg-cyan-50/40 p-2 space-y-1.5">
                       <span className="text-[9px] font-semibold uppercase tracking-wide text-cyan-700">Settings</span>
                       {activeSchemaSettingsDefs.map((def) => {
-                        if (def.kind === "checkbox" && (def.role === "ortho" || def.key === "ortho")) {
+                        const role = def.role ?? def.key;
+                        // Units — display unit dropdown (mirrors the m / ft / cm toolbar).
+                        if (def.kind === "select" && (role === "units" || def.key === "units")) {
+                          return (
+                            <label key={def.key} className="flex items-center justify-between gap-2 text-[10px] text-slate-600">
+                              <span className="text-[10px] text-slate-500">{def.label ?? "Units"}</span>
+                              <select
+                                className="h-6 rounded border border-slate-200 bg-white px-1 text-[10px]"
+                                value={unit}
+                                onChange={(e) => setUnit(e.target.value as Unit)}
+                              >
+                                {(def.options?.length ? def.options : [{ value: "m" }, { value: "ft" }, { value: "cm" }]).map((o) => (
+                                  <option key={o.value} value={o.value}>{o.label ?? o.value}</option>
+                                ))}
+                              </select>
+                            </label>
+                          );
+                        }
+                        // Snap radii (px) — pointer snapping while drawing.
+                        const snapControl: { val: number; max: number; set: (v: number) => void } | null =
+                          role === "node-snap-radius" ? { val: snapSettings.endpointRadius, max: typeof def.max === "number" ? def.max : 30, set: (v) => setSnapSettings((p) => ({ ...p, endpointRadius: v })) }
+                          : role === "spine-snap-radius" ? { val: snapSettings.wallSpineRadius, max: typeof def.max === "number" ? def.max : 56, set: (v) => setSnapSettings((p) => ({ ...p, wallSpineRadius: v })) }
+                          : null;
+                        if (snapControl) {
+                          return (
+                            <div key={def.key} className="space-y-0.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] text-slate-500">{def.label}</span>
+                                <span className="font-mono text-[10px] text-slate-700">{snapControl.val} px</span>
+                              </div>
+                              <input
+                                type="range"
+                                className="w-full"
+                                min={0}
+                                max={snapControl.max}
+                                step={1}
+                                value={snapControl.val}
+                                onChange={(e) => snapControl.set(+e.target.value)}
+                              />
+                            </div>
+                          );
+                        }
+                        if (def.kind !== "checkbox") return null;
+                        // Ortho — canvas draw lock (horizontal / vertical only).
+                        if (role === "ortho" || def.key === "ortho") {
                           return (
                             <label key={def.key} className="flex items-center justify-between gap-2 text-[10px] text-slate-600">
                               <span className="text-[10px] text-slate-500">{def.label ?? "Ortho"}</span>
@@ -29361,7 +29500,18 @@ User request: ${aiPrompt.trim()}`;
                             </label>
                           );
                         }
-                        return null;
+                        // Layer-visibility settings — hide / unhide the matching default Layer (checked = shown).
+                        const visControl: { checked: boolean; set: (v: boolean) => void } | null =
+                          role === "show-image" ? { checked: isLayerVisible(DEFAULT_IMAGE_LAYER_ID), set: (v) => setLayerEntityVisible(DEFAULT_IMAGE_LAYER_ID, v) }
+                          : role === "show-map" ? { checked: isLayerVisible(DEFAULT_MAP_LAYER_ID), set: (v) => setLayerEntityVisible(DEFAULT_MAP_LAYER_ID, v) }
+                          : null;
+                        if (!visControl) return null;
+                        return (
+                          <label key={def.key} className="flex items-center justify-between gap-2 text-[10px] text-slate-600">
+                            <span className="text-[10px] text-slate-500">{def.label}</span>
+                            <input type="checkbox" checked={visControl.checked} onChange={(e) => visControl.set(e.target.checked)} />
+                          </label>
+                        );
                       })}
                     </div>
                   </div>

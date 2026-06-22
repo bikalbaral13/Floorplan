@@ -921,6 +921,13 @@ export const SITE_GROUP_LAYER_IDS: ReadonlySet<string> = new Set([
   DEFAULT_INSET_LAYER_ID,
   DEFAULT_DEDUCTION_LAYER_ID,
 ]);
+/** Layer IDs grouped under the foldable "Default" block in the Layers panel — the built-in Layer 0 plus
+ *  the Image underlay and Map system layers. */
+export const DEFAULT_GROUP_LAYER_IDS: ReadonlySet<string> = new Set([
+  DEFAULT_LAYER_ID,
+  DEFAULT_IMAGE_LAYER_ID,
+  DEFAULT_MAP_LAYER_ID,
+]);
 /** The seed layer table. Intentionally MINIMAL — only the built-in Layer "0". All type layers
  *  (Wall / Door / Window / Node / Segment …) are now SCHEMA-DRIVEN: load a workflow template whose
  *  Schema feeds a "Schema to Layers" node and the matching foldable Node / Segment layer blocks appear

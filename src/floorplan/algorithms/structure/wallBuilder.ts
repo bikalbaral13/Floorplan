@@ -178,7 +178,7 @@ export function computeWallDimensions(
   schema: FrameSchema,
   ppm: number,
   pieces: WallPiece[],
-  params: { showOuterDim: boolean; showInnerDim: boolean; showCenterDim: boolean; dimGap: number },
+  params: { showOuterDim: boolean; showInnerDim: boolean; showCenterDim: boolean; dimGap: number; offsetDim?: boolean; defaultThicknessMm?: number },
 ): WallDimResult {
   const dimLines: Point[][] = [];
   const dimLabels: { x: number; y: number; text: string; rotation: number }[] = [];
@@ -199,18 +199,24 @@ export function computeWallDimensions(
     if (!showOuter && !showInner && !showCenter) continue;
     const poly = piece.poly;
     if (poly.length < 4) continue;
+    // Centerline (spine) lookup — reused by the centerline dimension AND, when Offsetted Dimension is on,
+    // as the base length the inner / outer face values are derived from.
+    const ge = gEdgeById.get(piece.id);
+    const gA = ge ? gNodeById.get(ge.a) : undefined;
+    const gB = ge ? gNodeById.get(ge.b) : undefined;
+    const spineLen = gA && gB ? Math.hypot(gB.x - gA.x, gB.y - gA.y) : 0;
+    // Offsetted Dimension: per-piece toggle. When on, the inner / outer face dimensions report the
+    // centerline length offset by half the wall thickness on each end (inner = spine − T, outer = spine + T)
+    // — the nominal trace dimension — instead of the actual mitred face length.
+    const offsetDim = resolveBool(schema.segment, segAttrs, piece.id, "offsetDim", ROLES.offsetDim, params.offsetDim ?? false);
+    const thM = resolveNum(schema.segment, segAttrs, piece.id, "thicknessM", ROLES.wallThickness, (params.defaultThicknessMm ?? 230) / 1000);
+    const thPx = Math.max(0, thM) * ppm;
     // Centerline dimension: drawn straight on the spine (the graph edge), labelled at its midpoint.
-    if (showCenter) {
-      const ge = gEdgeById.get(piece.id);
-      const A = ge ? gNodeById.get(ge.a) : undefined;
-      const B = ge ? gNodeById.get(ge.b) : undefined;
-      if (A && B) {
-        const L = Math.hypot(B.x - A.x, B.y - A.y);
-        dimLines.push([{ x: A.x, y: A.y }, { x: B.x, y: B.y }]);
-        let crot = Math.atan2(B.y - A.y, B.x - A.x) * 180 / Math.PI;
-        if (crot > 90 || crot < -90) crot += 180;
-        dimLabels.push({ x: (A.x + B.x) / 2, y: (A.y + B.y) / 2, text: `${(L / ppm).toFixed(2)} m`, rotation: crot });
-      }
+    if (showCenter && gA && gB) {
+      dimLines.push([{ x: gA.x, y: gA.y }, { x: gB.x, y: gB.y }]);
+      let crot = Math.atan2(gB.y - gA.y, gB.x - gA.x) * 180 / Math.PI;
+      if (crot > 90 || crot < -90) crot += 180;
+      dimLabels.push({ x: (gA.x + gB.x) / 2, y: (gA.y + gB.y) / 2, text: `${(spineLen / ppm).toFixed(2)} m`, rotation: crot });
     }
     let cx = 0, cy = 0;
     for (const p of poly) { cx += p.x; cy += p.y; }
@@ -236,18 +242,32 @@ export function computeWallDimensions(
       const sorted = [...ed].sort((u, v) => Math.hypot(v.mx - gx, v.my - gy) - Math.hypot(u.mx - gx, u.my - gy));
       outer = sorted[0]; inner = sorted[1];
     }
-    const faces: typeof ed = [];
-    if (showOuter && outer) faces.push(outer);
-    if (showInner && inner) faces.push(inner);
-    for (const e of faces) {
+    const faces: { e: (typeof ed)[number]; side: "outer" | "inner" }[] = [];
+    if (showOuter && outer) faces.push({ e: outer, side: "outer" });
+    if (showInner && inner) faces.push({ e: inner, side: "inner" });
+    for (const { e, side } of faces) {
       const L = e.len || 1;
       const ux = (e.b.x - e.a.x) / L, uy = (e.b.y - e.a.y) / L;
       let nx = -uy, ny = ux;
       if ((e.mx - cx) * nx + (e.my - cy) * ny < 0) { nx = -nx; ny = -ny; } // offset away from THIS band
-      dimLines.push([{ x: e.a.x + nx * gapPx, y: e.a.y + ny * gapPx }, { x: e.b.x + nx * gapPx, y: e.b.y + ny * gapPx }]);
+      // Offsetted Dimension: inner = spine − T/2 each side (= spine − T), outer = spine + T/2 each side
+      // (= spine + T). Falls back to the mitred face length when there's no spine to offset from.
+      const labelLen =
+        offsetDim && spineLen > 0
+          ? side === "inner"
+            ? Math.max(0, spineLen - thPx)
+            : spineLen + thPx
+          : L;
+      // Draw the dimension line at `labelLen`, centred on the face midpoint — so the line visibly shrinks
+      // inward (inner) / extends outward (outer) by half the thickness at each end and matches its value.
+      // When the offset is off this reproduces the exact face edge (e.a→e.b is symmetric about the midpoint).
+      const half = labelLen / 2;
+      const a0 = { x: e.mx - ux * half + nx * gapPx, y: e.my - uy * half + ny * gapPx };
+      const b0 = { x: e.mx + ux * half + nx * gapPx, y: e.my + uy * half + ny * gapPx };
+      dimLines.push([a0, b0]);
       let rot = Math.atan2(e.b.y - e.a.y, e.b.x - e.a.x) * 180 / Math.PI;
       if (rot > 90 || rot < -90) rot += 180;
-      dimLabels.push({ x: e.mx + nx * labelPx, y: e.my + ny * labelPx, text: `${(L / ppm).toFixed(2)} m`, rotation: rot });
+      dimLabels.push({ x: e.mx + nx * labelPx, y: e.my + ny * labelPx, text: `${(labelLen / ppm).toFixed(2)} m`, rotation: rot });
     }
   }
   return { dimLines, dimLabels };

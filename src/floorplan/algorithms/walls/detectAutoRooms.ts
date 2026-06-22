@@ -163,7 +163,7 @@ const cycleCanonicalKey = (cycle: string[]) => {
 /** Detect rooms (closed faces) from a wall list by building a planar graph and traversing faces.
  *  Steps: (1) split walls at intersections, (2) build adjacency graph,
  *  (3) traverse faces with the left-hand rule, (4) compute net area accounting for nested holes. */
-export const detectAutoRoomsFromWalls = (walls: Wall[]): Room[] => {
+export const detectAutoRoomsFromWalls = (walls: Wall[], opts?: { innerOffset?: boolean }): Room[] => {
   const segments: Array<{ start: Point; end: Point }> = walls
     .filter(w => w.segmentType !== "connection")
     .map(w => ({ start: { ...w.start }, end: { ...w.end } }));
@@ -306,7 +306,7 @@ export const detectAutoRoomsFromWalls = (walls: Wall[]): Room[] => {
           //   left  → shift face edge by +thickness/2 perpendicular to wall, in the wall's "left"
           //   right → shift face edge by +thickness/2 perpendicular to wall, in the wall's "right"
           // "left" perpendicular matches miteredWalls.ts: perpL(ux,uy) = (-uy, ux).
-          const offsetPts = applyLeftRightOffset(facePoints, walls);
+          const offsetPts = opts?.innerOffset ? buildOffsetFace(facePoints, walls) : applyLeftRightOffset(facePoints, walls);
           faces.push({
             id: `${ROOM_AUTO_ID_PREFIX}${cycleCanonicalKey(facePoints.map(getPointKey))}`,
             points: offsetPts.length >= 3 ? offsetPts : facePoints,

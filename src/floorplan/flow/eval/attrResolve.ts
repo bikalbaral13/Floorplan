@@ -101,6 +101,9 @@ export const ROLES = {
   showOuterDim: ["show-outer-dim"],
   showInnerDim: ["show-inner-dim"],
   showCenterDim: ["show-center-dim"],
+  // Offsetted dimension: when on, the inner / outer face dimension shows the centerline length offset by
+  // half the wall thickness on each end (inner = spine − T, outer = spine + T) instead of the mitred face.
+  offsetDim: ["offset-dim"],
   wallColor: ["wall-color", "color"],
   wallLineStyle: ["wall-linestyle", "line-style"],
   // Union is a whole-network merge (drops internal mitre-seam diagonals); surfaced per-wall in the schema

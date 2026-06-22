@@ -2799,7 +2799,7 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "totalArea", label: "Wall area", unit: "m²" },
     ],
     // Fallbacks used only when the schema doesn't define the property for a segment.
-    defaultParams: { thicknessMm: 230, justification: "center", height: 3, union: false, showOuterDim: false, showInnerDim: false, showCenterDim: false, dimGap: 0.18 },
+    defaultParams: { thicknessMm: 230, justification: "center", height: 3, union: true, showOuterDim: false, showInnerDim: false, showCenterDim: false, offsetDim: false, dimGap: 0.18 },
     fields: [
       { key: "thicknessMm", label: "Thickness", kind: "range", min: 0, max: 1000, step: 10, unit: "mm", role: "wall-thickness" },
       // Justification is which side of the (always-snappable) centerline the SOLID sits on. Inner / Outer
@@ -2827,9 +2827,32 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "showInnerDim", label: "Show Inner Dimension", kind: "checkbox" },
       // Center dimension = the wall's centerline (spine) length, drawn on the centerline.
       { key: "showCenterDim", label: "Show Center Dimension", kind: "checkbox" },
+      // Offsetted Dimension: report the inner / outer face as the centerline length offset by half the
+      // thickness each end (inner = spine − T, outer = spine + T) — the nominal trace dimension — rather
+      // than the actual mitred face length. Only affects the inner / outer face values.
+      { key: "offsetDim", label: "Offsetted Dimension", kind: "checkbox", showIf: (p) => p.showOuterDim === true || p.showInnerDim === true },
       { key: "dimGap", label: "Dimension Offset", kind: "number", min: 0, max: 2, step: 0.02, unit: "m", showIf: (p) => p.showOuterDim === true || p.showInnerDim === true },
     ],
     hint: "Stroke a graph into mitred walls, taking each wall's thickness from the Segment schema (role wall-thickness). The wall solid follows Justification (default center); the centerline is always what you snap to. Show Inner / Outer Dimension dimension the room-facing and street-facing faces — inner vs outer is decided from the enclosed room geometry; Show Center Dimension dimensions the centerline. Wire a Schema node into the Schema input; only wall-typed segments are drawn.",
+  },
+  "graph-to-room": {
+    type: "graph-to-room",
+    label: "Graph to Room",
+    color: "#16a34a",
+    // Forms the INNER (clear) rooms from the wall graph: each wall-bounded face is inset to the inner wall
+    // faces by half each bounding wall's schema thickness. Present-only gate — the canvas auto-room detector
+    // does the inset when this node exists, so the rooms stay selectable Spaces with the schema's Space
+    // properties injected. Emits the resulting room polygons + count / area for downstream consumers.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "schema", label: "Schema" }],
+    valueOutputs: [
+      { key: "rooms", label: "Rooms" },
+      { key: "totalArea", label: "Room area", unit: "m²" },
+    ],
+    defaultParams: {},
+    fields: [],
+    hint: "Forms inner (clear) rooms from the wall graph — each wall-bounded face is inset by half its schema thickness to the inner wall faces. The rooms stay selectable Spaces carrying the Schema's Space properties. Wire the Canvas Graph (out-3) in; attach a Schema for per-wall thickness.",
   },
   "segment-to-door": {
     type: "segment-to-door",
@@ -3485,7 +3508,7 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     hasInput: true,
     hasOutput: true,
     geomInputs: [{ key: "schema", label: "Schema" }],
-    defaultParams: { height: 3.0, direction: "up" },
+    defaultParams: { height: 3.0, direction: "up", color: "#94a3b8", opacity: 1, showEdges: true },
     fields: [
       { key: "height", label: "Height", kind: "range", min: 0, max: 60, step: 0.1, unit: "m", role: "extrude-height" },
       {
@@ -3498,8 +3521,92 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
           { value: "down", label: "Downwards" },
         ],
       },
+      // Appearance of the extruded mass in the 3D view. Per-element via roles extrude-color /
+      // extrude-opacity / extrude-edges (graphAttrs.spaces) — the node values are the fallback.
+      { key: "color", label: "Color", kind: "color", role: "extrude-color" },
+      { key: "opacity", label: "Opacity", kind: "range", min: 0, max: 1, step: 0.05, role: "extrude-opacity" },
+      { key: "showEdges", label: "Show Edges", kind: "checkbox", role: "extrude-edges" },
     ],
-    hint: "Extrude each input space into a solid 3D mass of the given Height, Upwards from the floor or Downwards below it.",
+    hint: "Extrude each input space into a solid 3D mass of the given Height, Upwards from the floor or Downwards below it. Set its Colour, Opacity (for see-through massing) and Show Edges in the 3D view.",
+  },
+  mass: {
+    type: "mass",
+    label: "Mass",
+    color: "#0e7490",
+    // Primitive 3D Mass generator (no input): a Cube / Cuboid / Sphere / Cone / Cylinder of the given
+    // dimensions, rendered in the 3D view. A starting Mass to feed downstream Mass nodes.
+    hasInput: false,
+    hasOutput: true,
+    defaultParams: { shape: "cube", length: 3, breadth: 2, height: 3, radius: 1.5, color: "#94a3b8" },
+    fields: [
+      {
+        key: "shape",
+        label: "Shape",
+        kind: "select",
+        options: [
+          { value: "cube", label: "Cube" },
+          { value: "cuboid", label: "Cuboid" },
+          { value: "sphere", label: "Sphere" },
+          { value: "cone", label: "Cone" },
+          { value: "cylinder", label: "Cylinder" },
+        ],
+      },
+      { key: "length", label: "Length", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m", showIf: (p) => p.shape === "cube" || p.shape === "cuboid" },
+      { key: "breadth", label: "Breadth", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m", showIf: (p) => p.shape === "cuboid" },
+      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m", showIf: (p) => p.shape === "sphere" || p.shape === "cone" || p.shape === "cylinder" },
+      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m", showIf: (p) => p.shape === "cuboid" || p.shape === "cone" || p.shape === "cylinder" },
+      { key: "color", label: "Color", kind: "color" },
+    ],
+    hint: "A primitive 3D Mass — Cube (Length) · Cuboid (Length × Breadth × Height) · Sphere (Radius) · Cone (Radius, Height) · Cylinder (Radius, Height). Rendered in the 3D view as a starting Mass.",
+  },
+  "inset-3d": {
+    type: "inset-3d",
+    label: "Inset 3D",
+    color: "#0e7490",
+    // Mass op: inset (or outset) each incoming Mass's footprint by Offset — Inside shrinks it, Outside
+    // grows it — producing a new Mass. Feed a Mass from Space to 3D; the host extrudes the inset footprint.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { direction: "inside", offset: 0.2 },
+    fields: [
+      {
+        key: "direction",
+        label: "Direction",
+        kind: "select",
+        options: [
+          { value: "inside", label: "Inside (shrink)" },
+          { value: "outside", label: "Outside (grow)" },
+        ],
+      },
+      { key: "offset", label: "Offset", kind: "range", min: 0, max: 5, step: 0.05, unit: "m" },
+    ],
+    hint: "Inset a 3D Mass — shrink (Inside) or grow (Outside) its footprint by Offset → a new Mass. Feed a Mass from Space to 3D.",
+  },
+  "smooth-3d": {
+    type: "smooth-3d",
+    label: "Smoothing 3D",
+    color: "#0e7490",
+    // Mass op: round each incoming Mass's footprint (Chaikin corner-cutting) so the extruded mass has
+    // smooth vertical faces — producing a new Mass. Feed a Mass from Space to 3D / Inset 3D.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { iterations: 2 },
+    fields: [
+      { key: "iterations", label: "Iterations", kind: "range", min: 1, max: 5, step: 1 },
+    ],
+    hint: "Smooth a 3D Mass — rounds its footprint corners (more Iterations = rounder) so the extruded mass has smooth faces → a new Mass. Feed a Mass from Space to 3D / Inset 3D.",
+  },
+  "voronoi-3d": {
+    type: "voronoi-3d",
+    label: "Voronoi 3D",
+    color: "#0e7490",
+    // Mass op: the 3D Voronoi diagram of the input Mass's vertices — each vertex seeds a convex cell
+    // (clipped to the Mass's bounding box). Rendered as cell wireframes in the 3D view. Feed a Mass node.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: {},
+    fields: [],
+    hint: "3D Voronoi of a Mass's vertices — each vertex seeds a convex cell (half-space intersection), clipped to the Mass's bounding box. Wire a Mass primitive in; cells render in the 3D view.",
   },
   image: {
     type: "image",

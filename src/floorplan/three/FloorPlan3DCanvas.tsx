@@ -120,7 +120,9 @@ interface Props {
   mapUnderlay?: { src: string; x: number; y: number; w: number; h: number; scale: number };
   /** Flow "Space to 3D" output — each input space extruded into a solid mass of `heightM`, Up from the
    *  floor plane (baseY 0 → +height) or Down below it (−height → 0). Rendered as opaque blocks. */
-  spaceMasses?: { id: string; points: Point[]; heightM: number; direction: "up" | "down"; color?: string }[];
+  spaceMasses?: { id: string; points: Point[]; heightM: number; direction: "up" | "down"; color?: string; opacity?: number; showEdges?: boolean }[];
+  /** Flow "Mass" primitive generators — a Cube / Cuboid / Sphere / Cone / Cylinder rendered standalone. */
+  primitiveMasses?: { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string }[];
   /** Flow "Mesh to 3D" output — generic 3D meshes (e.g. column footings) to render. Each is a set of
    *  lofted prisms in plan-px world coords + metre heights (see {@link FlowMesh}). */
   meshPreview?: FlowMesh[];
@@ -461,7 +463,7 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, meshPreview, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, meshPreview, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -757,16 +759,50 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         }));
         const up = sm.direction !== "down";
         const baseY = up ? 0 : -sm.heightM;
+        const opacity = sm.opacity ?? 1;
+        const transparent = opacity < 1;
         return (
-          <EdgedMesh
+          <mesh
             key={`space-mass-${sm.id}`}
             rotation={[-Math.PI / 2, 0, 0]}
             position={[0, baseY, 0]}
             onClick={handleWallClick(sm.id)}
           >
             <extrudeGeometry args={[shape, { depth: sm.heightM, bevelEnabled: false, steps: 1 }]} />
-            <meshStandardMaterial color={sm.color ?? "#94a3b8"} />
-          </EdgedMesh>
+            <meshStandardMaterial color={sm.color ?? "#94a3b8"} transparent={transparent} opacity={opacity} depthWrite={!transparent} />
+            {sm.showEdges !== false && <Edges color="#0f172a" threshold={15} lineWidth={1} />}
+          </mesh>
+        );
+      })}
+
+      {/* Flow "Mass" primitives — a Cube / Cuboid / Sphere / Cone / Cylinder per generator node, standing
+           on the floor plane. Laid out along +X (6 m apart) so multiple generators don't overlap. */}
+      {(primitiveMasses ?? []).map((pm, i) => {
+        const sx = i * 6;
+        let y: number;
+        let geom: React.ReactNode;
+        if (pm.shape === "cuboid") {
+          y = pm.height / 2;
+          geom = <boxGeometry args={[pm.length, pm.height, pm.breadth]} />;
+        } else if (pm.shape === "sphere") {
+          y = pm.radius;
+          geom = <sphereGeometry args={[pm.radius, 32, 24]} />;
+        } else if (pm.shape === "cone") {
+          y = pm.height / 2;
+          geom = <coneGeometry args={[pm.radius, pm.height, 40]} />;
+        } else if (pm.shape === "cylinder") {
+          y = pm.height / 2;
+          geom = <cylinderGeometry args={[pm.radius, pm.radius, pm.height, 40]} />;
+        } else {
+          // cube
+          y = pm.length / 2;
+          geom = <boxGeometry args={[pm.length, pm.length, pm.length]} />;
+        }
+        return (
+          <mesh key={`prim-mass-${pm.id}`} position={[sx, y, 0]}>
+            {geom}
+            <meshStandardMaterial color={pm.color ?? "#94a3b8"} />
+          </mesh>
         );
       })}
 
