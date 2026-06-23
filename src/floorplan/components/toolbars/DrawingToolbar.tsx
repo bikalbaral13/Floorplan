@@ -80,8 +80,15 @@ export interface DrawingToolbarProps {
    *  full state setup (e.g. forcing wallDrawMode = "line" so the segment renders
    *  as a thin line instead of a thick wall band). */
   onAddSegmentClick?: () => void;
+  /** Opens the Add Segment dialog (display params) before drawing. When omitted, the main Add Segment
+   *  button falls back to starting the single-segment line tool directly. */
+  onOpenAddSegmentDialog?: () => void;
   /** True while polyline-path drawing is the active mode (drives button highlight). */
   drawingPath: boolean;
+  /** Starts the "Dimension" tool — click two points to place a standalone Dimension annotation. */
+  onAddDimensionClick?: () => void;
+  /** True while the Dimension tool is the active mode (drives button highlight). */
+  drawingDimension?: boolean;
   /** Merge ≥2 selected spaces into one. Always enabled — prompts the user via toast
    *  when fewer than 2 are currently selected. */
   onMergeSpaces: () => void;
@@ -244,7 +251,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 className="h-9 w-9 p-0"
                 title="Add Segment"
                 aria-label="Add Segment"
-                onClick={() => { p.onSingleSegmentClick?.("line"); }}
+                onClick={() => { if (p.onOpenAddSegmentDialog) p.onOpenAddSegmentDialog(); else p.onSingleSegmentClick?.("line"); }}
               >
                 <Slash className="h-6 w-6 text-teal-700" />
               </Button>
@@ -447,6 +454,13 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               </div>
             </PopoverContent>
             </Popover>
+            {/* Dimension — click two points to drop a standalone Dimension annotation (own button below Add Space). */}
+            <ToolButton
+              active={!!p.drawingDimension}
+              icon={<Ruler className="h-6 w-6 text-amber-600" />}
+              label="Dimension"
+              onClick={() => p.onAddDimensionClick?.()}
+            />
             {/* Path — moved out of the Add Segment dropdown; opens the Draw Path dialog (thickness / type / style). */}
             <ToolButton
               active={p.drawingPath}
@@ -472,7 +486,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 variant={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode ? "default" : "outline"}
                 size="sm"
                 className="h-9 w-9 p-0"
-                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : p.selectFilter === "graph" ? "Graph (connected)" : p.selectFilter === "image" ? "Image only" : p.selectFilter === "grid" ? "Grid only" : "Space only"})`}
+                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : p.selectFilter === "graph" ? "Graph (connected)" : p.selectFilter === "image" ? "Image only" : p.selectFilter === "grid" ? "Grid only" : p.selectFilter === "dimension" ? "Dimension only" : "Space only"})`}
                 aria-label="Select"
                 onClick={() => {
                   p.onSelectFilterChange("all");
@@ -510,6 +524,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                     { v: "graph", label: "Graph (connected)", Icon: Waypoints },
                     { v: "image", label: "Image", Icon: ImageIcon },
                     { v: "grid", label: "Grid", Icon: Grid3x3 },
+                    { v: "dimension", label: "Dimension", Icon: Ruler },
                   ] as const).map(({ v, label, Icon }) => (
                     <Button
                       key={v}

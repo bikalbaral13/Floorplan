@@ -7,17 +7,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { WallMethod } from "../../types";
 
 export type DrawPathStyle = "straight" | "nurbs-through" | "nurbs-smooth";
+
+/** Path justification, relative to the way the drawn line bends: the ribbon sits on the inner
+ *  (concave) or outer (convex) side of the curve, or straddles the centerline. Resolved to a
+ *  concrete left / right offset at commit time from the spine's net bend. */
+export type PathJustify = "inner" | "center" | "outer";
 
 interface DrawPathDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   thicknessM: string;
   onThicknessChange: (value: string) => void;
-  method: WallMethod;
-  onMethodChange: (m: WallMethod) => void;
+  justify: PathJustify;
+  onJustifyChange: (j: PathJustify) => void;
   style: DrawPathStyle;
   onStyleChange: (s: DrawPathStyle) => void;
   onStart: () => void;
@@ -32,8 +36,8 @@ export const DrawPathDialog = ({
   onOpenChange,
   thicknessM,
   onThicknessChange,
-  method,
-  onMethodChange,
+  justify,
+  onJustifyChange,
   style,
   onStyleChange,
   onStart,
@@ -48,39 +52,43 @@ export const DrawPathDialog = ({
           <p className="mb-1 text-xs font-semibold text-slate-600">Thickness (m)</p>
           <Input
             type="number"
-            min={0.01}
+            min={0}
             step={0.05}
             value={thicknessM}
             onChange={(e) => onThicknessChange(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onStart(); }}
             autoFocus
           />
+          <p className="mt-0.5 text-[9px] text-slate-400">0 = draw as a single line (no thickness / Space).</p>
         </div>
         <div>
           <p className="mb-1 text-xs font-semibold text-slate-600">Justification</p>
           <div className="flex flex-wrap gap-1.5">
             <Button
               size="sm"
-              variant={method === "left" ? "default" : "outline"}
-              onClick={() => onMethodChange("left")}
+              variant={justify === "inner" ? "default" : "outline"}
+              onClick={() => onJustifyChange("inner")}
             >
-              Left
+              Inner
             </Button>
             <Button
               size="sm"
-              variant={method === "center" ? "default" : "outline"}
-              onClick={() => onMethodChange("center")}
+              variant={justify === "center" ? "default" : "outline"}
+              onClick={() => onJustifyChange("center")}
             >
               Center
             </Button>
             <Button
               size="sm"
-              variant={method === "right" ? "default" : "outline"}
-              onClick={() => onMethodChange("right")}
+              variant={justify === "outer" ? "default" : "outline"}
+              onClick={() => onJustifyChange("outer")}
             >
-              Right
+              Outer
             </Button>
           </div>
+          <p className="mt-0.5 text-[9px] text-slate-400">
+            Inner / Outer offset the ribbon to the concave / convex side of the path's bend.
+          </p>
         </div>
         <div>
           <p className="mb-1 text-xs font-semibold text-slate-600">Path Style</p>

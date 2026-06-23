@@ -76,6 +76,10 @@ interface LeftToolbarProps {
   onDrawPathClick: () => void;
   /** True while polyline-path drawing is the active mode. */
   drawingPath: boolean;
+  /** Starts the Dimension tool (click two points to place a Dimension annotation). */
+  onAddDimensionClick?: () => void;
+  /** True while the Dimension tool is the active mode. */
+  drawingDimension?: boolean;
   /** Opens the Add Wall dialog. */
   onAddWallClick: () => void;
   /** True while the dialog-configured polyline wall draw mode is active. */
@@ -83,6 +87,7 @@ interface LeftToolbarProps {
   /** Add Segment override — parent handles the full state setup so the segment
    *  renders as a thin line (mode: "line") instead of a thick wall band. */
   onAddSegmentClick?: () => void;
+  onOpenAddSegmentDialog?: () => void;
   /** Merge selected spaces into one. */
   onMergeSpaces: () => void;
   /** Unused — kept for backwards compatibility with the parent invocation. */
@@ -162,9 +167,12 @@ export const LeftToolbar = ({
   onTestDrawPolygon,
   onDrawPathClick,
   drawingPath,
+  onAddDimensionClick,
+  drawingDimension,
   onAddWallClick,
   drawingWall,
   onAddSegmentClick,
+  onOpenAddSegmentDialog,
   onMergeSpaces,
   canMergeSpaces: _canMergeSpaces,
   onDeleteSelection,
@@ -212,7 +220,10 @@ export const LeftToolbar = ({
       onSetScaleArea={onSetScaleArea}
       onDrawPathClick={onDrawPathClick}
       drawingPath={drawingPath}
+      onAddDimensionClick={onAddDimensionClick}
+      drawingDimension={drawingDimension}
       onAddSegmentClick={onAddSegmentClick}
+      onOpenAddSegmentDialog={onOpenAddSegmentDialog}
       onMergeSpaces={onMergeSpaces}
       onDeleteSelection={onDeleteSelection}
       topToolSlots={topToolSlots}

@@ -100,7 +100,7 @@ import type {
   WallMethod,
   WallMode,
 } from "./types";
-import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue } from "./types";
+import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue } from "./types";
 import { rasterizePdfFirstPage } from "./pdfRaster";
 import { vectorizeImage, type VectorizeColorMode } from "./algorithms/vector/vectorizeImage";
 import { detectObjects, splitDataUrl, DEFAULT_DETECTION_MODEL, type Detection, type DetectionMode } from "./algorithms/vision/geminiObjectDetection";
@@ -168,7 +168,8 @@ import { CalibrationDialog } from "./components/dialogs/CalibrationDialog";
 import { AreaCalibrationDialog } from "./components/dialogs/AreaCalibrationDialog";
 import { AutoGenDialog } from "./components/dialogs/AutoGenDialog";
 import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealingDialog";
-import { DrawPathDialog, type DrawPathStyle } from "./components/dialogs/DrawPathDialog";
+import { DrawPathDialog, type DrawPathStyle, type PathJustify } from "./components/dialogs/DrawPathDialog";
+import { AddSegmentDialog, type AddSegmentConfig } from "./components/dialogs/AddSegmentDialog";
 import { AddWallDialog } from "./components/dialogs/AddWallDialog";
 import { AddOpeningDialog } from "./components/dialogs/AddOpeningDialog";
 import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/AddFurnitureDialog";
@@ -209,6 +210,9 @@ import { InflationAlgorithmBlock, type InflationAngleMode } from "./components/r
 import { WallOutputsBlock } from "./components/segmentProperties/WallOutputsBlock";
 import { WallExtendBlock, type WallExtendMode } from "./components/segmentProperties/WallExtendBlock";
 import { WallInputsBlock } from "./components/segmentProperties/WallInputsBlock";
+import { WallDisplayBlock } from "./components/segmentProperties/WallDisplayBlock";
+import { SegmentObjectBlock } from "./components/segmentProperties/SegmentObjectBlock";
+import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "./types";
 import { SchemaPropsBlock, SchemaMetricsBlock } from "./components/GraphSchemaBlocks";
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "./algorithms/network/pipeNetworkSolver";
 import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries } from "./flow/flowTypes";
@@ -806,6 +810,58 @@ interface LayerVisibility {
   placementRenderedSymbol: boolean;
 }
 
+/** Net signed bend of a polyline spine (Σ of cross-products of consecutive edge vectors). > 0 means the
+ *  path curves toward its left normal, so the concave (inner) side is "left"; < 0 → inner side is "right". */
+const pathSpineTurn = (spine: Point[]): number => {
+  let turn = 0;
+  for (let i = 1; i + 1 < spine.length; i++) {
+    const e1x = spine[i].x - spine[i - 1].x, e1y = spine[i].y - spine[i - 1].y;
+    const e2x = spine[i + 1].x - spine[i].x, e2y = spine[i + 1].y - spine[i].y;
+    turn += e1x * e2y - e1y * e2x;
+  }
+  return turn;
+};
+
+/** Resolve a Path "inner / outer" justification to a concrete offset side (WallMethod left / right) from
+ *  the drawn spine's bend: the inner (concave) side is whichever way the path curves toward. A straight
+ *  (no-bend) path defaults inner → "left", outer → "right". Center passes through unchanged. */
+const resolvePathJustify = (justify: PathJustify, spine: Point[]): WallMethod => {
+  if (justify === "center") return "center";
+  const innerIsLeft = pathSpineTurn(spine) >= 0;
+  return (justify === "inner") === innerIsLeft ? "left" : "right";
+};
+
+/** Konva-points for a dimension arrowhead at (ex,ey), opening toward the inward unit direction (ux,uy)
+ *  — the same V-barb the Dimension object uses. Returns [b1x,b1y, ex,ey, b2x,b2y]. */
+const arrowHeadPoints = (ex: number, ey: number, ux: number, uy: number, size: number): number[] => {
+  const TH = 0.42;
+  const rot = (a: number) => ({ x: ux * Math.cos(a) - uy * Math.sin(a), y: ux * Math.sin(a) + uy * Math.cos(a) });
+  const p = rot(TH), q = rot(-TH);
+  return [ex + p.x * size, ey + p.y * size, ex, ey, ex + q.x * size, ey + q.y * size];
+};
+
+/** Closed band polygon for a "Buffered" display segment: a `thickness`-wide ribbon along a→b with the
+ *  chosen cap style — flat (butt), square (extended by half-thickness), or capsule (semicircular). */
+const bufferBandPoints = (a: Point, b: Point, thickness: number, style: "capsule" | "square" | "flat"): number[] => {
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+  if (len < 0.01) return [a.x, a.y];
+  const ux = dx / len, uy = dy / len, nx = -uy, ny = ux, r = Math.max(0.01, thickness / 2);
+  if (style === "flat") {
+    return [a.x + nx * r, a.y + ny * r, b.x + nx * r, b.y + ny * r, b.x - nx * r, b.y - ny * r, a.x - nx * r, a.y - ny * r];
+  }
+  if (style === "square") {
+    const ax = a.x - ux * r, ay = a.y - uy * r, bx = b.x + ux * r, by = b.y + uy * r;
+    return [ax + nx * r, ay + ny * r, bx + nx * r, by + ny * r, bx - nx * r, by - ny * r, ax - nx * r, ay - ny * r];
+  }
+  // capsule — semicircular caps at each end
+  const ARC = 8, pts: number[] = [];
+  pts.push(a.x + nx * r, a.y + ny * r, b.x + nx * r, b.y + ny * r);
+  for (let i = 1; i <= ARC; i++) { const ang = (i / (ARC + 1)) * Math.PI; pts.push(b.x + (nx * Math.cos(ang) + ux * Math.sin(ang)) * r, b.y + (ny * Math.cos(ang) + uy * Math.sin(ang)) * r); }
+  pts.push(b.x - nx * r, b.y - ny * r, a.x - nx * r, a.y - ny * r);
+  for (let i = 1; i <= ARC; i++) { const ang = Math.PI + (i / (ARC + 1)) * Math.PI; pts.push(a.x + (nx * Math.cos(ang) + ux * Math.sin(ang)) * r, a.y + (ny * Math.cos(ang) + uy * Math.sin(ang)) * r); }
+  return pts;
+};
+
 const distanceInUnit = (a: Point, b: Point, unit: Unit, pixelsPerMeter: number) => {
   const pxDistance = Math.hypot(a.x - b.x, a.y - b.y);
   const meters = pxDistance / pixelsPerMeter;
@@ -972,7 +1028,7 @@ const snapValue = (value: number, grid: number) => Math.round(value / grid) * gr
 const withNearestWallSpine = (p: Point, walls: Wall[], tool: Tool, maxDistance: number = WALL_OPENING_PLACE_MAX_DIST): Point => {
   if (
     walls.length === 0 ||
-    (tool !== "wall" && tool !== "segment" && tool !== "single-segment" && tool !== "room" && tool !== "measure")
+    (tool !== "wall" && tool !== "segment" && tool !== "single-segment" && tool !== "room" && tool !== "measure" && tool !== "dimension")
   ) {
     return p;
   }
@@ -1405,6 +1461,131 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return ribbons;
   }, [history.state.walls]);
 
+  /** Inner & outer FACE dimensions for Draw-Path corridors. Chains connected `segmentType:"path"` walls
+   *  into a spine, offsets it to both sides by the justification, and measures each side's arc length —
+   *  so a drawn Path shows BOTH its outer (longer/convex) and inner (shorter/concave) face lengths. The
+   *  longer edge is tagged "outer". Recomputed as the path grows (each click commits a segment). */
+  const pathEdgeDimensions = useMemo(() => {
+    const TOL = 1.5;
+    const kk = (p: Point) => `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+    type W = { id: string; start: Point; end: Point; thickness: number; interpolate: boolean; method: WallMethod; nurbs: boolean };
+    const pathWalls: W[] = [];
+    for (const w of history.state.walls) {
+      if (w.segmentType !== "path" || (w.thickness ?? 0) <= 0.5) continue;
+      pathWalls.push({ id: w.id, start: w.start, end: w.end, thickness: w.thickness, interpolate: !!w.nurbsInterpolate, method: (w.method ?? "center") as WallMethod, nurbs: w.pathJoin === "nurbs" });
+    }
+    type Out = { edge: number[]; pos: Point; lenPx: number; role: "outer" | "inner" };
+    const out: Out[] = [];
+    if (pathWalls.length === 0) return out;
+    const byEndpoint = new Map<string, W[]>();
+    for (const w of pathWalls) {
+      const ka = kk(w.start), kb = kk(w.end);
+      if (!byEndpoint.has(ka)) byEndpoint.set(ka, []);
+      if (!byEndpoint.has(kb)) byEndpoint.set(kb, []);
+      byEndpoint.get(ka)!.push(w);
+      byEndpoint.get(kb)!.push(w);
+    }
+    const visited = new Set<string>();
+    const pickTerminal = (): W | null => {
+      for (const [, arr] of byEndpoint) if (arr.length === 1 && !visited.has(arr[0].id)) return arr[0];
+      for (const w of pathWalls) if (!visited.has(w.id)) return w;
+      return null;
+    };
+    const chains: { vertices: Point[]; thickness: number; method: WallMethod; interpolate: boolean; nurbs: boolean }[] = [];
+    while (true) {
+      const seed = pickTerminal();
+      if (!seed) break;
+      let startKey = kk(seed.start);
+      if ((byEndpoint.get(kk(seed.end))?.length ?? 0) === 1) startKey = kk(seed.end);
+      const verts: Point[] = [];
+      let cur: W | undefined = seed;
+      let curKey = startKey;
+      let th = seed.thickness;
+      const method = seed.method, interpolate = seed.interpolate, nurbs = seed.nurbs;
+      while (cur && !visited.has(cur.id)) {
+        visited.add(cur.id);
+        th = Math.max(th, cur.thickness);
+        const curPt = kk(cur.start) === curKey ? cur.start : cur.end;
+        const nextPt = kk(cur.start) === curKey ? cur.end : cur.start;
+        verts.push(curPt);
+        curKey = kk(nextPt);
+        const nbrs = byEndpoint.get(curKey) ?? [];
+        const nextWall = nbrs.find((w) => !visited.has(w.id));
+        if (!nextWall) { verts.push(nextPt); break; }
+        cur = nextWall;
+      }
+      if (verts.length >= 2) chains.push({ vertices: verts, thickness: th, method, interpolate, nurbs });
+    }
+    for (const ch of chains) {
+      // Straight (miter) paths use the raw corner vertices as the spine; NURBS paths use the tessellated curve.
+      const sampled = ch.nurbs ? evaluatePathCurve(ch.vertices, ch.interpolate) : ch.vertices;
+      if (sampled.length < 2) continue;
+      const leftOffset = ch.method === "right" ? 0 : ch.method === "left" ? ch.thickness : ch.thickness / 2;
+      const rightOffset = ch.method === "left" ? 0 : ch.method === "right" ? ch.thickness : ch.thickness / 2;
+      const left: Point[] = [], right: Point[] = [];
+      for (let i = 0; i < sampled.length; i++) {
+        const prev = sampled[Math.max(0, i - 1)];
+        const next = sampled[Math.min(sampled.length - 1, i + 1)];
+        const tx = next.x - prev.x, ty = next.y - prev.y;
+        const L = Math.hypot(tx, ty) || 1;
+        const nx = -ty / L, ny = tx / L;
+        const p = sampled[i];
+        left.push({ x: p.x + nx * leftOffset, y: p.y + ny * leftOffset });
+        right.push({ x: p.x - nx * rightOffset, y: p.y - ny * rightOffset });
+      }
+      const leftArr = left.flatMap((p) => [p.x, p.y]);
+      const rightArr = right.flatMap((p) => [p.x, p.y]);
+      // Raw pixel arc lengths — kept unit-agnostic so this memo doesn't depend on `unit` (which is
+      // declared later); the label is formatted at render time where unit / px-per-m are in scope.
+      const polyLenPx = (pts: Point[]) => { let s = 0; for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); return s; };
+      const leftLenPx = polyLenPx(left);
+      const rightLenPx = polyLenPx(right);
+      // Label positions: each edge's mid sample, nudged a little further outward along the local normal.
+      const mi = Math.floor(sampled.length / 2);
+      const pm = sampled[Math.max(0, mi - 1)], nm = sampled[Math.min(sampled.length - 1, mi + 1)];
+      const tmx = nm.x - pm.x, tmy = nm.y - pm.y, Lm = Math.hypot(tmx, tmy) || 1;
+      const nmx = -tmy / Lm, nmy = tmx / Lm;
+      const leftPos = { x: left[mi].x + nmx * 12, y: left[mi].y + nmy * 12 };
+      const rightPos = { x: right[mi].x - nmx * 12, y: right[mi].y - nmy * 12 };
+      const outerIsLeft = leftLenPx >= rightLenPx;
+      out.push({ edge: leftArr, pos: leftPos, lenPx: leftLenPx, role: outerIsLeft ? "outer" : "inner" });
+      out.push({ edge: rightArr, pos: rightPos, lenPx: rightLenPx, role: outerIsLeft ? "inner" : "outer" });
+    }
+    return out;
+  }, [history.state.walls]);
+
+  /** How Buffered display segments join at shared corners (Preferences). "mitered" = per-wall mitered
+   *  polygon (sharp joints), "mitered-union" = union of connected bands into one seamless outline,
+   *  "individual" = standalone per-segment band (no join). Canvas-wide rendering policy. */
+  const [bufferJoinMode, setBufferJoinMode] = useState<"mitered" | "mitered-union" | "individual">("mitered");
+  /** When on (Preferences), a Space detected from buffered segments is inset to the band's INNER edge —
+   *  so the green fill shows only the clear inner area, subtracting the buffered segment thickness. */
+  const [subtractBufferedFromSpace, setSubtractBufferedFromSpace] = useState<boolean>(false);
+  /** Expanded state of the Segment Properties "Parametric Object" block. */
+  const [segObjExpanded, setSegObjExpanded] = useState<boolean>(true);
+
+  /** Buffered-segment UNION outline — active only when the "Buffered Segment Joins" preference is
+   *  "mitered-union". Unions every Buffered display band into one seamless outline (boundary edges), so
+   *  connected segments read as a single corridor with no internal corner seams. */
+  const bufferedUnion = useMemo(() => {
+    if (bufferJoinMode !== "mitered-union") return null;
+    const polys = new Map<string, Point[]>();
+    let color = "#334155", anyFilled = false;
+    for (const w of history.state.walls) {
+      if (w.segmentType === "path" || !w.bufferStyle) continue;
+      const flat = bufferBandPoints(w.start, w.end, w.thickness ?? 0, w.bufferStyle);
+      if (flat.length < 6) continue;
+      const ring: Point[] = [];
+      for (let i = 0; i + 1 < flat.length; i += 2) ring.push({ x: flat[i], y: flat[i + 1] });
+      polys.set(w.id, ring);
+      color = w.color;
+      if (w.mode !== "outline") anyFilled = true;
+    }
+    if (polys.size === 0) return null;
+    const { fills } = computeMiteredUnion(polys);
+    return { fills, color, fillUnion: anyFilled };
+  }, [bufferJoinMode, history.state.walls]);
+
   /** Compute capsule polygons (line buffered by thickness/2 with semicircular caps) for all walls. */
   const capsulePolygons = useMemo(() => {
     const ARC_PTS = 8;
@@ -1753,6 +1934,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** "Add Segment" (single-line) trace state — click sets start, second click commits one segment. */
   const [singleSegStart, setSingleSegStart] = useState<Point | null>(null);
   const [singleSegPreview, setSingleSegPreview] = useState<Point | null>(null);
+  /** "Dimension" tool trace state — first click sets the start, second click commits a Dimension object. */
+  const [dimensionStart, setDimensionStart] = useState<Point | null>(null);
+  const [dimensionPreview, setDimensionPreview] = useState<Point | null>(null);
+  /** Add Segment dialog — collects display params (mode / thickness / line style / colour / fill …)
+   *  before the single-segment draw starts (mirrors the Draw Path dialog). */
+  const [addSegDialogOpen, setAddSegDialogOpen] = useState<boolean>(false);
+  const [addSegConfig, setAddSegConfig] = useState<AddSegmentConfig>({
+    mode: "line", thickness: "0.1", lineStyle: "solid", color: "#334155", bufferStyle: "capsule", fill: "outlined", method: "center",
+  });
+  /** Active Add-Segment display config (set when the dialog starts a draw) — applied to each drawn line. */
+  const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered"; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod } | null>(null);
   /** Hover span for click-to-place door/window on a wall (Add Segment → Door/Window): the opening's
    *  two endpoints on the host wall + whether it fits, so the preview shows where the click lands. */
   const [openingPlacePreview, setOpeningPlacePreview] = useState<{ ds: Point; de: Point } | null>(null);
@@ -1798,12 +1990,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [drawPathDialogOpen, setDrawPathDialogOpen] = useState<boolean>(false);
   const [drawPathLabelInput, setDrawPathLabelInput] = useState<string>("Path1");
   const [drawPathThicknessInputM, setDrawPathThicknessInputM] = useState<string>("1.0");
-  const [drawPathMethodInput, setDrawPathMethodInput] = useState<WallMethod>("center");
+  const [drawPathJustifyInput, setDrawPathJustifyInput] = useState<PathJustify>("center");
   const [drawPathStyleInput, setDrawPathStyleInput] = useState<DrawPathStyle>("straight");
   /** Active path-draw config — when set, polyline-path walls use these values for
    *  thickness (px) and label instead of the segment-type default. Cleared when the
    *  user exits path mode. */
-  const [activeDrawPathConfig, setActiveDrawPathConfig] = useState<{ label: string; thicknessPx: number; method: WallMethod; style: DrawPathStyle } | null>(null);
+  const [activeDrawPathConfig, setActiveDrawPathConfig] = useState<{ label: string; thicknessPx: number; justify: PathJustify; style: DrawPathStyle } | null>(null);
   /** When true, finishing a Draw Path keeps the drawn path as SEGMENTS instead of converting it into a
    *  Space (set when launched from Add Space → Path). Cleared once the path ends. Ref so the finish
    *  handlers read the live value without re-creating their callbacks. */
@@ -3398,6 +3590,118 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     if (Object.keys(cur).length === 0) delete bucket[id];
     else bucket[id] = cur;
     h.set({ ...h.state, graphAttrs: { ...ga, [kind]: bucket } });
+  }, []);
+
+  /** Apply a Segment display change to BOTH styling channels in ONE history step: the per-wall prop
+   *  (drives the plain canvas render) AND the matching graphAttrs role (drives the schema / flow
+   *  Wall-Builder band), so the styling shows whether or not a workflow / schema is loaded. */
+  const applySegmentDisplay = useCallback((id: string, patch: Partial<Wall>, attrs: Record<string, import("./types").GraphAttrValue | null>) => {
+    const h = historyRef.current;
+    const ga = h.state.graphAttrs ?? { nodes: {}, segments: {} };
+    const seg = { ...(ga.segments ?? {}) };
+    const cur = { ...(seg[id] ?? {}) };
+    for (const [k, v] of Object.entries(attrs)) { if (v === null) delete cur[k]; else cur[k] = v; }
+    if (Object.keys(cur).length === 0) delete seg[id]; else seg[id] = cur;
+    h.set({
+      ...h.state,
+      walls: h.state.walls.map((w) => (w.id === id ? { ...w, ...patch } : w)),
+      graphAttrs: { ...ga, segments: seg },
+    });
+  }, []);
+
+  // ── Parametric objects (Door / … attached to a segment) ──────────────────────
+  /** Import a `.pobj.json` parametric object file into the project library (persisted in history). */
+  const importParametricObject = useCallback(async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text()) as Record<string, unknown>;
+      if (!parsed || parsed.kind !== "parametric-object" || !Array.isArray(parsed.parameters)) throw new Error("not a parametric-object file");
+      const meta = (parsed.meta ?? {}) as Record<string, unknown>;
+      const id = (typeof meta.id === "string" && meta.id) || file.name.replace(/\.[^.]+$/, "") || createId();
+      const params: ParametricObjectParam[] = (parsed.parameters as Record<string, unknown>[]).map((q) => {
+        const kind = (["number", "select", "checkbox", "text", "color"].includes(q.kind as string) ? q.kind : "number") as ParametricObjectParam["kind"];
+        const def = q.default ?? (kind === "checkbox" ? false : kind === "number" ? 0 : "");
+        return {
+          key: String(q.key ?? ""),
+          label: String(q.label ?? q.key ?? ""),
+          kind,
+          default: def as number | string | boolean,
+          min: typeof q.min === "number" ? q.min : undefined,
+          max: typeof q.max === "number" ? q.max : undefined,
+          step: typeof q.step === "number" ? q.step : undefined,
+          unit: typeof q.unit === "string" ? q.unit : undefined,
+          options: Array.isArray(q.options)
+            ? (q.options as unknown[]).map((o) => (typeof o === "string" ? { value: o, label: o } : { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }))
+            : undefined,
+        };
+      }).filter((p) => p.key);
+      const obj: ParametricObjectFile = {
+        kind: "parametric-object",
+        version: Number(parsed.version) || 1,
+        meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined },
+        parameters: params,
+      };
+      const h = historyRef.current;
+      h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [id]: obj } });
+      toast.success(`Imported object: ${obj.meta.name}`);
+    } catch (e) {
+      toast.error(`Import failed: ${e instanceof Error ? e.message : "invalid file"}`);
+    }
+  }, []);
+
+  /** Attach a library object to a segment (seeded with the object's default param values), cutting an
+   *  opening in the host wall: it's split into pre · opening · post, the opening piece carries the
+   *  attachment and renders as a gap (the object's symbol fills it). Too-short / opening segments just
+   *  receive the attachment without a cut. */
+  const attachObjectToSegment = useCallback((wallId: string, objectId: string) => {
+    const h = historyRef.current;
+    const obj = (h.state.objectLibrary ?? {})[objectId];
+    if (!obj) return;
+    const wall = h.state.walls.find((w) => w.id === wallId);
+    if (!wall) return;
+    const params: Record<string, number | string | boolean> = {};
+    for (const pr of obj.parameters) params[pr.key] = pr.default;
+    const att: SegmentAttachment = { id: createId(), objectId, params, t: 0.5, flip: false };
+
+    const segLenM = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y) / pixelsPerMeter;
+    const widthM = typeof params.width === "number" ? params.width : Number(params.width) || 0.9;
+    const st = wall.segmentType ?? "wall";
+    const canCut = st !== "door" && st !== "window" && !wall.isObjectOpening && segLenM > 0.3 && widthM > 0;
+    if (!canCut) {
+      h.set({ ...h.state, walls: h.state.walls.map((w) => (w.id === wallId ? { ...w, attachments: [...(w.attachments ?? []), att] } : w)) });
+      return;
+    }
+    const openM = Math.min(widthM, segLenM - 0.1);
+    const centerM = Math.max(openM / 2, Math.min(segLenM - openM / 2, att.t * segLenM));
+    const startT = (centerM - openM / 2) / segLenM;
+    const endT = (centerM + openM / 2) / segLenM;
+    const lerp = (tt: number): Point => ({ x: wall.start.x + (wall.end.x - wall.start.x) * tt, y: wall.start.y + (wall.end.y - wall.start.y) * tt });
+    const base = { thickness: wall.thickness, color: wall.color, mode: wall.mode, method: wall.method ?? ("center" as const), segmentType: wall.segmentType, heightM: wall.heightM, bufferStyle: wall.bufferStyle, lineStyle: wall.lineStyle, hatch: wall.hatch, hatchStyle: wall.hatchStyle, hatchSpacing: wall.hatchSpacing, hatchAngle: wall.hatchAngle, hatchWeight: wall.hatchWeight };
+    const pre: Wall = { ...base, id: createId(), start: wall.start, end: lerp(startT) };
+    const opening: Wall = { ...base, id: createId(), start: lerp(startT), end: lerp(endT), isObjectOpening: true, attachments: [att] };
+    const post: Wall = { ...base, id: createId(), start: lerp(endT), end: wall.end };
+    h.set({ ...h.state, walls: [...h.state.walls.filter((w) => w.id !== wallId), pre, opening, post] });
+    selection.selectOne(opening.id);
+  }, [pixelsPerMeter, selection]);
+
+  const detachSegmentObject = useCallback((wallId: string, attId: string) => {
+    const h = historyRef.current;
+    h.set({ ...h.state, walls: h.state.walls.map((w) => {
+      if (w.id !== wallId) return w;
+      const rest = (w.attachments ?? []).filter((a) => a.id !== attId);
+      // When the last object is detached, drop the opening flag so the band fills the gap again
+      // (the three collinear pieces render as a continuous wall once more).
+      return { ...w, attachments: rest.length ? rest : undefined, ...(rest.length ? {} : { isObjectOpening: undefined }) };
+    }) });
+  }, []);
+
+  const updateSegmentAttachment = useCallback((wallId: string, attId: string, patch: Partial<SegmentAttachment>) => {
+    const h = historyRef.current;
+    h.set({ ...h.state, walls: h.state.walls.map((w) => (w.id === wallId ? { ...w, attachments: (w.attachments ?? []).map((a) => (a.id === attId ? { ...a, ...patch } : a)) } : w)) });
+  }, []);
+
+  const updateSegmentAttachmentParam = useCallback((wallId: string, attId: string, key: string, value: number | string | boolean) => {
+    const h = historyRef.current;
+    h.set({ ...h.state, walls: h.state.walls.map((w) => (w.id === wallId ? { ...w, attachments: (w.attachments ?? []).map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)) } : w)) });
   }, []);
 
   // The graph currently selected (only in Graph scope): the component containing any selected id, with
@@ -8608,43 +8912,52 @@ User request: ${aiPrompt.trim()}`;
       }
       return keep.length >= 3 ? keep : pts;
     };
-    const simplifiedLoops = loops.map(simplifyLoop);
+    // Keep only the INNER region(s). A closed path ribbon unions into a ring, so the boundary trace
+    // yields an OUTER loop plus the inner hole loop(s). The corridor band itself is subtracted — the
+    // Space is just the inner hole (every loop except the largest-area outer one). The path walls stay,
+    // so the drawn band remains as the boundary, exactly like wall segments around an Add-Segment space.
+    const loopArea = (pts: Point[]): number => {
+      let a = 0;
+      for (let i = 0; i < pts.length; i++) { const j = (i + 1) % pts.length; a += pts[i].x * pts[j].y - pts[j].x * pts[i].y; }
+      return Math.abs(a) / 2;
+    };
+    const innerLoops = loops.length >= 2
+      ? (() => {
+          const withArea = loops.map((l) => ({ l, a: loopArea(l) }));
+          const maxA = Math.max(...withArea.map((x) => x.a));
+          return withArea.filter((x) => x.a < maxA - 1e-6).map((x) => x.l);
+        })()
+      : [];
+    if (innerLoops.length === 0) {
+      // Open path (no enclosed area) — leave the corridor as drawn; nothing to fill.
+      setActiveDrawPathConfig(null);
+      setNextWallSegmentType("wall");
+      setTool("select");
+      toast.info("Path drawn — close the loop to create an inner space");
+      return;
+    }
+    const simplifiedLoops = innerLoops.map(simplifyLoop);
     const newSpaceId = createId();
-    const style = getCurrentWallStyle();
-    const newSpaceWalls = simplifiedLoops.flatMap((loop) =>
-      loop.map((p, i) => ({
-        id: createId(),
-        start: p,
-        end: loop[(i + 1) % loop.length],
-        thickness: style.thickness,
-        color: style.color,
-        mode: "fill" as const,
-        method: "center" as const,
-        segmentType: "wall" as const,
-        isPathSpaceWall: true,
-        pathSpaceSourceRoomId: newSpaceId,
-      }))
-    );
     const newRooms = simplifiedLoops.map((points, i) => ({
       id: i === 0 ? newSpaceId : createId(),
       points,
-      fill: "rgba(14, 165, 233, 0.35)",
-      stroke: "#0369a1",
-      roomType: "path" as const,
-      label: loops.length > 1 ? `${cfg.label} ${i + 1}` : cfg.label,
+      fill: "rgba(34, 197, 94, 0.28)",
+      stroke: "#16a34a",
+      roomType: "room" as const,
+      label: simplifiedLoops.length > 1 ? `${cfg.label} ${i + 1}` : cfg.label,
     }));
     const h = historyRef.current;
-    const pathIdSet = new Set(pathWalls.map((w) => w.id));
+    // Keep the path corridor walls (the band stays as the boundary); just add the inner Space(s).
     h.set({
       ...h.state,
-      walls: [...h.state.walls.filter((w) => !pathIdSet.has(w.id)), ...newSpaceWalls],
       rooms: [...h.state.rooms, ...newRooms],
     });
-    toast.success(`Created ${newRooms.length === 1 ? "space" : `${newRooms.length} spaces`} from path "${cfg.label}"`);
+    selection.selectOne(newSpaceId);
+    toast.success(`Created inner ${newRooms.length === 1 ? "space" : `${newRooms.length} spaces`} from path "${cfg.label}"`);
     setActiveDrawPathConfig(null);
     setNextWallSegmentType("wall");
     setTool("select");
-  }, [activeDrawPathConfig, getCurrentWallStyle]);
+  }, [activeDrawPathConfig, getCurrentWallStyle, selection]);
 
   /** Add Openings: split a wall/site-boundary segment into pre / opening / post sub-segments.
    *  centerT (m from start) = lenOverride/2 + (posOverride/100) * (segLen - lenOverride),
@@ -16264,16 +16577,16 @@ User request: ${aiPrompt.trim()}`;
           spinePoints,
           splineTension: 0,
           thickness: nextWallSegmentType === "path"
-            ? (activeDrawPathConfig?.thicknessPx ?? pixelsPerMeter)
+            ? (activeDrawPathConfig ? (activeDrawPathConfig.thicknessPx > 0 ? activeDrawPathConfig.thicknessPx : 0.01) : pixelsPerMeter)
             : (layerVisibility.viewGraph ? 0.01 : wallThickness),
           color: wallColor,
           dashed: lineTypeDashed,
           // Path walls drawn via the toolbar's Draw Path use mitered-union so the
           // miter offset polygons are generated — required for converting the path
           // into a Space when the user finishes drawing.
-          mode: nextWallSegmentType === "path" && activeDrawPathConfig ? "mitered-union" : "line",
+          mode: nextWallSegmentType === "path" && activeDrawPathConfig && activeDrawPathConfig.thicknessPx > 0 ? "mitered-union" : "line",
           method: nextWallSegmentType === "path" && activeDrawPathConfig
-            ? activeDrawPathConfig.method
+            ? resolvePathJustify(activeDrawPathConfig.justify, tessellated)
             : wallDrawMethod,
           segmentType: nextWallSegmentType,
           ...(nextWallSegmentType === "path" && activeDrawPathConfig?.label
@@ -16307,6 +16620,26 @@ User request: ${aiPrompt.trim()}`;
       total += value;
       measurements.push(`${value.toFixed(2)} ${unit}`);
     }
+    // A Dimension annotation per drawn edge — placed on the Dimension layer, offset beside the segment,
+    // so drawing a segment also shows its measurement as a selectable, styleable object.
+    const dims: import("./types").DimensionObject[] = [];
+    for (let i = 0; i + 3 < segmentDraft.length; i += 2) {
+      dims.push({
+        id: createId(),
+        kind: "dimension",
+        layerId: DEFAULT_DIMENSION_LAYER_ID,
+        x: 0,
+        y: 0,
+        rotation: 0,
+        points: [segmentDraft[i], segmentDraft[i + 1], segmentDraft[i + 2], segmentDraft[i + 3]],
+        tickStyle: "arrow",
+        showLine: true,
+        showUnits: true,
+        offset: 18,
+        stroke: "#b45309",
+        fill: "transparent",
+      });
+    }
     history.set({
       ...history.state,
       objects: [
@@ -16323,6 +16656,7 @@ User request: ${aiPrompt.trim()}`;
           stroke: "#0F766E",
           fill: "transparent",
         },
+        ...dims,
       ],
     });
     setSegmentDraft([]);
@@ -16503,7 +16837,9 @@ User request: ${aiPrompt.trim()}`;
         setCurrentWallSplinePoints([]);
         // Active Draw-Path flow: keep the path as segments (Add Space → Path), or finalize into a Space.
         if (activeDrawPathConfig) {
-          if (drawPathAsSegmentsRef.current) { drawPathAsSegmentsRef.current = false; setActiveDrawPathConfig(null); setNextWallSegmentType("wall"); setTool("select"); }
+          // A 0-thickness path is just a single line — keep the drawn segments as-is; don't try to
+          // materialise a ribbon Space (the offset band collapses at zero thickness).
+          if (drawPathAsSegmentsRef.current || activeDrawPathConfig.thicknessPx <= 0) { drawPathAsSegmentsRef.current = false; setActiveDrawPathConfig(null); setNextWallSegmentType("wall"); setTool("select"); }
           else finalizeDrawnPathAsSpace();
         }
         setRoomDraft([]);
@@ -16520,6 +16856,8 @@ User request: ${aiPrompt.trim()}`;
         // segments stay; this only clears the next-anchor preview state.
         setSingleSegStart(null);
         setSingleSegPreview(null);
+        setDimensionStart(null);
+        setDimensionPreview(null);
         setImageSelected(false);
       }
       if (event.key === "Enter" && tool === "segment") {
@@ -16584,13 +16922,13 @@ User request: ${aiPrompt.trim()}`;
               start: currentWallStart,
               end,
               thickness: nextWallSegmentType === "path"
-                ? (activeDrawPathConfig?.thicknessPx ?? pixelsPerMeter)
+                ? (activeDrawPathConfig ? (activeDrawPathConfig.thicknessPx > 0 ? activeDrawPathConfig.thicknessPx : 0.01) : pixelsPerMeter)
                 : (layerVisibility.viewGraph ? 0.01 : wallThickness),
               color: wallColor,
               dashed: lineTypeDashed,
               mode: wallDrawMode,
               method: nextWallSegmentType === "path" && activeDrawPathConfig
-                ? activeDrawPathConfig.method
+                ? resolvePathJustify(activeDrawPathConfig.justify, [])
                 : wallDrawMethod,
               segmentType: nextWallSegmentType,
               ...(nextWallSegmentType === "path" && activeDrawPathConfig?.label ? { label: activeDrawPathConfig.label } : {}),
@@ -16607,7 +16945,9 @@ User request: ${aiPrompt.trim()}`;
         setCurrentWallSplinePoints([]);
         // Active Draw-Path flow: keep the path as segments (Add Space → Path), or finalize into a Space.
         if (activeDrawPathConfig) {
-          if (drawPathAsSegmentsRef.current) { drawPathAsSegmentsRef.current = false; setActiveDrawPathConfig(null); setNextWallSegmentType("wall"); setTool("select"); }
+          // A 0-thickness path is just a single line — keep the drawn segments as-is; don't try to
+          // materialise a ribbon Space (the offset band collapses at zero thickness).
+          if (drawPathAsSegmentsRef.current || activeDrawPathConfig.thicknessPx <= 0) { drawPathAsSegmentsRef.current = false; setActiveDrawPathConfig(null); setNextWallSegmentType("wall"); setTool("select"); }
           else finalizeDrawnPathAsSpace();
         }
         // setTool("select")
@@ -16639,7 +16979,7 @@ User request: ${aiPrompt.trim()}`;
               ...history.state,
               walls: splitWallsAtIntersections([
                 ...history.state.walls,
-                { id: newSegId, start, end, thickness: layerVisibility.viewGraph ? 0.01 : wallThickness, color: wallColor, dashed: lineTypeDashed, mode: "line", method: "center", segmentType: singleSegType, ...(singleSegType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}) },
+                { id: newSegId, start, end, thickness: layerVisibility.viewGraph ? 0.01 : wallThickness, color: wallColor, dashed: lineTypeDashed, mode: "line", method: "center", segmentType: singleSegType, ...(singleSegType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}), ...(singleSegType === "line" ? lineSegConfigProps() : {}) },
               ]),
               graphAttrs: taggedGA,
             });
@@ -17438,7 +17778,8 @@ User request: ${aiPrompt.trim()}`;
       tool === "circle" ||
       tool === "space-rect" ||
       tool === "space-circle" ||
-      tool === "single-segment";
+      tool === "single-segment" ||
+      tool === "dimension";
     if (!clickedOnStage && !drawHitsShapes) {
       return;
     }
@@ -17501,10 +17842,30 @@ User request: ${aiPrompt.trim()}`;
       : { x: anchor.x, y: target.y };
   };
 
-  /** Apply the active drawing constraint from `anchor` to `target`: Shift → 8-way (45°) lock (explicit
-   *  override); else Ortho mode → horizontal/vertical only; else the point unchanged. */
+  /** Apply the active drawing constraint from `anchor` to `target`: Ortho (horizontal / vertical lock) is
+   *  active while Shift is held OR the persistent Ortho toggle (Preferences) is on — so on a raw canvas,
+   *  holding Shift turns Ortho on and releasing turns it off. Otherwise the point is unchanged. */
   const constrainToAnchor = (anchor: Point, target: Point, shiftKey: boolean): Point =>
-    shiftKey ? axisLockToAnchor(anchor, target) : orthoMode ? orthoLockToAnchor(anchor, target) : target;
+    (shiftKey || orthoMode) ? orthoLockToAnchor(anchor, target) : target;
+
+  /** Extra Wall props from the active Add-Segment dialog config (applied to drawn "line" segments).
+   *  Buffered → renders as a band (fill / outline / hatched) with the chosen cap style; Line → thin stroke. */
+  const lineSegConfigProps = (): Partial<Wall> => {
+    const c = activeSegmentConfigRef.current;
+    if (!c) return {};
+    const buffered = c.mode === "buffered";
+    return {
+      thickness: c.thicknessPx,
+      color: c.color,
+      lineStyle: c.lineStyle,
+      dashed: c.lineStyle === "dashed",
+      method: buffered ? c.method : "center",
+      mode: buffered ? (c.fill === "outlined" ? "outline" : "fill") : "line",
+      bufferStyle: buffered ? c.bufferStyle : undefined,
+      hatch: buffered && c.fill === "hatched",
+      ...(buffered && c.fill === "hatched" ? { hatchStyle: "diagonal" as const } : {}),
+    };
+  };
 
   /** Commit a Space (Room) defined by the current `spaceRectAnchor` and an opposite-corner point.
    *  Also commits the 4 boundary edges as line-mode wall segments (segmentType "line") so the
@@ -17692,13 +18053,13 @@ User request: ${aiPrompt.trim()}`;
             start: points[i],
             end: points[i + 1],
             thickness: nextWallSegmentType === "path"
-              ? (activeDrawPathConfig?.thicknessPx ?? pixelsPerMeter)
+              ? (activeDrawPathConfig ? (activeDrawPathConfig.thicknessPx > 0 ? activeDrawPathConfig.thicknessPx : 0.01) : pixelsPerMeter)
               : (layerVisibility.viewGraph ? 0.01 : wallThickness),
             color: wallColor,
             dashed: lineTypeDashed,
             mode: wallDrawMode,
             method: nextWallSegmentType === "path" && activeDrawPathConfig
-              ? activeDrawPathConfig.method
+              ? resolvePathJustify(activeDrawPathConfig.justify, [])
               : wallDrawMethod,
             segmentType: nextWallSegmentType,
             ...(nextWallSegmentType === "path" && activeDrawPathConfig?.label
@@ -17727,13 +18088,13 @@ User request: ${aiPrompt.trim()}`;
               start: currentWallStart,
               end: snapped,
               thickness: nextWallSegmentType === "path"
-                ? (activeDrawPathConfig?.thicknessPx ?? pixelsPerMeter)
+                ? (activeDrawPathConfig ? (activeDrawPathConfig.thicknessPx > 0 ? activeDrawPathConfig.thicknessPx : 0.01) : pixelsPerMeter)
                 : (layerVisibility.viewGraph ? 0.01 : wallThickness),
               color: wallColor,
               dashed: lineTypeDashed,
               mode: wallDrawMode,
               method: nextWallSegmentType === "path" && activeDrawPathConfig
-                ? activeDrawPathConfig.method
+                ? resolvePathJustify(activeDrawPathConfig.justify, [])
                 : wallDrawMethod,
               segmentType: nextWallSegmentType,
               ...(nextWallSegmentType === "path" && activeDrawPathConfig?.label
@@ -17826,6 +18187,37 @@ User request: ${aiPrompt.trim()}`;
       return;
     }
 
+    if (tool === "dimension") {
+      // First click sets the start; second click commits a Dimension object between the two points.
+      if (!dimensionStart) {
+        setDimensionStart(snapped);
+        setDimensionPreview(snapped);
+        return;
+      }
+      const end = constrainToAnchor(dimensionStart, snapped, shiftKey);
+      if (Math.hypot(end.x - dimensionStart.x, end.y - dimensionStart.y) < 1) return; // ignore zero-length
+      const dimObj: import("./types").DimensionObject = {
+        id: createId(),
+        kind: "dimension",
+        layerId: DEFAULT_DIMENSION_LAYER_ID,
+        x: 0,
+        y: 0,
+        rotation: 0,
+        points: [dimensionStart.x, dimensionStart.y, end.x, end.y],
+        tickStyle: "arrow",
+        showLine: true,
+        showUnits: true,
+        offset: 0,
+        stroke: "#b45309",
+        fill: "transparent",
+      };
+      history.set({ ...history.state, objects: [...history.state.objects, dimObj] });
+      // Reset for the next dimension (the tool stays active for repeated placement; Esc exits).
+      setDimensionStart(null);
+      setDimensionPreview(null);
+      return;
+    }
+
     if (tool === "single-segment") {
       // A click commits/anchors via the cursor position, so discard any half-typed direct-distance length.
       if (wallLengthInputRef.current !== "") setWallLengthInput("");
@@ -17854,6 +18246,23 @@ User request: ${aiPrompt.trim()}`;
       const taggedGA = (singleSegType !== "line" || Object.keys(segDefaults).length > 0)
         ? { ...ga0, segments: { ...(ga0.segments ?? {}), [newSegId]: { ...(ga0.segments?.[newSegId] ?? {}), ...(singleSegType !== "line" ? { "seg-type": singleSegType } : {}), ...segDefaults } } }
         : ga0;
+      // Drawing a line / wall segment also drops a Dimension annotation beside it (Dimension layer) —
+      // selectable + styleable in Properties. Door / window openings aren't dimensioned.
+      const segDim: import("./types").DimensionObject | null = isOpening ? null : {
+        id: createId(),
+        kind: "dimension",
+        layerId: DEFAULT_DIMENSION_LAYER_ID,
+        x: 0,
+        y: 0,
+        rotation: 0,
+        points: [singleSegStart.x, singleSegStart.y, end.x, end.y],
+        tickStyle: "arrow",
+        showLine: true,
+        showUnits: true,
+        offset: 18,
+        stroke: "#b45309",
+        fill: "transparent",
+      };
       history.set({
         ...history.state,
         walls: splitWallsAtIntersections([
@@ -17871,8 +18280,11 @@ User request: ${aiPrompt.trim()}`;
             segmentType: singleSegType,
             // Door openings carry hinge/swing defaults so the swing symbol renders immediately.
             ...(singleSegType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}),
+            // Apply the Add Segment dialog's display config to plain line segments.
+            ...(singleSegType === "line" ? lineSegConfigProps() : {}),
           },
         ]),
+        ...(segDim ? { objects: [...history.state.objects, segDim] } : {}),
         graphAttrs: taggedGA,
       });
       // Openings are one segment each (don't chain); plain lines / walls keep the polyline chain alive.
@@ -18182,6 +18594,9 @@ User request: ${aiPrompt.trim()}`;
           const locked = constrainToAnchor(singleSegStart, snapped, event.evt.shiftKey);
           setSingleSegPreview(locked);
         }
+        if (tool === "dimension" && dimensionStart) {
+          setDimensionPreview(constrainToAnchor(dimensionStart, snapped, event.evt.shiftKey));
+        }
         if (tool === "space-circle" && spaceCircleCenter) {
           setSpaceCirclePreview(snapped);
           // Sync radius input to live cursor unless the user has manually typed.
@@ -18437,11 +18852,13 @@ User request: ${aiPrompt.trim()}`;
     if (tool === "select" && selectFilter !== "all") {
       const hitKind: SelectFilter | null = wallHit
         ? "segment"
-        : objHit?.kind === "segment"
-          ? "segment"
-          : roomHit
-            ? "space"
-            : null;
+        : objHit?.kind === "dimension"
+          ? "dimension"
+          : objHit?.kind === "segment"
+            ? "segment"
+            : roomHit
+              ? "space"
+              : null;
       // "graph" scope picks via a segment click (then expands to the connected component below).
       const wanted: SelectFilter = selectFilter === "graph" ? "segment" : selectFilter;
       if (hitKind !== wanted) return;
@@ -18606,6 +19023,14 @@ User request: ${aiPrompt.trim()}`;
     if (furniture?.type === "door") {
       setIsRightPanelCollapsed(false);
     }
+  };
+
+  /** Patch a single canvas object in history by id (e.g. editing a Dimension's tick style / colour). */
+  const patchObject = (id: string, patch: Partial<FloorObject>) => {
+    history.set({
+      ...history.state,
+      objects: history.state.objects.map((entry) => (entry.id === id ? ({ ...entry, ...patch } as FloorObject) : entry)),
+    });
   };
 
   const onObjectDragEnd = (id: string, x: number, y: number) => {
@@ -19736,7 +20161,41 @@ User request: ${aiPrompt.trim()}`;
 
         <div className="flex flex-col gap-3">
           {snappingSection}
-          {/* Units moved to the Floorplan Tracer schema's Settings block (Properties tab). */}
+          {/* Canvas — display units + Ortho draw lock. These are canvas-wide settings (the same
+              `unit` / `orthoMode` state the toolbar and drawing use); the Floorplan Tracer schema's
+              Settings block, when loaded, only seeds their defaults. Always available here. */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Canvas</p>
+            <div className="space-y-2">
+              <label className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-medium text-slate-700">Units</span>
+                  <p className="text-[9px] text-slate-400">Display unit for lengths and areas.</p>
+                </div>
+                <select
+                  className="h-7 rounded border border-slate-200 bg-white px-1.5 text-xs"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value as Unit)}
+                >
+                  <option value="m">Meters (m)</option>
+                  <option value="ft">Feet (ft)</option>
+                  <option value="cm">Centimeters (cm)</option>
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-medium text-slate-700">Ortho</span>
+                  <p className="text-[9px] text-slate-400">Lock each new wall / segment to horizontal or vertical (Shift gives the 45° lock).</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0"
+                  checked={orthoMode}
+                  onChange={(e) => setOrthoMode(e.target.checked)}
+                />
+              </label>
+            </div>
+          </div>
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Scale calibration (px per meter)</p>
             <p className="text-xs font-medium text-slate-700">{pixelsPerMeter.toFixed(2)} px/m</p>
@@ -19817,6 +20276,38 @@ User request: ${aiPrompt.trim()}`;
               className="h-4 w-4 shrink-0"
               checked={showCenterDimPref}
               onChange={(e) => setShowCenterDimPref(e.target.checked)}
+            />
+          </label>
+          {/* Buffered Segment Joins — canvas-wide policy for how Buffered display segments meet at shared
+              corners: Mitered (sharp per-wall joints), Mitered Union (one seamless outline), or Individual
+              (standalone bands). */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Buffered Segment Joins</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { v: "mitered", label: "Mitered" },
+                { v: "mitered-union", label: "Mitered Union" },
+                { v: "individual", label: "Individual" },
+              ] as const).map((o) => (
+                <Button key={o.v} size="sm" variant={bufferJoinMode === o.v ? "default" : "outline"} onClick={() => setBufferJoinMode(o.v)}>
+                  {o.label}
+                </Button>
+              ))}
+            </div>
+            <p className="mt-0.5 text-[9px] text-slate-400">How Buffered segments join at shared corners.</p>
+          </div>
+          {/* Subtract segment for Space — inset the detected Space fill to the inner edge of the buffered
+              segments, so the green shows only the clear inner area (subtracting the band thickness). */}
+          <label className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-medium text-slate-700">Subtract segment for Space</span>
+              <p className="text-[9px] text-slate-400">Fill only the inner area, avoiding the buffered segment thickness.</p>
+            </div>
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0"
+              checked={subtractBufferedFromSpace}
+              onChange={(e) => setSubtractBufferedFromSpace(e.target.checked)}
             />
           </label>
           {/* Wall Extend Behavior — global drag/extend settings (direction + connection constraints).
@@ -20656,9 +21147,25 @@ User request: ${aiPrompt.trim()}`;
                   setSpaceRectInputDirty(false);
                   setTool("space-rect");
                 }}
+                drawingDimension={tool === "dimension"}
+                onAddDimensionClick={() => {
+                  // Start the click-click Dimension tool (two points → a Dimension annotation).
+                  pendingNodeTypeRef.current = null;
+                  setFurnitureNodeMode(false);
+                  setDimensionStart(null);
+                  setDimensionPreview(null);
+                  setAddDoorMode(false);
+                  setAddWindowMode(false);
+                  setAddEdgeMode(null);
+                  setAddRoomMode(false);
+                  setTool("dimension");
+                }}
                 singleSegType={singleSegType}
+                onOpenAddSegmentDialog={() => setAddSegDialogOpen(true)}
                 onSingleSegmentClick={(segType = "line") => {
                   // Start the click-click segment trace — plain line, door / window, or a schema seg-type.
+                  // No dialog config on this path (schema dropdown / direct) — clear any stale Add-Segment config.
+                  activeSegmentConfigRef.current = null;
                   pendingNodeTypeRef.current = null;
                   setFurnitureNodeMode(false);
                   setSingleSegStart(null);
@@ -21360,11 +21867,38 @@ User request: ${aiPrompt.trim()}`;
                     const wallHalfThicknessPx = layerVisibility.viewGraph
                       ? 0
                       : (getCurrentWallStyle().thickness ?? 10) / 2;
-                    const renderOuter = wallHalfThicknessPx > 0.5
-                      ? (offsetPolygonInward(room.points, wallHalfThicknessPx) ?? room.points)
+                    // "Subtract segment for Space" (Preferences): inset the fill to the INNER edge of the
+                    // buffered segments bounding this room (their half-thickness), even in Graph view — so
+                    // the green shows only the clear inner area, not under the band. Uses the max bounding
+                    // buffered thickness (centre-justification assumption: inner extent = thickness/2).
+                    let bufferedHalfPx = 0;
+                    if (subtractBufferedFromSpace) {
+                      const rpts = room.points;
+                      const distToEdges = (mx: number, my: number) => {
+                        let d = Infinity;
+                        for (let i = 0; i < rpts.length; i++) {
+                          const a = rpts[i], b = rpts[(i + 1) % rpts.length];
+                          const vx = b.x - a.x, vy = b.y - a.y, L2 = vx * vx + vy * vy || 1;
+                          let t = ((mx - a.x) * vx + (my - a.y) * vy) / L2;
+                          t = Math.max(0, Math.min(1, t));
+                          const dx = mx - (a.x + t * vx), dy = my - (a.y + t * vy);
+                          d = Math.min(d, Math.hypot(dx, dy));
+                        }
+                        return d;
+                      };
+                      for (const w of history.state.walls) {
+                        if (!w.bufferStyle || w.segmentType === "path") continue;
+                        if (distToEdges((w.start.x + w.end.x) / 2, (w.start.y + w.end.y) / 2) < 8) {
+                          bufferedHalfPx = Math.max(bufferedHalfPx, (w.thickness ?? 0) / 2);
+                        }
+                      }
+                    }
+                    const insetPx = Math.max(wallHalfThicknessPx, bufferedHalfPx);
+                    const renderOuter = insetPx > 0.5
+                      ? (offsetPolygonInward(room.points, insetPx) ?? room.points)
                       : room.points;
-                    const renderHoles = wallHalfThicknessPx > 0.5
-                      ? roomHoles.map((h) => offsetPolygonInward(h, -wallHalfThicknessPx) ?? h)
+                    const renderHoles = insetPx > 0.5
+                      ? roomHoles.map((h) => offsetPolygonInward(h, -insetPx) ?? h)
                       : roomHoles;
                     return (
                       <Group key={roomReactKey}>
@@ -22058,6 +22592,78 @@ User request: ${aiPrompt.trim()}`;
                       listening={false}
                     />
                   ))}
+
+                  {/* Buffered-segment union — when "Mitered Union" join mode is active, the per-wall bands
+                      render invisibly (hit-only) and the merged corridor is drawn here as one seamless
+                      filled + outlined shape (no internal corner seams). */}
+                  {bufferedUnion && bufferedUnion.fills.map((poly, i) => (
+                    <Line
+                      key={`bufu-${i}`}
+                      points={poly.flatMap((p) => [p.x, p.y])}
+                      closed
+                      fill={bufferedUnion.fillUnion ? bufferedUnion.color : "rgba(0,0,0,0)"}
+                      stroke={bufferedUnion.color}
+                      strokeWidth={Math.max(0.75, 1 / scale)}
+                      listening={false}
+                    />
+                  ))}
+
+                  {/* Parametric object instances attached to segments — a placeholder Door swing symbol
+                      (leaf + quarter-arc) sized by the instance's `width` param, positioned at `t` along the
+                      host segment. (The file's own generator → full 2D/3D geometry is the next step.) */}
+                  {history.state.walls.filter((w) => isLayerVisible(w.layerId) && (w.attachments?.length ?? 0) > 0).flatMap((w) =>
+                    (w.attachments ?? []).map((att) => {
+                      const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy) || 1;
+                      const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+                      const side = att.flip ? -1 : 1;
+                      const obj = (history.state.objectLibrary ?? {})[att.objectId];
+                      const isOpening = !!w.isObjectOpening;
+                      const hingeRight = String(att.params.hinge ?? "left").toLowerCase() === "right";
+                      const wp = att.params.width ?? obj?.parameters.find((p) => p.key === "width")?.default ?? 0.9;
+                      // On an opening piece the leaf spans the gap (= piece length); otherwise use the width param.
+                      const wPx = isOpening ? L : (typeof wp === "number" ? wp : Number(wp) || 0.9) * pixelsPerMeter;
+                      // Hinge at a jamb of the opening piece (flips with the Hinge param); else at `t` along the wall.
+                      const hx = isOpening ? (hingeRight ? w.end.x : w.start.x) : w.start.x + ux * (L * Math.min(1, Math.max(0, att.t)));
+                      const hy = isOpening ? (hingeRight ? w.end.y : w.start.y) : w.start.y + uy * (L * Math.min(1, Math.max(0, att.t)));
+                      // Closed-leaf direction (along the wall, toward the other jamb).
+                      const ax = isOpening && hingeRight ? -ux : ux;
+                      const ay = isOpening && hingeRight ? -uy : uy;
+                      const sw = Math.max(0.75, 1.25 / scale);
+                      const arc: number[] = [];
+                      for (let i = 0; i <= 12; i++) {
+                        const a = (i / 12) * (Math.PI / 2);
+                        arc.push(hx + (ax * Math.cos(a) + nx * side * Math.sin(a)) * wPx, hy + (ay * Math.cos(a) + ny * side * Math.sin(a)) * wPx);
+                      }
+                      return (
+                        <Group key={att.id} listening={false}>
+                          {/* Leaf (open, perpendicular to the wall) */}
+                          <Line points={[hx, hy, hx + nx * side * wPx, hy + ny * side * wPx]} stroke="#b45309" strokeWidth={sw} />
+                          {/* Swing arc */}
+                          <Line points={arc} stroke="#b45309" strokeWidth={sw} />
+                        </Group>
+                      );
+                    }),
+                  )}
+
+                  {/* Path corridor INNER / OUTER face dimensions — both offset edges measured and labelled.
+                      Gated on the Dimension layer so they can be toggled with the other dimensions. */}
+                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && pathEdgeDimensions.map((d, i) => {
+                    const col = d.role === "outer" ? "#b45309" : "#0891b2";
+                    const sw = Math.max(0.6, 1 / scale);
+                    const arr = 11 / Math.max(1, scale);
+                    const pts = d.edge, n = pts.length;
+                    // Inward unit directions at each end (toward the neighbouring vertex) for the arrowheads.
+                    let su = pts[2] - pts[0], sv = pts[3] - pts[1]; const sl = Math.hypot(su, sv) || 1; su /= sl; sv /= sl;
+                    let eu = pts[n - 4] - pts[n - 2], ev = pts[n - 3] - pts[n - 1]; const el = Math.hypot(eu, ev) || 1; eu /= el; ev /= el;
+                    return (
+                      <Group key={`pathdim-${i}`} listening={false}>
+                        <Line points={pts} stroke={col} strokeWidth={sw} />
+                        <Line points={arrowHeadPoints(pts[0], pts[1], su, sv, arr)} stroke={col} strokeWidth={sw} />
+                        <Line points={arrowHeadPoints(pts[n - 2], pts[n - 1], eu, ev, arr)} stroke={col} strokeWidth={sw} />
+                        <Text x={d.pos.x} y={d.pos.y} text={`${d.role === "outer" ? "Outer" : "Inner"} ${unitValueFromPixels(d.lenPx, unit, pixelsPerMeter).toFixed(2)} ${unit}`} fontSize={Math.max(9, 11 / scale)} fill={col} />
+                      </Group>
+                    );
+                  })}
 
                   {/* Architectural view: wall band physically clipped by column footprints. Drawn as a
                    *  single even-odd-filled shape so column notches / holes / splits are cut out of the
@@ -23988,13 +24594,17 @@ User request: ${aiPrompt.trim()}`;
                     }
 
                     let wStyle = wallWithDefaults(wall);
+                    // "Buffered" display segment (Display block) — render as a thickness band with a cap
+                    // style; like paths, its whole point is its width, so the Graph-view thinning below
+                    // must NOT collapse it.
+                    const isBufferedDisplay = wall.segmentType !== "path" && !!wall.bufferStyle;
                     // Path segments always render as a mitered-union offset corridor — the
                     // view-mode (Graph / Curved / Sharp) overrides that normally collapse a
                     // wall to a thin line don't apply to paths, because a path's whole point
                     // is its width.
                     if (wall.segmentType === "path") {
                       wStyle = { ...wStyle, mode: "mitered-union" };
-                    } else if (layerVisibility.viewGraph) {
+                    } else if (layerVisibility.viewGraph && !isBufferedDisplay) {
                       // Graph (schematic) view renders every wall as a thin line. This is derived at
                       // RENDER time so the stored `thickness` parameter is NEVER mutated — toggling
                       // between Graph and Architectural preserves each wall's real thickness.
@@ -24071,7 +24681,59 @@ User request: ${aiPrompt.trim()}`;
                     const thicknessHandleLayouts = getWallThicknessHandleLayouts(wall, liveThickness);
                     return (
                       <Group key={wall.id} {...segmentDragProps}>
-                        {wStyle.mode === "line" && layerVisibility.viewCurved && layerVisibility.fillingUnion ? (
+                        {wall.isObjectOpening ? (
+                          /* Opening gap for an attached parametric object — no band; a transparent hit line
+                             keeps it selectable so its object can be edited in the Properties tab. */
+                          <Line
+                            id={wall.id}
+                            points={[liveStart.x, liveStart.y, liveEnd.x, liveEnd.y]}
+                            stroke="transparent"
+                            strokeWidth={1}
+                            hitStrokeWidth={Math.max(14, wStyle.thickness + 10)}
+                            onClick={(event) => {
+                              if (toolRef.current !== "select") return;
+                              onObjectSelect(event.target.id(), event.evt.shiftKey);
+                            }}
+                          />
+                        ) : isBufferedDisplay ? (
+                          /* Buffered display segment — a thickness band. Corner join follows the canvas-wide
+                             "Buffered Segment Joins" preference: Mitered (per-wall mitered polygon → sharp
+                             joints), Mitered Union (seamless outline drawn as an overlay, so here the band is
+                             stroke-less fill), or Individual (standalone band with the chosen cap style). */
+                          (() => {
+                            const mitre = bufferJoinMode === "mitered" ? miteredPolygons.get(wall.id) : null;
+                            const pts = mitre && mitre.length >= 3
+                              ? mitre.flatMap((p) => [p.x, p.y])
+                              : bufferBandPoints(liveStart, liveEnd, liveThickness, wall.bufferStyle ?? "capsule");
+                            const unioned = bufferJoinMode === "mitered-union";
+                            return (
+                          <Line
+                            id={wall.id}
+                            points={pts}
+                            closed
+                            fill={unioned || (wall.mode === "outline" && !wall.hatch) ? "rgba(0,0,0,0)" : wall.color}
+                            {...(unioned ? {} : hatchProps)}
+                            stroke={unioned ? "transparent" : wall.color}
+                            strokeWidth={1}
+                            dash={unioned ? undefined : segmentDash(wall)}
+                            hitStrokeWidth={Math.max(14, liveThickness + 10)}
+                            onClick={(event) => {
+                              if (toolRef.current === "door" || toolRef.current === "window") return;
+                              if (toolRef.current !== "select") return;
+                              const intent = wallClickIntent(wall, event.target.getStage());
+                              if (intent.kind === "none") return;
+                              if (intent.kind === "node") {
+                                setSelectedNodeKey(intent.key);
+                                selection.clearSelection();
+                                setSelectedGenElement(null);
+                                return;
+                              }
+                              onObjectSelect(event.target.id(), event.evt.shiftKey);
+                            }}
+                          />
+                            );
+                          })()
+                        ) : wStyle.mode === "line" && layerVisibility.viewCurved && layerVisibility.fillingUnion ? (
                           /* Curved Union: thick round-capped line — overlaps seamlessly at junctions */
                           <Line
                             id={wall.id}
@@ -25656,6 +26318,74 @@ User request: ${aiPrompt.trim()}`;
                         </Group>
                       );
                     }
+                    if (objectItem.kind === "dimension") {
+                      const pts = objectItem.points;
+                      if (pts.length < 4) return null;
+                      const p1 = { x: pts[0], y: pts[1] };
+                      const p2 = { x: pts[2], y: pts[3] };
+                      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+                      const len = Math.hypot(dx, dy) || 1;
+                      const ux = dx / len, uy = dy / len;   // unit along the segment
+                      const nx = -uy, ny = ux;              // unit normal
+                      const off = objectItem.offset ?? 0;
+                      const d1 = { x: p1.x + nx * off, y: p1.y + ny * off };
+                      const d2 = { x: p2.x + nx * off, y: p2.y + ny * off };
+                      const mid = { x: (d1.x + d2.x) / 2, y: (d1.y + d2.y) / 2 };
+                      const measure = distanceInUnit(p1, p2, unit, pixelsPerMeter);
+                      const showUnits = objectItem.showUnits !== false;
+                      const showLine = objectItem.showLine !== false;
+                      const label = showUnits ? `${measure.toFixed(2)} ${unit}` : measure.toFixed(2);
+                      const isSel = selection.selectedIds.includes(objectItem.id);
+                      const color = isSel ? "#2563EB" : objectItem.stroke;
+                      const sw = Math.max(0.75, 1.25 / Math.max(1, scale));
+                      const ARR = 11 / Math.max(1, scale);
+                      // Arrowhead at end `e`, opening toward (tx,ty) (the inward direction along the line).
+                      const arrow = (e: { x: number; y: number }, tx: number, ty: number): number[] => {
+                        const TH = 0.42;
+                        const r = (a: number) => ({ x: tx * Math.cos(a) - ty * Math.sin(a), y: tx * Math.sin(a) + ty * Math.cos(a) });
+                        const a = r(TH), b = r(-TH);
+                        return [e.x + a.x * ARR, e.y + a.y * ARR, e.x, e.y, e.x + b.x * ARR, e.y + b.y * ARR];
+                      };
+                      // 45° architectural slash centered on end `c`.
+                      const slash = (c: { x: number; y: number }): number[] => {
+                        const sx = ux + nx, sy = uy + ny, sl = Math.hypot(sx, sy) || 1;
+                        return [c.x - (sx / sl) * ARR / 2, c.y - (sy / sl) * ARR / 2, c.x + (sx / sl) * ARR / 2, c.y + (sy / sl) * ARR / 2];
+                      };
+                      return (
+                        <Group
+                          key={objectItem.id}
+                          onClick={(event) => onObjectSelect(objectItem.id, event.evt.shiftKey)}
+                          onTap={(event) => onObjectSelect(objectItem.id, Boolean((event.evt as MouseEvent).shiftKey))}
+                        >
+                          {/* Extension lines (only when the dimension line is offset off the segment). */}
+                          {off !== 0 ? <Line points={[p1.x, p1.y, d1.x, d1.y]} stroke={color} strokeWidth={sw * 0.6} opacity={0.6} listening={false} /> : null}
+                          {off !== 0 ? <Line points={[p2.x, p2.y, d2.x, d2.y]} stroke={color} strokeWidth={sw * 0.6} opacity={0.6} listening={false} /> : null}
+                          {/* The dimension line itself (non-listening; the wide hit line below catches clicks). */}
+                          {showLine ? <Line points={[d1.x, d1.y, d2.x, d2.y]} stroke={color} strokeWidth={isSel ? sw * 1.6 : sw} listening={false} /> : null}
+                          {/* Always-present transparent hit line with a generous hit width, so clicking
+                              ANYWHERE near the dimension (even off the thin line) selects it. */}
+                          <Line
+                            points={[d1.x, d1.y, d2.x, d2.y]}
+                            stroke="transparent"
+                            strokeWidth={1}
+                            hitStrokeWidth={20 / Math.max(0.0001, scale)}
+                          />
+                          {/* End ticks — arrowheads or slashes. */}
+                          {objectItem.tickStyle === "line" ? (
+                            <>
+                              <Line points={slash(d1)} stroke={color} strokeWidth={sw} listening={false} />
+                              <Line points={slash(d2)} stroke={color} strokeWidth={sw} listening={false} />
+                            </>
+                          ) : (
+                            <>
+                              <Line points={arrow(d1, ux, uy)} stroke={color} strokeWidth={sw} listening={false} />
+                              <Line points={arrow(d2, -ux, -uy)} stroke={color} strokeWidth={sw} listening={false} />
+                            </>
+                          )}
+                          <Text x={mid.x + nx * 8 + 4} y={mid.y + ny * 8 - 6} fontSize={12 / Math.max(1, scale)} fill={color} text={label} />
+                        </Group>
+                      );
+                    }
                     return (
                       <Line
                         key={objectItem.id}
@@ -26549,6 +27279,22 @@ User request: ${aiPrompt.trim()}`;
                         );
                       }
 
+                      // Path draw: also preview the inner / outer ribbon faces (offset by the path's
+                      // thickness + justification) with a length label on each, so both faces hover live.
+                      const pathCfg = nextWallSegmentType === "path" && activeDrawPathConfig && activeDrawPathConfig.thicknessPx > 0 ? activeDrawPathConfig : null;
+                      const hoverEdges: { pts: number[]; pos: Point; role: "outer" | "inner" }[] = [];
+                      if (pathCfg) {
+                        const t = pathCfg.thicknessPx;
+                        const method = resolvePathJustify(pathCfg.justify, [currentWallStart, end]);
+                        const lo = method === "right" ? 0 : method === "left" ? t : t / 2;
+                        const ro = method === "left" ? 0 : method === "right" ? t : t / 2;
+                        const mkEdge = (sgn: 1 | -1, off: number, role: "outer" | "inner") => ({
+                          pts: [currentWallStart.x + sgn * nx * off, currentWallStart.y + sgn * ny * off, end.x + sgn * nx * off, end.y + sgn * ny * off],
+                          pos: { x: mid.x + sgn * nx * (off + offset), y: mid.y + sgn * ny * (off + offset) },
+                          role,
+                        });
+                        hoverEdges.push(mkEdge(1, lo, "outer"), mkEdge(-1, ro, "inner"));
+                      }
                       return (
                         <>
                           <Line
@@ -26558,13 +27304,32 @@ User request: ${aiPrompt.trim()}`;
                             dash={[6, 4]}
                             lineCap="round"
                           />
-                          <Text
-                            x={mid.x + nx * offset}
-                            y={mid.y + ny * offset}
-                            fontSize={Math.max(10, 12 / Math.max(1, scale))}
-                            fill="#0F766E"
-                            text={text}
-                          />
+                          {hoverEdges.map((e, i) => {
+                            const col = e.role === "outer" ? "#b45309" : "#0891b2";
+                            const sw = Math.max(1, 1.5 / Math.max(1, scale));
+                            const arr = 11 / Math.max(1, scale);
+                            const [ax, ay, bx, by] = e.pts;
+                            let u = bx - ax, v = by - ay; const l = Math.hypot(u, v) || 1; u /= l; v /= l;
+                            return (
+                              <Group key={`hp${i}`} listening={false}>
+                                <Line points={e.pts} stroke={col} strokeWidth={sw} />
+                                <Line points={arrowHeadPoints(ax, ay, u, v, arr)} stroke={col} strokeWidth={sw} />
+                                <Line points={arrowHeadPoints(bx, by, -u, -v, arr)} stroke={col} strokeWidth={sw} />
+                              </Group>
+                            );
+                          })}
+                          {hoverEdges.map((e, i) => (
+                            <Text key={`hpt${i}`} x={e.pos.x} y={e.pos.y} fontSize={Math.max(9, 11 / Math.max(1, scale))} fill={e.role === "outer" ? "#b45309" : "#0891b2"} text={`${e.role === "outer" ? "Outer" : "Inner"} ${text}`} listening={false} />
+                          ))}
+                          {!pathCfg && (
+                            <Text
+                              x={mid.x + nx * offset}
+                              y={mid.y + ny * offset}
+                              fontSize={Math.max(10, 12 / Math.max(1, scale))}
+                              fill="#0F766E"
+                              text={text}
+                            />
+                          )}
                         </>
                       );
                     })()
@@ -26769,6 +27534,24 @@ User request: ${aiPrompt.trim()}`;
                         {!(singleSegType === "wall" && bandPolys.length > 0) && (
                           <Text x={mid.x + 6 / Math.max(1, scale)} y={mid.y - fontPx - 4 / Math.max(1, scale)} text={text} fontSize={fontPx} fill="#0F766E" listening={false} />
                         )}
+                      </>
+                    );
+                  })() : null}
+                  {/* Dimension tool preview: dashed line + end ticks + live length label. */}
+                  {tool === "dimension" && dimensionStart && dimensionPreview ? (() => {
+                    const a = dimensionStart, b = dimensionPreview;
+                    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+                    const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+                    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                    const t = 6 / Math.max(1, scale);
+                    const fontPx = Math.max(10, 12 / Math.max(1, scale));
+                    const col = "#b45309";
+                    return (
+                      <>
+                        <Line points={[a.x, a.y, b.x, b.y]} stroke={col} strokeWidth={Math.max(1, 1.25 / Math.max(1, scale))} dash={[6, 4]} listening={false} />
+                        <Line points={[a.x + nx * t, a.y + ny * t, a.x - nx * t, a.y - ny * t]} stroke={col} strokeWidth={Math.max(1, 1.25 / Math.max(1, scale))} listening={false} />
+                        <Line points={[b.x + nx * t, b.y + ny * t, b.x - nx * t, b.y - ny * t]} stroke={col} strokeWidth={Math.max(1, 1.25 / Math.max(1, scale))} listening={false} />
+                        <Text x={mid.x + nx * (t + 4 / Math.max(1, scale))} y={mid.y + ny * (t + 4 / Math.max(1, scale))} text={`${distanceInUnit(a, b, unit, pixelsPerMeter).toFixed(2)} ${unit}`} fontSize={fontPx} fill={col} listening={false} />
                       </>
                     );
                   })() : null}
@@ -28256,11 +29039,75 @@ User request: ${aiPrompt.trim()}`;
                               ),
                             });
                           }}
+                          onSetThicknessPx={(px) => applySegmentDisplay(selectedWall.id, { thickness: px }, { "wall-thickness": px / pixelsPerMeter })}
                           onJustificationChange={setWallMethodForUi}
                           mInUnit={mInUnit}
                           unitToM={unitToM}
                           unitDecimals={unitDecimals}
                           unitStep={unitStep}
+                        />
+                        {/* Display — the canvas-native equivalent of the flow "Display Segment" node
+                            (line style / colour / hatch / justification / direction), shown in the Segment
+                            Properties tab by default so segment display is fully canvas-operable. */}
+                        <WallDisplayBlock
+                          selectedWall={selectedWall}
+                          expanded={true}
+                          setExpanded={() => {}}
+                          wallLevels={wallLevels}
+                          mode={selectedWall.bufferStyle ? "buffered" : "line"}
+                          onModeChange={(m) => {
+                            // Buffered defaults to Outlined (mode "outline"); switching back to Line drops the buffer + hatch.
+                            if (m === "buffered") applySegmentDisplay(selectedWall.id, { mode: (!selectedWall.mode || selectedWall.mode === "line") ? "outline" : selectedWall.mode, bufferStyle: selectedWall.bufferStyle ?? "capsule" }, {});
+                            else applySegmentDisplay(selectedWall.id, { mode: "line", bufferStyle: undefined, hatch: false }, { hatch: false });
+                          }}
+                          bufferStyle={selectedWall.bufferStyle ?? "capsule"}
+                          onBufferStyleChange={(s) => applySegmentDisplay(selectedWall.id, { bufferStyle: s }, {})}
+                          fill={selectedWall.hatch ? "hatched" : selectedWall.mode === "outline" ? "outlined" : "filled"}
+                          onFillChange={(f) => {
+                            if (f === "filled") applySegmentDisplay(selectedWall.id, { mode: "fill", hatch: false }, { hatch: false });
+                            else if (f === "outlined") applySegmentDisplay(selectedWall.id, { mode: "outline", hatch: false }, { hatch: false });
+                            else applySegmentDisplay(selectedWall.id, { mode: "fill", hatch: true, hatchStyle: selectedWall.hatchStyle ?? "diagonal" }, { hatch: true, "hatch-style": selectedWall.hatchStyle ?? "diagonal" });
+                          }}
+                          onJustificationChange={(m) => { setWallDrawMethod(m); applySegmentDisplay(selectedWall.id, { method: m }, { "wall-justification": m }); }}
+                          onLineStyleChange={(style) => applySegmentDisplay(selectedWall.id, { lineStyle: style, dashed: style === "dashed" }, { "wall-linestyle": style })}
+                          onColorChange={(color) => applySegmentDisplay(selectedWall.id, { color }, { "wall-color": color })}
+                          onHatchChange={(patch) => {
+                            const attrs: Record<string, import("./types").GraphAttrValue | null> = {};
+                            if ("hatch" in patch) attrs["hatch"] = !!patch.hatch;
+                            if ("hatchStyle" in patch) attrs["hatch-style"] = patch.hatchStyle ?? null;
+                            if ("hatchSpacing" in patch) attrs["hatch-spacing"] = patch.hatchSpacing ?? null;
+                            if ("hatchAngle" in patch) attrs["hatch-angle"] = patch.hatchAngle ?? null;
+                            applySegmentDisplay(selectedWall.id, patch, attrs);
+                          }}
+                          onToggleShowDirection={(show) => applySegmentDisplay(selectedWall.id, { showDirection: show }, { "show-direction": show })}
+                          onFlipDirection={() => {
+                            history.set({
+                              ...history.state,
+                              walls: history.state.walls.map((w) => {
+                                if (w.id !== selectedWall.id) return w;
+                                let spinePoints = w.spinePoints;
+                                if (spinePoints && spinePoints.length >= 4) {
+                                  const rev: number[] = [];
+                                  for (let i = spinePoints.length - 2; i >= 0; i -= 2) rev.push(spinePoints[i], spinePoints[i + 1]);
+                                  spinePoints = rev;
+                                }
+                                return { ...w, start: w.end, end: w.start, ...(spinePoints ? { spinePoints } : {}) };
+                              }),
+                            });
+                          }}
+                        />
+                        {/* Parametric Object — import a parametric object file (Door / …) into the project
+                            library and attach an instance to this segment, then edit its Input Properties. */}
+                        <SegmentObjectBlock
+                          expanded={segObjExpanded}
+                          setExpanded={setSegObjExpanded}
+                          library={history.state.objectLibrary ?? {}}
+                          attachments={selectedWall.attachments ?? []}
+                          onImportFile={(f) => void importParametricObject(f)}
+                          onAttach={(objectId) => attachObjectToSegment(selectedWall.id, objectId)}
+                          onDetach={(attId) => detachSegmentObject(selectedWall.id, attId)}
+                          onUpdateAttachment={(attId, patch) => updateSegmentAttachment(selectedWall.id, attId, patch)}
+                          onUpdateParam={(attId, key, value) => updateSegmentAttachmentParam(selectedWall.id, attId, key, value)}
                         />
                         {/* Imported-schema properties (the Schema node's Segment section — Type discriminator
                             + type-conditional fields via showIf). Mirrors the Node Properties tab. */}
@@ -28304,7 +29151,7 @@ User request: ${aiPrompt.trim()}`;
                   </>
                 ) : selectedRoom ? (
                   <p className="text-xs text-slate-500">Selected: Space</p>
-                ) : (
+                ) : selectedObject ? null : (
                   <>
                     <p className="text-xs text-slate-500">Tool: {tool}</p>
                     <p className="text-xs text-slate-500">Zoom: {(scale * 100).toFixed(0)}%</p>
@@ -28741,7 +29588,109 @@ User request: ${aiPrompt.trim()}`;
                       Delete
                     </Button>
                   </div>
-                ) : selectedObject ? (
+                ) : selectedObject && selectedObject.kind === "dimension" ? (() => {
+                  const dim = selectedObject;
+                  const p1 = { x: dim.points[0], y: dim.points[1] };
+                  const p2 = { x: dim.points[2], y: dim.points[3] };
+                  const tick = dim.tickStyle ?? "arrow";
+                  // Metrics (read-only outputs).
+                  const length = distanceInUnit(p1, p2, unit, pixelsPerMeter);
+                  const dxU = distanceInUnit({ x: 0, y: 0 }, { x: Math.abs(p2.x - p1.x), y: 0 }, unit, pixelsPerMeter);
+                  const dyU = distanceInUnit({ x: 0, y: 0 }, { x: Math.abs(p2.y - p1.y), y: 0 }, unit, pixelsPerMeter);
+                  let angle = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+                  if (angle < 0) angle += 360;
+                  const metricRow = (label: string, value: string) => (
+                    <div className="flex items-center justify-between border-b border-slate-100 py-1 last:border-0">
+                      <span className="text-[11px] text-slate-500">{label}</span>
+                      <span className="font-mono text-[11px] text-slate-700">{value}</span>
+                    </div>
+                  );
+                  return (
+                    <>
+                      <p className="text-xs text-slate-500">Selected: Dimension</p>
+
+                      {/* Properties | Metrics tab strip (matches the Segment panel). */}
+                      {!propsSplitView && (
+                        <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                          <button
+                            type="button"
+                            className={`flex-1 px-2.5 py-1.5 text-center transition ${wallPropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                            onClick={() => setWallPropsTab("properties")}
+                            aria-pressed={wallPropsTab === "properties"}
+                          >
+                            Properties
+                          </button>
+                          <button
+                            type="button"
+                            className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${wallPropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                            onClick={() => setWallPropsTab("metrics")}
+                            aria-pressed={wallPropsTab === "metrics"}
+                          >
+                            Metrics
+                          </button>
+                        </div>
+                      )}
+
+                      <div className={propsSplitView ? "grid grid-cols-2 gap-3 items-start" : "contents"}>
+                        {(propsSplitView || wallPropsTab === "properties") && (
+                          <div className="rounded border border-slate-200 bg-white p-2 space-y-2.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
+
+                            {/* Tick marks — arrowheads or slash lines. */}
+                            <div>
+                              <span className="text-[10px] text-slate-400">Tick marks</span>
+                              <div className="mt-0.5 flex gap-1.5">
+                                <Button size="sm" variant={tick === "arrow" ? "default" : "outline"} onClick={() => patchObject(dim.id, { tickStyle: "arrow" })}>Arrow</Button>
+                                <Button size="sm" variant={tick === "line" ? "default" : "outline"} onClick={() => patchObject(dim.id, { tickStyle: "line" })}>Line</Button>
+                              </div>
+                            </div>
+
+                            {/* Colour. */}
+                            <label className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] text-slate-600">Colour</span>
+                              <input type="color" className="h-6 w-10 cursor-pointer rounded border border-slate-200" value={dim.stroke} onChange={(e) => patchObject(dim.id, { stroke: e.target.value })} />
+                            </label>
+
+                            {/* Show line. */}
+                            <label className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] text-slate-600">Show line</span>
+                              <input type="checkbox" className="h-4 w-4" checked={dim.showLine !== false} onChange={(e) => patchObject(dim.id, { showLine: e.target.checked })} />
+                            </label>
+
+                            {/* Show units. */}
+                            <label className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] text-slate-600">Show units</span>
+                              <input type="checkbox" className="h-4 w-4" checked={dim.showUnits !== false} onChange={(e) => patchObject(dim.id, { showUnits: e.target.checked })} />
+                            </label>
+
+                            {/* Offset from the measured segment. */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] text-slate-600">Offset</span>
+                                <span className="font-mono text-[10px] text-slate-500">{Math.round(dim.offset ?? 0)} px</span>
+                              </div>
+                              <input type="range" className="w-full" min={-60} max={60} step={1} value={dim.offset ?? 0} onChange={(e) => patchObject(dim.id, { offset: +e.target.value })} />
+                            </div>
+
+                            <Button size="sm" variant="outline" className="w-full text-rose-600 hover:text-rose-700" onClick={deleteSelected}>Delete</Button>
+                          </div>
+                        )}
+
+                        {(propsSplitView || wallPropsTab === "metrics") && (
+                          <div className="rounded border border-slate-200 bg-white p-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Metrics</span>
+                            <div className="mt-1">
+                              {metricRow("Length", `${length.toFixed(2)} ${unit}`)}
+                              {metricRow("Δ Horizontal", `${dxU.toFixed(2)} ${unit}`)}
+                              {metricRow("Δ Vertical", `${dyU.toFixed(2)} ${unit}`)}
+                              {metricRow("Angle", `${angle.toFixed(1)}°`)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })() : selectedObject ? (
                   <div className="mt-4 rounded border p-2 text-xs">
                     <p className="font-medium">Selected object: {selectedObject.kind}</p>
                     <p>Position: {selectedObject.x.toFixed(1)}, {selectedObject.y.toFixed(1)}</p>
@@ -30948,24 +31897,59 @@ User request: ${aiPrompt.trim()}`;
         onOpenChange={setDrawPathDialogOpen}
         thicknessM={drawPathThicknessInputM}
         onThicknessChange={setDrawPathThicknessInputM}
-        method={drawPathMethodInput}
-        onMethodChange={setDrawPathMethodInput}
+        justify={drawPathJustifyInput}
+        onJustifyChange={setDrawPathJustifyInput}
         style={drawPathStyleInput}
         onStyleChange={setDrawPathStyleInput}
         onStart={() => {
           const tM = parseFloat(drawPathThicknessInputM);
-          const safeThicknessM = isFinite(tM) && tM > 0 ? tM : 0.2;
+          // Allow 0 — a zero-thickness path is committed as a single line (no offset ribbon / Space).
+          const safeThicknessM = isFinite(tM) && tM >= 0 ? tM : 0.2;
           const safeLabel = drawPathLabelInput.trim() || "Path1";
           setActiveDrawPathConfig({
             label: safeLabel,
             thicknessPx: safeThicknessM * pixelsPerMeter,
-            method: drawPathMethodInput,
+            justify: drawPathJustifyInput,
             style: drawPathStyleInput,
           });
           setTool("wall");
           setWallDrawType("polyline");
           setNextWallSegmentType("path");
           setDrawPathDialogOpen(false);
+        }}
+      />
+
+      {/* Add Segment Dialog — prompts display params (mode / thickness / line style / colour / fill),
+          then starts the single-segment draw applying them to each drawn line. */}
+      <AddSegmentDialog
+        open={addSegDialogOpen}
+        onOpenChange={setAddSegDialogOpen}
+        unit={unit}
+        config={addSegConfig}
+        onChange={(patch) => setAddSegConfig((c) => ({ ...c, ...patch }))}
+        onStart={() => {
+          const tU = parseFloat(addSegConfig.thickness);
+          const m = isFinite(tU) && tU >= 0 ? unitToM(tU) : 0.1;
+          activeSegmentConfigRef.current = {
+            thicknessPx: m * pixelsPerMeter,
+            lineStyle: addSegConfig.lineStyle,
+            color: addSegConfig.color,
+            mode: addSegConfig.mode,
+            bufferStyle: addSegConfig.bufferStyle,
+            fill: addSegConfig.fill,
+            method: addSegConfig.method,
+          };
+          pendingNodeTypeRef.current = null;
+          setFurnitureNodeMode(false);
+          setSingleSegStart(null);
+          setSingleSegPreview(null);
+          setSingleSegType("line");
+          setAddDoorMode(false);
+          setAddWindowMode(false);
+          setAddEdgeMode(null);
+          setAddRoomMode(false);
+          setTool("single-segment");
+          setAddSegDialogOpen(false);
         }}
       />
 

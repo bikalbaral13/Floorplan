@@ -11,6 +11,15 @@ export interface WallDisplayBlockProps {
   onToggleShowDirection: (show: boolean) => void;
   /** Swap the wall's source and target endpoints (visual direction reverse). */
   onFlipDirection: () => void;
+  /** Display mode — "line" (thin styled stroke) or "buffered" (thickness band with a cap style). */
+  mode: "line" | "buffered";
+  onModeChange: (m: "line" | "buffered") => void;
+  /** Buffer cap style, used when mode === "buffered". */
+  bufferStyle: "capsule" | "square" | "flat";
+  onBufferStyleChange: (s: "capsule" | "square" | "flat") => void;
+  /** Buffered-mode fill — Filled (solid), Outlined (stroke only, default), or Hatched (pattern). */
+  fill: "filled" | "outlined" | "hatched";
+  onFillChange: (f: "filled" | "outlined" | "hatched") => void;
   /** Justification change — keeps draw-mode default in sync. */
   onJustificationChange: (m: WallMethod) => void;
   /** Stroke style for the segment in 2D (solid / dashed / dotted). */
@@ -35,6 +44,88 @@ export const WallDisplayBlock = (p: WallDisplayBlockProps) => (
     </button>
     {p.expanded && (
       <>
+        {/* Mode — Line (thin styled stroke) or Buffered (thickness band with a cap style). */}
+        <div>
+          <span className="text-[10px] text-slate-400">Mode</span>
+          <div className="mt-0.5 flex flex-wrap gap-1.5">
+            <Button size="sm" variant={p.mode === "line" ? "default" : "outline"} onClick={() => p.onModeChange("line")}>Line</Button>
+            <Button size="sm" variant={p.mode === "buffered" ? "default" : "outline"} onClick={() => p.onModeChange("buffered")}>Buffered</Button>
+          </div>
+        </div>
+        {/* Buffer Style — only meaningful in Buffered mode (cap geometry of the thickness band). */}
+        {p.mode === "buffered" && (
+          <div>
+            <span className="text-[10px] text-slate-400">Buffer Style</span>
+            <div className="mt-0.5 flex flex-wrap gap-1.5">
+              <Button size="sm" variant={p.bufferStyle === "capsule" ? "default" : "outline"} onClick={() => p.onBufferStyleChange("capsule")}>Capsule</Button>
+              <Button size="sm" variant={p.bufferStyle === "square" ? "default" : "outline"} onClick={() => p.onBufferStyleChange("square")}>Square</Button>
+              <Button size="sm" variant={p.bufferStyle === "flat" ? "default" : "outline"} onClick={() => p.onBufferStyleChange("flat")}>Flat (Butt)</Button>
+            </div>
+          </div>
+        )}
+        {/* Fill — Buffered mode only: Filled / Outlined (default) / Hatched. Picking Hatched here is the
+            hatch toggle (no separate "Use Hatch" checkbox); its sub-options appear below. */}
+        {p.mode === "buffered" && (
+          <div className="space-y-1.5">
+            <span className="text-[10px] text-slate-400">Fill</span>
+            <div className="mt-0.5 flex flex-wrap gap-1.5">
+              <Button size="sm" variant={p.fill === "filled" ? "default" : "outline"} onClick={() => p.onFillChange("filled")}>Filled</Button>
+              <Button size="sm" variant={p.fill === "outlined" ? "default" : "outline"} onClick={() => p.onFillChange("outlined")}>Outlined</Button>
+              <Button size="sm" variant={p.fill === "hatched" ? "default" : "outline"} onClick={() => p.onFillChange("hatched")}>Hatched</Button>
+            </div>
+            {p.fill === "hatched" && (
+              <div className="space-y-1.5 rounded border border-slate-100 bg-slate-50 p-1.5">
+                <div>
+                  <span className="text-[10px] text-slate-400">Hatch Style</span>
+                  <div className="mt-0.5 flex flex-wrap gap-1.5">
+                    <Button size="sm" variant={(p.selectedWall.hatchStyle ?? "diagonal") === "diagonal" ? "default" : "outline"} onClick={() => p.onHatchChange({ hatchStyle: "diagonal" })}>
+                      Diagonal
+                    </Button>
+                    <Button size="sm" variant={p.selectedWall.hatchStyle === "dots" ? "default" : "outline"} onClick={() => p.onHatchChange({ hatchStyle: "dots" })}>
+                      Random Dots
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-2">
+                  <div>
+                    <span className="text-[10px] text-slate-400">Spacing (px)</span>
+                    <input
+                      type="number"
+                      min={2}
+                      step={1}
+                      className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                      value={p.selectedWall.hatchSpacing ?? 8}
+                      onChange={(e) => { const v = parseFloat(e.target.value); p.onHatchChange({ hatchSpacing: isFinite(v) && v > 0 ? v : undefined }); }}
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400">Weight</span>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                      value={p.selectedWall.hatchWeight ?? 1}
+                      onChange={(e) => { const v = parseFloat(e.target.value); p.onHatchChange({ hatchWeight: isFinite(v) && v > 0 ? v : undefined }); }}
+                    />
+                  </div>
+                </div>
+                {(p.selectedWall.hatchStyle ?? "diagonal") === "diagonal" && (
+                  <div>
+                    <span className="text-[10px] text-slate-400">Angle (°)</span>
+                    <input
+                      type="number"
+                      step={5}
+                      className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                      value={p.selectedWall.hatchAngle ?? 45}
+                      onChange={(e) => { const v = parseFloat(e.target.value); p.onHatchChange({ hatchAngle: isFinite(v) ? v : undefined }); }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {/* Line style — solid / dashed / dotted (overrides the legacy dashed flag). */}
         <div>
           <span className="text-[10px] text-slate-400">Line Style</span>
@@ -69,83 +160,25 @@ export const WallDisplayBlock = (p: WallDisplayBlockProps) => (
             <span className="text-[10px] text-slate-500">{p.selectedWall.color || "#334155"}</span>
           </div>
         </div>
-        {/* Hatch fill — fill the segment's interior with a pattern instead of a solid colour. */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
-            <input
-              type="checkbox"
-              checked={!!p.selectedWall.hatch}
-              onChange={(e) => p.onHatchChange({ hatch: e.target.checked })}
-            />
-            Use Hatch
-          </label>
-          {p.selectedWall.hatch && (
-            <div className="space-y-1.5 rounded border border-slate-100 bg-slate-50 p-1.5">
-              <div>
-                <span className="text-[10px] text-slate-400">Hatch Style</span>
-                <div className="mt-0.5 flex flex-wrap gap-1.5">
-                  <Button size="sm" variant={(p.selectedWall.hatchStyle ?? "diagonal") === "diagonal" ? "default" : "outline"} onClick={() => p.onHatchChange({ hatchStyle: "diagonal" })}>
-                    Diagonal
-                  </Button>
-                  <Button size="sm" variant={p.selectedWall.hatchStyle === "dots" ? "default" : "outline"} onClick={() => p.onHatchChange({ hatchStyle: "dots" })}>
-                    Random Dots
-                  </Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-x-2">
-                <div>
-                  <span className="text-[10px] text-slate-400">Spacing (px)</span>
-                  <input
-                    type="number"
-                    min={2}
-                    step={1}
-                    className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                    value={p.selectedWall.hatchSpacing ?? 8}
-                    onChange={(e) => { const v = parseFloat(e.target.value); p.onHatchChange({ hatchSpacing: isFinite(v) && v > 0 ? v : undefined }); }}
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400">Weight</span>
-                  <input
-                    type="number"
-                    min={0.5}
-                    step={0.5}
-                    className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                    value={p.selectedWall.hatchWeight ?? 1}
-                    onChange={(e) => { const v = parseFloat(e.target.value); p.onHatchChange({ hatchWeight: isFinite(v) && v > 0 ? v : undefined }); }}
-                  />
-                </div>
-              </div>
-              {(p.selectedWall.hatchStyle ?? "diagonal") === "diagonal" && (
-                <div>
-                  <span className="text-[10px] text-slate-400">Angle (°)</span>
-                  <input
-                    type="number"
-                    step={5}
-                    className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
-                    value={p.selectedWall.hatchAngle ?? 45}
-                    onChange={(e) => { const v = parseFloat(e.target.value); p.onHatchChange({ hatchAngle: isFinite(v) ? v : undefined }); }}
-                  />
-                </div>
-              )}
+        {/* Justification — only applies to a Buffered band (which side of the centerline it sits on).
+            A Line segment has no width, so it's hidden in Line mode. */}
+        {p.mode === "buffered" && (
+          <div>
+            <span className="text-[10px] text-slate-400">Justification</span>
+            <div className="mt-0.5 flex flex-wrap gap-1.5">
+              <Button size="sm" variant={(p.selectedWall.method ?? "center") === "left" ? "default" : "outline"} onClick={() => p.onJustificationChange("left")}>
+                Left
+              </Button>
+              <Button size="sm" variant={(p.selectedWall.method ?? "center") === "center" ? "default" : "outline"} onClick={() => p.onJustificationChange("center")}>
+                Center
+              </Button>
+              <Button size="sm" variant={(p.selectedWall.method ?? "center") === "right" ? "default" : "outline"} onClick={() => p.onJustificationChange("right")}>
+                Right
+              </Button>
             </div>
-          )}
-        </div>
-        <div>
-          <span className="text-[10px] text-slate-400">Justification</span>
-          <div className="mt-0.5 flex flex-wrap gap-1.5">
-            <Button size="sm" variant={(p.selectedWall.method ?? "center") === "left" ? "default" : "outline"} onClick={() => p.onJustificationChange("left")}>
-              Left
-            </Button>
-            <Button size="sm" variant={(p.selectedWall.method ?? "center") === "center" ? "default" : "outline"} onClick={() => p.onJustificationChange("center")}>
-              Center
-            </Button>
-            <Button size="sm" variant={(p.selectedWall.method ?? "center") === "right" ? "default" : "outline"} onClick={() => p.onJustificationChange("right")}>
-              Right
-            </Button>
+            <p className="mt-0.5 text-[9px] text-slate-400">Press Tab while drawing to cycle.</p>
           </div>
-          <p className="mt-0.5 text-[9px] text-slate-400">Press Tab while drawing to cycle.</p>
-        </div>
+        )}
         <label className="flex items-center gap-1 text-[10px] text-slate-600">
           <input
             type="checkbox"

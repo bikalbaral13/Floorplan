@@ -20,6 +20,10 @@ export interface WallInputsBlockProps {
   /** Mutate the selected wall by replacing it with the updater's return value. The
    *  parent wraps this in a `history.set` over `walls.map(...)`. */
   updateSelectedWall: (updater: (w: Wall) => Wall) => void;
+  /** Set the segment thickness (in px). When provided, the parent also mirrors the value into the
+   *  segment's `wall-thickness` graphAttr so a loaded schema / flow band reflects it. Falls back to
+   *  `updateSelectedWall` when omitted. */
+  onSetThicknessPx?: (px: number) => void;
   /** Justification change uses a dedicated parent helper that also keeps draw-mode
    *  state in sync. */
   onJustificationChange: (m: WallMethod) => void;
@@ -96,8 +100,26 @@ export const WallInputsBlock = (p: WallInputsBlockProps) => {
               }}
             />
           </div>
-          {/* All other segment properties (Segment Type, type-specific fields, height, thickness, …) are
-              controlled via the Flow node graph, so only ID + Label are shown here. */}
+          {/* Thickness — the segment's band width, edited in the active display unit (stored in px). */}
+          <div>
+            <span className="text-[10px] text-slate-400">Thickness ({p.unit})</span>
+            <input
+              type="number"
+              min={0}
+              step={p.unitStep()}
+              className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono"
+              value={Number(p.mInUnit((w.thickness ?? 0) / p.pixelsPerMeter).toFixed(p.unitDecimals()))}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                if (!isFinite(v) || v < 0) return;
+                const px = p.unitToM(v) * p.pixelsPerMeter;
+                if (p.onSetThicknessPx) p.onSetThicknessPx(px);
+                else p.updateSelectedWall((wall) => ({ ...wall, thickness: px }));
+              }}
+            />
+          </div>
+          {/* Other segment properties (Segment Type, type-specific fields, height, …) are controlled
+              via the Flow node graph / Schema; ID + Label + Thickness are canvas-operable here. */}
         </>
       )}
     </div>

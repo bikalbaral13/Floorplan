@@ -53,8 +53,18 @@ export interface Wall {
   hatchAngle?: number;
   /** Hatch line thickness / dot radius factor. Default 1. */
   hatchWeight?: number;
+  /** Parametric object instances attached to this segment (e.g. a parametric Door), each referencing a
+   *  library object id + its per-instance params + position along the segment. */
+  attachments?: SegmentAttachment[];
+  /** This wall piece is the OPENING gap cut for an attached parametric object — it renders as a hole in
+   *  the band (no fill/stroke), and the object's symbol/geometry fills it. */
+  isObjectOpening?: boolean;
   /** fill = solid wall; outline = hollow rectangle stroke only */
   mode?: WallMode;
+  /** Display block "Buffered" mode — when set, the segment renders as a thickness band with this cap
+   *  style (capsule = rounded, square = extended, flat = butt), surviving Graph view. Absent = Line mode
+   *  (thin styled stroke). Mirrors the flow "Display Segment" node's buffer style. */
+  bufferStyle?: "capsule" | "square" | "flat";
   /** How the start→end spine aligns to the wall thickness */
   method?: WallMethod;
   /** Segment type: built-in (`wall` / `door` / `window` / `plot-boundary` / `path`) or a
@@ -513,7 +523,7 @@ export interface SerializedFlow {
   edges: SerializedFlowEdge[];
 }
 
-export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "segment";
+export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "segment" | "dimension";
 
 /** Scope filter applied while the Select tool is active.
  *  - "all": pick anything (current behavior — default).
@@ -523,7 +533,7 @@ export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "
  *  - "graph": clicking any segment selects its whole connected component (links + shared-endpoint
  *    nodes) — a flood-fill across junctions, so a drawn network selects as one unit.
  *  Doors/windows/objects always fall back to "all" — only available without a scope. */
-export type SelectFilter = "all" | "node" | "segment" | "space" | "graph" | "image" | "grid";
+export type SelectFilter = "all" | "node" | "segment" | "space" | "graph" | "image" | "grid" | "dimension";
 
 export type Tool =
   | "select"
@@ -547,7 +557,9 @@ export type Tool =
   /** "Add Space → Shapes → Circle" — click center, drag for radius, type exact radius. */
   | "space-circle"
   /** "Add Segment" (drawing toolbar) — click-click for a single straight line segment. */
-  | "single-segment";
+  | "single-segment"
+  /** "Dimension" (drawing toolbar) — click two points to place a standalone Dimension annotation. */
+  | "dimension";
 
 export interface BaseObject {
   id: string;
@@ -604,7 +616,61 @@ export interface SegmentObject extends BaseObject {
   constraint?: AdjacencyConstraint;
 }
 
-export type FloorObject = RectObject | CircleObject | PolygonObject | FreehandObject | TextObject | SegmentObject;
+/** A dimension annotation: a measured line between two world points, rendered with end ticks
+ *  (arrowheads or slash marks), the measured length as a label, and optional perpendicular offset.
+ *  It is a selectable canvas object; its `stroke` is the line/text colour. Length is computed live
+ *  from `points` + the current unit, so changing units re-labels it automatically. */
+export interface DimensionObject extends BaseObject {
+  kind: "dimension";
+  /** Measured endpoints in world px: [x1, y1, x2, y2]. */
+  points: number[];
+  /** End-tick style — arrowheads ("arrow") or 45° architectural slashes ("line"). Defaults to "arrow". */
+  tickStyle?: "arrow" | "line";
+  /** Draw the dimension line connecting the two ends. Defaults to true. */
+  showLine?: boolean;
+  /** Append the current unit (m / ft / cm) to the length label. Defaults to true. */
+  showUnits?: boolean;
+  /** Perpendicular offset (px) of the dimension line from the measured segment (0 = on the segment). */
+  offset?: number;
+}
+
+export type FloorObject = RectObject | CircleObject | PolygonObject | FreehandObject | TextObject | SegmentObject | DimensionObject;
+
+/** One adjustable Input Property of a parametric object file (Door / Window / …). Mirrors the
+ *  Schema/Flow param shape so the existing property renderers can drive it. */
+export interface ParametricObjectParam {
+  key: string;
+  label: string;
+  kind: "number" | "select" | "checkbox" | "text" | "color";
+  default: number | string | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  options?: { value: string; label: string }[];
+}
+
+/** A self-contained parametric object loaded from a `.pobj.json` file — its identity + Input Properties
+ *  schema. (The geometry generator is a follow-up; this carries the metadata + parameters so instances
+ *  can be attached to segments and edited in the Properties tab.) */
+export interface ParametricObjectFile {
+  kind: "parametric-object";
+  version: number;
+  meta: { id: string; name: string; category?: string; units?: string };
+  parameters: ParametricObjectParam[];
+}
+
+/** An instance of a parametric object bound to a host segment: which library object, its per-instance
+ *  parameter values, and host placement (position `t` along the segment 0..1, and which side it faces). */
+export interface SegmentAttachment {
+  id: string;
+  objectId: string;
+  params: Record<string, number | string | boolean>;
+  /** Position along the host segment, 0 (start) → 1 (end). */
+  t: number;
+  /** Mirror the object to the other side of the segment. */
+  flip?: boolean;
+}
 
 export interface FurnitureItem {
   id: string;
@@ -853,6 +919,9 @@ export interface FloorPlanModel {
   /** User-defined segment-type registry. Keyed by slug (= the value stored in wall.segmentType).
    *  Built-ins (`wall`, `door`, `window`, `plot-boundary`) are NOT stored here. */
   customSegmentTypes?: Record<string, AreaTypeDef>;
+  /** Imported parametric object files (Door / Window / …), keyed by object id. Segment attachments
+   *  reference these; persisted so a project keeps its object library. */
+  objectLibrary?: Record<string, ParametricObjectFile>;
   /** AutoCAD-style layer table. Always non-empty (a default `"0"` layer is seeded).
    *  Per-entity `layerId` references entries here; missing/unknown references resolve to `"0"`. */
   layers?: Layer[];
@@ -910,6 +979,7 @@ export const DEFAULT_FOOTPRINT_LAYER_ID = "footprint-area";
 export const DEFAULT_BASEMENT_LAYER_ID = "basement-area";
 export const DEFAULT_INSET_LAYER_ID = "inset-area";
 export const DEFAULT_DEDUCTION_LAYER_ID = "deduction-area";
+export const DEFAULT_DIMENSION_LAYER_ID = "dimension";
 /** Layer IDs grouped under the foldable "Site" block in the Layers panel.
  *  Membership drives both the UI grouping and any future "lock the whole
  *  Site cascade" actions. */
@@ -927,6 +997,7 @@ export const DEFAULT_GROUP_LAYER_IDS: ReadonlySet<string> = new Set([
   DEFAULT_LAYER_ID,
   DEFAULT_IMAGE_LAYER_ID,
   DEFAULT_MAP_LAYER_ID,
+  DEFAULT_DIMENSION_LAYER_ID,
 ]);
 /** The seed layer table. Intentionally MINIMAL — only the built-in Layer "0". All type layers
  *  (Wall / Door / Window / Node / Segment …) are now SCHEMA-DRIVEN: load a workflow template whose
@@ -942,6 +1013,8 @@ export const defaultLayerTable = (): Layer[] => [
   // Map is a system layer (not a drawing-type layer): seeded but hidden. Toggling it visible opens the
   // OSM search panel; an imported GeoJSON / OSM overlay renders under the drawing when it's visible.
   { id: DEFAULT_MAP_LAYER_ID,   name: "Map",   color: "#0284c7", visible: false, locked: false, order: 2 },
+  // Dimension annotations layer — toggle to hide / show all dimension objects at once.
+  { id: DEFAULT_DIMENSION_LAYER_ID, name: "Dimension", color: "#b45309", visible: true, locked: false, order: 3 },
 ];
 
 /** Layer for a given Space (room) type. Drives the auto-assignment in the
