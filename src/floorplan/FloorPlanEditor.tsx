@@ -1563,8 +1563,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  "individual" = standalone per-segment band (no join). Canvas-wide rendering policy. */
   const [bufferJoinMode, setBufferJoinMode] = useState<"mitered" | "mitered-union" | "individual">("mitered");
   /** When on (Preferences), a Space detected from buffered segments is inset to the band's INNER edge —
-   *  so the green fill shows only the clear inner area, subtracting the buffered segment thickness. */
-  const [subtractBufferedFromSpace, setSubtractBufferedFromSpace] = useState<boolean>(false);
+   *  so the green fill shows only the clear inner area, subtracting the buffered segment thickness.
+   *  On by default. */
+  const [subtractBufferedFromSpace, setSubtractBufferedFromSpace] = useState<boolean>(true);
   /** Expanded state of the Segment Properties "Parametric Object" block. */
   const [segObjExpanded, setSegObjExpanded] = useState<boolean>(true);
   /** Expanded state of the Node Properties Display + Parametric Object blocks. */
@@ -1886,18 +1887,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [showCenterDimPref, setShowCenterDimPref] = useState<boolean>(false);
   /** Active "template" — the schema/semantics (Node / Segment / Space / Settings property definitions +
    *  type names + icons), independent of the Flow graph. Loading one wires its types + properties into the
-   *  drawing tools, Layers, and Properties tab WITHOUT running any geometry pipeline. Persisted to
-   *  localStorage so it survives reloads. */
-  const [activeTemplate, setActiveTemplateState] = useState<TemplateParams | null>(() => {
-    try { const raw = localStorage.getItem("floorplan-active-template-v1"); return raw ? (JSON.parse(raw) as TemplateParams) : null; } catch { return null; }
-  });
-  const setActiveTemplate = useCallback((t: TemplateParams | null) => {
-    setActiveTemplateState(t);
-    try {
-      if (t) localStorage.setItem("floorplan-active-template-v1", JSON.stringify(t));
-      else localStorage.removeItem("floorplan-active-template-v1");
-    } catch { /* ignore quota / privacy-mode errors */ }
-  }, []);
+   *  drawing tools, Layers, and Properties tab WITHOUT running any geometry pipeline. The app always boots
+   *  with NO template loaded (so Ortho / units stay at canvas defaults); the user picks one from the
+   *  Template dialog each session. Not persisted across reloads. */
+  const [activeTemplate, setActiveTemplate] = useState<TemplateParams | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState<boolean>(false);
   const templateSamples = useMemo<TemplateSample[]>(() => [{ name: "Floorplan Tracer", params: FLOORPLAN_SCHEMA_PARAMS as TemplateParams }], []);
   /** The active template converted to Properties-tab definitions (same converter the flow Schema node
@@ -3051,7 +3044,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [infoExpanded, setInfoExpanded] = useState<boolean>(true);
   const [infoExpandedEntries, setInfoExpandedEntries] = useState<Set<string>>(() => new Set());
   // Per-panel collapse state (Properties / Tools / Info). Header stays visible; body hides when off.
-  const [propertiesPanelExpanded, setPropertiesPanelExpanded] = useState<boolean>(false);
+  // Properties opens expanded on load so the Properties / Metrics tab is visible by default.
+  const [propertiesPanelExpanded, setPropertiesPanelExpanded] = useState<boolean>(true);
   const [toolsPanelExpanded, setToolsPanelExpanded] = useState<boolean>(true);
   const [infoPanelExpanded, setInfoPanelExpanded] = useState<boolean>(true);
   // Space Tools — hierarchical algorithm tree replacing the per-block render in the
@@ -12396,12 +12390,15 @@ User request: ${aiPrompt.trim()}`;
     return [polygon];
   };
 
-  /** Iteratively offset the polygon inward by `delta` (pixels). Returns the new polygon (possibly
-   *  self-intersecting), or null if it has fully collapsed (empty, or bounding-box too small). Callers
-   *  should pass the result through `untangleSelfIntersections` to split it into simple loops. */
-  const offsetPolygonInward = (pts: Point[], delta: number): Point[] | null => {
+  /** Iteratively offset the polygon inward by `delta` (pixels). `delta` may be a single value (uniform
+   *  inset) or a per-edge array where `delta[i]` applies to the edge from `pts[i]` to `pts[i+1]` — used so a
+   *  room bounded by segments of different widths insets each side by its own half-thickness. Returns the
+   *  new polygon (possibly self-intersecting), or null if it has fully collapsed (empty, or bounding-box too
+   *  small). Callers should pass the result through `untangleSelfIntersections` to split it into simple loops. */
+  const offsetPolygonInward = (pts: Point[], delta: number | number[]): Point[] | null => {
     const N = pts.length;
     if (N < 3) return null;
+    const deltaAt = (i: number) => (typeof delta === "number" ? delta : (delta[i] ?? 0));
     let sa = 0;
     for (let i = 0; i < N; i++) {
       const a = pts[i], b = pts[(i + 1) % N];
@@ -12420,12 +12417,13 @@ User request: ${aiPrompt.trim()}`;
     for (let i = 0; i < N; i++) {
       const prev = (i - 1 + N) % N;
       const nPrev = normals[prev], nCurr = normals[i];
-      const p1x = pts[prev].x + delta * nPrev.nx;
-      const p1y = pts[prev].y + delta * nPrev.ny;
+      const dPrev = deltaAt(prev), dCurr = deltaAt(i);
+      const p1x = pts[prev].x + dPrev * nPrev.nx;
+      const p1y = pts[prev].y + dPrev * nPrev.ny;
       const d1x = pts[i].x - pts[prev].x;
       const d1y = pts[i].y - pts[prev].y;
-      const p2x = pts[i].x + delta * nCurr.nx;
-      const p2y = pts[i].y + delta * nCurr.ny;
+      const p2x = pts[i].x + dCurr * nCurr.nx;
+      const p2y = pts[i].y + dCurr * nCurr.ny;
       const d2x = pts[(i + 1) % N].x - pts[i].x;
       const d2y = pts[(i + 1) % N].y - pts[i].y;
       const cross = d1x * d2y - d1y * d2x;
@@ -12434,7 +12432,8 @@ User request: ${aiPrompt.trim()}`;
         const nx = (nPrev.nx + nCurr.nx);
         const ny = (nPrev.ny + nCurr.ny);
         const nl = Math.hypot(nx, ny) || 1;
-        result.push({ x: pts[i].x + (delta * nx) / nl, y: pts[i].y + (delta * ny) / nl });
+        const dAvg = (dPrev + dCurr) / 2;
+        result.push({ x: pts[i].x + (dAvg * nx) / nl, y: pts[i].y + (dAvg * ny) / nl });
       } else {
         const t = ((p2x - p1x) * d2y - (p2y - p1y) * d2x) / cross;
         result.push({ x: p1x + t * d1x, y: p1y + t * d1y });
@@ -22035,39 +22034,51 @@ User request: ${aiPrompt.trim()}`;
                     const wallHalfThicknessPx = layerVisibility.viewGraph
                       ? 0
                       : (getCurrentWallStyle().thickness ?? 10) / 2;
-                    // "Subtract segment for Space" (Preferences): inset the fill to the INNER edge of the
-                    // buffered segments bounding this room (their half-thickness), even in Graph view — so
-                    // the green shows only the clear inner area, not under the band. Uses the max bounding
-                    // buffered thickness (centre-justification assumption: inner extent = thickness/2).
-                    let bufferedHalfPx = 0;
-                    if (subtractBufferedFromSpace) {
-                      const rpts = room.points;
-                      const distToEdges = (mx: number, my: number) => {
-                        let d = Infinity;
-                        for (let i = 0; i < rpts.length; i++) {
-                          const a = rpts[i], b = rpts[(i + 1) % rpts.length];
-                          const vx = b.x - a.x, vy = b.y - a.y, L2 = vx * vx + vy * vy || 1;
-                          let t = ((mx - a.x) * vx + (my - a.y) * vy) / L2;
-                          t = Math.max(0, Math.min(1, t));
-                          const dx = mx - (a.x + t * vx), dy = my - (a.y + t * vy);
-                          d = Math.min(d, Math.hypot(dx, dy));
+                    // "Subtract segment for Space" (Preferences): inset each boundary edge to the INNER face
+                    // of the buffered segment bounding THAT edge (its own half-thickness), even in Graph view
+                    // — so the green shows only the clear inner area, not under the band. Per-edge (not a
+                    // single max across the room) so a room bounded by segments of different widths insets
+                    // correctly on each side; centre-justification assumption: inner extent = thickness/2.
+                    // Edges with no buffered segment fall back to the default wall half-thickness.
+                    const edgeInsets = (ring: Point[]): number[] => {
+                      const M = ring.length;
+                      const out = new Array<number>(M).fill(wallHalfThicknessPx);
+                      if (!subtractBufferedFromSpace) return out;
+                      for (let i = 0; i < M; i++) {
+                        const a = ring[i], b = ring[(i + 1) % M];
+                        const ex = b.x - a.x, ey = b.y - a.y;
+                        const eL = Math.hypot(ex, ey) || 1e-9;
+                        const eux = ex / eL, euy = ey / eL;
+                        let half = 0;
+                        for (const w of history.state.walls) {
+                          if (!w.bufferStyle || w.segmentType === "path") continue;
+                          // Only a segment collinear with this edge bounds it: its direction must be parallel
+                          // (|sin θ| small) and its midpoint must project onto the edge span (within ~8px).
+                          const wx = w.end.x - w.start.x, wy = w.end.y - w.start.y;
+                          const wL = Math.hypot(wx, wy) || 1e-9;
+                          if (Math.abs((eux * wy - euy * wx) / wL) > 0.2) continue;
+                          const mx = (w.start.x + w.end.x) / 2, my = (w.start.y + w.end.y) / 2;
+                          let t = (mx - a.x) * eux + (my - a.y) * euy;
+                          t = Math.max(0, Math.min(eL, t));
+                          if (Math.hypot(mx - (a.x + t * eux), my - (a.y + t * euy)) < 8) {
+                            half = Math.max(half, (w.thickness ?? 0) / 2);
+                          }
                         }
-                        return d;
-                      };
-                      for (const w of history.state.walls) {
-                        if (!w.bufferStyle || w.segmentType === "path") continue;
-                        if (distToEdges((w.start.x + w.end.x) / 2, (w.start.y + w.end.y) / 2) < 8) {
-                          bufferedHalfPx = Math.max(bufferedHalfPx, (w.thickness ?? 0) / 2);
-                        }
+                        out[i] = Math.max(wallHalfThicknessPx, half);
                       }
-                    }
-                    const insetPx = Math.max(wallHalfThicknessPx, bufferedHalfPx);
-                    const renderOuter = insetPx > 0.5
-                      ? (offsetPolygonInward(room.points, insetPx) ?? room.points)
+                      return out;
+                    };
+                    const outerInsets = edgeInsets(room.points);
+                    const renderOuter = outerInsets.some((d) => d > 0.5)
+                      ? (offsetPolygonInward(room.points, outerInsets) ?? room.points)
                       : room.points;
-                    const renderHoles = insetPx > 0.5
-                      ? roomHoles.map((h) => offsetPolygonInward(h, -insetPx) ?? h)
-                      : roomHoles;
+                    // Holes (boundaries against an inner space) offset OUTWARD: negate each per-edge inset.
+                    const renderHoles = roomHoles.map((h) => {
+                      const hi = edgeInsets(h);
+                      return hi.some((d) => d > 0.5)
+                        ? (offsetPolygonInward(h, hi.map((d) => -d)) ?? h)
+                        : h;
+                    });
                     return (
                       <Group key={roomReactKey}>
                         {isRoomSelected && layerVisibility.seeds && (
@@ -27028,6 +27039,17 @@ User request: ${aiPrompt.trim()}`;
                     const rgbA = `rgba(${c[0]},${c[1]},${c[2]},0.35)`;
                     const outerR = 8 / scale;
                     const innerR = 3.5 / scale;
+                    // Per-seed metrics shown beside the marker: room label, area and aspect ratio. Area /
+                    // ratio turn red when the room's constraints are violated — same definitions the SA
+                    // scorer uses (area from rect.w·h in m², ratio = longer / shorter side).
+                    const seedAreaM2 = (rect.w * rect.h) / (ppm * ppm);
+                    const seedAreaViolated = !!roomSpec && (
+                      (roomSpec.minArea !== undefined && roomSpec.minArea > 0 && seedAreaM2 < roomSpec.minArea) ||
+                      (roomSpec.maxArea !== undefined && seedAreaM2 > roomSpec.maxArea)
+                    );
+                    const seedRatio = Math.max(rect.w / (rect.h || 1), rect.h / (rect.w || 1));
+                    const seedRatioViolated = roomSpec?.maxRatio !== undefined && seedRatio > roomSpec.maxRatio;
+                    const seedLabelW = 130 / scale;
                     return (
                       <Group
                         key={`seed-${rect.label}`}
@@ -27146,6 +27168,28 @@ User request: ${aiPrompt.trim()}`;
                               fill={isDragging ? "#f59e0b" : isFirstPick ? (addEdgeMode === "connection" ? "#16a34a" : "#3b82f6") : isSelected ? "#f59e0b" : rgb} />
                           </>
                         )}
+                        {/* Room label · area · aspect ratio beside the seed. Area / ratio render red when
+                            the room's constraint is violated, green otherwise. Non-interactive so it never
+                            steals the seed's drag / click. */}
+                        <Group y={outerR + 4 / scale} listening={false}>
+                          <Text
+                            x={-seedLabelW / 2} width={seedLabelW} align="center"
+                            fontSize={11 / scale} fontStyle="bold" fill="#0f172a"
+                            text={rect.label}
+                          />
+                          <Text
+                            y={12 / scale}
+                            x={-seedLabelW / 2} width={seedLabelW} align="center"
+                            fontSize={10 / scale} fill={seedAreaViolated ? "#dc2626" : "#16a34a"}
+                            text={`Area: ${areaInSquareUnit(rect.w * rect.h, unit, pixelsPerMeter).toFixed(2)} ${unit}²`}
+                          />
+                          <Text
+                            y={23 / scale}
+                            x={-seedLabelW / 2} width={seedLabelW} align="center"
+                            fontSize={10 / scale} fill={seedRatioViolated ? "#dc2626" : "#16a34a"}
+                            text={`Ratio: ${seedRatio.toFixed(2)}${roomSpec?.maxRatio ? ` / ${roomSpec.maxRatio}` : ""}`}
+                          />
+                        </Group>
                       </Group>
                     );
                   }))}

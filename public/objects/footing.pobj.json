@@ -1,0 +1,170 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "footing.column.v1", "name": "Footing", "category": "Structure/Foundations", "units": "m" },
+  "parameters": [
+    { "key": "type", "label": "Footing type", "kind": "select", "default": "sloped", "options": [
+      { "value": "spread", "label": "Spread (flat RCC pad)" },
+      { "value": "sloped", "label": "Sloped (trapezoidal frustum)" },
+      { "value": "stepped", "label": "Stepped (tiered pads)" }
+    ] },
+    { "key": "columnWidth", "label": "Column width (X)", "kind": "number", "default": 0.3, "min": 0.05, "max": 2, "step": 0.05, "unit": "m" },
+    { "key": "columnDepth", "label": "Column depth (Z)", "kind": "number", "default": 0.3, "min": 0.05, "max": 2, "step": 0.05, "unit": "m" },
+    { "key": "columnHeight", "label": "Column height", "kind": "number", "default": 1.0, "min": 0.1, "max": 6, "step": 0.1, "unit": "m" },
+    { "key": "baseWidth", "label": "Base width (X)", "kind": "number", "default": 1.5, "min": 0.2, "max": 6, "step": 0.05, "unit": "m" },
+    { "key": "baseDepth", "label": "Base depth (Z)", "kind": "number", "default": 1.5, "min": 0.2, "max": 6, "step": 0.05, "unit": "m" },
+    { "key": "rccThickness", "label": "RCC base thickness", "kind": "number", "default": 0.2, "min": 0.05, "max": 1.5, "step": 0.025, "unit": "m" },
+    { "key": "frustumHeight", "label": "Frustum / slope height", "kind": "number", "default": 0.2, "min": 0.05, "max": 1.5, "step": 0.025, "unit": "m" },
+    { "key": "frustumTopWidth", "label": "Frustum top width (X)", "kind": "number", "default": 0.6, "min": 0.05, "max": 6, "step": 0.05, "unit": "m" },
+    { "key": "frustumTopDepth", "label": "Frustum top depth (Z)", "kind": "number", "default": 0.6, "min": 0.05, "max": 6, "step": 0.05, "unit": "m" },
+    { "key": "frustumSlices", "label": "Frustum slices (3D smoothness)", "kind": "number", "default": 8, "min": 1, "max": 24, "step": 1 },
+    { "key": "steps", "label": "Steps (stepped type)", "kind": "number", "default": 3, "min": 1, "max": 10, "step": 1 },
+    { "key": "pccThickness", "label": "PCC levelling thickness", "kind": "number", "default": 0.1, "min": 0, "max": 0.6, "step": 0.025, "unit": "m" },
+    { "key": "solingThickness", "label": "Soling / hardcore thickness", "kind": "number", "default": 0.1, "min": 0, "max": 0.6, "step": 0.025, "unit": "m" },
+    { "key": "skew", "label": "Eccentricity", "kind": "select", "default": "center", "options": [
+      { "value": "left", "label": "Eccentric (grows left, right face flush)" },
+      { "value": "center", "label": "Centred (concentric)" },
+      { "value": "right", "label": "Eccentric (grows right, left face flush)" }
+    ] },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#7c3aed" }
+  ],
+
+  "geometry": {
+    "description": "Self-contained column-footing generator mirroring footing.ts (toFootingSpec + buildFootingLayers). Emits a stack of solid boxes in a LOCAL frame: X = width axis, Y(plan) = depth axis (Z), and h = height where h = -v (v = distance DOWNWARD from the node = the column top), so the column descends from the node and the footing body sits at/below grade. Each view projects these boxes: plan = top-down (X, Z) footprints; 3D mesh = one prism per box (h0->h1). NOTE: the generic engine can only extrude CONSTANT footprints and renders a SINGLE colour, so the sloped frustum is approximated by `frustumSlices` tapering boxes and the per-layer materials (RCC / PCC / soling tints) collapse to one colour — the dedicated Footing flow node keeps the true loft and per-layer colours.",
+    "units": "m",
+    "emit": "boxes",
+
+    "expressions": {
+      "_doc": "Every numeric field below is an expression string over the scope (parameters + vars + the active loop variable). No arbitrary code — only this grammar.",
+      "operators": ["+", "-", "*", "/", "%", "( )", "comparison: == != < <= > >=", "logical: && ||", "ternary: cond ? a : b", "unary - / !"],
+      "functions": ["min", "max", "floor", "ceil", "round", "abs", "sqrt", "cos", "sin", "tan", "atan2", "pow"],
+      "stringLiterals": "single-quoted, e.g. type == 'sloped'"
+    },
+
+    "vars": {
+      "_doc": "Evaluated in order; later entries may reference earlier ones. Mirrors toFootingSpec's clamping so this file is the single source of truth. Half-extents (h*) are halves of the full widths/depths. `sk` is the eccentric sign; `cxBase` is the centre-X of the full base footprint after the skew shift (footing.ts cxFor with hw = baseHW).",
+      "CW": "max(0.02, columnWidth)",
+      "CD": "max(0.02, columnDepth)",
+      "BW": "max(CW, baseWidth)",
+      "BD": "max(CD, baseDepth)",
+      "CH": "max(0.05, columnHeight)",
+      "RCC": "max(0.01, rccThickness)",
+      "PCC": "max(0, pccThickness)",
+      "SOL": "max(0, solingThickness)",
+      "FH": "max(0.01, frustumHeight)",
+      "FTW": "min(BW, max(CW, frustumTopWidth))",
+      "FTD": "min(BD, max(CD, frustumTopDepth))",
+      "cHW": "CW / 2",
+      "cHD": "CD / 2",
+      "bHW": "BW / 2",
+      "bHD": "BD / 2",
+      "ftHW": "FTW / 2",
+      "ftHD": "FTD / 2",
+      "sk": "skew == 'left' ? -1 : (skew == 'right' ? 1 : 0)",
+      "cxBase": "sk < 0 ? (cHW - bHW) : (sk > 0 ? (bHW - cHW) : 0)"
+    },
+
+    "cases": [
+      {
+        "when": "type == 'spread'",
+        "description": "Flat RCC pad directly under the column. Column -> RCC pad -> (PCC) -> (soling).",
+        "vars": {
+          "vRcc": "CH + RCC",
+          "vPcc": "CH + RCC + PCC",
+          "vSol": "CH + RCC + PCC + SOL"
+        },
+        "rules": [
+          { "comment": "column stem (centred on the node, descends from grade)",
+            "box": { "x0": "-cHW", "x1": "cHW", "y0": "-cHD", "y1": "cHD", "h0": "0", "h1": "-CH" } },
+          { "comment": "RCC base pad — full base footprint",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-CH", "h1": "-vRcc" } },
+          { "comment": "PCC levelling course",
+            "when": "PCC > 0",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-vRcc", "h1": "-vPcc" } },
+          { "comment": "soling / hardcore",
+            "when": "SOL > 0",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-vPcc", "h1": "-vSol" } }
+        ]
+      },
+      {
+        "when": "type == 'sloped'",
+        "description": "Trapezoidal frustum tapering from the frustum-top footprint (just under the column) out to the full base, then a flat RCC pad. The loft is approximated by SL stacked slices, each a constant box sized at its mid-height taper. Each slice keeps depth centred and obeys the eccentric skew on X.",
+        "vars": {
+          "SL": "max(1, round(frustumSlices))",
+          "vFru": "CH + FH",
+          "vRcc": "CH + FH + RCC",
+          "vPcc": "CH + FH + RCC + PCC",
+          "vSol": "CH + FH + RCC + PCC + SOL"
+        },
+        "rules": [
+          { "comment": "column stem",
+            "box": { "x0": "-cHW", "x1": "cHW", "y0": "-cHD", "y1": "cHD", "h0": "0", "h1": "-CH" } },
+          { "comment": "sloped frustum — SL slices, half-width hw = ftHW + (bHW-ftHW)*((i+0.5)/SL) at the slice mid-height; X faces follow the skew (left->right face flush at cHW, right->left face flush at -cHW, centre->symmetric)",
+            "repeat": "SL", "as": "i",
+            "box": {
+              "x0": "sk < 0 ? (cHW - 2*(ftHW + (bHW - ftHW)*((i + 0.5)/SL))) : (sk > 0 ? -cHW : -(ftHW + (bHW - ftHW)*((i + 0.5)/SL)))",
+              "x1": "sk < 0 ? cHW : (sk > 0 ? (2*(ftHW + (bHW - ftHW)*((i + 0.5)/SL)) - cHW) : (ftHW + (bHW - ftHW)*((i + 0.5)/SL)))",
+              "y0": "-(ftHD + (bHD - ftHD)*((i + 0.5)/SL))",
+              "y1": "(ftHD + (bHD - ftHD)*((i + 0.5)/SL))",
+              "h0": "-(CH + FH*(i/SL))",
+              "h1": "-(CH + FH*((i + 1)/SL))"
+            } },
+          { "comment": "RCC base pad below the frustum",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-vFru", "h1": "-vRcc" } },
+          { "comment": "PCC levelling course",
+            "when": "PCC > 0",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-vRcc", "h1": "-vPcc" } },
+          { "comment": "soling / hardcore",
+            "when": "SOL > 0",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-vPcc", "h1": "-vSol" } }
+        ]
+      },
+      {
+        "when": "type == 'stepped'",
+        "description": "Tiered footing: NS pads widening from the frustum-top footprint (top tier) to the full base (bottom tier), occupying the RCC thickness in equal-height steps. Then (PCC) and (soling) under the base.",
+        "vars": {
+          "NS": "max(1, round(steps))",
+          "vRcc": "CH + RCC",
+          "vPcc": "CH + RCC + PCC",
+          "vSol": "CH + RCC + PCC + SOL"
+        },
+        "rules": [
+          { "comment": "column stem",
+            "box": { "x0": "-cHW", "x1": "cHW", "y0": "-cHD", "y1": "cHD", "h0": "0", "h1": "-CH" } },
+          { "comment": "step tiers — half-width hw = ftHW + (bHW-ftHW)*((i+1)/NS); top tier (i=0) smallest, bottom tier (i=NS-1) = full base; X faces follow the skew",
+            "repeat": "NS", "as": "i",
+            "box": {
+              "x0": "sk < 0 ? (cHW - 2*(ftHW + (bHW - ftHW)*((i + 1)/NS))) : (sk > 0 ? -cHW : -(ftHW + (bHW - ftHW)*((i + 1)/NS)))",
+              "x1": "sk < 0 ? cHW : (sk > 0 ? (2*(ftHW + (bHW - ftHW)*((i + 1)/NS)) - cHW) : (ftHW + (bHW - ftHW)*((i + 1)/NS)))",
+              "y0": "-(ftHD + (bHD - ftHD)*((i + 1)/NS))",
+              "y1": "(ftHD + (bHD - ftHD)*((i + 1)/NS))",
+              "h0": "-(CH + RCC*(i/NS))",
+              "h1": "-(CH + RCC*((i + 1)/NS))"
+            } },
+          { "comment": "PCC levelling course",
+            "when": "PCC > 0",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-vRcc", "h1": "-vPcc" } },
+          { "comment": "soling / hardcore",
+            "when": "SOL > 0",
+            "box": { "x0": "cxBase - bHW", "x1": "cxBase + bHW", "y0": "-bHD", "y1": "bHD", "h0": "-vPcc", "h1": "-vSol" } }
+        ]
+      }
+    ],
+
+    "placement": {
+      "_doc": "How the local boxes are positioned in the world. Mirrors footing.ts (footingPlanPolys / footingMeshPrisms).",
+      "anchor": "node",
+      "rotation": "rotation",
+      "rotationUnit": "deg",
+      "rotationAbout": "node-origin",
+      "scale": "ppm (pixels per metre) applied by the renderer"
+    },
+
+    "projections": {
+      "_doc": "Derived views — all read the same boxes, so plan + 3D stay consistent.",
+      "plan": { "axes": ["x", "y"], "note": "top-down footprints: column rect + base rect (+ step / slice rings); X = width, Y(plan) = depth (Z)" },
+      "mesh3d": { "footprint": ["x", "y"], "yBottom": "min(h0, h1)", "yTop": "max(h0, h1)", "color": "color", "note": "h = -v, so worldY <= 0: the column + footing sit at/below grade" }
+    }
+  }
+}
