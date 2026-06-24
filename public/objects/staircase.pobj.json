@@ -1,0 +1,142 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "staircase.straight.v1", "name": "Staircase", "category": "Circulation/Stairs", "units": "m", "symbol": "staircase" },
+  "parameters": [
+    { "key": "config", "label": "Configuration", "kind": "select", "default": "straight", "options": [
+      { "value": "straight", "label": "Straight (going + landing)" },
+      { "value": "u-shape", "label": "U-shape (180° turn)" },
+      { "value": "u-shape-mid", "label": "U-shape + mid flight (2 × 90°)" }
+    ] },
+    { "key": "steps", "label": "Number of steps", "kind": "number", "default": 14, "min": 2, "max": 60, "step": 1 },
+    { "key": "tread", "label": "Tread (going)", "kind": "number", "default": 0.28, "min": 0.2, "max": 0.45, "step": 0.005, "unit": "m" },
+    { "key": "riser", "label": "Riser (rise)", "kind": "number", "default": 0.17, "min": 0.1, "max": 0.25, "step": 0.005, "unit": "m" },
+    { "key": "width", "label": "Width", "kind": "number", "default": 1.0, "min": 0.6, "max": 3.0, "step": 0.05, "unit": "m" },
+    { "key": "direction", "label": "Direction", "kind": "select", "default": "ltr", "options": [
+      { "value": "ltr", "label": "Left → Right" },
+      { "value": "rtl", "label": "Right → Left" }
+    ] },
+    { "key": "midSteps", "label": "Mid / split steps", "kind": "number", "default": 0, "min": 0, "max": 40, "step": 1 },
+    { "key": "landingWidth", "label": "Landing depth", "kind": "number", "default": 1.0, "min": 0.5, "max": 3.0, "step": 0.05, "unit": "m" },
+    { "key": "midSpace", "label": "Mid space (between flights)", "kind": "number", "default": 0.1, "min": 0, "max": 1.0, "step": 0.05, "unit": "m" },
+    { "key": "landingCuts", "label": "Landing cuts", "kind": "number", "default": 1, "min": 1, "max": 10, "step": 1 },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#0f766e" }
+  ],
+
+  "geometry": {
+    "description": "Self-contained generator. Emits a stack of solid boxes (steps + landings) in a LOCAL frame, identical to buildStaircaseBoxes: X = run axis (signed by `dir`), Y = cross/width axis (both horizontal, matching the 2D plan), H = height (rise), up. Each view projects these boxes: plan = top-down (X,Y); elevations = side (Left/Right = X×H, Front/Back = Y×H); 3D mesh = one prism per box (footprint on the ground, H = rise).",
+    "units": "m",
+    "emit": "boxes",
+
+    "expressions": {
+      "doc": "Every numeric field below is an expression string evaluated against the scope (parameters + `vars` + the active loop variable). No arbitrary code — only the grammar listed here.",
+      "operators": ["+", "-", "*", "/", "( )", "comparison: == != < <= > >=", "logical: && ||", "ternary: cond ? a : b", "unary minus"],
+      "functions": ["min(a,b)", "max(a,b)", "floor(x)", "ceil(x)", "round(x)", "abs(x)"],
+      "stringLiterals": "single-quoted, e.g. direction == 'rtl'"
+    },
+
+    "vars": {
+      "_doc": "Evaluated in order; later entries may reference earlier ones. Mirrors toStaircaseSpec's clamping so the file is the single source of truth.",
+      "N": "max(2, round(steps))",
+      "T": "max(0.05, tread)",
+      "W": "max(0.1, width)",
+      "L": "max(0, landingWidth)",
+      "G": "max(0, midSpace)",
+      "R": "max(0.05, riser)",
+      "MS": "round(midSteps)",
+      "dir": "direction == 'rtl' ? -1 : 1"
+    },
+
+    "cases": [
+      {
+        "when": "config == 'straight'",
+        "description": "A single going (flight of N steps) rising to a top landing. Each step is a solid column from H=0 to its tread top, so the side elevation reads as the classic stepped profile.",
+        "rules": [
+          { "comment": "step columns",
+            "repeat": "N", "as": "i",
+            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "0", "h1": "(i+1)*R" } },
+          { "comment": "top landing",
+            "when": "L > 0",
+            "box": { "x0": "dir*N*T", "x1": "dir*(N*T + L)", "y0": "0", "y1": "W", "h0": "0", "h1": "N*R" } }
+        ]
+      },
+      {
+        "when": "config == 'u-shape'",
+        "description": "A half-turn (180°): flight 1, a turn landing spanning both flights (separated by Mid space G), then the remaining steps returning the other way. Split at Mid steps (0 → auto half).",
+        "vars": {
+          "n1": "(MS > 0 && MS < N) ? MS : floor(N/2)",
+          "n2": "N - n1",
+          "xt": "dir*n1*T",
+          "xl": "xt + dir*L"
+        },
+        "rules": [
+          { "comment": "flight 1",
+            "repeat": "n1", "as": "i",
+            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "0", "h1": "(i+1)*R" } },
+          { "comment": "turn landing (spans both flights)",
+            "box": { "x0": "xt", "x1": "xl", "y0": "0", "y1": "2*W + G", "h0": "0", "h1": "n1*R" } },
+          { "comment": "flight 2 (returns)",
+            "repeat": "n2", "as": "j",
+            "box": { "x0": "xt - dir*j*T", "x1": "xt - dir*(j+1)*T", "y0": "W + G", "y1": "2*W + G", "h0": "0", "h1": "(n1 + j + 1)*R" } }
+        ]
+      },
+      {
+        "when": "config == 'u-shape-mid'",
+        "description": "Two 90° turns: flight 1 → landing 1 → a perpendicular MID flight (Mid steps) → landing 2 → flight 3 returning opposite flight 1. Mid steps 0 → auto (~a third). The remaining steps split between the two outer flights.",
+        "vars": {
+          "mid": "(MS > 0 && MS < N - 1) ? MS : max(1, round(N/3))",
+          "rem": "max(2, N - mid)",
+          "a": "ceil(rem/2)",
+          "b": "rem - a",
+          "xt": "dir*a*T",
+          "xr": "xt + dir*W",
+          "y2": "W + mid*T",
+          "y3": "y2 + W"
+        },
+        "rules": [
+          { "comment": "flight 1",
+            "repeat": "a", "as": "i",
+            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "0", "h1": "(i+1)*R" } },
+          { "comment": "landing 1",
+            "box": { "x0": "xt", "x1": "xr", "y0": "0", "y1": "W", "h0": "0", "h1": "a*R" } },
+          { "comment": "mid flight (perpendicular)",
+            "repeat": "mid", "as": "k",
+            "box": { "x0": "xt", "x1": "xr", "y0": "W + k*T", "y1": "W + (k+1)*T", "h0": "0", "h1": "(a + k + 1)*R" } },
+          { "comment": "landing 2",
+            "box": { "x0": "xt", "x1": "xr", "y0": "y2", "y1": "y3", "h0": "0", "h1": "(a + mid)*R" } },
+          { "comment": "flight 3 (returns)",
+            "repeat": "b", "as": "j",
+            "box": { "x0": "xt - dir*j*T", "x1": "xt - dir*(j+1)*T", "y0": "y2", "y1": "y3", "h0": "0", "h1": "(a + mid + j + 1)*R" } }
+        ]
+      }
+    ],
+
+    "placement": {
+      "_doc": "How the local boxes are positioned in the world. Mirrors staircaseMeshPrisms / the Node-to-Staircase plan placement.",
+      "anchor": "node",
+      "rotation": "rotation",
+      "rotationUnit": "deg",
+      "rotationAbout": "node-origin",
+      "scale": "ppm (pixels per metre) applied by the renderer"
+    },
+
+    "projections": {
+      "_doc": "Derived views — all read the same boxes, so plan + elevations + 3D stay consistent.",
+      "plan": { "axes": ["x", "y"], "note": "top-down footprint; step nosing lines = the X seams between consecutive step boxes" },
+      "elevation": {
+        "left":  { "horizontal": "x",  "vertical": "-h" },
+        "right": { "horizontal": "-x", "vertical": "-h" },
+        "front": { "horizontal": "y",  "vertical": "-h" },
+        "back":  { "horizontal": "-y", "vertical": "-h" }
+      },
+      "mesh3d": { "footprint": ["x", "y"], "yBottom": "h0", "yTop": "h1", "color": "color" }
+    },
+
+    "annotations": {
+      "_doc": "Plan-only overlays drawn by Node-to-Staircase; derived from the boxes/params, not solid geometry.",
+      "ascentArrows": "one direction arrow along each flight's run centreline, pointing up-slope (toward increasing H)",
+      "landingCuts": "for config == 'u-shape', divide the turn landing into `landingCuts` winder slices: (landingCuts − 1) lines fanning from the inner corner where the flights meet to equally-spaced points on the landing's far edge (1 = no cuts)"
+    }
+  }
+}

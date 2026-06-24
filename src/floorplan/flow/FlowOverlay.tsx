@@ -20,12 +20,13 @@ import { Button } from "@/components/ui/button";
 import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles, ChevronDown, ChevronRight, Group as GroupIcon, FilePlus, Eye, EyeOff, Minus, Maximize2, Minimize2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Point, SerializedFlow, SerializedFlowNode } from "../types";
-import { FLOW_TOOLS, outputSlots, inputProps, schemaEntries, GENERATE_DEFAULT_MODEL, type FlowNodeData, type FlowToolType, type OutputSlot } from "./flowTypes";
+import { FLOW_TOOLS, outputSlots, inputProps, schemaEntries, GENERATE_DEFAULT_MODEL, type FlowNodeData, type FlowToolType, type OutputSlot, type InputProp, type InputPropType } from "./flowTypes";
 import { compileFlow } from "./compileFlow";
 import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, type AutoPlaceEntry, type OpeningKind } from "./autoFlow";
 import { PlaceObjectEditor } from "./PlaceObjectEditor";
 import { DimensionEdgesEditor } from "./DimensionEdgesEditor";
 import { InputPropsEditor } from "./InputPropsEditor";
+import { LayoutRoomsEditor } from "./LayoutRoomsEditor";
 import { SchemaNodeEditor } from "./SchemaNodeEditor";
 import { evaluateFlow, type FlowPreviewItem } from "./eval/evaluateFlow";
 import type { GridField } from "./eval/evalNodes";
@@ -39,7 +40,7 @@ const nextId = (tool: string) => `${tool}_${nodeSeq++}`;
 /** Palette grouping — the left "Add" rail is split into foldable category blocks (in this order). */
 const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Canvas", tools: ["canvas-source", "separate"] },
-  { title: "Space", tools: ["source", "space-creator", "space-geometry", "pull", "transform", "hatching", "dimension", "area-dimension", "input-props", "schema", "output-schema", "schema-to-drawing", "schema-to-layers", "merge"] },
+  { title: "Space", tools: ["source", "space-creator", "space-geometry", "pull", "transform", "hatching", "dimension", "area-dimension", "input-props", "schema", "output-schema", "schema-to-drawing", "schema-to-layers", "merge", "layout-gen"] },
   { title: "Reshape", tools: ["inset", "optimise-rect", "smoothing", "densify", "bounding-shape", "convex-hull", "contour"] },
   { title: "Partition", tools: ["split", "bsp", "voronoi", "treemap", "rect-pack", "convex-decomp", "mesh", "circle-packing", "skeleton", "visibility"] },
   { title: "Segment", tools: ["segment-source", "segment-split", "display-segment"] },
@@ -53,18 +54,21 @@ const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d"] },
   { title: "Footing", tools: ["footing", "footing-to-3d-mesh", "mesh-to-3d"] },
   { title: "Staircase", tools: ["staircase", "staircase-to-3d-mesh"] },
+  { title: "Parametric", tools: ["param-object", "param-grab", "param-render", "param-render-3d"] },
   { title: "Calculate", tools: ["math", "random", "bua", "point", "file-upload", "text"] },
   { title: "Output", tools: ["output", "render", "analyse", "generate"] },
 ];
 
 /** A reusable node-graph preset shown in the right "Workflow templates" rail. Stored with template-local
  *  node ids + relative positions; {@link insertWorkflow} remaps the ids and offsets the positions when
- *  it appends the cluster into the live graph. */
+ *  it appends the cluster into the live graph. A node may be a `group` container (with width/height + a
+ *  `label` param) and other nodes may set `parentId` to nest inside it (their x/y are then RELATIVE to the
+ *  group's top-left, matching the export format). */
 interface WorkflowTemplate {
   id: string;
   title: string;
   description: string;
-  nodes: { id: string; tool: FlowToolType; x: number; y: number; params?: Record<string, unknown> }[];
+  nodes: { id: string; tool: FlowToolType | "group"; x: number; y: number; params?: Record<string, unknown>; type?: "group"; width?: number; height?: number; parentId?: string }[];
   edges: { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }[];
 }
 
@@ -224,6 +228,92 @@ export const FLOORPLAN_SCHEMA_PARAMS = {
   ],
 };
 
+// Starter parametric definition for the "Parametric Workflow" template's Parametric Object textbox — a
+// self-contained staircase (parameters + declarative geometry rules) that the Parametric Renderer evaluates
+// into plan lines. Mirrors buildStaircaseBoxes, so it reproduces the Node-to-Staircase plan from a file.
+const STAIRCASE_DEFINITION = JSON.stringify({
+  kind: "parametric-object",
+  meta: { name: "Staircase", units: "m" },
+  parameters: [
+    { key: "config", label: "Configuration", kind: "select", default: "straight", options: [{ value: "straight", label: "Straight" }, { value: "u-shape", label: "U-shape (180°)" }, { value: "u-shape-mid", label: "U-shape + mid" }] },
+    { key: "steps", label: "Steps", kind: "number", default: 14, min: 2, max: 60, step: 1 },
+    { key: "tread", label: "Tread (going)", kind: "number", default: 0.28, min: 0.2, max: 0.45, step: 0.005 },
+    { key: "riser", label: "Riser", kind: "number", default: 0.17, min: 0.1, max: 0.25, step: 0.005 },
+    { key: "width", label: "Width", kind: "number", default: 1.0, min: 0.6, max: 3, step: 0.05 },
+    { key: "direction", label: "Direction", kind: "select", default: "ltr", options: [{ value: "ltr", label: "Left → Right" }, { value: "rtl", label: "Right → Left" }] },
+    { key: "midSteps", label: "Mid / split steps", kind: "number", default: 0, min: 0, max: 40, step: 1 },
+    { key: "landingWidth", label: "Landing depth", kind: "number", default: 1.0, min: 0.5, max: 3, step: 0.05 },
+    { key: "midSpace", label: "Mid space", kind: "number", default: 0.1, min: 0, max: 1, step: 0.05 },
+    { key: "rotation", label: "Rotation", kind: "number", default: 0, min: 0, max: 360, step: 1 },
+    { key: "color", label: "Colour", kind: "color", default: "#0f766e" },
+  ],
+  geometry: {
+    emit: "boxes",
+    vars: {
+      N: "max(2, round(steps))", T: "max(0.05, tread)", W: "max(0.1, width)",
+      L: "max(0, landingWidth)", G: "max(0, midSpace)", R: "max(0.05, riser)",
+      MS: "round(midSteps)", dir: "direction == 'rtl' ? -1 : 1",
+    },
+    cases: [
+      { when: "config == 'straight'", rules: [
+        { repeat: "N", as: "i", box: { x0: "dir*i*T", x1: "dir*(i+1)*T", y0: "0", y1: "W", h0: "0", h1: "(i+1)*R" } },
+        { when: "L > 0", box: { x0: "dir*N*T", x1: "dir*(N*T + L)", y0: "0", y1: "W", h0: "0", h1: "N*R" } },
+      ] },
+      { when: "config == 'u-shape'",
+        vars: { n1: "(MS > 0 && MS < N) ? MS : floor(N/2)", n2: "N - n1", xt: "dir*n1*T", xl: "xt + dir*L" },
+        rules: [
+          { repeat: "n1", as: "i", box: { x0: "dir*i*T", x1: "dir*(i+1)*T", y0: "0", y1: "W", h0: "0", h1: "(i+1)*R" } },
+          { box: { x0: "xt", x1: "xl", y0: "0", y1: "2*W + G", h0: "0", h1: "n1*R" } },
+          { repeat: "n2", as: "j", box: { x0: "xt - dir*j*T", x1: "xt - dir*(j+1)*T", y0: "W + G", y1: "2*W + G", h0: "0", h1: "(n1 + j + 1)*R" } },
+        ] },
+      { when: "config == 'u-shape-mid'",
+        vars: { mid: "(MS > 0 && MS < N - 1) ? MS : max(1, round(N/3))", rem: "max(2, N - mid)", a: "ceil(rem/2)", b: "rem - a", xt: "dir*a*T", xr: "xt + dir*W", y2: "W + mid*T", y3: "y2 + W" },
+        rules: [
+          { repeat: "a", as: "i", box: { x0: "dir*i*T", x1: "dir*(i+1)*T", y0: "0", y1: "W", h0: "0", h1: "(i+1)*R" } },
+          { box: { x0: "xt", x1: "xr", y0: "0", y1: "W", h0: "0", h1: "a*R" } },
+          { repeat: "mid", as: "k", box: { x0: "xt", x1: "xr", y0: "W + k*T", y1: "W + (k+1)*T", h0: "0", h1: "(a + k + 1)*R" } },
+          { box: { x0: "xt", x1: "xr", y0: "y2", y1: "y3", h0: "0", h1: "(a + mid)*R" } },
+          { repeat: "b", as: "j", box: { x0: "xt - dir*j*T", x1: "xt - dir*(j+1)*T", y0: "y2", y1: "y3", h0: "0", h1: "(a + mid + j + 1)*R" } },
+        ] },
+    ],
+  },
+}, null, 2);
+
+/** Build the Grab Parameters node's interactive control list from a parametric definition's `parameters`
+ *  (number→slider, select→options, checkbox, text/color→textbox). Preserves the user's CURRENT value for
+ *  any parameter whose key still exists (so edits survive re-syncs); seeds from the parameter default
+ *  otherwise. Returns `existing` unchanged when the definition can't be parsed. Shape matches inputProps so
+ *  the host's sync effect can compare cheaply. */
+const paramGrabProps = (defText: string, existing: InputProp[]): InputProp[] => {
+  let parsed: { parameters?: unknown };
+  try { parsed = JSON.parse(defText) as { parameters?: unknown }; } catch { return existing; }
+  const params = parsed?.parameters;
+  if (!Array.isArray(params)) return existing.length ? existing : [];
+  const prevById = new Map(existing.map((p) => [p.id, p]));
+  return params.map((q, i) => {
+    const o = (q && typeof q === "object" ? q : {}) as Record<string, unknown>;
+    const key = typeof o.key === "string" && o.key ? o.key : `p${i + 1}`;
+    const kind = typeof o.kind === "string" ? o.kind : "number";
+    const type: InputPropType = kind === "select" ? "select" : kind === "checkbox" ? "checkbox" : kind === "text" || kind === "color" ? "text" : "range";
+    const options = Array.isArray(o.options)
+      ? o.options.map((op) => (op && typeof op === "object" ? String((op as Record<string, unknown>).value ?? "") : String(op))).filter(Boolean)
+      : [];
+    const d = o.default;
+    const seed: string | number | boolean = type === "checkbox" ? d === true : type === "range" ? Number(d) || 0 : typeof d === "string" ? d : String(d ?? "");
+    const prev = prevById.get(key);
+    return {
+      id: key,
+      name: typeof o.label === "string" && o.label ? o.label : key,
+      type,
+      value: prev ? prev.value : seed,
+      min: Number.isFinite(Number(o.min)) ? Number(o.min) : 0,
+      max: Number.isFinite(Number(o.max)) ? Number(o.max) : 10,
+      step: Number(o.step) || (type === "range" ? 0.1 : 1),
+      options,
+    };
+  });
+};
+
 /** Built-in workflow templates, grouped into foldable categories on the right rail. */
 const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = [
   {
@@ -323,6 +413,247 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { source: "elevBack", target: "placeBack", targetHandle: "gin-stamp" },
           { source: "elevLeft", target: "placeLeft", targetHandle: "gin-stamp" },
           { source: "elevRight", target: "placeRight", targetHandle: "gin-stamp" },
+        ],
+      },
+    ],
+  },
+  {
+    title: "Layout",
+    workflows: [
+      {
+        id: "layout-generation",
+        title: "Layout Generation",
+        description: "Generate a multi-room layout inside a selected Space. Select a plot/floor Space on the canvas (the Space node grabs it), then press Generate on the Layout Generation node — it runs the floorplan generator and loads it as the editable canvas layout: drag the room seeds, and the connection / repulsion lines show between rooms. Run Annealing optimises the seed positions (simulated annealing). Room count / floor area / SA score feed the Output node; the Input Properties node exposes Min Room Area / Wall Width / SA Iterations as sliders.",
+        nodes: [
+          { id: "src", tool: "source", x: 0, y: 0, params: { id: "", grabFromSelection: true } },
+          { id: "ip", tool: "input-props", x: 0, y: 220, params: { props: [
+            { id: "minArea", name: "Min Room Area", type: "range", value: 12, min: 2, max: 80, step: 1, options: [] },
+            { id: "wallWidth", name: "Wall Width", type: "range", value: 0.15, min: 0.05, max: 0.4, step: 0.01, options: [] },
+            { id: "saIterations", name: "SA Iterations", type: "range", value: 600, min: 50, max: 3000, step: 50, options: [] }
+          ] } },
+          { id: "layoutgen", tool: "layout-gen", x: 380, y: 60, params: { rooms: [
+            { label: "Living", minArea: 18, maxArea: 0, maxRatio: 2.5 },
+            { label: "Kitchen", minArea: 8, maxArea: 0, maxRatio: 2.5 },
+            { label: "Bedroom", minArea: 12, maxArea: 0, maxRatio: 2.5 },
+            { label: "Bathroom", minArea: 4, maxArea: 0, maxRatio: 3 }
+          ], algorithm: "bsp", wallWidth: 0.15, connections: "Living-Kitchen, Living-Bedroom", repulsions: "", saIterations: 600 } },
+          { id: "out", tool: "output", x: 800, y: 60, params: { slots: [
+            { id: "s1", label: "Rooms" },
+            { id: "s2", label: "Floor Area (m²)" },
+            { id: "s3", label: "SA Score" }
+          ] } }
+        ],
+        edges: [
+          { source: "src", target: "layoutgen" },
+          { source: "ip", target: "layoutgen", sourceHandle: "val-minArea", targetHandle: "valin-minArea" },
+          { source: "ip", target: "layoutgen", sourceHandle: "val-wallWidth", targetHandle: "valin-wallWidth" },
+          { source: "ip", target: "layoutgen", sourceHandle: "val-saIterations", targetHandle: "valin-saIterations" },
+          { source: "layoutgen", target: "out", sourceHandle: "val-rooms", targetHandle: "valin-s1" },
+          { source: "layoutgen", target: "out", sourceHandle: "val-area", targetHandle: "valin-s2" },
+          { source: "layoutgen", target: "out", sourceHandle: "val-score", targetHandle: "valin-s3" }
+        ],
+      },
+    ],
+  },
+  {
+    title: "Site",
+    workflows: [
+      {
+        id: "site-massing",
+        title: "Site Massing",
+        description: "Full site-massing study from a selected plot Space: setbacks (Inset) → split into Amenity Open Space + buildable → Optimise Rectangle → extrude tower floors (upward) + a basement podium (downward). Alongside, an FSI BUA statement (basic / premium / TDR / scheme / fungible) and Non-FSI BUA (parking + other) are computed in Math nodes and collected in an Output node (areas, floor counts, building height, GCR, total BUA). Wire it to a plot Space (the Space node grabs the selection).",
+        nodes: [
+          { id: "g_fsi", tool: "group", type: "group", x: -409, y: 471, width: 700, height: 900, params: { label: "FSI BUA Statement" } },
+          { id: "g_nonfsi", tool: "group", type: "group", x: -420, y: 1500, width: 460, height: 300, params: { label: "Non-FSI BUA" } },
+          { id: "g_massing", tool: "group", type: "group", x: 360, y: -160, width: 1000, height: 800, params: { label: "Massing Pipeline" } },
+          { id: "g_out", tool: "group", type: "group", x: 360, y: 720, width: 580, height: 560, params: { label: "Measurements & Output" } },
+          { id: "source_9", tool: "source", x: -1128, y: -703, params: { id: "Space001", grabFromSelection: true } },
+          { id: "ip", tool: "input-props", x: -1040, y: -471, params: { props: [
+            { id: "amenityOsRate", name: "Amenity OS Rate", type: "range", value: 0.1, min: 0, max: 1, step: 0.01, options: [] },
+            { id: "losRate", name: "LOS Rate", type: "range", value: 0.15, min: 0, max: 1, step: 0.01, options: [] },
+            { id: "basicFsi", name: "Basic FSI", type: "range", value: 1, min: 0, max: 5, step: 0.1, options: [] },
+            { id: "premiumFsi", name: "Premium FSI", type: "range", value: 0.5, min: 0, max: 5, step: 0.1, options: [] },
+            { id: "tdr", name: "TDR FSI", type: "range", value: 0.9, min: 0, max: 5, step: 0.1, options: [] },
+            { id: "fung", name: "Fungible Rate", type: "range", value: 0.35, min: 0, max: 1, step: 0.01, options: [] },
+            { id: "schemeFsi", name: "Scheme FSI (m2)", type: "range", value: 11721.6, min: 0, max: 50000, step: 0.1, options: [] },
+            { id: "inSitu", name: "In-Situ FSI", type: "range", value: 2, min: 0, max: 5, step: 0.1, options: [] },
+            { id: "carParks", name: "Car Parks", type: "range", value: 417, min: 0, max: 2000, step: 1, options: [] },
+            { id: "areaPerCarPark", name: "Area/Car Park", type: "text", value: "30", min: 0, max: 100, step: 1, options: [] },
+            { id: "otherNonFsi", name: "Other Non-FSI", type: "text", value: "6000", min: 0, max: 50000, step: 1, options: [] },
+            { id: "wings", name: "Wings / Cores", type: "range", value: 4, min: 1, max: 20, step: 1, options: [] },
+            { id: "podiumOffset", name: "Podium Offset", type: "range", value: 2.8, min: 0, max: 20, step: 0.1, options: [] },
+            { id: "front", name: "Front Setback", type: "range", value: 10.8, min: 0, max: 30, step: 0.1, options: [] },
+            { id: "remaining", name: "Other Setback", type: "range", value: 3.2, min: 0, max: 30, step: 0.1, options: [] },
+            { id: "edgeIndex", name: "Front Edge Index", type: "range", value: 3, min: 0, max: 19, step: 1, options: [] },
+            { id: "axisTilt", name: "Axis Tilt", type: "range", value: 99, min: 0, max: 360, step: 1, options: [] },
+            { id: "rectangles", name: "Rectangles", type: "range", value: 1, min: 1, max: 10, step: 1, options: [] },
+            { id: "splitAngle", name: "Split Angle", type: "range", value: 271, min: 0, max: 360, step: 1, options: [] },
+            { id: "p_1_nnz6", name: "Optimise axis tilt ", type: "checkbox", value: false, min: 0, max: 10, step: 1, options: [] },
+            { id: "p_1_k0gu", name: "Floor Height", type: "range", value: 3.2, min: 0, max: 10, step: 0.1, options: [] }
+          ] } },
+          { id: "sg_plot", tool: "space-geometry", x: -397, y: -152, params: {} },
+          { id: "math_6", tool: "math", x: -342, y: -26, params: { a: 0.1, b: 8140, op: "multiply", round: "ceil" } },
+          { id: "m_amenity", tool: "math", parentId: "g_fsi", x: 16, y: 44, params: { a: 8140, b: 0.1, op: "multiply", round: "none" } },
+          { id: "m_netplot", tool: "math", parentId: "g_fsi", x: 16, y: 240, params: { a: 8140, b: 814, op: "subtract", round: "none" } },
+          { id: "m_zonal", tool: "math", parentId: "g_fsi", x: 16, y: 436, params: { a: 7326, b: 1, op: "multiply", round: "none" } },
+          { id: "m_premium", tool: "math", parentId: "g_fsi", x: 16, y: 632, params: { a: 7326, b: 0.5, op: "multiply", round: "none" } },
+          { id: "m_tdr", tool: "math", parentId: "g_fsi", x: 236, y: 44, params: { a: 7326, b: 0.9, op: "multiply", round: "none" } },
+          { id: "m_premtdr", tool: "math", parentId: "g_fsi", x: 236, y: 240, params: { a: 3663, b: 6593.4, op: "add", round: "none" } },
+          { id: "m_premtdrscheme", tool: "math", parentId: "g_fsi", x: 236, y: 436, params: { a: 10256.4, b: 11721.6, op: "add", round: "none" } },
+          { id: "m_totalexfung", tool: "math", parentId: "g_fsi", x: 236, y: 632, params: { a: 7326, b: 21978, op: "add", round: "none" } },
+          { id: "m_fungzonal", tool: "math", parentId: "g_fsi", x: 456, y: 44, params: { a: 7326, b: 0.35, op: "multiply", round: "none" } },
+          { id: "m_fungothers", tool: "math", parentId: "g_fsi", x: 456, y: 289, params: { a: 21978, b: 0.35, op: "multiply", round: "none" } },
+          { id: "m_fungtotal", tool: "math", parentId: "g_fsi", x: 456, y: 436, params: { a: 2564.1, b: 7692.3, op: "add", round: "none" } },
+          { id: "m_fsibua", tool: "math", parentId: "g_fsi", x: 456, y: 632, params: { a: 29304, b: 10256.4, op: "add", round: "none" } },
+          { id: "m_parking", tool: "math", parentId: "g_nonfsi", x: 16, y: 44, params: { a: 417, b: "30", op: "multiply", round: "none" } },
+          { id: "m_nonfsibua", tool: "math", parentId: "g_nonfsi", x: 236, y: 44, params: { a: 12510, b: "6000", op: "add", round: "none" } },
+          { id: "inset_1", tool: "inset", parentId: "g_massing", x: 16, y: 44, params: { mode: "front-remaining", uniformSetback: 0.25, inside: true, front: 10.8, remaining: 3.2, frontEdgeMode: "index", frontEdgeIndex: 3, inputCount: 1 } },
+          { id: "split_4", tool: "split", parentId: "g_massing", x: 256, y: 44, params: { type: "normal", mode: "target", count: 2, angle: 271, target: 814, splitAlongMinorPrincipalAxis: false, stripLength: 1, stripPosition: 50, principalMethod: "pca", ratios: "90,10", handleCount: 2 } },
+          { id: "optimise-rect_1", tool: "optimise-rect", parentId: "g_massing", x: 496, y: 44, params: { shape: "rectangle", reference: "custom", referenceEdge: 0, axisAngle: 99, count: 1, union: true, shrinkEnabled: false, targetArea: 50, shrinkAngle: 0, shrinkSlide: 0, optimiseShrinkEnabled: false, exactArea: false, optimiseAxisTilt: 0, inputCount: 1 } },
+          { id: "floor-massing_1", tool: "floor-massing", parentId: "g_massing", x: 736, y: 44, params: { direction: "upward", n: 8, inputCount: 1 } },
+          { id: "inset_2", tool: "inset", parentId: "g_massing", x: 16, y: 400, params: { mode: "equal", uniformSetback: 2.8, inside: false, front: 0, remaining: 0, inputCount: 1 } },
+          { id: "floor-massing_2", tool: "floor-massing", parentId: "g_massing", x: 290, y: 377, params: { direction: "downward", n: 4, inputCount: 1 } },
+          { id: "m_floors", tool: "math", parentId: "g_massing", x: 496, y: 400, params: { a: 39560.4, b: 4957.582344629365, op: "divide", round: "ceil" } },
+          { id: "m_bfloors", tool: "math", parentId: "g_massing", x: 736, y: 400, params: { a: 18510, b: 5832.273365089326, op: "divide", round: "ceil" } },
+          { id: "sg_buildable", tool: "space-geometry", parentId: "g_out", x: 5, y: 41, params: {} },
+          { id: "sg_footprint", tool: "space-geometry", parentId: "g_out", x: 0, y: 204, params: {} },
+          { id: "sg_basement", tool: "space-geometry", parentId: "g_out", x: 16, y: 356, params: {} },
+          { id: "output_5", tool: "output", parentId: "g_out", x: 347, y: 110, params: { slots: [
+            { id: "s1", label: "Inset Area" },
+            { id: "s_1_ni97", label: "Amenities Open Space Area" },
+            { id: "s_2_hs1v", label: "Buildable Area" },
+            { id: "s_3_f5ah", label: "Building Footprint Area" },
+            { id: "s_4_r12i", label: "Basement Area" },
+            { id: "s_5_x4jw", label: "FSI BUA" },
+            { id: "s_6_i37o", label: "Non-FSI BUA" },
+            { id: "s_7_drvb", label: "Number of Floors" },
+            { id: "s_8_nhlw", label: "Number of Basement Floors" },
+            { id: "s_1_cgd3", label: "Total Height of Building" },
+            { id: "s_1_p7i2", label: "Layout Open Space" },
+            { id: "s_2_h1jl", label: "Ground Coverage Ratio" },
+            { id: "s_3_psip", label: "Total BUA Area" },
+            { id: "s_4_6yku", label: "" }
+          ] } },
+          { id: "math_10", tool: "math", x: 1164, y: 525, params: { a: 4, b: 3.2, op: "multiply", round: "ceil" } },
+          { id: "math_11", tool: "math", x: 648, y: 1278, params: { a: 5698.088194873841, b: 4957.582344629365, op: "subtract", round: "ceil" } },
+          { id: "math_12", tool: "math", x: 0, y: -21, params: { a: 4957.582344629365, b: 8140, op: "divide", round: "none" } },
+          { id: "math_13", tool: "math", x: 442, y: 1435, params: { a: 39560.4, b: 18510, op: "add", round: "ceil" } }
+        ],
+        edges: [
+          { source: "ip", target: "inset_1" },
+          { source: "inset_1", target: "split_4" },
+          { source: "optimise-rect_1", target: "floor-massing_1" },
+          { source: "optimise-rect_1", target: "inset_2" },
+          { source: "inset_2", target: "floor-massing_2" },
+          { source: "optimise-rect_1", target: "sg_footprint" },
+          { source: "floor-massing_2", target: "sg_basement" },
+          { source: "ip", target: "inset_1", sourceHandle: "val-front", targetHandle: "valin-front" },
+          { source: "ip", target: "inset_1", sourceHandle: "val-remaining", targetHandle: "valin-remaining" },
+          { source: "ip", target: "inset_1", sourceHandle: "val-edgeIndex", targetHandle: "valin-frontEdgeIndex" },
+          { source: "ip", target: "split_4", sourceHandle: "val-ratio", targetHandle: "valin-ratios" },
+          { source: "ip", target: "split_4", sourceHandle: "val-splitAngle", targetHandle: "valin-angle" },
+          { source: "ip", target: "optimise-rect_1", sourceHandle: "val-axisTilt", targetHandle: "valin-axisAngle" },
+          { source: "ip", target: "optimise-rect_1", sourceHandle: "val-rectangles", targetHandle: "valin-count" },
+          { source: "ip", target: "inset_2", sourceHandle: "val-podiumOffset", targetHandle: "valin-uniformSetback" },
+          { source: "sg_plot", target: "m_amenity", sourceHandle: "val-area", targetHandle: "valin-a" },
+          { source: "ip", target: "m_amenity", sourceHandle: "val-amenityOsRate", targetHandle: "valin-b" },
+          { source: "sg_plot", target: "m_netplot", sourceHandle: "val-area", targetHandle: "valin-a" },
+          { source: "m_amenity", target: "m_netplot", sourceHandle: "val-result", targetHandle: "valin-b" },
+          { source: "m_netplot", target: "m_zonal", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "m_zonal", sourceHandle: "val-basicFsi", targetHandle: "valin-b" },
+          { source: "m_netplot", target: "m_premium", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "m_premium", sourceHandle: "val-premiumFsi", targetHandle: "valin-b" },
+          { source: "m_netplot", target: "m_tdr", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "m_tdr", sourceHandle: "val-tdr", targetHandle: "valin-b" },
+          { source: "m_premium", target: "m_premtdr", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "m_tdr", target: "m_premtdr", sourceHandle: "val-result", targetHandle: "valin-b" },
+          { source: "m_premtdr", target: "m_premtdrscheme", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "m_premtdrscheme", sourceHandle: "val-schemeFsi", targetHandle: "valin-b" },
+          { source: "m_zonal", target: "m_totalexfung", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "m_premtdrscheme", target: "m_totalexfung", sourceHandle: "val-result", targetHandle: "valin-b" },
+          { source: "m_zonal", target: "m_fungzonal", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "m_fungzonal", sourceHandle: "val-fung", targetHandle: "valin-b" },
+          { source: "m_premtdrscheme", target: "m_fungothers", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "m_fungothers", sourceHandle: "val-fung", targetHandle: "valin-b" },
+          { source: "m_fungzonal", target: "m_fungtotal", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "m_fungothers", target: "m_fungtotal", sourceHandle: "val-result", targetHandle: "valin-b" },
+          { source: "m_totalexfung", target: "m_fsibua", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "m_fungtotal", target: "m_fsibua", sourceHandle: "val-result", targetHandle: "valin-b" },
+          { source: "ip", target: "m_parking", sourceHandle: "val-carParks", targetHandle: "valin-a" },
+          { source: "ip", target: "m_parking", sourceHandle: "val-areaPerCarPark", targetHandle: "valin-b" },
+          { source: "m_parking", target: "m_nonfsibua", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "m_nonfsibua", sourceHandle: "val-otherNonFsi", targetHandle: "valin-b" },
+          { source: "m_fsibua", target: "m_floors", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "optimise-rect_1", target: "m_floors", sourceHandle: "val-area", targetHandle: "valin-b" },
+          { source: "m_floors", target: "floor-massing_1", sourceHandle: "val-result", targetHandle: "valin-n" },
+          { source: "m_nonfsibua", target: "m_bfloors", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "inset_2", target: "m_bfloors", sourceHandle: "val-area", targetHandle: "valin-b" },
+          { source: "m_bfloors", target: "floor-massing_2", sourceHandle: "val-result", targetHandle: "valin-n" },
+          { source: "inset_1", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s1" },
+          { source: "m_amenity", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_1_ni97" },
+          { source: "sg_buildable", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s_2_hs1v" },
+          { source: "sg_footprint", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s_3_f5ah" },
+          { source: "sg_basement", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s_4_r12i" },
+          { source: "m_fsibua", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_5_x4jw" },
+          { source: "m_nonfsibua", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_6_i37o" },
+          { source: "floor-massing_1", target: "output_5", sourceHandle: "val-floors", targetHandle: "valin-s_7_drvb" },
+          { source: "floor-massing_2", target: "output_5", sourceHandle: "val-floors", targetHandle: "valin-s_8_nhlw" },
+          { source: "split_4", target: "optimise-rect_1", sourceHandle: "out-1" },
+          { source: "split_4", target: "sg_buildable", sourceHandle: "out-1" },
+          { source: "ip", target: "math_6", sourceHandle: "val-amenityOsRate", targetHandle: "valin-a" },
+          { source: "sg_plot", target: "math_6", sourceHandle: "val-area", targetHandle: "valin-b" },
+          { source: "math_6", target: "split_4", sourceHandle: "val-result", targetHandle: "valin-target" },
+          { source: "ip", target: "optimise-rect_1", sourceHandle: "val-p_1_nnz6", targetHandle: "valin-optimiseAxisTilt" },
+          { source: "source_9", target: "ip" },
+          { source: "source_9", target: "sg_plot" },
+          { source: "math_10", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_1_cgd3" },
+          { source: "m_bfloors", target: "math_10", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "ip", target: "math_10", sourceHandle: "val-p_1_k0gu", targetHandle: "valin-b" },
+          { source: "sg_buildable", target: "math_11", sourceHandle: "val-area", targetHandle: "valin-a" },
+          { source: "sg_footprint", target: "math_11", sourceHandle: "val-area", targetHandle: "valin-b" },
+          { source: "math_11", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_1_p7i2" },
+          { source: "math_12", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_2_h1jl" },
+          { source: "sg_footprint", target: "math_12", sourceHandle: "val-area", targetHandle: "valin-a" },
+          { source: "sg_plot", target: "math_12", sourceHandle: "val-area", targetHandle: "valin-b" },
+          { source: "m_fsibua", target: "math_13", sourceHandle: "val-result", targetHandle: "valin-a" },
+          { source: "m_nonfsibua", target: "math_13", sourceHandle: "val-result", targetHandle: "valin-b" },
+          { source: "math_13", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_3_psip" }
+        ],
+      },
+    ],
+  },
+  {
+    title: "Parametric",
+    workflows: [
+      {
+        id: "parametric-workflow",
+        title: "Parametric Workflow",
+        description: "Parametric Object (a definition textbox) → Grab Parameters (interactive sliders) → Parametric Renderer (2D plan) + Parametric 3D Renderer → Mesh to 3D, all anchored at a selected Canvas Node. Grab Parameters auto-builds a control per parameter; move its sliders and BOTH the 2D plan and the 3D mesh redraw from the same parameters. Pre-loaded with a self-contained staircase; select a node on the canvas (the Node source grabs the selection). Hit-and-trial: tweak the JSON in the Parametric Object box (or the sliders) to change the geometry, no code.",
+        nodes: [
+          // The parametric object's definition lives entirely in this textbox (parameters + geometry rules).
+          { id: "obj", tool: "param-object", x: 12, y: 40, params: { definition: STAIRCASE_DEFINITION } },
+          // Interactive control panel — one slider/dropdown per parameter, baked from the definition.
+          { id: "grab", tool: "param-grab", x: 360, y: 40, params: { props: [] } },
+          // The canvas anchor — grabs the currently-selected node (or set an explicit id).
+          { id: "node", tool: "node-source", x: 360, y: 620, params: { id: "", grabFromSelection: true, outputMode: "single" } },
+          // 2D: evaluates the (value-applied) definition at the node and draws its plan lines on the canvas.
+          { id: "render", tool: "param-render", x: 720, y: 180, params: { definition: "" } },
+          // 3D: evaluates the SAME definition into a mesh at the node (footprints extruded by height).
+          { id: "render3d", tool: "param-render-3d", x: 720, y: 420, params: { definition: "" } },
+          // Terminal: shows the parametric mesh in the 3D view.
+          { id: "meshto3d", tool: "mesh-to-3d", x: 1060, y: 420, params: {} },
+        ],
+        edges: [
+          // Definition → Grab Parameters (val-def → valin-def): controls auto-populate from the parameters.
+          { source: "obj", target: "grab", sourceHandle: "val-def", targetHandle: "valin-def" },
+          // Grab Parameters → both renderers: the definition with the user's slider values baked into defaults.
+          { source: "grab", target: "render", sourceHandle: "val-def", targetHandle: "valin-def" },
+          { source: "grab", target: "render3d", sourceHandle: "val-def", targetHandle: "valin-def" },
+          // Selected canvas node point → both renderers' main geometry input (the placement anchor).
+          { source: "node", target: "render", sourceHandle: "out-0" },
+          { source: "node", target: "render3d", sourceHandle: "out-0" },
+          // 3D mesh → Mesh to 3D terminal (shows in the 3D view).
+          { source: "render3d", target: "meshto3d" },
         ],
       },
     ],
@@ -761,7 +1092,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             </div>
           );
         })()}
-        {def.fields.length === 0 && d.tool !== "place-object" && d.tool !== "output" && d.tool !== "input-props" && d.tool !== "canvas-source" && (
+        {def.fields.length === 0 && d.tool !== "place-object" && d.tool !== "output" && d.tool !== "input-props" && d.tool !== "param-grab" && d.tool !== "canvas-source" && (
           <div className="text-[9px] italic text-slate-400">{def.hint}</div>
         )}
         {/* Place Object: a multi-object list editor instead of the generic flat-param fields. */}
@@ -787,6 +1118,36 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             onRowRef={(pid, el) => { rowRefs.current[`prop:${pid}`] = el; }}
             nodrag
           />
+        )}
+        {/* Grab Parameters: interactive controls auto-built from the wired Parametric Object's definition
+            (values-only — label + slider/options/checkbox/textbox). Editing republishes the definition. */}
+        {d.tool === "param-grab" && (
+          inputProps(d.params).length === 0
+            ? <span className="text-[10px] italic text-slate-400">Wire a Parametric Object into Definition →</span>
+            : <InputPropsEditor params={d.params} onParamChange={(key, val) => d.onParamChange?.(id, key, val)} valuesOnly nodrag />
+        )}
+        {/* Layout Generation: trigger the host's floorplan generator (loads the editable canvas layout —
+            draggable seeds + connection/repulsion lines) and simulated annealing; show a live result line. */}
+        {d.tool === "layout-gen" && (
+          <div className="space-y-1.5">
+            <LayoutRoomsEditor params={d.params} onParamChange={(key, val) => d.onParamChange?.(id, key, val)} />
+            <Button size="sm" className="h-7 w-full gap-1.5 px-2 text-[11px] nodrag" onClick={() => d.onRunLayoutGen?.(id, d.params)}>
+              <Wand2 className="h-3 w-3" /> Generate Layout
+            </Button>
+            <div className="flex gap-1.5">
+              <Button size="sm" variant="outline" className="h-7 flex-1 gap-1.5 px-2 text-[11px] nodrag" onClick={() => d.onAddRoom?.(id, d.params)}>
+                <Plus className="h-3 w-3" /> Add Room
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 flex-1 gap-1.5 px-2 text-[11px] nodrag" disabled={Boolean(d.params._saRunning)} onClick={() => d.onRunAnneal?.(id, d.params)}>
+                {d.params._saRunning ? <><Loader2 className="h-3 w-3 animate-spin" /> Annealing…</> : <><Wand2 className="h-3 w-3" /> Anneal</>}
+              </Button>
+            </div>
+            {d.params._rooms != null && (
+              <div className="rounded bg-purple-50 px-1.5 py-1 text-center font-mono text-[9px] text-purple-700">
+                {String(d.params._rooms)} rooms · {Number(d.params._area || 0).toFixed(1)} m²{d.params._score != null ? ` · score ${Number(d.params._score).toFixed(1)}` : ""}
+              </div>
+            )}
+          </div>
         )}
         {/* Output Metrics: a named-slot editor. Each row = an editable name + amber input endpoint (left)
             + the live wired value. Slots auto-grow (a free endpoint is always kept) and can be added. */}
@@ -1190,7 +1551,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
         )}
         {/* Scalar value outputs (e.g. Inset area, BUA): each is a labelled row with an amber endpoint
             handle (id `val-<key>`) anchored at the node's right edge — no overlap with the fields. */}
-        {def.valueOutputs?.some((vo) => !vo.alignField) && d.tool !== "file-upload" && d.tool !== "text" && d.tool !== "analyse" ? (
+        {def.valueOutputs?.some((vo) => !vo.alignField) && d.tool !== "file-upload" && d.tool !== "text" && d.tool !== "analyse" && d.tool !== "param-object" && d.tool !== "param-grab" ? (
           <div className="flex flex-col gap-0.5 pt-0.5">
             {def.valueOutputs.filter((vo) => !vo.alignField).map((vo) => {
               const v = (d.params._values as Record<string, number> | undefined)?.[vo.key];
@@ -1423,6 +1784,13 @@ export interface FlowOverlayProps {
   injectWallGraphRef?: MutableRefObject<(() => void) | null>;
   /** Bridge to mirror a freshly-placed furniture node as a Node → Node to Object chain. */
   injectNodeObjectRef?: MutableRefObject<((nodeId: string) => void) | null>;
+  /** Host action: run the floorplan generator for a Layout Generation node (loads the editable canvas
+   *  layout — draggable seeds, connections/repulsions). The node passes its id + params. */
+  onRunLayoutGen?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Host action: run simulated annealing on the current generated layout. */
+  onRunAnneal?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Host action: enter "Add Room" mode — the next canvas click drops a new room into the generated layout. */
+  onAddRoom?: (nodeId: string, params: Record<string, unknown>) => void;
 }
 
 interface NodeCallbacks {
@@ -1431,6 +1799,9 @@ interface NodeCallbacks {
   onRunDetect: (nodeId: string, params: Record<string, unknown>) => void;
   onRunAnalyse: (nodeId: string, params: Record<string, unknown>) => void;
   onRunGenerate: (nodeId: string, params: Record<string, unknown>) => void;
+  onRunLayoutGen: (nodeId: string, params: Record<string, unknown>) => void;
+  onRunAnneal: (nodeId: string, params: Record<string, unknown>) => void;
+  onAddRoom: (nodeId: string, params: Record<string, unknown>) => void;
 }
 
 const makeNode = (
@@ -1450,7 +1821,7 @@ const makeNode = (
     position: pos,
     // Every node (Space included) is deletable, so the canvas can be emptied completely.
     deletable: true,
-    data: { tool, params: { ...def.defaultParams }, onParamChange: cb.onParamChange, onRunRender: cb.onRunRender, onRunDetect: cb.onRunDetect, onRunAnalyse: cb.onRunAnalyse, onRunGenerate: cb.onRunGenerate } as FlowNodeData,
+    data: { tool, params: { ...def.defaultParams }, onParamChange: cb.onParamChange, onRunRender: cb.onRunRender, onRunDetect: cb.onRunDetect, onRunAnalyse: cb.onRunAnalyse, onRunGenerate: cb.onRunGenerate, onRunLayoutGen: cb.onRunLayoutGen, onRunAnneal: cb.onRunAnneal, onAddRoom: cb.onAddRoom } as FlowNodeData,
   };
 };
 
@@ -1776,7 +2147,15 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     }
   }, [onParamChange]);
 
-  const nodeCb = useMemo<NodeCallbacks>(() => ({ onParamChange, onRunRender, onRunDetect, onRunAnalyse, onRunGenerate }), [onParamChange, onRunRender, onRunDetect, onRunAnalyse, onRunGenerate]);
+  const layoutGenCb = props.onRunLayoutGen;
+  const annealCb = props.onRunAnneal;
+  const addRoomCb = props.onAddRoom;
+  const nodeCb = useMemo<NodeCallbacks>(() => ({
+    onParamChange, onRunRender, onRunDetect, onRunAnalyse, onRunGenerate,
+    onRunLayoutGen: (nodeId, params) => layoutGenCb?.(nodeId, params),
+    onRunAnneal: (nodeId, params) => annealCb?.(nodeId, params),
+    onAddRoom: (nodeId, params) => addRoomCb?.(nodeId, params),
+  }), [onParamChange, onRunRender, onRunDetect, onRunAnalyse, onRunGenerate, layoutGenCb, annealCb, addRoomCb]);
 
   // Keep every Space (source) node with "Grab ID from selection" on synced to ALL currently-selected
   // spaces' ids (comma-separated), so one Space node can output several spaces at once. Falls back to the
@@ -1886,34 +2265,49 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   // overlapping ids never collide) and positions offset to the right of the existing content.
   const insertWorkflow = useCallback((tpl: WorkflowTemplate) => {
     if (!tpl.nodes.length) return;
-    const minTx = Math.min(...tpl.nodes.map((n) => n.x));
-    const minTy = Math.min(...tpl.nodes.map((n) => n.y));
+    // Offset only TOP-LEVEL nodes (groups + ungrouped ops); grouped children keep their parent-relative x/y.
+    const topLevel = tpl.nodes.filter((n) => !n.parentId);
+    const minTx = Math.min(...topLevel.map((n) => n.x));
+    const minTy = Math.min(...topLevel.map((n) => n.y));
     setNodes((ns) => {
       const baseX = ns.length
         ? Math.max(...ns.map((n) => n.position.x + (n.measured?.width ?? n.width ?? 220))) + 80
         : 80;
       const baseY = 100;
+      // Pre-assign fresh ids for ALL nodes so parentId / edge references can be remapped.
       const idMap = new Map<string, string>();
+      for (const tn of tpl.nodes) idMap.set(tn.id, nextId(tn.type === "group" || tn.tool === "group" ? "group" : tn.tool));
       const newNodes: Node[] = tpl.nodes.map((tn) => {
-        const newId = nextId(tn.tool);
-        idMap.set(tn.id, newId);
-        const def = FLOW_TOOLS[tn.tool];
-        return {
+        const newId = idMap.get(tn.id)!;
+        const isGroup = tn.type === "group" || tn.tool === "group";
+        const def = isGroup ? undefined : FLOW_TOOLS[tn.tool as FlowToolType];
+        const position = tn.parentId ? { x: tn.x, y: tn.y } : { x: baseX + (tn.x - minTx), y: baseY + (tn.y - minTy) };
+        const node: Node = {
           id: newId,
-          type: "op",
-          position: { x: baseX + (tn.x - minTx), y: baseY + (tn.y - minTy) },
+          type: isGroup ? "group" : "op",
+          position,
           deletable: true,
-          data: {
-            tool: tn.tool,
-            params: { ...def.defaultParams, ...(tn.params ?? {}) },
-            onParamChange: nodeCb.onParamChange,
-            onRunRender: nodeCb.onRunRender,
-            onRunDetect: nodeCb.onRunDetect,
-            onRunAnalyse: nodeCb.onRunAnalyse,
-            onRunGenerate: nodeCb.onRunGenerate,
-          } as FlowNodeData,
+          data: isGroup
+            ? ({ tool: "group", params: { ...(tn.params ?? {}) } } as unknown as FlowNodeData)
+            : ({
+                tool: tn.tool as FlowToolType,
+                params: { ...(def?.defaultParams ?? {}), ...(tn.params ?? {}) },
+                onParamChange: nodeCb.onParamChange,
+                onRunRender: nodeCb.onRunRender,
+                onRunDetect: nodeCb.onRunDetect,
+                onRunAnalyse: nodeCb.onRunAnalyse,
+                onRunGenerate: nodeCb.onRunGenerate,
+                onRunLayoutGen: nodeCb.onRunLayoutGen,
+                onRunAnneal: nodeCb.onRunAnneal,
+                onAddRoom: nodeCb.onAddRoom,
+              } as FlowNodeData),
         };
+        if (isGroup) node.style = { width: tn.width ?? 240, height: tn.height ?? 160 };
+        if (tn.parentId) { node.parentId = idMap.get(tn.parentId)!; node.extent = "parent"; }
+        return node;
       });
+      // React Flow requires a parent (group) node to precede its children in the array — groups first.
+      newNodes.sort((a, b) => (a.type === "group" ? 0 : 1) - (b.type === "group" ? 0 : 1));
       // Edges reference template-local ids → remap to the freshly-minted node ids.
       setEdges((es) => [
         ...es,
@@ -1955,6 +2349,27 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       return changed ? next : ns;
     });
   }, [edges, setNodes]);
+
+  // Grab Parameters sync: for each `param-grab` node, read the definition of the Parametric Object wired
+  // into its `valin-def` and bake an interactive control list into `props` (preserving the user's current
+  // values across re-syncs). Keyed on nodes+edges; the changed-guard keeps it idempotent (no loop).
+  useEffect(() => {
+    setNodes((ns) => {
+      let changed = false;
+      const byId = new Map(ns.map((n) => [n.id, n]));
+      const next = ns.map((n) => {
+        const data = n.data as FlowNodeData;
+        if (data.tool !== "param-grab") return n;
+        const e = edges.find((ed) => ed.target === n.id && ed.targetHandle === "valin-def");
+        const srcDef = e ? String((byId.get(e.source)?.data as FlowNodeData | undefined)?.params.definition ?? "") : "";
+        const desired = paramGrabProps(srcDef, inputProps(data.params));
+        if (JSON.stringify(inputProps(data.params)) === JSON.stringify(desired)) return n;
+        changed = true;
+        return { ...n, data: { ...n.data, params: { ...data.params, props: desired } } };
+      });
+      return changed ? next : ns;
+    });
+  }, [nodes, edges, setNodes]);
 
   // "New" — clear the whole graph and reseed a lone Source node (a fresh, empty flow).
   const newFlow = useCallback(() => {
@@ -2058,7 +2473,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
         deletable: true,
         data: isGroup
           ? ({ tool: "group", params: { ...(n.data?.params ?? {}) } } as unknown as FlowNodeData)
-          : ({ tool, params: { ...(n.data?.params ?? {}) }, onParamChange: nodeCb.onParamChange, onRunRender: nodeCb.onRunRender, onRunDetect: nodeCb.onRunDetect, onRunAnalyse: nodeCb.onRunAnalyse, onRunGenerate: nodeCb.onRunGenerate } as FlowNodeData),
+          : ({ tool, params: { ...(n.data?.params ?? {}) }, onParamChange: nodeCb.onParamChange, onRunRender: nodeCb.onRunRender, onRunDetect: nodeCb.onRunDetect, onRunAnalyse: nodeCb.onRunAnalyse, onRunGenerate: nodeCb.onRunGenerate, onRunLayoutGen: nodeCb.onRunLayoutGen, onRunAnneal: nodeCb.onRunAnneal, onAddRoom: nodeCb.onAddRoom } as FlowNodeData),
       };
       // Grouped child → reattach to its parent (position stays parent-relative, constrained to the box).
       if (typeof n.parentId === "string") { node.parentId = n.parentId; node.extent = "parent"; }

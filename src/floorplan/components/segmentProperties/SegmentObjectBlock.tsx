@@ -19,6 +19,10 @@ export interface SegmentObjectBlockProps {
   onUpdateAttachment: (attId: string, patch: Partial<SegmentAttachment>) => void;
   /** Set one Input Property value on an attachment. */
   onUpdateParam: (attId: string, key: string, value: number | string | boolean) => void;
+  /** Show host placement controls (position along segment + flip). Off for point hosts like nodes. */
+  showPlacement?: boolean;
+  /** Heading + empty-state label, so the block reads naturally on a node too. */
+  title?: string;
 }
 
 /** One Input Property control — number / select / checkbox / text / colour. */
@@ -83,7 +87,7 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
   return (
     <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
       <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => p.setExpanded((v) => !v)}>
-        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Parametric Object</span>
+        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{p.title ?? "Parametric Object"}</span>
         <span className="text-[11px] text-slate-400">{p.expanded ? "▼" : "▶"}</span>
       </button>
       {p.expanded && (
@@ -110,7 +114,7 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
             />
           </div>
 
-          {p.attachments.length === 0 && <p className="text-[10px] text-slate-400">No object attached to this segment.</p>}
+          {p.attachments.length === 0 && <p className="text-[10px] text-slate-400">No object attached.</p>}
 
           {/* Each attachment: name, Input Properties, position, flip, detach. */}
           {p.attachments.map((att) => {
@@ -126,18 +130,22 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
                 {obj?.parameters.map((def) => (
                   <ParamField key={def.key} def={def} value={att.params[def.key]} onChange={(val) => p.onUpdateParam(att.id, def.key, val)} />
                 ))}
-                {/* Host placement. */}
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-500">Position</span>
-                    <span className="font-mono text-[10px] text-slate-500">{Math.round(att.t * 100)}%</span>
-                  </div>
-                  <input type="range" className="w-full" min={0} max={1} step={0.01} value={att.t} onChange={(e) => p.onUpdateAttachment(att.id, { t: +e.target.value })} />
-                </div>
-                <label className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-500">Flip side</span>
-                  <input type="checkbox" className="h-4 w-4" checked={!!att.flip} onChange={(e) => p.onUpdateAttachment(att.id, { flip: e.target.checked })} />
-                </label>
+                {/* Host placement (segment only — a node is a point). */}
+                {p.showPlacement !== false && (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500">Position</span>
+                        <span className="font-mono text-[10px] text-slate-500">{Math.round(att.t * 100)}%</span>
+                      </div>
+                      <input type="range" className="w-full" min={0} max={1} step={0.01} value={att.t} onChange={(e) => p.onUpdateAttachment(att.id, { t: +e.target.value })} />
+                    </div>
+                    <label className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500">Flip side</span>
+                      <input type="checkbox" className="h-4 w-4" checked={!!att.flip} onChange={(e) => p.onUpdateAttachment(att.id, { flip: e.target.checked })} />
+                    </label>
+                  </>
+                )}
               </div>
             );
           })}

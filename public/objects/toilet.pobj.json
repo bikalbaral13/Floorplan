@@ -1,0 +1,26 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "toilet.v1", "name": "Toilet", "category": "Fixtures/Bathroom", "units": "m" },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 0.4, "min": 0.32, "max": 0.55, "step": 0.01, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.7, "min": 0.55, "max": 0.85, "step": 0.01, "unit": "m" },
+    { "key": "height", "label": "Tank Height", "kind": "number", "default": 0.78, "min": 0.6, "max": 1.0, "step": 0.01, "unit": "m" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#64748b" }
+  ],
+  "geometry": {
+    "description": "Toilet: a cistern/tank box at the back (+Y, 0 → Tank Height) and a rounded bowl (octagon) at the front (0 → seat height 0.4).",
+    "emit": "shapes",
+    "vars": { "W": "width", "D": "depth", "H": "height", "rx": "W/2", "ry": "0.24", "by": "-D/2 + 0.28" },
+    "cases": [
+      { "rules": [
+        { "comment": "tank", "box": { "x0": "-W/2", "x1": "W/2", "y0": "D/2 - 0.2", "y1": "D/2", "h0": "0", "h1": "H" } },
+        { "comment": "bowl (octagon)", "poly": { "h0": "0", "h1": "0.4", "pts": [
+          ["rx", "by"], ["0.707*rx", "by + 0.707*ry"], ["0", "by + ry"], ["-0.707*rx", "by + 0.707*ry"],
+          ["-rx", "by"], ["-0.707*rx", "by - 0.707*ry"], ["0", "by - ry"], ["0.707*rx", "by - 0.707*ry"]
+        ] } }
+      ] }
+    ]
+  }
+}

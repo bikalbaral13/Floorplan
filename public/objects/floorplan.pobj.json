@@ -1,0 +1,35 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "floorplan.bsp.v1", "name": "Floorplan", "category": "Layout/Floorplan", "units": "m" },
+  "parameters": [
+    { "key": "rooms", "label": "Number of Rooms", "kind": "number", "default": 5, "min": 1, "max": 30, "step": 1 },
+    { "key": "roomArea", "label": "Avg Room Area", "kind": "number", "default": 14, "min": 4, "max": 60, "step": 1, "unit": "m²" },
+    { "key": "aspect", "label": "Plan Aspect (W/D)", "kind": "number", "default": 1.4, "min": 0.5, "max": 3.0, "step": 0.1 },
+    { "key": "wallWidth", "label": "Wall Width", "kind": "number", "default": 0.15, "min": 0.05, "max": 0.4, "step": 0.01, "unit": "m" },
+    { "key": "wallHeight", "label": "Wall Height", "kind": "number", "default": 2.8, "min": 2.0, "max": 4.0, "step": 0.05, "unit": "m" },
+    { "key": "sillHeight", "label": "Window Sill Height", "kind": "number", "default": 0.9, "min": 0, "max": 1.5, "step": 0.05, "unit": "m" },
+    { "key": "lintelHeight", "label": "Window Lintel Height", "kind": "number", "default": 2.1, "min": 1.5, "max": 3.5, "step": 0.05, "unit": "m" },
+    { "key": "doorWidth", "label": "Door Width", "kind": "number", "default": 0.9, "min": 0.6, "max": 1.4, "step": 0.05, "unit": "m" },
+    { "key": "windowWidth", "label": "Window Width", "kind": "number", "default": 1.2, "min": 0.4, "max": 3.0, "step": 0.05, "unit": "m" },
+    { "key": "random", "label": "Random Layout", "kind": "checkbox", "default": true },
+    { "key": "seed", "label": "Seed", "kind": "number", "default": 1, "min": 1, "max": 9999, "step": 1 },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#334155" }
+  ],
+
+  "geometry": {
+    "description": "Procedural floorplan: a seeded BSP splits the footprint into `rooms` cells (Random Layout jitters the split positions; Seed makes it repeatable, off = even splits). The footprint is derived from Number of Rooms × Avg Room Area at the given Aspect. Emits a floor slab, partition + perimeter walls (Wall Width, extruded to Wall Height), a door swing symbol on each partition + an entrance, and a window on each outer wall (drawn in plan and built as a glazing panel between Sill and Lintel heights in 3D). The whole plan is the generic `floorplan` rule — it draws in 2D and 3D from these parameters.",
+    "emit": "shapes",
+    "vars": {
+      "area": "max(4, rooms * roomArea)",
+      "W": "sqrt(area * max(0.2, aspect))",
+      "D": "area / sqrt(area * max(0.2, aspect))"
+    },
+    "cases": [
+      { "rules": [
+        { "comment": "seeded BSP floorplan — walls, floor, door + window symbols", "floorplan": true }
+      ] }
+    ]
+  }
+}

@@ -651,13 +651,19 @@ export interface ParametricObjectParam {
 }
 
 /** A self-contained parametric object loaded from a `.pobj.json` file — its identity + Input Properties
- *  schema. (The geometry generator is a follow-up; this carries the metadata + parameters so instances
- *  can be attached to segments and edited in the Properties tab.) */
+ *  schema + an optional declarative `geometry` block. When `geometry` is present, an attached instance
+ *  renders its OWN lines (2D plan) and 3D mesh from the parameters (evaluated by `evalParametricGeometry` /
+ *  `evalParametricPrisms`); otherwise it falls back to the placeholder `meta.symbol`. */
 export interface ParametricObjectFile {
   kind: "parametric-object";
   version: number;
-  meta: { id: string; name: string; category?: string; units?: string };
+  /** `symbol` selects the placeholder 2D plan symbol drawn for instances ("door" swing, "window"
+   *  frame+glass, "staircase" steps) when the file has no `geometry` block. Defaults to "door". */
+  meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" };
   parameters: ParametricObjectParam[];
+  /** Declarative geometry generator (vars + cases + box rules with expression strings). Passed verbatim to
+   *  `evalParametricGeometry` (plan) / `evalParametricPrisms` (3D mesh). Kept loose — the evaluator validates. */
+  geometry?: Record<string, unknown>;
 }
 
 /** An instance of a parametric object bound to a host segment: which library object, its per-instance
@@ -771,6 +777,8 @@ export interface NodeMeta {
   hatchAngle?: number;
   /** Hatch line thickness / dot radius factor. Default 1. */
   hatchWeight?: number;
+  /** Parametric object instances attached to this node (e.g. a parametric Staircase). */
+  attachments?: SegmentAttachment[];
 }
 
 /** Placement point of an object symbol relative to the node. */

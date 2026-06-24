@@ -32,7 +32,7 @@ export const parseDimEdges = (v: unknown): number[] => {
 };
 export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d";
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "layout-gen";
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
@@ -2991,6 +2991,109 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Place a furniture symbol (bed / sofa / …) on each input node — Width × Depth, Rotation, Anchor and Kind.",
   },
+  "layout-gen": {
+    type: "layout-gen",
+    label: "Layout Generation",
+    color: "#9333ea",
+    // Independent of the BSP node: a front-end to the existing interactive floorplan generator. Wire a
+    // Space (boundary) into the input, set the rooms / connections / repulsions / algorithm, then press
+    // "Generate" — the host runs generateFloorPlan and loads it as the canvas's editable layout (draggable
+    // seeds, connection/repulsion lines, Add Room all work on the canvas). "Run Annealing" optimises the
+    // seed positions. Room count / floor area / SA score are published for an Output node.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [
+      { key: "wallWidth", label: "Wall width" },
+      { key: "saIterations", label: "SA iterations" },
+    ],
+    valueOutputs: [
+      { key: "rooms", label: "Rooms" },
+      { key: "area", label: "Floor area", unit: "m²" },
+      { key: "score", label: "SA score" },
+    ],
+    // `rooms` is a per-room list ({label, minArea, maxArea, maxRatio}); a custom editor renders it on the
+    // node (see LayoutRoomsEditor). The canvas colour-codes each generated room's Area / Ratio against it.
+    defaultParams: { rooms: [
+      { label: "Living", minArea: 18, maxArea: 0, maxRatio: 2.5 },
+      { label: "Kitchen", minArea: 8, maxArea: 0, maxRatio: 2.5 },
+      { label: "Bedroom", minArea: 12, maxArea: 0, maxRatio: 2.5 },
+      { label: "Bathroom", minArea: 4, maxArea: 0, maxRatio: 3 },
+    ], algorithm: "bsp", wallWidth: 0.15, connections: "Living-Kitchen, Living-Bedroom", repulsions: "", saIterations: 600 },
+    fields: [
+      { key: "algorithm", label: "Algorithm", kind: "select", options: [
+        { value: "bsp", label: "BSP (recursive split)" },
+        { value: "rdg", label: "RDG (room graph)" },
+      ] },
+      { key: "wallWidth", label: "Wall Width", kind: "range", min: 0.05, max: 0.4, step: 0.01, unit: "m" },
+      { key: "connections", label: "Connections (A-B, …)", kind: "text", placeholder: "Living-Kitchen, Living-Bedroom" },
+      { key: "repulsions", label: "Repulsions (A-B, …)", kind: "text", placeholder: "Kitchen-Bathroom" },
+      { key: "saIterations", label: "SA Iterations", kind: "range", min: 50, max: 3000, step: 50 },
+    ],
+    hint: "Generate a multi-room layout inside the wired Space — set each room's Min/Max area + max aspect Ratio. Draggable seeds + connection/repulsion lines on the canvas; each room's Area/Ratio is colour-coded green (ok) / red (violated). Run Annealing to optimise.",
+  },
+  "param-object": {
+    type: "param-object",
+    label: "Parametric Object",
+    color: "#0d9488",
+    // Definition SOURCE: a textbox holding a self-contained parametric object (JSON — `parameters` defaults
+    // + a `geometry` block of declarative rules). Publishes the definition string on `val-def`; wire that
+    // into a Parametric Renderer. No geometry of its own. A wired `valin-def` overrides the typed text.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "def", label: "Definition in" }],
+    valueOutputs: [{ key: "def", label: "Definition" }],
+    defaultParams: { definition: "" },
+    fields: [
+      { key: "definition", label: "Definition (JSON)", kind: "textarea", placeholder: "Paste a parametric object definition — parameters + geometry rules…" },
+    ],
+    hint: "A self-contained parametric object definition (parameters + geometry rules). Outputs it on val-def → wire into a Parametric Renderer.",
+  },
+  "param-grab": {
+    type: "param-grab",
+    label: "Grab Parameters",
+    color: "#0891b2",
+    // Interactive control panel: reads the parametric definition (wired from a Parametric Object into
+    // `valin-def`), auto-builds one control per parameter (slider / options / checkbox / textbox — the
+    // host bakes the control list into `props` from the definition), and re-publishes the definition on
+    // `val-def` with the user's chosen values baked into its parameter defaults. Drop it between a
+    // Parametric Object and a Parametric Renderer to tweak the object live.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "def", label: "Definition" }],
+    valueOutputs: [{ key: "def", label: "Definition" }],
+    defaultParams: { props: [] },
+    fields: [],
+    hint: "Fetch the parameters of a wired Parametric Object as interactive controls (sliders / options / …) and pass the definition on with your values applied.",
+  },
+  "param-render": {
+    type: "param-render",
+    label: "Parametric Renderer",
+    color: "#0f766e",
+    // Generic, file-driven analogue of Node to Staircase: evaluates a parametric definition (wired from a
+    // Parametric Object node into `valin-def`, or its own `definition` param) and draws the resulting lines
+    // at EACH input node point. The geometry comes entirely from the definition — no per-object TypeScript.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "def", label: "Definition" }],
+    defaultParams: { definition: "" },
+    fields: [],
+    hint: "Evaluate a parametric definition (from a Parametric Object node) and draw its lines at each input node — the file-driven analogue of Node to Staircase.",
+  },
+  "param-render-3d": {
+    type: "param-render-3d",
+    label: "Parametric 3D Renderer",
+    color: "#7c3aed",
+    // Evaluates a parametric definition (wired from a Parametric Object / Grab Parameters into `valin-def`,
+    // or its own `definition` param) into a 3D MESH at each input node — one lofted prism per geometry box
+    // (footprint extruded h0→h1 metres). Publishes the mesh on the mesh channel; wire into Mesh to 3D to
+    // show it in the 3D view. Same definition + parameters as the 2D Parametric Renderer.
+    hasInput: true,
+    hasOutput: true,
+    valueInputs: [{ key: "def", label: "Definition" }],
+    defaultParams: { definition: "" },
+    fields: [],
+    hint: "Evaluate a parametric definition into a 3D mesh at each input node (footprints extruded by height) → wire into Mesh to 3D.",
+  },
   "node-to-staircase": {
     type: "node-to-staircase",
     label: "Node to Staircase",
@@ -4271,6 +4374,14 @@ export interface FlowNodeData extends Record<string, unknown> {
   onRunAnalyse?: (nodeId: string, params: Record<string, unknown>) => void;
   /** Injected by the host — the Generate node's "Generate" action (image/video/music via Google AI, bakes `_resultUrl`). */
   onRunGenerate?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Layout Generation node's "Generate" action (runs the floorplan generator on
+   *  the wired Space and loads it as the canvas's editable layout: draggable seeds + connections/repulsions). */
+  onRunLayoutGen?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Layout Generation node's "Run Annealing" action (simulated annealing). */
+  onRunAnneal?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Layout Generation node's "Add Room" action (enter add-room-on-canvas mode:
+   *  the next canvas click drops a new room into the current generated layout). */
+  onAddRoom?: (nodeId: string, params: Record<string, unknown>) => void;
 }
 
 /** Default model per Generate-node media kind. Changing the kind dropdown swaps the model to its default

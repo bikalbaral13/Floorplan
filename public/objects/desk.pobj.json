@@ -1,0 +1,27 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "desk.v1", "name": "Desk", "category": "Furniture/Office", "units": "m" },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 1.4, "min": 0.8, "max": 2.4, "step": 0.05, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.7, "min": 0.5, "max": 1.0, "step": 0.05, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 0.75, "min": 0.6, "max": 0.9, "step": 0.01, "unit": "m" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#6366f1" }
+  ],
+  "geometry": {
+    "description": "Desk: a top slab on four legs plus a back modesty panel at +Y.",
+    "emit": "shapes",
+    "vars": { "W": "width", "D": "depth", "H": "height", "tt": "H - 0.04" },
+    "cases": [
+      { "rules": [
+        { "comment": "leg FL", "box": { "x0": "-W/2 + 0.03", "x1": "-W/2 + 0.08", "y0": "-D/2 + 0.03", "y1": "-D/2 + 0.08", "h0": "0", "h1": "tt" } },
+        { "comment": "leg FR", "box": { "x0": "W/2 - 0.08", "x1": "W/2 - 0.03", "y0": "-D/2 + 0.03", "y1": "-D/2 + 0.08", "h0": "0", "h1": "tt" } },
+        { "comment": "leg BL", "box": { "x0": "-W/2 + 0.03", "x1": "-W/2 + 0.08", "y0": "D/2 - 0.08", "y1": "D/2 - 0.03", "h0": "0", "h1": "tt" } },
+        { "comment": "leg BR", "box": { "x0": "W/2 - 0.08", "x1": "W/2 - 0.03", "y0": "D/2 - 0.08", "y1": "D/2 - 0.03", "h0": "0", "h1": "tt" } },
+        { "comment": "modesty panel", "box": { "x0": "-W/2 + 0.05", "x1": "W/2 - 0.05", "y0": "D/2 - 0.05", "y1": "D/2 - 0.02", "h0": "0.35", "h1": "tt" } },
+        { "comment": "top", "box": { "x0": "-W/2", "x1": "W/2", "y0": "-D/2", "y1": "D/2", "h0": "tt", "h1": "H" } }
+      ] }
+    ]
+  }
+}

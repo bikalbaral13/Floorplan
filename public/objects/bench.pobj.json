@@ -1,0 +1,24 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "bench.v1", "name": "Bench", "category": "Furniture/Seating", "units": "m" },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 1.4, "min": 0.6, "max": 2.4, "step": 0.05, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.4, "min": 0.3, "max": 0.6, "step": 0.05, "unit": "m" },
+    { "key": "height", "label": "Seat Height", "kind": "number", "default": 0.45, "min": 0.3, "max": 0.6, "step": 0.01, "unit": "m" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#a16207" }
+  ],
+  "geometry": {
+    "description": "Bench: a seat slab on two end leg-panels.",
+    "emit": "shapes",
+    "vars": { "W": "width", "D": "depth", "H": "height", "st": "H - 0.05" },
+    "cases": [
+      { "rules": [
+        { "comment": "left leg panel", "box": { "x0": "-W/2", "x1": "-W/2 + 0.05", "y0": "-D/2", "y1": "D/2", "h0": "0", "h1": "st" } },
+        { "comment": "right leg panel", "box": { "x0": "W/2 - 0.05", "x1": "W/2", "y0": "-D/2", "y1": "D/2", "h0": "0", "h1": "st" } },
+        { "comment": "seat", "box": { "x0": "-W/2", "x1": "W/2", "y0": "-D/2", "y1": "D/2", "h0": "st", "h1": "H" } }
+      ] }
+    ]
+  }
+}

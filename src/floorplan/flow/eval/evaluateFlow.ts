@@ -13,6 +13,7 @@ import { computePull, type PullParams } from "../../algorithms/geometry/pull";
 import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalSkeletonRegions, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, voronoiSeeds, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow } from "./evalNodes";
 import { toFootingSpec, footingElevationPolys, footingPlanPolys, footingMeshPrisms } from "./footing";
 import { toStaircaseSpec, staircaseElevationPolys, staircaseMeshPrisms, type ElevationView } from "./staircase";
+import { evalParametricGeometry, evalParametricPrisms } from "./parametricObject";
 import { floorplanElevationPolys, type ElevSeg, type ElevKind, type ElevationView as FloorElevView } from "./floorplanElevation";
 import type { FlowMesh, FlowMeshPrism } from "./meshTypes";
 import { conditionMetricValue, evaluateSpaceCondition } from "../conditional";
@@ -898,6 +899,50 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "text", polygons: [], color: FLOW_TOOLS.text.color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
+    // Parametric Object (definition source): publish the textbox definition on `val-def` for a Parametric
+    // Renderer; a wired `valin-def` overrides the typed text. No geometry.
+    if (data.tool === "param-object") {
+      const vin = resolveValueInputs(id);
+      const def = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
+      const vals = { def };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "param-object", polygons: [], color: FLOW_TOOLS["param-object"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Layout Generation: pure value publisher — the heavy generate/anneal runs in the host (driving the
+    // canvas's editable layout); the host bakes the live results into `_rooms` / `_area` / `_score`, which
+    // we surface here as val-rooms / val-area / val-score for an Output node. No geometry.
+    if (data.tool === "layout-gen") {
+      const p = data.params;
+      const vals = { rooms: num(p._rooms, 0), area: num(p._area, 0), score: num(p._score, 0) };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "layout-gen", polygons: [], color: FLOW_TOOLS["layout-gen"].color, isFinal: false, values: vals });
+      continue;
+    }
+    // Grab Parameters (interactive control panel): read the wired definition, bake this node's control
+    // values into its parameter defaults, and re-publish the modified definition on `val-def`. No geometry.
+    if (data.tool === "param-grab") {
+      const vin = resolveValueInputs(id);
+      const inDef = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
+      let outDef = inDef;
+      try {
+        const parsed = JSON.parse(inDef) as { parameters?: unknown };
+        if (Array.isArray(parsed.parameters)) {
+          const vals: Record<string, number | string | boolean> = {};
+          for (const p of inputProps(data.params)) vals[p.id] = p.type === "checkbox" ? p.value === true : p.value;
+          (parsed as { parameters: unknown[] }).parameters = parsed.parameters.map((q) => {
+            const o = (q && typeof q === "object" ? q : {}) as Record<string, unknown>;
+            const k = typeof o.key === "string" ? o.key : "";
+            return k && k in vals ? { ...o, default: vals[k] } : o;
+          });
+          outDef = JSON.stringify(parsed);
+        }
+      } catch { /* unparseable — pass the definition through unchanged */ }
+      const vals = { def: outDef };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "param-grab", polygons: [], color: FLOW_TOOLS["param-grab"].color, isFinal: false, values: vals });
+      continue;
+    }
     // Point (value source): publish its (x, y) as val-x / val-y for downstream value inputs. No geometry.
     if (data.tool === "point") {
       const vals = { x: num(data.params.x, 0), y: num(data.params.y, 0) };
@@ -1560,6 +1605,52 @@ export function evaluateFlow(
           doorLines: lines.length ? lines : undefined,
         });
       }
+      continue;
+    }
+    // Parametric Renderer: parse the wired/typed parametric definition and draw its lines at each input
+    // node point — the generic, file-driven analogue of Node to Staircase (geometry from the definition).
+    if (data.tool === "param-render") {
+      const vin = resolveValueInputs(id);
+      const defText = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
+      const fill: Point[][] = [];
+      const lines: Point[][] = [];
+      let drawColor = FLOW_TOOLS["param-render"].color;
+      for (const pl of inputPolylinesOf(id, 1)) {
+        const p = pl[0];
+        if (!p) continue;
+        const g = evalParametricGeometry(defText, p, ppm);
+        drawColor = g.color || drawColor;
+        fill.push(...g.fill);
+        lines.push(...g.lines);
+      }
+      const all = [...fill, ...lines];
+      outputs.set(id, fill.length ? fill : all);
+      handleGroups.set(id, [all]);
+      if (all.length > 0) {
+        items.push({
+          nodeId: id, tool: "param-render", polygons: [], color: drawColor,
+          isFinal: succs.get(id)!.length === 0,
+          doorFill: fill.length ? fill : undefined,
+          doorLines: lines.length ? lines : undefined,
+        });
+      }
+      continue;
+    }
+    // Parametric 3D Renderer: evaluate the definition into a 3D mesh at each input node (one lofted prism
+    // per geometry box, extruded by height) and publish on the mesh channel for a downstream Mesh to 3D.
+    if (data.tool === "param-render-3d") {
+      const vin = resolveValueInputs(id);
+      const defText = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
+      const meshes: FlowMesh[] = [];
+      let mi = 0;
+      for (const pl of inputPolylinesOf(id, 1)) {
+        const p = pl[0];
+        if (!p) continue;
+        const prisms = evalParametricPrisms(defText, p, ppm);
+        if (prisms.length) meshes.push({ id: `${id}-${mi++}`, prisms });
+      }
+      meshOutputs.set(id, meshes);
+      outputs.set(id, []);
       continue;
     }
     // Node to Footing: draw a column-footing section on each incoming node — spread (flat pad), sloped

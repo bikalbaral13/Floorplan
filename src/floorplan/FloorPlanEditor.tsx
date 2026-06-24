@@ -212,10 +212,14 @@ import { WallExtendBlock, type WallExtendMode } from "./components/segmentProper
 import { WallInputsBlock } from "./components/segmentProperties/WallInputsBlock";
 import { WallDisplayBlock } from "./components/segmentProperties/WallDisplayBlock";
 import { SegmentObjectBlock } from "./components/segmentProperties/SegmentObjectBlock";
+import { NodeDisplayBlock } from "./components/nodeProperties/NodeDisplayBlock";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "./types";
 import { SchemaPropsBlock, SchemaMetricsBlock } from "./components/GraphSchemaBlocks";
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "./algorithms/network/pipeNetworkSolver";
 import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries } from "./flow/flowTypes";
+import { evalParametricGeometry, evalParametricPrisms } from "./flow/eval/parametricObject";
+import type { FlowMesh } from "./flow/eval/meshTypes";
+import { layoutRooms } from "./flow/LayoutRoomsEditor";
 import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, type AutoPlaceEntry, type OpeningKind } from "./flow/autoFlow";
 import { computeInflationRect } from "./algorithms/layout/inflationRect";
 import { OptimiseShapeBlock, type OptimiseShapeKind } from "./components/roomProperties/OptimiseShapeBlock";
@@ -1563,6 +1567,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [subtractBufferedFromSpace, setSubtractBufferedFromSpace] = useState<boolean>(false);
   /** Expanded state of the Segment Properties "Parametric Object" block. */
   const [segObjExpanded, setSegObjExpanded] = useState<boolean>(true);
+  /** Expanded state of the Node Properties Display + Parametric Object blocks. */
+  const [nodeDispExpanded, setNodeDispExpanded] = useState<boolean>(true);
+  const [nodeObjExpanded, setNodeObjExpanded] = useState<boolean>(true);
 
   /** Buffered-segment UNION outline — active only when the "Buffered Segment Joins" preference is
    *  "mitered-union". Unions every Buffered display band into one seamless outline (boundary edges), so
@@ -2456,6 +2463,29 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const m = flowPreview.flatMap((i) => i.meshes ?? []);
     return m.length ? m : undefined;
   }, [flowPreview]);
+  // Parametric objects attached to NODES that carry their own geometry → 3D meshes (footprints extruded by
+  // height), shown in the 3D view via the same Mesh-to-3D path as the Flow editor. Anchored at each node,
+  // with the instance's edited params overriding the file defaults.
+  const parametricObjectMeshes = useMemo<FlowMesh[]>(() => {
+    const lib = history.state.objectLibrary ?? {};
+    const meta = history.state.nodeMeta ?? {};
+    const out: FlowMesh[] = [];
+    for (const node of wallNodes) {
+      for (const att of meta[node.stableKey]?.attachments ?? []) {
+        const obj = lib[att.objectId];
+        if (!obj?.geometry) continue;
+        const prisms = evalParametricPrisms(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params);
+        if (prisms.length) out.push({ id: `pobj-${node.stableKey}-${att.id}`, prisms });
+      }
+    }
+    return out;
+  }, [wallNodes, history.state.nodeMeta, history.state.objectLibrary, pixelsPerMeter]);
+  // Everything the 3D view shows on the generic mesh channel: Flow "Mesh to 3D" output + node-attached
+  // parametric-object meshes.
+  const meshPreviewAll = useMemo<FlowMesh[] | undefined>(() => {
+    const all = [...(flowMeshPreview ?? []), ...parametricObjectMeshes];
+    return all.length ? all : undefined;
+  }, [flowMeshPreview, parametricObjectMeshes]);
   // "Views" mode: the four orthographic elevations of the canvas plan (walls + door/window openings),
   // projected from the live wall graph. Plan stays in the centre; Back top / Front bottom / Left / Right.
   /** Live Place Object previews → temporary placement-preview walls (one quad per object) merged into
@@ -3637,8 +3667,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const obj: ParametricObjectFile = {
         kind: "parametric-object",
         version: Number(parsed.version) || 1,
-        meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined },
+        meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : undefined },
         parameters: params,
+        // Carry the declarative geometry block through so attached instances render their own 2D lines + 3D mesh.
+        ...(parsed.geometry && typeof parsed.geometry === "object" && !Array.isArray(parsed.geometry) ? { geometry: parsed.geometry as Record<string, unknown> } : {}),
       };
       const h = historyRef.current;
       h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [id]: obj } });
@@ -3703,6 +3735,30 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const h = historyRef.current;
     h.set({ ...h.state, walls: h.state.walls.map((w) => (w.id === wallId ? { ...w, attachments: (w.attachments ?? []).map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)) } : w)) });
   }, []);
+
+  // ── Parametric objects attached to a NODE (stored in nodeMeta.attachments) ──
+  const patchNodeAttachments = useCallback((stableKey: string, fn: (list: SegmentAttachment[]) => SegmentAttachment[]) => {
+    const h = historyRef.current;
+    const prev = h.state.nodeMeta ?? {};
+    const cur = prev[stableKey] ?? {};
+    h.set({ ...h.state, nodeMeta: { ...prev, [stableKey]: { ...cur, attachments: fn(cur.attachments ?? []) } } });
+  }, []);
+
+  const attachObjectToNode = useCallback((stableKey: string, objectId: string) => {
+    const obj = (historyRef.current.state.objectLibrary ?? {})[objectId];
+    if (!obj) return;
+    const params: Record<string, number | string | boolean> = {};
+    for (const pr of obj.parameters) params[pr.key] = pr.default;
+    patchNodeAttachments(stableKey, (list) => [...list, { id: createId(), objectId, params, t: 0, flip: false }]);
+  }, [patchNodeAttachments]);
+
+  const detachNodeObject = useCallback((stableKey: string, attId: string) => {
+    patchNodeAttachments(stableKey, (list) => list.filter((a) => a.id !== attId));
+  }, [patchNodeAttachments]);
+
+  const updateNodeAttachmentParam = useCallback((stableKey: string, attId: string, key: string, value: number | string | boolean) => {
+    patchNodeAttachments(stableKey, (list) => list.map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)));
+  }, [patchNodeAttachments]);
 
   // The graph currently selected (only in Graph scope): the component containing any selected id, with
   // its auto display id and node/link/face metrics.
@@ -16413,6 +16469,118 @@ User request: ${aiPrompt.trim()}`;
     setSaRunning(false);
   }, []);
 
+  // ── Flow "Layout Generation" node bridge ──────────────────────────────────────────────────────────
+  // The node's "Generate" button calls this: build a GenerateConfig from the SELECTED Space boundary +
+  // the node's params, run the same generateFloorPlan, and load it as the editable canvas layout (so the
+  // existing draggable seeds + connection/repulsion lines + Add Room all work). Metrics are baked back
+  // onto the flow node (_rooms/_area) for an Output node.
+  const onRunLayoutGenFromNode = useCallback((nodeId: string, params: Record<string, unknown>) => {
+    // Boundary = the wired Space. Prefer the currently-selected space (what the flow's Space source
+    // resolves to); else, if only one space exists use it; else fall back to the LARGEST space (the plot
+    // to subdivide). So a connected Space works whether or not it's selected on the canvas.
+    const candidates = visibleRooms.filter((r) => r.points && r.points.length >= 3);
+    const selId = selectedRoomIdRef.current;
+    let room = (selId ? candidates.find((r) => r.id === selId) : undefined)
+      ?? (candidates.length === 1 ? candidates[0] : undefined);
+    if (!room && candidates.length > 1) {
+      room = candidates.reduce((a, b) => (Math.abs(polygonArea(b.points)) > Math.abs(polygonArea(a.points)) ? b : a));
+    }
+    if (!room) { toast.error("Draw or select a Space (the boundary) to generate a layout in."); return; }
+    const ppm = pixelsPerMeter;
+    const boundary: [number, number][] = room.points.map((p) => [p.x / ppm, p.y / ppm]);
+    const roomSpecs = layoutRooms(params).filter((r) => r.label.trim());
+    if (!roomSpecs.length) { toast.error("Add at least one room."); return; }
+    const rooms = roomSpecs.map((r) => ({
+      label: r.label.trim(),
+      minArea: r.minArea > 0 ? r.minArea : undefined,
+      maxArea: r.maxArea > 0 ? r.maxArea : undefined,
+      maxRatio: r.maxRatio > 0 ? r.maxRatio : undefined,
+    }));
+    const parsePairs = (s: unknown): [string, string][] =>
+      String(s ?? "").split(",").map((e) => e.trim()).filter(Boolean)
+        .map((e) => e.split("-").map((x) => x.trim()))
+        .filter((a) => a.length === 2 && a[0] && a[1]).map((a) => [a[0], a[1]] as [string, string]);
+    const config: GenerateConfig = {
+      boundary,
+      rooms,
+      connections: parsePairs(params.connections) as ConnectionEntry[],
+      repulsions: parsePairs(params.repulsions),
+      algorithm: params.algorithm === "rdg" ? "rdg" : "bsp",
+      wallWidth: Number(params.wallWidth) || 0.15,
+    };
+    try {
+      const result = generateFloorPlan(config, ppm);
+      const newWalls: Wall[] = result.walls.map((seg) => ({ id: createId(), start: { x: seg.ax, y: seg.ay }, end: { x: seg.bx, y: seg.by }, thickness: seg.widthPx, color: wallColor, mode: "line", method: "center" }));
+      const cleanedFurniture = history.state.furniture.filter((f) => !(f.type === "door" && f.connectionRooms));
+      const connectionDoors = createConnectionDoors(newWalls, result.roomRects, config.connections ?? []);
+      history.set({ ...history.state, walls: newWalls, furniture: [...cleanedFurniture, ...connectionDoors] });
+      const seedPositionsMeters: Record<string, { x: number; y: number }> = {};
+      for (const [label, pos] of Object.entries(result.seedPositionsPx)) seedPositionsMeters[label] = { x: pos.x / ppm, y: pos.y / ppm };
+      setGeneratedLayout({ config, seedPositions: seedPositionsMeters, roomRects: result.roomRects });
+      const totalArea = result.roomRects.reduce((s, r) => s + (r.w * r.h) / (ppm * ppm), 0);
+      flowParamApiRef.current?.(nodeId, "_rooms", result.roomRects.length);
+      flowParamApiRef.current?.(nodeId, "_area", totalArea);
+      toast.success(`Generated ${result.roomRects.length} rooms — drag the seeds to rearrange`);
+    } catch (e) {
+      toast.error("Layout generation failed: " + (e instanceof Error ? e.message : String(e)));
+    }
+  }, [visibleRooms, selection, pixelsPerMeter, wallColor, history, createConnectionDoors]);
+
+  // The node's "Run Annealing" button: simulated annealing on the current generated layout (mirrors
+  // handleSaStart, with the node's iteration count), baking the score/metrics back onto the node.
+  const onRunAnnealFromNode = useCallback((nodeId: string, params: Record<string, unknown>) => {
+    const layout = generatedLayoutRef.current;
+    if (!layout) { toast.error("Generate a layout first."); return; }
+    const sap = { ...DEFAULT_SA_PARAMS, iterations: Math.max(50, Math.round(Number(params.saIterations) || DEFAULT_SA_PARAMS.iterations)) };
+    flowParamApiRef.current?.(nodeId, "_saRunning", true);
+    setSaRunning(true);
+    const handle = runSimulatedAnnealing(
+      layout.config, layout.seedPositions, pixelsPerMeter, sap,
+      () => {},
+      (seeds, roomRects) => {
+        const updatedConfig: GenerateConfig = { ...layout.config, rooms: layout.config.rooms.map((r) => ({ ...r, x: seeds[r.label]?.x ?? r.x, y: seeds[r.label]?.y ?? r.y })) };
+        try {
+          const result = generateFloorPlan(updatedConfig, pixelsPerMeter);
+          const newWalls: Wall[] = result.walls.map((seg) => ({ id: createId(), start: { x: seg.ax, y: seg.ay }, end: { x: seg.bx, y: seg.by }, thickness: seg.widthPx, color: wallColor, mode: "line", method: "center" }));
+          const updatedFurniture = repositionConnectionDoors(historyRef.current.state.furniture, newWalls, roomRects, updatedConfig.connections);
+          historyRef.current.set({ ...historyRef.current.state, walls: newWalls, furniture: updatedFurniture });
+          setGeneratedLayout({ config: updatedConfig, seedPositions: { ...seeds }, roomRects });
+        } catch { /* ignore intermediate frame errors */ }
+      },
+      (result) => {
+        setSaRunning(false);
+        const totalArea = result.roomRects.reduce((s, r) => s + (r.w * r.h) / (pixelsPerMeter * pixelsPerMeter), 0);
+        flowParamApiRef.current?.(nodeId, "_saRunning", false);
+        flowParamApiRef.current?.(nodeId, "_score", result.bestScore);
+        flowParamApiRef.current?.(nodeId, "_rooms", result.roomRects.length);
+        flowParamApiRef.current?.(nodeId, "_area", totalArea);
+        toast.success(`Annealing complete — best score ${result.bestScore.toFixed(2)}`);
+      },
+    );
+    saHandleRef.current = handle;
+  }, [pixelsPerMeter, wallColor, repositionConnectionDoors]);
+
+  // The flow node captures its `onRun*` callbacks ONCE at creation, so a handler whose identity changes
+  // each render (these close over visibleRooms / selection) would go stale. Pass STABLE wrappers that
+  // always invoke the latest handler via a ref, so Generate/Anneal see the current canvas state.
+  const layoutGenHandlerRef = useRef(onRunLayoutGenFromNode);
+  layoutGenHandlerRef.current = onRunLayoutGenFromNode;
+  const annealHandlerRef = useRef(onRunAnnealFromNode);
+  annealHandlerRef.current = onRunAnnealFromNode;
+  const onRunLayoutGenStable = useCallback((nodeId: string, params: Record<string, unknown>) => layoutGenHandlerRef.current(nodeId, params), []);
+  const onRunAnnealStable = useCallback((nodeId: string, params: Record<string, unknown>) => annealHandlerRef.current(nodeId, params), []);
+
+  // "Add Room" button on the node: enter the existing add-room-on-canvas mode (the next canvas click drops
+  // a new room into the current generated layout via the Add Room dialog). Needs an existing layout.
+  const onAddRoomFromNode = useCallback((_nodeId: string, _params: Record<string, unknown>) => {
+    if (!generatedLayoutRef.current) { toast.error("Generate a layout first, then Add Room."); return; }
+    setAddRoomMode(true);
+    toast.success("Click inside the layout to place a new room.");
+  }, []);
+  const addRoomHandlerRef = useRef(onAddRoomFromNode);
+  addRoomHandlerRef.current = onAddRoomFromNode;
+  const onAddRoomStable = useCallback((nodeId: string, params: Record<string, unknown>) => addRoomHandlerRef.current(nodeId, params), []);
+
   const handleSaRestoreBest = useCallback(() => {
     const result = saBestResult ?? saHandleRef.current?.restoreBest();
     if (!result || !generatedLayout) {
@@ -21489,7 +21657,7 @@ User request: ${aiPrompt.trim()}`;
                   massingShowBlocks={massingShowBlocks}
                   massingExtrudeUpwards={massingExtrudeUpwards}
                   massingPreview={flowMassingPreview}
-                  meshPreview={flowMeshPreview}
+                  meshPreview={meshPreviewAll}
                   mapUnderlay={(() => {
                     // Prefer the OSM basemap clipped to the site region (the real map under the building);
                     // else fall back to the dropped image underlay textured on the ground (Approach A).
@@ -22615,20 +22783,45 @@ User request: ${aiPrompt.trim()}`;
                     (w.attachments ?? []).map((att) => {
                       const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy) || 1;
                       const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
-                      const side = att.flip ? -1 : 1;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
+                      const symbol = obj?.meta.symbol ?? "door";
                       const isOpening = !!w.isObjectOpening;
+                      const sw = Math.max(0.75, 1.25 / scale);
+                      const widthM = (typeof att.params.width === "number" ? att.params.width : Number(att.params.width)) || Number(obj?.parameters.find((p) => p.key === "width")?.default) || 0.9;
+                      const spanPx = isOpening ? L : widthM * pixelsPerMeter;
+                      const color = typeof att.params.color === "string" ? att.params.color : (symbol === "window" ? "#0891b2" : "#b45309");
+
+                      if (symbol === "window") {
+                        // Window plan symbol: two frame edges (±half wall thickness) + a centre glass line +
+                        // jamb caps + (panes − 1) mullion dividers, spanning the opening.
+                        const halfT = Math.max(2, (w.thickness ?? 10) / 2);
+                        const cAt = isOpening ? 0.5 : Math.min(1, Math.max(0, att.t));
+                        const cx = w.start.x + ux * (L * cAt), cy = w.start.y + uy * (L * cAt);
+                        const sx = cx - ux * spanPx / 2, sy = cy - uy * spanPx / 2;
+                        const ex = cx + ux * spanPx / 2, ey = cy + uy * spanPx / 2;
+                        const panes = Math.max(1, Math.round(Number(att.params.panes) || 1));
+                        const lines: number[][] = [
+                          [sx + nx * halfT, sy + ny * halfT, ex + nx * halfT, ey + ny * halfT],
+                          [sx - nx * halfT, sy - ny * halfT, ex - nx * halfT, ey - ny * halfT],
+                          [sx, sy, ex, ey],
+                          [sx + nx * halfT, sy + ny * halfT, sx - nx * halfT, sy - ny * halfT],
+                          [ex + nx * halfT, ey + ny * halfT, ex - nx * halfT, ey - ny * halfT],
+                        ];
+                        for (let i = 1; i < panes; i++) {
+                          const t = i / panes, mx = sx + (ex - sx) * t, my = sy + (ey - sy) * t;
+                          lines.push([mx + nx * halfT, my + ny * halfT, mx - nx * halfT, my - ny * halfT]);
+                        }
+                        return <Group key={att.id} listening={false}>{lines.map((pts, i) => <Line key={i} points={pts} stroke={color} strokeWidth={sw} />)}</Group>;
+                      }
+
+                      // Door swing symbol (default): leaf hinged at a jamb + quarter-arc.
+                      const side = att.flip ? -1 : 1;
                       const hingeRight = String(att.params.hinge ?? "left").toLowerCase() === "right";
-                      const wp = att.params.width ?? obj?.parameters.find((p) => p.key === "width")?.default ?? 0.9;
-                      // On an opening piece the leaf spans the gap (= piece length); otherwise use the width param.
-                      const wPx = isOpening ? L : (typeof wp === "number" ? wp : Number(wp) || 0.9) * pixelsPerMeter;
-                      // Hinge at a jamb of the opening piece (flips with the Hinge param); else at `t` along the wall.
+                      const wPx = spanPx;
                       const hx = isOpening ? (hingeRight ? w.end.x : w.start.x) : w.start.x + ux * (L * Math.min(1, Math.max(0, att.t)));
                       const hy = isOpening ? (hingeRight ? w.end.y : w.start.y) : w.start.y + uy * (L * Math.min(1, Math.max(0, att.t)));
-                      // Closed-leaf direction (along the wall, toward the other jamb).
                       const ax = isOpening && hingeRight ? -ux : ux;
                       const ay = isOpening && hingeRight ? -uy : uy;
-                      const sw = Math.max(0.75, 1.25 / scale);
                       const arc: number[] = [];
                       for (let i = 0; i <= 12; i++) {
                         const a = (i / 12) * (Math.PI / 2);
@@ -22636,10 +22829,52 @@ User request: ${aiPrompt.trim()}`;
                       }
                       return (
                         <Group key={att.id} listening={false}>
-                          {/* Leaf (open, perpendicular to the wall) */}
-                          <Line points={[hx, hy, hx + nx * side * wPx, hy + ny * side * wPx]} stroke="#b45309" strokeWidth={sw} />
-                          {/* Swing arc */}
-                          <Line points={arc} stroke="#b45309" strokeWidth={sw} />
+                          <Line points={[hx, hy, hx + nx * side * wPx, hy + ny * side * wPx]} stroke={color} strokeWidth={sw} />
+                          <Line points={arc} stroke={color} strokeWidth={sw} />
+                        </Group>
+                      );
+                    }),
+                  )}
+
+                  {/* Parametric objects attached to NODES — a placeholder Staircase plan symbol (footprint
+                      rectangle + tread lines), sized by the instance's width / steps / tread params and
+                      rotated by `rotation`, centred on the host node. */}
+                  {wallNodes.flatMap((node) =>
+                    (((history.state.nodeMeta ?? {})[node.stableKey] ?? {}).attachments ?? []).map((att) => {
+                      const obj = (history.state.objectLibrary ?? {})[att.objectId];
+                      const sw = Math.max(0.75, 1.25 / scale);
+                      const color = typeof att.params.color === "string" ? att.params.color : "#0f766e";
+                      // Parametric object with its own geometry block → evaluate its plan lines at the node
+                      // (the instance's edited params override the file defaults). Falls back to the
+                      // hardcoded staircase placeholder below for objects without geometry.
+                      if (obj?.geometry) {
+                        const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params);
+                        if (!g.fill.length && !g.lines.length) return null;
+                        return (
+                          <Group key={att.id} listening={false}>
+                            {g.fill.map((poly, i) => <Line key={`f${i}`} points={poly.flatMap((p) => [p.x, p.y])} closed stroke={g.color} strokeWidth={sw} fill={`${g.color}22`} lineJoin="round" />)}
+                            {g.lines.map((ln, i) => <Line key={`l${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
+                          </Group>
+                        );
+                      }
+                      const num = (k: string, d: number) => { const v = att.params[k] ?? obj?.parameters.find((p) => p.key === k)?.default; const n = typeof v === "number" ? v : Number(v); return isFinite(n) && n > 0 ? n : d; };
+                      const widthPx = num("width", 1) * pixelsPerMeter;
+                      const steps = Math.max(1, Math.round(num("steps", 12)));
+                      const runPx = steps * num("tread", 0.28) * pixelsPerMeter;
+                      const rot = ((Number(att.params.rotation) || 0) * Math.PI) / 180;
+                      const ax = Math.cos(rot), ay = Math.sin(rot);   // run axis
+                      const cxv = -ay, cyv = ax;                       // cross axis
+                      const P = (along: number, cross: number) => [node.x + ax * along + cxv * cross, node.y + ay * along + cyv * cross] as [number, number];
+                      const c0 = P(0, -widthPx / 2), c1 = P(runPx, -widthPx / 2), c2 = P(runPx, widthPx / 2), c3 = P(0, widthPx / 2);
+                      const treads: number[][] = [];
+                      for (let i = 1; i < steps; i++) {
+                        const d = (i / steps) * runPx;
+                        treads.push([...P(d, -widthPx / 2), ...P(d, widthPx / 2)]);
+                      }
+                      return (
+                        <Group key={att.id} listening={false}>
+                          <Line points={[...c0, ...c1, ...c2, ...c3]} closed stroke={color} strokeWidth={sw} fill="rgba(15,118,110,0.06)" />
+                          {treads.map((t, i) => <Line key={i} points={t} stroke={color} strokeWidth={sw} />)}
                         </Group>
                       );
                     }),
@@ -27952,7 +28187,7 @@ User request: ${aiPrompt.trim()}`;
                     // Segment to Door / Window + Node to Staircase / Footing: filled symbol polygons + open
                     // symbol lines (door swing + leaves / window frame + glass / stair flights + treads + arrow /
                     // footing layers).
-                    if ((item.tool === "segment-to-door" || item.tool === "segment-to-window" || item.tool === "node-to-staircase" || item.tool === "node-to-footing" || item.tool === "footing-to-elevation" || item.tool === "footing-to-plan" || item.tool === "node-source") && (item.doorFill || item.doorLines)) {
+                    if ((item.tool === "segment-to-door" || item.tool === "segment-to-window" || item.tool === "node-to-staircase" || item.tool === "node-to-footing" || item.tool === "footing-to-elevation" || item.tool === "footing-to-plan" || item.tool === "node-source" || item.tool === "param-render") && (item.doorFill || item.doorLines)) {
                       const sw = (item.isFinal ? 2 : 1.5) / scale;
                       const els: React.ReactNode[] = [];
                       (item.doorFill ?? []).forEach((poly, fi) => els.push(
@@ -28634,6 +28869,9 @@ User request: ${aiPrompt.trim()}`;
               injectOpeningRef={flowInjectOpeningRef}
               injectWallGraphRef={flowInjectWallGraphRef}
               injectNodeObjectRef={flowInjectNodeObjectRef}
+              onRunLayoutGen={onRunLayoutGenStable}
+              onRunAnneal={onRunAnnealStable}
+              onAddRoom={onAddRoomStable}
               onRunCommit={async (json, committedNodeIds) => {
                 await applyRecipeJson(json, "commit");
                 // Mitered Join → lay down real Path walls (segmentType "path") in the document for every
@@ -31362,8 +31600,29 @@ User request: ${aiPrompt.trim()}`;
                           ) : null}
                           {/* Element Parameters (FlowParamsPanel) removed — the imported Schema's Node
                               section above is the single source of truth for per-node properties. */}
-                          {/* Display block (node-marker shape / style / colour / size / hatch) removed —
-                              it now lives in the Flow "Display Node" node. */}
+                          {/* Display — canvas-native equivalent of the flow "Display Node" node
+                              (marker shape / style / colour / size / hatch). */}
+                          <NodeDisplayBlock
+                            expanded={nodeDispExpanded}
+                            setExpanded={setNodeDispExpanded}
+                            meta={(history.state.nodeMeta ?? {})[node.stableKey] ?? {}}
+                            onChange={(patch) => updateNodeMeta(node.stableKey, patch)}
+                          />
+                          {/* Parametric Object — import a parametric object file (Staircase / …) and attach
+                              an instance to this node, then edit its Input Properties. */}
+                          <SegmentObjectBlock
+                            title="Parametric Object"
+                            showPlacement={false}
+                            expanded={nodeObjExpanded}
+                            setExpanded={setNodeObjExpanded}
+                            library={history.state.objectLibrary ?? {}}
+                            attachments={((history.state.nodeMeta ?? {})[node.stableKey] ?? {}).attachments ?? []}
+                            onImportFile={(f) => void importParametricObject(f)}
+                            onAttach={(objectId) => attachObjectToNode(node.stableKey, objectId)}
+                            onDetach={(attId) => detachNodeObject(node.stableKey, attId)}
+                            onUpdateAttachment={() => {}}
+                            onUpdateParam={(attId, key, value) => updateNodeAttachmentParam(node.stableKey, attId, key, value)}
+                          />
                         </>}
                       </div>
                       )}

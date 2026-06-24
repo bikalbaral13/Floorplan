@@ -1,0 +1,23 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "nightstand.v1", "name": "Nightstand", "category": "Furniture/Bedroom", "units": "m" },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 0.45, "min": 0.3, "max": 0.7, "step": 0.01, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.4, "min": 0.3, "max": 0.6, "step": 0.01, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 0.55, "min": 0.4, "max": 0.8, "step": 0.01, "unit": "m" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#78716c" }
+  ],
+  "geometry": {
+    "description": "Nightstand: a small body box with a drawer line on the front face (−Y).",
+    "emit": "shapes",
+    "vars": { "W": "width", "D": "depth", "H": "height" },
+    "cases": [
+      { "rules": [
+        { "comment": "body", "box": { "x0": "-W/2", "x1": "W/2", "y0": "-D/2", "y1": "D/2", "h0": "0", "h1": "H" } },
+        { "comment": "drawer line", "line": { "pts": [["-W/2 + 0.03", "-D/2 + 0.03"], ["W/2 - 0.03", "-D/2 + 0.03"]] } }
+      ] }
+    ]
+  }
+}
