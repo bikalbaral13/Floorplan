@@ -18,6 +18,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/floorplan
+            git remote set-url origin https://${{ secrets.GH_TOKEN }}@github.com/bikal2026/Floorplan.git
             git pull origin main
             npm ci
             npm run build
