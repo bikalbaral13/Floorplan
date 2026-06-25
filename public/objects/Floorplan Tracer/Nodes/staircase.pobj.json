@@ -20,12 +20,17 @@
     { "key": "landingWidth", "label": "Landing depth", "kind": "number", "default": 1.0, "min": 0.5, "max": 3.0, "step": 0.05, "unit": "m" },
     { "key": "midSpace", "label": "Mid space (between flights)", "kind": "number", "default": 0.1, "min": 0, "max": 1.0, "step": 0.05, "unit": "m" },
     { "key": "landingCuts", "label": "Landing cuts", "kind": "number", "default": 1, "min": 1, "max": 10, "step": 1 },
+    { "key": "stepStyle", "label": "Step style", "kind": "select", "default": "solid", "options": [
+      { "value": "solid", "label": "Solid (filled to the ground)" },
+      { "value": "open", "label": "Open (floating treads, vacant below)" }
+    ] },
+    { "key": "treadThickness", "label": "Tread thickness (open mode)", "kind": "number", "default": 0.06, "min": 0.02, "max": 0.5, "step": 0.005, "unit": "m" },
     { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
     { "key": "color", "label": "Colour", "kind": "color", "default": "#0f766e" }
   ],
 
   "geometry": {
-    "description": "Self-contained generator. Emits a stack of solid boxes (steps + landings) in a LOCAL frame, identical to buildStaircaseBoxes: X = run axis (signed by `dir`), Y = cross/width axis (both horizontal, matching the 2D plan), H = height (rise), up. Each view projects these boxes: plan = top-down (X,Y); elevations = side (Left/Right = X×H, Front/Back = Y×H); 3D mesh = one prism per box (footprint on the ground, H = rise).",
+    "description": "Self-contained generator. Emits a stack of boxes (steps + landings) in a LOCAL frame, identical to buildStaircaseBoxes: X = run axis (signed by `dir`), Y = cross/width axis (both horizontal, matching the 2D plan), H = height (rise). Each view projects these boxes: plan = top-down (X,Y); elevations = side (Left/Right = X×H, Front/Back = Y×H); 3D mesh = one prism per box. `stepStyle` = 'solid' fills every box from the ground (H=0) up to its tread top (the classic stepped mass). `stepStyle` = 'open' instead makes every box a FLOATING SLAB of `treadThickness` at its tread top — so each step/landing is a thin plate with the space below it vacant (open / cantilevered stair). Both modes share the same footprints and tread tops, so plan + elevations + 3D stay consistent.",
     "units": "m",
     "emit": "boxes",
 
@@ -37,7 +42,7 @@
     },
 
     "vars": {
-      "_doc": "Evaluated in order; later entries may reference earlier ones. Mirrors toStaircaseSpec's clamping so the file is the single source of truth.",
+      "_doc": "Evaluated in order; later entries may reference earlier ones. Mirrors toStaircaseSpec's clamping so the file is the single source of truth. `open`/`TT` drive the floating-tread mode: in open mode a box's bottom (h0) rises to its tread top minus TT (clamped ≥ 0) instead of sitting at the ground.",
       "N": "max(2, round(steps))",
       "T": "max(0.05, tread)",
       "W": "max(0.1, width)",
@@ -45,20 +50,22 @@
       "G": "max(0, midSpace)",
       "R": "max(0.05, riser)",
       "MS": "round(midSteps)",
-      "dir": "direction == 'rtl' ? -1 : 1"
+      "dir": "direction == 'rtl' ? -1 : 1",
+      "open": "stepStyle == 'open' ? 1 : 0",
+      "TT": "max(0.01, treadThickness)"
     },
 
     "cases": [
       {
         "when": "config == 'straight'",
-        "description": "A single going (flight of N steps) rising to a top landing. Each step is a solid column from H=0 to its tread top, so the side elevation reads as the classic stepped profile.",
+        "description": "A single going (flight of N steps) rising to a top landing. Solid mode: each step is a column from H=0 to its tread top, so the side elevation reads as the classic stepped profile. Open mode: each step is a floating tread slab (vacant below).",
         "rules": [
-          { "comment": "step columns",
+          { "comment": "step columns / treads",
             "repeat": "N", "as": "i",
-            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "0", "h1": "(i+1)*R" } },
+            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "open ? max(0, (i+1)*R - TT) : 0", "h1": "(i+1)*R" } },
           { "comment": "top landing",
             "when": "L > 0",
-            "box": { "x0": "dir*N*T", "x1": "dir*(N*T + L)", "y0": "0", "y1": "W", "h0": "0", "h1": "N*R" } }
+            "box": { "x0": "dir*N*T", "x1": "dir*(N*T + L)", "y0": "0", "y1": "W", "h0": "open ? max(0, N*R - TT) : 0", "h1": "N*R" } }
         ]
       },
       {
@@ -73,12 +80,12 @@
         "rules": [
           { "comment": "flight 1",
             "repeat": "n1", "as": "i",
-            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "0", "h1": "(i+1)*R" } },
+            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "open ? max(0, (i+1)*R - TT) : 0", "h1": "(i+1)*R" } },
           { "comment": "turn landing (spans both flights)",
-            "box": { "x0": "xt", "x1": "xl", "y0": "0", "y1": "2*W + G", "h0": "0", "h1": "n1*R" } },
+            "box": { "x0": "xt", "x1": "xl", "y0": "0", "y1": "2*W + G", "h0": "open ? max(0, n1*R - TT) : 0", "h1": "n1*R" } },
           { "comment": "flight 2 (returns)",
             "repeat": "n2", "as": "j",
-            "box": { "x0": "xt - dir*j*T", "x1": "xt - dir*(j+1)*T", "y0": "W + G", "y1": "2*W + G", "h0": "0", "h1": "(n1 + j + 1)*R" } }
+            "box": { "x0": "xt - dir*j*T", "x1": "xt - dir*(j+1)*T", "y0": "W + G", "y1": "2*W + G", "h0": "open ? max(0, (n1 + j + 1)*R - TT) : 0", "h1": "(n1 + j + 1)*R" } }
         ]
       },
       {
@@ -97,17 +104,17 @@
         "rules": [
           { "comment": "flight 1",
             "repeat": "a", "as": "i",
-            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "0", "h1": "(i+1)*R" } },
+            "box": { "x0": "dir*i*T", "x1": "dir*(i+1)*T", "y0": "0", "y1": "W", "h0": "open ? max(0, (i+1)*R - TT) : 0", "h1": "(i+1)*R" } },
           { "comment": "landing 1",
-            "box": { "x0": "xt", "x1": "xr", "y0": "0", "y1": "W", "h0": "0", "h1": "a*R" } },
+            "box": { "x0": "xt", "x1": "xr", "y0": "0", "y1": "W", "h0": "open ? max(0, a*R - TT) : 0", "h1": "a*R" } },
           { "comment": "mid flight (perpendicular)",
             "repeat": "mid", "as": "k",
-            "box": { "x0": "xt", "x1": "xr", "y0": "W + k*T", "y1": "W + (k+1)*T", "h0": "0", "h1": "(a + k + 1)*R" } },
+            "box": { "x0": "xt", "x1": "xr", "y0": "W + k*T", "y1": "W + (k+1)*T", "h0": "open ? max(0, (a + k + 1)*R - TT) : 0", "h1": "(a + k + 1)*R" } },
           { "comment": "landing 2",
-            "box": { "x0": "xt", "x1": "xr", "y0": "y2", "y1": "y3", "h0": "0", "h1": "(a + mid)*R" } },
+            "box": { "x0": "xt", "x1": "xr", "y0": "y2", "y1": "y3", "h0": "open ? max(0, (a + mid)*R - TT) : 0", "h1": "(a + mid)*R" } },
           { "comment": "flight 3 (returns)",
             "repeat": "b", "as": "j",
-            "box": { "x0": "xt - dir*j*T", "x1": "xt - dir*(j+1)*T", "y0": "y2", "y1": "y3", "h0": "0", "h1": "(a + mid + j + 1)*R" } }
+            "box": { "x0": "xt - dir*j*T", "x1": "xt - dir*(j+1)*T", "y0": "y2", "y1": "y3", "h0": "open ? max(0, (a + mid + j + 1)*R - TT) : 0", "h1": "(a + mid + j + 1)*R" } }
         ]
       }
     ],

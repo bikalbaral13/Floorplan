@@ -37,6 +37,9 @@ interface LeftToolbarProps {
   onOpenTemplate: () => void;
   /** True when a template is currently loaded (drives the Template button highlight). */
   templateActive?: boolean;
+  /** Import a folder of parametric objects (Nodes / Segments / Spaces of `.pobj.json`) — drives the
+   *  Import Objects toolbar button; populates the Add Node / Add Segment / Add Space dropdowns. */
+  onImportObjects?: (files: File[]) => void;
   onSelectedGenElementChange: (value: null) => void;
 
   shapesPopoverOpen: boolean;
@@ -146,6 +149,7 @@ export const LeftToolbar = ({
   onCreateGrid,
   onOpenTemplate,
   templateActive,
+  onImportObjects,
   onSelectedGenElementChange,
   shapesPopoverOpen,
   onShapesPopoverOpenChange,
@@ -212,6 +216,7 @@ export const LeftToolbar = ({
       onCreateGrid={onCreateGrid}
       onOpenTemplate={onOpenTemplate}
       templateActive={templateActive}
+      onImportObjects={onImportObjects}
       onSelectedGenElementChange={onSelectedGenElementChange}
       onAddWallClick={onAddWallClick}
       drawingWall={drawingWall}

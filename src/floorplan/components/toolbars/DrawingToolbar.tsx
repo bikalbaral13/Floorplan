@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   AppWindow,
@@ -25,6 +25,7 @@ import {
   Square,
   Trash2,
   Type,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -62,6 +63,9 @@ export interface DrawingToolbarProps {
   onOpenTemplate?: () => void;
   /** True when a template is currently loaded (drives the Template button highlight). */
   templateActive?: boolean;
+  /** Import a folder of parametric objects (Nodes / Segments / Spaces of `.pobj.json`). Populates the
+   *  Add Node / Add Segment / Add Space dropdowns from the imported objects' labels. */
+  onImportObjects?: (files: File[]) => void;
   /** Clears any currently-selected generated element when starting a Door/Window/Connection tool. */
   onSelectedGenElementChange: (value: null) => void;
   /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
@@ -142,6 +146,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
   const [addNodeModeOpen, setAddNodeModeOpen] = useState<boolean>(false);
   // "Miscellaneous" dropdown — groups the Text / Freehand / Measure tools.
   const [miscOpen, setMiscOpen] = useState<boolean>(false);
+  const objectsFileRef = useRef<HTMLInputElement | null>(null);
 
   const resetModes = () => {
     p.onAddDoorModeChange(false);
@@ -187,6 +192,28 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 icon={<LayoutTemplate className="h-6 w-6 text-indigo-600" />}
                 label="Template"
                 onClick={p.onOpenTemplate}
+              />
+              <hr className="w-full border-slate-200" />
+            </div>
+          )}
+          {/* Import Objects — pick a folder of `.pobj.json` (Nodes / Segments / Spaces); the imported
+              objects' labels populate the Add Node / Add Segment / Add Space dropdowns. */}
+          {p.onImportObjects && (
+            <div className="flex flex-col items-center gap-2">
+              <ToolButton
+                icon={<Upload className="h-6 w-6 text-teal-600" />}
+                label="Import Objects"
+                onClick={() => objectsFileRef.current?.click()}
+              />
+              <input
+                ref={objectsFileRef}
+                type="file"
+                multiple
+                className="hidden"
+                // `webkitdirectory` / `directory` aren't in React's input types — render them at creation so
+                // the picker opens in directory mode and files carry `webkitRelativePath` (the folder structure).
+                {...({ webkitdirectory: "", directory: "" } as unknown as InputHTMLAttributes<HTMLInputElement>)}
+                onChange={(e) => { const files = e.target.files ? Array.from(e.target.files) : []; e.target.value = ""; if (files.length) p.onImportObjects?.(files); }}
               />
               <hr className="w-full border-slate-200" />
             </div>

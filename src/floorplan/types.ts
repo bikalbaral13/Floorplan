@@ -429,6 +429,9 @@ export interface Room {
   stroke: string;
   /** Fill opacity 0–1 (Display block). When unset the raw `fill` colour is used as-is. */
   fillOpacity?: number;
+  /** Parametric objects attached to this Space (e.g. a Floor slab). Same instance shape as a segment/node
+   *  attachment; placement (t/flip) is unused for an area host. */
+  attachments?: SegmentAttachment[];
   label?: string;
   netArea?: number;
   /** Area type: built-in (`room` / `floorplate-boundary` / `plot-boundary`) or a custom slug
@@ -659,8 +662,12 @@ export interface ParametricObjectFile {
   version: number;
   /** `symbol` selects the placeholder 2D plan symbol drawn for instances ("door" swing, "window"
    *  frame+glass, "staircase" steps) when the file has no `geometry` block. Defaults to "door". */
-  meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" };
+  meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" | "floor" | "wall" };
   parameters: ParametricObjectParam[];
+  /** Which host this object is drawn onto from the toolbar — set when imported via a Floorplan-Tracer
+   *  folder (Nodes → "node", Segments → "segment", Spaces → "space"). Drives the Add Node / Add Segment /
+   *  Add Space menus and the auto-attach when the matching element is drawn / selected. */
+  hostKind?: "node" | "segment" | "space";
   /** Declarative geometry generator (vars + cases + box rules with expression strings). Passed verbatim to
    *  `evalParametricGeometry` (plan) / `evalParametricPrisms` (3D mesh). Kept loose — the evaluator validates. */
   geometry?: Record<string, unknown>;

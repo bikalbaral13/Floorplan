@@ -1568,6 +1568,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [subtractBufferedFromSpace, setSubtractBufferedFromSpace] = useState<boolean>(true);
   /** Expanded state of the Segment Properties "Parametric Object" block. */
   const [segObjExpanded, setSegObjExpanded] = useState<boolean>(true);
+  /** Expanded state of the Space Properties "Floor / Parametric Object" block. */
+  const [spaceObjExpanded, setSpaceObjExpanded] = useState<boolean>(true);
   /** Expanded state of the Node Properties Display + Parametric Object blocks. */
   const [nodeDispExpanded, setNodeDispExpanded] = useState<boolean>(true);
   const [nodeObjExpanded, setNodeObjExpanded] = useState<boolean>(true);
@@ -1982,6 +1984,23 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const pendingNodeTypeRef = useRef<string | null>(null);
   // The schema space-type to tag the next drawn Space with (Add Space → Room / Open Space).
   const pendingSpaceTypeRef = useRef<string | null>(null);
+  // Pending parametric-object attach (one-shot): set when an imported object is picked from Add Node /
+  // Add Segment / Add Space; consumed (and cleared) when the next node/segment is drawn or space selected.
+  const pendingNodeObjectIdRef = useRef<string | null>(null);
+  const pendingSegObjectIdRef = useRef<string | null>(null);
+  const pendingSpaceObjectIdRef = useRef<string | null>(null);
+  /** Build a fresh SegmentAttachment from the pending Add-Segment object (if any), reading the object's
+   *  default parameters from the library. Returns null when no object is pending. Does NOT clear the
+   *  pending id — it persists across the whole polyline chain so every drawn segment gets its own
+   *  attachment (a continuous wall, not just the first). The id is cleared at chain start/end instead. */
+  const buildPendingSegAttachment = useCallback((): SegmentAttachment | null => {
+    const segObjId = pendingSegObjectIdRef.current;
+    const segObjDef = segObjId ? (history.state.objectLibrary ?? {})[segObjId] : null;
+    if (!segObjDef || !segObjId) return null;
+    const params: Record<string, number | string | boolean> = {};
+    for (const pr of segObjDef.parameters) params[pr.key] = pr.default;
+    return { id: createId(), objectId: segObjId, params, t: 0.5, flip: false };
+  }, [history]);
   // "Set params once per tool selection" — the open segment-type parameter dialog, and the confirmed
   // per-element defaults reused for every segment of the active type until another tool is picked.
   const [segParamsDialog, setSegParamsDialog] = useState<{ segType: string; label: string } | null>(null);
@@ -2473,12 +2492,49 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
     return out;
   }, [wallNodes, history.state.nodeMeta, history.state.objectLibrary, pixelsPerMeter]);
+  // Floor slabs (attached to a Space) + Wall bands (attached to a Segment) → 3D meshes. Each takes its
+  // footprint from the HOST — a floor uses the room polygon, a wall uses the segment band at its canvas
+  // thickness — and extrudes by the object's param: a floor by `thickness` below `level`, a wall by `height`
+  // above `base`. Footprints are plan-px world coords; yTop/yBottom are metres (same convention as above).
+  const floorWallMeshes = useMemo<FlowMesh[]>(() => {
+    const lib = history.state.objectLibrary ?? {};
+    const out: FlowMesh[] = [];
+    const pnum = (att: SegmentAttachment, k: string, d: number): number => { const v = att.params[k]; const x = typeof v === "number" ? v : Number(v); return isFinite(x) ? x : d; };
+    const pcol = (att: SegmentAttachment, d: string): string => (typeof att.params.color === "string" && att.params.color ? att.params.color : d);
+    for (const room of history.state.rooms) {
+      for (const att of room.attachments ?? []) {
+        if (lib[att.objectId]?.meta.symbol !== "floor" || room.points.length < 3) continue;
+        const thickness = Math.max(0.01, pnum(att, "thickness", 0.15));
+        const level = pnum(att, "level", 0);
+        const foot = room.points.map((p) => ({ x: p.x, y: p.y }));
+        out.push({ id: `floor-${room.id}-${att.id}`, prisms: [{ bottom: foot, top: foot, yBottom: level - thickness, yTop: level, color: pcol(att, "#a8a29e") }] });
+      }
+    }
+    for (const w of history.state.walls) {
+      for (const att of w.attachments ?? []) {
+        if (lib[att.objectId]?.meta.symbol !== "wall") continue;
+        const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy);
+        if (L < 1e-6) continue;
+        const nx = -dy / L, ny = dx / L, ht = Math.max(1, (w.thickness ?? 10) / 2);
+        const foot = [
+          { x: w.start.x + nx * ht, y: w.start.y + ny * ht },
+          { x: w.end.x + nx * ht, y: w.end.y + ny * ht },
+          { x: w.end.x - nx * ht, y: w.end.y - ny * ht },
+          { x: w.start.x - nx * ht, y: w.start.y - ny * ht },
+        ];
+        const height = Math.max(0.05, pnum(att, "height", 2.7));
+        const base = pnum(att, "base", 0);
+        out.push({ id: `wall-${w.id}-${att.id}`, prisms: [{ bottom: foot, top: foot, yBottom: base, yTop: base + height, color: pcol(att, "#94a3b8") }] });
+      }
+    }
+    return out;
+  }, [history.state.rooms, history.state.walls, history.state.objectLibrary]);
   // Everything the 3D view shows on the generic mesh channel: Flow "Mesh to 3D" output + node-attached
-  // parametric-object meshes.
+  // parametric-object meshes + Space-floor / Segment-wall meshes.
   const meshPreviewAll = useMemo<FlowMesh[] | undefined>(() => {
-    const all = [...(flowMeshPreview ?? []), ...parametricObjectMeshes];
+    const all = [...(flowMeshPreview ?? []), ...parametricObjectMeshes, ...floorWallMeshes];
     return all.length ? all : undefined;
-  }, [flowMeshPreview, parametricObjectMeshes]);
+  }, [flowMeshPreview, parametricObjectMeshes, floorWallMeshes]);
   // "Views" mode: the four orthographic elevations of the canvas plan (walls + door/window openings),
   // projected from the live wall graph. Plan stays in the centre; Back top / Front bottom / Left / Right.
   /** Live Place Object previews → temporary placement-preview walls (one quad per object) merged into
@@ -3634,45 +3690,89 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   }, []);
 
   // ── Parametric objects (Door / … attached to a segment) ──────────────────────
-  /** Import a `.pobj.json` parametric object file into the project library (persisted in history). */
-  const importParametricObject = useCallback(async (file: File) => {
-    try {
-      const parsed = JSON.parse(await file.text()) as Record<string, unknown>;
-      if (!parsed || parsed.kind !== "parametric-object" || !Array.isArray(parsed.parameters)) throw new Error("not a parametric-object file");
-      const meta = (parsed.meta ?? {}) as Record<string, unknown>;
-      const id = (typeof meta.id === "string" && meta.id) || file.name.replace(/\.[^.]+$/, "") || createId();
-      const params: ParametricObjectParam[] = (parsed.parameters as Record<string, unknown>[]).map((q) => {
-        const kind = (["number", "select", "checkbox", "text", "color"].includes(q.kind as string) ? q.kind : "number") as ParametricObjectParam["kind"];
-        const def = q.default ?? (kind === "checkbox" ? false : kind === "number" ? 0 : "");
-        return {
-          key: String(q.key ?? ""),
-          label: String(q.label ?? q.key ?? ""),
-          kind,
-          default: def as number | string | boolean,
-          min: typeof q.min === "number" ? q.min : undefined,
-          max: typeof q.max === "number" ? q.max : undefined,
-          step: typeof q.step === "number" ? q.step : undefined,
-          unit: typeof q.unit === "string" ? q.unit : undefined,
-          options: Array.isArray(q.options)
-            ? (q.options as unknown[]).map((o) => (typeof o === "string" ? { value: o, label: o } : { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }))
-            : undefined,
-        };
-      }).filter((p) => p.key);
-      const obj: ParametricObjectFile = {
-        kind: "parametric-object",
-        version: Number(parsed.version) || 1,
-        meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : undefined },
-        parameters: params,
-        // Carry the declarative geometry block through so attached instances render their own 2D lines + 3D mesh.
-        ...(parsed.geometry && typeof parsed.geometry === "object" && !Array.isArray(parsed.geometry) ? { geometry: parsed.geometry as Record<string, unknown> } : {}),
+  /** Pure parse + normalise of a `.pobj.json` payload → a library object (throws on a bad payload).
+   *  `hostKind` tags which toolbar host (node/segment/space) it's drawn onto — set when importing a folder. */
+  const buildParametricObjectFile = useCallback((parsed: Record<string, unknown>, fileName: string, hostKind?: "node" | "segment" | "space"): ParametricObjectFile => {
+    if (!parsed || parsed.kind !== "parametric-object" || !Array.isArray(parsed.parameters)) throw new Error("not a parametric-object file");
+    const meta = (parsed.meta ?? {}) as Record<string, unknown>;
+    const id = (typeof meta.id === "string" && meta.id) || fileName.replace(/\.[^.]+$/, "") || createId();
+    const params: ParametricObjectParam[] = (parsed.parameters as Record<string, unknown>[]).map((q) => {
+      const kind = (["number", "select", "checkbox", "text", "color"].includes(q.kind as string) ? q.kind : "number") as ParametricObjectParam["kind"];
+      const def = q.default ?? (kind === "checkbox" ? false : kind === "number" ? 0 : "");
+      return {
+        key: String(q.key ?? ""),
+        label: String(q.label ?? q.key ?? ""),
+        kind,
+        default: def as number | string | boolean,
+        min: typeof q.min === "number" ? q.min : undefined,
+        max: typeof q.max === "number" ? q.max : undefined,
+        step: typeof q.step === "number" ? q.step : undefined,
+        unit: typeof q.unit === "string" ? q.unit : undefined,
+        options: Array.isArray(q.options)
+          ? (q.options as unknown[]).map((o) => (typeof o === "string" ? { value: o, label: o } : { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }))
+          : undefined,
       };
+    }).filter((p) => p.key);
+    return {
+      kind: "parametric-object",
+      version: Number(parsed.version) || 1,
+      meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : meta.symbol === "floor" ? "floor" : meta.symbol === "wall" ? "wall" : undefined },
+      parameters: params,
+      ...(hostKind ? { hostKind } : {}),
+      // Carry the declarative geometry block through so attached instances render their own 2D lines + 3D mesh.
+      ...(parsed.geometry && typeof parsed.geometry === "object" && !Array.isArray(parsed.geometry) ? { geometry: parsed.geometry as Record<string, unknown> } : {}),
+    };
+  }, []);
+
+  /** Import a single `.pobj.json` parametric object file into the project library (persisted in history). */
+  const importParametricObject = useCallback(async (file: File, hostKind?: "node" | "segment" | "space") => {
+    try {
+      const obj = buildParametricObjectFile(JSON.parse(await file.text()) as Record<string, unknown>, file.name, hostKind);
       const h = historyRef.current;
-      h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [id]: obj } });
+      h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [obj.meta.id]: obj } });
       toast.success(`Imported object: ${obj.meta.name}`);
     } catch (e) {
       toast.error(`Import failed: ${e instanceof Error ? e.message : "invalid file"}`);
     }
-  }, []);
+  }, [buildParametricObjectFile]);
+
+  /** Import a whole Floorplan-Tracer folder (picked via a directory input). Each `.json` under Nodes/ ,
+   *  Segments/ , Spaces/ is parsed and tagged with its hostKind from the path, then ALL are merged into the
+   *  library in ONE history step (a per-file loop would race on `historyRef.current` and keep only the last). */
+  const importObjectFolder = useCallback(async (files: File[]) => {
+    const additions: Record<string, ParametricObjectFile> = {};
+    let failed = 0;
+    let bySymbol = 0;
+    for (const file of files) {
+      if (!file.name.toLowerCase().endsWith(".json")) continue;
+      // Primary: tag by the subfolder this file lives in. Split the relative path on either separator and
+      // match a folder segment EXACTLY (singular or plural) — robust whether the picked root is the parent
+      // ("Floorplan Tracer/Nodes/bed.pobj.json") or the subfolder itself ("Nodes/bed.pobj.json").
+      const parts = ((file as { webkitRelativePath?: string }).webkitRelativePath || file.name).toLowerCase().split(/[\\/]+/);
+      const has = (...names: string[]) => names.some((nm) => parts.includes(nm));
+      let hostKind: "node" | "segment" | "space" | undefined =
+        has("nodes", "node") ? "node" : has("segments", "segment") ? "segment" : has("spaces", "space") ? "space" : undefined;
+      try {
+        const parsed = JSON.parse(await file.text()) as Record<string, unknown>;
+        if (!hostKind) {
+          // Fallback when the browser didn't expose the folder structure: derive from the object's own
+          // symbol so the set still lands in the right menu — door/window/wall → segment, floor → space,
+          // everything else (furniture, staircase, footing, …) → node.
+          const sym = (parsed.meta as { symbol?: string } | undefined)?.symbol;
+          hostKind = sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" ? "space" : "node";
+          bySymbol++;
+        }
+        const obj = buildParametricObjectFile(parsed, file.name, hostKind);
+        additions[obj.meta.id] = obj;
+      } catch { failed++; }
+    }
+    const n = Object.keys(additions).length;
+    if (n === 0) { toast.error("No parametric objects found in the folder"); return; }
+    const h = historyRef.current;
+    h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), ...additions } });
+    const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
+    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${bySymbol ? ` (${bySymbol} by symbol)` : ""}${failed ? `, ${failed} failed` : ""}`);
+  }, [buildParametricObjectFile]);
 
   /** Attach a library object to a segment (seeded with the object's default param values), cutting an
    *  opening in the host wall: it's split into pre · opening · post, the opening piece carries the
@@ -3691,7 +3791,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const segLenM = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y) / pixelsPerMeter;
     const widthM = typeof params.width === "number" ? params.width : Number(params.width) || 0.9;
     const st = wall.segmentType ?? "wall";
-    const canCut = st !== "door" && st !== "window" && !wall.isObjectOpening && segLenM > 0.3 && widthM > 0;
+    // Only Door / Window objects cut an opening in the host segment. A Wall (or any other) object attaches
+    // along the whole segment without cutting — it spans the full length (thickness comes from the segment).
+    const isOpeningObj = obj.meta.symbol === "door" || obj.meta.symbol === "window";
+    const canCut = isOpeningObj && st !== "door" && st !== "window" && !wall.isObjectOpening && segLenM > 0.3 && widthM > 0;
     if (!canCut) {
       h.set({ ...h.state, walls: h.state.walls.map((w) => (w.id === wallId ? { ...w, attachments: [...(w.attachments ?? []), att] } : w)) });
       return;
@@ -3753,6 +3856,45 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const updateNodeAttachmentParam = useCallback((stableKey: string, attId: string, key: string, value: number | string | boolean) => {
     patchNodeAttachments(stableKey, (list) => list.map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)));
   }, [patchNodeAttachments]);
+
+  // ── Parametric objects attached to a SPACE (stored in room.attachments — e.g. a Floor slab) ──
+  // Auto-detected rooms have no entry in history.state.rooms, so attaching promotes them to a manual room
+  // first (fresh id + the attachment), mirroring `assignRoomLabel`, so the floor persists across wall edits.
+  const attachObjectToSpace = useCallback((room: Room, objectId: string) => {
+    const h = historyRef.current;
+    const obj = (h.state.objectLibrary ?? {})[objectId];
+    if (!obj || !room) return;
+    const params: Record<string, number | string | boolean> = {};
+    for (const pr of obj.parameters) params[pr.key] = pr.default;
+    const att: SegmentAttachment = { id: createId(), objectId, params, t: 0, flip: false };
+    if (room.id.startsWith(ROOM_AUTO_ID_PREFIX)) {
+      const newRoom: Room = { ...room, id: createId(), attachments: [...(room.attachments ?? []), att] };
+      h.set({ ...h.state, rooms: [...h.state.rooms, newRoom] });
+      selection.selectOne(newRoom.id);
+    } else {
+      h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === room.id ? { ...r, attachments: [...(r.attachments ?? []), att] } : r)) });
+    }
+  }, [selection]);
+
+  const detachSpaceObject = useCallback((roomId: string, attId: string) => {
+    const h = historyRef.current;
+    h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === roomId ? { ...r, attachments: (r.attachments ?? []).filter((a) => a.id !== attId) } : r)) });
+  }, []);
+
+  const updateSpaceAttachmentParam = useCallback((roomId: string, attId: string, key: string, value: number | string | boolean) => {
+    const h = historyRef.current;
+    h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === roomId ? { ...r, attachments: (r.attachments ?? []).map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)) } : r)) });
+  }, []);
+
+  // One-shot Space-object attach: when an object was picked from Add Space with nothing selected, attach it
+  // to the next space the user selects (spaces are auto-detected, so selection is the natural trigger).
+  useEffect(() => {
+    const id = pendingSpaceObjectIdRef.current;
+    if (!id || !selectedRoom) return;
+    pendingSpaceObjectIdRef.current = null;
+    attachObjectToSpace(selectedRoom, id);
+    toast.success("Object attached to the space");
+  }, [selectedRoom, attachObjectToSpace]);
 
   // The graph currently selected (only in Graph scope): the component containing any selected id, with
   // its auto display id and node/link/face metrics.
@@ -3831,6 +3973,31 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // A loaded Template takes priority — it drives the Add Segment / Add Node type names + icons with no flow.
   const templateDrawTools = useMemo(() => (activeTemplate ? drawToolsFromParams(activeTemplate) : undefined), [activeTemplate]);
   const schemaDrawTools = templateDrawTools ?? flowDrawTools ?? schemaToolsFromGraph;
+  // Imported parametric objects (from a Floorplan-Tracer folder), tagged by host → extra Add Node / Add
+  // Segment / Add Space menu entries (value `obj:<id>`). Picking one + drawing attaches the object.
+  const objectDrawTools = useMemo(() => {
+    const lib = history.state.objectLibrary ?? {};
+    // Effective host: the tag set at import, else inferred from the object's symbol — so objects imported
+    // before host-tagging existed (or via the old path) still land in the right menu (door/window/wall →
+    // segment, floor → space, everything else → node).
+    const effKind = (o: ParametricObjectFile): "node" | "segment" | "space" => {
+      if (o.hostKind) return o.hostKind;
+      const s = o.meta.symbol;
+      return s === "wall" || s === "door" || s === "window" ? "segment" : s === "floor" ? "space" : "node";
+    };
+    const mk = (kind: "node" | "segment" | "space"): DrawToolList =>
+      Object.values(lib).filter((o) => effKind(o) === kind).map((o) => ({ value: `obj:${o.meta.id}`, label: o.meta.name || o.meta.id }));
+    return { nodes: mk("node"), segments: mk("segment"), spaces: mk("space") };
+  }, [history.state.objectLibrary]);
+  // Schema draw tools (template / flow) + imported-object tools, merged so both appear in the menus.
+  const mergedDrawTools = useMemo<NonNullable<DrawTools>>(() => {
+    const base = schemaDrawTools ?? { segments: [], nodes: [], spaces: [] };
+    return {
+      segments: [...base.segments, ...objectDrawTools.segments],
+      nodes: [...base.nodes, ...objectDrawTools.nodes],
+      spaces: [...base.spaces, ...objectDrawTools.spaces],
+    };
+  }, [schemaDrawTools, objectDrawTools]);
 
   // Full segment property defs of the active schema node — the SAME source the Add Segment dropdown uses
   // (not graphSchema, which only populates when the schema is wired to a graph node). Drives the
@@ -17137,6 +17304,9 @@ User request: ${aiPrompt.trim()}`;
             // Same graphAttrs tagging as the click-commit: stamp seg-type + the saved per-type defaults
             // (thickness / justification / height) so a typed-length wall honours the dialog values too.
             const newSegId = createId();
+            // Attach the pending Add-Segment object (if any) just like the click-commit, so a typed-length
+            // segment mid-chain is the same element (e.g. a wall) as the clicked ones.
+            const segAtt = buildPendingSegAttachment();
             const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
             const segDefaults = activeSegDefaultsRef.current?.type === singleSegType ? activeSegDefaultsRef.current.vals : {};
             const taggedGA = (singleSegType !== "line" || Object.keys(segDefaults).length > 0)
@@ -17146,7 +17316,7 @@ User request: ${aiPrompt.trim()}`;
               ...history.state,
               walls: splitWallsAtIntersections([
                 ...history.state.walls,
-                { id: newSegId, start, end, thickness: layerVisibility.viewGraph ? 0.01 : wallThickness, color: wallColor, dashed: lineTypeDashed, mode: "line", method: "center", segmentType: singleSegType, ...(singleSegType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}), ...(singleSegType === "line" ? lineSegConfigProps() : {}) },
+                { id: newSegId, start, end, thickness: layerVisibility.viewGraph ? 0.01 : wallThickness, color: wallColor, dashed: lineTypeDashed, mode: "line", method: "center", segmentType: singleSegType, ...(segAtt ? { attachments: [segAtt] } : {}), ...(singleSegType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}), ...(singleSegType === "line" ? lineSegConfigProps() : {}) },
               ]),
               graphAttrs: taggedGA,
             });
@@ -17158,6 +17328,7 @@ User request: ${aiPrompt.trim()}`;
         setWallLengthInput("");
         setSingleSegStart(null);
         setSingleSegPreview(null);
+        pendingSegObjectIdRef.current = null; // chain finished — drop the pending object attachment
         setTool("select");
       }
     };
@@ -18430,6 +18601,12 @@ User request: ${aiPrompt.trim()}`;
         stroke: "#b45309",
         fill: "transparent",
       };
+      // Imported object picked from Add Segment → attach it to this drawn segment. The pending object id
+      // PERSISTS across the whole polyline chain (cleared when the chain ends or another tool starts), so
+      // every segment drawn in the session becomes the object — e.g. a continuous wall, not just the first.
+      // Each segment gets its own attachment instance. If a segment later splits at an intersection the
+      // attachment stays on the un-split piece.
+      const segAtt = buildPendingSegAttachment();
       history.set({
         ...history.state,
         walls: splitWallsAtIntersections([
@@ -18445,6 +18622,7 @@ User request: ${aiPrompt.trim()}`;
             mode: isWall ? wallDrawMode : "line",
             method: isWall ? wallDrawMethod : "center",
             segmentType: singleSegType,
+            ...(segAtt ? { attachments: [segAtt] } : {}),
             // Door openings carry hinge/swing defaults so the swing symbol renders immediately.
             ...(singleSegType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}),
             // Apply the Add Segment dialog's display config to plain line segments.
@@ -18507,6 +18685,19 @@ User request: ${aiPrompt.trim()}`;
       const nextGraphAttrs = nodeType
         ? { ...ga, nodes: { ...(ga.nodes ?? {}), [nodeStableKey]: { ...(ga.nodes?.[nodeStableKey] ?? {}), "node-type": nodeType } } }
         : ga;
+      // Imported object picked from Add Node → attach it to this node in the SAME history step (a separate
+      // set would race on the not-yet-committed node). One-shot: cleared after placing.
+      const nodeObjId = pendingNodeObjectIdRef.current;
+      const nodeObj = nodeObjId ? (history.state.objectLibrary ?? {})[nodeObjId] : null;
+      let nodeMetaPatch: typeof history.state.nodeMeta | null = null;
+      if (nodeObj && nodeObjId) {
+        const params: Record<string, number | string | boolean> = {};
+        for (const pr of nodeObj.parameters) params[pr.key] = pr.default;
+        const prevMeta = history.state.nodeMeta ?? {};
+        const cur = prevMeta[nodeStableKey] ?? {};
+        nodeMetaPatch = { ...prevMeta, [nodeStableKey]: { ...cur, attachments: [...(cur.attachments ?? []), { id: createId(), objectId: nodeObjId, params, t: 0, flip: false }] } };
+      }
+      pendingNodeObjectIdRef.current = null;
       history.set({
         ...history.state,
         walls: [
@@ -18524,6 +18715,7 @@ User request: ${aiPrompt.trim()}`;
           },
         ],
         graphAttrs: nextGraphAttrs,
+        ...(nodeMetaPatch ? { nodeMeta: nodeMetaPatch } : {}),
       });
       // Stay in Add Node mode so the user can drop several nodes in a row. Press Esc to return
       // to Select (handled in the keydown effect).
@@ -18822,6 +19014,7 @@ User request: ${aiPrompt.trim()}`;
       }
       setSingleSegStart(null);
       setSingleSegPreview(null);
+      pendingSegObjectIdRef.current = null; // chain finished — drop the pending object attachment
       setTool("select");
       return;
     }
@@ -21302,6 +21495,7 @@ User request: ${aiPrompt.trim()}`;
                 onCreateGrid={() => setGridDialogOpen(true)}
                 onOpenTemplate={() => setTemplateDialogOpen(true)}
                 templateActive={!!activeTemplate}
+                onImportObjects={(files) => { void importObjectFolder(files); }}
                 onSelectedGenElementChange={setSelectedGenElement}
                 shapesPopoverOpen={shapesPopoverOpen}
                 onShapesPopoverOpenChange={setShapesPopoverOpen}
@@ -21333,6 +21527,7 @@ User request: ${aiPrompt.trim()}`;
                   // Start the click-click segment trace — plain line, door / window, or a schema seg-type.
                   // No dialog config on this path (schema dropdown / direct) — clear any stale Add-Segment config.
                   activeSegmentConfigRef.current = null;
+                  pendingSegObjectIdRef.current = null; // no imported object on this path
                   pendingNodeTypeRef.current = null;
                   setFurnitureNodeMode(false);
                   setSingleSegStart(null);
@@ -21341,6 +21536,23 @@ User request: ${aiPrompt.trim()}`;
                   setTool("single-segment");
                 }}
                 onAddSegmentType={(segType, label) => {
+                  // Reset any prior pending object first; the obj: branch below re-arms it. Schema-type
+                  // branches leave it cleared so they draw plain typed segments (no object attachment).
+                  pendingSegObjectIdRef.current = null;
+                  // Imported parametric object picked → draw a continuous chain of segments, attaching the
+                  // object to EACH one (e.g. a multi-segment wall). The chain ends on double-click / Esc.
+                  if (segType.startsWith("obj:")) {
+                    pendingSegObjectIdRef.current = segType.slice(4);
+                    activeSegmentConfigRef.current = null;
+                    pendingNodeTypeRef.current = null;
+                    setFurnitureNodeMode(false);
+                    setSingleSegStart(null);
+                    setSingleSegPreview(null);
+                    setSingleSegType("line");
+                    setTool("single-segment");
+                    toast.info("Click to draw connected segments — double-click or Esc to finish");
+                    return;
+                  }
                   // Picking a schema segment type: if it has parameters, pop the dialog to set them once;
                   // otherwise start drawing straight away. Clear any stale defaults for a clean prompt.
                   const fields = fieldsForSegType(activeSchemaSegmentDefs, segType);
@@ -21358,10 +21570,31 @@ User request: ${aiPrompt.trim()}`;
                 }}
                 // Schema-driven drawing tools (from a "Schema to Drawing Tools" node), augmenting/overriding
                 // the built-in Add Segment / Add Node types by value, with their icons.
-                schemaSegmentTools={schemaDrawTools?.segments}
-                schemaNodeTools={schemaDrawTools?.nodes}
-                schemaSpaceTools={schemaDrawTools?.spaces}
+                schemaSegmentTools={mergedDrawTools.segments.length ? mergedDrawTools.segments : undefined}
+                schemaNodeTools={mergedDrawTools.nodes.length ? mergedDrawTools.nodes : undefined}
+                schemaSpaceTools={mergedDrawTools.spaces.length ? mergedDrawTools.spaces : undefined}
                 onAddSpaceType={(spaceType) => {
+                  // Imported parametric object picked → attach to the currently-selected space, else arm a
+                  // one-shot attach for the next space drawn/clicked (spaces are auto-detected, no creation hook).
+                  if (spaceType.startsWith("obj:")) {
+                    const objId = spaceType.slice(4);
+                    if (selectedRoom) {
+                      attachObjectToSpace(selectedRoom, objId);
+                      toast.success("Object attached to the selected space");
+                      return;
+                    }
+                    pendingSpaceObjectIdRef.current = objId;
+                    pendingSpaceTypeRef.current = null;
+                    setTool("wall");
+                    setNextWallSegmentType("line");
+                    setWallDrawMode("line");
+                    setAddDoorMode(false);
+                    setAddWindowMode(false);
+                    setAddEdgeMode(null);
+                    setAddRoomMode(false);
+                    toast.info("Draw a space (close the polygon), then click it to attach the object");
+                    return;
+                  }
                   // Draw a Space tagged with the chosen schema space-type. The polygon is drawn as line
                   // segments (auto-detected into a Space); the pending type is applied on creation.
                   pendingSpaceTypeRef.current = spaceType;
@@ -21376,6 +21609,15 @@ User request: ${aiPrompt.trim()}`;
                   toast.info(`Draw a "${label}" space — close the polygon to finish`);
                 }}
                 onAddNodeType={(nodeType) => {
+                  // Imported parametric object picked → place a node and attach the object to it (one-shot).
+                  if (nodeType.startsWith("obj:")) {
+                    pendingNodeObjectIdRef.current = nodeType.slice(4);
+                    pendingNodeTypeRef.current = null;
+                    setFurnitureNodeMode(false);
+                    setTool("point");
+                    toast.info("Click to place — the object attaches to the new node");
+                    return;
+                  }
                   // Place tagged nodes of a schema node-type (object / junction / custom) on each click.
                   setFurnitureNodeMode(false);
                   pendingNodeTypeRef.current = nodeType;
@@ -22079,6 +22321,9 @@ User request: ${aiPrompt.trim()}`;
                         ? (offsetPolygonInward(h, hi.map((d) => -d)) ?? h)
                         : h;
                     });
+                    // Floor parametric object attached to this Space → its colour fills the Space in 2D.
+                    const floorAtt = room.attachments?.find((a) => (history.state.objectLibrary ?? {})[a.objectId]?.meta.symbol === "floor");
+                    const floorFill = floorAtt && typeof floorAtt.params.color === "string" ? floorAtt.params.color : null;
                     return (
                       <Group key={roomReactKey}>
                         {isRoomSelected && layerVisibility.seeds && (
@@ -22126,7 +22371,7 @@ User request: ${aiPrompt.trim()}`;
 
                               const raw = (ctx as unknown as { _context: CanvasRenderingContext2D })._context;
                               // Selection keeps the room's own fill — only the boundary is highlighted.
-                              const fill = room.fillOpacity != null ? applyAlpha(room.fill, room.fillOpacity) : room.fill;
+                              const fill = floorFill ?? (room.fillOpacity != null ? applyAlpha(room.fill, room.fillOpacity) : room.fill);
                               if (fill) {
                                 raw.fillStyle = fill;
                                 raw.fill(path, "evenodd");
@@ -22165,7 +22410,7 @@ User request: ${aiPrompt.trim()}`;
                             listening={!(addDoorMode || addWindowMode || furnitureNodeMode || tool === "point")}
                             points={renderOuter.flatMap((point) => [point.x, point.y])}
                             closed
-                            fill={room.fillOpacity != null ? applyAlpha(room.fill, room.fillOpacity) : room.fill}
+                            fill={floorFill ?? (room.fillOpacity != null ? applyAlpha(room.fill, room.fillOpacity) : room.fill)}
                             stroke={isRoomSelected ? "#f59e0b" : room.stroke}
                             strokeWidth={isRoomSelected ? 3.5 / scale : 1}
                             onClick={(event) => {
@@ -22801,6 +23046,18 @@ User request: ${aiPrompt.trim()}`;
                       const widthM = (typeof att.params.width === "number" ? att.params.width : Number(att.params.width)) || Number(obj?.parameters.find((p) => p.key === "width")?.default) || 0.9;
                       const spanPx = isOpening ? L : widthM * pixelsPerMeter;
                       const color = typeof att.params.color === "string" ? att.params.color : (symbol === "window" ? "#0891b2" : "#b45309");
+
+                      if (symbol === "wall") {
+                        // Wall object: tint the segment band (full length × canvas thickness) in the wall colour.
+                        const ht = Math.max(2, (w.thickness ?? 10) / 2);
+                        const band = [
+                          w.start.x + nx * ht, w.start.y + ny * ht,
+                          w.end.x + nx * ht, w.end.y + ny * ht,
+                          w.end.x - nx * ht, w.end.y - ny * ht,
+                          w.start.x - nx * ht, w.start.y - ny * ht,
+                        ];
+                        return <Line key={att.id} points={band} closed listening={false} fill={`${color}55`} stroke={color} strokeWidth={sw} lineJoin="round" />;
+                      }
 
                       if (symbol === "window") {
                         // Window plan symbol: two frame edges (±half wall thickness) + a centre glass line +
@@ -30053,6 +30310,23 @@ User request: ${aiPrompt.trim()}`;
                           }}
                         />
                       </div>
+                      {/* Floor / Parametric Object — import a `.pobj.json` (e.g. Floor) and attach it to this
+                          Space. A Floor object takes the Space polygon as its footprint and adds thickness +
+                          colour, rendering in both the 2D plan and the 3D view. */}
+                      <SegmentObjectBlock
+                        expanded={spaceObjExpanded}
+                        setExpanded={setSpaceObjExpanded}
+                        library={history.state.objectLibrary ?? {}}
+                        attachments={selectedRoom.attachments ?? []}
+                        onImportFile={(f) => void importParametricObject(f)}
+                        onAttach={(objectId) => attachObjectToSpace(selectedRoom, objectId)}
+                        onDetach={(attId) => detachSpaceObject(selectedRoom.id, attId)}
+                        onUpdateAttachment={() => {}}
+                        onUpdateParam={(attId, key, value) => updateSpaceAttachmentParam(selectedRoom.id, attId, key, value)}
+                        showPlacement={false}
+                        title="Floor / Parametric Object"
+                      />
+
                       {/* Native Space Type selector removed — space type is controlled via the Flow node
                           graph (Schema space discriminator). */}
 
@@ -32242,6 +32516,7 @@ User request: ${aiPrompt.trim()}`;
             fill: addSegConfig.fill,
             method: addSegConfig.method,
           };
+          pendingSegObjectIdRef.current = null; // plain line via dialog — no imported object attached
           pendingNodeTypeRef.current = null;
           setFurnitureNodeMode(false);
           setSingleSegStart(null);
@@ -32345,6 +32620,7 @@ User request: ${aiPrompt.trim()}`;
           onConfirm={(vals) => {
             // Pin the values for reuse, then start the click-click draw with this type.
             activeSegDefaultsRef.current = { type: segParamsDialog.segType, vals };
+            pendingSegObjectIdRef.current = null; // typed schema segment — no imported object attached
             pendingNodeTypeRef.current = null;
             setFurnitureNodeMode(false);
             setSingleSegStart(null);
