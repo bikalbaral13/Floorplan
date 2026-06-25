@@ -125,6 +125,7 @@ import {
   wallPolygonPoints,
   wallWithDefaults,
 } from "./wallGeometry";
+import { computeConvexHull } from "./algorithms/partitioning/convexHull";
 import { computeMiteredWalls, computeWallDimensions, wallsToGraphInput } from "./algorithms/structure/wallBuilder";
 import type { FrameSchema } from "./algorithms/structure/frameBuilder";
 import { insetMassFootprint } from "./algorithms/mass/inset3d";
@@ -174,6 +175,9 @@ import { AddWallDialog } from "./components/dialogs/AddWallDialog";
 import { AddOpeningDialog } from "./components/dialogs/AddOpeningDialog";
 import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/AddFurnitureDialog";
 import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/SegmentTypeParamsDialog";
+import { ObjectParamsDialog } from "./components/dialogs/ObjectParamsDialog";
+import { ChatAIPanel, type ChatMessage } from "./components/ChatAIPanel";
+import { serializeForAI, chatEditModel, applyAiReply, summarizeChange } from "./ai/aiChat";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
@@ -1989,22 +1993,79 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const pendingNodeObjectIdRef = useRef<string | null>(null);
   const pendingSegObjectIdRef = useRef<string | null>(null);
   const pendingSpaceObjectIdRef = useRef<string | null>(null);
-  /** Build a fresh SegmentAttachment from the pending Add-Segment object (if any), reading the object's
-   *  default parameters from the library. Returns null when no object is pending. Does NOT clear the
-   *  pending id — it persists across the whole polyline chain so every drawn segment gets its own
-   *  attachment (a continuous wall, not just the first). The id is cleared at chain start/end instead. */
+  // Parameter values chosen in the Add-Segment object popup, applied to every segment drawn in the chain
+  // (keyed to the armed object so a stale value never leaks onto a different object).
+  const pendingSegObjectParamsRef = useRef<{ objectId: string; vals: Record<string, number | string | boolean> } | null>(null);
+  // Same, for the Add-Node object popup — applied to every node dropped while the tool is active.
+  const pendingNodeObjectParamsRef = useRef<{ objectId: string; vals: Record<string, number | string | boolean> } | null>(null);
+  // Last-used parameter values per imported object id — seeds the popup so re-picking an object remembers
+  // the previous settings (mirrors the schema segment-type dialog's "reuse last values").
+  const objParamsMemoryRef = useRef<Record<string, Record<string, number | string | boolean>>>({});
+  // Last-used segment display config per wall object — seeds the popup's Segment group. On confirm the config
+  // is written into activeSegmentConfigRef so lineSegConfigProps applies it to each drawn segment (the segment
+  // owns thickness / mode / fill / justification; the miter engine + Segment Properties read them).
+  const segDrawMemoryRef = useRef<Record<string, AddSegmentConfig>>({});
+  /** Build a fresh SegmentAttachment from the pending Add-Segment object (if any). Parameter values come
+   *  from the popup choice (when it matches the armed object), else the object's defaults. Returns null
+   *  when no object is pending. Does NOT clear the pending id — it persists across the whole polyline chain
+   *  so every drawn segment gets its own attachment (a continuous wall, not just the first). The id is
+   *  cleared at chain start/end instead. */
   const buildPendingSegAttachment = useCallback((): SegmentAttachment | null => {
     const segObjId = pendingSegObjectIdRef.current;
     const segObjDef = segObjId ? (history.state.objectLibrary ?? {})[segObjId] : null;
     if (!segObjDef || !segObjId) return null;
+    const chosen = pendingSegObjectParamsRef.current?.objectId === segObjId ? pendingSegObjectParamsRef.current.vals : null;
     const params: Record<string, number | string | boolean> = {};
-    for (const pr of segObjDef.parameters) params[pr.key] = pr.default;
+    for (const pr of segObjDef.parameters) params[pr.key] = chosen?.[pr.key] ?? pr.default;
     return { id: createId(), objectId: segObjId, params, t: 0.5, flip: false };
   }, [history]);
+  /** Arm the Add-Segment imported-object tool: start the single-segment chain so every segment drawn
+   *  attaches `objId` (with whatever params are pinned in pendingSegObjectParamsRef). */
+  const startSegObjectDraw = (objId: string) => {
+    pendingSegObjectIdRef.current = objId;
+    activeSegmentConfigRef.current = null;
+    pendingNodeTypeRef.current = null;
+    setFurnitureNodeMode(false);
+    setSingleSegStart(null);
+    setSingleSegPreview(null);
+    setSingleSegType("line");
+    setTool("single-segment");
+    toast.info("Click to draw connected segments — double-click or Esc to finish");
+  };
+  /** Arm an imported Door / Window object as a wall-OPENING tool: enter the single-segment door/window mode
+   *  so hovering a wall highlights the opening span (sized by the object's width) and a click splits the wall
+   *  + cuts the opening, dropping the object into it (handled in placeOpeningOnWall). The pending object id
+   *  persists so several openings can be placed; cleared when another tool is picked. */
+  const startSegOpeningPlace = (objId: string, symbol: "door" | "window", vals: Record<string, number | string | boolean>) => {
+    pendingSegObjectIdRef.current = objId;
+    activeSegmentConfigRef.current = null;
+    pendingNodeTypeRef.current = null;
+    setFurnitureNodeMode(false);
+    setSingleSegStart(null);
+    setSingleSegPreview(null);
+    setSingleSegType(symbol);
+    const w = typeof vals.width === "number" ? vals.width : Number(vals.width);
+    if (isFinite(w) && w > 0) { if (symbol === "window") setWindowWidthM(w); else setDoorWidthM(w); }
+    setTool("single-segment");
+    toast.info(`Hover a wall to place the ${symbol} — click to split the wall and cut the opening`);
+  };
+  /** Arm the Add-Node imported-object tool: enter point mode so every node dropped attaches `objId`
+   *  (with whatever params are pinned in pendingNodeObjectParamsRef). Persists until Esc / another tool. */
+  const startNodeObjectPlace = (objId: string) => {
+    pendingNodeObjectIdRef.current = objId;
+    pendingNodeTypeRef.current = null;
+    setFurnitureNodeMode(false);
+    setTool("point");
+    toast.info("Click to place the object — press Esc when done");
+  };
   // "Set params once per tool selection" — the open segment-type parameter dialog, and the confirmed
   // per-element defaults reused for every segment of the active type until another tool is picked.
   const [segParamsDialog, setSegParamsDialog] = useState<{ segType: string; label: string } | null>(null);
   const activeSegDefaultsRef = useRef<{ type: string; vals: Record<string, import("./types").GraphAttrValue> } | null>(null);
+  // Add-Segment / Add-Node imported-object parameters popup: the picked object id + host, shown before the
+  // draw/place starts so the user can set the object's Input Properties (e.g. Wall height / base / colour)
+  // — like the schema dialog. `host` routes the confirm to the segment-draw vs node-place arming.
+  const [objParamsDialog, setObjParamsDialog] = useState<{ objectId: string; label: string; host: "segment" | "node" } | null>(null);
   /** Draw Path flow: dialog open + draft inputs (string-typed for input binding). */
   const [drawPathDialogOpen, setDrawPathDialogOpen] = useState<boolean>(false);
   const [drawPathLabelInput, setDrawPathLabelInput] = useState<string>("Path1");
@@ -2511,24 +2572,58 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }
     }
     for (const w of history.state.walls) {
-      for (const att of w.attachments ?? []) {
-        if (lib[att.objectId]?.meta.symbol !== "wall") continue;
-        const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy);
-        if (L < 1e-6) continue;
-        const nx = -dy / L, ny = dx / L, ht = Math.max(1, (w.thickness ?? 10) / 2);
-        const foot = [
-          { x: w.start.x + nx * ht, y: w.start.y + ny * ht },
-          { x: w.end.x + nx * ht, y: w.end.y + ny * ht },
-          { x: w.end.x - nx * ht, y: w.end.y - ny * ht },
-          { x: w.start.x - nx * ht, y: w.start.y - ny * ht },
-        ];
-        const height = Math.max(0.05, pnum(att, "height", 2.7));
-        const base = pnum(att, "base", 0);
-        out.push({ id: `wall-${w.id}-${att.id}`, prisms: [{ bottom: foot, top: foot, yBottom: base, yTop: base + height, color: pcol(att, "#94a3b8") }] });
+      const atts = w.attachments ?? [];
+      const wallAtt = atts.find((a) => lib[a.objectId]?.meta.symbol === "wall");
+      const openAtt = atts.find((a) => { const s = lib[a.objectId]?.meta.symbol; return s === "door" || s === "window"; });
+      if (!wallAtt && !openAtt) continue;
+      const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy);
+      if (L < 1e-6) continue;
+      // Extrude the MITERED footprint (same polygon the 2D plan uses) so corners join cleanly in 3D
+      // instead of overlapping per-segment rectangles. Convex-hull it first: the miter polygon carries
+      // collinear centerline midpoints (and can be concave at T/X junctions), but the prism caps are
+      // fan-triangulated (convex-only) — the hull keeps the L-corner/loop shape while guaranteeing convex.
+      const nx = -dy / L, ny = dx / L, ht = Math.max(1, (w.thickness ?? 10) / 2);
+      const mitre = miteredPolygons.get(w.id);
+      const hull = mitre && mitre.length >= 3 ? computeConvexHull(mitre) : [];
+      const foot = hull.length >= 3
+        ? hull
+        : [
+            { x: w.start.x + nx * ht, y: w.start.y + ny * ht },
+            { x: w.end.x + nx * ht, y: w.end.y + ny * ht },
+            { x: w.end.x - nx * ht, y: w.end.y - ny * ht },
+            { x: w.start.x - nx * ht, y: w.start.y - ny * ht },
+          ];
+      const wbase = wallAtt ? pnum(wallAtt, "base", 0) : 0;
+      // Wall band — full height, OR carved into spandrels around an opening so the door/window sits in real
+      // wall (band over the head, and under the sill for a window). Door 0→Height, window Sill→Lintel.
+      if (wallAtt) {
+        const wtop = wbase + Math.max(0.05, pnum(wallAtt, "height", 2.7));
+        const wcol = pcol(wallAtt, "#94a3b8");
+        if (openAtt) {
+          const isWin = lib[openAtt.objectId]?.meta.symbol === "window";
+          const lintel = wbase + (isWin ? pnum(openAtt, "lintelHeight", 2.1) : pnum(openAtt, "height", 2.1));
+          const sillTop = wbase + (isWin ? pnum(openAtt, "sillHeight", 0.9) : 0);
+          if (sillTop > wbase + 0.01) out.push({ id: `wall-${w.id}-sill`, prisms: [{ bottom: foot, top: foot, yBottom: wbase, yTop: Math.min(sillTop, wtop), color: wcol }] });
+          if (lintel < wtop - 0.01) out.push({ id: `wall-${w.id}-head`, prisms: [{ bottom: foot, top: foot, yBottom: Math.max(lintel, wbase), yTop: wtop, color: wcol }] });
+        } else {
+          out.push({ id: `wall-${w.id}-${wallAtt.id}`, prisms: [{ bottom: foot, top: foot, yBottom: wbase, yTop: wtop, color: wcol }] });
+        }
+      }
+      // Door / Window → its OWN parametric 3D geometry (the .pobj.json geometry block), oriented along the
+      // wall at the opening centre. The geometry encodes the vertical levels; lift it by the wall base.
+      if (openAtt) {
+        const oObj = lib[openAtt.objectId];
+        if (oObj?.geometry) {
+          const cx = (w.start.x + w.end.x) / 2, cy = (w.start.y + w.end.y) / 2;
+          const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+          const prisms = evalParametricPrisms(JSON.stringify(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle });
+          const lifted = wbase ? prisms.map((p) => ({ ...p, yBottom: p.yBottom + wbase, yTop: p.yTop + wbase })) : prisms;
+          if (lifted.length) out.push({ id: `opening-${w.id}-${openAtt.id}`, prisms: lifted });
+        }
       }
     }
     return out;
-  }, [history.state.rooms, history.state.walls, history.state.objectLibrary]);
+  }, [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter]);
   // Everything the 3D view shows on the generic mesh channel: Flow "Mesh to 3D" output + node-attached
   // parametric-object meshes + Space-floor / Segment-wall meshes.
   const meshPreviewAll = useMemo<FlowMesh[] | undefined>(() => {
@@ -2998,8 +3093,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** AI Chat block state. */
   const [aiChatExpanded, setAiChatExpanded] = useState<boolean>(false);
   const [aiPrompt, setAiPrompt] = useState<string>("");
-  const [aiApiKey, setAiApiKey] = useState<string>("");
-  const [aiModel, setAiModel] = useState<string>("gemini-3-flash-preview");
+  const [aiApiKey, setAiApiKey] = useState<string>(() => { try { return localStorage.getItem("bp.ai.apiKey") ?? ""; } catch { return ""; } });
+  const [aiModel, setAiModel] = useState<string>(() => { try { return localStorage.getItem("bp.ai.model") || "gemini-3-flash-preview"; } catch { return "gemini-3-flash-preview"; } });
   const [aiBusy, setAiBusy] = useState<boolean>(false);
   const [aiLastResponse, setAiLastResponse] = useState<string>("");
 
@@ -3178,6 +3273,34 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [odMode, setOdMode] = useState<DetectionMode>("box");
   const [odBusy, setOdBusy] = useState<boolean>(false);
   const [objectDetections, setObjectDetections] = useState<Detection[]>([]);
+  // Chat AI (foldable canvas bar) — rewrites the model JSON via Gemini. Reuses the existing aiApiKey/aiModel
+  // (one Gemini key for all AI); its own message list + busy + fold state. Key/model persisted to localStorage.
+  const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
+  const [aiSendBusy, setAiSendBusy] = useState<boolean>(false);
+  const [aiCollapsed, setAiCollapsed] = useState<boolean>(true);
+  useEffect(() => { try { localStorage.setItem("bp.ai.apiKey", aiApiKey); } catch { /* ignore */ } }, [aiApiKey]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.model", aiModel); } catch { /* ignore */ } }, [aiModel]);
+  /** Send the current canvas JSON + the user's instruction to Gemini, then load the rewritten JSON back. */
+  const handleAiSend = useCallback(async (prompt: string) => {
+    if (!aiApiKey.trim() || !aiModel.trim()) {
+      toast.error("Set the Gemini API key + model in Preferences first");
+      setAiCollapsed(false);
+      return;
+    }
+    setAiMessages((m) => [...m, { role: "user", text: prompt }]);
+    setAiSendBusy(true);
+    try {
+      const before = historyRef.current.state;
+      const reply = await chatEditModel({ apiKey: aiApiKey, model: aiModel, json: serializeForAI(before), prompt });
+      const next = applyAiReply(before, reply);
+      historyRef.current.set(next);
+      setAiMessages((m) => [...m, { role: "ai", text: summarizeChange(before, next) }]);
+    } catch (e) {
+      setAiMessages((m) => [...m, { role: "error", text: (e as Error)?.message ?? "Request failed" }]);
+    } finally {
+      setAiSendBusy(false);
+    }
+  }, [aiApiKey, aiModel]);
   const logOp = useCallback((entry: Omit<LoggedOp, "id" | "timestamp">) => {
     setActionLog((prev) => {
       const next = [...prev, { ...entry, id: createId(), timestamp: Date.now() }];
@@ -3804,10 +3927,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const startT = (centerM - openM / 2) / segLenM;
     const endT = (centerM + openM / 2) / segLenM;
     const lerp = (tt: number): Point => ({ x: wall.start.x + (wall.end.x - wall.start.x) * tt, y: wall.start.y + (wall.end.y - wall.start.y) * tt });
-    const base = { thickness: wall.thickness, color: wall.color, mode: wall.mode, method: wall.method ?? ("center" as const), segmentType: wall.segmentType, heightM: wall.heightM, bufferStyle: wall.bufferStyle, lineStyle: wall.lineStyle, hatch: wall.hatch, hatchStyle: wall.hatchStyle, hatchSpacing: wall.hatchSpacing, hatchAngle: wall.hatchAngle, hatchWeight: wall.hatchWeight };
-    const pre: Wall = { ...base, id: createId(), start: wall.start, end: lerp(startT) };
-    const opening: Wall = { ...base, id: createId(), start: lerp(startT), end: lerp(endT), isObjectOpening: true, attachments: [att] };
-    const post: Wall = { ...base, id: createId(), start: lerp(endT), end: wall.end };
+    // Retain all of the host's properties (spread the host) + clone its attachment(s) onto pre/post with
+    // fresh ids, so the split pieces stay the SAME wall; the opening keeps them too (3D spandrels) and adds
+    // the new object.
+    const cloneWallAtts = (): SegmentAttachment[] => (wall.attachments ?? []).map((a) => ({ ...a, id: createId() }));
+    const preAtts = cloneWallAtts(), postAtts = cloneWallAtts();
+    const pre: Wall = { ...wall, id: createId(), start: wall.start, end: lerp(startT), isObjectOpening: undefined, attachments: preAtts.length ? preAtts : undefined };
+    const opening: Wall = { ...wall, id: createId(), start: lerp(startT), end: lerp(endT), isObjectOpening: true, attachments: [...cloneWallAtts(), att] };
+    const post: Wall = { ...wall, id: createId(), start: lerp(endT), end: wall.end, isObjectOpening: undefined, attachments: postAtts.length ? postAtts : undefined };
     h.set({ ...h.state, walls: [...h.state.walls.filter((w) => w.id !== wallId), pre, opening, post] });
     selection.selectOne(opening.id);
   }, [pixelsPerMeter, selection]);
@@ -17161,8 +17288,11 @@ User request: ${aiPrompt.trim()}`;
           setWallLengthInput("");
           return;
         }
-        // Add Node (point) tool persists across placements; Esc is the way out to Select.
+        // Add Node (point) tool persists across placements; Esc is the way out to Select. Drop the pending
+        // imported-object attachment so re-entering Add Node doesn't keep placing the old object.
         if (tool === "point") {
+          pendingNodeObjectIdRef.current = null;
+          pendingNodeObjectParamsRef.current = null;
           setTool("select");
           return;
         }
@@ -17329,6 +17459,7 @@ User request: ${aiPrompt.trim()}`;
         setSingleSegStart(null);
         setSingleSegPreview(null);
         pendingSegObjectIdRef.current = null; // chain finished — drop the pending object attachment
+        pendingSegObjectParamsRef.current = null;
         setTool("select");
       }
     };
@@ -17897,9 +18028,13 @@ User request: ${aiPrompt.trim()}`;
     if (!hit) return null;
     const host = history.state.walls.find((w) => w.id === hit.wallId);
     if (!host) return null;
-    // Only embed openings in solid WALL segments (not in another door / window / line).
+    // Embed openings in solid WALL segments — native "wall" types AND imported-Wall-object segments (a
+    // "line" carrying a wall-symbol attachment, e.g. drawn with the Floorplan-Tracer Wall). Reject doors /
+    // windows / plain lines and existing openings.
+    const lib = history.state.objectLibrary ?? {};
     const hostType = String(history.state.graphAttrs?.segments?.[host.id]?.["seg-type"] ?? host.segmentType ?? "wall");
-    if (hostType !== "wall") return null;
+    const hostIsWall = hostType === "wall" || (host.attachments ?? []).some((a) => lib[a.objectId]?.meta.symbol === "wall");
+    if (host.isObjectOpening || !hostIsWall) return null;
     const len = Math.hypot(host.end.x - host.start.x, host.end.y - host.start.y);
     if (len <= Wpx) return null; // host too short to hold the opening → ignore the click
     const ux = (host.end.x - host.start.x) / len, uy = (host.end.y - host.start.y) / len;
@@ -17918,6 +18053,27 @@ User request: ${aiPrompt.trim()}`;
     const span = openingSpanOnWall(p);
     if (!span) return;
     const { host, ds, de } = span;
+    // Imported Door / Window object armed → split the host into wall · opening · wall and drop the parametric
+    // object INTO the opening (isObjectOpening renders the band as a gap; the object draws the leaf/swing).
+    // Mirrors attachObjectToSegment, but the opening sits at the hover span instead of the segment centre.
+    const segAtt = buildPendingSegAttachment();
+    if (segAtt) {
+      // Retain EVERY property of the original segment on the remnants (spread the host) and clone its
+      // attachment(s) onto pre/post with fresh ids — so the split pieces stay the SAME wall (parametric-wall
+      // identity, styling, thickness, 3D), not generic lines. Only the opening swaps the door/window in (and
+      // keeps the host wall attachment so its 3D band is carved into spandrels around the opening).
+      const cloneHostAtts = (): SegmentAttachment[] => (host.attachments ?? []).map((a) => ({ ...a, id: createId() }));
+      const preAtts = cloneHostAtts(), postAtts = cloneHostAtts();
+      const pre: Wall = { ...host, id: createId(), start: host.start, end: ds, isObjectOpening: undefined, attachments: preAtts.length ? preAtts : undefined };
+      const opening: Wall = { ...host, id: createId(), start: ds, end: de, isObjectOpening: true, attachments: [...cloneHostAtts(), segAtt] };
+      const post: Wall = { ...host, id: createId(), start: de, end: host.end, isObjectOpening: undefined, attachments: postAtts.length ? postAtts : undefined };
+      const rest = history.state.walls.filter((w) => w.id !== host.id);
+      const fresh = [pre, opening, post].filter((w) => Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) > 0.1);
+      history.set({ ...history.state, walls: splitWallsAtIntersections([...rest, ...fresh]) });
+      selection.selectOne(opening.id);
+      setOpeningPlacePreview(null);
+      return;
+    }
     const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
     const segs: Record<string, Record<string, import("./types").GraphAttrValue>> = { ...(ga0.segments ?? {}) };
     const hostAttrs = segs[host.id];
@@ -18615,6 +18771,8 @@ User request: ${aiPrompt.trim()}`;
             id: newSegId,
             start: singleSegStart,
             end,
+            // Wall object: the popup's display config (thickness / mode / fill / justification) is applied
+            // last via lineSegConfigProps() below, overriding these line-mode defaults.
             thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
             color: wallColor,
             dashed: lineTypeDashed,
@@ -18686,18 +18844,20 @@ User request: ${aiPrompt.trim()}`;
         ? { ...ga, nodes: { ...(ga.nodes ?? {}), [nodeStableKey]: { ...(ga.nodes?.[nodeStableKey] ?? {}), "node-type": nodeType } } }
         : ga;
       // Imported object picked from Add Node → attach it to this node in the SAME history step (a separate
-      // set would race on the not-yet-committed node). One-shot: cleared after placing.
+      // set would race on the not-yet-committed node). The armed object PERSISTS so every node dropped while
+      // the tool is active gets it (cleared on Esc / when another node tool starts). Parameter values come
+      // from the popup choice (when it matches the armed object), else the object's defaults.
       const nodeObjId = pendingNodeObjectIdRef.current;
       const nodeObj = nodeObjId ? (history.state.objectLibrary ?? {})[nodeObjId] : null;
       let nodeMetaPatch: typeof history.state.nodeMeta | null = null;
       if (nodeObj && nodeObjId) {
+        const chosen = pendingNodeObjectParamsRef.current?.objectId === nodeObjId ? pendingNodeObjectParamsRef.current.vals : null;
         const params: Record<string, number | string | boolean> = {};
-        for (const pr of nodeObj.parameters) params[pr.key] = pr.default;
+        for (const pr of nodeObj.parameters) params[pr.key] = chosen?.[pr.key] ?? pr.default;
         const prevMeta = history.state.nodeMeta ?? {};
         const cur = prevMeta[nodeStableKey] ?? {};
         nodeMetaPatch = { ...prevMeta, [nodeStableKey]: { ...cur, attachments: [...(cur.attachments ?? []), { id: createId(), objectId: nodeObjId, params, t: 0, flip: false }] } };
       }
-      pendingNodeObjectIdRef.current = null;
       history.set({
         ...history.state,
         walls: [
@@ -19015,6 +19175,7 @@ User request: ${aiPrompt.trim()}`;
       setSingleSegStart(null);
       setSingleSegPreview(null);
       pendingSegObjectIdRef.current = null; // chain finished — drop the pending object attachment
+      pendingSegObjectParamsRef.current = null;
       setTool("select");
       return;
     }
@@ -20556,6 +20717,35 @@ User request: ${aiPrompt.trim()}`;
               </label>
             </div>
           </div>
+          {/* Chat AI — Gemini key + text model used by the foldable Chat AI bar to rewrite the canvas JSON. */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Chat AI (Gemini)</p>
+            <div className="space-y-2">
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-700">API key</span>
+                <input
+                  type="password"
+                  className="mt-1 h-7 w-full rounded border border-slate-200 bg-white px-1.5 text-xs"
+                  placeholder="Google AI Studio API key"
+                  value={aiApiKey}
+                  onChange={(e) => setAiApiKey(e.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-700">Model</span>
+                <input
+                  type="text"
+                  className="mt-1 h-7 w-full rounded border border-slate-200 bg-white px-1.5 text-xs"
+                  placeholder="gemini-2.0-flash"
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <p className="text-[9px] text-slate-400">Used by the foldable <span className="font-medium">Chat AI</span> bar (top of the canvas) to edit the plan from a prompt. Stored locally in this browser.</p>
+            </div>
+          </div>
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Scale calibration (px per meter)</p>
             <p className="text-xs font-medium text-slate-700">{pixelsPerMeter.toFixed(2)} px/m</p>
@@ -21488,6 +21678,8 @@ User request: ${aiPrompt.trim()}`;
                 onAddFurniture={() => {
                   // Click-to-place-a-node mode: each click drops a node that auto-wires to Node to Object.
                   pendingNodeTypeRef.current = null;
+                  pendingNodeObjectIdRef.current = null;
+                  pendingNodeObjectParamsRef.current = null;
                   setFurnitureNodeMode(true);
                   setTool("point");
                   toast.info("Click to drop a furniture node — press Esc when done");
@@ -21528,6 +21720,7 @@ User request: ${aiPrompt.trim()}`;
                   // No dialog config on this path (schema dropdown / direct) — clear any stale Add-Segment config.
                   activeSegmentConfigRef.current = null;
                   pendingSegObjectIdRef.current = null; // no imported object on this path
+                  pendingSegObjectParamsRef.current = null;
                   pendingNodeTypeRef.current = null;
                   setFurnitureNodeMode(false);
                   setSingleSegStart(null);
@@ -21539,18 +21732,26 @@ User request: ${aiPrompt.trim()}`;
                   // Reset any prior pending object first; the obj: branch below re-arms it. Schema-type
                   // branches leave it cleared so they draw plain typed segments (no object attachment).
                   pendingSegObjectIdRef.current = null;
-                  // Imported parametric object picked → draw a continuous chain of segments, attaching the
-                  // object to EACH one (e.g. a multi-segment wall). The chain ends on double-click / Esc.
+                  pendingSegObjectParamsRef.current = null;
+                  // Imported parametric object picked. If it exposes parameters, pop the object-params dialog
+                  // first (e.g. Wall height / base / colour) so the user sets them once; the draw starts on
+                  // confirm. Parameterless objects start drawing straight away. Either way the object then
+                  // attaches to EVERY segment in the chain (ends on double-click / Esc).
                   if (segType.startsWith("obj:")) {
-                    pendingSegObjectIdRef.current = segType.slice(4);
-                    activeSegmentConfigRef.current = null;
-                    pendingNodeTypeRef.current = null;
-                    setFurnitureNodeMode(false);
-                    setSingleSegStart(null);
-                    setSingleSegPreview(null);
-                    setSingleSegType("line");
-                    setTool("single-segment");
-                    toast.info("Click to draw connected segments — double-click or Esc to finish");
+                    const objId = segType.slice(4);
+                    const objDef = (history.state.objectLibrary ?? {})[objId];
+                    if (objDef && objDef.parameters.length > 0) {
+                      setObjParamsDialog({ objectId: objId, label: objDef.meta.name || label, host: "segment" });
+                      return;
+                    }
+                    // Door / Window objects place INTO a wall (split + cut opening); others draw as a segment.
+                    const sym = objDef?.meta.symbol;
+                    if (sym === "door" || sym === "window") {
+                      const dw = Number(objDef?.parameters.find((p) => p.key === "width")?.default);
+                      startSegOpeningPlace(objId, sym, isFinite(dw) ? { width: dw } : {});
+                    } else {
+                      startSegObjectDraw(objId);
+                    }
                     return;
                   }
                   // Picking a schema segment type: if it has parameters, pop the dialog to set them once;
@@ -21609,13 +21810,21 @@ User request: ${aiPrompt.trim()}`;
                   toast.info(`Draw a "${label}" space — close the polygon to finish`);
                 }}
                 onAddNodeType={(nodeType) => {
-                  // Imported parametric object picked → place a node and attach the object to it (one-shot).
+                  // Reset any prior pending object first; the obj: branch below re-arms it. Schema-type
+                  // branches leave it cleared so they place plain typed nodes (no object attachment).
+                  pendingNodeObjectIdRef.current = null;
+                  pendingNodeObjectParamsRef.current = null;
+                  // Imported parametric object picked. If it exposes parameters, pop the object-params dialog
+                  // first so the user sets them once; placing starts on confirm. Parameterless objects start
+                  // immediately. Either way the object then attaches to EVERY node dropped (ends on Esc).
                   if (nodeType.startsWith("obj:")) {
-                    pendingNodeObjectIdRef.current = nodeType.slice(4);
-                    pendingNodeTypeRef.current = null;
-                    setFurnitureNodeMode(false);
-                    setTool("point");
-                    toast.info("Click to place — the object attaches to the new node");
+                    const objId = nodeType.slice(4);
+                    const objDef = (history.state.objectLibrary ?? {})[objId];
+                    if (objDef && objDef.parameters.length > 0) {
+                      setObjParamsDialog({ objectId: objId, label: objDef.meta.name || objId, host: "node" });
+                      return;
+                    }
+                    startNodeObjectPlace(objId);
                     return;
                   }
                   // Place tagged nodes of a schema node-type (object / junction / custom) on each click.
@@ -21625,8 +21834,10 @@ User request: ${aiPrompt.trim()}`;
                   toast.info(`Click to drop a "${nodeType}" node — press Esc when done`);
                 }}
                 onPlainNodeClick={() => {
-                  // Plain Add Node (point) — clear any pending schema node-type / furniture tag.
+                  // Plain Add Node (point) — clear any pending schema node-type / furniture / object tag.
                   pendingNodeTypeRef.current = null;
+                  pendingNodeObjectIdRef.current = null;
+                  pendingNodeObjectParamsRef.current = null;
                   setFurnitureNodeMode(false);
                   setTool("point");
                 }}
@@ -21798,6 +22009,15 @@ User request: ${aiPrompt.trim()}`;
 
         <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
         <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
+        {/* Chat AI — foldable bar pinned to the top of the canvas; rewrites the model JSON via Gemini. */}
+        <ChatAIPanel
+          messages={aiMessages}
+          busy={aiSendBusy}
+          collapsed={aiCollapsed}
+          onToggleCollapsed={() => setAiCollapsed((c) => !c)}
+          onSend={handleAiSend}
+          configured={!!aiApiKey.trim() && !!aiModel.trim()}
+        />
         <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
           {/* Flow editor — node-graph pipeline that composes the stepwise tools (Inset,
               Optimise Rect, Split, …) and runs them via the existing recipe engine.
@@ -23048,14 +23268,27 @@ User request: ${aiPrompt.trim()}`;
                       const color = typeof att.params.color === "string" ? att.params.color : (symbol === "window" ? "#0891b2" : "#b45309");
 
                       if (symbol === "wall") {
-                        // Wall object: tint the segment band (full length × canvas thickness) in the wall colour.
+                        // When the host segment is itself a buffered band (bufferStyle set — e.g. the wall
+                        // popup's default "buffered" mode), the segment already renders the mitered band with
+                        // the full display config; skip the attachment band to avoid double-drawing. The
+                        // attachment then only contributes 3D height. In plain "line" mode, draw the band here.
+                        // Also skip on an object opening — the gap must show (the wall attachment there only
+                        // drives the 3D spandrel; the door/window fills the opening in 2D).
+                        if (w.bufferStyle || w.isObjectOpening) return null;
+                        // Wall object: render the MITERED band for the host segment (clean corner joins with
+                        // adjacent wall segments), tinted in the wall colour. The miter polygon is computed
+                        // from the segment's thickness + justification (the segment owns thickness). Falls back
+                        // to a plain rectangle if no mitered polygon exists (degenerate / lone segment).
+                        const mitre = miteredPolygons.get(w.id);
                         const ht = Math.max(2, (w.thickness ?? 10) / 2);
-                        const band = [
-                          w.start.x + nx * ht, w.start.y + ny * ht,
-                          w.end.x + nx * ht, w.end.y + ny * ht,
-                          w.end.x - nx * ht, w.end.y - ny * ht,
-                          w.start.x - nx * ht, w.start.y - ny * ht,
-                        ];
+                        const band = mitre && mitre.length >= 3
+                          ? mitre.flatMap((p) => [p.x, p.y])
+                          : [
+                              w.start.x + nx * ht, w.start.y + ny * ht,
+                              w.end.x + nx * ht, w.end.y + ny * ht,
+                              w.end.x - nx * ht, w.end.y - ny * ht,
+                              w.start.x - nx * ht, w.start.y - ny * ht,
+                            ];
                         return <Line key={att.id} points={band} closed listening={false} fill={`${color}55`} stroke={color} strokeWidth={sw} lineJoin="round" />;
                       }
 
@@ -32517,6 +32750,7 @@ User request: ${aiPrompt.trim()}`;
             method: addSegConfig.method,
           };
           pendingSegObjectIdRef.current = null; // plain line via dialog — no imported object attached
+          pendingSegObjectParamsRef.current = null;
           pendingNodeTypeRef.current = null;
           setFurnitureNodeMode(false);
           setSingleSegStart(null);
@@ -32621,6 +32855,7 @@ User request: ${aiPrompt.trim()}`;
             // Pin the values for reuse, then start the click-click draw with this type.
             activeSegDefaultsRef.current = { type: segParamsDialog.segType, vals };
             pendingSegObjectIdRef.current = null; // typed schema segment — no imported object attached
+            pendingSegObjectParamsRef.current = null;
             pendingNodeTypeRef.current = null;
             setFurnitureNodeMode(false);
             setSingleSegStart(null);
@@ -32629,6 +32864,73 @@ User request: ${aiPrompt.trim()}`;
             setTool("single-segment");
             setSegParamsDialog(null);
             toast.info(`Draw a segment to place the ${segParamsDialog.label.toLowerCase()} — click start, then end`);
+          }}
+        />
+      )}
+
+      {/* Imported-object parameters — set once when an imported object tool (e.g. Wall on Add Segment, or a
+          furniture object on Add Node) is picked; the chosen values are baked into the attachment of every
+          segment drawn / node dropped until another tool is chosen. `host` routes the confirm. Skips
+          automatically for parameterless objects (handled in onAddSegmentType / onAddNodeType). */}
+      {objParamsDialog && history.state.objectLibrary?.[objParamsDialog.objectId] && (
+        <ObjectParamsDialog
+          open
+          object={history.state.objectLibrary[objParamsDialog.objectId]}
+          initial={objParamsMemoryRef.current[objParamsDialog.objectId]}
+          // Segment-host WALL objects also get a "Segment" group with the FULL segment display config
+          // (mode / thickness / line style / colour / buffer style / fill / justification). Seeded from the
+          // last-used config, else a sensible buffered-wall default at the current wall thickness.
+          segment={(() => {
+            const objDef = history.state.objectLibrary[objParamsDialog.objectId];
+            if (objParamsDialog.host !== "segment" || objDef?.meta.symbol !== "wall") return undefined;
+            const remembered = segDrawMemoryRef.current[objParamsDialog.objectId];
+            const colorDefault = (objDef.parameters.find((p) => p.kind === "color")?.default as string | undefined) ?? wallColor;
+            const fallback: AddSegmentConfig = {
+              mode: "buffered",
+              thickness: String(Number(distanceInUnit({ x: 0, y: 0 }, { x: wallThickness, y: 0 }, unit, pixelsPerMeter).toFixed(3))),
+              lineStyle: "solid",
+              color: colorDefault,
+              bufferStyle: "flat",
+              fill: "filled",
+              method: "center",
+            };
+            return { unit, config: remembered ?? fallback };
+          })()}
+          onCancel={() => setObjParamsDialog(null)}
+          onConfirm={(vals, seg) => {
+            // Remember for next time + pin for this run, then start the segment chain / node placement.
+            const { objectId, host } = objParamsDialog;
+            objParamsMemoryRef.current[objectId] = vals;
+            if (host === "node") {
+              pendingNodeObjectParamsRef.current = { objectId, vals };
+              startNodeObjectPlace(objectId);
+            } else {
+              pendingSegObjectParamsRef.current = { objectId, vals };
+              const sym = history.state.objectLibrary[objectId]?.meta.symbol;
+              if (sym === "door" || sym === "window") {
+                // Door / Window: arm the wall-opening tool (hover a wall → split + cut the opening, drop
+                // the object in). The chosen width sizes the opening.
+                startSegOpeningPlace(objectId, sym, vals);
+              } else {
+                startSegObjectDraw(objectId); // clears activeSegmentConfigRef — set the wall config AFTER it
+                // Wall popup: apply the full display config to each drawn segment via lineSegConfigProps()
+                // (the segment owns thickness / mode / fill / justification — the miter render reads them).
+                if (seg) {
+                  segDrawMemoryRef.current[objectId] = seg;
+                  const tU = parseFloat(seg.thickness);
+                  activeSegmentConfigRef.current = {
+                    thicknessPx: (isFinite(tU) && tU >= 0 ? unitToM(tU) : 0.1) * pixelsPerMeter,
+                    lineStyle: seg.lineStyle,
+                    color: seg.color,
+                    mode: seg.mode,
+                    bufferStyle: seg.bufferStyle,
+                    fill: seg.fill,
+                    method: seg.method,
+                  };
+                }
+              }
+            }
+            setObjParamsDialog(null);
           }}
         />
       )}

@@ -25,8 +25,9 @@ export interface SegmentObjectBlockProps {
   title?: string;
 }
 
-/** One Input Property control — number / select / checkbox / text / colour. */
-const ParamField = ({ def, value, onChange }: { def: ParametricObjectParam; value: number | string | boolean | undefined; onChange: (v: number | string | boolean) => void }) => {
+/** One Input Property control — number / select / checkbox / text / colour. Exported so pre-draw dialogs
+ *  (e.g. the Add-Segment object parameters popup) render object parameters with the same controls. */
+export const ParamField = ({ def, value, onChange }: { def: ParametricObjectParam; value: number | string | boolean | undefined; onChange: (v: number | string | boolean) => void }) => {
   const v = value ?? def.default;
   if (def.kind === "checkbox") {
     return (

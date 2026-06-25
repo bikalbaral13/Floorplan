@@ -2,16 +2,26 @@
   "kind": "parametric-object",
   "version": 2,
   "meta": { "id": "floorplan.bsp.v1", "name": "Floorplan", "category": "Layout/Floorplan", "units": "m" },
+  "hostKind": "node",
+  "description": "Procedural floor plan with three footprint MODES. `rectangular` = a seeded BSP that splits a W×D box into `rooms` cells (Random Layout jitters the splits; Seed repeats them) with partition + perimeter walls, a door swing on each partition + an entrance, and a window on every outer wall. `L-shape` / `T-shape` = a shaped shell with THICKER exterior walls (Exterior Wall), an entrance door swing, outer windows (glazed Sill→Lintel in 3D), and — when Furnish is on — bed + sofa symbols, for a more realistic, professional 2D plan. A small North arrow is drawn on every mode. Footprint W×D derives from Rooms × Avg Area at the given Aspect; origin = node centre, X = width, Y = depth.",
   "parameters": [
+    { "key": "mode", "label": "Mode", "kind": "select", "default": "rectangular", "options": [
+      { "value": "rectangular", "label": "Rectangular (BSP rooms)" },
+      { "value": "L-shape", "label": "L-shape" },
+      { "value": "T-shape", "label": "T-shape" }
+    ] },
     { "key": "rooms", "label": "Number of Rooms", "kind": "number", "default": 5, "min": 1, "max": 30, "step": 1 },
     { "key": "roomArea", "label": "Avg Room Area", "kind": "number", "default": 14, "min": 4, "max": 60, "step": 1, "unit": "m²" },
     { "key": "aspect", "label": "Plan Aspect (W/D)", "kind": "number", "default": 1.4, "min": 0.5, "max": 3.0, "step": 0.1 },
-    { "key": "wallWidth", "label": "Wall Width", "kind": "number", "default": 0.15, "min": 0.05, "max": 0.4, "step": 0.01, "unit": "m" },
+    { "key": "wallWidth", "label": "Interior Wall", "kind": "number", "default": 0.12, "min": 0.05, "max": 0.4, "step": 0.01, "unit": "m" },
+    { "key": "extWall", "label": "Exterior Wall", "kind": "number", "default": 0.23, "min": 0.1, "max": 0.5, "step": 0.01, "unit": "m" },
     { "key": "wallHeight", "label": "Wall Height", "kind": "number", "default": 2.8, "min": 2.0, "max": 4.0, "step": 0.05, "unit": "m" },
     { "key": "sillHeight", "label": "Window Sill Height", "kind": "number", "default": 0.9, "min": 0, "max": 1.5, "step": 0.05, "unit": "m" },
     { "key": "lintelHeight", "label": "Window Lintel Height", "kind": "number", "default": 2.1, "min": 1.5, "max": 3.5, "step": 0.05, "unit": "m" },
     { "key": "doorWidth", "label": "Door Width", "kind": "number", "default": 0.9, "min": 0.6, "max": 1.4, "step": 0.05, "unit": "m" },
     { "key": "windowWidth", "label": "Window Width", "kind": "number", "default": 1.2, "min": 0.4, "max": 3.0, "step": 0.05, "unit": "m" },
+    { "key": "furnish", "label": "Furnish (L / T)", "kind": "checkbox", "default": true },
+    { "key": "showNorth", "label": "North Arrow", "kind": "checkbox", "default": true },
     { "key": "random", "label": "Random Layout", "kind": "checkbox", "default": true },
     { "key": "seed", "label": "Seed", "kind": "number", "default": 1, "min": 1, "max": 9999, "step": 1 },
     { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
@@ -19,17 +29,104 @@
   ],
 
   "geometry": {
-    "description": "Procedural floorplan: a seeded BSP splits the footprint into `rooms` cells (Random Layout jitters the split positions; Seed makes it repeatable, off = even splits). The footprint is derived from Number of Rooms × Avg Room Area at the given Aspect. Emits a floor slab, partition + perimeter walls (Wall Width, extruded to Wall Height), a door swing symbol on each partition + an entrance, and a window on each outer wall (drawn in plan and built as a glazing panel between Sill and Lintel heights in 3D). The whole plan is the generic `floorplan` rule — it draws in 2D and 3D from these parameters.",
+    "description": "Rectangular → built-in BSP generator. L / T → explicit floor slab + thick perimeter walls + entrance swing + windows + furniture symbols (h0=h1=0 → 2D plan only). North arrow drawn on every mode.",
     "emit": "shapes",
     "vars": {
       "area": "max(4, rooms * roomArea)",
       "W": "sqrt(area * max(0.2, aspect))",
-      "D": "area / sqrt(area * max(0.2, aspect))"
+      "D": "area / sqrt(area * max(0.2, aspect))",
+      "ww": "wallWidth",
+      "wh": "wallHeight",
+      "eh": "extWall / 2",
+      "sill": "sillHeight",
+      "lintel": "max(sillHeight + 0.1, lintelHeight)",
+      "dw": "doorWidth",
+      "wdw": "windowWidth",
+      "dhx": "-dw/2",
+      "dhy": "-D/2 + eh",
+      "nx": "W/2 + 0.95",
+      "ny": "D/2 - 0.55"
     },
     "cases": [
-      { "rules": [
-        { "comment": "seeded BSP floorplan — walls, floor, door + window symbols", "floorplan": true }
-      ] }
+      {
+        "comment": "L-SHAPE — vertical arm (width lw) + horizontal arm (depth ld); notch top-right.",
+        "when": "mode == 'L-shape'",
+        "vars": { "lw": "W * 0.45", "ld": "D * 0.45", "bx": "-W/2 + W*0.45/2", "by": "D*0.45/2", "sx": "W*0.45/2", "sy": "-D/2 + D*0.45/2" },
+        "rules": [
+          { "comment": "floor slab", "poly": { "h0": "-0.02", "h1": "0", "pts": [
+            ["-W/2", "-D/2"], ["W/2", "-D/2"], ["W/2", "-D/2 + ld"], ["-W/2 + lw", "-D/2 + ld"], ["-W/2 + lw", "D/2"], ["-W/2", "D/2"]
+          ] } },
+          { "comment": "wall: bottom", "box": { "x0": "-W/2 - eh", "x1": "W/2 + eh", "y0": "-D/2 - eh", "y1": "-D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: right (lower arm)", "box": { "x0": "W/2 - eh", "x1": "W/2 + eh", "y0": "-D/2 - eh", "y1": "-D/2 + ld + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: notch bottom", "box": { "x0": "-W/2 + lw - eh", "x1": "W/2 + eh", "y0": "-D/2 + ld - eh", "y1": "-D/2 + ld + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: notch left", "box": { "x0": "-W/2 + lw - eh", "x1": "-W/2 + lw + eh", "y0": "-D/2 + ld - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: top (left arm)", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + lw + eh", "y0": "D/2 - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: left", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + eh", "y0": "-D/2 - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "entrance leaf", "line": { "h0": "0", "h1": "0", "pts": [["dhx", "dhy"], ["dhx", "dhy + dw"]] } },
+          { "comment": "entrance swing", "repeat": "12", "as": "k", "line": { "h0": "0", "h1": "0", "pts": [
+            ["dhx + dw*cos(k/12 * PI/2)", "dhy + dw*sin(k/12 * PI/2)"], ["dhx + dw*cos((k+1)/12 * PI/2)", "dhy + dw*sin((k+1)/12 * PI/2)"]
+          ] } },
+          { "comment": "window A (bottom) line", "line": { "h0": "0", "h1": "0", "pts": [["W*0.28 - wdw/2", "-D/2"], ["W*0.28 + wdw/2", "-D/2"]] } },
+          { "comment": "window A panel", "box": { "x0": "W*0.28 - wdw/2", "x1": "W*0.28 + wdw/2", "y0": "-D/2 - eh", "y1": "-D/2 + eh", "h0": "sill", "h1": "lintel" } },
+          { "comment": "window B (left) line", "line": { "h0": "0", "h1": "0", "pts": [["-W/2", "D*0.18 - wdw/2"], ["-W/2", "D*0.18 + wdw/2"]] } },
+          { "comment": "window B panel", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + eh", "y0": "D*0.18 - wdw/2", "y1": "D*0.18 + wdw/2", "h0": "sill", "h1": "lintel" } },
+          { "comment": "bed mattress", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by-1.0"], ["bx+0.7", "by-1.0"], ["bx+0.7", "by+1.0"], ["bx-0.7", "by+1.0"]] } },
+          { "comment": "bed pillow", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.58", "by+0.72"], ["bx+0.58", "by+0.72"], ["bx+0.58", "by+0.95"], ["bx-0.58", "by+0.95"]] } },
+          { "comment": "bed duvet fold", "when": "furnish", "line": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by+0.45"], ["bx+0.7", "by+0.45"]] } },
+          { "comment": "sofa seat", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx-1.0", "sy-0.1"], ["sx+1.0", "sy-0.1"], ["sx+1.0", "sy+0.42"], ["sx-1.0", "sy+0.42"]] } },
+          { "comment": "sofa back", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx-1.0", "sy-0.35"], ["sx+1.0", "sy-0.35"], ["sx+1.0", "sy-0.1"], ["sx-1.0", "sy-0.1"]] } },
+          { "comment": "sofa arm L", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx-1.0", "sy-0.35"], ["sx-0.82", "sy-0.35"], ["sx-0.82", "sy+0.42"], ["sx-1.0", "sy+0.42"]] } },
+          { "comment": "sofa arm R", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx+0.82", "sy-0.35"], ["sx+1.0", "sy-0.35"], ["sx+1.0", "sy+0.42"], ["sx+0.82", "sy+0.42"]] } },
+          { "comment": "north ring", "when": "showNorth", "circle": { "cx": "nx", "cy": "ny", "r": "0.42", "sides": "24", "h0": "0", "h1": "0" } },
+          { "comment": "north shaft", "when": "showNorth", "line": { "h0": "0", "h1": "0", "pts": [["nx", "ny-0.3"], ["nx", "ny+0.18"]] } },
+          { "comment": "north head", "when": "showNorth", "poly": { "h0": "0", "h1": "0", "pts": [["nx", "ny+0.42"], ["nx-0.12", "ny+0.12"], ["nx+0.12", "ny+0.12"]] } }
+        ]
+      },
+      {
+        "comment": "T-SHAPE — top bar (depth tt) + centred stem (width sw).",
+        "when": "mode == 'T-shape'",
+        "vars": { "tt": "D * 0.42", "sw": "W * 0.42", "ty": "D/2 - D*0.42", "bx": "-W/4", "by": "(D/2 - D*0.42 + D/2)/2", "sx": "0", "sy": "(-D/2 + D/2 - D*0.42)/2" },
+        "rules": [
+          { "comment": "floor slab", "poly": { "h0": "-0.02", "h1": "0", "pts": [
+            ["-sw/2", "-D/2"], ["sw/2", "-D/2"], ["sw/2", "ty"], ["W/2", "ty"], ["W/2", "D/2"], ["-W/2", "D/2"], ["-W/2", "ty"], ["-sw/2", "ty"]
+          ] } },
+          { "comment": "wall: stem bottom", "box": { "x0": "-sw/2 - eh", "x1": "sw/2 + eh", "y0": "-D/2 - eh", "y1": "-D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: stem right", "box": { "x0": "sw/2 - eh", "x1": "sw/2 + eh", "y0": "-D/2 - eh", "y1": "ty + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: bar bottom-right", "box": { "x0": "sw/2 - eh", "x1": "W/2 + eh", "y0": "ty - eh", "y1": "ty + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: bar right", "box": { "x0": "W/2 - eh", "x1": "W/2 + eh", "y0": "ty - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: top", "box": { "x0": "-W/2 - eh", "x1": "W/2 + eh", "y0": "D/2 - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: bar left", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + eh", "y0": "ty - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: bar bottom-left", "box": { "x0": "-W/2 - eh", "x1": "-sw/2 + eh", "y0": "ty - eh", "y1": "ty + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "wall: stem left", "box": { "x0": "-sw/2 - eh", "x1": "-sw/2 + eh", "y0": "-D/2 - eh", "y1": "ty + eh", "h0": "0", "h1": "wh" } },
+          { "comment": "entrance leaf", "line": { "h0": "0", "h1": "0", "pts": [["dhx", "dhy"], ["dhx", "dhy + dw"]] } },
+          { "comment": "entrance swing", "repeat": "12", "as": "k", "line": { "h0": "0", "h1": "0", "pts": [
+            ["dhx + dw*cos(k/12 * PI/2)", "dhy + dw*sin(k/12 * PI/2)"], ["dhx + dw*cos((k+1)/12 * PI/2)", "dhy + dw*sin((k+1)/12 * PI/2)"]
+          ] } },
+          { "comment": "window A (top) line", "line": { "h0": "0", "h1": "0", "pts": [["-wdw/2", "D/2"], ["wdw/2", "D/2"]] } },
+          { "comment": "window A panel", "box": { "x0": "-wdw/2", "x1": "wdw/2", "y0": "D/2 - eh", "y1": "D/2 + eh", "h0": "sill", "h1": "lintel" } },
+          { "comment": "window B (bar right) line", "line": { "h0": "0", "h1": "0", "pts": [["W/2", "ty + (D/2-ty)/2 - wdw/2"], ["W/2", "ty + (D/2-ty)/2 + wdw/2"]] } },
+          { "comment": "window B panel", "box": { "x0": "W/2 - eh", "x1": "W/2 + eh", "y0": "ty + (D/2-ty)/2 - wdw/2", "y1": "ty + (D/2-ty)/2 + wdw/2", "h0": "sill", "h1": "lintel" } },
+          { "comment": "bed mattress", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by-1.0"], ["bx+0.7", "by-1.0"], ["bx+0.7", "by+1.0"], ["bx-0.7", "by+1.0"]] } },
+          { "comment": "bed pillow", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.58", "by+0.72"], ["bx+0.58", "by+0.72"], ["bx+0.58", "by+0.95"], ["bx-0.58", "by+0.95"]] } },
+          { "comment": "bed duvet fold", "when": "furnish", "line": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by+0.45"], ["bx+0.7", "by+0.45"]] } },
+          { "comment": "sofa seat", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx-1.0", "sy-0.1"], ["sx+1.0", "sy-0.1"], ["sx+1.0", "sy+0.42"], ["sx-1.0", "sy+0.42"]] } },
+          { "comment": "sofa back", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx-1.0", "sy-0.35"], ["sx+1.0", "sy-0.35"], ["sx+1.0", "sy-0.1"], ["sx-1.0", "sy-0.1"]] } },
+          { "comment": "sofa arm L", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx-1.0", "sy-0.35"], ["sx-0.82", "sy-0.35"], ["sx-0.82", "sy+0.42"], ["sx-1.0", "sy+0.42"]] } },
+          { "comment": "sofa arm R", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["sx+0.82", "sy-0.35"], ["sx+1.0", "sy-0.35"], ["sx+1.0", "sy+0.42"], ["sx+0.82", "sy+0.42"]] } },
+          { "comment": "north ring", "when": "showNorth", "circle": { "cx": "nx", "cy": "ny", "r": "0.42", "sides": "24", "h0": "0", "h1": "0" } },
+          { "comment": "north shaft", "when": "showNorth", "line": { "h0": "0", "h1": "0", "pts": [["nx", "ny-0.3"], ["nx", "ny+0.18"]] } },
+          { "comment": "north head", "when": "showNorth", "poly": { "h0": "0", "h1": "0", "pts": [["nx", "ny+0.42"], ["nx-0.12", "ny+0.12"], ["nx+0.12", "ny+0.12"]] } }
+        ]
+      },
+      {
+        "comment": "RECTANGULAR (default) — built-in seeded-BSP floorplan + north arrow.",
+        "rules": [
+          { "floorplan": true },
+          { "comment": "north ring", "when": "showNorth", "circle": { "cx": "nx", "cy": "ny", "r": "0.42", "sides": "24", "h0": "0", "h1": "0" } },
+          { "comment": "north shaft", "when": "showNorth", "line": { "h0": "0", "h1": "0", "pts": [["nx", "ny-0.3"], ["nx", "ny+0.18"]] } },
+          { "comment": "north head", "when": "showNorth", "poly": { "h0": "0", "h1": "0", "pts": [["nx", "ny+0.42"], ["nx-0.12", "ny+0.12"], ["nx+0.12", "ny+0.12"]] } }
+        ]
+      }
     ]
   }
 }
