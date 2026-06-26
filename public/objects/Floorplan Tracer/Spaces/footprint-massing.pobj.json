@@ -1,0 +1,21 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "footprint.massing.v1", "name": "Footprint Massing", "category": "Architecture/Massing", "units": "m", "symbol": "massing" },
+  "description": "Replicates a Flow recipe as a self-executing object: Space (host) → Inset by `offset` m → Optimise Rectangle (fit `rectCount` rectangles) → Massing (`floorCount` floors). The `pipeline` runs the SAME flow op adapters (evalInset / evalOptimise) over the host polygon, so it renders identically to the source flow with zero per-object code. Attach to a SPACE; the footprint is the space's own polygon. `offset`, `rectCount`, `floorCount` are the flow's input-props; `floorHeight` sets the per-floor stack height (the flow used the app's global floor height).",
+  "parameters": [
+    { "key": "offset", "label": "Setback Offset", "kind": "number", "default": 1.7, "min": 0, "max": 5, "step": 0.1, "unit": "m" },
+    { "key": "rectCount", "label": "Number of Rectangles", "kind": "number", "default": 2, "min": 1, "max": 10, "step": 1 },
+    { "key": "floorCount", "label": "Number of Floors", "kind": "number", "default": 7, "min": 1, "max": 50, "step": 1 },
+    { "key": "floorHeight", "label": "Floor-to-floor height", "kind": "number", "default": 3.0, "min": 2, "max": 6, "step": 0.1, "unit": "m" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#64748b" }
+  ],
+  "geometry": {
+    "pipeline": [
+      { "op": "host" },
+      { "op": "inset", "params": { "mode": "equal", "uniformSetback": "offset", "inside": true } },
+      { "op": "optimise-rect", "params": { "shape": "rectangle", "count": "rectCount", "reference": "none" } },
+      { "op": "floor-massing", "params": { "n": "floorCount", "direction": "upward", "floorHeight": "floorHeight" } }
+    ]
+  }
+}

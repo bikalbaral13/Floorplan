@@ -24,9 +24,9 @@ interface AddWallDialogProps {
 }
 
 const metresToUnit = (m: number, unit: Unit): number =>
-  unit === "m" ? m : unit === "cm" ? m * 100 : m * 3.28084;
+  unit === "m" ? m : unit === "cm" ? m * 100 : unit === "in" ? m * 39.3701 : m * 3.28084;
 const unitToMetres = (v: number, unit: Unit): number =>
-  unit === "m" ? v : unit === "cm" ? v / 100 : v / 3.28084;
+  unit === "m" ? v : unit === "cm" ? v / 100 : unit === "in" ? v / 39.3701 : v / 3.28084;
 
 /** Prompts the user for thickness and justification before starting a polyline
  *  wall draw. Mirrors DrawPathDialog but emits regular segmentType:"wall" walls. */

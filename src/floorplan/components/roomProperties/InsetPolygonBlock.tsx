@@ -81,10 +81,10 @@ export interface InsetPolygonBlockProps {
 
 export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
   const u = p.unit ?? "m";
-  const mToU = (m: number): number => (u === "m" ? m : u === "cm" ? m * 100 : m * 3.28084);
-  const uToM = (v: number): number => (u === "m" ? v : u === "cm" ? v / 100 : v / 3.28084);
+  const mToU = (m: number): number => (u === "m" ? m : u === "cm" ? m * 100 : u === "in" ? m * 39.3701 : m * 3.28084);
+  const uToM = (v: number): number => (u === "m" ? v : u === "cm" ? v / 100 : u === "in" ? v / 39.3701 : v / 3.28084);
   const maxU = mToU(5);
-  const stepU = u === "cm" ? 1 : u === "ft" ? 0.1 : 0.05;
+  const stepU = u === "cm" ? 1 : u === "ft" ? 0.1 : u === "in" ? 0.25 : 0.05;
   const fmt = (m: number): string => mToU(m).toFixed(u === "cm" ? 0 : 2);
 
   // Mode + front/remaining values: prefer parent-driven (lifted) state when supplied,
@@ -162,6 +162,7 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
   const areaInUnit = (m2: number): number => {
     if (u === "cm") return m2 * 10000;
     if (u === "ft") return m2 * 10.7639;
+    if (u === "in") return m2 * 1550.0031;
     return m2;
   };
   const fmtArea = (m2: number): string => `${areaInUnit(m2).toFixed(u === "cm" ? 0 : 2)} ${u}²`;
@@ -407,7 +408,7 @@ export const InsetPolygonBlock = (p: InsetPolygonBlockProps) => {
                   value={Math.min(areaInUnit(deductAreaM2), maxDeductU)}
                   onChange={(e) => {
                     const vU = +e.target.value;
-                    const vM2 = u === "cm" ? vU / 10000 : u === "ft" ? vU / 10.7639 : vU;
+                    const vM2 = u === "cm" ? vU / 10000 : u === "ft" ? vU / 10.7639 : u === "in" ? vU / 1550.0031 : vU;
                     setDeductAreaM2(vM2);
                   }}
                 />

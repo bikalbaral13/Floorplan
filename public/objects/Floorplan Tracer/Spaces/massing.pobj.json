@@ -1,0 +1,63 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": { "id": "massing.block.v1", "name": "Massing", "category": "Architecture/Massing", "units": "m", "symbol": "massing" },
+  "description": "Host-conforming massing block. Attach to a SPACE (from Space Properties): the building footprint is the space's own polygon — no plan-size parameters, mirroring the Flow Massing node. The `host` geometry rule is repeated once per floor (`n`), each instance lifted by `floorHeight`; `direction` extrudes Upward (Footprint, above ground) or Downward (Basement, below ground). `taper` steps the footprint in every `tierFloors` floors: 'setback' insets the host polygon `setbackM` metres per tier (parallel offset), 'area-ratio' scales it about its centroid so each tier holds `tierAreaRatio` of the area below. `blockGap` opens a void between adjacent floors. All geometry comes from the host polygon + these params via the generic engine — no per-object renderer code.",
+  "parameters": [
+    { "key": "n", "label": "Floors", "kind": "number", "default": 8, "min": 1, "max": 80, "step": 1 },
+    { "key": "floorHeight", "label": "Floor-to-floor height", "kind": "number", "default": 3.0, "min": 2, "max": 6, "step": 0.1, "unit": "m" },
+    {
+      "key": "direction",
+      "label": "Direction",
+      "kind": "select",
+      "default": "upward",
+      "options": [
+        { "value": "upward", "label": "Upward (Footprint)" },
+        { "value": "downward", "label": "Downward (Basement)" }
+      ]
+    },
+    {
+      "key": "taper",
+      "label": "Taper",
+      "kind": "select",
+      "default": "none",
+      "options": [
+        { "value": "none", "label": "None (prism)" },
+        { "value": "setback", "label": "Setback (m per tier)" },
+        { "value": "area-ratio", "label": "Area ratio per tier" }
+      ]
+    },
+    { "key": "tierFloors", "label": "Floors per tier", "kind": "number", "default": 4, "min": 1, "max": 20, "step": 1 },
+    { "key": "setbackM", "label": "Setback / tier", "kind": "number", "default": 2, "min": 0, "max": 20, "step": 0.1, "unit": "m" },
+    { "key": "tierAreaRatio", "label": "Area ratio / tier", "kind": "number", "default": 0.85, "min": 0.1, "max": 0.99, "step": 0.01 },
+    { "key": "blockGap", "label": "Gap between floors", "kind": "number", "default": 0, "min": 0, "max": 1, "step": 0.05, "unit": "m" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#64748b" }
+  ],
+  "geometry": {
+    "vars": {
+      "_doc": "Constants shared by every floor. `dir` flips the stack up/down; `tf` clamps floors-per-tier; `gap` is the inter-floor void (kept below the floor height).",
+      "dir": "direction == 'upward' ? 1 : -1",
+      "FH": "max(0.5, floorHeight)",
+      "tf": "max(1, floor(tierFloors))",
+      "nn": "max(1, floor(n))",
+      "gap": "max(0, min(blockGap, FH - 0.05))"
+    },
+    "cases": [
+      {
+        "_doc": "One host-extruded floor per `i` (0..nn-1). `inset` applies a parallel setback per tier (metres); `scale` shrinks about the centroid to an area ratio per tier (area scales as scale², so scale = sqrt(ratio)^tier). h0/h1 stack each floor by FH in `dir`, leaving `gap` as a void.",
+        "rules": [
+          {
+            "repeat": "nn",
+            "as": "i",
+            "host": {
+              "inset": "taper == 'setback' ? floor(i/tf) * setbackM : 0",
+              "scale": "taper == 'area-ratio' ? pow(tierAreaRatio, floor(i/tf) * 0.5) : 1",
+              "h0": "dir > 0 ? i * FH : -(i + 1) * FH",
+              "h1": "(dir > 0 ? i * FH : -(i + 1) * FH) + (FH - gap)"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

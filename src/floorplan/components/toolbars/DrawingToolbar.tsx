@@ -66,6 +66,9 @@ export interface DrawingToolbarProps {
   /** Import a folder of parametric objects (Nodes / Segments / Spaces of `.pobj.json`). Populates the
    *  Add Node / Add Segment / Add Space dropdowns from the imported objects' labels. */
   onImportObjects?: (files: File[]) => void;
+  /** Import the bundled object library directly (no folder picker). When set, the Import Objects button
+   *  calls this instead of opening the directory dialog. */
+  onImportObjectsAuto?: () => void;
   /** Clears any currently-selected generated element when starting a Door/Window/Connection tool. */
   onSelectedGenElementChange: (value: null) => void;
   /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
@@ -203,7 +206,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               <ToolButton
                 icon={<Upload className="h-6 w-6 text-teal-600" />}
                 label="Import Objects"
-                onClick={() => objectsFileRef.current?.click()}
+                onClick={() => (p.onImportObjectsAuto ? p.onImportObjectsAuto() : objectsFileRef.current?.click())}
               />
               <input
                 ref={objectsFileRef}

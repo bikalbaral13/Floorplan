@@ -40,6 +40,8 @@ interface LeftToolbarProps {
   /** Import a folder of parametric objects (Nodes / Segments / Spaces of `.pobj.json`) — drives the
    *  Import Objects toolbar button; populates the Add Node / Add Segment / Add Space dropdowns. */
   onImportObjects?: (files: File[]) => void;
+  /** Import the bundled object library directly (no folder picker) — drives the Import Objects button. */
+  onImportObjectsAuto?: () => void;
   onSelectedGenElementChange: (value: null) => void;
 
   shapesPopoverOpen: boolean;
@@ -150,6 +152,7 @@ export const LeftToolbar = ({
   onOpenTemplate,
   templateActive,
   onImportObjects,
+  onImportObjectsAuto,
   onSelectedGenElementChange,
   shapesPopoverOpen,
   onShapesPopoverOpenChange,
@@ -217,6 +220,7 @@ export const LeftToolbar = ({
       onOpenTemplate={onOpenTemplate}
       templateActive={templateActive}
       onImportObjects={onImportObjects}
+      onImportObjectsAuto={onImportObjectsAuto}
       onSelectedGenElementChange={onSelectedGenElementChange}
       onAddWallClick={onAddWallClick}
       drawingWall={drawingWall}

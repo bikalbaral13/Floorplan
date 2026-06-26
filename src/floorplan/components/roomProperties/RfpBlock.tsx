@@ -139,6 +139,7 @@ export const RfpBlock = (p: RfpBlockProps) => {
           const m2ToU = (m2: number): number => {
             if (u === "m") return m2;
             if (u === "cm") return m2 * 10000;
+            if (u === "in") return m2 * 1550.0031;
             return m2 * 10.7639;
           };
           const setNum = (i: number, key: "minArea" | "maxArea" | "maxRatio", v: string) => {

@@ -1549,9 +1549,9 @@ export interface AreaLabel { x: number; y: number; lines: string[] }
  *  L×B dimension — in the chosen unit (m / cm / ft). Positions are world-pixel; the host stacks the
  *  text lines (scale-aware) at the polygon centroid. */
 export function evalAreaDimension(polygons: Point[][], params: Record<string, unknown>, ppm: number): AreaLabel[] {
-  const unit = params.unit === "cm" ? "cm" : params.unit === "ft" ? "ft" : "m";
-  const lenK = unit === "cm" ? 100 : unit === "ft" ? 3.28084 : 1;       // m → unit
-  const areaK = unit === "cm" ? 10000 : unit === "ft" ? 10.7639 : 1;    // m² → unit²
+  const unit = params.unit === "cm" ? "cm" : params.unit === "ft" ? "ft" : params.unit === "in" ? "in" : "m";
+  const lenK = unit === "cm" ? 100 : unit === "ft" ? 3.28084 : unit === "in" ? 39.3701 : 1;       // m → unit
+  const areaK = unit === "cm" ? 10000 : unit === "ft" ? 10.7639 : unit === "in" ? 1550.0031 : 1;  // m² → unit²
   const showLabel = params.showLabel !== false;
   const showArea = params.showArea !== false;
   const showDim = params.showDimension !== false;
@@ -2948,21 +2948,46 @@ const insetUniform = (poly: Point[], m: number, ppm: number): Point[] | null => 
   return r.valid && r.pts.length >= 3 ? r.pts : null;
 };
 
-/** Inset a polygon inward until its area ≈ `ratio` × the original (binary-search the setback). */
+/** Inset a polygon inward until its area ≈ `ratio` × the original.
+ *
+ *  `computeInsetPolygon` does NOT clamp past the collapse point: once the uniform setback exceeds the
+ *  polygon's inradius the offset edges cross over and the result self-intersects into a FLIPPED polygon
+ *  whose |area| balloons quadratically (an 18×12 plate at 60 m inset reports ~11 000 m²). A plain
+ *  binary-search over [0, 60] starts deep in that garbage region and gets trapped there. So instead we
+ *  MARCH the setback up from 0 and stop at the first step that meets the target OR stops shrinking (the
+ *  flip / collapse boundary) — the valid shrinking range is a contiguous interval [0, mCollapse], so the
+ *  march never samples the flipped region — then bisect the final bracket to refine the area match. */
 const insetToAreaRatio = (poly: Point[], ratio: number, ppm: number): Point[] | null => {
-  const target = Math.abs(polygonArea(poly)) * ratio;
-  let lo = 0, hi = 60, best: Point[] | null = null; // hi in metres — generous upper bound
-  for (let it = 0; it < 28; it++) {
-    const mid = (lo + hi) / 2;
-    const r = computeInsetPolygon(poly, poly.map(() => mid), ppm, true);
-    if (r.valid && r.pts.length >= 3) {
-      best = r.pts;
-      if (Math.abs(polygonArea(r.pts)) > target) lo = mid; else hi = mid;
-    } else {
-      hi = mid; // overshot / collapsed → smaller setback
+  const src = Math.abs(polygonArea(poly));
+  if (src <= 0) return null;
+  const target = src * ratio;
+  const areaAt = (m: number): { pts: Point[]; a: number } | null => {
+    const r = computeInsetPolygon(poly, poly.map(() => m), ppm, true);
+    if (!r.valid || r.pts.length < 3) return null;
+    return { pts: r.pts, a: Math.abs(polygonArea(r.pts)) };
+  };
+  const STEP = 0.25; // metres — coarse march to bracket the target / collapse, then bisect
+  let prevPts = poly, prevArea = src;
+  for (let m = STEP; m <= 60 + 1e-9; m += STEP) {
+    const cur = areaAt(m);
+    // Stopped shrinking (collapse → null, or a self-intersected flip whose area grew): the previous
+    // step is the last good plate. Never reached the target → return that most-inset valid plate.
+    if (!cur || cur.a <= 0 || cur.a >= prevArea) return prevPts === poly ? null : prevPts;
+    if (cur.a <= target) {
+      // Crossed the target between (m-STEP, prevPts) and (m, cur). Bisect for a closer area match,
+      // staying inside the known-good shrinking bracket.
+      let lo = m - STEP, hi = m, best = cur.pts;
+      for (let it = 0; it < 22; it++) {
+        const mid = (lo + hi) / 2;
+        const rr = areaAt(mid);
+        if (rr && rr.a > 0 && rr.a < prevArea) { best = rr.pts; if (rr.a > target) lo = mid; else hi = mid; }
+        else hi = mid;
+      }
+      return best;
     }
+    prevPts = cur.pts; prevArea = cur.a;
   }
-  return best;
+  return prevPts === poly ? null : prevPts;
 };
 
 /** Per-FLOOR footprints for the Massing node. With taper off → the base footprint on every floor. With

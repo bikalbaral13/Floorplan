@@ -20,6 +20,8 @@ export interface AddSegmentConfig {
   bufferStyle: "capsule" | "square" | "flat";
   fill: "filled" | "outlined" | "hatched";
   method: WallMethod;
+  /** Draw this segment's label at its midpoint on the canvas. On by default. */
+  showLabel: boolean;
 }
 
 interface SegmentDisplayFieldsProps {
@@ -78,6 +80,12 @@ export const SegmentDisplayFields = ({ unit, config, onChange, onSubmit, autoFoc
         <span className="text-[10px] text-slate-500">{config.color}</span>
       </div>
     </div>
+
+    {/* Show Label — draw the segment's label at its midpoint. */}
+    <label className="flex items-center justify-between gap-2">
+      <span className="text-xs font-semibold text-slate-600">Show Label</span>
+      <input type="checkbox" className="h-4 w-4" checked={config.showLabel} onChange={(e) => onChange({ showLabel: e.target.checked })} />
+    </label>
 
     {/* Buffered-only options */}
     {config.mode === "buffered" && (

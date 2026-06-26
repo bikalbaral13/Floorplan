@@ -6,6 +6,7 @@ export type WallSplitType = "percent" | "length";
 const metresToUnit = (meters: number, unit: Unit): number => {
   if (unit === "m") return meters;
   if (unit === "cm") return meters * 100;
+  if (unit === "in") return meters * 39.3701;
   return meters * 3.28084;
 };
 

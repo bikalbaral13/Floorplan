@@ -1,4 +1,4 @@
-export type Unit = "m" | "ft" | "cm";
+export type Unit = "m" | "ft" | "cm" | "in";
 
 export interface Point {
   x: number;
@@ -81,6 +81,8 @@ export interface Wall {
   customParams?: Record<string, string | number | boolean>;
   /** Optional user-editable label shown in the properties panel. */
   label?: string;
+  /** When true, draw this segment's label at its midpoint on the canvas (Segment Properties → Show Label). */
+  showLabel?: boolean;
   /** Optional user-selected category for the segment. */
   category?: "Fire Exit" | "Facade" | "Electrical Entrance" | "Lift Entrance";
   /** When true, render an arrowhead at the segment's midpoint pointing from start → end. */
@@ -433,6 +435,9 @@ export interface Room {
    *  attachment; placement (t/flip) is unused for an area host. */
   attachments?: SegmentAttachment[];
   label?: string;
+  /** When true, draw this Space's label, area and L×B at its centroid on the canvas (Space Properties →
+   *  Display → Show Label). */
+  showLabel?: boolean;
   netArea?: number;
   /** Area type: built-in (`room` / `floorplate-boundary` / `plot-boundary`) or a custom slug
    *  registered in `FloorPlanModel.customRoomTypes`. Code paths that branch on the built-ins
@@ -662,7 +667,7 @@ export interface ParametricObjectFile {
   version: number;
   /** `symbol` selects the placeholder 2D plan symbol drawn for instances ("door" swing, "window"
    *  frame+glass, "staircase" steps) when the file has no `geometry` block. Defaults to "door". */
-  meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" | "floor" | "wall" };
+  meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" | "floor" | "wall" | "massing" };
   parameters: ParametricObjectParam[];
   /** Which host this object is drawn onto from the toolbar — set when imported via a Floorplan-Tracer
    *  folder (Nodes → "node", Segments → "segment", Spaces → "space"). Drives the Add Node / Add Segment /
@@ -738,6 +743,8 @@ export interface MapOverlayState {
  *  (dimX × dimY). Geometry values are in METRES (canonical, unit-independent). */
 export interface NodeMeta {
   label?: string;
+  /** When true, draw this node's label at the node on the canvas (Node Properties → Display → Show Label). */
+  showLabel?: boolean;
   /** Node classification. "point" (default) is a plain node with no footprint; "column" / "tree"
    *  render a semantic footprint in Architectural view; "object" tags a furniture/fixture item
    *  whose specific kind is given by `objectKind`. */

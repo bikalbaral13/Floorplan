@@ -13,6 +13,10 @@
  *  TypeScript. */
 import type { Point } from "../../types";
 import type { FlowMeshPrism } from "./meshTypes";
+import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
+// Flow op adapters reused verbatim by the pipeline runner — a pobj `pipeline` calls the SAME functions the
+// Flow editor dispatches to, so an object renders identically to the flow it was authored from.
+import { evalInset, evalOptimise } from "./evalNodes";
 
 // ── Expression language ──────────────────────────────────────────────────────────────────────────────
 // Grammar (low→high precedence): ternary, ||, &&, == !=, < <= > >=, + -, * / %, unary - !, primary
@@ -271,7 +275,93 @@ function generateFloorplan(sc: Scope, shapes: Shape[]): void {
 /** The neutral model: the shape stack plus its colour + plan rotation. Both the 2D plan and the 3D mesh are
  *  projections of this. Returns null on any parse/shape error. */
 interface ParametricShapes { shapes: Shape[]; color: string; rotationDeg: number; }
-function buildParametricShapes(defText: string, overrides?: Record<string, unknown>): ParametricShapes | null {
+
+/** Centroid (vertex average) of a ring. */
+const centroidOf = (pts: Point[]): Point => {
+  let cx = 0, cy = 0;
+  for (const p of pts) { cx += p.x; cy += p.y; }
+  return { x: cx / pts.length, y: cy / pts.length };
+};
+/** |signed area| of a ring (same units² as its points). */
+const ringArea = (pts: Point[]): number => {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p.x * q.y - q.x * p.y; }
+  return Math.abs(a) / 2;
+};
+
+// ── Op pipeline (the "dissolved flow") ───────────────────────────────────────────────────────────────
+// A `geometry.pipeline` is an ordered list of ops run over the host footprint, reusing the Flow op adapters
+// (evalInset / evalOptimise / …) so a pobj renders identically to the flow it replicates. Polygons stay in
+// LOCAL METRES (ppm = 1); a terminal `floor-massing` / `extrude` op lofts them into stacked prisms.
+type PolySet = Point[][];
+const num2 = (v: unknown, d: number): number => { const n = typeof v === "number" ? v : Number(v); return Number.isFinite(n) ? n : d; };
+
+/** Resolve a pipeline op's params against the parameter scope: numbers / booleans pass through; a string
+ *  that NAMES an input parameter resolves to that parameter's value (e.g. `"offset"` → 1.7); a `{ "$expr": … }`
+ *  wrapper is evaluated as an expression; every other string (enum literals like `"equal"`, `"rectangle"`,
+ *  hyphenated modes like `"front-remaining"`) stays a literal — so the adapter sees the exact param shape it
+ *  expects from the flow. */
+const resolveOpParams = (raw: Record<string, unknown>, scope: Scope): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "number" || typeof v === "boolean") out[k] = v;
+    else if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as Record<string, unknown>).$expr === "string") out[k] = evalRaw((v as Record<string, unknown>).$expr as string, scope);
+    else if (typeof v === "string") out[k] = v in scope ? scope[v] : v;
+    else out[k] = v;
+  }
+  return out;
+};
+
+/** Execute a pobj op pipeline over the host footprint → a Shape stack (2D plan + 3D mesh, same as rules). */
+function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope: Scope): Shape[] {
+  let polys: PolySet = [];
+  const shapes: Shape[] = [];
+  const copy = (poly: Point[]): Point[] => poly.map((p) => ({ x: p.x, y: p.y }));
+  for (const opRaw of pipeline) {
+    const op = asObj(opRaw);
+    if (!op || typeof op.op !== "string") continue;
+    const rp = resolveOpParams(asObj(op.params) ?? {}, scope);
+    switch (op.op) {
+      case "host":
+        polys = host && host.length >= 3 ? [copy(host)] : [];
+        break;
+      case "inset":
+        polys = polys.flatMap((poly) => evalInset(poly, rp, 1));
+        break;
+      case "optimise-rect":
+        polys = polys.flatMap((poly) => evalOptimise(poly, rp, 1));
+        break;
+      case "floor-massing":
+      case "extrude": {
+        // Loft each current footprint into `n` stacked floors (massing) or a single solid (extrude).
+        const n = op.op === "extrude" ? 1 : Math.max(1, Math.floor(num2(rp.n, 1)));
+        const fh = Math.max(0.1, op.op === "extrude" ? num2(rp.height, num2(rp.floorHeight, 3)) : num2(rp.floorHeight, 3));
+        const up = String(rp.direction ?? "upward") !== "downward";
+        const gap = Math.max(0, Math.min(num2(rp.blockGap, 0), fh - 0.05));
+        for (const poly of polys) {
+          if (poly.length < 3) continue;
+          for (let i = 0; i < n; i++) {
+            const baseY = up ? i * fh : -(i + 1) * fh;
+            shapes.push({ pts: copy(poly), closed: true, h0: baseY, h1: baseY + (fh - gap) });
+          }
+        }
+        break;
+      }
+      default:
+        break; // unknown op → pass the polygon set through unchanged (forward-compatible)
+    }
+    if (shapes.length >= MAX_SHAPES) break;
+  }
+  // No 3D op ran → present the final footprint as flat closed shapes (drawn in 2D, skipped in 3D).
+  if (shapes.length === 0) for (const poly of polys) if (poly.length >= 3) shapes.push({ pts: poly, closed: true, h0: 0, h1: 0 });
+  return shapes;
+}
+
+/** `host` is the HOST footprint (e.g. the space polygon a Floor / Massing is attached to) in LOCAL METRE
+ *  coords — centred so the shared `placer(anchor, ppm, rot)` reconstructs world pixels. When present it
+ *  feeds the `host` rule (and the `hostArea` scope var), so host-conforming objects extrude the host
+ *  polygon with zero per-object code. Self-contained objects (box/circle/poly) ignore it. */
+function buildParametricShapes(defText: string, overrides?: Record<string, unknown>, host?: Point[]): ParametricShapes | null {
   let parsed: unknown;
   try { parsed = JSON.parse(defText); } catch { return null; }
   const def = asObj(parsed);
@@ -289,6 +379,8 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
     if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") scope[k] = v;
   }
   scope.PI = Math.PI;
+  // Host footprint area (m²) — handy for area-driven rules; 0 when there's no host.
+  scope.hostArea = host && host.length >= 3 ? ringArea(host) : 0;
   const color = typeof scope.color === "string" && scope.color ? scope.color : "#0f766e";
   const rotationDeg = Number(scope.rotation) || 0;
 
@@ -302,6 +394,11 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
     for (const [k, expr] of Object.entries(o)) { if (!k.startsWith("_")) sc[k] = evalRaw(expr, sc); }
   };
   applyVars(geom.vars, scope);
+
+  // A `pipeline` (op list) takes precedence over `cases`/`rules`: run the dissolved-flow ops over the host
+  // footprint and return their Shape stack directly.
+  const pipeline = asArr(geom.pipeline);
+  if (pipeline.length > 0) return { shapes: runObjectPipeline(pipeline, host, scope), color, rotationDeg };
 
   // First matching case (no `when` ⇒ always matches).
   let chosen: Record<string, unknown> | null = null;
@@ -318,11 +415,35 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
   const shapes: Shape[] = [];
   // Rule kinds: `box` → closed axis-aligned quad; `circle` → closed regular N-gon (a 2D circle / a 3D
   // CYLINDER when h0≠h1) at (cx,cy) radius r, `sides` segments (default 24); `poly`/`line` → corners from a
-  // `pts` list of [xExpr, yExpr] pairs (poly closed/extruded, line open/2D-only).
+  // `pts` list of [xExpr, yExpr] pairs (poly closed/extruded, line open/2D-only); `host` → the HOST footprint
+  // optionally `scale`d about its centroid and/or `inset` inward (metres; negative = outset), extruded h0→h1.
   const emit = (rule: Record<string, unknown>, s: Scope): void => {
     if (shapes.length >= MAX_SHAPES) return;
     // Procedural floorplan generator (seeded BSP → walls + floor + door/window symbols).
     if (asObj(rule.floorplan) || rule.floorplan === true) { generateFloorplan(s, shapes); return; }
+    // Host footprint primitive — extrude the attached space's polygon (a uniform `scale` about its centroid
+    // then a parallel `inset`). One generic op set drives every host-conforming object: a Floor is a single
+    // un-tapered slab; a Massing tower repeats this per floor with a per-tier inset / scale. No host → skip.
+    const hostRule = asObj(rule.host);
+    if (hostRule) {
+      if (!host || host.length < 3) return;
+      let pts: Point[] = host;
+      const scaleF = hostRule.scale != null ? evalNum(hostRule.scale, s) : 1;
+      if (scaleF > 0 && Math.abs(scaleF - 1) > 1e-9) {
+        const c = centroidOf(pts);
+        pts = pts.map((p) => ({ x: c.x + (p.x - c.x) * scaleF, y: c.y + (p.y - c.y) * scaleF }));
+      }
+      const insetM = hostRule.inset != null ? evalNum(hostRule.inset, s) : 0;
+      if (Math.abs(insetM) > 1e-6) {
+        // host is in local metres → ppm=1. inset>0 shrinks inward; inset<0 grows outward. A collapsed /
+        // flipped inset (over-shrunk) is invalid → skip this shape (e.g. a setback floor that pinched out).
+        const r = computeInsetPolygon(pts, pts.map(() => Math.abs(insetM)), 1, insetM > 0);
+        if (!r.valid || r.pts.length < 3) return;
+        pts = r.pts;
+      }
+      shapes.push({ pts: pts.map((p) => ({ x: p.x, y: p.y })), closed: true, h0: evalNum(hostRule.h0, s), h1: evalNum(hostRule.h1, s) });
+      return;
+    }
     const box = asObj(rule.box);
     if (box) {
       const x0 = evalNum(box.x0, s), x1 = evalNum(box.x1, s), y0 = evalNum(box.y0, s), y1 = evalNum(box.y1, s);
@@ -369,8 +490,8 @@ const placer = (anchor: Point, ppm: number, rotDeg: number) => {
 
 /** Parse + evaluate a parametric definition into canvas polylines anchored at `anchor` (the top-down PLAN
  *  projection). Closed shapes fill + outline; open shapes only stroke. Empty on parse error. */
-export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>): ParametricGeometry {
-  const built = buildParametricShapes(defText, overrides);
+export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[]): ParametricGeometry {
+  const built = buildParametricShapes(defText, overrides, host);
   if (!built) return { fill: [], lines: [], color: "#0f766e" };
   const xf = placer(anchor, ppm, built.rotationDeg);
   const fill: Point[][] = [];
@@ -391,8 +512,8 @@ export function evalParametricGeometry(defText: string, anchor: Point, ppm: numb
 /** Parse + evaluate a parametric definition into 3D mesh prisms anchored at `anchor` — one lofted prism per
  *  CLOSED shape with a non-zero height span (footprint extruded h0→h1 metres). Open shapes / flat shapes are
  *  skipped. Same shape stack as the plan, so 3D is driven by the SAME parameters. Empty on parse error. */
-export function evalParametricPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>): FlowMeshPrism[] {
-  const built = buildParametricShapes(defText, overrides);
+export function evalParametricPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[]): FlowMeshPrism[] {
+  const built = buildParametricShapes(defText, overrides, host);
   if (!built) return [];
   const xf = placer(anchor, ppm, built.rotationDeg);
   const prisms: FlowMeshPrism[] = [];

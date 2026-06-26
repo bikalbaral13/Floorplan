@@ -31,6 +31,7 @@ import {
   Bed,
   BrickWall,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Circle as CircleIcon,
@@ -870,6 +871,7 @@ const bufferBandPoints = (a: Point, b: Point, thickness: number, style: "capsule
   return pts;
 };
 
+
 const distanceInUnit = (a: Point, b: Point, unit: Unit, pixelsPerMeter: number) => {
   const pxDistance = Math.hypot(a.x - b.x, a.y - b.y);
   const meters = pxDistance / pixelsPerMeter;
@@ -878,6 +880,9 @@ const distanceInUnit = (a: Point, b: Point, unit: Unit, pixelsPerMeter: number) 
   }
   if (unit === "cm") {
     return meters * 100;
+  }
+  if (unit === "in") {
+    return meters * 39.3701;
   }
   return meters * 3.28084;
 };
@@ -891,6 +896,7 @@ const polylineDistanceInUnit = (points: number[], unit: Unit, pixelsPerMeter: nu
   const meters = pxDistance / pixelsPerMeter;
   if (unit === "m") return meters;
   if (unit === "cm") return meters * 100;
+  if (unit === "in") return meters * 39.3701;
   return meters * 3.28084;
 };
 
@@ -902,6 +908,9 @@ const unitValueFromPixels = (px: number, unit: Unit, pixelsPerMeter: number) => 
   if (unit === "cm") {
     return meters * 100;
   }
+  if (unit === "in") {
+    return meters * 39.3701;
+  }
   return meters * 3.28084;
 };
 
@@ -911,6 +920,9 @@ const pixelsFromUnitValue = (value: number, unit: Unit, pixelsPerMeter: number) 
   }
   if (unit === "cm") {
     return (value / 100) * pixelsPerMeter;
+  }
+  if (unit === "in") {
+    return (value / 39.3701) * pixelsPerMeter;
   }
   return (value / 3.28084) * pixelsPerMeter;
 };
@@ -922,6 +934,9 @@ const areaInSquareUnit = (areaPx: number, unit: Unit, pixelsPerMeter: number) =>
   }
   if (unit === "cm") {
     return areaM2 * 10000;
+  }
+  if (unit === "in") {
+    return areaM2 * 1550.0031;
   }
   return areaM2 * 10.7639;
 };
@@ -1574,6 +1589,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [segObjExpanded, setSegObjExpanded] = useState<boolean>(true);
   /** Expanded state of the Space Properties "Floor / Parametric Object" block. */
   const [spaceObjExpanded, setSpaceObjExpanded] = useState<boolean>(true);
+  /** Foldable "Display" blocks in the Space / Node property panels (Show Label toggle). */
+  const [spaceDisplayExpanded, setSpaceDisplayExpanded] = useState<boolean>(true);
+  const [nodeDisplayExpanded, setNodeDisplayExpanded] = useState<boolean>(true);
   /** Expanded state of the Node Properties Display + Parametric Object blocks. */
   const [nodeDispExpanded, setNodeDispExpanded] = useState<boolean>(true);
   const [nodeObjExpanded, setNodeObjExpanded] = useState<boolean>(true);
@@ -1841,24 +1859,27 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const m2InUnit = useCallback((m2: number): number => {
     if (unit === "m") return m2;
     if (unit === "cm") return m2 * 10000;
+    if (unit === "in") return m2 * 1550.0031;
     return m2 * 10.7639;
   }, [unit]);
   /** Convert a value stored in meters to the currently-selected linear display unit. */
   const mInUnit = useCallback((m: number): number => {
     if (unit === "m") return m;
     if (unit === "cm") return m * 100;
+    if (unit === "in") return m * 39.3701;
     return m * 3.28084;
   }, [unit]);
   /** Inverse of mInUnit: convert from the display unit back to meters (for input commits). */
   const unitToM = useCallback((u: number): number => {
     if (unit === "m") return u;
     if (unit === "cm") return u / 100;
+    if (unit === "in") return u / 39.3701;
     return u / 3.28084;
   }, [unit]);
   /** How many decimal places to render — cm reads as integer; everything else needs 2. */
   const unitDecimals = useCallback((): number => (unit === "cm" ? 0 : 2), [unit]);
-  /** Step value matching the unit so cm increments by 1, m/ft by 0.01. */
-  const unitStep = useCallback((): number => (unit === "cm" ? 1 : 0.01), [unit]);
+  /** Step value matching the unit so cm increments by 1, inches by 0.25, m/ft by 0.01. */
+  const unitStep = useCallback((): number => (unit === "cm" ? 1 : unit === "in" ? 0.25 : 0.01), [unit]);
   const [currentWallStart, setCurrentWallStart] = useState<Point | null>(null);
   const [currentWallSplinePoints, setCurrentWallSplinePoints] = useState<Point[]>([]);
   // Direct distance entry for the Wall tool: while a wall is being drawn (anchor placed), typing digits
@@ -1870,6 +1891,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const wallLengthInputRef = useRef<string>("");
   const guideLinesRef = useRef<number[]>([]);
   useEffect(() => { wallLengthInputRef.current = wallLengthInput; }, [wallLengthInput]);
+  /** Which face a typed length refers to while tracing a BUFFERED Add-Segment line — Center (the
+   *  centerline, default), Inner (= centre − thickness) or Outer (= centre + thickness). Tab cycles it.
+   *  The typed value is mapped to the centerline the engine draws (see `centerFromTypedUnit`). */
+  const [lengthDimMode, setLengthDimMode] = useState<"center" | "inner" | "outer">("center");
+  const lengthDimModeRef = useRef<"center" | "inner" | "outer">("center");
+  useEffect(() => { lengthDimModeRef.current = lengthDimMode; }, [lengthDimMode]);
   /** While dragging wall handles: spine length (endpoints) or thickness. */
   const [wallResizeDraft, setWallResizeDraft] = useState<WallResizeDraft | null>(null);
   const [roomDraft, setRoomDraft] = useState<Point[]>([]);
@@ -1887,7 +1914,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Ortho mode (Preferences): when on, drawing a Wall or Segment locks each new segment to horizontal or
    *  vertical (whichever axis the cursor is farther along) from its anchor — without holding Shift. Shift
    *  still gives the finer 8-way (45°) lock and overrides Ortho while held. */
-  const [orthoMode, setOrthoMode] = useState<boolean>(false);
+  const [orthoMode, setOrthoMode] = useState<boolean>(true);
+  /** Arrow-key fine-tune nudge step in the active display unit (Preferences). Default 0.01; Shift = ×10. */
+  const [nudgeDelta, setNudgeDelta] = useState<number>(0.01);
   /** Show Center Dimension (Preferences): when on, the live wall-trace preview also dimensions the
    *  centerline (spine) length in addition to the inner / outer faces. Off by default. */
   const [showCenterDimPref, setShowCenterDimPref] = useState<boolean>(false);
@@ -1947,10 +1976,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  before the single-segment draw starts (mirrors the Draw Path dialog). */
   const [addSegDialogOpen, setAddSegDialogOpen] = useState<boolean>(false);
   const [addSegConfig, setAddSegConfig] = useState<AddSegmentConfig>({
-    mode: "line", thickness: "0.1", lineStyle: "solid", color: "#334155", bufferStyle: "capsule", fill: "outlined", method: "center",
+    mode: "line", thickness: "0.1", lineStyle: "solid", color: "#334155", bufferStyle: "capsule", fill: "outlined", method: "center", showLabel: true,
   });
   /** Active Add-Segment display config (set when the dialog starts a draw) — applied to each drawn line. */
-  const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered"; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod } | null>(null);
+  const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered"; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod; showLabel: boolean } | null>(null);
   /** Hover span for click-to-place door/window on a wall (Add Segment → Door/Window): the opening's
    *  two endpoints on the host wall + whether it fits, so the preview shows where the click lands. */
   const [openingPlacePreview, setOpeningPlacePreview] = useState<{ ds: Point; de: Point } | null>(null);
@@ -2563,12 +2592,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const pnum = (att: SegmentAttachment, k: string, d: number): number => { const v = att.params[k]; const x = typeof v === "number" ? v : Number(v); return isFinite(x) ? x : d; };
     const pcol = (att: SegmentAttachment, d: string): string => (typeof att.params.color === "string" && att.params.color ? att.params.color : d);
     for (const room of history.state.rooms) {
+      if (room.points.length < 3) continue;
+      // Host footprint → local-metre coords centred on the room centroid; the engine's `placer(anchor, ppm)`
+      // reconstructs world pixels. Any space-attached parametric object with a `geometry` block extrudes its
+      // OWN 3D from these params + the host polygon (Floor = one slab, Massing = a stacked/tapered tower) —
+      // one generic path, no per-object code.
+      const c = polygonCentroid(room.points);
+      const hostLocal = room.points.map((p) => ({ x: (p.x - c.x) / pixelsPerMeter, y: (p.y - c.y) / pixelsPerMeter }));
       for (const att of room.attachments ?? []) {
-        if (lib[att.objectId]?.meta.symbol !== "floor" || room.points.length < 3) continue;
-        const thickness = Math.max(0.01, pnum(att, "thickness", 0.15));
-        const level = pnum(att, "level", 0);
-        const foot = room.points.map((p) => ({ x: p.x, y: p.y }));
-        out.push({ id: `floor-${room.id}-${att.id}`, prisms: [{ bottom: foot, top: foot, yBottom: level - thickness, yTop: level, color: pcol(att, "#a8a29e") }] });
+        const obj = lib[att.objectId];
+        if (!obj?.geometry) continue;
+        const prisms = evalParametricPrisms(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal);
+        if (prisms.length) out.push({ id: `pobj-space-${room.id}-${att.id}`, prisms });
       }
     }
     for (const w of history.state.walls) {
@@ -3373,6 +3408,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     roomId: string; roomPoints: Point[]; anchors: Point[]; wallSnapshots: Map<string, { start: Point; end: Point }>;
     startWorldX: number; startWorldY: number; moved: boolean;
   } | null>(null);
+  /** "All" select scope: when a stage mousedown selects a node/segment by priority, the following Konva
+   *  shape onClick (which could hit an overlapping segment/space) is suppressed so it can't override the
+   *  priority pick. Set in onStageMouseDown, consumed in onObjectSelect. */
+  const suppressClickSelectRef = useRef<boolean>(false);
 
   /** Room boundary drag: stores initial snapshot for live translation of room + associated walls + dimensions. */
   const roomBoundaryDragRef = useRef<{
@@ -3839,7 +3878,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return {
       kind: "parametric-object",
       version: Number(parsed.version) || 1,
-      meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : meta.symbol === "floor" ? "floor" : meta.symbol === "wall" ? "wall" : undefined },
+      meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : meta.symbol === "floor" ? "floor" : meta.symbol === "wall" ? "wall" : meta.symbol === "massing" ? "massing" : undefined },
       parameters: params,
       ...(hostKind ? { hostKind } : {}),
       // Carry the declarative geometry block through so attached instances render their own 2D lines + 3D mesh.
@@ -3882,7 +3921,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           // symbol so the set still lands in the right menu — door/window/wall → segment, floor → space,
           // everything else (furniture, staircase, footing, …) → node.
           const sym = (parsed.meta as { symbol?: string } | undefined)?.symbol;
-          hostKind = sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" ? "space" : "node";
+          hostKind = sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node";
           bySymbol++;
         }
         const obj = buildParametricObjectFile(parsed, file.name, hostKind);
@@ -3895,6 +3934,48 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), ...additions } });
     const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
     toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${bySymbol ? ` (${bySymbol} by symbol)` : ""}${failed ? `, ${failed} failed` : ""}`);
+  }, [buildParametricObjectFile]);
+
+  /** Import the bundled object library straight from `public/objects/Floorplan Tracer` (no folder picker).
+   *  Each `.pobj.json` is fetched by its relative URL, parsed, tagged with its subfolder's hostKind
+   *  (Spaces → space, Segments → segment, Nodes → node), and merged into the library in one history step. */
+  const autoImportObjectFolder = useCallback(async () => {
+    const base = "/objects/Floorplan Tracer";
+    const files: { sub: "Spaces" | "Segments" | "Nodes"; file: string }[] = [
+      { sub: "Spaces", file: "floor.pobj.json" },
+      { sub: "Spaces", file: "massing.pobj.json" },
+      { sub: "Spaces", file: "footprint-massing.pobj.json" },
+      { sub: "Segments", file: "wall.pobj.json" },
+      { sub: "Segments", file: "door.pobj.json" },
+      { sub: "Segments", file: "window.pobj.json" },
+      { sub: "Nodes", file: "chair.pobj.json" }, { sub: "Nodes", file: "table.pobj.json" },
+      { sub: "Nodes", file: "desk.pobj.json" }, { sub: "Nodes", file: "sink.pobj.json" },
+      { sub: "Nodes", file: "bathtub.pobj.json" }, { sub: "Nodes", file: "bookshelf.pobj.json" },
+      { sub: "Nodes", file: "fridge.pobj.json" }, { sub: "Nodes", file: "stove.pobj.json" },
+      { sub: "Nodes", file: "tv-unit.pobj.json" }, { sub: "Nodes", file: "bench.pobj.json" },
+      { sub: "Nodes", file: "nightstand.pobj.json" }, { sub: "Nodes", file: "bed.pobj.json" },
+      { sub: "Nodes", file: "wardrobe.pobj.json" }, { sub: "Nodes", file: "sofa.pobj.json" },
+      { sub: "Nodes", file: "footing.pobj.json" }, { sub: "Nodes", file: "staircase.pobj.json" },
+      { sub: "Nodes", file: "floorplan.pobj.json" }, { sub: "Nodes", file: "toilet.pobj.json" },
+    ];
+    const hostKindOf = (sub: string): "node" | "segment" | "space" => (sub === "Spaces" ? "space" : sub === "Segments" ? "segment" : "node");
+    const additions: Record<string, ParametricObjectFile> = {};
+    let failed = 0;
+    await Promise.all(files.map(async ({ sub, file }) => {
+      try {
+        const res = await fetch(encodeURI(`${base}/${sub}/${file}`));
+        if (!res.ok) { failed++; return; }
+        const parsed = (await res.json()) as Record<string, unknown>;
+        const obj = buildParametricObjectFile(parsed, file, hostKindOf(sub));
+        additions[obj.meta.id] = obj;
+      } catch { failed++; }
+    }));
+    const n = Object.keys(additions).length;
+    if (n === 0) { toast.error("No objects found at public/objects/Floorplan Tracer"); return; }
+    const h = historyRef.current;
+    h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), ...additions } });
+    const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
+    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${failed ? `, ${failed} failed` : ""}`);
   }, [buildParametricObjectFile]);
 
   /** Attach a library object to a segment (seeded with the object's default param values), cutting an
@@ -4163,7 +4244,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const schemaUnitsDefault = useMemo<Unit | null>(() => {
     const def = activeSchemaSettingsDefs.find((d) => d.role === "units" || d.key === "units");
     const v = def?.default;
-    return v === "m" || v === "ft" || v === "cm" ? v : null;
+    return v === "m" || v === "ft" || v === "cm" || v === "in" ? v : null;
   }, [activeSchemaSettingsDefs]);
   useEffect(() => {
     if (schemaUnitsDefault != null) setUnit(schemaUnitsDefault);
@@ -7140,7 +7221,7 @@ User request: ${aiPrompt.trim()}`;
       build: (m) => {
         const v = parseFloat(m[1]);
         const unit = (m[2] ?? "m").toLowerCase();
-        const metres = unit === "cm" ? v / 100 : v;
+        const metres = unit === "cm" ? v / 100 : unit === "ft" ? v / 3.28084 : unit === "in" ? v / 39.3701 : v;
         return { tool: "inset", params: { uniformSetback: metres } };
       },
     },
@@ -7613,7 +7694,7 @@ User request: ${aiPrompt.trim()}`;
       build: (m) => {
         const v = parseFloat(m[1]);
         const unit = (m[2] ?? "m").toLowerCase();
-        return { tool: "inset", params: { uniformSetback: unit === "cm" ? v / 100 : v } };
+        return { tool: "inset", params: { uniformSetback: unit === "cm" ? v / 100 : unit === "ft" ? v / 3.28084 : unit === "in" ? v / 39.3701 : v } };
       },
     },
     // ── Convex hull variants ───────────────────────────────────────────────
@@ -16958,7 +17039,7 @@ User request: ${aiPrompt.trim()}`;
     if (Number.isNaN(distanceValue) || distanceValue <= 0) {
       return;
     }
-    const distanceMeters = unit === "m" ? distanceValue : unit === "cm" ? distanceValue / 100 : distanceValue / 3.28084;
+    const distanceMeters = unit === "m" ? distanceValue : unit === "cm" ? distanceValue / 100 : unit === "in" ? distanceValue / 39.3701 : distanceValue / 3.28084;
     if (distanceMeters <= 0) {
       return;
     }
@@ -17336,6 +17417,69 @@ User request: ${aiPrompt.trim()}`;
       // form field is focused (so typing into sidebar inputs isn't hijacked).
       const ae = document.activeElement as HTMLElement | null;
       const inFormField = !!ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable);
+      // Fine-tune nudge: with the Select tool, arrow keys translate the selected node / segment / space by
+      // one step (Shift = a coarser ×10 step). Naturally axis-aligned, so it complements Ortho dragging.
+      if (!inFormField && tool === "select" && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        // Step = the Preferences "Nudge delta" (in the active unit) → pixels; Shift = a coarser ×10.
+        const stepPx = pixelsFromUnitValue(Math.max(0, nudgeDelta), unit, pixelsPerMeter);
+        const step = event.shiftKey ? stepPx * 10 : stepPx;
+        const ndx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+        const ndy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+        const mv = (p: Point): Point => ({ x: p.x + ndx, y: p.y + ndy });
+        // Node — move every wall endpoint coincident with the selected node.
+        if (selectedNodeKey) {
+          const node = wallNodes.find((n) => n.stableKey === selectedNodeKey || n.key === selectedNodeKey);
+          if (node) {
+            event.preventDefault();
+            history.set({ ...history.state, walls: history.state.walls.map((w) => ({
+              ...w,
+              start: Math.hypot(w.start.x - node.x, w.start.y - node.y) < 2 ? mv(w.start) : w.start,
+              end: Math.hypot(w.end.x - node.x, w.end.y - node.y) < 2 ? mv(w.end) : w.end,
+            })) });
+            return;
+          }
+        }
+        const ids = selection.selectedIds;
+        // Segment — translate the selected wall's endpoints + any coincident neighbour endpoints.
+        const wall = ids.length ? history.state.walls.find((w) => ids.includes(w.id)) : undefined;
+        if (wall && !isLayerLocked(wall.layerId)) {
+          event.preventDefault();
+          const anchors = [wall.start, wall.end];
+          const near = (p: Point) => anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < 2);
+          history.set({ ...history.state, walls: history.state.walls.map((w) => ({
+            ...w, start: near(w.start) ? mv(w.start) : w.start, end: near(w.end) ? mv(w.end) : w.end,
+          })) });
+          return;
+        }
+        // Space — translate the room polygon (+ boundary walls when "move connected edges" is on).
+        const room = ids.length ? visibleRooms.find((r) => ids.includes(r.id)) : undefined;
+        if (room && !isLayerLocked(room.layerId)) {
+          event.preventDefault();
+          const roomPts = room.points ?? [];
+          const tol = 4;
+          const anchors: Point[] = [];
+          if (areaConnectionConstraint === "with-walls" && roomPts.length >= 3) {
+            const nearBoundary = (px: number, py: number) => {
+              for (let i = 0, j = roomPts.length - 1; i < roomPts.length; j = i++) {
+                const ax = roomPts[j].x, ay = roomPts[j].y, ddx = roomPts[i].x - ax, ddy = roomPts[i].y - ay;
+                const len2 = ddx * ddx + ddy * ddy || 1;
+                const t = Math.max(0, Math.min(1, ((px - ax) * ddx + (py - ay) * ddy) / len2));
+                if (Math.hypot(px - (ax + t * ddx), py - (ay + t * ddy)) < tol) return true;
+              }
+              return false;
+            };
+            for (const w of history.state.walls) for (const p of [w.start, w.end]) {
+              if (nearBoundary(p.x, p.y) && !anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < tol)) anchors.push({ x: p.x, y: p.y });
+            }
+          }
+          const near = (p: Point) => anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < tol);
+          history.set({ ...history.state,
+            rooms: history.state.rooms.map((r) => (r.id === room.id ? { ...r, points: roomPts.map(mv) } : r)),
+            walls: history.state.walls.map((w) => ({ ...w, start: near(w.start) ? mv(w.start) : w.start, end: near(w.end) ? mv(w.end) : w.end })),
+          });
+          return;
+        }
+      }
       // Direct-distance entry is available while drawing a straight Wall OR a single Segment.
       const straightDrawing = (tool === "wall" && currentWallStart && (wallDrawType === "single" || wallDrawType === "polyline"))
         || (tool === "single-segment" && !!singleSegStartRef.current);
@@ -17361,6 +17505,12 @@ User request: ${aiPrompt.trim()}`;
         const cycle: WallMethod[] = ["left", "center", "right"];
         const next = cycle[(cycle.indexOf(wallDrawMethod) + 1) % 3];
         setWallMethodForUi(next);
+      }
+      // Buffered Add-Segment trace: Tab cycles which face a typed length refers to (Center → Inner → Outer).
+      if (event.key === "Tab" && tool === "single-segment" && activeSegmentConfigRef.current?.mode === "buffered") {
+        event.preventDefault();
+        const cycle: ("center" | "inner" | "outer")[] = ["center", "inner", "outer"];
+        setLengthDimMode((m) => cycle[(cycle.indexOf(m) + 1) % 3]);
       }
       if (event.key === "Enter" && tool === "wall" && wallDrawType === "spline" && currentWallSplinePoints.length > 1) {
         event.preventDefault();
@@ -17429,7 +17579,8 @@ User request: ${aiPrompt.trim()}`;
           const dirY = preview.y - start.y;
           const dist = Math.hypot(dirX, dirY);
           if (isFinite(lenUnit) && lenUnit > 0 && dist > 1e-6) {
-            const lenPx = pixelsFromUnitValue(lenUnit, unit, pixelsPerMeter);
+            // Buffered trace: a typed Inner/Outer value maps to the centerline length actually drawn.
+            const lenPx = pixelsFromUnitValue(centerFromTypedUnit(lenUnit), unit, pixelsPerMeter);
             const end = { x: start.x + (dirX / dist) * lenPx, y: start.y + (dirY / dist) * lenPx };
             // Same graphAttrs tagging as the click-commit: stamp seg-type + the saved per-type defaults
             // (thickness / justification / height) so a typed-length wall honours the dialog values too.
@@ -17496,6 +17647,7 @@ User request: ${aiPrompt.trim()}`;
     layerVisibility,
     selectedNodeKey,
     wallNodes,
+    nudgeDelta,
   ]);
 
   const saveModel = async () => {
@@ -18107,6 +18259,9 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onStageMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    // Clear any stale click-suppression from a previous gesture (set only when an all-scope mousedown
+    // makes a priority node/segment selection just below).
+    suppressClickSelectRef.current = false;
     const clickedNode = event.target;
     const clickedOnStage = clickedNode === clickedNode.getStage();
     const isTransformerHandle = clickedNode.getParent()?.getClassName() === "Transformer";
@@ -18234,6 +18389,88 @@ User request: ${aiPrompt.trim()}`;
       }
     }
 
+    // "All" select scope: priority Node > Segment > Space. A press on the priority target under the pointer
+    // SELECTS it (a first press only selects — highlight persists, Properties opens); pressing the
+    // ALREADY-SELECTED target instead begins its drag. Space SELECTION is left to the room's onClick (so
+    // objects sitting on a space stay clickable by z-order); only an already-selected space drags here.
+    if (event.evt.button === 0 && tool === "select" && selectFilter === "all" && !freezeWorldManipulators) {
+      const pointer = pointerPositionInWorld();
+      if (pointer) {
+        // 1) Node — nearest within the generous radius.
+        let nodeHit: { x: number; y: number; stableKey: string; key: string } | null = null;
+        {
+          const R = 24 / scale; let bestD = Infinity;
+          for (const n of wallNodes) {
+            const d = Math.hypot(n.x - pointer.x, n.y - pointer.y);
+            if (d < R && d < bestD) { bestD = d; nodeHit = { x: n.x, y: n.y, stableKey: n.stableKey, key: n.key }; }
+          }
+        }
+        if (nodeHit) {
+          const isSel = selectedNodeKey === nodeHit.key || selectedNodeKey === nodeHit.stableKey;
+          if (isSel) {
+            const NODE_TOL = 2; const snapshots = new Map<string, { start: Point; end: Point }>();
+            for (const w of history.state.walls) {
+              if (Math.hypot(w.start.x - nodeHit.x, w.start.y - nodeHit.y) < NODE_TOL || Math.hypot(w.end.x - nodeHit.x, w.end.y - nodeHit.y) < NODE_TOL) snapshots.set(w.id, { start: { ...w.start }, end: { ...w.end } });
+            }
+            stageNodeDragRef.current = { nodeX: nodeHit.x, nodeY: nodeHit.y, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false };
+          } else {
+            setSelectedNodeKey(nodeHit.stableKey); selection.clearSelection(); setSelectedGenElement(null);
+            suppressClickSelectRef.current = true;
+          }
+          return;
+        }
+        // 2) Segment.
+        const seg = nearestSegmentAt(pointer.x, pointer.y);
+        if (seg) {
+          const wall = history.state.walls.find((w) => w.id === seg.id);
+          if (wall && isLayerLocked(wall.layerId)) return;
+          if (selection.selectedIds.includes(seg.id)) {
+            const anchors: Point[] = wall ? [{ ...wall.start }, { ...wall.end }] : [];
+            const NODE_TOL = 2; const snapshots = new Map<string, { start: Point; end: Point }>();
+            for (const w of history.state.walls) {
+              const nearAnchor = (p: Point) => anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < NODE_TOL);
+              if (nearAnchor(w.start) || nearAnchor(w.end)) snapshots.set(w.id, { start: { ...w.start }, end: { ...w.end } });
+            }
+            stageSegmentDragRef.current = { anchors, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false };
+          } else {
+            selection.selectOne(seg.id); setSelectedNodeKey(null); setSelectedGenElement(null);
+            suppressClickSelectRef.current = true;
+          }
+          return;
+        }
+        // 3) Space — only an already-selected space begins a drag (selection happens via the room onClick).
+        const sp = spaceAt(pointer.x, pointer.y);
+        if (sp && selection.selectedIds.includes(sp.id)) {
+          const room = visibleRooms.find((r) => r.id === sp.id);
+          if (room && !isLayerLocked(room.layerId)) {
+            const roomPts = room.points ?? [];
+            const tol = 4; const anchors: Point[] = []; const wallSnaps = new Map<string, { start: Point; end: Point }>();
+            if (areaConnectionConstraint === "with-walls" && roomPts.length >= 3) {
+              const nearBoundary = (px: number, py: number) => {
+                for (let i = 0, j = roomPts.length - 1; i < roomPts.length; j = i++) {
+                  const ax = roomPts[j].x, ay = roomPts[j].y, dx = roomPts[i].x - ax, dy = roomPts[i].y - ay;
+                  const len2 = dx * dx + dy * dy || 1;
+                  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+                  if (Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < tol) return true;
+                }
+                return false;
+              };
+              for (const w of history.state.walls) for (const p of [w.start, w.end]) {
+                if (nearBoundary(p.x, p.y) && !anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < tol)) anchors.push({ x: p.x, y: p.y });
+              }
+              const nearAnchor = (px: number, py: number) => anchors.some((a) => Math.hypot(a.x - px, a.y - py) < tol);
+              for (const w of history.state.walls) {
+                if (nearAnchor(w.start.x, w.start.y) || nearAnchor(w.end.x, w.end.y)) wallSnaps.set(w.id, { start: { ...w.start }, end: { ...w.end } });
+              }
+            }
+            stageSpaceDragRef.current = { roomId: sp.id, roomPoints: roomPts.map((p) => ({ ...p })), anchors, wallSnapshots: wallSnaps, startWorldX: pointer.x, startWorldY: pointer.y, moved: false };
+            return;
+          }
+        }
+        // No priority target (or unselected space) → fall through; the shape onClick handles selection.
+      }
+    }
+
     // Add room mode: capture click position and open detail dialog
     if (addRoomMode && generatedLayout) {
       const stage = event.target.getStage();
@@ -18358,7 +18595,114 @@ User request: ${aiPrompt.trim()}`;
       bufferStyle: buffered ? c.bufferStyle : undefined,
       hatch: buffered && c.fill === "hatched",
       ...(buffered && c.fill === "hatched" ? { hatchStyle: "diagonal" as const } : {}),
+      showLabel: c.showLabel,
     };
+  };
+
+  /** Buffered Add-Segment trace thickness in the active display unit (0 when not tracing a buffered line). */
+  const bufferedTraceThicknessUnit = (): number => {
+    const c = activeSegmentConfigRef.current;
+    if (!c || c.mode !== "buffered" || tool !== "single-segment") return 0;
+    return mInUnit(c.thicknessPx / pixelsPerMeter);
+  };
+  /** Map a typed length (in the active unit) to the CENTERLINE length the engine draws, honouring the
+   *  Center / Inner / Outer dimension mode for a buffered trace: Inner → centre = typed + thickness,
+   *  Outer → centre = typed − thickness, Center → unchanged. Non-buffered traces return the value as-is. */
+  const centerFromTypedUnit = (typedUnit: number): number => {
+    const t = bufferedTraceThicknessUnit();
+    if (t <= 0) return typedUnit;
+    const m = lengthDimModeRef.current;
+    if (m === "inner") return typedUnit + t;
+    if (m === "outer") return Math.max(0.01, typedUnit - t);
+    return typedUnit;
+  };
+
+  /** One dimension annotation along a straight edge p1→p2: the line + end arrowheads + an Outer (amber) /
+   *  Inner (cyan) length label. `lengthPx` is the value to print (may differ from |p2−p1| for the preview's
+   *  projected faces); `(outNx,outNy)` nudges the label outward. */
+  const dimEdge = (p1: Point, p2: Point, lengthPx: number, outNx: number, outNy: number, role: "outer" | "inner", key: string, highlight = false) => {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy);
+    if (len < 1) return null;
+    const ux = dx / len, uy = dy / len;
+    // Active (Tab-selected) dimension reads in a teal accent + bolder line/label so it's clear which face
+    // the typed length is driving; the other face keeps its amber (outer) / cyan (inner) colour.
+    const col = highlight ? "#0f766e" : role === "outer" ? "#b45309" : "#0891b2";
+    const sw = Math.max(0.6, (highlight ? 1.8 : 1) / Math.max(1, scale));
+    const arr = 9 / Math.max(1, scale);
+    const lblGap = 4 / Math.max(1, scale);
+    const mid = { x: (p1.x + p2.x) / 2 + outNx * lblGap, y: (p1.y + p2.y) / 2 + outNy * lblGap };
+    return (
+      <Group key={key} listening={false}>
+        <Line points={[p1.x, p1.y, p2.x, p2.y]} stroke={col} strokeWidth={sw} />
+        <Line points={arrowHeadPoints(p1.x, p1.y, ux, uy, arr)} stroke={col} strokeWidth={sw} />
+        <Line points={arrowHeadPoints(p2.x, p2.y, -ux, -uy, arr)} stroke={col} strokeWidth={sw} />
+        <Text x={mid.x} y={mid.y} text={`${unitValueFromPixels(lengthPx, unit, pixelsPerMeter).toFixed(2)} ${unit}`} fontSize={Math.max(9, 11 / Math.max(1, scale))} fontStyle={highlight ? "bold" : "normal"} fill={col} listening={false} />
+      </Group>
+    );
+  };
+
+  /** LIVE Add-Segment preview dims for a buffered band a→b (single segment). Shows the projected 45°-miter
+   *  faces: Inner = L − thickness (half off each end), Outer = L + thickness. Inner is placed on the lower-x
+   *  (vertical-ish) / lower-y (horizontal-ish) side per the requested convention. */
+  const renderBufferedPreviewDims = (a: Point, b: Point, thicknessPx: number, activeMode: "center" | "inner" | "outer") => {
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    if (len < 0.5) return null;
+    const ux = dx / len, uy = dy / len, r = Math.max(0.01, thicknessPx / 2);
+    // Inner normal points toward the lower coordinate (y for horizontal-ish, x for vertical-ish).
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    let inx = -uy, iny = ux;
+    if ((horizontal ? iny : inx) > 0) { inx = -inx; iny = -iny; }
+    const onx = -inx, ony = -iny;
+    const off = r + 9 / Math.max(1, scale);
+    // Inner face inset by r at each end (→ L − t); outer face extended by r at each end (→ L + t).
+    const iP1 = { x: a.x + ux * r + inx * off, y: a.y + uy * r + iny * off };
+    const iP2 = { x: b.x - ux * r + inx * off, y: b.y - uy * r + iny * off };
+    const oP1 = { x: a.x - ux * r + onx * off, y: a.y - uy * r + ony * off };
+    const oP2 = { x: b.x + ux * r + onx * off, y: b.y + uy * r + ony * off };
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const chipFs = Math.max(9, 11 / Math.max(1, scale));
+    const chip = activeMode === "inner" ? "Inner" : activeMode === "outer" ? "Outer" : "Center";
+    return (
+      <>
+        {dimEdge(iP1, iP2, Math.max(0, len - 2 * r), inx, iny, "inner", "pvbuf-in", activeMode === "inner")}
+        {dimEdge(oP1, oP2, len + 2 * r, onx, ony, "outer", "pvbuf-out", activeMode === "outer")}
+        {/* Mode chip — which face a typed length drives; press Tab to cycle Center / Inner / Outer. */}
+        <Text x={mid.x + 6 / Math.max(1, scale)} y={mid.y + 6 / Math.max(1, scale)} text={`⇥ ${chip}`} fontSize={chipFs} fontStyle="bold" fill="#0f766e" listening={false} />
+      </>
+    );
+  };
+
+  /** COMMITTED buffered-segment dims — the ACTUAL mitered face lengths from `computeMiteredWallDimensions`
+   *  (so chained segments read their true mitered inner/outer). Inner = the shorter (concave / bend-toward)
+   *  face; ties (a lone straight segment) fall back to the lower-x / lower-y side. */
+  const renderBufferedCommitDims = (w: Wall) => {
+    const dim = miteredDimensions.find((d) => d.wallId === w.id);
+    if (!dim || dim.leftEdge.length < 2 || dim.rightEdge.length < 2) return null;
+    const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, len = Math.hypot(dx, dy);
+    if (len < 0.5) return null;
+    const ux = dx / len, uy = dy / len;
+    const L = [dim.leftEdge[0], dim.leftEdge[dim.leftEdge.length - 1]] as const;
+    const R = [dim.rightEdge[0], dim.rightEdge[dim.rightEdge.length - 1]] as const;
+    const nL: [number, number] = [-uy, ux];
+    const nR: [number, number] = [uy, -ux];
+    let leftIsInner: boolean;
+    if (Math.abs(dim.leftLength - dim.rightLength) > 0.5) {
+      leftIsInner = dim.leftLength < dim.rightLength;
+    } else {
+      const lMid = { x: (L[0].x + L[1].x) / 2, y: (L[0].y + L[1].y) / 2 };
+      const rMid = { x: (R[0].x + R[1].x) / 2, y: (R[0].y + R[1].y) / 2 };
+      leftIsInner = Math.abs(dx) >= Math.abs(dy) ? lMid.y < rMid.y : lMid.x < rMid.x;
+    }
+    const gap = 6 / Math.max(1, scale);
+    const off = (p: Point, n: [number, number]) => ({ x: p.x + n[0] * gap, y: p.y + n[1] * gap });
+    const inE = leftIsInner ? L : R, inN = leftIsInner ? nL : nR, inLen = leftIsInner ? dim.leftLength : dim.rightLength;
+    const outE = leftIsInner ? R : L, outN = leftIsInner ? nR : nL, outLen = leftIsInner ? dim.rightLength : dim.leftLength;
+    return (
+      <Group key={`bufdim-${w.id}`} listening={false}>
+        {dimEdge(off(inE[0], inN), off(inE[1], inN), inLen, inN[0], inN[1], "inner", `bufdim-${w.id}-in`)}
+        {dimEdge(off(outE[0], outN), off(outE[1], outN), outLen, outN[0], outN[1], "outer", `bufdim-${w.id}-out`)}
+      </Group>
+    );
   };
 
   /** Commit a Space (Room) defined by the current `spaceRectAnchor` and an opposite-corner point.
@@ -18741,8 +19085,10 @@ User request: ${aiPrompt.trim()}`;
         ? { ...ga0, segments: { ...(ga0.segments ?? {}), [newSegId]: { ...(ga0.segments?.[newSegId] ?? {}), ...(singleSegType !== "line" ? { "seg-type": singleSegType } : {}), ...segDefaults } } }
         : ga0;
       // Drawing a line / wall segment also drops a Dimension annotation beside it (Dimension layer) —
-      // selectable + styleable in Properties. Door / window openings aren't dimensioned.
-      const segDim: import("./types").DimensionObject | null = isOpening ? null : {
+      // selectable + styleable in Properties. Door / window openings aren't dimensioned, and BUFFERED
+      // segments are skipped too (they render their own Outer / Inner face dimensions instead).
+      const isBufferedSeg = singleSegType === "line" && activeSegmentConfigRef.current?.mode === "buffered";
+      const segDim: import("./types").DimensionObject | null = (isOpening || isBufferedSeg) ? null : {
         id: createId(),
         kind: "dimension",
         layerId: DEFAULT_DIMENSION_LAYER_ID,
@@ -18947,14 +19293,17 @@ User request: ${aiPrompt.trim()}`;
       setPosition((p) => ({ x: p.x + dx, y: p.y + dy }));
       return;
     }
+    // Ortho-constrain a drag delta to a single axis when Ortho is on (Preferences) OR Shift is held — so a
+    // node / segment / space drag moves purely horizontally or vertically (dominant axis wins).
+    const orthoDelta = (dx: number, dy: number): [number, number] =>
+      (orthoMode || event.evt.shiftKey) ? (Math.abs(dx) >= Math.abs(dy) ? [dx, 0] : [0, dy]) : [dx, dy];
     // Stage-level node drag (Node scope): move the node + its connected wall endpoints by the pointer
     // delta. history.replace keeps it to a single live entry; the commit happens on mouse up.
     const nodeDrag = stageNodeDragRef.current;
     if (nodeDrag) {
       const pointer = pointerPositionInWorld();
       if (pointer) {
-        const dx = pointer.x - nodeDrag.startWorldX;
-        const dy = pointer.y - nodeDrag.startWorldY;
+        const [dx, dy] = orthoDelta(pointer.x - nodeDrag.startWorldX, pointer.y - nodeDrag.startWorldY);
         if (dx !== 0 || dy !== 0) nodeDrag.moved = true;
         history.replace({
           ...history.state,
@@ -18979,8 +19328,7 @@ User request: ${aiPrompt.trim()}`;
     if (segDrag) {
       const pointer = pointerPositionInWorld();
       if (pointer) {
-        const dx = pointer.x - segDrag.startWorldX;
-        const dy = pointer.y - segDrag.startWorldY;
+        const [dx, dy] = orthoDelta(pointer.x - segDrag.startWorldX, pointer.y - segDrag.startWorldY);
         if (dx !== 0 || dy !== 0) segDrag.moved = true;
         const nearAnchor = (p: Point) => segDrag.anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < 2);
         history.replace({
@@ -19005,8 +19353,7 @@ User request: ${aiPrompt.trim()}`;
     if (spaceDrag) {
       const pointer = pointerPositionInWorld();
       if (pointer) {
-        const dx = pointer.x - spaceDrag.startWorldX;
-        const dy = pointer.y - spaceDrag.startWorldY;
+        const [dx, dy] = orthoDelta(pointer.x - spaceDrag.startWorldX, pointer.y - spaceDrag.startWorldY);
         if (dx !== 0 || dy !== 0) spaceDrag.moved = true;
         const nearAnchor = (p: Point) => spaceDrag.anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < 4);
         history.replace({
@@ -19078,6 +19425,33 @@ User request: ${aiPrompt.trim()}`;
       setHoveredSpaceId((k) => (k === spId ? k : spId));
       const container = event.target.getStage()?.container();
       if (container) container.style.cursor = spId && selection.selectedIds.includes(spId) ? "all-scroll" : spId ? "pointer" : "default";
+    }
+    // "All" select scope: highlight ONE target by priority Node > Segment > Space (only the matching hover
+    // state is set; the others are cleared). The cursor reads draggable (all-scroll) over the SELECTED
+    // target, else a pointer over any hoverable target.
+    if (tool === "select" && selectFilter === "all") {
+      let nKey: string | null = null, sId: string | null = null, spId: string | null = null;
+      if (pointer) {
+        const R = 24 / scale; let bestD = Infinity;
+        for (const n of wallNodes) {
+          const d = Math.hypot(n.x - pointer.x, n.y - pointer.y);
+          if (d < R && d < bestD) { bestD = d; nKey = n.stableKey; }
+        }
+        if (!nKey) {
+          const seg = nearestSegmentAt(pointer.x, pointer.y);
+          if (seg) sId = seg.id;
+          else { const sp = spaceAt(pointer.x, pointer.y); if (sp) spId = sp.id; }
+        }
+      }
+      setHoveredNodeKey((k) => (k === nKey ? k : nKey));
+      setHoveredSegmentId((k) => (k === sId ? k : sId));
+      setHoveredSpaceId((k) => (k === spId ? k : spId));
+      const container = event.target.getStage()?.container();
+      if (container) {
+        const nodeSel = !!nKey && wallNodes.some((n) => n.stableKey === nKey && (selectedNodeKey === n.key || selectedNodeKey === n.stableKey));
+        const onSelected = nodeSel || (!!sId && selection.selectedIds.includes(sId)) || (!!spId && selection.selectedIds.includes(spId));
+        container.style.cursor = onSelected ? "all-scroll" : (nKey || sId || spId) ? "pointer" : "default";
+      }
     }
     if (addEdgeMode && addEdgeFirstRoom && pointer) {
       setEdgePreviewPoint({ x: pointer.x, y: pointer.y });
@@ -19360,6 +19734,9 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onObjectSelect = (id: string, shift: boolean) => {
+    // "All" scope: a priority node/segment pick was just made in onStageMouseDown — swallow this trailing
+    // onClick so an overlapping segment/space underneath can't override it.
+    if (suppressClickSelectRef.current) { suppressClickSelectRef.current = false; return; }
     // Gate selection by layer lock — silently ignore clicks on locked entities.
     const wallHit = history.state.walls.find((w) => w.id === id);
     const objHit = history.state.objects.find((o) => o.id === id);
@@ -20701,6 +21078,7 @@ User request: ${aiPrompt.trim()}`;
                   <option value="m">Meters (m)</option>
                   <option value="ft">Feet (ft)</option>
                   <option value="cm">Centimeters (cm)</option>
+                  <option value="in">Inches (in)</option>
                 </select>
               </label>
               <label className="flex items-center justify-between gap-2">
@@ -20713,6 +21091,20 @@ User request: ${aiPrompt.trim()}`;
                   className="h-4 w-4 shrink-0"
                   checked={orthoMode}
                   onChange={(e) => setOrthoMode(e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-medium text-slate-700">Nudge delta ({unit})</span>
+                  <p className="text-[9px] text-slate-400">Arrow-key move step for a selected node / segment / space (Shift = ×10).</p>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  className="h-7 w-20 shrink-0 rounded border border-slate-200 bg-white px-1.5 text-xs"
+                  value={nudgeDelta}
+                  onChange={(e) => { const v = parseFloat(e.target.value); setNudgeDelta(Number.isFinite(v) && v >= 0 ? v : 0); }}
                 />
               </label>
             </div>
@@ -21688,6 +22080,7 @@ User request: ${aiPrompt.trim()}`;
                 onOpenTemplate={() => setTemplateDialogOpen(true)}
                 templateActive={!!activeTemplate}
                 onImportObjects={(files) => { void importObjectFolder(files); }}
+                onImportObjectsAuto={() => { void autoImportObjectFolder(); }}
                 onSelectedGenElementChange={setSelectedGenElement}
                 shapesPopoverOpen={shapesPopoverOpen}
                 onShapesPopoverOpenChange={setShapesPopoverOpen}
@@ -22469,6 +22862,11 @@ User request: ${aiPrompt.trim()}`;
                       }
                     }
                     const hasLabel = !!displayLabel;
+                    // Centroid Space text (Preferences → "Show Space text"): the label (or the canonical
+                    // display id "Space001" — same scheme as the Properties ID field — when unlabelled) plus
+                    // the L × B bounding dimensions of the polygon, in the active unit.
+                    const spaceDisplayId = `Space${String(visibleRooms.findIndex((r) => r.id === room.id) + 1).padStart(3, "0")}`;
+                    const spaceLabel = displayLabel || spaceDisplayId;
 
                     // Effective holes (auto-detected: footprints carved out of a plot-boundary).
                     const roomHoles = getRoomHoles(room, visibleRooms);
@@ -22541,8 +22939,21 @@ User request: ${aiPrompt.trim()}`;
                         ? (offsetPolygonInward(h, hi.map((d) => -d)) ?? h)
                         : h;
                     });
-                    // Floor parametric object attached to this Space → its colour fills the Space in 2D.
-                    const floorAtt = room.attachments?.find((a) => (history.state.objectLibrary ?? {})[a.objectId]?.meta.symbol === "floor");
+                    // Centroid label dimensions/area. With "Subtract segment for Space" ON, report the INNER
+                    // (inset to the wall faces — `renderOuter`/`renderHoles`) L×B and net area; OFF reports the
+                    // centre-to-centre polygon (`room.points`) and the usual net area.
+                    const labelPoly = subtractBufferedFromSpace ? renderOuter : room.points;
+                    const lpXs = labelPoly.map((p) => p.x), lpYs = labelPoly.map((p) => p.y);
+                    const lpBw = lpXs.length ? Math.max(...lpXs) - Math.min(...lpXs) : 0;
+                    const lpBh = lpYs.length ? Math.max(...lpYs) - Math.min(...lpYs) : 0;
+                    const spaceLBLabel = `${unitValueFromPixels(Math.max(lpBw, lpBh), unit, pixelsPerMeter).toFixed(2)} × ${unitValueFromPixels(Math.min(lpBw, lpBh), unit, pixelsPerMeter).toFixed(2)} ${unit}`;
+                    const labelAreaPx = subtractBufferedFromSpace
+                      ? Math.max(0, Math.abs(polygonArea(renderOuter)) - renderHoles.reduce((s, h) => s + Math.abs(polygonArea(h)), 0))
+                      : roomNetArea(room, visibleRooms);
+                    const spaceAreaLabel = `Area: ${areaInSquareUnit(labelAreaPx, unit, pixelsPerMeter).toFixed(2)} ${unit}²`;
+                    // Any host-conforming parametric object (Floor, Massing, …) attached to this Space → its
+                    // colour fills the Space in 2D. Generic: keyed on having a geometry block, not a symbol.
+                    const floorAtt = room.attachments?.find((a) => (history.state.objectLibrary ?? {})[a.objectId]?.geometry);
                     const floorFill = floorAtt && typeof floorAtt.params.color === "string" ? floorAtt.params.color : null;
                     return (
                       <Group key={roomReactKey}>
@@ -22943,33 +23354,42 @@ User request: ${aiPrompt.trim()}`;
                             </Group>
                           );
                         })()}
-                        {layerVisibility.text ? (
+                        {room.showLabel !== false ? (
                           <Group x={center.x} y={center.y}>
-                            {hasLabel && (
-                              <Text
-                                offsetX={48}
-                                offsetY={24}
-                                width={96}
-                                align="center"
-                                fontSize={12}
-                                fill="#14532D"
-                                fontStyle="bold"
-                                text={displayLabel}
-                              />
-                            )}
+                            {/* Label (or display id), L × B and area — shown unless this Space's "Show Label" is off (on by default). */}
                             <Text
                               offsetX={48}
-                              offsetY={hasLabel ? 10 : 2}
+                              offsetY={24}
+                              width={96}
+                              align="center"
+                              fontSize={12}
+                              fill="#14532D"
+                              fontStyle="bold"
+                              text={spaceLabel}
+                            />
+                            {/* L × B bounding dimensions. */}
+                            <Text
+                              offsetX={48}
+                              offsetY={11}
+                              width={96}
+                              align="center"
+                              fontSize={10}
+                              fill="#0f766e"
+                              text={spaceLBLabel}
+                            />
+                            <Text
+                              offsetX={48}
+                              offsetY={-1}
                               width={96}
                               align="center"
                               fontSize={11}
                               fill={areaColor}
-                              text={`Area: ${areaInSquareUnit(roomNetArea(room, visibleRooms), unit, pixelsPerMeter).toFixed(2)} ${unit}²`}
+                              text={spaceAreaLabel}
                             />
                             {generatedLayout && (
                               <Text
                                 offsetX={48}
-                                offsetY={hasLabel ? -3 : -12}
+                                offsetY={-13}
                                 width={96}
                                 align="center"
                                 fontSize={10}
@@ -23381,6 +23801,27 @@ User request: ${aiPrompt.trim()}`;
                     }),
                   )}
 
+                  {/* Parametric objects attached to SPACES — their plan geometry, evaluated from the file's
+                      geometry block + the host (room) polygon. Same engine as nodes; the host footprint is
+                      passed in local metres so e.g. a Massing tower draws its per-tier setback rings. */}
+                  {history.state.rooms.flatMap((room) => {
+                    if (room.points.length < 3) return [];
+                    const c = polygonCentroid(room.points);
+                    const hostLocal = room.points.map((p) => ({ x: (p.x - c.x) / pixelsPerMeter, y: (p.y - c.y) / pixelsPerMeter }));
+                    const sw = Math.max(0.75, 1.25 / scale);
+                    return (room.attachments ?? []).map((att) => {
+                      const obj = (history.state.objectLibrary ?? {})[att.objectId];
+                      if (!obj?.geometry) return null;
+                      const g = evalParametricGeometry(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal);
+                      if (!g.lines.length) return null;
+                      return (
+                        <Group key={`pobj-space-2d-${room.id}-${att.id}`} listening={false}>
+                          {g.lines.map((ln, i) => <Line key={`l${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
+                        </Group>
+                      );
+                    });
+                  })}
+
                   {/* Path corridor INNER / OUTER face dimensions — both offset edges measured and labelled.
                       Gated on the Dimension layer so they can be toggled with the other dimensions. */}
                   {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && pathEdgeDimensions.map((d, i) => {
@@ -23400,6 +23841,12 @@ User request: ${aiPrompt.trim()}`;
                       </Group>
                     );
                   })}
+
+                  {/* Buffered display segments — their committed ACTUAL mitered Outer / Inner dimensions,
+                      gated on the Dimension layer like other dimensions. */}
+                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && history.state.walls
+                    .filter((w) => w.bufferStyle && w.segmentType !== "path" && isLayerVisible(w.layerId))
+                    .map((w) => renderBufferedCommitDims(w))}
 
                   {/* Architectural view: wall band physically clipped by column footprints. Drawn as a
                    *  single even-odd-filled shape so column notches / holes / splits are cut out of the
@@ -24740,6 +25187,49 @@ User request: ${aiPrompt.trim()}`;
                     );
                   })()}
 
+                  {/* "All" select scope: priority highlight — Node (ring) > Segment (line, or mitered / band
+                   *  boundary for buffered segments) > Space (polygon outline). The hovered target (only one,
+                   *  by priority) plus any selected target(s) are outlined in blue; selected reads bolder. */}
+                  {tool === "select" && selectFilter === "all" && (() => {
+                    const BLUE = "#3b82f6";
+                    const nodeKeys = new Set<string>();
+                    if (hoveredNodeKey) nodeKeys.add(hoveredNodeKey);
+                    if (selectedNodeKey) nodeKeys.add(selectedNodeKey);
+                    const segIds = new Set<string>();
+                    if (hoveredSegmentId) segIds.add(hoveredSegmentId);
+                    for (const sid of selection.selectedIds) segIds.add(sid);
+                    const spIds = new Set<string>();
+                    if (hoveredSpaceId) spIds.add(hoveredSpaceId);
+                    for (const sid of selection.selectedIds) spIds.add(sid);
+                    return (
+                      <>
+                        {[...nodeKeys].map((key) => {
+                          const n = wallNodes.find((x) => x.stableKey === key || x.key === key);
+                          if (!n) return null;
+                          const sel = selectedNodeKey === n.key || selectedNodeKey === n.stableKey;
+                          return <Circle key={`all-hl-node-${key}`} x={n.x} y={n.y} radius={(sel ? 7 : 6) / scale} fill={sel ? "rgba(59,130,246,0.22)" : "rgba(59,130,246,0.12)"} stroke={BLUE} strokeWidth={1.5 / scale} listening={false} />;
+                        })}
+                        {[...segIds].map((sid) => {
+                          const w = history.state.walls.find((x) => x.id === sid);
+                          if (!w) return null;
+                          const sel = selection.selectedIds.includes(sid);
+                          if (w.bufferStyle && w.segmentType !== "path") {
+                            const mitre = bufferJoinMode === "mitered" ? miteredPolygons.get(w.id) : null;
+                            const pts = mitre && mitre.length >= 3 ? mitre.flatMap((p) => [p.x, p.y]) : bufferBandPoints(w.start, w.end, w.thickness ?? 0, w.bufferStyle ?? "capsule");
+                            return <Line key={`all-hl-seg-${sid}`} points={pts} closed stroke={BLUE} strokeWidth={(sel ? 2.5 : 2) / scale} lineJoin="round" listening={false} />;
+                          }
+                          return <Line key={`all-hl-seg-${sid}`} points={[w.start.x, w.start.y, w.end.x, w.end.y]} stroke={BLUE} strokeWidth={(sel ? 3 : 2.5) / scale} lineCap="round" listening={false} />;
+                        })}
+                        {[...spIds].map((sid) => {
+                          const r = visibleRooms.find((x) => x.id === sid);
+                          if (!r || !r.points || r.points.length < 3) return null;
+                          const sel = selection.selectedIds.includes(sid);
+                          return <Line key={`all-hl-space-${sid}`} points={r.points.flatMap((p) => [p.x, p.y])} closed stroke={BLUE} strokeWidth={(sel ? 2.5 : 2) / scale} dash={sel ? undefined : [8, 5]} fill="rgba(59,130,246,0.06)" listening={false} />;
+                        })}
+                      </>
+                    );
+                  })()}
+
                   {/* "Space" select scope: a blue ring at the centroid of the hovered and/or selected
                    *  space — mirrors Node/Segment scope. Forgiving pick + drag handled in the stage
                    *  pointer handlers (spaceAt). */}
@@ -24898,6 +25388,30 @@ User request: ${aiPrompt.trim()}`;
                     );
                   })}
 
+                  {/* Per-node labels (Node Properties → Display → Show Label, on by default). Shown only for
+                      LABELLED nodes (so plain junctions stay uncluttered), independent of the node-dot layer. */}
+                  {wallNodes.map((node) => {
+                    const meta = (history.state.nodeMeta ?? {})[node.stableKey];
+                    if (!meta?.label || meta.showLabel === false) return null;
+                    const label = meta.label;
+                    const fs = Math.max(9, 12 / scale);
+                    return (
+                      <Text
+                        key={`nodelabel-${node.stableKey}`}
+                        x={node.x}
+                        y={node.y}
+                        width={140}
+                        offsetX={70}
+                        offsetY={fs * 1.6}
+                        align="center"
+                        text={label}
+                        fontSize={fs}
+                        fontStyle="bold"
+                        fill="#1e3a8a"
+                        listening={false}
+                      />
+                    );
+                  })}
                   {layerVisibility.nodes && (tool === "select" || tool === "single-segment" || tool === "point") && wallNodes.map((node) => {
                     const isSelected = selectedNodeKey === node.key || selectedNodeKey === node.stableKey;
                     // In "Node" select scope, node-picking is the primary action — give each node a much
@@ -24960,7 +25474,7 @@ User request: ${aiPrompt.trim()}`;
                         listening={!pointMode}
                         // In Node scope the drag is handled at the stage level (so it works anywhere within
                         // the node's radius); elsewhere the circle drags itself.
-                        draggable={!freezeWorldManipulators && !nodeScope && !pointMode}
+                        draggable={!freezeWorldManipulators && !nodeScope && !(tool === "select" && selectFilter === "all") && !pointMode}
                         onMouseEnter={(e) => {
                           // In "Node" scope, the hover highlight AND cursor are driven by onStageMouseMove
                           // (nearest-node within a radius), so skip here to avoid fighting it.
@@ -25021,8 +25535,14 @@ User request: ${aiPrompt.trim()}`;
                             e.target.x(tp.x); e.target.y(tp.y);
                             return;
                           }
-                          const dx = e.target.x() - drag.startX;
-                          const dy = e.target.y() - drag.startY;
+                          let dx = e.target.x() - drag.startX;
+                          let dy = e.target.y() - drag.startY;
+                          // Ortho (Preferences) or Shift → lock the node drag to one axis; snap the dragged
+                          // dot back onto the constrained position so it visibly follows the lock.
+                          if (orthoMode || e.evt?.shiftKey) {
+                            if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
+                            e.target.x(drag.startX + dx); e.target.y(drag.startY + dy);
+                          }
                           // Use history.replace so the drag doesn't flood the undo stack with per-frame entries.
                           history.replace({
                             ...history.state,
@@ -26939,6 +27459,28 @@ User request: ${aiPrompt.trim()}`;
                       </Group>
                     );
                   })}
+                  {/* Per-segment labels at the midpoint (Segment Properties → Show Label, on by default). */}
+                  {history.state.walls.filter((w) => w.showLabel !== false && w.label && isLayerVisible(w.layerId)).slice().sort(compareByLayer).map((wall) => {
+                    const mx = (wall.start.x + wall.end.x) / 2;
+                    const my = (wall.start.y + wall.end.y) / 2;
+                    const fs = Math.max(9, 12 / scale);
+                    return (
+                      <Text
+                        key={`seglabel-${wall.id}`}
+                        x={mx}
+                        y={my}
+                        width={140}
+                        offsetX={70}
+                        offsetY={fs * 0.6}
+                        align="center"
+                        text={wall.label}
+                        fontSize={fs}
+                        fontStyle="bold"
+                        fill="#0f172a"
+                        listening={false}
+                      />
+                    );
+                  })}
                 </WorldViewport>
               </Layer>
             ) : null}
@@ -28221,7 +28763,8 @@ User request: ${aiPrompt.trim()}`;
                     if (isFinite(typedLen) && typedLen > 0) {
                       const ddx = cursor.x - a.x, ddy = cursor.y - a.y, dd = Math.hypot(ddx, ddy);
                       if (dd > 1e-6) {
-                        const lp = pixelsFromUnitValue(typedLen, unit, pixelsPerMeter);
+                        // Buffered trace: a typed Inner/Outer value maps to the centerline the preview draws.
+                        const lp = pixelsFromUnitValue(centerFromTypedUnit(typedLen), unit, pixelsPerMeter);
                         b = { x: a.x + (ddx / dd) * lp, y: a.y + (ddy / dd) * lp };
                       }
                     }
@@ -28268,6 +28811,11 @@ User request: ${aiPrompt.trim()}`;
                       pvDimLines = dim.dimLines;
                       pvDimLabels = dim.dimLabels;
                     }
+                    // Buffered Add-Segment config (raw canvas, no imported object): preview the actual band
+                    // (width + cap style + fill) instead of a thin line, so a buffered segment looks the same
+                    // while hovering as it will once committed.
+                    const segCfg = activeSegmentConfigRef.current;
+                    const bufferedPreview = !!segCfg && segCfg.mode === "buffered" && singleSegType !== "wall";
                     return (
                       <>
                         {bandPolys.length ? (
@@ -28286,6 +28834,25 @@ User request: ${aiPrompt.trim()}`;
                               <Text key={`pvdt${i}`} x={lb.x} y={lb.y} text={lb.text} fontSize={fontPx} fill="#EA580C" rotation={lb.rotation} listening={false} />
                             ))}
                           </>
+                        ) : bufferedPreview && segCfg ? (
+                          <>
+                            {/* Buffered band preview — the thickness-wide ribbon with the chosen cap style
+                                (capsule / square / flat) and fill, matching the committed buffered segment. */}
+                            <Line
+                              points={bufferBandPoints(a, b, segCfg.thicknessPx, segCfg.bufferStyle)}
+                              closed
+                              fill={segCfg.fill === "outlined" ? undefined : `${segCfg.color}40`}
+                              stroke={segCfg.color}
+                              strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))}
+                              dash={[6, 4]}
+                              lineJoin="round"
+                              listening={false}
+                            />
+                            {/* Faint centerline for reference. */}
+                            <Line points={[a.x, a.y, b.x, b.y]} stroke={segCfg.color} strokeWidth={Math.max(0.5, 1 / Math.max(1, scale))} dash={[4, 4]} opacity={0.5} lineCap="round" listening={false} />
+                            {/* Live Outer / Inner dimensions (projected: Inner = L − t, Outer = L + t). */}
+                            {renderBufferedPreviewDims(a, b, segCfg.thicknessPx, lengthDimMode)}
+                          </>
                         ) : (
                           <Line
                             points={[a.x, a.y, b.x, b.y]}
@@ -28298,9 +28865,9 @@ User request: ${aiPrompt.trim()}`;
                         )}
                         <Circle x={a.x} y={a.y} radius={Math.max(3, 4 / Math.max(1, scale))} fill="#0F766E" stroke="#fff" strokeWidth={1} />
                         {/* Midpoint (centerline) length label. Suppressed for a wall trace that produced
-                            face dimensions — there we only show the inner / outer dimensions. Kept for
-                            door / window / line previews (their only length readout). */}
-                        {!(singleSegType === "wall" && bandPolys.length > 0) && (
+                            face dimensions, and for buffered segments (which show Outer / Inner instead).
+                            Kept for door / window / plain-line previews (their only length readout). */}
+                        {!(singleSegType === "wall" && bandPolys.length > 0) && !bufferedPreview && (
                           <Text x={mid.x + 6 / Math.max(1, scale)} y={mid.y - fontPx - 4 / Math.max(1, scale)} text={text} fontSize={fontPx} fill="#0F766E" listening={false} />
                         )}
                       </>
@@ -29868,6 +30435,22 @@ User request: ${aiPrompt.trim()}`;
                             });
                           }}
                         />
+                        {/* Show Label — draw this segment's label at its midpoint on the canvas. */}
+                        <label className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 py-1.5">
+                          <div>
+                            <span className="text-[11px] font-medium text-slate-700">Show Label</span>
+                            <p className="text-[9px] text-slate-400">Show this segment's label at its midpoint.</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 shrink-0"
+                            checked={selectedWall.showLabel !== false}
+                            onChange={(e) => {
+                              const v = e.target.checked;
+                              history.set({ ...history.state, walls: history.state.walls.map((w) => w.id === selectedWall.id ? { ...w, showLabel: v } : w) });
+                            }}
+                          />
+                        </label>
                         {/* Parametric Object — import a parametric object file (Door / …) into the project
                             library and attach an instance to this segment, then edit its Input Properties. */}
                         <SegmentObjectBlock
@@ -30542,6 +31125,45 @@ User request: ${aiPrompt.trim()}`;
                             }
                           }}
                         />
+                      </div>
+                      {/* Display — per-Space canvas text. "Show Label" prints the Space's label (or display
+                          id), area and L × B at its centroid. */}
+                      <div className="mt-2 rounded border border-slate-200 bg-white">
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                          onClick={() => setSpaceDisplayExpanded((v) => !v)}
+                        >
+                          <span>Display</span>
+                          {spaceDisplayExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+                        {spaceDisplayExpanded && (
+                          <div className="border-t border-slate-100 px-2 py-1.5">
+                            <label className="flex items-center justify-between gap-2">
+                              <div>
+                                <span className="text-[11px] font-medium text-slate-700">Show Label</span>
+                                <p className="text-[9px] text-slate-400">Show the Space's label, area and L × B at its centroid.</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 shrink-0"
+                                checked={selectedRoom.showLabel !== false}
+                                onChange={(e) => {
+                                  const v = e.target.checked;
+                                  const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                                  if (isAuto) {
+                                    // Auto-detected rooms aren't in history.state.rooms — promote to manual so the flag persists.
+                                    const newId = createId();
+                                    history.set({ ...history.state, rooms: [...history.state.rooms, { ...selectedRoom, id: newId, showLabel: v }] });
+                                    selection.selectOne(newId);
+                                  } else {
+                                    history.set({ ...history.state, rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, showLabel: v } : r) });
+                                  }
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
                       </div>
                       {/* Floor / Parametric Object — import a `.pobj.json` (e.g. Floor) and attach it to this
                           Space. A Floor object takes the Space polygon as its footprint and adds thickness +
@@ -31444,7 +32066,7 @@ User request: ${aiPrompt.trim()}`;
                                 value={unit}
                                 onChange={(e) => setUnit(e.target.value as Unit)}
                               >
-                                {(def.options?.length ? def.options : [{ value: "m" }, { value: "ft" }, { value: "cm" }]).map((o) => (
+                                {(def.options?.length ? def.options : [{ value: "m" }, { value: "ft" }, { value: "cm" }, { value: "in" }]).map((o) => (
                                   <option key={o.value} value={o.value}>{o.label ?? o.value}</option>
                                 ))}
                               </select>
@@ -31965,6 +32587,33 @@ User request: ${aiPrompt.trim()}`;
                                     value={meta.label ?? ""}
                                     onChange={(e) => updateNodeMeta(node.stableKey, { label: e.target.value })}
                                   />
+                                </div>
+                                {/* Display — "Show Label" prints this node's label at the node on the canvas. */}
+                                <div className="rounded border border-slate-200 bg-white">
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                    onClick={() => setNodeDisplayExpanded((v) => !v)}
+                                  >
+                                    <span>Display</span>
+                                    {nodeDisplayExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                  </button>
+                                  {nodeDisplayExpanded && (
+                                    <div className="border-t border-slate-100 px-2 py-1.5">
+                                      <label className="flex items-center justify-between gap-2">
+                                        <div>
+                                          <span className="text-[11px] font-medium text-slate-700">Show Label</span>
+                                          <p className="text-[9px] text-slate-400">Show the node's label at the node on the canvas.</p>
+                                        </div>
+                                        <input
+                                          type="checkbox"
+                                          className="h-4 w-4 shrink-0"
+                                          checked={meta.showLabel !== false}
+                                          onChange={(e) => updateNodeMeta(node.stableKey, { showLabel: e.target.checked })}
+                                        />
+                                      </label>
+                                    </div>
+                                  )}
                                 </div>
                                 {/* Native node Type selector removed — node type is controlled via the Flow
                                     node graph (Schema node-type discriminator). */}
@@ -32748,6 +33397,7 @@ User request: ${aiPrompt.trim()}`;
             bufferStyle: addSegConfig.bufferStyle,
             fill: addSegConfig.fill,
             method: addSegConfig.method,
+            showLabel: addSegConfig.showLabel,
           };
           pendingSegObjectIdRef.current = null; // plain line via dialog — no imported object attached
           pendingSegObjectParamsRef.current = null;
@@ -32893,6 +33543,7 @@ User request: ${aiPrompt.trim()}`;
               bufferStyle: "flat",
               fill: "filled",
               method: "center",
+              showLabel: true,
             };
             return { unit, config: remembered ?? fallback };
           })()}
@@ -32926,6 +33577,7 @@ User request: ${aiPrompt.trim()}`;
                     bufferStyle: seg.bufferStyle,
                     fill: seg.fill,
                     method: seg.method,
+                    showLabel: seg.showLabel,
                   };
                 }
               }

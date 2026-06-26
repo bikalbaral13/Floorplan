@@ -17,7 +17,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles, ChevronDown, ChevronRight, Group as GroupIcon, FilePlus, Eye, EyeOff, Minus, Maximize2, Minimize2, Copy } from "lucide-react";
+import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles, ChevronDown, ChevronRight, Group as GroupIcon, FilePlus, Eye, EyeOff, Minus, Maximize2, Minimize2, Copy, Boxes } from "lucide-react";
 import { toast } from "sonner";
 import type { Point, SerializedFlow, SerializedFlowNode } from "../types";
 import { FLOW_TOOLS, outputSlots, inputProps, schemaEntries, GENERATE_DEFAULT_MODEL, type FlowNodeData, type FlowToolType, type OutputSlot, type InputProp, type InputPropType } from "./flowTypes";
@@ -1825,6 +1825,66 @@ const makeNode = (
   };
 };
 
+/** Convert a parametric-object file (with a `geometry.pipeline`) back into a Flow graph for visualisation:
+ *  `host` → the Source node, `parameters` → an Input Props node, each pipeline op → its tool node. Wires the
+ *  main chain (Source → Input Props → op₁ → op₂ → …) plus a value edge from Input Props to every op param that
+ *  REFERENCES a parameter (and is a real value-input of that tool — e.g. inset `uniformSetback`, optimise-rect
+ *  `count`, massing `n`). Param-referenced op params are baked to the parameter's default as the node's literal
+ *  value. Objects without a pipeline yield just Source + Input Props (nothing to chain). */
+const pobjToFlowGraph = (pobj: Record<string, unknown>): { version: number; nodes: unknown[]; edges: unknown[] } => {
+  const params = Array.isArray(pobj.parameters) ? (pobj.parameters as Record<string, unknown>[]) : [];
+  const paramKeys = new Set(params.map((p) => String(p.key)));
+  const defaultOf = (key: string): unknown => params.find((p) => String(p.key) === key)?.default;
+  const propType = (kind: unknown): InputPropType =>
+    kind === "number" ? "range" : kind === "color" ? "color" : kind === "checkbox" ? "checkbox" : kind === "select" ? "select" : "text";
+  const props: InputProp[] = params.map((p) => ({
+    id: String(p.key),
+    name: String(p.label ?? p.key),
+    type: propType(p.kind),
+    value: (p.default ?? (p.kind === "checkbox" ? false : p.kind === "number" ? 0 : "")) as InputProp["value"],
+    min: typeof p.min === "number" ? p.min : 0,
+    max: typeof p.max === "number" ? p.max : 100,
+    step: typeof p.step === "number" ? p.step : 1,
+    options: Array.isArray(p.options) ? (p.options as Record<string, unknown>[]).map((o) => ({ value: String(o.value), label: String(o.label ?? o.value) })) : [],
+  }));
+
+  const nodes: unknown[] = [
+    { id: "source", position: { x: 80, y: 200 }, data: { tool: "source", params: { grabFromSelection: true } } },
+    { id: "input-props", position: { x: 340, y: 200 }, data: { tool: "input-props", params: { props } } },
+  ];
+  const edges: unknown[] = [
+    { id: "e-source-input-props", source: "source", target: "input-props", sourceHandle: null, targetHandle: null },
+  ];
+
+  const geom = pobj.geometry && typeof pobj.geometry === "object" ? (pobj.geometry as Record<string, unknown>) : {};
+  const pipeline = Array.isArray(geom.pipeline) ? (geom.pipeline as Record<string, unknown>[]) : [];
+  let prevId = "input-props";
+  let x = 600;
+  let step = 0;
+  for (const opRaw of pipeline) {
+    const opName = typeof opRaw.op === "string" ? opRaw.op : "";
+    if (!opName || opName === "host") continue; // `host` is represented by the Source node
+    step += 1;
+    const nodeId = `${opName}_${step}`;
+    const viKeys = new Set((FLOW_TOOLS[opName as FlowToolType]?.valueInputs ?? []).map((v) => v.key));
+    const opParams = opRaw.params && typeof opRaw.params === "object" ? (opRaw.params as Record<string, unknown>) : {};
+    const nodeParams: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(opParams)) {
+      if (typeof v === "string" && paramKeys.has(v)) {
+        nodeParams[k] = defaultOf(v); // bake the referenced parameter's default as the literal value
+        if (viKeys.has(k)) edges.push({ id: `v-${v}-${nodeId}`, source: "input-props", target: nodeId, sourceHandle: `val-${v}`, targetHandle: `valin-${k}` });
+      } else {
+        nodeParams[k] = v;
+      }
+    }
+    nodes.push({ id: nodeId, position: { x, y: 200 }, data: { tool: opName, params: nodeParams } });
+    edges.push({ id: `e-${prevId}-${nodeId}`, source: prevId, target: nodeId, sourceHandle: null, targetHandle: null });
+    prevId = nodeId;
+    x += 260;
+  }
+  return { version: 1, nodes, edges };
+};
+
 export const FlowOverlay = (props: FlowOverlayProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -2633,6 +2693,26 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     reader.readAsText(file);
   }, [importFlowData]);
 
+  // ── Load Parametric Object: upload a .pobj.json and reconstruct its pipeline as a Flow graph (nodes +
+  // connections) so the recipe can be inspected / edited visually. ──
+  const pobjInputRef = useRef<HTMLInputElement | null>(null);
+  const loadParametricObject = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const pobj = JSON.parse(String(reader.result)) as Record<string, unknown>;
+        if (pobj.kind !== "parametric-object") throw new Error("not a parametric-object file");
+        const n = importFlowData(pobjToFlowGraph(pobj));
+        const name = (pobj.meta as { name?: string } | undefined)?.name ?? "object";
+        toast.success(`Loaded "${name}" — ${n} node${n === 1 ? "" : "s"}`);
+      } catch (err) {
+        toast.error("Invalid parametric-object JSON");
+        console.error("Parametric object load failed:", err);
+      }
+    };
+    reader.readAsText(file);
+  }, [importFlowData]);
+
   // ── Import via paste: drop flow JSON straight into a textarea (no file needed). ──
   const [importOpen, setImportOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -3265,6 +3345,13 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importFlow(f); e.target.value = ""; }}
           />
+          <input
+            ref={pobjInputRef}
+            type="file"
+            accept="application/json,.json,.pobj.json"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) loadParametricObject(f); e.target.value = ""; }}
+          />
           {/* Delete / Group the current selection (also works via the Delete key). */}
           <Button
             variant="outline"
@@ -3287,6 +3374,15 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             <GroupIcon className="h-3.5 w-3.5" /> Group
           </Button>
           <div className="mx-0.5 h-5 w-px bg-slate-200" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-[11px] text-teal-600 hover:bg-teal-50"
+            onClick={() => pobjInputRef.current?.click()}
+            title="Load Parametric Object — upload a .pobj.json file; its pipeline is shown as Flow nodes + connections"
+          >
+            <Boxes className="h-3.5 w-3.5" /> Load Parametric Object
+          </Button>
           <Button
             variant="outline"
             size="sm"
