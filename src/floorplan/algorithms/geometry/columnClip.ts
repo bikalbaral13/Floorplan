@@ -121,6 +121,26 @@ export const columnFootprintPolygons = (
  * columns the wall polygons are simply unioned. Falls back to the un-clipped polygons if the
  * boolean op fails on degenerate input.
  */
+/**
+ * Subtract one or more clip polygons from a single subject polygon. Returns the resulting region as a list
+ * of polygons (each with optional holes). Non-overlapping clips are no-ops. Falls back to the subject
+ * unchanged on degenerate input or boolean-op failure.
+ */
+export const subtractPolygon = (subject: Point[], clips: Point[][]): ClipPoly[] => {
+  if (subject.length < 3) return [];
+  const validClips = clips.filter((p) => p.length >= 3);
+  if (validClips.length === 0) return [{ outer: subject, holes: [] }];
+  try {
+    const result = pc.difference(
+      [ringFromPoints(subject)] as Polygon,
+      ...validClips.map((p) => [ringFromPoints(p)] as Polygon)
+    );
+    return multiPolygonToClipPolys(result);
+  } catch {
+    return [{ outer: subject, holes: [] }];
+  }
+};
+
 export const clipWallBandByColumns = (
   wallPolys: Point[][],
   columnPolys: Point[][]

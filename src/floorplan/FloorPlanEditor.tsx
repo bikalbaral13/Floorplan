@@ -152,7 +152,7 @@ import {
 } from "./algorithms/geometry/distances";
 import { classifyCardinal } from "./algorithms/geometry/cardinal";
 import { sutherlandHodgmanClip } from "./algorithms/geometry/sutherlandHodgman";
-import { columnFootprintPolygons, clipWallBandByColumns, type ClipPoly } from "./algorithms/geometry/columnClip";
+import { columnFootprintPolygons, clipWallBandByColumns, subtractPolygon, type ClipPoly } from "./algorithms/geometry/columnClip";
 import { computePolygonPrincipalAxes } from "./algorithms/geometry/principalAxes";
 import { areaProportionalCuts, computeSplitPolygons } from "./algorithms/geometry/splitPolygons";
 import { sampleSegmentInside, computeVisibilityPolygon } from "./algorithms/geometry/visibilityPolygon";
@@ -773,6 +773,9 @@ interface SnapSettings {
   objectEdges: boolean;
   /** Project the pointer onto the nearest point along a segment's spine while drawing. */
   segmentPoints: boolean;
+  /** Snap to the mitered-join corner vertices of buffered/mitered wall bands — so a node can be placed
+   *  exactly on a miter point. */
+  miteredPoints: boolean;
   /** Snap radius in pixels for endpoint (node) detection. Lower = easier to draw short segments near existing nodes. */
   endpointRadius: number;
   /** Snap radius in pixels for projecting onto the nearest wall spine while drawing. */
@@ -941,6 +944,74 @@ const areaInSquareUnit = (areaPx: number, unit: Unit, pixelsPerMeter: number) =>
   return areaM2 * 10.7639;
 };
 
+/** Display-units options (Preferences → Display Units). `precision` = decimal digits for decimal labels;
+ *  `ftInches` formats linear feet as `ft' in"` (only honoured when the active unit is "ft"). */
+export type DisplayUnitOpts = { precision: number; ftInches: boolean };
+
+/** Render a decimal feet value as feet-and-inches, e.g. 12.5 → `12' 6"`. The inches part keeps up to
+ *  `precision` decimals (default 2) so sub-inch nudges show — e.g. 8.2083 ft → `8' 2.5"` — with trailing
+ *  zeros trimmed so whole inches stay clean (`28' 0"`, not `28' 0.00"`). */
+const feetToFtIn = (feet: number, precision = 2) => {
+  const neg = feet < 0;
+  const absF = Math.abs(feet);
+  let whole = Math.floor(absF);
+  const f = Math.pow(10, Math.max(0, precision));
+  let inches = Math.round((absF - whole) * 12 * f) / f;
+  if (inches >= 12) { whole += 1; inches -= 12; }
+  let inchStr = inches.toFixed(Math.max(0, precision));
+  if (inchStr.includes(".")) inchStr = inchStr.replace(/\.?0+$/, "");
+  return `${neg ? "-" : ""}${whole}' ${inchStr}"`;
+};
+
+/** Format a pixel length for DISPLAY — value only, no trailing unit word. Honours precision + ft-inches.
+ *  ft-inches output carries its own `' "` marks, so callers must not append a unit suffix to it. */
+const formatLengthBare = (px: number, unit: Unit, pixelsPerMeter: number, opts: DisplayUnitOpts) => {
+  const v = unitValueFromPixels(px, unit, pixelsPerMeter);
+  if (unit === "ft" && opts.ftInches) return feetToFtIn(v, opts.precision);
+  return v.toFixed(opts.precision);
+};
+
+/** True when the active unit/options render lengths WITHOUT a trailing unit word (ft-inches carries marks). */
+const lengthHasInlineUnit = (unit: Unit, opts: DisplayUnitOpts) => unit === "ft" && opts.ftInches;
+
+/** Format a pixel length for DISPLAY with its unit suffix, e.g. `3.05 m` or `12' 6"`. */
+const formatLengthLabel = (px: number, unit: Unit, pixelsPerMeter: number, opts: DisplayUnitOpts) => {
+  const bare = formatLengthBare(px, unit, pixelsPerMeter, opts);
+  return lengthHasInlineUnit(unit, opts) ? bare : `${bare} ${unit}`;
+};
+
+/** Format a pixel² area for DISPLAY with its `unit²` suffix. Area is always decimal (ft-inches doesn't apply). */
+const formatAreaLabel = (areaPx: number, unit: Unit, pixelsPerMeter: number, opts: DisplayUnitOpts) =>
+  `${areaInSquareUnit(areaPx, unit, pixelsPerMeter).toFixed(opts.precision)} ${unit}²`;
+
+/** Parse a typed direct-distance string into a numeric value in the active display unit.
+ *  When unit is "ft", accepts feet-inches forms — `10' 5.5"`, `10'`, `5.5"`, `10' 5.5''` (`''` ≡ `"`),
+ *  or even partials like `10' 5` — and returns decimal feet. All other units (and a plain number in ft)
+ *  fall back to `parseFloat`. Returns NaN for empty / unparseable input. */
+const parseTypedLength = (raw: string, unit: Unit): number => {
+  const s = raw.replace(/''/g, '"').trim();
+  if (s === "") return NaN;
+  if (unit === "ft" && /['"]/.test(s)) {
+    const apos = s.indexOf("'");
+    if (apos >= 0) {
+      const ft = parseFloat(s.slice(0, apos)) || 0;          // feet before the `'`
+      const inch = parseFloat(s.slice(apos + 1)) || 0;       // parseFloat skips the leading space, ignores a trailing `"`
+      return ft + inch / 12;
+    }
+    return (parseFloat(s) || 0) / 12;                         // inches only (`5.5"`)
+  }
+  return parseFloat(s);
+};
+
+/** Slugify a display label into a stable layer id (lowercase, dashes), e.g. "Spiral Staircase" → "spiral-staircase". */
+const layerSlug = (s: string): string => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "layer";
+
+/** The fine sub-unit the Nudge delta is expressed in for a given display unit — ft-inches nudges in INCHES
+ *  (so a half-inch step reads as 0.5), everything else nudges in its own unit. */
+const nudgeUnitFor = (u: Unit): Unit => (u === "ft" ? "in" : u);
+/** Sensible default Nudge-delta value (in `nudgeUnitFor(u)`) when the display unit changes. */
+const defaultNudgeFor = (u: Unit): number => (u === "ft" || u === "in" ? 0.5 : u === "cm" ? 1 : 0.01);
+
 /** SAT-based convex polygon overlap test. For non-convex rooms this can give false negatives. */
 const polygonsOverlapSAT = (A: Point[], B: Point[]) => {
   const collectAxes = (poly: Point[], out: { x: number; y: number }[]) => {
@@ -1062,7 +1133,23 @@ const withNearestWallSpine = (p: Point, walls: Wall[], tool: Tool, maxDistance: 
 
 /** All radii in `settings`/below are SCREEN pixels; `scale` (zoom) converts them to world units so the
  *  snap tolerance stays constant on screen at any zoom. Grid snapping stays in world units (unaffected). */
-const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings: SnapSettings, rooms?: Room[], scale: number = 1) => {
+/** Nearest point on any of the given edges within `radius` of `point`; null if none are close enough. */
+const nearestPointOnEdges = (point: Point, edges: { a: Point; b: Point }[], radius: number): Point | null => {
+  let best: Point | null = null;
+  let bestD = radius;
+  for (const e of edges) {
+    const ex = e.b.x - e.a.x, ey = e.b.y - e.a.y;
+    const len2 = ex * ex + ey * ey;
+    let t = len2 > 1e-9 ? ((point.x - e.a.x) * ex + (point.y - e.a.y) * ey) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const px = e.a.x + t * ex, py = e.a.y + t * ey;
+    const d = Math.hypot(px - point.x, py - point.y);
+    if (d < bestD) { bestD = d; best = { x: px, y: py }; }
+  }
+  return best;
+};
+
+const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings: SnapSettings, rooms?: Room[], scale: number = 1, miterEdges?: { a: Point; b: Point }[]) => {
   let next: Point = { ...point };
   const s = scale > 0 ? scale : 1;
 
@@ -1113,6 +1200,14 @@ const snapPoint = (point: Point, walls: Wall[], objects: FloorObject[], settings
         });
       }
     });
+  }
+
+  // Mitered polygon lines: project onto the nearest point along a mitered band edge (corners included) so a
+  // node can be dropped anywhere on the miter outline.
+  if (settings.miteredPoints && miterEdges && miterEdges.length) {
+    const radius = Math.max(0, settings.endpointRadius ?? 14) / s;
+    const hit = nearestPointOnEdges(point, miterEdges, radius);
+    if (hit) next = hit;
   }
 
   // Highest priority: snap to all vertices of plot-boundary and floorplate-boundary rooms
@@ -1368,6 +1463,26 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Mitered wall polygons — computed once when walls change, shared across all mitered wall renders. */
   const miteredPolygons = useMemo(() => computeMiteredWallPolygons(history.state.walls), [history.state.walls]);
   const miteredUnion = useMemo(() => computeMiteredUnion(miteredPolygons), [miteredPolygons]);
+  /** All mitered-polygon outline edges, used by the "Mitered Points" snap (Preferences → Snapping) — the
+   *  pointer/node projects onto the nearest point ALONG these lines (corners included), not just vertices. */
+  const miterSnapEdges = useMemo(() => {
+    const edges: { a: Point; b: Point }[] = [];
+    for (const poly of miteredPolygons.values()) {
+      if (poly.length < 2) continue;
+      for (let i = 0; i < poly.length; i++) edges.push({ a: poly[i], b: poly[(i + 1) % poly.length] });
+    }
+    return edges;
+  }, [miteredPolygons]);
+  /** Mitered-polygon edges of every wall EXCEPT the given ids — for snapping a dragged node onto other
+   *  walls' miter lines without it chasing its own (moving) edges. Snapshotted at drag start. */
+  const miterSnapEdgesExcluding = (excludeIds: Set<string>): { a: Point; b: Point }[] => {
+    const edges: { a: Point; b: Point }[] = [];
+    for (const [wid, poly] of miteredPolygons) {
+      if (excludeIds.has(wid) || poly.length < 2) continue;
+      for (let i = 0; i < poly.length; i++) edges.push({ a: poly[i], b: poly[(i + 1) % poly.length] });
+    }
+    return edges;
+  };
 
   /** Path-only mitered union — used to render path corridors as a continuous offset
    *  band (filled + outlined) regardless of the current view mode. Restricting the
@@ -1917,6 +2032,20 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [orthoMode, setOrthoMode] = useState<boolean>(true);
   /** Arrow-key fine-tune nudge step in the active display unit (Preferences). Default 0.01; Shift = ×10. */
   const [nudgeDelta, setNudgeDelta] = useState<number>(0.01);
+  /** Display Units (Preferences): decimal digits shown on length/area labels. Default 2. Persisted. */
+  const [decimalPrecision, setDecimalPrecision] = useState<number>(() => {
+    try { const v = parseInt(localStorage.getItem("bp.units.precision") ?? "", 10); return Number.isFinite(v) && v >= 0 && v <= 6 ? v : 2; } catch { return 2; }
+  });
+  /** Feet-inches is now folded into the unit choice: the "Feet-Inches (ft-in)" option sets unit = "ft", and
+   *  feet are always rendered as `12' 6"`. So ft-inches display is simply `unit === "ft"`. */
+  const ftInchesMode = unit === "ft";
+  /** Bundled display-units options + component-scoped label formatters (honour unit + precision + ft-inches). */
+  const displayUnitOpts = useMemo<DisplayUnitOpts>(() => ({ precision: decimalPrecision, ftInches: ftInchesMode }), [decimalPrecision, ftInchesMode]);
+  const fmtLen = useCallback((px: number) => formatLengthLabel(px, unit, pixelsPerMeter, displayUnitOpts), [unit, pixelsPerMeter, displayUnitOpts]);
+  const fmtLenBare = useCallback((px: number) => formatLengthBare(px, unit, pixelsPerMeter, displayUnitOpts), [unit, pixelsPerMeter, displayUnitOpts]);
+  const fmtArea = useCallback((areaPx: number) => formatAreaLabel(areaPx, unit, pixelsPerMeter, displayUnitOpts), [unit, pixelsPerMeter, displayUnitOpts]);
+  /** Whether the current length labels carry their own inline unit (ft-inches) so callers skip the unit suffix. */
+  const lenInlineUnit = useMemo(() => lengthHasInlineUnit(unit, displayUnitOpts), [unit, displayUnitOpts]);
   /** Show Center Dimension (Preferences): when on, the live wall-trace preview also dimensions the
    *  centerline (spine) length in addition to the inner / outer faces. Off by default. */
   const [showCenterDimPref, setShowCenterDimPref] = useState<boolean>(false);
@@ -2133,6 +2262,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     midpoints: true,
     objectEdges: true,
     segmentPoints: true,
+    miteredPoints: false,
     endpointRadius: 14,
     wallSpineRadius: 14,
   });
@@ -2397,24 +2527,55 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         // Add-Furniture sprites.
         if (w.isPlacementWall || w.isPlacementPreview) return { ...w, layerId: furnitureDefault };
         const seg = w.segmentType ?? "wall";
-        const lid = seg === "door" ? doorDefault : seg === "window" ? windowDefault : wallDefault;
+        // A layer whose id === the segment type (created when its Add Segment dropdown item was picked)
+        // takes precedence, so custom seg-types (e.g. "staircase") land on their own layer.
+        const lid = layerIds.has(seg) ? seg
+          : seg === "door" ? doorDefault
+          : seg === "window" ? windowDefault
+          : wallDefault;
         return { ...w, layerId: lid };
+      });
+    const stampRooms = (arr: Room[]): Room[] =>
+      arr.map((r) => {
+        if (r.layerId) return r;
+        // A layer whose id === the room type (created when its Add Space dropdown item was picked) wins.
+        const rt = r.roomType;
+        return { ...r, layerId: rt && layerIds.has(rt) ? rt : activeLayerId };
       });
     const stampFurniture = (arr: FurnitureItem[]): FurnitureItem[] =>
       arr.map((f) => {
         if (f.layerId) return f;
-        const lid = f.type === "door" ? doorDefault : f.type === "window" ? windowDefault : furnitureDefault;
+        const lid = layerIds.has(f.type) ? f.type : f.type === "door" ? doorDefault : f.type === "window" ? windowDefault : furnitureDefault;
         return { ...f, layerId: lid };
       });
     history.replace({
       ...s,
       walls: stampWalls(s.walls),
-      rooms: stamp(s.rooms),
+      rooms: stampRooms(s.rooms),
       objects: stamp(s.objects),
       furniture: stampFurniture(s.furniture),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history.state, activeLayerId]);
+
+  /** Ensure a layer named for a drawing type exists (id === `slug`) and make it the active layer, so the
+   *  next entity of that type auto-stamps onto it (see the layer-stamp effect above). Called when an Add
+   *  Node / Add Segment / Add Space dropdown item is picked, so e.g. choosing "Wall" / "Door" / "Staircase"
+   *  creates the matching layer (if absent) and draws into it. Returns the layer id. */
+  const ensureLayerForType = useCallback((slug: string, name?: string) => {
+    if (!slug) return activeLayerId;
+    const layers = history.state.layers ?? [];
+    const existing = layers.find((l) => l.id === slug);
+    if (!existing) {
+      const order = layers.reduce((m, l) => Math.max(m, l.order), 0) + 1;
+      const palette = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899"];
+      const color = palette[layers.length % palette.length];
+      const label = name?.trim() || slug.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+      history.set({ ...history.state, layers: [...layers, { id: slug, name: label, color, visible: true, locked: false, order }] });
+    }
+    setActiveLayerId(slug);
+    return slug;
+  }, [history, activeLayerId]);
 
   useEffect(() => {
     const need = Math.max(1, Math.min(19, Math.round(wallSplitCount) - 1));
@@ -3315,6 +3476,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [aiCollapsed, setAiCollapsed] = useState<boolean>(true);
   useEffect(() => { try { localStorage.setItem("bp.ai.apiKey", aiApiKey); } catch { /* ignore */ } }, [aiApiKey]);
   useEffect(() => { try { localStorage.setItem("bp.ai.model", aiModel); } catch { /* ignore */ } }, [aiModel]);
+  useEffect(() => { try { localStorage.setItem("bp.units.precision", String(decimalPrecision)); } catch { /* ignore */ } }, [decimalPrecision]);
   /** Send the current canvas JSON + the user's instruction to Gemini, then load the rewritten JSON back. */
   const handleAiSend = useCallback(async (prompt: string) => {
     if (!aiApiKey.trim() || !aiModel.trim()) {
@@ -3393,6 +3555,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const stageNodeDragRef = useRef<{
     nodeX: number; nodeY: number; startWorldX: number; startWorldY: number;
     wallSnapshots: Map<string, { start: Point; end: Point }>; moved: boolean;
+    /** Mitered-polygon edges (of all OTHER walls, snapshotted at drag start) for "Mitered Points" snap. */
+    snapEdges?: { a: Point; b: Point }[];
   } | null>(null);
   /** Stage-level segment drag (Segment select scope): grab a segment from anywhere within its hover
    *  distance and translate it (both endpoints + coincident neighbour endpoints) by the pointer delta. */
@@ -3408,6 +3572,30 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     roomId: string; roomPoints: Point[]; anchors: Point[]; wallSnapshots: Map<string, { start: Point; end: Point }>;
     startWorldX: number; startWorldY: number; moved: boolean;
   } | null>(null);
+  /** Multi-selection group drag (raw canvas, Segments + Spaces): grab any already-selected element while
+   *  more than one is selected and translate the whole set by one pointer delta. `roomPoints` = original
+   *  polygons of every selected manual room; `anchors` = endpoints of selected segments + (when
+   *  "Move connected edges" is on) boundary nodes of selected rooms — any wall endpoint coincident with an
+   *  anchor translates, so coincident junctions stay stitched. Single live history.replace per move. */
+  const stageGroupDragRef = useRef<{
+    roomPoints: Map<string, Point[]>; anchors: Point[]; wallSnapshots: Map<string, { start: Point; end: Point }>;
+    startWorldX: number; startWorldY: number; moved: boolean;
+    /** Ctrl+drag duplicate-and-move: these freshly-cloned wall ids translate rigidly; if the gesture ends
+     *  without movement the copies are discarded (a bare Ctrl-click shouldn't stack a duplicate). */
+    isCopy?: boolean; copyIds?: string[];
+    /** After the Ctrl-drag's mouse-up the copy enters hover-placement mode (`placing`): it follows the cursor
+     *  with no button/modifier held, you can type a distance, and Enter/click applies (Esc cancels). */
+    placing?: boolean;
+    /** Copy-drag typed-distance support: the pressed segment's thickness (px, added to the typed CLEAR
+     *  distance for the centre-to-centre offset) and the last pointer (so typing re-applies without a move). */
+    primaryThicknessPx?: number; lastPointerX?: number; lastPointerY?: number;
+  } | null>(null);
+  /** Typed clear-distance string for an active Ctrl+copy drag (in the active unit; ft-inches OK). The copy is
+   *  offset along the drag direction by `parse(distance) + segment thickness` so the typed value is the
+   *  face-to-face gap. Mirrored to a ref for the mouse-move / keydown handlers. */
+  const [copyDistanceInput, setCopyDistanceInput] = useState<string>("");
+  const copyDistanceRef = useRef<string>("");
+  useEffect(() => { copyDistanceRef.current = copyDistanceInput; }, [copyDistanceInput]);
   /** "All" select scope: when a stage mousedown selects a node/segment by priority, the following Konva
    *  shape onClick (which could hit an overlapping segment/space) is suppressed so it can't override the
    *  priority pick. Set in onStageMouseDown, consumed in onObjectSelect. */
@@ -17417,11 +17605,31 @@ User request: ${aiPrompt.trim()}`;
       // form field is focused (so typing into sidebar inputs isn't hijacked).
       const ae = document.activeElement as HTMLElement | null;
       const inFormField = !!ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable);
+      // Direct-distance entry for an active Ctrl+copy drag: type the CLEAR distance (ft-inches OK); the copy
+      // snaps to that distance (+ segment thickness, centre-to-centre) along the current drag direction.
+      const copyDrag = stageGroupDragRef.current;
+      if (!inFormField && copyDrag?.isCopy) {
+        const reapply = () => {
+          if (copyDrag.lastPointerX == null || copyDrag.lastPointerY == null) return;
+          const d = copyTypedDelta(copyDrag, copyDrag.lastPointerX, copyDrag.lastPointerY);
+          if (d) { copyDrag.moved = true; translateGroupDrag(copyDrag, d[0], d[1]); }
+        };
+        const set = (n: string) => { const v = n.slice(0, 16); copyDistanceRef.current = v; setCopyDistanceInput(v); reapply(); };
+        if (/^[0-9]$/.test(event.key)) { event.preventDefault(); set(copyDistanceRef.current + event.key); return; }
+        if (event.key === "." || event.key === ",") { event.preventDefault(); const s = copyDistanceRef.current; set(s.includes(".") ? s : s === "" ? "0." : s + "."); return; }
+        if (unit === "ft" && event.key === "'") { event.preventDefault(); const s = copyDistanceRef.current; set(s.includes("'") ? s + "'" : s + "' "); return; }
+        if (unit === "ft" && event.key === '"') { event.preventDefault(); const s = copyDistanceRef.current; set(s.includes('"') ? s : s + '"'); return; }
+        if (event.key === "Backspace" && copyDistanceRef.current !== "") { event.preventDefault(); set(copyDistanceRef.current.slice(0, -1)); return; }
+        // Enter applies the copy (commits if it moved); Escape cancels and discards the clones.
+        if (event.key === "Enter") { event.preventDefault(); reapply(); endCopyGesture(copyDrag, true); return; }
+        if (event.key === "Escape") { event.preventDefault(); endCopyGesture(copyDrag, false); return; }
+      }
       // Fine-tune nudge: with the Select tool, arrow keys translate the selected node / segment / space by
       // one step (Shift = a coarser ×10 step). Naturally axis-aligned, so it complements Ortho dragging.
       if (!inFormField && tool === "select" && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-        // Step = the Preferences "Nudge delta" (in the active unit) → pixels; Shift = a coarser ×10.
-        const stepPx = pixelsFromUnitValue(Math.max(0, nudgeDelta), unit, pixelsPerMeter);
+        // Step = the Preferences "Nudge delta" (in the active unit's fine sub-unit — inches for ft-inches)
+        // → pixels; Shift = a coarser ×10.
+        const stepPx = pixelsFromUnitValue(Math.max(0, nudgeDelta), nudgeUnitFor(unit), pixelsPerMeter);
         const step = event.shiftKey ? stepPx * 10 : stepPx;
         const ndx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
         const ndy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
@@ -17439,45 +17647,48 @@ User request: ${aiPrompt.trim()}`;
             return;
           }
         }
+        // Segments + Spaces — translate EVERY selected segment's endpoints (+ coincident neighbours) and
+        // EVERY selected manual room's polygon (+ boundary walls when "move connected edges" is on) by the
+        // same step, so a multi-selection nudges as one. Single selection is just the size-1 case.
         const ids = selection.selectedIds;
-        // Segment — translate the selected wall's endpoints + any coincident neighbour endpoints.
-        const wall = ids.length ? history.state.walls.find((w) => ids.includes(w.id)) : undefined;
-        if (wall && !isLayerLocked(wall.layerId)) {
-          event.preventDefault();
-          const anchors = [wall.start, wall.end];
-          const near = (p: Point) => anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < 2);
-          history.set({ ...history.state, walls: history.state.walls.map((w) => ({
-            ...w, start: near(w.start) ? mv(w.start) : w.start, end: near(w.end) ? mv(w.end) : w.end,
-          })) });
-          return;
-        }
-        // Space — translate the room polygon (+ boundary walls when "move connected edges" is on).
-        const room = ids.length ? visibleRooms.find((r) => ids.includes(r.id)) : undefined;
-        if (room && !isLayerLocked(room.layerId)) {
-          event.preventDefault();
-          const roomPts = room.points ?? [];
+        if (ids.length > 0) {
+          const idSet = new Set(ids);
           const tol = 4;
           const anchors: Point[] = [];
-          if (areaConnectionConstraint === "with-walls" && roomPts.length >= 3) {
-            const nearBoundary = (px: number, py: number) => {
-              for (let i = 0, j = roomPts.length - 1; i < roomPts.length; j = i++) {
-                const ax = roomPts[j].x, ay = roomPts[j].y, ddx = roomPts[i].x - ax, ddy = roomPts[i].y - ay;
-                const len2 = ddx * ddx + ddy * ddy || 1;
-                const t = Math.max(0, Math.min(1, ((px - ax) * ddx + (py - ay) * ddy) / len2));
-                if (Math.hypot(px - (ax + t * ddx), py - (ay + t * ddy)) < tol) return true;
-              }
-              return false;
-            };
-            for (const w of history.state.walls) for (const p of [w.start, w.end]) {
-              if (nearBoundary(p.x, p.y) && !anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < tol)) anchors.push({ x: p.x, y: p.y });
+          const addAnchor = (p: Point) => { if (!anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < 2)) anchors.push({ x: p.x, y: p.y }); };
+          let anyLockFree = false;
+          // Selected segments → both endpoints are anchors (coincident neighbours follow, keeping junctions stitched).
+          for (const w of history.state.walls) {
+            if (idSet.has(w.id) && !isLayerLocked(w.layerId)) { anyLockFree = true; addAnchor(w.start); addAnchor(w.end); }
+          }
+          // Selected manual rooms → translate polygon; "with-walls" also makes boundary nodes anchors.
+          const roomIds = new Set<string>();
+          for (const r of visibleRooms) {
+            if (!idSet.has(r.id) || isLayerLocked(r.layerId)) continue;
+            const pts = r.points ?? [];
+            if (pts.length >= 3 && history.state.rooms.some((hr) => hr.id === r.id)) { roomIds.add(r.id); anyLockFree = true; }
+            if (areaConnectionConstraint === "with-walls" && pts.length >= 3) {
+              const nearBoundary = (px: number, py: number) => {
+                for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+                  const ax = pts[j].x, ay = pts[j].y, ddx = pts[i].x - ax, ddy = pts[i].y - ay;
+                  const len2 = ddx * ddx + ddy * ddy || 1;
+                  const t = Math.max(0, Math.min(1, ((px - ax) * ddx + (py - ay) * ddy) / len2));
+                  if (Math.hypot(px - (ax + t * ddx), py - (ay + t * ddy)) < tol) return true;
+                }
+                return false;
+              };
+              for (const w of history.state.walls) for (const p of [w.start, w.end]) if (nearBoundary(p.x, p.y)) { anyLockFree = true; addAnchor(p); }
             }
           }
-          const near = (p: Point) => anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < tol);
-          history.set({ ...history.state,
-            rooms: history.state.rooms.map((r) => (r.id === room.id ? { ...r, points: roomPts.map(mv) } : r)),
-            walls: history.state.walls.map((w) => ({ ...w, start: near(w.start) ? mv(w.start) : w.start, end: near(w.end) ? mv(w.end) : w.end })),
-          });
-          return;
+          if (anyLockFree && (anchors.length > 0 || roomIds.size > 0)) {
+            event.preventDefault();
+            const near = (p: Point) => anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < 2);
+            history.set({ ...history.state,
+              rooms: history.state.rooms.map((r) => (roomIds.has(r.id) ? { ...r, points: (r.points ?? []).map(mv) } : r)),
+              walls: history.state.walls.map((w) => ({ ...w, start: near(w.start) ? mv(w.start) : w.start, end: near(w.end) ? mv(w.end) : w.end })),
+            });
+            return;
+          }
         }
       }
       // Direct-distance entry is available while drawing a straight Wall OR a single Segment.
@@ -17486,12 +17697,24 @@ User request: ${aiPrompt.trim()}`;
       if (!inFormField && straightDrawing) {
         if (/^[0-9]$/.test(event.key)) {
           event.preventDefault();
-          setWallLengthInput((s) => (s + event.key).slice(0, 12));
+          setWallLengthInput((s) => (s + event.key).slice(0, 16));
           return;
         }
         if (event.key === "." || event.key === ",") {
           event.preventDefault();
           setWallLengthInput((s) => (s.includes(".") ? s : s === "" ? "0." : s + "."));
+          return;
+        }
+        // Feet-inches entry (only when Units = Feet): `'` = feet mark (auto-adds a space so the user gets
+        // the `10' 5.5"` look without pressing Space, which is the pan key), `"` = inch mark.
+        if (unit === "ft" && event.key === "'") {
+          event.preventDefault();
+          setWallLengthInput((s) => (s.includes("'") ? s + "'" : s + "' ").slice(0, 16));
+          return;
+        }
+        if (unit === "ft" && event.key === '"') {
+          event.preventDefault();
+          setWallLengthInput((s) => (s.includes('"') ? s : s + '"').slice(0, 16));
           return;
         }
         if (event.key === "Backspace" && wallLengthInputRef.current !== "") {
@@ -17524,7 +17747,7 @@ User request: ${aiPrompt.trim()}`;
         const guide = guideLinesRef.current;
         if (typed !== "" && guide.length === 2 && (wallDrawType === "single" || wallDrawType === "polyline")) {
           setWallLengthInput("");
-          const lenUnit = parseFloat(typed);
+          const lenUnit = parseTypedLength(typed, unit);
           const dirX = guide[0] - currentWallStart.x;
           const dirY = guide[1] - currentWallStart.y;
           const dist = Math.hypot(dirX, dirY);
@@ -17574,7 +17797,7 @@ User request: ${aiPrompt.trim()}`;
         // chain (the new endpoint becomes the next anchor). No length typed → finish the chain.
         if (typed !== "" && preview) {
           setWallLengthInput("");
-          const lenUnit = parseFloat(typed);
+          const lenUnit = parseTypedLength(typed, unit);
           const dirX = preview.x - start.x;
           const dirY = preview.y - start.y;
           const dist = Math.hypot(dirX, dirY);
@@ -17883,6 +18106,39 @@ User request: ${aiPrompt.trim()}`;
     if (selectedNodeKey) {
       const node = wallNodes.find((n) => n.stableKey === selectedNodeKey || n.key === selectedNodeKey);
       if (node) {
+        // Pass-through node: exactly two same-type, COLLINEAR segments meeting here. The node is just a
+        // point along a straight line, so dissolve it — merge the two into one segment instead of deleting.
+        if (node.wallIds.length === 2) {
+          const w1 = history.state.walls.find((w) => w.id === node.wallIds[0]);
+          const w2 = history.state.walls.find((w) => w.id === node.wallIds[1]);
+          if (w1 && w2 && (w1.segmentType ?? "wall") === (w2.segmentType ?? "wall")) {
+            const NODE_TOL = 2;
+            const farOf = (w: Wall) => (Math.hypot(w.start.x - node.x, w.start.y - node.y) < NODE_TOL ? w.end : w.start);
+            const far1 = farOf(w1), far2 = farOf(w2);
+            const d1x = far1.x - node.x, d1y = far1.y - node.y;
+            const d2x = far2.x - node.x, d2y = far2.y - node.y;
+            const l1 = Math.hypot(d1x, d1y) || 1, l2 = Math.hypot(d2x, d2y) || 1;
+            const sin = Math.abs(d1x * d2y - d1y * d2x) / (l1 * l2); // ~0 when parallel
+            const cos = (d1x * d2x + d1y * d2y) / (l1 * l2);          // <0 when the two point opposite ways
+            if (sin < 0.05 && cos < 0) {
+              // Keep w1 (its props/attachments/graphAttrs), span it across both, drop w2 + the node meta.
+              const merged: Wall = { ...w1, start: { ...far1 }, end: { ...far2 } };
+              const ga = history.state.graphAttrs;
+              const segs = ga?.segments ? Object.fromEntries(Object.entries(ga.segments).filter(([k]) => k !== w2.id)) : ga?.segments;
+              const nextMeta = { ...(history.state.nodeMeta ?? {}) };
+              delete nextMeta[node.stableKey];
+              history.set({
+                ...history.state,
+                walls: history.state.walls.map((w) => (w.id === w1.id ? merged : w)).filter((w) => w.id !== w2.id),
+                nodeMeta: nextMeta,
+                ...(ga ? { graphAttrs: { ...ga, segments: segs } } : {}),
+              });
+              setSelectedNodeKey(null);
+              toast.success("Removed node — merged the two segments");
+              return;
+            }
+          }
+        }
         const ids = new Set(node.wallIds);
         const nextMeta = { ...(history.state.nodeMeta ?? {}) };
         delete nextMeta[node.stableKey];
@@ -18258,7 +18514,172 @@ User request: ${aiPrompt.trim()}`;
     setOpeningPlacePreview(null);
   };
 
+  /** Build a group-drag snapshot from the current multi-selection (Segments + Spaces). Returns null unless
+   *  2+ elements are selected. Translates, by one delta: each selected segment's two endpoints, each
+   *  selected manual room's polygon, and (when "Move connected edges" is on) walls coincident with selected
+   *  rooms' boundary nodes. Any wall endpoint coincident with an anchor moves, so junctions stay stitched. */
+  const buildGroupDragSnapshot = (pointerX: number, pointerY: number) => {
+    const ids = new Set(selection.selectedIds);
+    if (ids.size < 2) return null;
+    const TOL = 2;
+    const anchors: Point[] = [];
+    const addAnchor = (p: Point) => { if (!anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < TOL)) anchors.push({ x: p.x, y: p.y }); };
+    // Selected segments → both endpoints become anchors.
+    for (const w of history.state.walls) {
+      if (ids.has(w.id) && !isLayerLocked(w.layerId)) { addAnchor(w.start); addAnchor(w.end); }
+    }
+    // Selected manual rooms → snapshot polygon; "with-walls" also makes boundary nodes anchors.
+    const roomPoints = new Map<string, Point[]>();
+    const boundaryTol = 4;
+    for (const r of visibleRooms) {
+      if (!ids.has(r.id) || isLayerLocked(r.layerId)) continue;
+      const pts = r.points ?? [];
+      // Only manual rooms (present in history.state.rooms) can have their polygon translated.
+      if (pts.length >= 3 && history.state.rooms.some((hr) => hr.id === r.id)) roomPoints.set(r.id, pts.map((p) => ({ ...p })));
+      if (areaConnectionConstraint === "with-walls" && pts.length >= 3) {
+        const nearBoundary = (px: number, py: number) => {
+          for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const ax = pts[j].x, ay = pts[j].y, dx = pts[i].x - ax, dy = pts[i].y - ay;
+            const len2 = dx * dx + dy * dy || 1;
+            const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+            if (Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < boundaryTol) return true;
+          }
+          return false;
+        };
+        for (const w of history.state.walls) for (const p of [w.start, w.end]) if (nearBoundary(p.x, p.y)) addAnchor(p);
+      }
+    }
+    if (anchors.length === 0 && roomPoints.size === 0) return null;
+    // Snapshot every wall with an endpoint near any anchor (its own + stitched neighbours).
+    const wallSnapshots = new Map<string, { start: Point; end: Point }>();
+    const nearAnchor = (p: Point) => anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < TOL);
+    for (const w of history.state.walls) {
+      if (nearAnchor(w.start) || nearAnchor(w.end)) wallSnapshots.set(w.id, { start: { ...w.start }, end: { ...w.end } });
+    }
+    return { roomPoints, anchors, wallSnapshots, startWorldX: pointerX, startWorldY: pointerY, moved: false };
+  };
+
+  /** Ctrl+drag duplicate-and-move (v1, segments only): clone the given walls (fresh ids, deep-copied
+   *  graphAttrs + attachments + layer) in place, select them, and start a rigid group-drag of the COPIES
+   *  (no neighbour stitching — a copy detaches). The clones are added via history.replace (no undo entry yet)
+   *  so the whole duplicate+move commits as ONE entry on mouse-up; a Ctrl-click with no movement discards them. */
+  const startSegmentCopyDrag = (wallIds: string[], pointerX: number, pointerY: number): boolean => {
+    const idSet = new Set(wallIds);
+    const toCopy = history.state.walls.filter((w) => idSet.has(w.id) && !isLayerLocked(w.layerId));
+    if (toCopy.length === 0) return false;
+    const ga = history.state.graphAttrs ?? { nodes: {}, segments: {} };
+    const newSegAttrs: Record<string, Record<string, unknown>> = { ...(ga.segments ?? {}) };
+    const newWalls: Wall[] = [];
+    const newIds: string[] = [];
+    const anchors: Point[] = [];
+    const wallSnapshots = new Map<string, { start: Point; end: Point }>();
+    for (const w of toCopy) {
+      const nid = createId();
+      newIds.push(nid);
+      const copy: Wall = {
+        ...w,
+        id: nid,
+        start: { ...w.start },
+        end: { ...w.end },
+        ...(w.attachments ? { attachments: w.attachments.map((a) => ({ ...a, id: createId() })) } : {}),
+      };
+      newWalls.push(copy);
+      if (ga.segments?.[w.id]) newSegAttrs[nid] = { ...ga.segments[w.id] };
+      anchors.push({ ...copy.start }, { ...copy.end });
+      wallSnapshots.set(nid, { start: { ...copy.start }, end: { ...copy.end } });
+    }
+    history.replace({
+      ...history.state,
+      walls: [...history.state.walls, ...newWalls],
+      graphAttrs: { ...ga, segments: newSegAttrs },
+    });
+    selection.setSelection(newIds);
+    setSelectedNodeKey(null);
+    setSelectedGenElement(null);
+    setCopyDistanceInput("");
+    copyDistanceRef.current = "";
+    stageGroupDragRef.current = {
+      roomPoints: new Map(), anchors, wallSnapshots,
+      startWorldX: pointerX, startWorldY: pointerY, moved: false, isCopy: true, copyIds: newIds,
+      primaryThicknessPx: toCopy[0]?.thickness ?? 0, lastPointerX: pointerX, lastPointerY: pointerY,
+    };
+    return true;
+  };
+
+  /** Apply a translation delta to an active group/copy drag (rooms + snapshotted wall endpoints). Used by
+   *  both the mouse-move handler and the copy-distance keystroke path (which re-applies without a mouse move). */
+  const translateGroupDrag = (gd: NonNullable<typeof stageGroupDragRef.current>, dx: number, dy: number) => {
+    const nearAnchor = (p: Point) => gd.anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < 2);
+    history.replace({
+      ...history.state,
+      rooms: history.state.rooms.map((r) => {
+        const snap = gd.roomPoints.get(r.id);
+        return snap ? { ...r, points: snap.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : r;
+      }),
+      walls: history.state.walls.map((w) => {
+        const snap = gd.wallSnapshots.get(w.id);
+        if (!snap) return w;
+        return {
+          ...w,
+          start: nearAnchor(snap.start) ? { x: snap.start.x + dx, y: snap.start.y + dy } : w.start,
+          end: nearAnchor(snap.end) ? { x: snap.end.x + dx, y: snap.end.y + dy } : w.end,
+        };
+      }),
+    });
+  };
+
+  /** Copy-drag offset: when a clear distance is typed during a Ctrl+copy drag, place the copies along the
+   *  current drag direction at `parse(distance) + thickness` (centre-to-centre); else return null so the
+   *  caller falls back to the raw pointer delta. */
+  const copyTypedDelta = (gd: NonNullable<typeof stageGroupDragRef.current>, px: number, py: number): [number, number] | null => {
+    if (!gd.isCopy) return null;
+    const typed = copyDistanceRef.current;
+    if (typed === "") return null;
+    const rawX = px - gd.startWorldX, rawY = py - gd.startWorldY;
+    const dist = Math.hypot(rawX, rawY);
+    if (dist < 1e-6) return null;
+    const v = parseTypedLength(typed, unit);
+    if (!Number.isFinite(v) || v <= 0) return null;
+    const magPx = pixelsFromUnitValue(v, unit, pixelsPerMeter) + (gd.primaryThicknessPx ?? 0);
+    // Ortho lock: when Ortho is on, snap the offset direction to the dominant axis (matches the free-drag
+    // path's orthoDelta), so a typed-distance copy lands squarely horizontal/vertical.
+    let dirX = rawX / dist, dirY = rawY / dist;
+    if (orthoMode) {
+      if (Math.abs(rawX) >= Math.abs(rawY)) { dirX = Math.sign(rawX); dirY = 0; }
+      else { dirX = 0; dirY = Math.sign(rawY); }
+    }
+    return [dirX * magPx, dirY * magPx];
+  };
+
+  /** Remove the in-progress copy clones (and their graphAttrs) from the working state — used to cancel a
+   *  copy placement or to undo a never-moved copy. */
+  const discardCopyClones = (gd: NonNullable<typeof stageGroupDragRef.current>) => {
+    const drop = new Set(gd.copyIds ?? []);
+    const ga = history.state.graphAttrs;
+    const segs = ga?.segments ? Object.fromEntries(Object.entries(ga.segments).filter(([k]) => !drop.has(k))) : ga?.segments;
+    history.replace({ ...history.state, walls: history.state.walls.filter((w) => !drop.has(w.id)), ...(ga ? { graphAttrs: { ...ga, segments: segs } } : {}) });
+  };
+
+  /** Finish a Ctrl+copy gesture. `apply` (Enter / click) commits the moved copies as one undo entry;
+   *  otherwise (Esc / an unmoved copy) the clones are discarded. Clears the drag ref + typed distance. */
+  const endCopyGesture = (gd: NonNullable<typeof stageGroupDragRef.current>, apply: boolean) => {
+    stageGroupDragRef.current = null;
+    setCopyDistanceInput(""); copyDistanceRef.current = "";
+    if (apply && gd.moved) {
+      history.set({ ...history.state, walls: splitWallsAtIntersections(history.state.walls) });
+    } else {
+      discardCopyClones(gd);
+      selection.clearSelection();
+    }
+  };
+
   const onStageMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    // A Ctrl+copy placement awaiting confirmation: a left-click drops the copy at its current spot (Enter
+    // does the same; Esc cancels). Consume the click so it doesn't start a fresh selection/drag.
+    if (event.evt.button === 0 && stageGroupDragRef.current?.placing) {
+      endCopyGesture(stageGroupDragRef.current, true);
+      return;
+    }
     // Clear any stale click-suppression from a previous gesture (set only when an all-scope mousedown
     // makes a priority node/segment selection just below).
     suppressClickSelectRef.current = false;
@@ -18305,7 +18726,7 @@ User request: ${aiPrompt.trim()}`;
           const touchEnd = Math.hypot(w.end.x - nearest.x, w.end.y - nearest.y) < NODE_TOL;
           if (touchStart || touchEnd) snapshots.set(w.id, { start: { ...w.start }, end: { ...w.end } });
         }
-        stageNodeDragRef.current = { nodeX: nearest.x, nodeY: nearest.y, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false };
+        stageNodeDragRef.current = { nodeX: nearest.x, nodeY: nearest.y, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false, snapEdges: miterSnapEdgesExcluding(new Set(snapshots.keys())) };
         return;
       }
     }
@@ -18319,6 +18740,27 @@ User request: ${aiPrompt.trim()}`;
       if (seg && pointer) {
         const wall = history.state.walls.find((w) => w.id === seg.id);
         if (wall && isLayerLocked(wall.layerId)) return;
+        // Ctrl → duplicate-and-move: copy the pressed segment (or all selected segments if it's part of a
+        // multi-selection) and drag the copies, leaving the originals in place.
+        if (event.evt.ctrlKey) {
+          const ids = (selection.selectedIds.includes(seg.id) && selection.selectedIds.length > 1)
+            ? selection.selectedIds.filter((id) => history.state.walls.some((w) => w.id === id))
+            : [seg.id];
+          if (startSegmentCopyDrag(ids, pointer.x, pointer.y)) { suppressClickSelectRef.current = true; return; }
+        }
+        // Shift → additively toggle this segment in/out of the multi-selection; never starts a drag.
+        if (event.evt.shiftKey) {
+          selection.toggleSelected(seg.id);
+          setSelectedNodeKey(null);
+          setSelectedGenElement(null);
+          suppressClickSelectRef.current = true;
+          return;
+        }
+        // Pressing an already-selected segment while 2+ are selected grabs the whole group → group drag.
+        if (selection.selectedIds.includes(seg.id) && selection.selectedIds.length > 1) {
+          const group = buildGroupDragSnapshot(pointer.x, pointer.y);
+          if (group) { stageGroupDragRef.current = group; return; }
+        }
         selection.selectOne(seg.id);
         setSelectedNodeKey(null);
         setSelectedGenElement(null);
@@ -18347,6 +18789,19 @@ User request: ${aiPrompt.trim()}`;
         const room = visibleRooms.find((r) => r.id === sp.id);
         if (!room) return;
         if (isLayerLocked(room.layerId)) return;
+        // Shift → additively toggle this space in/out of the multi-selection; never starts a drag.
+        if (event.evt.shiftKey) {
+          selection.toggleSelected(sp.id);
+          setSelectedNodeKey(null);
+          setSelectedGenElement(null);
+          suppressClickSelectRef.current = true;
+          return;
+        }
+        // Pressing an already-selected space while 2+ are selected grabs the whole group → group drag.
+        if (selection.selectedIds.includes(sp.id) && selection.selectedIds.length > 1) {
+          const group = buildGroupDragSnapshot(pointer.x, pointer.y);
+          if (group) { stageGroupDragRef.current = group; return; }
+        }
         selection.selectOne(sp.id);
         setSelectedNodeKey(null);
         setSelectedGenElement(null);
@@ -18412,7 +18867,7 @@ User request: ${aiPrompt.trim()}`;
             for (const w of history.state.walls) {
               if (Math.hypot(w.start.x - nodeHit.x, w.start.y - nodeHit.y) < NODE_TOL || Math.hypot(w.end.x - nodeHit.x, w.end.y - nodeHit.y) < NODE_TOL) snapshots.set(w.id, { start: { ...w.start }, end: { ...w.end } });
             }
-            stageNodeDragRef.current = { nodeX: nodeHit.x, nodeY: nodeHit.y, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false };
+            stageNodeDragRef.current = { nodeX: nodeHit.x, nodeY: nodeHit.y, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false, snapEdges: miterSnapEdgesExcluding(new Set(snapshots.keys())) };
           } else {
             setSelectedNodeKey(nodeHit.stableKey); selection.clearSelection(); setSelectedGenElement(null);
             suppressClickSelectRef.current = true;
@@ -18424,6 +18879,24 @@ User request: ${aiPrompt.trim()}`;
         if (seg) {
           const wall = history.state.walls.find((w) => w.id === seg.id);
           if (wall && isLayerLocked(wall.layerId)) return;
+          // Ctrl → duplicate-and-move the pressed segment (or the whole selected segment set), leaving originals.
+          if (event.evt.ctrlKey) {
+            const ids = (selection.selectedIds.includes(seg.id) && selection.selectedIds.length > 1)
+              ? selection.selectedIds.filter((id) => history.state.walls.some((w) => w.id === id))
+              : [seg.id];
+            if (startSegmentCopyDrag(ids, pointer.x, pointer.y)) { suppressClickSelectRef.current = true; return; }
+          }
+          // Shift → additively toggle this segment; never starts a drag.
+          if (event.evt.shiftKey) {
+            selection.toggleSelected(seg.id); setSelectedNodeKey(null); setSelectedGenElement(null);
+            suppressClickSelectRef.current = true;
+            return;
+          }
+          // Pressing a selected segment while 2+ are selected grabs the whole group → group drag.
+          if (selection.selectedIds.includes(seg.id) && selection.selectedIds.length > 1) {
+            const group = buildGroupDragSnapshot(pointer.x, pointer.y);
+            if (group) { stageGroupDragRef.current = group; return; }
+          }
           if (selection.selectedIds.includes(seg.id)) {
             const anchors: Point[] = wall ? [{ ...wall.start }, { ...wall.end }] : [];
             const NODE_TOL = 2; const snapshots = new Map<string, { start: Point; end: Point }>();
@@ -18439,8 +18912,14 @@ User request: ${aiPrompt.trim()}`;
           return;
         }
         // 3) Space — only an already-selected space begins a drag (selection happens via the room onClick).
+        // Shift is left entirely to the room onClick (which toggles), so don't start a drag on a shift-press.
         const sp = spaceAt(pointer.x, pointer.y);
-        if (sp && selection.selectedIds.includes(sp.id)) {
+        if (sp && !event.evt.shiftKey && selection.selectedIds.includes(sp.id)) {
+          // Pressing a selected space while 2+ are selected grabs the whole group → group drag.
+          if (selection.selectedIds.length > 1) {
+            const group = buildGroupDragSnapshot(pointer.x, pointer.y);
+            if (group) { stageGroupDragRef.current = group; return; }
+          }
           const room = visibleRooms.find((r) => r.id === sp.id);
           if (room && !isLayerLocked(room.layerId)) {
             const roomPts = room.points ?? [];
@@ -18547,7 +19026,7 @@ User request: ${aiPrompt.trim()}`;
       return;
     }
     const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
-    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
+    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale, miterSnapEdges);
     setGuideLines([snapped.x, snapped.y]);
     applyWorldDrawDown(snapped, event.evt.detail, event.evt.shiftKey);
   };
@@ -18636,7 +19115,7 @@ User request: ${aiPrompt.trim()}`;
         <Line points={[p1.x, p1.y, p2.x, p2.y]} stroke={col} strokeWidth={sw} />
         <Line points={arrowHeadPoints(p1.x, p1.y, ux, uy, arr)} stroke={col} strokeWidth={sw} />
         <Line points={arrowHeadPoints(p2.x, p2.y, -ux, -uy, arr)} stroke={col} strokeWidth={sw} />
-        <Text x={mid.x} y={mid.y} text={`${unitValueFromPixels(lengthPx, unit, pixelsPerMeter).toFixed(2)} ${unit}`} fontSize={Math.max(9, 11 / Math.max(1, scale))} fontStyle={highlight ? "bold" : "normal"} fill={col} listening={false} />
+        <Text x={mid.x} y={mid.y} text={fmtLen(lengthPx)} fontSize={Math.max(9, 11 / Math.max(1, scale))} fontStyle={highlight ? "bold" : "normal"} fill={col} listening={false} />
       </Group>
     );
   };
@@ -19297,13 +19776,35 @@ User request: ${aiPrompt.trim()}`;
     // node / segment / space drag moves purely horizontally or vertically (dominant axis wins).
     const orthoDelta = (dx: number, dy: number): [number, number] =>
       (orthoMode || event.evt.shiftKey) ? (Math.abs(dx) >= Math.abs(dy) ? [dx, 0] : [0, dy]) : [dx, dy];
+    // Multi-selection group drag (Segments + Spaces): translate every selected room polygon + every
+    // snapshotted wall endpoint near an anchor by one pointer delta. Takes priority over the single-element
+    // drags below. One live history.replace entry; committed on mouse up.
+    const groupDrag = stageGroupDragRef.current;
+    if (groupDrag) {
+      const pointer = pointerPositionInWorld();
+      if (pointer) {
+        groupDrag.lastPointerX = pointer.x; groupDrag.lastPointerY = pointer.y;
+        // A typed clear-distance (copy drag) sets the offset along the drag direction; else raw ortho delta.
+        const typedDelta = copyTypedDelta(groupDrag, pointer.x, pointer.y);
+        const [dx, dy] = typedDelta ?? orthoDelta(pointer.x - groupDrag.startWorldX, pointer.y - groupDrag.startWorldY);
+        if (dx !== 0 || dy !== 0) groupDrag.moved = true;
+        translateGroupDrag(groupDrag, dx, dy);
+      }
+      return;
+    }
     // Stage-level node drag (Node scope): move the node + its connected wall endpoints by the pointer
     // delta. history.replace keeps it to a single live entry; the commit happens on mouse up.
     const nodeDrag = stageNodeDragRef.current;
     if (nodeDrag) {
       const pointer = pointerPositionInWorld();
       if (pointer) {
-        const [dx, dy] = orthoDelta(pointer.x - nodeDrag.startWorldX, pointer.y - nodeDrag.startWorldY);
+        let [dx, dy] = orthoDelta(pointer.x - nodeDrag.startWorldX, pointer.y - nodeDrag.startWorldY);
+        // "Mitered Points" snap: pull the node onto the nearest point along another wall's mitered outline.
+        if (snapSettings.miteredPoints && nodeDrag.snapEdges && nodeDrag.snapEdges.length) {
+          const r = Math.max(0, snapSettings.endpointRadius ?? 14) / (scale > 0 ? scale : 1);
+          const hit = nearestPointOnEdges({ x: nodeDrag.nodeX + dx, y: nodeDrag.nodeY + dy }, nodeDrag.snapEdges, r);
+          if (hit) { dx = hit.x - nodeDrag.nodeX; dy = hit.y - nodeDrag.nodeY; }
+        }
         if (dx !== 0 || dy !== 0) nodeDrag.moved = true;
         history.replace({
           ...history.state,
@@ -19470,7 +19971,7 @@ User request: ${aiPrompt.trim()}`;
         setGuideLines(hit ? [hit.x, hit.y] : [pointer.x, pointer.y]);
       } else {
         const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
-        const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
+        const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale, miterSnapEdges);
         // Wall rubber-band: lock the guide to the active draw constraint (Ortho / Shift) once an anchor
         // is placed, so the preview matches what a click commits. Rect/spline keep the raw cursor.
         const wallGuide = tool === "wall" && currentWallStart && wallDrawType !== "rect" && wallDrawType !== "spline"
@@ -19526,7 +20027,7 @@ User request: ${aiPrompt.trim()}`;
       return;
     }
     const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
-    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
+    const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale, miterSnapEdges);
     setFreehandDraft((prev) => [...prev, snapped.x, snapped.y]);
   };
 
@@ -19617,7 +20118,7 @@ User request: ${aiPrompt.trim()}`;
             return null;
           }
           const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
-          return snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
+          return snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale, miterSnapEdges);
         })();
       pendingMeasureFinishSnapRef.current = null;
       if (!end) {
@@ -19686,6 +20187,23 @@ User request: ${aiPrompt.trim()}`;
   const onStageMouseUp = () => {
     viewportPanPointerActiveRef.current = false;
     setIsPanning(false);
+    // Finish a multi-selection group drag — commit the translated rooms + walls as one undo entry (only if
+    // it actually moved; a press without movement keeps the group selected).
+    const groupDrag = stageGroupDragRef.current;
+    if (groupDrag) {
+      // Ctrl+copy: mouse-up does NOT commit — instead enter hover-placement mode. The copy now follows the
+      // cursor (no button/modifier held); type a distance + Enter (or click) to apply, Esc to cancel.
+      if (groupDrag.isCopy && !groupDrag.placing) {
+        groupDrag.placing = true;
+        return;
+      }
+      // Plain multi-selection group move — commit the translated rooms + walls as one undo entry.
+      stageGroupDragRef.current = null;
+      if (groupDrag.moved) {
+        history.set({ ...history.state, walls: splitWallsAtIntersections(history.state.walls) });
+      }
+      return;
+    }
     // Finish a stage-level node drag: commit the moved walls as one undo entry (only if it actually
     // moved — a press without movement was just a selection).
     const nodeDrag = stageNodeDragRef.current;
@@ -19928,6 +20446,43 @@ User request: ${aiPrompt.trim()}`;
     history.set({
       ...history.state,
       objects: history.state.objects.map((entry) => (entry.id === id ? ({ ...entry, ...patch } as FloorObject) : entry)),
+    });
+  };
+
+  /** Resize the segment a Dimension measures by moving its END node so the new length matches `newLenUnit`
+   *  (in the active display unit). The START endpoint and direction stay fixed; moving the end node
+   *  translates every wall endpoint coincident with it (junctions stay stitched) and any room-polygon
+   *  vertices at that node (spaces follow). The dimension's own endpoints are updated to match. If the moved
+   *  end isn't on a junction node (a free-floating dimension), it's a no-op. */
+  const setDimensionLength = (dim: import("./types").DimensionObject, newLenUnit: number) => {
+    if (!Number.isFinite(newLenUnit) || newLenUnit <= 0) return;
+    const p1 = { x: dim.points[0], y: dim.points[1] };
+    const p2 = { x: dim.points[2], y: dim.points[3] };
+    const curPx = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    if (curPx < 1e-6) return;
+    const dirx = (p2.x - p1.x) / curPx, diry = (p2.y - p1.y) / curPx;
+    const newPx = pixelsFromUnitValue(newLenUnit, unit, pixelsPerMeter);
+    const newB = { x: p1.x + dirx * newPx, y: p1.y + diry * newPx };
+    const dx = newB.x - p2.x, dy = newB.y - p2.y;
+    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return; // already that length
+    // Match the moved (end) endpoint to a junction node; bail if it isn't on one.
+    const NODE_TOL = 3;
+    const node = wallNodes.find((n) => Math.hypot(n.x - p2.x, n.y - p2.y) < NODE_TOL);
+    if (!node) { toast.info("This dimension isn't on a node — nothing to resize"); return; }
+    const nearNode = (p: Point) => Math.hypot(p.x - node.x, p.y - node.y) < NODE_TOL;
+    history.set({
+      ...history.state,
+      walls: history.state.walls.map((w) => ({
+        ...w,
+        start: nearNode(w.start) ? { x: w.start.x + dx, y: w.start.y + dy } : w.start,
+        end: nearNode(w.end) ? { x: w.end.x + dx, y: w.end.y + dy } : w.end,
+      })),
+      rooms: history.state.rooms.map((r) => {
+        const pts = r.points ?? [];
+        if (!pts.some((p) => nearNode(p))) return r;
+        return { ...r, points: pts.map((p) => (nearNode(p) ? { x: p.x + dx, y: p.y + dy } : p)) };
+      }),
+      objects: history.state.objects.map((o) => (o.id === dim.id ? { ...o, points: [p1.x, p1.y, newB.x, newB.y] } : o)),
     });
   };
 
@@ -21026,6 +21581,9 @@ User request: ${aiPrompt.trim()}`;
         <Button size="sm" variant={snapSettings.segmentPoints ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, segmentPoints: !prev.segmentPoints }))}>
           Segment Points
         </Button>
+        <Button size="sm" variant={snapSettings.miteredPoints ? "default" : "outline"} onClick={() => setSnapSettings((prev) => ({ ...prev, miteredPoints: !prev.miteredPoints }))}>
+          Mitered Points
+        </Button>
       </div>
       {/* Node snap radius & Wall-spine snap radius moved to the Floorplan Tracer schema's Settings block
           (Properties tab). */}
@@ -21072,13 +21630,18 @@ User request: ${aiPrompt.trim()}`;
                 </div>
                 <select
                   className="h-7 rounded border border-slate-200 bg-white px-1.5 text-xs"
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value as Unit)}
+                  value={unit === "ft" ? "ftin" : unit}
+                  onChange={(e) => {
+                    // "Feet-Inches" maps to the internal "ft" unit (feet rendered as 12' 6"); ft & in are no
+                    // longer offered separately. Switching units resets Nudge delta to a sensible default.
+                    const u: Unit = e.target.value === "ftin" ? "ft" : (e.target.value as Unit);
+                    setUnit(u);
+                    setNudgeDelta(defaultNudgeFor(u));
+                  }}
                 >
                   <option value="m">Meters (m)</option>
-                  <option value="ft">Feet (ft)</option>
                   <option value="cm">Centimeters (cm)</option>
-                  <option value="in">Inches (in)</option>
+                  <option value="ftin">Feet-Inches (ft-in)</option>
                 </select>
               </label>
               <label className="flex items-center justify-between gap-2">
@@ -21095,8 +21658,8 @@ User request: ${aiPrompt.trim()}`;
               </label>
               <label className="flex items-center justify-between gap-2">
                 <div>
-                  <span className="text-[11px] font-medium text-slate-700">Nudge delta ({unit})</span>
-                  <p className="text-[9px] text-slate-400">Arrow-key move step for a selected node / segment / space (Shift = ×10).</p>
+                  <span className="text-[11px] font-medium text-slate-700">Nudge delta ({nudgeUnitFor(unit)})</span>
+                  <p className="text-[9px] text-slate-400">Arrow-key move step for a selected node / segment / space (Shift = ×10). For ft-inches this is in inches.</p>
                 </div>
                 <input
                   type="number"
@@ -21105,6 +21668,23 @@ User request: ${aiPrompt.trim()}`;
                   className="h-7 w-20 shrink-0 rounded border border-slate-200 bg-white px-1.5 text-xs"
                   value={nudgeDelta}
                   onChange={(e) => { const v = parseFloat(e.target.value); setNudgeDelta(Number.isFinite(v) && v >= 0 ? v : 0); }}
+                />
+              </label>
+              {/* Display Units — decimal digits on length / area labels. Feet-inches rendering (12' 6") is now
+                  implied by the "Feet-Inches" unit choice above, so there's no separate toggle. */}
+              <label className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-medium text-slate-700">Float precision</span>
+                  <p className="text-[9px] text-slate-400">Decimal digits on length &amp; area labels{unit === "ft" ? " (and the inches part of ft-inches)" : ""}.</p>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={6}
+                  step={1}
+                  className="h-7 w-20 shrink-0 rounded border border-slate-200 bg-white px-1.5 text-xs"
+                  value={decimalPrecision}
+                  onChange={(e) => { const v = parseInt(e.target.value, 10); setDecimalPrecision(Number.isFinite(v) ? Math.min(6, Math.max(0, v)) : 2); }}
                 />
               </label>
             </div>
@@ -22133,6 +22713,8 @@ User request: ${aiPrompt.trim()}`;
                   if (segType.startsWith("obj:")) {
                     const objId = segType.slice(4);
                     const objDef = (history.state.objectLibrary ?? {})[objId];
+                    // Create + activate a layer named for this object (e.g. "Staircase") so it draws into it.
+                    ensureLayerForType(layerSlug(objDef?.meta.name || label), objDef?.meta.name || label);
                     if (objDef && objDef.parameters.length > 0) {
                       setObjParamsDialog({ objectId: objId, label: objDef.meta.name || label, host: "segment" });
                       return;
@@ -22147,6 +22729,9 @@ User request: ${aiPrompt.trim()}`;
                     }
                     return;
                   }
+                  // Create + activate a layer named for this segment type (e.g. "Wall" / "Door" / "Staircase")
+                  // so the drawn segments auto-stamp onto it.
+                  ensureLayerForType(segType, label);
                   // Picking a schema segment type: if it has parameters, pop the dialog to set them once;
                   // otherwise start drawing straight away. Clear any stale defaults for a clean prompt.
                   const fields = fieldsForSegType(activeSchemaSegmentDefs, segType);
@@ -22177,6 +22762,8 @@ User request: ${aiPrompt.trim()}`;
                       toast.success("Object attached to the selected space");
                       return;
                     }
+                    const objName = (history.state.objectLibrary ?? {})[objId]?.meta.name || objId;
+                    ensureLayerForType(layerSlug(objName), objName);
                     pendingSpaceObjectIdRef.current = objId;
                     pendingSpaceTypeRef.current = null;
                     setTool("wall");
@@ -22189,6 +22776,8 @@ User request: ${aiPrompt.trim()}`;
                     toast.info("Draw a space (close the polygon), then click it to attach the object");
                     return;
                   }
+                  // Create + activate a layer named for this space type so the drawn Space lands on it.
+                  ensureLayerForType(spaceType, spaceType.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "));
                   // Draw a Space tagged with the chosen schema space-type. The polygon is drawn as line
                   // segments (auto-detected into a Space); the pending type is applied on creation.
                   pendingSpaceTypeRef.current = spaceType;
@@ -22213,6 +22802,8 @@ User request: ${aiPrompt.trim()}`;
                   if (nodeType.startsWith("obj:")) {
                     const objId = nodeType.slice(4);
                     const objDef = (history.state.objectLibrary ?? {})[objId];
+                    // Create + activate a layer named for this object (e.g. "Column") so it places into it.
+                    ensureLayerForType(layerSlug(objDef?.meta.name || objId), objDef?.meta.name || objId);
                     if (objDef && objDef.parameters.length > 0) {
                       setObjParamsDialog({ objectId: objId, label: objDef.meta.name || objId, host: "node" });
                       return;
@@ -22220,6 +22811,8 @@ User request: ${aiPrompt.trim()}`;
                     startNodeObjectPlace(objId);
                     return;
                   }
+                  // Create + activate a layer named for this node type so dropped nodes/objects land on it.
+                  ensureLayerForType(nodeType);
                   // Place tagged nodes of a schema node-type (object / junction / custom) on each click.
                   setFurnitureNodeMode(false);
                   pendingNodeTypeRef.current = nodeType;
@@ -22729,7 +23322,7 @@ User request: ${aiPrompt.trim()}`;
                         return;
                       }
                       const spine = withNearestWallSpine(pointer, snapWalls, tool, snapSettings.segmentPoints ? snapSettings.wallSpineRadius / scale : 0);
-                      const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale);
+                      const snapped = snapPoint(spine, snapWalls, history.state.objects, snapSettings, visibleRooms, scale, miterSnapEdges);
                       setGuideLines([snapped.x, snapped.y]);
                       applyWorldDrawDown(snapped, e.evt.detail);
                     }}
@@ -22929,16 +23522,54 @@ User request: ${aiPrompt.trim()}`;
                       return out;
                     };
                     const outerInsets = edgeInsets(room.points);
-                    const renderOuter = outerInsets.some((d) => d > 0.5)
+                    const renderOuterBase = outerInsets.some((d) => d > 0.5)
                       ? (offsetPolygonInward(room.points, outerInsets) ?? room.points)
                       : room.points;
+                    // Dead-end (degree-1) buffered segments: the per-edge inset can't cap the free tip, so a
+                    // triangular sliver of green is left under the wall end. Subtract the FULL band rectangle
+                    // of any degree-1 segment overlapping this room so its whole area is removed. (degree>=2
+                    // nodes are already handled correctly by the edge inset above.)
+                    let renderOuter = renderOuterBase;
+                    const bandHoles: Point[][] = [];
+                    if (subtractBufferedFromSpace) {
+                      const deadEndWallIds = new Set<string>();
+                      for (const n of wallNodes) if (n.wallIds.length === 1) deadEndWallIds.add(n.wallIds[0]);
+                      if (deadEndWallIds.size > 0) {
+                        let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
+                        for (const p of room.points) { if (p.x < rMinX) rMinX = p.x; if (p.x > rMaxX) rMaxX = p.x; if (p.y < rMinY) rMinY = p.y; if (p.y > rMaxY) rMaxY = p.y; }
+                        const bands: Point[][] = [];
+                        for (const w of history.state.walls) {
+                          if (!deadEndWallIds.has(w.id) || !w.bufferStyle || w.segmentType === "path") continue;
+                          // Cheap reject: skip a segment whose bbox is entirely outside the room bbox.
+                          const sMinX = Math.min(w.start.x, w.end.x), sMaxX = Math.max(w.start.x, w.end.x);
+                          const sMinY = Math.min(w.start.y, w.end.y), sMaxY = Math.max(w.start.y, w.end.y);
+                          if (sMaxX < rMinX || sMinX > rMaxX || sMaxY < rMinY || sMinY > rMaxY) continue;
+                          const flat = bufferBandPoints(w.start, w.end, w.thickness ?? 0, w.bufferStyle);
+                          const band: Point[] = [];
+                          for (let i = 0; i + 1 < flat.length; i += 2) band.push({ x: flat[i], y: flat[i + 1] });
+                          if (band.length >= 3) bands.push(band);
+                        }
+                        if (bands.length > 0) {
+                          const clipped = subtractPolygon(renderOuterBase, bands);
+                          if (clipped.length > 0) {
+                            // Keep the largest-area outer ring as the room fill; collect any holes for the area calc.
+                            let best = clipped[0], bestA = Math.abs(polygonArea(clipped[0].outer));
+                            for (let i = 1; i < clipped.length; i++) { const a = Math.abs(polygonArea(clipped[i].outer)); if (a > bestA) { bestA = a; best = clipped[i]; } }
+                            if (best.outer.length >= 3) { renderOuter = best.outer; for (const h of best.holes) bandHoles.push(h); }
+                          }
+                        }
+                      }
+                    }
                     // Holes (boundaries against an inner space) offset OUTWARD: negate each per-edge inset.
-                    const renderHoles = roomHoles.map((h) => {
-                      const hi = edgeInsets(h);
-                      return hi.some((d) => d > 0.5)
-                        ? (offsetPolygonInward(h, hi.map((d) => -d)) ?? h)
-                        : h;
-                    });
+                    const renderHoles = [
+                      ...roomHoles.map((h) => {
+                        const hi = edgeInsets(h);
+                        return hi.some((d) => d > 0.5)
+                          ? (offsetPolygonInward(h, hi.map((d) => -d)) ?? h)
+                          : h;
+                      }),
+                      ...bandHoles,
+                    ];
                     // Centroid label dimensions/area. With "Subtract segment for Space" ON, report the INNER
                     // (inset to the wall faces — `renderOuter`/`renderHoles`) L×B and net area; OFF reports the
                     // centre-to-centre polygon (`room.points`) and the usual net area.
@@ -22946,11 +23577,16 @@ User request: ${aiPrompt.trim()}`;
                     const lpXs = labelPoly.map((p) => p.x), lpYs = labelPoly.map((p) => p.y);
                     const lpBw = lpXs.length ? Math.max(...lpXs) - Math.min(...lpXs) : 0;
                     const lpBh = lpYs.length ? Math.max(...lpYs) - Math.min(...lpYs) : 0;
-                    const spaceLBLabel = `${unitValueFromPixels(Math.max(lpBw, lpBh), unit, pixelsPerMeter).toFixed(2)} × ${unitValueFromPixels(Math.min(lpBw, lpBh), unit, pixelsPerMeter).toFixed(2)} ${unit}`;
+                    const [lbA, lbB] =
+                      room.aspectMode === "x-y" ? [lpBw, lpBh] :
+                      room.aspectMode === "y-x" ? [lpBh, lpBw] :
+                      [Math.max(lpBw, lpBh), Math.min(lpBw, lpBh)]; // "max-min" default
+                    // ft-inches dims carry their own marks, so the unit suffix is appended once only in decimal mode.
+                    const spaceLBLabel = `${fmtLenBare(lbA)} × ${fmtLenBare(lbB)}${lenInlineUnit ? "" : ` ${unit}`}`;
                     const labelAreaPx = subtractBufferedFromSpace
                       ? Math.max(0, Math.abs(polygonArea(renderOuter)) - renderHoles.reduce((s, h) => s + Math.abs(polygonArea(h)), 0))
                       : roomNetArea(room, visibleRooms);
-                    const spaceAreaLabel = `Area: ${areaInSquareUnit(labelAreaPx, unit, pixelsPerMeter).toFixed(2)} ${unit}²`;
+                    const spaceAreaLabel = `Area: ${fmtArea(labelAreaPx)}`;
                     // Any host-conforming parametric object (Floor, Massing, …) attached to this Space → its
                     // colour fills the Space in 2D. Generic: keyed on having a geometry block, not a symbol.
                     const floorAtt = room.attachments?.find((a) => (history.state.objectLibrary ?? {})[a.objectId]?.geometry);
@@ -23837,7 +24473,7 @@ User request: ${aiPrompt.trim()}`;
                         <Line points={pts} stroke={col} strokeWidth={sw} />
                         <Line points={arrowHeadPoints(pts[0], pts[1], su, sv, arr)} stroke={col} strokeWidth={sw} />
                         <Line points={arrowHeadPoints(pts[n - 2], pts[n - 1], eu, ev, arr)} stroke={col} strokeWidth={sw} />
-                        <Text x={d.pos.x} y={d.pos.y} text={`${d.role === "outer" ? "Outer" : "Inner"} ${unitValueFromPixels(d.lenPx, unit, pixelsPerMeter).toFixed(2)} ${unit}`} fontSize={Math.max(9, 11 / scale)} fill={col} />
+                        <Text x={d.pos.x} y={d.pos.y} text={`${d.role === "outer" ? "Outer" : "Inner"} ${fmtLen(d.lenPx)}`} fontSize={Math.max(9, 11 / scale)} fill={col} />
                       </Group>
                     );
                   })}
@@ -25902,6 +26538,14 @@ User request: ${aiPrompt.trim()}`;
                       wallResizeDraft?.wallId === wall.id && wallResizeDraft.kind === "thickness"
                         ? wallResizeDraft.thickness
                         : wStyle.thickness;
+                    // A Wall (segmentType "wall" or carrying a wall parametric-object attachment) shown in LINE
+                    // mode should read as a thin styled centerline — its thickness is band/3D data, not the
+                    // stroke width. So draw it as a constant ~1.5px line (lineStyle dashes still apply), like a
+                    // raw line segment, instead of a stroke as wide as the wall.
+                    const isWallLineSeg = wStyle.mode === "line" && (
+                      wall.segmentType === "wall" ||
+                      (wall.attachments ?? []).some((a) => (history.state.objectLibrary ?? {})[a.objectId]?.meta.symbol === "wall")
+                    );
                     const dxDir = wall.end.x - wall.start.x;
                     const dyDir = wall.end.y - wall.start.y;
                     const lenDir = Math.hypot(dxDir, dyDir);
@@ -26060,7 +26704,7 @@ User request: ${aiPrompt.trim()}`;
                             points={liveSpinePoints ?? [liveStart.x, liveStart.y, liveEnd.x, liveEnd.y]}
                             tension={liveSpinePoints && liveSpinePoints.length >= 6 ? wall.splineTension ?? WALL_SPLINE_TENSION : 0}
                             stroke={wall.segmentType === "door" ? "#b45309" : wall.segmentType === "window" ? "#2563eb" : wall.segmentType === "connection" ? "#16a34a" : wall.color}
-                            strokeWidth={wall.segmentType === "door" || wall.segmentType === "window" ? Math.max(2, wStyle.thickness * 1.5) : wall.segmentType === "connection" ? 2 : Math.max(1, wStyle.thickness)}
+                            strokeWidth={wall.segmentType === "door" || wall.segmentType === "window" ? Math.max(2, wStyle.thickness * 1.5) : wall.segmentType === "connection" ? 2 : isWallLineSeg ? Math.max(0.75, 1.5 / Math.max(0.0001, scale)) : Math.max(1, wStyle.thickness)}
                             lineCap="round"
                             dash={segmentDash(wall)}
                             hitStrokeWidth={Math.max(14, wStyle.thickness + 10)}
@@ -26365,7 +27009,8 @@ User request: ${aiPrompt.trim()}`;
                                   history.state.objects,
                                   snapSettings,
                                   visibleRooms,
-                                  scale
+                                  scale,
+                                  miterSnapEdges
                                 );
                                 const snappedWithWall =
                                   wallExtendMode === "wall-only"
@@ -26487,7 +27132,8 @@ User request: ${aiPrompt.trim()}`;
                                   history.state.objects,
                                   snapSettings,
                                   visibleRooms,
-                                  scale
+                                  scale,
+                                  miterSnapEdges
                                 );
                                 const snappedWithWall =
                                   wallExtendMode === "wall-only"
@@ -26629,7 +27275,8 @@ User request: ${aiPrompt.trim()}`;
                                     history.state.objects,
                                     snapSettings,
                                     visibleRooms,
-                                    scale
+                                    scale,
+                                    miterSnapEdges
                                   );
                                   event.target.position(snapped);
                                   offset = { x: snapped.x - iX, y: snapped.y - iY };
@@ -26643,7 +27290,8 @@ User request: ${aiPrompt.trim()}`;
                                     history.state.objects,
                                     snapSettings,
                                     visibleRooms,
-                                    scale
+                                    scale,
+                                    miterSnapEdges
                                   );
                                   dist = (snapped.x - iX) * nx + (snapped.y - iY) * ny;
                                   event.target.position({ x: iX + nx * dist, y: iY + ny * dist });
@@ -28213,7 +28861,7 @@ User request: ${aiPrompt.trim()}`;
                             y={12 / scale}
                             x={-seedLabelW / 2} width={seedLabelW} align="center"
                             fontSize={10 / scale} fill={seedAreaViolated ? "#dc2626" : "#16a34a"}
-                            text={`Area: ${areaInSquareUnit(rect.w * rect.h, unit, pixelsPerMeter).toFixed(2)} ${unit}²`}
+                            text={`Area: ${fmtArea(rect.w * rect.h)}`}
                           />
                           <Text
                             y={23 / scale}
@@ -28482,7 +29130,7 @@ User request: ${aiPrompt.trim()}`;
                       <Text
                         x={seg.lx}
                         y={seg.ly}
-                        text={`${unitValueFromPixels(seg.distPx, unit, pixelsPerMeter).toFixed(2)} ${unit}`}
+                        text={fmtLen(seg.distPx)}
                         fontSize={Math.max(10, 11 / Math.max(1, scale))}
                         fill={seg.kind === "wall" ? "#115E59" : "#9A3412"}
                         fontStyle="bold"
@@ -28493,6 +29141,29 @@ User request: ${aiPrompt.trim()}`;
               </Layer>
             ) : null}
 
+            {/* Ctrl+copy drag — live typed clear-distance label at the copy's midpoint. */}
+            {(() => {
+              const gd = stageGroupDragRef.current;
+              if (!gd?.isCopy || copyDistanceInput === "") return null;
+              const w = history.state.walls.find((ww) => ww.id === gd.copyIds?.[0]);
+              if (!w) return null;
+              const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
+              return (
+                <Layer listening={false}>
+                  <WorldViewport x={position.x} y={position.y} scale={scale}>
+                    <Text
+                      x={mid.x}
+                      y={mid.y - 14 / Math.max(1, scale)}
+                      text={`${copyDistanceInput}▏${unit === "ft" ? "" : ` ${unit}`}`}
+                      fontSize={Math.max(10, 12 / Math.max(1, scale))}
+                      fontStyle="bold"
+                      fill="#2563eb"
+                      listening={false}
+                    />
+                  </WorldViewport>
+                </Layer>
+              );
+            })()}
             {layerVisibility.guides ? (
               <Layer listening={false}>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
@@ -28519,7 +29190,7 @@ User request: ${aiPrompt.trim()}`;
                       // While typing a direct-distance length (straight draw), the preview ends at that
                       // length in the current hover direction — so the rubber-band matches what Enter draws.
                       const cursor = { x: guideLines[0], y: guideLines[1] };
-                      const typedLen = wallLengthInput !== "" && (wallDrawType === "single" || wallDrawType === "polyline") ? parseFloat(wallLengthInput) : NaN;
+                      const typedLen = wallLengthInput !== "" && (wallDrawType === "single" || wallDrawType === "polyline") ? parseTypedLength(wallLengthInput, unit) : NaN;
                       let end = cursor;
                       if (isFinite(typedLen) && typedLen > 0) {
                         const ddx = cursor.x - currentWallStart.x;
@@ -28540,7 +29211,7 @@ User request: ${aiPrompt.trim()}`;
                       // While typing a direct-distance length, show the typed value (with a caret) so the
                       // user sees exactly what Enter will draw, in the current hover direction.
                       const text = wallLengthInput !== "" && (wallDrawType === "single" || wallDrawType === "polyline")
-                        ? `${wallLengthInput}▏ ${unit}`
+                        ? `${wallLengthInput}▏${/['"]/.test(wallLengthInput) ? "" : ` ${unit}`}`
                         : `${distanceInUnit(currentWallStart, end, unit, pixelsPerMeter).toFixed(2)} ${unit}`;
 
                       if (wallDrawType === "rect") {
@@ -28748,7 +29419,7 @@ User request: ${aiPrompt.trim()}`;
                         <Line points={[ds.x, ds.y, de.x, de.y]} stroke={col} strokeWidth={Math.max(2, 3 / Math.max(1, scale))} lineCap="round" listening={false} />
                         <Line points={[ds.x + nx * tick, ds.y + ny * tick, ds.x - nx * tick, ds.y - ny * tick]} stroke={col} strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))} listening={false} />
                         <Line points={[de.x + nx * tick, de.y + ny * tick, de.x - nx * tick, de.y - ny * tick]} stroke={col} strokeWidth={Math.max(1, 1.5 / Math.max(1, scale))} listening={false} />
-                        <Text x={mid.x + nx * (tick + 4 / Math.max(1, scale))} y={mid.y + ny * (tick + 4 / Math.max(1, scale))} text={`${unitValueFromPixels(L, unit, pixelsPerMeter).toFixed(2)} ${unit}`} fontSize={fontPx} fill={col} listening={false} />
+                        <Text x={mid.x + nx * (tick + 4 / Math.max(1, scale))} y={mid.y + ny * (tick + 4 / Math.max(1, scale))} text={fmtLen(L)} fontSize={fontPx} fill={col} listening={false} />
                       </>
                     );
                   })() : null}
@@ -28758,7 +29429,7 @@ User request: ${aiPrompt.trim()}`;
                     const cursor = singleSegPreview;
                     // While typing a direct-distance length, the preview ends at that length in the current
                     // hover direction — so the rubber-band matches what Enter draws.
-                    const typedLen = wallLengthInput !== "" ? parseFloat(wallLengthInput) : NaN;
+                    const typedLen = wallLengthInput !== "" ? parseTypedLength(wallLengthInput, unit) : NaN;
                     let b = cursor;
                     if (isFinite(typedLen) && typedLen > 0) {
                       const ddx = cursor.x - a.x, ddy = cursor.y - a.y, dd = Math.hypot(ddx, ddy);
@@ -28771,7 +29442,7 @@ User request: ${aiPrompt.trim()}`;
                     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
                     const fontPx = Math.max(10, 12 / Math.max(1, scale));
                     const text = wallLengthInput !== ""
-                      ? `${wallLengthInput}▏ ${unit}`
+                      ? `${wallLengthInput}▏${/['"]/.test(wallLengthInput) ? "" : ` ${unit}`}`
                       : `${distanceInUnit(a, b, unit, pixelsPerMeter).toFixed(2)} ${unit}`;
                     const segDef = activeSegDefaultsRef.current?.type === singleSegType ? activeSegDefaultsRef.current.vals : null;
                     // For a WALL trace, preview EXACTLY what placement produces: build the hypothetical
@@ -30590,7 +31261,7 @@ User request: ${aiPrompt.trim()}`;
                                         {room.label ? <span className="ml-1 font-sans text-slate-500">— {room.label}</span> : null}
                                       </span>
                                       <span className="text-[10px] text-slate-400">
-                                        {areaInSquareUnit(roomNetArea(room, history.state.rooms), unit, pixelsPerMeter).toFixed(2)} {unit}²
+                                        {fmtArea(roomNetArea(room, history.state.rooms))}
                                       </span>
                                     </button>
                                   ))
@@ -30991,6 +31662,22 @@ User request: ${aiPrompt.trim()}`;
                           <div className="rounded border border-slate-200 bg-white p-2 space-y-2.5">
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
 
+                            {/* Length — editable: retypes the segment length by moving its END node (start
+                                fixed, direction preserved). Connected segments + the space follow the node.
+                                A free-floating dimension (end not on a node) is a no-op. */}
+                            <div>
+                              <span className="text-[10px] text-slate-400">Length{lenInlineUnit ? "" : ` (${unit})`}</span>
+                              <input
+                                key={`dimlen-${dim.id}-${dim.points.join(",")}`}
+                                type="text"
+                                className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1.5 text-xs font-mono"
+                                defaultValue={fmtLenBare(Math.hypot(p2.x - p1.x, p2.y - p1.y))}
+                                onBlur={(e) => { const v = parseTypedLength(e.target.value, unit); if (Number.isFinite(v) && v > 0) setDimensionLength(dim, v); }}
+                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              />
+                              <p className="text-[9px] text-slate-400">Moves the end node to set this length; connected segments &amp; the space follow.</p>
+                            </div>
+
                             {/* Tick marks — arrowheads or slash lines. */}
                             <div>
                               <span className="text-[10px] text-slate-400">Tick marks</span>
@@ -31162,6 +31849,30 @@ User request: ${aiPrompt.trim()}`;
                                 }}
                               />
                             </label>
+                            {/* Display Aspect Mode — order of the centroid L × B dimension label. */}
+                            <div className="mt-1.5">
+                              <span className="text-[11px] font-medium text-slate-700">Display Aspect Mode</span>
+                              <select
+                                className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs"
+                                value={selectedRoom.aspectMode ?? "max-min"}
+                                onChange={(e) => {
+                                  const v = e.target.value as "max-min" | "x-y" | "y-x";
+                                  const isAuto = selectedRoom.id.startsWith(ROOM_AUTO_ID_PREFIX);
+                                  if (isAuto) {
+                                    // Auto-detected rooms aren't in history.state.rooms — promote to manual so the flag persists.
+                                    const newId = createId();
+                                    history.set({ ...history.state, rooms: [...history.state.rooms, { ...selectedRoom, id: newId, aspectMode: v }] });
+                                    selection.selectOne(newId);
+                                  } else {
+                                    history.set({ ...history.state, rooms: history.state.rooms.map((r) => r.id === selectedRoom.id ? { ...r, aspectMode: v } : r) });
+                                  }
+                                }}
+                              >
+                                <option value="max-min">Max × Min</option>
+                                <option value="x-y">X × Y</option>
+                                <option value="y-x">Y × X</option>
+                              </select>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -31393,7 +32104,7 @@ User request: ${aiPrompt.trim()}`;
                           <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
                             <div>
                               <span className="text-[9px] text-slate-400">Area</span>
-                              <p className="font-mono text-slate-700">{areaInSquareUnit(roomNetArea(selectedRoom, history.state.rooms), unit, pixelsPerMeter).toFixed(2)} {unit}²</p>
+                              <p className="font-mono text-slate-700">{fmtArea(roomNetArea(selectedRoom, history.state.rooms))}</p>
                             </div>
                             <div>
                               <span className="text-[9px] text-slate-400">Perimeter</span>
@@ -32063,10 +32774,14 @@ User request: ${aiPrompt.trim()}`;
                               <span className="text-[10px] text-slate-500">{def.label ?? "Units"}</span>
                               <select
                                 className="h-6 rounded border border-slate-200 bg-white px-1 text-[10px]"
-                                value={unit}
-                                onChange={(e) => setUnit(e.target.value as Unit)}
+                                value={unit === "ft" ? "ftin" : unit}
+                                onChange={(e) => {
+                                  const u: Unit = e.target.value === "ftin" ? "ft" : (e.target.value as Unit);
+                                  setUnit(u);
+                                  setNudgeDelta(defaultNudgeFor(u));
+                                }}
                               >
-                                {(def.options?.length ? def.options : [{ value: "m" }, { value: "ft" }, { value: "cm" }, { value: "in" }]).map((o) => (
+                                {(def.options?.length ? def.options : [{ value: "m", label: "Meters (m)" }, { value: "cm", label: "Centimeters (cm)" }, { value: "ftin", label: "Feet-Inches (ft-in)" }]).map((o) => (
                                   <option key={o.value} value={o.value}>{o.label ?? o.value}</option>
                                 ))}
                               </select>
@@ -32856,11 +33571,11 @@ User request: ${aiPrompt.trim()}`;
                                   if (!w) return null;
                                   const wIdx = history.state.walls.findIndex((ww) => ww.id === wId);
                                   const wLabel = `Wall${String(wIdx + 1).padStart(3, "0")}`;
-                                  const len = unitValueFromPixels(Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y), unit, pixelsPerMeter);
+                                  const lenPx = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
                                   return (
                                     <div key={wId} className="flex justify-between gap-2">
                                       <span className="text-slate-400">{wLabel}</span>
-                                      <span>{len.toFixed(3)} {unit}</span>
+                                      <span>{fmtLen(lenPx)}</span>
                                     </div>
                                   );
                                 })}

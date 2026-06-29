@@ -438,6 +438,9 @@ export interface Room {
   /** When true, draw this Space's label, area and L×B at its centroid on the canvas (Space Properties →
    *  Display → Show Label). */
   showLabel?: boolean;
+  /** Order of the L×B dimension label at the Space centroid (Display block).
+   *  "max-min" (default) = long × short; "x-y" = width × height; "y-x" = height × width. */
+  aspectMode?: "max-min" | "x-y" | "y-x";
   netArea?: number;
   /** Area type: built-in (`room` / `floorplate-boundary` / `plot-boundary`) or a custom slug
    *  registered in `FloorPlanModel.customRoomTypes`. Code paths that branch on the built-ins
