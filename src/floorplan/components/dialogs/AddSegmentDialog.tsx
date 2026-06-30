@@ -7,12 +7,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { Unit, WallMethod } from "../../types";
+import type { DrawPathStyle, Unit, WallMethod } from "../../types";
 
 /** The display parameters chosen before drawing a plain "Add Segment" line — mirrors the segment
  *  Display block (Mode / Buffer Style / Fill / Line Style / Colour / Thickness / Justification). */
 export interface AddSegmentConfig {
   mode: "line" | "buffered";
+  /** Path geometry: "straight" draws plain line segments; the NURBS options turn the drawn
+   *  polyline chain into a smooth curve (interpolating through vertices, or smoothing them). */
+  pathType: DrawPathStyle;
   /** Thickness in the active display unit (string draft). */
   thickness: string;
   lineStyle: "solid" | "dashed" | "dotted";
@@ -48,13 +51,31 @@ export const SegmentDisplayFields = ({ unit, config, onChange, onSubmit, autoFoc
       </div>
     </div>
 
-    {/* Thickness */}
+    {/* Path Type — Straight draws plain line segments; NURBS turns the drawn polyline chain into a
+        smooth curve. Thickness is honoured either way (thin → curved line, thick → curved ribbon). */}
+    <div>
+      <p className="mb-1 text-xs font-semibold text-slate-600">Path Type</p>
+      <div className="flex flex-wrap gap-1.5">
+        <Button size="sm" variant={config.pathType === "straight" ? "default" : "outline"} onClick={() => onChange({ pathType: "straight" })}>Straight</Button>
+        <Button size="sm" variant={config.pathType === "nurbs-through" ? "default" : "outline"} onClick={() => onChange({ pathType: "nurbs-through" })}>NURBS · through vertices</Button>
+        <Button size="sm" variant={config.pathType === "nurbs-smooth" ? "default" : "outline"} onClick={() => onChange({ pathType: "nurbs-smooth" })}>NURBS · smooth</Button>
+      </div>
+      {config.pathType !== "straight" && (
+        <p className="mt-0.5 text-[9px] text-slate-400">
+          "Through vertices" interpolates each click; "smooth" approximates the polyline. Justification defaults to centre.
+        </p>
+      )}
+    </div>
+
+    {/* Thickness — in feet, allow ft-inches drafts like 5' 6.5" (parsed via parseTypedLength on submit),
+        so use a free-text field there; other units keep the numeric stepper. */}
     <div>
       <p className="mb-1 text-xs font-semibold text-slate-600">Thickness ({unit})</p>
       <Input
-        type="number"
-        min={0}
-        step={unit === "cm" ? 1 : 0.05}
+        type={unit === "ft" ? "text" : "number"}
+        {...(unit === "ft"
+          ? { inputMode: "text" as const, placeholder: `e.g. 0.5 or 5' 6.5"` }
+          : { min: 0, step: unit === "cm" ? 1 : 0.05 })}
         value={config.thickness}
         onChange={(e) => onChange({ thickness: e.target.value })}
         onKeyDown={(e) => { if (e.key === "Enter") onSubmit?.(); }}

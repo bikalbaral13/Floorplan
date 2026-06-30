@@ -943,6 +943,26 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "param-grab", polygons: [], color: FLOW_TOOLS["param-grab"].color, isFinal: false, values: vals });
       continue;
     }
+    // Grab Geometry (read-only inspector): the inline formula/value table is baked by the host sync effect.
+    // Here we just PASS the wired definition through on `val-def` so the node can sit mid-chain. No geometry.
+    if (data.tool === "param-geometry") {
+      const vin = resolveValueInputs(id);
+      const def = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
+      const vals = { def };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "param-geometry", polygons: [], color: FLOW_TOOLS["param-geometry"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Grab Output Metrics (read-only readout): the inline metrics are baked by the host sync effect. Here we
+    // just PASS the wired definition through on `val-def` so the node can sit mid-chain. No geometry.
+    if (data.tool === "param-output-metrics") {
+      const vin = resolveValueInputs(id);
+      const def = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
+      const vals = { def };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "param-output-metrics", polygons: [], color: FLOW_TOOLS["param-output-metrics"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
     // Point (value source): publish its (x, y) as val-x / val-y for downstream value inputs. No geometry.
     if (data.tool === "point") {
       const vals = { x: num(data.params.x, 0), y: num(data.params.y, 0) };

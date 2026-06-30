@@ -22,6 +22,16 @@ export type WallSegmentType = "wall" | "line" | "door" | "window" | "plot-bounda
  *  Defaults to "miter" when omitted. Has no effect on non-path segments. */
 export type PathJoin = "miter" | "round" | "nurbs";
 
+/** Path geometry style for a drawn path / NURBS segment chain: "straight" = plain mitered
+ *  edges, "nurbs-through" = interpolating curve passing through every vertex, "nurbs-smooth" =
+ *  approximating curve that smooths the polyline. (Previously defined in DrawPathDialog.) */
+export type DrawPathStyle = "straight" | "nurbs-through" | "nurbs-smooth";
+
+/** Path justification relative to the curve's bend: the ribbon sits on the inner (concave) or
+ *  outer (convex) side, or straddles the centerline. Resolved to a concrete left / right offset
+ *  at commit time from the spine's net bend. */
+export type PathJustify = "inner" | "center" | "outer";
+
 /** Connection-segment metadata: when segmentType === "connection", these reference the two rooms the edge links. */
 export interface ConnectionWallMeta {
   aRoomId?: string;

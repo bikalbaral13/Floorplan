@@ -32,7 +32,7 @@ export const parseDimEdges = (v: unknown): number[] => {
 };
 export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "layout-gen";
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen";
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
@@ -3050,7 +3050,7 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   },
   "param-grab": {
     type: "param-grab",
-    label: "Grab Parameters",
+    label: "Grab Input Parameters",
     color: "#0891b2",
     // Interactive control panel: reads the parametric definition (wired from a Parametric Object into
     // `valin-def`), auto-builds one control per parameter (slider / options / checkbox / textbox — the
@@ -3093,6 +3093,40 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     defaultParams: { definition: "" },
     fields: [],
     hint: "Evaluate a parametric definition into a 3D mesh at each input node (footprints extruded by height) → wire into Mesh to 3D.",
+  },
+  "param-geometry": {
+    type: "param-geometry",
+    label: "Grab Geometry",
+    color: "#0891b2",
+    // Read-only INSPECTOR: reads the parametric definition wired into `valin-def` (from a Parametric Object,
+    // or downstream of Grab Parameters so it reflects the chosen values), evaluates its geometry block (vars
+    // + chosen case + box rules) at the CURRENT parameters, and shows each formula next to its live computed
+    // value INLINE in the node. Passes the definition through on `val-def` so it can sit mid-chain. The host
+    // bakes the evaluated inspection into `_inspection`. No geometry of its own.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "def", label: "Definition" }],
+    valueOutputs: [{ key: "def", label: "Definition" }],
+    defaultParams: {},
+    fields: [],
+    hint: "Inspect a wired Parametric Object's geometry — each var / box formula with its live computed value. Passes the definition through.",
+  },
+  "param-output-metrics": {
+    type: "param-output-metrics",
+    label: "Grab Output Metrics",
+    color: "#0891b2",
+    // Read-only METRICS readout: reads the parametric definition wired into `valin-def` (from a Parametric
+    // Object, or downstream of Grab Input Parameters so it reflects the chosen values), and shows the object's
+    // OUTPUT metrics inline — both DECLARED outputs (a top-level `outputs` array of named expressions) and a
+    // few DERIVED ones (bounding W×D×H, footprint area, volume, shape count). The host bakes the evaluated
+    // values into `_outputs`. Passes the definition through on `val-def`. No geometry of its own.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "def", label: "Definition" }],
+    valueOutputs: [{ key: "def", label: "Definition" }],
+    defaultParams: {},
+    fields: [],
+    hint: "Read a wired Parametric Object's output metrics (declared `outputs` + derived size/area/volume). Passes the definition through.",
   },
   "node-to-staircase": {
     type: "node-to-staircase",

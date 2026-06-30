@@ -3,7 +3,7 @@
   "version": 2,
   "meta": { "id": "floorplan.bsp.v1", "name": "Floorplan", "category": "Layout/Floorplan", "units": "m" },
   "hostKind": "node",
-  "description": "Procedural floor plan with three footprint MODES. `rectangular` = a seeded BSP that splits a W×D box into `rooms` cells (Random Layout jitters the splits; Seed repeats them) with partition + perimeter walls, a door swing on each partition + an entrance, and a window on every outer wall. `L-shape` / `T-shape` = a shaped shell with THICKER exterior walls (Exterior Wall), an entrance door swing, outer windows (glazed Sill→Lintel in 3D), and — when Furnish is on — bed + sofa symbols, for a more realistic, professional 2D plan. A small North arrow is drawn on every mode. Footprint W×D derives from Rooms × Avg Area at the given Aspect; origin = node centre, X = width, Y = depth.",
+  "description": "Procedural floor plan with three footprint MODES. `rectangular` = a seeded BSP that splits a W×D box into `rooms` cells (Random Layout jitters the splits; Seed repeats them) with partition + perimeter walls, a door swing on each partition + an entrance, and a window on every outer wall. `L-shape` / `T-shape` = a shaped shell with THICKER exterior walls (Exterior Wall); the entrance door and outer windows are COMPOSED from the separate Door (door.single.v1) and Window (window.standard.v1) objects via `ref` rules (each placed + rotated onto its wall, driven by Door Width / Window Width / Sill / Lintel), and — when Furnish is on — bed + sofa symbols, for a more realistic, professional 2D plan. (Composition needs Door + Window loaded in the object library.) A small North arrow is drawn on every mode. Footprint W×D derives from Rooms × Avg Area at the given Aspect; origin = node centre, X = width, Y = depth.",
   "parameters": [
     { "key": "mode", "label": "Mode", "kind": "select", "default": "rectangular", "options": [
       { "value": "rectangular", "label": "Rectangular (BSP rooms)" },
@@ -29,7 +29,7 @@
   ],
 
   "geometry": {
-    "description": "Rectangular → built-in BSP generator. L / T → explicit floor slab + thick perimeter walls + entrance swing + windows + furniture symbols (h0=h1=0 → 2D plan only). North arrow drawn on every mode.",
+    "description": "Rectangular → built-in BSP generator (door/window symbols still inline). L / T → explicit floor slab + thick perimeter walls, then the entrance Door + outer Windows COMPOSED via `ref` rules from the separate Door / Window objects (params = expressions in this scope; x/y/rotation place them on each wall), plus furniture symbols. North arrow drawn on every mode.",
     "emit": "shapes",
     "vars": {
       "area": "max(4, rooms * roomArea)",
@@ -62,14 +62,9 @@
           { "comment": "wall: notch left", "box": { "x0": "-W/2 + lw - eh", "x1": "-W/2 + lw + eh", "y0": "-D/2 + ld - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
           { "comment": "wall: top (left arm)", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + lw + eh", "y0": "D/2 - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
           { "comment": "wall: left", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + eh", "y0": "-D/2 - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
-          { "comment": "entrance leaf", "line": { "h0": "0", "h1": "0", "pts": [["dhx", "dhy"], ["dhx", "dhy + dw"]] } },
-          { "comment": "entrance swing", "repeat": "12", "as": "k", "line": { "h0": "0", "h1": "0", "pts": [
-            ["dhx + dw*cos(k/12 * PI/2)", "dhy + dw*sin(k/12 * PI/2)"], ["dhx + dw*cos((k+1)/12 * PI/2)", "dhy + dw*sin((k+1)/12 * PI/2)"]
-          ] } },
-          { "comment": "window A (bottom) line", "line": { "h0": "0", "h1": "0", "pts": [["W*0.28 - wdw/2", "-D/2"], ["W*0.28 + wdw/2", "-D/2"]] } },
-          { "comment": "window A panel", "box": { "x0": "W*0.28 - wdw/2", "x1": "W*0.28 + wdw/2", "y0": "-D/2 - eh", "y1": "-D/2 + eh", "h0": "sill", "h1": "lintel" } },
-          { "comment": "window B (left) line", "line": { "h0": "0", "h1": "0", "pts": [["-W/2", "D*0.18 - wdw/2"], ["-W/2", "D*0.18 + wdw/2"]] } },
-          { "comment": "window B panel", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + eh", "y0": "D*0.18 - wdw/2", "y1": "D*0.18 + wdw/2", "h0": "sill", "h1": "lintel" } },
+          { "comment": "entrance door — COMPOSED from the Door object (ref). Only width/height passed; leaves/hinge/swing/frame use the door's own defaults.", "ref": "door.single.v1", "x": "0", "y": "-D/2", "rotation": "0", "params": { "width": "dw", "height": "wh" } },
+          { "comment": "window A (bottom wall) — COMPOSED from the Window object (ref).", "ref": "window.standard.v1", "x": "W*0.28", "y": "-D/2", "rotation": "0", "params": { "width": "wdw", "thickness": "extWall", "sillHeight": "sill", "lintelHeight": "lintel" } },
+          { "comment": "window B (left wall) — COMPOSED from the Window object (ref), rotated 90° so the opening runs along the wall.", "ref": "window.standard.v1", "x": "-W/2", "y": "D*0.18", "rotation": "90", "params": { "width": "wdw", "thickness": "extWall", "sillHeight": "sill", "lintelHeight": "lintel" } },
           { "comment": "bed mattress", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by-1.0"], ["bx+0.7", "by-1.0"], ["bx+0.7", "by+1.0"], ["bx-0.7", "by+1.0"]] } },
           { "comment": "bed pillow", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.58", "by+0.72"], ["bx+0.58", "by+0.72"], ["bx+0.58", "by+0.95"], ["bx-0.58", "by+0.95"]] } },
           { "comment": "bed duvet fold", "when": "furnish", "line": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by+0.45"], ["bx+0.7", "by+0.45"]] } },
@@ -98,14 +93,9 @@
           { "comment": "wall: bar left", "box": { "x0": "-W/2 - eh", "x1": "-W/2 + eh", "y0": "ty - eh", "y1": "D/2 + eh", "h0": "0", "h1": "wh" } },
           { "comment": "wall: bar bottom-left", "box": { "x0": "-W/2 - eh", "x1": "-sw/2 + eh", "y0": "ty - eh", "y1": "ty + eh", "h0": "0", "h1": "wh" } },
           { "comment": "wall: stem left", "box": { "x0": "-sw/2 - eh", "x1": "-sw/2 + eh", "y0": "-D/2 - eh", "y1": "ty + eh", "h0": "0", "h1": "wh" } },
-          { "comment": "entrance leaf", "line": { "h0": "0", "h1": "0", "pts": [["dhx", "dhy"], ["dhx", "dhy + dw"]] } },
-          { "comment": "entrance swing", "repeat": "12", "as": "k", "line": { "h0": "0", "h1": "0", "pts": [
-            ["dhx + dw*cos(k/12 * PI/2)", "dhy + dw*sin(k/12 * PI/2)"], ["dhx + dw*cos((k+1)/12 * PI/2)", "dhy + dw*sin((k+1)/12 * PI/2)"]
-          ] } },
-          { "comment": "window A (top) line", "line": { "h0": "0", "h1": "0", "pts": [["-wdw/2", "D/2"], ["wdw/2", "D/2"]] } },
-          { "comment": "window A panel", "box": { "x0": "-wdw/2", "x1": "wdw/2", "y0": "D/2 - eh", "y1": "D/2 + eh", "h0": "sill", "h1": "lintel" } },
-          { "comment": "window B (bar right) line", "line": { "h0": "0", "h1": "0", "pts": [["W/2", "ty + (D/2-ty)/2 - wdw/2"], ["W/2", "ty + (D/2-ty)/2 + wdw/2"]] } },
-          { "comment": "window B panel", "box": { "x0": "W/2 - eh", "x1": "W/2 + eh", "y0": "ty + (D/2-ty)/2 - wdw/2", "y1": "ty + (D/2-ty)/2 + wdw/2", "h0": "sill", "h1": "lintel" } },
+          { "comment": "entrance door — COMPOSED from the Door object (ref).", "ref": "door.single.v1", "x": "0", "y": "-D/2", "rotation": "0", "params": { "width": "dw", "height": "wh" } },
+          { "comment": "window A (top wall) — COMPOSED from the Window object (ref).", "ref": "window.standard.v1", "x": "0", "y": "D/2", "rotation": "0", "params": { "width": "wdw", "thickness": "extWall", "sillHeight": "sill", "lintelHeight": "lintel" } },
+          { "comment": "window B (bar-right wall) — COMPOSED from the Window object (ref), rotated 90°.", "ref": "window.standard.v1", "x": "W/2", "y": "ty + (D/2-ty)/2", "rotation": "90", "params": { "width": "wdw", "thickness": "extWall", "sillHeight": "sill", "lintelHeight": "lintel" } },
           { "comment": "bed mattress", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by-1.0"], ["bx+0.7", "by-1.0"], ["bx+0.7", "by+1.0"], ["bx-0.7", "by+1.0"]] } },
           { "comment": "bed pillow", "when": "furnish", "poly": { "h0": "0", "h1": "0", "pts": [["bx-0.58", "by+0.72"], ["bx+0.58", "by+0.72"], ["bx+0.58", "by+0.95"], ["bx-0.58", "by+0.95"]] } },
           { "comment": "bed duvet fold", "when": "furnish", "line": { "h0": "0", "h1": "0", "pts": [["bx-0.7", "by+0.45"], ["bx+0.7", "by+0.45"]] } },

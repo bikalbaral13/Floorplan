@@ -29,6 +29,7 @@ import { InputPropsEditor } from "./InputPropsEditor";
 import { LayoutRoomsEditor } from "./LayoutRoomsEditor";
 import { SchemaNodeEditor } from "./SchemaNodeEditor";
 import { evaluateFlow, type FlowPreviewItem } from "./eval/evaluateFlow";
+import { inspectParametricGeometry, evalParametricOutputs, type GeomInspection, type ParamOutputs } from "./eval/parametricObject";
 import type { GridField } from "./eval/evalNodes";
 import { detectObjects, splitDataUrl } from "../algorithms/vision/geminiObjectDetection";
 import { parseBspConnections, serializeBspConnections } from "../algorithms/partitioning/bspAdvanced";
@@ -50,11 +51,9 @@ const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Image", tools: ["image", "vectorise", "object-detection"] },
   { title: "Logic", tools: ["conditional", "param-manip"] },
   { title: "Build", tools: ["floor-massing", "place-object", "frame-builder"] },
-  { title: "Building", tools: ["wall-builder", "graph-to-room", "segment-to-door", "segment-to-window", "node-to-object", "node-to-staircase", "node-to-footing", "segment-to-3d", "space-to-3d"] },
-  { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d"] },
-  { title: "Footing", tools: ["footing", "footing-to-3d-mesh", "mesh-to-3d"] },
-  { title: "Staircase", tools: ["staircase", "staircase-to-3d-mesh"] },
-  { title: "Parametric", tools: ["param-object", "param-grab", "param-render", "param-render-3d"] },
+  { title: "Building", tools: ["wall-builder", "graph-to-room", "segment-to-door", "segment-to-window", "node-to-object", "segment-to-3d", "space-to-3d"] },
+  { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d", "mesh-to-3d"] },
+  { title: "Parametric", tools: ["param-object", "param-grab", "param-output-metrics", "param-geometry", "param-render", "param-render-3d"] },
   { title: "Calculate", tools: ["math", "random", "bua", "point", "file-upload", "text"] },
   { title: "Output", tools: ["output", "render", "analyse", "generate"] },
 ];
@@ -312,6 +311,24 @@ const paramGrabProps = (defText: string, existing: InputProp[]): InputProp[] => 
       options,
     };
   });
+};
+
+/** Bake a Grab Parameters node's current control values into a definition's parameter defaults — the same
+ *  transform the flow evaluator applies, so a Grab Geometry node downstream of Grab Parameters can resolve
+ *  the EFFECTIVE definition (with the chosen values) for its live inspection. Unparseable → returned as-is. */
+const bakeParamDefaults = (defText: string, props: InputProp[]): string => {
+  try {
+    const parsed = JSON.parse(defText) as { parameters?: unknown[] };
+    if (!Array.isArray(parsed.parameters)) return defText;
+    const vals: Record<string, string | number | boolean> = {};
+    for (const p of props) vals[p.id] = p.type === "checkbox" ? p.value === true : p.value;
+    parsed.parameters = parsed.parameters.map((q) => {
+      const o = (q && typeof q === "object" ? q : {}) as Record<string, unknown>;
+      const k = typeof o.key === "string" ? o.key : "";
+      return k && k in vals ? { ...o, default: vals[k] } : o;
+    });
+    return JSON.stringify(parsed);
+  } catch { return defText; }
 };
 
 /** Built-in workflow templates, grouped into foldable categories on the right rail. */
@@ -628,7 +645,7 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
       {
         id: "parametric-workflow",
         title: "Parametric Workflow",
-        description: "Parametric Object (a definition textbox) → Grab Parameters (interactive sliders) → Parametric Renderer (2D plan) + Parametric 3D Renderer → Mesh to 3D, all anchored at a selected Canvas Node. Grab Parameters auto-builds a control per parameter; move its sliders and BOTH the 2D plan and the 3D mesh redraw from the same parameters. Pre-loaded with a self-contained staircase; select a node on the canvas (the Node source grabs the selection). Hit-and-trial: tweak the JSON in the Parametric Object box (or the sliders) to change the geometry, no code.",
+        description: "Parametric Object (a definition textbox) → Grab Input Parameters (interactive sliders) → Parametric Renderer (2D plan) + Parametric 3D Renderer → Mesh to 3D, all anchored at a selected Canvas Node. Grab Input Parameters auto-builds a control per parameter; move its sliders and BOTH the 2D plan and the 3D mesh redraw from the same parameters. Pre-loaded with a self-contained staircase; select a node on the canvas (the Node source grabs the selection). Hit-and-trial: tweak the JSON in the Parametric Object box (or the sliders) to change the geometry, no code.",
         nodes: [
           // The parametric object's definition lives entirely in this textbox (parameters + geometry rules).
           { id: "obj", tool: "param-object", x: 12, y: 40, params: { definition: STAIRCASE_DEFINITION } },
@@ -708,41 +725,6 @@ const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = 
           { source: "canvas", target: "frame", sourceHandle: "out-3" },
           // Schema → Drawing Tools: surface Column / Beam types in the drawing dropdowns.
           { source: "schema", target: "schemaTools", targetHandle: "gin-schema" },
-        ],
-      },
-      {
-        id: "parametric-staircase",
-        title: "Parametric Staircase",
-        description: "One Staircase definition (U-shape) → 2D Plan, all four elevations and a 3D Mesh. The Plan + elevations feed a Views Layout node, so they appear in the canvas \"Views\" mode (plan centre, Back top / Front bottom / Left / Right) — no node placement needed. The 3D Mesh feeds Mesh to 3D. Edit the Staircase node once and every view updates.",
-        nodes: [
-          // The single source of truth — a location-free staircase definition.
-          { id: "staircase", tool: "staircase", x: 320, y: 120, params: { config: "u-shape", steps: 9, tread: 0.265, riser: 0.17, width: 1, direction: "ltr", midSteps: 0, landingWidth: 1, midSpace: 0.1, landingCuts: 2, rotation: 0, color: "#0f766e" } },
-          // Views — origin-relative drawings / mesh built from the definition.
-          { id: "plan", tool: "staircase-to-plan", x: 560, y: 60, params: { color: "#0f766e" } },
-          { id: "elevFront", tool: "staircase-to-front-elevation", x: 560, y: 150, params: { color: "#0f766e" } },
-          { id: "elevBack", tool: "staircase-to-back-elevation", x: 560, y: 240, params: { color: "#0f766e" } },
-          { id: "elevLeft", tool: "staircase-to-left-elevation", x: 560, y: 330, params: { color: "#0f766e" } },
-          { id: "elevRight", tool: "staircase-to-right-elevation", x: 560, y: 420, params: { color: "#0f766e" } },
-          { id: "mesh", tool: "staircase-to-3d-mesh", x: 560, y: -40, params: { color: "#0f766e" } },
-          // Views Layout — routes the plan + 4 elevations into the canvas "Views" mode panels (no Nodes).
-          { id: "views", tool: "views-layout", x: 860, y: 200, params: {} },
-          // 3D preview terminal.
-          { id: "mesh3d", tool: "mesh-to-3d", x: 860, y: -40, params: {} },
-        ],
-        edges: [
-          { source: "staircase", target: "plan" },
-          { source: "staircase", target: "elevFront" },
-          { source: "staircase", target: "elevBack" },
-          { source: "staircase", target: "elevLeft" },
-          { source: "staircase", target: "elevRight" },
-          { source: "staircase", target: "mesh" },
-          // Plan + elevations → Views Layout (shown in the canvas "Views" mode).
-          { source: "plan", target: "views", targetHandle: "gin-plan" },
-          { source: "elevFront", target: "views", targetHandle: "gin-front" },
-          { source: "elevBack", target: "views", targetHandle: "gin-back" },
-          { source: "elevLeft", target: "views", targetHandle: "gin-left" },
-          { source: "elevRight", target: "views", targetHandle: "gin-right" },
-          { source: "mesh", target: "mesh3d" },
         ],
       },
     ],
@@ -1092,7 +1074,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             </div>
           );
         })()}
-        {def.fields.length === 0 && d.tool !== "place-object" && d.tool !== "output" && d.tool !== "input-props" && d.tool !== "param-grab" && d.tool !== "canvas-source" && (
+        {def.fields.length === 0 && d.tool !== "place-object" && d.tool !== "output" && d.tool !== "input-props" && d.tool !== "param-grab" && d.tool !== "param-geometry" && d.tool !== "param-output-metrics" && d.tool !== "canvas-source" && (
           <div className="text-[9px] italic text-slate-400">{def.hint}</div>
         )}
         {/* Place Object: a multi-object list editor instead of the generic flat-param fields. */}
@@ -1126,6 +1108,85 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             ? <span className="text-[10px] italic text-slate-400">Wire a Parametric Object into Definition →</span>
             : <InputPropsEditor params={d.params} onParamChange={(key, val) => d.onParamChange?.(id, key, val)} valuesOnly nodrag />
         )}
+        {/* Grab Geometry: read-only inspector — each var / box formula with its live computed value (baked
+            into `_inspection` by the host sync). Scrollable so a large object stays compact in the node. */}
+        {d.tool === "param-geometry" && (() => {
+          const insp = d.params._inspection as GeomInspection | undefined;
+          if (!insp || !insp.ok) {
+            return <span className="text-[10px] italic text-slate-400">Wire a Parametric Object into Definition →</span>;
+          }
+          const Row = ({ name, expr, value }: { name: string; expr: string; value: string }) => (
+            <div className="flex items-baseline justify-between gap-2 leading-tight">
+              <span className="truncate font-medium text-slate-600" title={`${name} = ${expr}`}>{name}</span>
+              <span className="shrink-0 font-mono text-[9px] text-slate-400">{expr}</span>
+              <span className="shrink-0 font-mono font-semibold text-teal-700">{value}</span>
+            </div>
+          );
+          return (
+            <div className="nodrag max-h-64 space-y-1.5 overflow-y-auto pr-0.5 text-[10px]">
+              {insp.params.length > 0 && (
+                <div>
+                  <div className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400">Parameters</div>
+                  {insp.params.map((r) => <Row key={`p-${r.name}`} {...r} />)}
+                </div>
+              )}
+              {insp.vars.length > 0 && (
+                <div>
+                  <div className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400">Vars</div>
+                  {insp.vars.map((r, i) => <Row key={`v-${i}-${r.name}`} {...r} />)}
+                </div>
+              )}
+              {insp.chosenCase != null && (
+                <div className="text-[9px] text-slate-500">Case: <span className="font-mono text-slate-700">{insp.chosenCase}</span></div>
+              )}
+              {insp.boxes.map((b, i) => (
+                <div key={`b-${i}`} className="rounded border border-slate-200 bg-slate-50/60 px-1.5 py-1">
+                  <div className="mb-0.5 flex items-baseline justify-between text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span>{b.label}</span>
+                    {b.when && <span className="font-mono normal-case text-slate-400" title="condition">if {b.when}</span>}
+                  </div>
+                  {b.fields.map((r) => <Row key={`bf-${r.name}`} {...r} />)}
+                </div>
+              ))}
+              {insp.boxes.length === 0 && insp.vars.length === 0 && (
+                <span className="italic text-slate-400">No geometry rules to inspect.</span>
+              )}
+            </div>
+          );
+        })()}
+        {/* Grab Output Metrics: read-only readout of the object's output metrics (declared `outputs` + derived
+            size/area/volume), baked into `_outputs` by the host sync. */}
+        {d.tool === "param-output-metrics" && (() => {
+          const out = d.params._outputs as ParamOutputs | undefined;
+          if (!out || !out.ok) {
+            return <span className="text-[10px] italic text-slate-400">Wire a Parametric Object into Definition →</span>;
+          }
+          const Row = ({ name, value, unit }: { name: string; value: string; unit?: string }) => (
+            <div className="flex items-baseline justify-between gap-2 leading-tight">
+              <span className="truncate font-medium text-slate-600">{name}</span>
+              <span className="shrink-0 font-mono font-semibold text-cyan-700">{value}{unit ? <span className="ml-0.5 font-normal text-slate-400">{unit}</span> : null}</span>
+            </div>
+          );
+          return (
+            <div className="nodrag max-h-64 space-y-1.5 overflow-y-auto pr-0.5 text-[10px]">
+              {out.declared.length > 0 && (
+                <div>
+                  <div className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400">Outputs</div>
+                  {out.declared.map((r, i) => <Row key={`o-${i}-${r.name}`} {...r} />)}
+                </div>
+              )}
+              {out.derived.length > 0 && (
+                <div>
+                  <div className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400">Derived</div>
+                  {out.derived.map((r, i) => <Row key={`d-${i}-${r.name}`} {...r} />)}
+                </div>
+              )}
+              {out.declared.length === 0 && (
+                <span className="text-[9px] italic text-slate-400">No declared outputs — add an `outputs` array to the object to publish named metrics.</span>
+              )}
+            </div>
+          );
+        })()}
         {/* Layout Generation: trigger the host's floorplan generator (loads the editable canvas layout —
             draggable seeds + connection/repulsion lines) and simulated annealing; show a live result line. */}
         {d.tool === "layout-gen" && (
@@ -1551,7 +1612,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
         )}
         {/* Scalar value outputs (e.g. Inset area, BUA): each is a labelled row with an amber endpoint
             handle (id `val-<key>`) anchored at the node's right edge — no overlap with the fields. */}
-        {def.valueOutputs?.some((vo) => !vo.alignField) && d.tool !== "file-upload" && d.tool !== "text" && d.tool !== "analyse" && d.tool !== "param-object" && d.tool !== "param-grab" ? (
+        {def.valueOutputs?.some((vo) => !vo.alignField) && d.tool !== "file-upload" && d.tool !== "text" && d.tool !== "analyse" && d.tool !== "param-object" && d.tool !== "param-grab" && d.tool !== "param-geometry" && d.tool !== "param-output-metrics" ? (
           <div className="flex flex-col gap-0.5 pt-0.5">
             {def.valueOutputs.filter((vo) => !vo.alignField).map((vo) => {
               const v = (d.params._values as Record<string, number> | undefined)?.[vo.key];
@@ -2426,6 +2487,44 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
         if (JSON.stringify(inputProps(data.params)) === JSON.stringify(desired)) return n;
         changed = true;
         return { ...n, data: { ...n.data, params: { ...data.params, props: desired } } };
+      });
+      return changed ? next : ns;
+    });
+  }, [nodes, edges, setNodes]);
+
+  // Grab Geometry / Grab Output Metrics sync: for each inspector node, resolve the EFFECTIVE definition wired
+  // into its `valin-def` — directly from a Parametric Object, or baked through a Grab Input Parameters (so the
+  // chosen values apply) — then bake the evaluated read-only result into a transient param for inline display:
+  // `_inspection` (geometry formulas + values) or `_outputs` (declared + derived output metrics). The
+  // changed-guard keeps it idempotent (no render loop); `_`-prefixed params are stripped on export.
+  useEffect(() => {
+    setNodes((ns) => {
+      let changed = false;
+      const byId = new Map(ns.map((n) => [n.id, n]));
+      const resolveDef = (node: typeof ns[number]): string => {
+        const e = edges.find((ed) => ed.target === node.id && ed.targetHandle === "valin-def");
+        if (!e) return "";
+        const src = byId.get(e.source);
+        if (!src) return "";
+        const sd = src.data as FlowNodeData;
+        if (sd.tool === "param-grab") {
+          const e2 = edges.find((ed) => ed.target === src.id && ed.targetHandle === "valin-def");
+          const base = e2 ? String((byId.get(e2.source)?.data as FlowNodeData | undefined)?.params.definition ?? "") : "";
+          return bakeParamDefaults(base, inputProps(sd.params));
+        }
+        return String(sd.params.definition ?? "");
+      };
+      const bake = (n: typeof ns[number], key: string, value: unknown): typeof n => {
+        const data = n.data as FlowNodeData;
+        if (JSON.stringify(data.params[key]) === JSON.stringify(value)) return n;
+        changed = true;
+        return { ...n, data: { ...n.data, params: { ...data.params, [key]: value } } };
+      };
+      const next = ns.map((n) => {
+        const data = n.data as FlowNodeData;
+        if (data.tool === "param-geometry") return bake(n, "_inspection", inspectParametricGeometry(resolveDef(n)));
+        if (data.tool === "param-output-metrics") return bake(n, "_outputs", evalParametricOutputs(resolveDef(n)));
+        return n;
       });
       return changed ? next : ns;
     });

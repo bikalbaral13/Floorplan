@@ -165,6 +165,15 @@ export interface ParametricGeometry { fill: Point[][]; lines: Point[][]; color: 
 
 const MAX_SHAPES = 4000;
 const MAX_REPEAT = 1000;
+/** Composition (a `ref` rule instantiates another object): hard recursion cap as a runaway/cycle backstop. */
+const MAX_REF_DEPTH = 8;
+
+/** Resolves a referenced object's id (`meta.id`) → its definition JSON text, or null if unknown. Supplied by
+ *  the host (built from the object library) so the engine can COMPOSE objects without bundling the library. */
+export type ObjectResolver = (id: string) => string | null;
+/** Threaded through nested evaluation for `ref` rules: how to resolve children, current depth, and the set of
+ *  ids already on the stack (cycle guard). Absent → `ref` rules are skipped (engine stays self-contained). */
+interface RefCtx { resolve?: ObjectResolver; depth: number; seen: Set<string>; }
 const asObj = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 const asArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -361,7 +370,7 @@ function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope
  *  coords — centred so the shared `placer(anchor, ppm, rot)` reconstructs world pixels. When present it
  *  feeds the `host` rule (and the `hostArea` scope var), so host-conforming objects extrude the host
  *  polygon with zero per-object code. Self-contained objects (box/circle/poly) ignore it. */
-function buildParametricShapes(defText: string, overrides?: Record<string, unknown>, host?: Point[]): ParametricShapes | null {
+function buildParametricShapes(defText: string, overrides?: Record<string, unknown>, host?: Point[], ctx?: RefCtx): ParametricShapes | null {
   let parsed: unknown;
   try { parsed = JSON.parse(defText); } catch { return null; }
   const def = asObj(parsed);
@@ -419,6 +428,36 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
   // optionally `scale`d about its centroid and/or `inset` inward (metres; negative = outset), extruded h0→h1.
   const emit = (rule: Record<string, unknown>, s: Scope): void => {
     if (shapes.length >= MAX_SHAPES) return;
+    // Composition: a `ref` rule instantiates ANOTHER object by id and merges its shapes. The child is
+    // evaluated with `params` (each an expression in THIS scope) as overrides, then transformed by the rule's
+    // x / y / rotation / scale (rotation composes with the child's own `rotation` param). Recursion is guarded
+    // by depth + a visited-id set (cycles). Needs a resolver (host-supplied); without one, refs are skipped.
+    if (typeof rule.ref === "string") {
+      if (!ctx?.resolve || ctx.depth >= MAX_REF_DEPTH || ctx.seen.has(rule.ref)) return;
+      const childText = ctx.resolve(rule.ref);
+      if (!childText) return;
+      const childOverrides: Record<string, unknown> = {};
+      const pobj = asObj(rule.params);
+      if (pobj) for (const [k, ex] of Object.entries(pobj)) childOverrides[k] = evalRaw(ex, s);
+      const child = buildParametricShapes(childText, childOverrides, undefined, {
+        resolve: ctx.resolve, depth: ctx.depth + 1, seen: new Set([...ctx.seen, rule.ref]),
+      });
+      if (child) {
+        const tx = evalNum(rule.x, s), ty = evalNum(rule.y, s);
+        const scl = rule.scale != null ? evalNum(rule.scale, s) : 1;
+        // The ref's own rotation + the child's `rotation` param both rotate about the child origin → sum them.
+        const th = ((evalNum(rule.rotation, s) || 0) + (child.rotationDeg || 0)) * Math.PI / 180;
+        const cs = Math.cos(th), sn = Math.sin(th);
+        for (const csh of child.shapes) {
+          if (shapes.length >= MAX_SHAPES) break;
+          shapes.push({
+            pts: csh.pts.map((p) => ({ x: tx + (p.x * cs - p.y * sn) * scl, y: ty + (p.x * sn + p.y * cs) * scl })),
+            closed: csh.closed, h0: csh.h0, h1: csh.h1,
+          });
+        }
+      }
+      return;
+    }
     // Procedural floorplan generator (seeded BSP → walls + floor + door/window symbols).
     if (asObj(rule.floorplan) || rule.floorplan === true) { generateFloorplan(s, shapes); return; }
     // Host footprint primitive — extrude the attached space's polygon (a uniform `scale` about its centroid
@@ -490,8 +529,8 @@ const placer = (anchor: Point, ppm: number, rotDeg: number) => {
 
 /** Parse + evaluate a parametric definition into canvas polylines anchored at `anchor` (the top-down PLAN
  *  projection). Closed shapes fill + outline; open shapes only stroke. Empty on parse error. */
-export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[]): ParametricGeometry {
-  const built = buildParametricShapes(defText, overrides, host);
+export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): ParametricGeometry {
+  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set() });
   if (!built) return { fill: [], lines: [], color: "#0f766e" };
   const xf = placer(anchor, ppm, built.rotationDeg);
   const fill: Point[][] = [];
@@ -512,8 +551,8 @@ export function evalParametricGeometry(defText: string, anchor: Point, ppm: numb
 /** Parse + evaluate a parametric definition into 3D mesh prisms anchored at `anchor` — one lofted prism per
  *  CLOSED shape with a non-zero height span (footprint extruded h0→h1 metres). Open shapes / flat shapes are
  *  skipped. Same shape stack as the plan, so 3D is driven by the SAME parameters. Empty on parse error. */
-export function evalParametricPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[]): FlowMeshPrism[] {
-  const built = buildParametricShapes(defText, overrides, host);
+export function evalParametricPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): FlowMeshPrism[] {
+  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set() });
   if (!built) return [];
   const xf = placer(anchor, ppm, built.rotationDeg);
   const prisms: FlowMeshPrism[] = [];
@@ -523,4 +562,187 @@ export function evalParametricPrisms(defText: string, anchor: Point, ppm: number
     prisms.push({ bottom: foot, top: foot, yBottom: Math.min(sh.h0, sh.h1), yTop: Math.max(sh.h0, sh.h1), color: built.color });
   }
   return prisms;
+}
+
+// ── Geometry inspection (formulas + live values) ─────────────────────────────────────────────────────
+// Powers the "Grab Geometry" Flow node: parse a definition, evaluate its geometry block exactly like
+// buildParametricShapes, but RECORD each step (resolved parameters, ordered vars, chosen case, and each
+// emitted box rule's per-field formula + computed value) instead of producing geometry. Read-only.
+export interface GeomInspectRow { name: string; expr: string; value: string; }
+export interface GeomInspectBox { label: string; when?: string; fields: GeomInspectRow[]; }
+export interface GeomInspection { ok: boolean; params: GeomInspectRow[]; vars: GeomInspectRow[]; chosenCase: string | null; boxes: GeomInspectBox[]; }
+
+/** Render an expression field as readable source text (a number/bool stays literal; a string is the formula). */
+const exprStr = (e: unknown): string =>
+  e == null ? "—" : typeof e === "string" ? e : typeof e === "object" ? JSON.stringify(e) : String(e);
+/** Format a computed value compactly — trim trailing zeros on decimals; pass strings/bools through. */
+const valStr = (v: number | string | boolean): string =>
+  typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/\.?0+$/, "")) : String(v);
+
+export function inspectParametricGeometry(defText: string, overrides?: Record<string, unknown>, host?: Point[]): GeomInspection {
+  const empty: GeomInspection = { ok: false, params: [], vars: [], chosenCase: null, boxes: [] };
+  let parsed: unknown;
+  try { parsed = JSON.parse(defText); } catch { return empty; }
+  const def = asObj(parsed);
+  if (!def) return empty;
+
+  // Parameter defaults → scope, then overrides; PI + hostArea injected as in buildParametricShapes.
+  const scope: Scope = {};
+  for (const p of asArr(def.parameters)) {
+    const o = asObj(p);
+    if (!o || typeof o.key !== "string") continue;
+    const d = o.default;
+    scope[o.key] = typeof d === "number" || typeof d === "boolean" || typeof d === "string" ? d : 0;
+  }
+  if (overrides) for (const [k, v] of Object.entries(overrides)) {
+    if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") scope[k] = v;
+  }
+  scope.PI = Math.PI;
+  scope.hostArea = host && host.length >= 3 ? ringArea(host) : 0;
+
+  const params: GeomInspectRow[] = [];
+  for (const p of asArr(def.parameters)) {
+    const o = asObj(p);
+    if (!o || typeof o.key !== "string") continue;
+    params.push({ name: typeof o.label === "string" && o.label ? o.label : o.key, expr: o.key, value: valStr(scope[o.key]) });
+  }
+
+  const geom = asObj(def.geometry);
+  if (!geom) return { ok: true, params, vars: [], chosenCase: null, boxes: [] };
+
+  const vars: GeomInspectRow[] = [];
+  const applyVarsRec = (varsObj: unknown, sc: Scope): void => {
+    const o = asObj(varsObj);
+    if (!o) return;
+    for (const [k, expr] of Object.entries(o)) {
+      if (k.startsWith("_")) continue;
+      sc[k] = evalRaw(expr, sc);
+      vars.push({ name: k, expr: exprStr(expr), value: valStr(sc[k]) });
+    }
+  };
+  applyVarsRec(geom.vars, scope);
+
+  // A `pipeline` (dissolved-flow ops) has no flat box-rules to inspect — note it and return the vars.
+  if (asArr(geom.pipeline).length > 0) return { ok: true, params, vars, chosenCase: "(pipeline)", boxes: [] };
+
+  let chosen: Record<string, unknown> | null = null;
+  let chosenWhen: string | null = null;
+  for (const c of asArr(geom.cases)) {
+    const o = asObj(c);
+    if (!o) continue;
+    if (evalTruthy(o.when, scope)) { chosen = o; chosenWhen = o.when == null ? "default" : exprStr(o.when); break; }
+  }
+  if (!chosen) return { ok: true, params, vars, chosenCase: null, boxes: [] };
+
+  const sc: Scope = { ...scope };
+  applyVarsRec(chosen.vars, sc);
+
+  const boxes: GeomInspectBox[] = [];
+  const fieldRows = (obj: Record<string, unknown>, keys: string[], s: Scope): GeomInspectRow[] =>
+    keys.filter((k) => obj[k] != null).map((k) => ({ name: k, expr: exprStr(obj[k]), value: valStr(evalNum(obj[k], s)) }));
+  const rowsFor = (rule: Record<string, unknown>, s: Scope): GeomInspectBox | null => {
+    if (typeof rule.ref === "string") return { label: `ref → ${rule.ref}`, fields: fieldRows(rule, ["x", "y", "rotation", "scale"], s) };
+    if (asObj(rule.floorplan) || rule.floorplan === true) return { label: "floorplan", fields: [] };
+    const hostRule = asObj(rule.host);
+    if (hostRule) return { label: "host", fields: fieldRows(hostRule, ["scale", "inset", "h0", "h1"], s) };
+    const box = asObj(rule.box);
+    if (box) return { label: "box", fields: fieldRows(box, ["x0", "x1", "y0", "y1", "h0", "h1"], s) };
+    const circle = asObj(rule.circle);
+    if (circle) return { label: "circle", fields: fieldRows(circle, ["cx", "cy", "r", "sides", "h0", "h1"], s) };
+    const spec = asObj(rule.poly) ?? asObj(rule.line);
+    if (spec) {
+      const ptsN = asArr(spec.pts).length;
+      return { label: asObj(rule.poly) ? "poly" : "line", fields: [{ name: "pts", expr: `${ptsN} point(s)`, value: String(ptsN) }, ...fieldRows(spec, ["h0", "h1"], s)] };
+    }
+    return null;
+  };
+  for (const r of asArr(chosen.rules)) {
+    const rule = asObj(r);
+    if (!rule) continue;
+    const when = rule.when == null ? undefined : exprStr(rule.when);
+    if (!evalTruthy(rule.when, sc)) continue;
+    if (rule.repeat != null) {
+      const count = Math.max(0, Math.min(MAX_REPEAT, Math.round(evalNum(rule.repeat, sc))));
+      const as = typeof rule.as === "string" ? rule.as : "i";
+      sc[as] = 0; // inspect one representative iteration; the label notes the repeat count
+      const b = rowsFor(rule, sc);
+      if (b) boxes.push({ ...b, label: `${b.label} × ${count}`, when });
+    } else {
+      const b = rowsFor(rule, sc);
+      if (b) boxes.push({ ...b, when });
+    }
+    if (boxes.length >= 200) break; // keep the inline table bounded
+  }
+  return { ok: true, params, vars, chosenCase: chosenWhen, boxes };
+}
+
+// ── Output metrics ───────────────────────────────────────────────────────────────────────────────────
+// Powers the "Grab Output Metrics" Flow node. Two sources: (1) DECLARED outputs — a top-level `outputs`
+// array on the definition, `[{ key?, label?, expr|value, unit? }]`, each an expression over the parameters
+// + geometry vars (the object's own published metrics); (2) DERIVED — geometry the evaluator already
+// produces (shape count, overall bounding W×D×H, footprint area, volume), so the node is useful even for
+// objects that declare no outputs. Read-only.
+export interface ParamOutputRow { name: string; value: string; unit?: string; }
+export interface ParamOutputs { ok: boolean; declared: ParamOutputRow[]; derived: ParamOutputRow[]; }
+
+export function evalParametricOutputs(defText: string, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): ParamOutputs {
+  const empty: ParamOutputs = { ok: false, declared: [], derived: [] };
+  let parsed: unknown;
+  try { parsed = JSON.parse(defText); } catch { return empty; }
+  const def = asObj(parsed);
+  if (!def) return empty;
+
+  // Full scope: parameter defaults → overrides → PI/hostArea → geometry vars → chosen-case vars.
+  const scope: Scope = {};
+  for (const p of asArr(def.parameters)) {
+    const o = asObj(p);
+    if (!o || typeof o.key !== "string") continue;
+    const d = o.default;
+    scope[o.key] = typeof d === "number" || typeof d === "boolean" || typeof d === "string" ? d : 0;
+  }
+  if (overrides) for (const [k, v] of Object.entries(overrides)) {
+    if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") scope[k] = v;
+  }
+  scope.PI = Math.PI;
+  scope.hostArea = host && host.length >= 3 ? ringArea(host) : 0;
+  const geom = asObj(def.geometry);
+  if (geom) {
+    const applyVars = (vo: unknown, sc: Scope): void => {
+      const o = asObj(vo);
+      if (!o) return;
+      for (const [k, e] of Object.entries(o)) if (!k.startsWith("_")) sc[k] = evalRaw(e, sc);
+    };
+    applyVars(geom.vars, scope);
+    let chosen: Record<string, unknown> | null = null;
+    for (const c of asArr(geom.cases)) { const o = asObj(c); if (o && evalTruthy(o.when, scope)) { chosen = o; break; } }
+    if (chosen) applyVars(chosen.vars, scope);
+  }
+
+  // Declared outputs — each entry's `expr` (or `value`) evaluated in the full scope.
+  const declared: ParamOutputRow[] = [];
+  for (const o of asArr(def.outputs)) {
+    const e = asObj(o);
+    if (!e) continue;
+    const name = typeof e.label === "string" && e.label ? e.label : typeof e.key === "string" ? e.key : "output";
+    declared.push({ name, value: valStr(evalRaw(e.expr ?? e.value, scope)), unit: typeof e.unit === "string" ? e.unit : undefined });
+  }
+
+  // Derived metrics from the evaluated shape stack (local metres) — bounding box, footprint area, volume.
+  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set() });
+  const derived: ParamOutputRow[] = [];
+  if (built && built.shapes.length) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minH = Infinity, maxH = -Infinity, area = 0, vol = 0;
+    for (const sh of built.shapes) {
+      for (const p of sh.pts) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+      minH = Math.min(minH, sh.h0, sh.h1); maxH = Math.max(maxH, sh.h0, sh.h1);
+      if (sh.closed) { const a = Math.abs(ringArea(sh.pts)); area += a; vol += a * Math.abs(sh.h1 - sh.h0); }
+    }
+    derived.push({ name: "Shapes", value: String(built.shapes.length) });
+    derived.push({ name: "Width", value: valStr(maxX - minX), unit: "m" });
+    derived.push({ name: "Depth", value: valStr(maxY - minY), unit: "m" });
+    derived.push({ name: "Height", value: valStr(maxH - minH), unit: "m" });
+    derived.push({ name: "Footprint", value: valStr(area), unit: "m²" });
+    derived.push({ name: "Volume", value: valStr(vol), unit: "m³" });
+  }
+  return { ok: true, declared, derived };
 }

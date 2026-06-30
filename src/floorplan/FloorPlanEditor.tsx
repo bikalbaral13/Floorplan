@@ -170,7 +170,7 @@ import { CalibrationDialog } from "./components/dialogs/CalibrationDialog";
 import { AreaCalibrationDialog } from "./components/dialogs/AreaCalibrationDialog";
 import { AutoGenDialog } from "./components/dialogs/AutoGenDialog";
 import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealingDialog";
-import { DrawPathDialog, type DrawPathStyle, type PathJustify } from "./components/dialogs/DrawPathDialog";
+import type { DrawPathStyle, PathJustify } from "./types";
 import { AddSegmentDialog, type AddSegmentConfig } from "./components/dialogs/AddSegmentDialog";
 import { AddWallDialog } from "./components/dialogs/AddWallDialog";
 import { AddOpeningDialog } from "./components/dialogs/AddOpeningDialog";
@@ -178,7 +178,7 @@ import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/Ad
 import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/SegmentTypeParamsDialog";
 import { ObjectParamsDialog } from "./components/dialogs/ObjectParamsDialog";
 import { ChatAIPanel, type ChatMessage } from "./components/ChatAIPanel";
-import { serializeForAI, chatEditModel, applyAiReply, summarizeChange } from "./ai/aiChat";
+import { serializeForAI, chatEditModel, applyAiReply, summarizeChange, cutOpeningsForAttachments, normalizeNodeMetaKeys, DEFAULT_SYSTEM_PROMPT } from "./ai/aiChat";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
@@ -2044,6 +2044,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const fmtLen = useCallback((px: number) => formatLengthLabel(px, unit, pixelsPerMeter, displayUnitOpts), [unit, pixelsPerMeter, displayUnitOpts]);
   const fmtLenBare = useCallback((px: number) => formatLengthBare(px, unit, pixelsPerMeter, displayUnitOpts), [unit, pixelsPerMeter, displayUnitOpts]);
   const fmtArea = useCallback((areaPx: number) => formatAreaLabel(areaPx, unit, pixelsPerMeter, displayUnitOpts), [unit, pixelsPerMeter, displayUnitOpts]);
+  /** Resolve a referenced parametric object's id (`meta.id`) → its definition JSON, so a parametric object can
+   *  COMPOSE others via `ref` rules (e.g. a Floorplan referencing Door / Window). Passed to the evaluator. */
+  const resolveObjectDef = useCallback(
+    (objId: string): string | null => { const o = history.state.objectLibrary?.[objId]; return o ? JSON.stringify(o) : null; },
+    [history.state.objectLibrary],
+  );
   /** Whether the current length labels carry their own inline unit (ft-inches) so callers skip the unit suffix. */
   const lenInlineUnit = useMemo(() => lengthHasInlineUnit(unit, displayUnitOpts), [unit, displayUnitOpts]);
   /** Show Center Dimension (Preferences): when on, the live wall-trace preview also dimensions the
@@ -2105,10 +2111,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  before the single-segment draw starts (mirrors the Draw Path dialog). */
   const [addSegDialogOpen, setAddSegDialogOpen] = useState<boolean>(false);
   const [addSegConfig, setAddSegConfig] = useState<AddSegmentConfig>({
-    mode: "line", thickness: "0.1", lineStyle: "solid", color: "#334155", bufferStyle: "capsule", fill: "outlined", method: "center", showLabel: true,
+    mode: "line", pathType: "straight", thickness: "0.1", lineStyle: "solid", color: "#334155", bufferStyle: "capsule", fill: "outlined", method: "center", showLabel: true,
   });
   /** Active Add-Segment display config (set when the dialog starts a draw) — applied to each drawn line. */
-  const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered"; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod; showLabel: boolean } | null>(null);
+  const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered"; pathType: DrawPathStyle; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod; showLabel: boolean } | null>(null);
   /** Hover span for click-to-place door/window on a wall (Add Segment → Door/Window): the opening's
    *  two endpoints on the host wall + whether it fits, so the preview shows where the click lands. */
   const [openingPlacePreview, setOpeningPlacePreview] = useState<{ ds: Point; de: Point } | null>(null);
@@ -2224,12 +2230,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // draw/place starts so the user can set the object's Input Properties (e.g. Wall height / base / colour)
   // — like the schema dialog. `host` routes the confirm to the segment-draw vs node-place arming.
   const [objParamsDialog, setObjParamsDialog] = useState<{ objectId: string; label: string; host: "segment" | "node" } | null>(null);
-  /** Draw Path flow: dialog open + draft inputs (string-typed for input binding). */
-  const [drawPathDialogOpen, setDrawPathDialogOpen] = useState<boolean>(false);
-  const [drawPathLabelInput, setDrawPathLabelInput] = useState<string>("Path1");
-  const [drawPathThicknessInputM, setDrawPathThicknessInputM] = useState<string>("1.0");
-  const [drawPathJustifyInput, setDrawPathJustifyInput] = useState<PathJustify>("center");
-  const [drawPathStyleInput, setDrawPathStyleInput] = useState<DrawPathStyle>("straight");
   /** Active path-draw config — when set, polyline-path walls use these values for
    *  thickness (px) and label instead of the segment-type default. Cleared when the
    *  user exits path mode. */
@@ -2737,7 +2737,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       for (const att of meta[node.stableKey]?.attachments ?? []) {
         const obj = lib[att.objectId];
         if (!obj?.geometry) continue;
-        const prisms = evalParametricPrisms(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params);
+        const prisms = evalParametricPrisms(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef);
         if (prisms.length) out.push({ id: `pobj-${node.stableKey}-${att.id}`, prisms });
       }
     }
@@ -2763,7 +2763,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       for (const att of room.attachments ?? []) {
         const obj = lib[att.objectId];
         if (!obj?.geometry) continue;
-        const prisms = evalParametricPrisms(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal);
+        const prisms = evalParametricPrisms(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef);
         if (prisms.length) out.push({ id: `pobj-space-${room.id}-${att.id}`, prisms });
       }
     }
@@ -2812,7 +2812,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (oObj?.geometry) {
           const cx = (w.start.x + w.end.x) / 2, cy = (w.start.y + w.end.y) / 2;
           const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-          const prisms = evalParametricPrisms(JSON.stringify(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle });
+          const prisms = evalParametricPrisms(JSON.stringify(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle }, undefined, resolveObjectDef);
           const lifted = wbase ? prisms.map((p) => ({ ...p, yBottom: p.yBottom + wbase, yTop: p.yTop + wbase })) : prisms;
           if (lifted.length) out.push({ id: `opening-${w.id}-${openAtt.id}`, prisms: lifted });
         }
@@ -3291,6 +3291,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [aiPrompt, setAiPrompt] = useState<string>("");
   const [aiApiKey, setAiApiKey] = useState<string>(() => { try { return localStorage.getItem("bp.ai.apiKey") ?? ""; } catch { return ""; } });
   const [aiModel, setAiModel] = useState<string>(() => { try { return localStorage.getItem("bp.ai.model") || "gemini-3-flash-preview"; } catch { return "gemini-3-flash-preview"; } });
+  /** Editable system prompt for Chat AI (overrides the default). Persisted; empty falls back to the default. */
+  const [aiSystemPrompt, setAiSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.systemPrompt") || DEFAULT_SYSTEM_PROMPT; } catch { return DEFAULT_SYSTEM_PROMPT; } });
   const [aiBusy, setAiBusy] = useState<boolean>(false);
   const [aiLastResponse, setAiLastResponse] = useState<string>("");
 
@@ -3476,20 +3478,47 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [aiCollapsed, setAiCollapsed] = useState<boolean>(true);
   useEffect(() => { try { localStorage.setItem("bp.ai.apiKey", aiApiKey); } catch { /* ignore */ } }, [aiApiKey]);
   useEffect(() => { try { localStorage.setItem("bp.ai.model", aiModel); } catch { /* ignore */ } }, [aiModel]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.systemPrompt", aiSystemPrompt); } catch { /* ignore */ } }, [aiSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.units.precision", String(decimalPrecision)); } catch { /* ignore */ } }, [decimalPrecision]);
   /** Send the current canvas JSON + the user's instruction to Gemini, then load the rewritten JSON back. */
-  const handleAiSend = useCallback(async (prompt: string) => {
+  const handleAiSend = useCallback(async (prompt: string, file?: File) => {
     if (!aiApiKey.trim() || !aiModel.trim()) {
       toast.error("Set the Gemini API key + model in Preferences first");
       setAiCollapsed(false);
       return;
     }
-    setAiMessages((m) => [...m, { role: "user", text: prompt }]);
+    setAiMessages((m) => [...m, { role: "user", text: file ? `${prompt || "(generate from the attachment)"}\n📎 ${file.name}` : prompt }]);
     setAiSendBusy(true);
     try {
+      // Read an attached image / PDF to raw base64 (strip the data-URL prefix) for Gemini inline media.
+      let filePart: { data: string; mimeType: string } | undefined;
+      let detections: Detection[] | undefined;
+      if (file) {
+        const dataUrl = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error("Could not read the attached file")); r.readAsDataURL(file); });
+        const { mimeType, base64 } = splitDataUrl(dataUrl);
+        filePart = { data: base64, mimeType };
+        // Spatial/robotics detection pass (IMAGES only, best-effort): bounding boxes of rooms / doors /
+        // windows / furniture to GROUND the generated layout. Combined with the raw image in the next call.
+        // Non-fatal — if the spatial model isn't accessible we fall back to image-only analysis.
+        if (mimeType.startsWith("image/")) {
+          try {
+            const dets = await detectObjects({ model: DEFAULT_DETECTION_MODEL, apiKey: aiApiKey, mode: "box", targets: "rooms, doors, windows, and furniture", maxItems: 40, imageBase64: base64, mimeType });
+            if (dets.length) { detections = dets; setAiMessages((m) => [...m, { role: "ai", text: `Detected ${dets.length} elements (rooms / doors / windows) — grounding the layout…` }]); }
+          } catch { /* spatial detection optional — continue with image-only analysis */ }
+        }
+      }
       const before = historyRef.current.state;
-      const reply = await chatEditModel({ apiKey: aiApiKey, model: aiModel, json: serializeForAI(before), prompt });
-      const next = applyAiReply(before, reply);
+      const effectivePrompt = prompt || (file ? "Generate a floor plan that reproduces the attached drawing." : "");
+      const reply = await chatEditModel({ apiKey: aiApiKey, model: aiModel, json: serializeForAI(before), prompt: effectivePrompt, pixelsPerMeter, objectLibrary: before.objectLibrary, file: filePart, detections, systemPrompt: aiSystemPrompt });
+      const merged = applyAiReply(before, reply);
+      // Punch real openings for any door/window object the AI attached to a wall (mirrors the manual
+      // place-opening cut), and canonicalise nodeMeta keys so AI-placed NODE objects (furniture / staircase
+      // on degenerate marker walls) resolve to the right node stableKey.
+      const next: FloorPlanModel = {
+        ...merged,
+        walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, pixelsPerMeter),
+        nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
+      };
       historyRef.current.set(next);
       setAiMessages((m) => [...m, { role: "ai", text: summarizeChange(before, next) }]);
     } catch (e) {
@@ -3497,7 +3526,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     } finally {
       setAiSendBusy(false);
     }
-  }, [aiApiKey, aiModel]);
+  }, [aiApiKey, aiModel, pixelsPerMeter, aiSystemPrompt]);
   const logOp = useCallback((entry: Omit<LoggedOp, "id" | "timestamp">) => {
     setActionLog((prev) => {
       const next = [...prev, { ...entry, id: createId(), timestamp: Date.now() }];
@@ -3563,6 +3592,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const stageSegmentDragRef = useRef<{
     anchors: Point[]; startWorldX: number; startWorldY: number;
     wallSnapshots: Map<string, { start: Point; end: Point }>; moved: boolean;
+    /** The pressed segment's id (for the live offset-distance label position). */
+    primaryId?: string;
+    /** After the drag's mouse-up the segment enters hover-placement (`placing`): it follows the cursor with
+     *  no button held so you can type an offset distance; Enter/click applies, Esc cancels. Mirrors Ctrl+copy. */
+    placing?: boolean;
+    /** Typed offset-distance support: last pointer (so a keystroke re-applies the offset without a mouse move). */
+    lastPointerX?: number; lastPointerY?: number;
   } | null>(null);
   /** Stage-level space/room drag (Space select scope): grab a space from anywhere inside it. With
    *  "Move connected edges", `anchors` = every wall node on the space boundary; any wall endpoint
@@ -3596,6 +3632,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [copyDistanceInput, setCopyDistanceInput] = useState<string>("");
   const copyDistanceRef = useRef<string>("");
   useEffect(() => { copyDistanceRef.current = copyDistanceInput; }, [copyDistanceInput]);
+  /** Typed offset-distance string for an active plain (non-Ctrl) segment drag (active unit; ft-inches OK).
+   *  The segment translates by exactly this distance along the current drag direction — like a typed offset.
+   *  Mirrored to a ref for the mouse-move / keydown handlers. */
+  const [moveDistanceInput, setMoveDistanceInput] = useState<string>("");
+  const moveDistanceRef = useRef<string>("");
+  useEffect(() => { moveDistanceRef.current = moveDistanceInput; }, [moveDistanceInput]);
   /** "All" select scope: when a stage mousedown selects a node/segment by priority, the following Konva
    *  shape onClick (which could hit an overlapping segment/space) is suppressed so it can't override the
    *  priority pick. Set in onStageMouseDown, consumed in onObjectSelect. */
@@ -17624,6 +17666,25 @@ User request: ${aiPrompt.trim()}`;
         if (event.key === "Enter") { event.preventDefault(); reapply(); endCopyGesture(copyDrag, true); return; }
         if (event.key === "Escape") { event.preventDefault(); endCopyGesture(copyDrag, false); return; }
       }
+      // Direct-distance entry for an active plain (non-Ctrl) segment drag: type the OFFSET distance
+      // (ft-inches OK); the segment translates by exactly that distance along the current drag direction.
+      const segMove = stageSegmentDragRef.current;
+      if (!inFormField && segMove) {
+        const reapply = () => {
+          if (segMove.lastPointerX == null || segMove.lastPointerY == null) return;
+          const d = dragTypedDelta(segMove.startWorldX, segMove.startWorldY, segMove.lastPointerX, segMove.lastPointerY);
+          if (d) { segMove.moved = true; translateSegmentDrag(segMove, d[0], d[1]); }
+        };
+        const set = (n: string) => { const v = n.slice(0, 16); moveDistanceRef.current = v; setMoveDistanceInput(v); reapply(); };
+        if (/^[0-9]$/.test(event.key)) { event.preventDefault(); set(moveDistanceRef.current + event.key); return; }
+        if (event.key === "." || event.key === ",") { event.preventDefault(); const s = moveDistanceRef.current; set(s.includes(".") ? s : s === "" ? "0." : s + "."); return; }
+        if (unit === "ft" && event.key === "'") { event.preventDefault(); const s = moveDistanceRef.current; set(s.includes("'") ? s + "'" : s + "' "); return; }
+        if (unit === "ft" && event.key === '"') { event.preventDefault(); const s = moveDistanceRef.current; set(s.includes('"') ? s : s + '"'); return; }
+        if (event.key === "Backspace" && moveDistanceRef.current !== "") { event.preventDefault(); set(moveDistanceRef.current.slice(0, -1)); return; }
+        // Enter applies the move (commits if it moved); Escape cancels — restore the segment to its origin.
+        if (event.key === "Enter") { event.preventDefault(); reapply(); endSegmentMoveGesture(segMove, true); return; }
+        if (event.key === "Escape") { event.preventDefault(); endSegmentMoveGesture(segMove, false); return; }
+      }
       // Fine-tune nudge: with the Select tool, arrow keys translate the selected node / segment / space by
       // one step (Shift = a coarser ×10 step). Naturally axis-aligned, so it complements Ortho dragging.
       if (!inFormField && tool === "select" && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight")) {
@@ -17734,6 +17795,31 @@ User request: ${aiPrompt.trim()}`;
         event.preventDefault();
         const cycle: ("center" | "inner" | "outer")[] = ["center", "inner", "outer"];
         setLengthDimMode((m) => cycle[(cycle.indexOf(m) + 1) % 3]);
+      }
+      // "S" enters the Select tool in scope mode (starting at Node); Tab then cycles the scope. Mirrors the
+      // Select-button reset so no stale Door/Window/Edge/Room/Furniture mode lingers. Ignored in form fields.
+      if (!inFormField && !event.ctrlKey && !event.metaKey && !event.altKey
+          && (event.key === "s" || event.key === "S")
+          && !stageGroupDragRef.current && !stageSegmentDragRef.current) {
+        event.preventDefault();
+        setTool("select");
+        setSelectFilter("node");
+        setAddDoorMode(false);
+        setAddWindowMode(false);
+        setAddEdgeMode(null);
+        setAddEdgeFirstRoom(null);
+        setAddRoomMode(false);
+        setAddFurnitureMode(false);
+        return;
+      }
+      // Select tool: Tab cycles the select scope (Node → Segment → Space) for quick keyboard scoping.
+      // A non-cycle scope (All / Graph / …) falls to "node" first. Skipped in form fields so Tab still
+      // moves focus between sidebar inputs.
+      if (!inFormField && event.key === "Tab" && tool === "select") {
+        event.preventDefault();
+        const cycle: SelectFilter[] = ["node", "segment", "space"];
+        setSelectFilter(cycle[(cycle.indexOf(selectFilter) + 1) % cycle.length]);
+        return;
       }
       if (event.key === "Enter" && tool === "wall" && wallDrawType === "spline" && currentWallSplinePoints.length > 1) {
         event.preventDefault();
@@ -18628,6 +18714,59 @@ User request: ${aiPrompt.trim()}`;
     });
   };
 
+  /** Apply a translation delta to an active plain segment drag — moves the segment's endpoints (+ coincident
+   *  neighbour endpoints) by (dx, dy) from their snapshot. Shared by the mouse-move handler and the typed
+   *  offset-distance keystroke path (which re-applies without a mouse move). */
+  const translateSegmentDrag = (segDrag: NonNullable<typeof stageSegmentDragRef.current>, dx: number, dy: number) => {
+    const nearAnchor = (p: Point) => segDrag.anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < 2);
+    history.replace({
+      ...history.state,
+      walls: history.state.walls.map((w) => {
+        const snap = segDrag.wallSnapshots.get(w.id);
+        if (!snap) return w;
+        return {
+          ...w,
+          start: nearAnchor(snap.start) ? { x: snap.start.x + dx, y: snap.start.y + dy } : w.start,
+          end: nearAnchor(snap.end) ? { x: snap.end.x + dx, y: snap.end.y + dy } : w.end,
+        };
+      }),
+    });
+  };
+
+  /** Finish a plain segment-move gesture. `apply` (mouse-up after typing / Enter / click) commits the moved
+   *  segment as one undo entry; otherwise (Esc) the segment is restored to its origin. Clears the drag ref +
+   *  typed distance. */
+  const endSegmentMoveGesture = (segDrag: NonNullable<typeof stageSegmentDragRef.current>, apply: boolean) => {
+    stageSegmentDragRef.current = null;
+    setMoveDistanceInput(""); moveDistanceRef.current = "";
+    if (apply) {
+      if (segDrag.moved) history.set({ ...history.state, walls: splitWallsAtIntersections(history.state.walls) });
+    } else {
+      translateSegmentDrag(segDrag, 0, 0); // restore snapshot positions (live replace only — no undo entry)
+    }
+  };
+
+  /** Plain-drag offset: when an offset distance is typed during a (non-Ctrl) segment drag, translate the
+   *  segment by exactly `parse(distance)` (pure translation — no thickness) along the current drag direction;
+   *  else return null so the caller falls back to the raw pointer delta. */
+  const dragTypedDelta = (startX: number, startY: number, px: number, py: number): [number, number] | null => {
+    const typed = moveDistanceRef.current;
+    if (typed === "") return null;
+    const rawX = px - startX, rawY = py - startY;
+    const dist = Math.hypot(rawX, rawY);
+    if (dist < 1e-6) return null;
+    const v = parseTypedLength(typed, unit);
+    if (!Number.isFinite(v) || v <= 0) return null;
+    const magPx = pixelsFromUnitValue(v, unit, pixelsPerMeter);
+    // Ortho lock: when Ortho is on, snap the offset direction to the dominant axis (matches the free-drag path).
+    let dirX = rawX / dist, dirY = rawY / dist;
+    if (orthoMode) {
+      if (Math.abs(rawX) >= Math.abs(rawY)) { dirX = Math.sign(rawX); dirY = 0; }
+      else { dirX = 0; dirY = Math.sign(rawY); }
+    }
+    return [dirX * magPx, dirY * magPx];
+  };
+
   /** Copy-drag offset: when a clear distance is typed during a Ctrl+copy drag, place the copies along the
    *  current drag direction at `parse(distance) + thickness` (centre-to-centre); else return null so the
    *  caller falls back to the raw pointer delta. */
@@ -18678,6 +18817,12 @@ User request: ${aiPrompt.trim()}`;
     // does the same; Esc cancels). Consume the click so it doesn't start a fresh selection/drag.
     if (event.evt.button === 0 && stageGroupDragRef.current?.placing) {
       endCopyGesture(stageGroupDragRef.current, true);
+      return;
+    }
+    // A plain segment-move placement awaiting confirmation: a left-click drops the segment at its current
+    // spot (Enter does the same; Esc cancels). Consume the click so it doesn't start a fresh selection/drag.
+    if (event.evt.button === 0 && stageSegmentDragRef.current?.placing) {
+      endSegmentMoveGesture(stageSegmentDragRef.current, true);
       return;
     }
     // Clear any stale click-suppression from a previous gesture (set only when an all-scope mousedown
@@ -18772,7 +18917,8 @@ User request: ${aiPrompt.trim()}`;
           const nearAnchor = (p: Point) => anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < NODE_TOL);
           if (nearAnchor(w.start) || nearAnchor(w.end)) snapshots.set(w.id, { start: { ...w.start }, end: { ...w.end } });
         }
-        stageSegmentDragRef.current = { anchors, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false };
+        setMoveDistanceInput(""); moveDistanceRef.current = "";
+        stageSegmentDragRef.current = { anchors, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false, primaryId: seg.id, lastPointerX: pointer.x, lastPointerY: pointer.y };
         return;
       }
     }
@@ -18904,7 +19050,8 @@ User request: ${aiPrompt.trim()}`;
               const nearAnchor = (p: Point) => anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < NODE_TOL);
               if (nearAnchor(w.start) || nearAnchor(w.end)) snapshots.set(w.id, { start: { ...w.start }, end: { ...w.end } });
             }
-            stageSegmentDragRef.current = { anchors, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false };
+            setMoveDistanceInput(""); moveDistanceRef.current = "";
+            stageSegmentDragRef.current = { anchors, startWorldX: pointer.x, startWorldY: pointer.y, wallSnapshots: snapshots, moved: false, primaryId: seg.id, lastPointerX: pointer.x, lastPointerY: pointer.y };
           } else {
             selection.selectOne(seg.id); setSelectedNodeKey(null); setSelectedGenElement(null);
             suppressClickSelectRef.current = true;
@@ -19063,6 +19210,24 @@ User request: ${aiPrompt.trim()}`;
   const lineSegConfigProps = (): Partial<Wall> => {
     const c = activeSegmentConfigRef.current;
     if (!c) return {};
+    // NURBS path types convert the drawn polyline chain into a smooth curve: each segment is tagged
+    // segmentType "path" + pathJoin "nurbs", and the connected chain is tessellated into one ribbon by
+    // `nurbsPathRibbons`. Thickness is honoured (thin → curved line, thick → curved ribbon); justification
+    // defaults to centre. nurbsInterpolate distinguishes through-vertices vs smoothing.
+    if (c.pathType !== "straight") {
+      return {
+        thickness: c.thicknessPx,
+        color: c.color,
+        lineStyle: c.lineStyle,
+        dashed: c.lineStyle === "dashed",
+        method: "center",
+        mode: "line",
+        segmentType: "path",
+        pathJoin: "nurbs",
+        nurbsInterpolate: c.pathType === "nurbs-through",
+        showLabel: c.showLabel,
+      };
+    }
     const buffered = c.mode === "buffered";
     return {
       thickness: c.thicknessPx,
@@ -19567,7 +19732,10 @@ User request: ${aiPrompt.trim()}`;
       // selectable + styleable in Properties. Door / window openings aren't dimensioned, and BUFFERED
       // segments are skipped too (they render their own Outer / Inner face dimensions instead).
       const isBufferedSeg = singleSegType === "line" && activeSegmentConfigRef.current?.mode === "buffered";
-      const segDim: import("./types").DimensionObject | null = (isOpening || isBufferedSeg) ? null : {
+      // NURBS path lines render as a smooth ribbon, not a straight stroke — a per-chord dimension would
+      // mislead, so skip it (matches how buffered segments render their own face dimensions instead).
+      const isNurbsLine = singleSegType === "line" && (activeSegmentConfigRef.current?.pathType ?? "straight") !== "straight";
+      const segDim: import("./types").DimensionObject | null = (isOpening || isBufferedSeg || isNurbsLine) ? null : {
         id: createId(),
         kind: "dimension",
         layerId: DEFAULT_DIMENSION_LAYER_ID,
@@ -19829,21 +19997,12 @@ User request: ${aiPrompt.trim()}`;
     if (segDrag) {
       const pointer = pointerPositionInWorld();
       if (pointer) {
-        const [dx, dy] = orthoDelta(pointer.x - segDrag.startWorldX, pointer.y - segDrag.startWorldY);
+        segDrag.lastPointerX = pointer.x; segDrag.lastPointerY = pointer.y;
+        // A typed offset-distance sets the translation along the drag direction; else raw ortho delta.
+        const typedDelta = dragTypedDelta(segDrag.startWorldX, segDrag.startWorldY, pointer.x, pointer.y);
+        const [dx, dy] = typedDelta ?? orthoDelta(pointer.x - segDrag.startWorldX, pointer.y - segDrag.startWorldY);
         if (dx !== 0 || dy !== 0) segDrag.moved = true;
-        const nearAnchor = (p: Point) => segDrag.anchors.some((a) => Math.hypot(p.x - a.x, p.y - a.y) < 2);
-        history.replace({
-          ...history.state,
-          walls: history.state.walls.map((w) => {
-            const snap = segDrag.wallSnapshots.get(w.id);
-            if (!snap) return w;
-            return {
-              ...w,
-              start: nearAnchor(snap.start) ? { x: snap.start.x + dx, y: snap.start.y + dy } : w.start,
-              end: nearAnchor(snap.end) ? { x: snap.end.x + dx, y: snap.end.y + dy } : w.end,
-            };
-          }),
-        });
+        translateSegmentDrag(segDrag, dx, dy);
       }
       return;
     }
@@ -20217,10 +20376,12 @@ User request: ${aiPrompt.trim()}`;
     // Finish a stage-level segment drag — commit as one undo entry (only if it actually moved).
     const segDrag = stageSegmentDragRef.current;
     if (segDrag) {
+      // Mouse-up does NOT commit when the drag moved — instead enter hover-placement mode so you can type an
+      // offset distance (mirrors Ctrl+copy). The segment now follows the cursor; type a distance + Enter (or
+      // click) to apply, Esc to cancel. A press without movement was just a selection → clear.
+      if (segDrag.moved && !segDrag.placing) { segDrag.placing = true; return; }
       stageSegmentDragRef.current = null;
-      if (segDrag.moved) {
-        history.set({ ...history.state, walls: splitWallsAtIntersections(history.state.walls) });
-      }
+      setMoveDistanceInput(""); moveDistanceRef.current = "";
       return;
     }
     // Finish a stage-level space drag — commit the translated room (+ walls) as one undo entry.
@@ -20997,6 +21158,34 @@ User request: ${aiPrompt.trim()}`;
       ...visibleRooms.filter((r) => r.id.startsWith(ROOM_AUTO_ID_PREFIX)),
       ...history.state.rooms,
     ];
+    // Prune the parametric-object library to only the objects actually USED on the canvas (segment / node /
+    // space attachments + placement walls) — not every imported file — so the export stays small. A used
+    // object that COMPOSES others via `ref` rules drags its dependencies in too (transitive closure), so a
+    // composed object (e.g. a Floorplan referencing Door / Window) still resolves on re-import.
+    const fullLib = history.state.objectLibrary ?? {};
+    const usedIds = new Set<string>();
+    const addAtt = (atts?: import("./types").SegmentAttachment[]) => { for (const a of atts ?? []) if (a.objectId) usedIds.add(a.objectId); };
+    for (const w of history.state.walls) { addAtt(w.attachments); if (w.placementObjectId) usedIds.add(w.placementObjectId); }
+    for (const r of exportRooms) addAtt(r.attachments);
+    for (const m of Object.values(history.state.nodeMeta ?? {})) addAtt(m.attachments);
+    // Deep-scan an object's geometry for `{ "ref": "<id>" }` occurrences to follow composition dependencies.
+    const collectRefs = (node: unknown, out: Set<string>): void => {
+      if (Array.isArray(node)) { for (const x of node) collectRefs(x, out); return; }
+      if (node && typeof node === "object") {
+        for (const [k, v] of Object.entries(node)) {
+          if (k === "ref" && typeof v === "string") out.add(v); else collectRefs(v, out);
+        }
+      }
+    };
+    const queue = [...usedIds];
+    while (queue.length) {
+      const obj = fullLib[queue.pop()!];
+      if (!obj?.geometry) continue;
+      const refs = new Set<string>();
+      collectRefs(obj.geometry, refs);
+      for (const dep of refs) if (fullLib[dep] && !usedIds.has(dep)) { usedIds.add(dep); queue.push(dep); }
+    }
+    const usedLibrary = Object.fromEntries(Object.entries(fullLib).filter(([id]) => usedIds.has(id)));
     // Persist the current scale calibration (pixels-per-metre) alongside the
     // model so re-importing restores the same real-world scale. It lives in
     // component state, not the model, so it must be added explicitly here.
@@ -21004,7 +21193,7 @@ User request: ${aiPrompt.trim()}`;
     // label, category, …) and the custom-type registries
     // (customSegmentTypes / customRoomTypes) are part of history.state, so both
     // segment and space parameters round-trip through the spread below.
-    const payload = JSON.stringify({ ...history.state, rooms: exportRooms, pixelsPerMeter }, null, 2);
+    const payload = JSON.stringify({ ...history.state, rooms: exportRooms, objectLibrary: usedLibrary, pixelsPerMeter }, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -22955,18 +23144,6 @@ User request: ${aiPrompt.trim()}`;
                 canMergeSpaces={true}
                 onMergeSpaces={mergeSelectedRooms}
                 onDeleteSelection={deleteSelected}
-                drawingPath={tool === "wall" && nextWallSegmentType === "path"}
-                onDrawPathClick={() => {
-                  if (tool === "wall" && nextWallSegmentType === "path") {
-                    // Already drawing — second click cancels.
-                    setNextWallSegmentType("wall");
-                    setTool("select");
-                  } else {
-                    // Add Space → Path: keep the drawn path as SEGMENTS (don't finalize into a Space).
-                    drawPathAsSegmentsRef.current = true;
-                    setDrawPathDialogOpen(true);
-                  }
-                }}
                 onAddSegmentClick={() => {
                   setTool("wall");
                   // Add Segment = simple line segment: segmentType "line" + mode "line"
@@ -23003,6 +23180,9 @@ User request: ${aiPrompt.trim()}`;
           onToggleCollapsed={() => setAiCollapsed((c) => !c)}
           onSend={handleAiSend}
           configured={!!aiApiKey.trim() && !!aiModel.trim()}
+          systemPrompt={aiSystemPrompt}
+          onSystemPromptChange={setAiSystemPrompt}
+          defaultSystemPrompt={DEFAULT_SYSTEM_PROMPT}
         />
         <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
           {/* Flow editor — node-graph pipeline that composes the stepwise tools (Inset,
@@ -24405,7 +24585,7 @@ User request: ${aiPrompt.trim()}`;
                       // (the instance's edited params override the file defaults). Falls back to the
                       // hardcoded staircase placeholder below for objects without geometry.
                       if (obj?.geometry) {
-                        const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params);
+                        const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef);
                         if (!g.fill.length && !g.lines.length) return null;
                         return (
                           <Group key={att.id} listening={false}>
@@ -24448,7 +24628,7 @@ User request: ${aiPrompt.trim()}`;
                     return (room.attachments ?? []).map((att) => {
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!obj?.geometry) return null;
-                      const g = evalParametricGeometry(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal);
+                      const g = evalParametricGeometry(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef);
                       if (!g.lines.length) return null;
                       return (
                         <Group key={`pobj-space-2d-${room.id}-${att.id}`} listening={false}>
@@ -29164,6 +29344,29 @@ User request: ${aiPrompt.trim()}`;
                 </Layer>
               );
             })()}
+            {/* Plain segment drag — live typed offset-distance label at the dragged segment's midpoint. */}
+            {(() => {
+              const sd = stageSegmentDragRef.current;
+              if (!sd || moveDistanceInput === "") return null;
+              const w = history.state.walls.find((ww) => ww.id === sd.primaryId);
+              if (!w) return null;
+              const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
+              return (
+                <Layer listening={false}>
+                  <WorldViewport x={position.x} y={position.y} scale={scale}>
+                    <Text
+                      x={mid.x}
+                      y={mid.y - 14 / Math.max(1, scale)}
+                      text={`${moveDistanceInput}▏${unit === "ft" ? "" : ` ${unit}`}`}
+                      fontSize={Math.max(10, 12 / Math.max(1, scale))}
+                      fontStyle="bold"
+                      fill="#2563eb"
+                      listening={false}
+                    />
+                  </WorldViewport>
+                </Layer>
+              );
+            })()}
             {layerVisibility.guides ? (
               <Layer listening={false}>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
@@ -29536,9 +29739,11 @@ User request: ${aiPrompt.trim()}`;
                         )}
                         <Circle x={a.x} y={a.y} radius={Math.max(3, 4 / Math.max(1, scale))} fill="#0F766E" stroke="#fff" strokeWidth={1} />
                         {/* Midpoint (centerline) length label. Suppressed for a wall trace that produced
-                            face dimensions, and for buffered segments (which show Outer / Inner instead).
-                            Kept for door / window / plain-line previews (their only length readout). */}
-                        {!(singleSegType === "wall" && bandPolys.length > 0) && !bufferedPreview && (
+                            face dimensions. For buffered segments the Outer / Inner dims are the standing
+                            readout, but while typing a direct distance the typed value is shown here too —
+                            mirroring the plain-line preview so you see what you're entering. Kept for door /
+                            window / plain-line previews (their only length readout). */}
+                        {!(singleSegType === "wall" && bandPolys.length > 0) && (!bufferedPreview || wallLengthInput !== "") && (
                           <Text x={mid.x + 6 / Math.max(1, scale)} y={mid.y - fontPx - 4 / Math.max(1, scale)} text={text} fontSize={fontPx} fill="#0F766E" listening={false} />
                         )}
                       </>
@@ -30582,10 +30787,57 @@ User request: ${aiPrompt.trim()}`;
               </button>
             </div>
           )}
-          <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-slate-200/80 bg-white/95 px-4 py-1.5 text-xs text-slate-600 shadow-md backdrop-blur">
-            <span className="font-medium text-slate-800">{(scale * 100).toFixed(0)}%</span>
-            <span className="hidden sm:inline">Scroll zoom · Middle-click or Pan tool or Space+drag to pan</span>
-          </div>
+          {/* Live status bar — derived from the current interaction state (no event plumbing): zoom · active
+              tool/scope · current selection (with length/area) · live typed length/offset/copy distance ·
+              Ortho flag. Pointer-events-none so it never blocks the canvas. */}
+          {(() => {
+            const TOOL_LABELS: Record<string, string> = {
+              select: "Select", wall: "Wall", room: "Room", rect: "Rectangle", circle: "Circle",
+              freehand: "Freehand", text: "Text", segment: "Polygon", measure: "Measure",
+              scale: "Set Scale", "scale-area": "Set Scale · Area", pan: "Pan", door: "Door",
+              window: "Window", point: "Add Node", "space-rect": "Space · Rectangle",
+              "space-circle": "Space · Circle", "single-segment": "Add Segment", dimension: "Dimension",
+            };
+            const SCOPE_LABELS: Record<string, string> = {
+              all: "All", node: "Node", segment: "Segment", space: "Space", graph: "Graph",
+              image: "Image", grid: "Grid", dimension: "Dimension",
+            };
+            const modeLabel = tool === "select"
+              ? `Select · ${SCOPE_LABELS[selectFilter] ?? selectFilter}`
+              : tool === "single-segment"
+                ? `Add Segment · ${addSegConfig.mode === "buffered" ? "Buffered" : "Line"}`
+                : (TOOL_LABELS[tool] ?? tool);
+            // Current selection → human label with the relevant measure (segment length / space area).
+            const ids = selection.selectedIds;
+            let selLabel = "";
+            if (selectedNodeKey) selLabel = "Node selected";
+            else if (ids.length === 1) {
+              const w = history.state.walls.find((x) => x.id === ids[0]);
+              if (w) selLabel = `Segment selected · ${fmtLen(Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y))}`;
+              else {
+                const r = visibleRooms.find((rr) => rr.id === ids[0]);
+                selLabel = r ? `Space selected · ${fmtArea(roomNetArea(r, visibleRooms))}` : "1 selected";
+              }
+            } else if (ids.length > 1) selLabel = `${ids.length} selected`;
+            // Live typed entry — drawing length, plain-drag offset, or Ctrl+copy gap (ft-inches carry their marks).
+            const withUnit = (s: string) => `${s}${/['"]/.test(s) ? "" : ` ${unit}`}`;
+            let typedKind = "", typedLabel = "";
+            if (wallLengthInput !== "") { typedKind = "Length"; typedLabel = withUnit(wallLengthInput); }
+            else if (moveDistanceInput !== "") { typedKind = "Offset"; typedLabel = withUnit(moveDistanceInput); }
+            else if (copyDistanceInput !== "") { typedKind = "Copy gap"; typedLabel = withUnit(copyDistanceInput); }
+            const dot = <span className="text-slate-300">·</span>;
+            return (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 px-4 py-1.5 text-xs text-slate-600 shadow-md backdrop-blur">
+                <span className="font-medium text-slate-800">{(scale * 100).toFixed(0)}%</span>
+                {dot}
+                <span className="font-medium text-slate-700">{modeLabel}</span>
+                {tool === "select" && (<span className="text-[10px] text-slate-400">(Tab ⇄ Node/Segment/Space)</span>)}
+                {selLabel && (<>{dot}<span>{selLabel}</span></>)}
+                {typedLabel && (<>{dot}<span className="font-semibold text-blue-600">{typedKind}: {typedLabel}▏</span></>)}
+                {orthoMode && (<>{dot}<span className="font-medium text-teal-700">Ortho</span></>)}
+              </div>
+            );
+          })()}
           {/* Properties panel fold toggle — sits at the right edge of the canvas, in the
               gutter against the right panel. "<" collapses the Properties block (Properties
               | Metrics tab + body); ">" reopens it. */}
@@ -34065,33 +34317,6 @@ User request: ${aiPrompt.trim()}`;
         onConfirm={handleAddRoomConfirm}
       />
 
-      {/* Draw Path Dialog — prompts thickness + justification, then activates polyline-path draw mode. */}
-      <DrawPathDialog
-        open={drawPathDialogOpen}
-        onOpenChange={setDrawPathDialogOpen}
-        thicknessM={drawPathThicknessInputM}
-        onThicknessChange={setDrawPathThicknessInputM}
-        justify={drawPathJustifyInput}
-        onJustifyChange={setDrawPathJustifyInput}
-        style={drawPathStyleInput}
-        onStyleChange={setDrawPathStyleInput}
-        onStart={() => {
-          const tM = parseFloat(drawPathThicknessInputM);
-          // Allow 0 — a zero-thickness path is committed as a single line (no offset ribbon / Space).
-          const safeThicknessM = isFinite(tM) && tM >= 0 ? tM : 0.2;
-          const safeLabel = drawPathLabelInput.trim() || "Path1";
-          setActiveDrawPathConfig({
-            label: safeLabel,
-            thicknessPx: safeThicknessM * pixelsPerMeter,
-            justify: drawPathJustifyInput,
-            style: drawPathStyleInput,
-          });
-          setTool("wall");
-          setWallDrawType("polyline");
-          setNextWallSegmentType("path");
-          setDrawPathDialogOpen(false);
-        }}
-      />
 
       {/* Add Segment Dialog — prompts display params (mode / thickness / line style / colour / fill),
           then starts the single-segment draw applying them to each drawn line. */}
@@ -34102,13 +34327,14 @@ User request: ${aiPrompt.trim()}`;
         config={addSegConfig}
         onChange={(patch) => setAddSegConfig((c) => ({ ...c, ...patch }))}
         onStart={() => {
-          const tU = parseFloat(addSegConfig.thickness);
+          const tU = parseTypedLength(addSegConfig.thickness, unit);
           const m = isFinite(tU) && tU >= 0 ? unitToM(tU) : 0.1;
           activeSegmentConfigRef.current = {
             thicknessPx: m * pixelsPerMeter,
             lineStyle: addSegConfig.lineStyle,
             color: addSegConfig.color,
             mode: addSegConfig.mode,
+            pathType: addSegConfig.pathType,
             bufferStyle: addSegConfig.bufferStyle,
             fill: addSegConfig.fill,
             method: addSegConfig.method,
@@ -34252,6 +34478,7 @@ User request: ${aiPrompt.trim()}`;
             const colorDefault = (objDef.parameters.find((p) => p.kind === "color")?.default as string | undefined) ?? wallColor;
             const fallback: AddSegmentConfig = {
               mode: "buffered",
+              pathType: "straight",
               thickness: String(Number(distanceInUnit({ x: 0, y: 0 }, { x: wallThickness, y: 0 }, unit, pixelsPerMeter).toFixed(3))),
               lineStyle: "solid",
               color: colorDefault,
@@ -34283,12 +34510,13 @@ User request: ${aiPrompt.trim()}`;
                 // (the segment owns thickness / mode / fill / justification — the miter render reads them).
                 if (seg) {
                   segDrawMemoryRef.current[objectId] = seg;
-                  const tU = parseFloat(seg.thickness);
+                  const tU = parseTypedLength(seg.thickness, unit);
                   activeSegmentConfigRef.current = {
                     thicknessPx: (isFinite(tU) && tU >= 0 ? unitToM(tU) : 0.1) * pixelsPerMeter,
                     lineStyle: seg.lineStyle,
                     color: seg.color,
                     mode: seg.mode,
+                    pathType: seg.pathType,
                     bufferStyle: seg.bufferStyle,
                     fill: seg.fill,
                     method: seg.method,

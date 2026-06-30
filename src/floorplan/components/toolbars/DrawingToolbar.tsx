@@ -20,7 +20,6 @@ import {
   Sofa,
   Grid3x3,
   LayoutTemplate,
-  Spline,
   Waypoints,
   Square,
   Trash2,
@@ -80,9 +79,6 @@ export interface DrawingToolbarProps {
   onSetScale: () => void;
   /** Begin the "By Area" scale calibration — click a space/polygon + type real area. */
   onSetScaleArea: () => void;
-  /** Opens the Draw Path dialog. Parent owns the dialog + path-config state and
-   *  activates polyline-path draw mode after the user clicks "Start drawing". */
-  onDrawPathClick: () => void;
   /** Override for the Add Segment button — when provided, the parent handles the
    *  full state setup (e.g. forcing wallDrawMode = "line" so the segment renders
    *  as a thin line instead of a thick wall band). */
@@ -90,8 +86,6 @@ export interface DrawingToolbarProps {
   /** Opens the Add Segment dialog (display params) before drawing. When omitted, the main Add Segment
    *  button falls back to starting the single-segment line tool directly. */
   onOpenAddSegmentDialog?: () => void;
-  /** True while polyline-path drawing is the active mode (drives button highlight). */
-  drawingPath: boolean;
   /** Starts the "Dimension" tool — click two points to place a standalone Dimension annotation. */
   onAddDimensionClick?: () => void;
   /** True while the Dimension tool is the active mode (drives button highlight). */
@@ -491,13 +485,8 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               label="Dimension"
               onClick={() => p.onAddDimensionClick?.()}
             />
-            {/* Path — moved out of the Add Segment dropdown; opens the Draw Path dialog (thickness / type / style). */}
-            <ToolButton
-              active={p.drawingPath}
-              icon={<Spline className="h-6 w-6 text-violet-600" />}
-              label="Path"
-              onClick={() => p.onDrawPathClick()}
-            />
+            {/* Path tool retired — its "Path Type" (Straight / NURBS) now lives in the Add Segment dialog,
+                so a single Add Segment draw produces straight lines or NURBS curves. */}
             {/* Grid moved to Preferences (top-right). Connection moved into the Space dropdown.
                 Freehand moved into the Miscellaneous dropdown.
                 Wall & Furniture are no longer standalone — they come from the schema-driven Add Segment /
