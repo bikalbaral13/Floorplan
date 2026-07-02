@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "bed.v2", "name": "Bed", "category": "Furniture/Bedroom", "units": "m" },
+  "meta": { "id": "bed.v2", "name": "Bed", "category": "Furniture/Bedroom", "units": "m", "icon": { "paths": ["M3 8h18v9H3z", "M3 12h18", "M6 8V6h5v2", "M3 17v2", "M21 17v2"] } },
   "parameters": [
     { "key": "size", "label": "Size", "kind": "select", "default": "queen", "options": [
       { "value": "single", "label": "Single / Twin (0.97×1.90)" },

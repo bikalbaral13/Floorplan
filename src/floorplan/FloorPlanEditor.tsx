@@ -172,6 +172,7 @@ import { AutoGenDialog } from "./components/dialogs/AutoGenDialog";
 import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealingDialog";
 import type { DrawPathStyle, PathJustify } from "./types";
 import { AddSegmentDialog, type AddSegmentConfig } from "./components/dialogs/AddSegmentDialog";
+import { AddNodeDialog, type NodeDisplayConfig } from "./components/dialogs/AddNodeDialog";
 import { AddWallDialog } from "./components/dialogs/AddWallDialog";
 import { AddOpeningDialog } from "./components/dialogs/AddOpeningDialog";
 import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/AddFurnitureDialog";
@@ -179,6 +180,7 @@ import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/
 import { ObjectParamsDialog } from "./components/dialogs/ObjectParamsDialog";
 import { ChatAIPanel, type ChatMessage } from "./components/ChatAIPanel";
 import { serializeForAI, chatEditModel, applyAiReply, summarizeChange, cutOpeningsForAttachments, normalizeNodeMetaKeys, DEFAULT_SYSTEM_PROMPT } from "./ai/aiChat";
+import { registerAgentCommand, startAgentBridge, agentBridgeEnabled } from "./agentBridge";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
@@ -222,7 +224,7 @@ import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } f
 import { SchemaPropsBlock, SchemaMetricsBlock } from "./components/GraphSchemaBlocks";
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "./algorithms/network/pipeNetworkSolver";
 import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries } from "./flow/flowTypes";
-import { evalParametricGeometry, evalParametricPrisms } from "./flow/eval/parametricObject";
+import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs } from "./flow/eval/parametricObject";
 import type { FlowMesh } from "./flow/eval/meshTypes";
 import { layoutRooms } from "./flow/LayoutRoomsEditor";
 import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, type AutoPlaceEntry, type OpeningKind } from "./flow/autoFlow";
@@ -335,6 +337,25 @@ const getHatchPattern = (style: "diagonal" | "dots", spacing: number, color: str
   }
   _hatchCache.set(key, canvas);
   return canvas;
+};
+
+/** Placement anchor for the Add-Node imported-object ghost — which point of the object's bounding box
+ *  snaps to the cursor. Tab cycles through these while an object is armed. */
+type NodePlaceAnchor = "center" | "top-left" | "top-right" | "bottom-right" | "bottom-left";
+const NODE_ANCHOR_CYCLE: NodePlaceAnchor[] = ["center", "top-left", "top-right", "bottom-right", "bottom-left"];
+const NODE_ANCHOR_LABELS: Record<NodePlaceAnchor, string> = {
+  center: "Center", "top-left": "Top-Left", "top-right": "Top-Right", "bottom-right": "Bottom-Right", "bottom-left": "Bottom-Left",
+};
+/** The bbox corner (local to the object's centre) the anchor pins to the cursor. `bbox` is the object's
+ *  geometry extent evaluated at the origin; the node centre is placed at `cursor − anchorLocal(...)`. */
+const anchorLocal = (a: NodePlaceAnchor, b: { minX: number; minY: number; maxX: number; maxY: number }): Point => {
+  switch (a) {
+    case "top-left": return { x: b.minX, y: b.minY };
+    case "top-right": return { x: b.maxX, y: b.minY };
+    case "bottom-left": return { x: b.minX, y: b.maxY };
+    case "bottom-right": return { x: b.maxX, y: b.maxY };
+    default: return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+  }
 };
 
 /** A node marker (Display block): one of four shapes (Dot / Circle / Square / Triangle) drawn with a
@@ -2104,6 +2125,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** "Add Segment" (single-line) trace state — click sets start, second click commits one segment. */
   const [singleSegStart, setSingleSegStart] = useState<Point | null>(null);
   const [singleSegPreview, setSingleSegPreview] = useState<Point | null>(null);
+  /** Add-Node imported-object placement: the armed object id (mirrors `pendingNodeObjectIdRef` for render/
+   *  status gating), the cursor ghost point (world px), and the anchor the ghost snaps to the cursor (Tab). */
+  const [placingNodeObjectId, setPlacingNodeObjectId] = useState<string | null>(null);
+  const [nodeGhostPoint, setNodeGhostPoint] = useState<Point | null>(null);
+  const [nodePlaceAnchor, setNodePlaceAnchor] = useState<NodePlaceAnchor>("center");
+  /** Placement rotation (deg) for the armed node object — cycled 0→90→180→270 by "R". Applied to the ghost
+   *  and stamped onto each placed node's attachment (`params.rotation`). */
+  const [nodePlaceRotation, setNodePlaceRotation] = useState<number>(0);
   /** "Dimension" tool trace state — first click sets the start, second click commits a Dimension object. */
   const [dimensionStart, setDimensionStart] = useState<Point | null>(null);
   const [dimensionPreview, setDimensionPreview] = useState<Point | null>(null);
@@ -2113,6 +2142,20 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [addSegConfig, setAddSegConfig] = useState<AddSegmentConfig>({
     mode: "line", pathType: "straight", thickness: "0.1", lineStyle: "solid", color: "#334155", bufferStyle: "capsule", fill: "outlined", method: "center", showLabel: true,
   });
+  /** Default node-marker display (Node Properties → Display) applied to every node that hasn't overridden the
+   *  field — the fallback the canvas marker render reads. Seeded to the built-in defaults (so nothing changes
+   *  until a `Nodes/node_settings.pobj.json` is imported), then patched by `applyNodeDefaults` on Import Objects. */
+  const NODE_DISPLAY_DEFAULTS: NodeDisplayConfig = {
+    showLabel: true, dispShape: "dot", dispStyle: "solid", dispColor: "#475569", dispSize: 1,
+    hatch: false, hatchStyle: "diagonal", hatchSpacing: 8, hatchWeight: 1, hatchAngle: 45,
+  };
+  const [nodeDisplayDefaults, setNodeDisplayDefaults] = useState<NodeDisplayConfig>(NODE_DISPLAY_DEFAULTS);
+  /** Add-Node dialog (mirrors the Add-Segment dialog): display params chosen before dropping nodes. Opens
+   *  from the Add Node toolbar button; on Start the point tool begins and each dropped node is stamped with
+   *  `activeNodeConfigRef`. */
+  const [addNodeDialogOpen, setAddNodeDialogOpen] = useState<boolean>(false);
+  const [addNodeConfig, setAddNodeConfig] = useState<NodeDisplayConfig>(NODE_DISPLAY_DEFAULTS);
+  const activeNodeConfigRef = useRef<NodeDisplayConfig | null>(null);
   /** Active Add-Segment display config (set when the dialog starts a draw) — applied to each drawn line. */
   const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered"; pathType: DrawPathStyle; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod; showLabel: boolean } | null>(null);
   /** Hover span for click-to-place door/window on a wall (Add Segment → Door/Window): the opening's
@@ -2219,9 +2262,50 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     pendingNodeObjectIdRef.current = objId;
     pendingNodeTypeRef.current = null;
     setFurnitureNodeMode(false);
+    setPlacingNodeObjectId(objId);
+    setNodeGhostPoint(null);
+    setNodePlaceRotation(0);
     setTool("point");
-    toast.info("Click to place the object — press Esc when done");
+    toast.info("Click to place the object — Tab cycles anchor, R rotates, Esc when done");
   };
+  /** Clear the armed Add-Node object (ghost + status). Called on Esc / when another node/segment tool starts. */
+  const clearNodeObjectPlace = () => {
+    pendingNodeObjectIdRef.current = null;
+    pendingNodeObjectParamsRef.current = null;
+    setPlacingNodeObjectId(null);
+    setNodeGhostPoint(null);
+  };
+  // Live anchor + rotation for the click handler (avoids a stale closure of the state).
+  const nodePlaceAnchorRef = useRef<NodePlaceAnchor>("center");
+  useEffect(() => { nodePlaceAnchorRef.current = nodePlaceAnchor; }, [nodePlaceAnchor]);
+  const nodePlaceRotationRef = useRef<number>(0);
+  useEffect(() => { nodePlaceRotationRef.current = nodePlaceRotation; }, [nodePlaceRotation]);
+  /** Resolved param values for the armed node object (pinned popup values, else the object's defaults). */
+  const armedNodeParams = useCallback((objId: string): Record<string, number | string | boolean> => {
+    const obj = (historyRef.current.state.objectLibrary ?? {})[objId];
+    const chosen = pendingNodeObjectParamsRef.current?.objectId === objId ? pendingNodeObjectParamsRef.current.vals : null;
+    const params: Record<string, number | string | boolean> = {};
+    for (const pr of obj?.parameters ?? []) params[pr.key] = chosen?.[pr.key] ?? pr.default;
+    return params;
+  }, []);
+  /** Bounding box (world px, relative to the object's centre) of an armed node object's plan geometry, so
+   *  the ghost / placement can offset by the current anchor. Null for objects without a geometry block. */
+  const nodeObjectBBox = useCallback((objId: string, params: Record<string, number | string | boolean>) => {
+    const obj = (historyRef.current.state.objectLibrary ?? {})[objId];
+    if (!obj?.geometry) return null;
+    const g = evalParametricGeometry(JSON.stringify(obj), { x: 0, y: 0 }, pixelsPerMeter, params, undefined, resolveObjectDef);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const poly of [...g.fill, ...g.lines]) for (const p of poly) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
+    return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+  }, [pixelsPerMeter, resolveObjectDef]);
+  /** Anchor-adjusted node-centre for placing an armed object at `cursor` (falls back to the cursor). Uses the
+   *  ROTATED geometry's bbox so the anchor offset matches the rotated ghost. */
+  const nodePlacePoint = useCallback((objId: string, cursor: Point): Point => {
+    const bbox = nodeObjectBBox(objId, { ...armedNodeParams(objId), rotation: nodePlaceRotationRef.current });
+    if (!bbox) return cursor;
+    const al = anchorLocal(nodePlaceAnchorRef.current, bbox);
+    return { x: cursor.x - al.x, y: cursor.y - al.y };
+  }, [nodeObjectBBox, armedNodeParams]);
   // "Set params once per tool selection" — the open segment-type parameter dialog, and the confirmed
   // per-element defaults reused for every segment of the active type until another tool is picked.
   const [segParamsDialog, setSegParamsDialog] = useState<{ segType: string; label: string } | null>(null);
@@ -4084,7 +4168,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // ── Parametric objects (Door / … attached to a segment) ──────────────────────
   /** Pure parse + normalise of a `.pobj.json` payload → a library object (throws on a bad payload).
    *  `hostKind` tags which toolbar host (node/segment/space) it's drawn onto — set when importing a folder. */
-  const buildParametricObjectFile = useCallback((parsed: Record<string, unknown>, fileName: string, hostKind?: "node" | "segment" | "space"): ParametricObjectFile => {
+  const buildParametricObjectFile = useCallback((parsed: Record<string, unknown>, fileName: string, hostKind?: "node" | "segment" | "space" | "canvas"): ParametricObjectFile => {
     if (!parsed || parsed.kind !== "parametric-object" || !Array.isArray(parsed.parameters)) throw new Error("not a parametric-object file");
     const meta = (parsed.meta ?? {}) as Record<string, unknown>;
     const id = (typeof meta.id === "string" && meta.id) || fileName.replace(/\.[^.]+$/, "") || createId();
@@ -4096,6 +4180,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         label: String(q.label ?? q.key ?? ""),
         kind,
         default: def as number | string | boolean,
+        // Carry the binding role through — for canvas/titleblock objects it maps the param onto a Layout
+        // sheet field (INFO_ROLE_TO_PROP), and it doubles as the value store key (role ?? key).
+        role: typeof q.role === "string" && q.role ? q.role : undefined,
         min: typeof q.min === "number" ? q.min : undefined,
         max: typeof q.max === "number" ? q.max : undefined,
         step: typeof q.step === "number" ? q.step : undefined,
@@ -4105,10 +4192,19 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           : undefined,
       };
     }).filter((p) => p.key);
+    // Menu/toolbar glyph: accept an inline `src` string (data-URI / URL) or inline stroke-path data
+    // ({ paths: string[] }); anything else is dropped so the menu falls back to a symbol-keyed Lucide icon.
+    const rawIcon = meta.icon;
+    const icon: import("./types").ParametricObjectIcon | undefined =
+      typeof rawIcon === "string" && rawIcon
+        ? rawIcon
+        : rawIcon && typeof rawIcon === "object" && Array.isArray((rawIcon as { paths?: unknown }).paths)
+          ? { paths: (rawIcon as { paths: unknown[] }).paths.filter((d): d is string => typeof d === "string" && !!d) }
+          : undefined;
     return {
       kind: "parametric-object",
       version: Number(parsed.version) || 1,
-      meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : meta.symbol === "floor" ? "floor" : meta.symbol === "wall" ? "wall" : meta.symbol === "massing" ? "massing" : undefined },
+      meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : meta.symbol === "floor" ? "floor" : meta.symbol === "wall" ? "wall" : meta.symbol === "massing" ? "massing" : meta.symbol === "titleblock" ? "titleblock" : meta.symbol === "settings" ? "settings" : undefined, ...(icon ? { icon } : {}) },
       parameters: params,
       ...(hostKind ? { hostKind } : {}),
       // Carry the declarative geometry block through so attached instances render their own 2D lines + 3D mesh.
@@ -4128,6 +4224,81 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
   }, [buildParametricObjectFile]);
 
+  /** Apply a `settings` canvas object (`settings.pobj.json`) to the live editor settings — Ortho lock,
+   *  display Units, Nudge delta, and "Subtract segment for Space" — read from each param's role + default.
+   *  Called imperatively on Import Objects, so importing the file configures the canvas as declared. */
+  const applyCanvasSettings = useCallback((obj: ParametricObjectFile) => {
+    const find = (role: string) => obj.parameters.find((p) => (p.role ?? p.key) === role || p.key === role);
+    const applied: string[] = [];
+    const ortho = find("ortho");
+    if (ortho) { setOrthoMode(ortho.default === true); applied.push("Ortho"); }
+    const units = find("units");
+    const u = units?.default;
+    if (u === "m" || u === "ft" || u === "cm" || u === "in") { setUnit(u); applied.push("Units"); }
+    const nudge = find("nudge-delta");
+    if (nudge && Number.isFinite(Number(nudge.default))) { setNudgeDelta(Math.max(0, Number(nudge.default))); applied.push("Nudge"); }
+    const subtract = find("subtract-segment-space");
+    if (subtract) { setSubtractBufferedFromSpace(subtract.default === true); applied.push("Subtract segment"); }
+    if (applied.length) toast.success(`Applied canvas settings — ${applied.join(" · ")}`);
+  }, [setOrthoMode, setUnit, setNudgeDelta, setSubtractBufferedFromSpace]);
+
+  /** Apply a `segment` settings object (`Segments/segment_settings.pobj.json`, symbol "settings") to the
+   *  Add-Segment ("Wall parameters") config — Mode / Path Type / Thickness / Line Style / Colour / Show
+   *  Label / Buffer Style / Fill / Justification — so the next drawn segment defaults to these. Read from
+   *  each param's role + default. Thickness is interpreted in the active display unit (kept as a string). */
+  const applySegmentDefaults = useCallback((obj: ParametricObjectFile) => {
+    const find = (role: string) => obj.parameters.find((p) => (p.role ?? p.key) === role || p.key === role)?.default;
+    const patch: Partial<AddSegmentConfig> = {};
+    const applied: string[] = [];
+    const mode = find("mode");
+    if (mode === "line" || mode === "buffered") { patch.mode = mode; applied.push("Mode"); }
+    const pt = find("path-type");
+    if (pt === "straight" || pt === "nurbs-through" || pt === "nurbs-smooth") { patch.pathType = pt; applied.push("Path"); }
+    const th = find("thickness");
+    if (th != null && Number.isFinite(Number(th))) { patch.thickness = String(th); applied.push("Thickness"); }
+    const ls = find("line-style");
+    if (ls === "solid" || ls === "dashed" || ls === "dotted") { patch.lineStyle = ls; applied.push("Line style"); }
+    const color = find("color");
+    if (typeof color === "string" && color) { patch.color = color; applied.push("Colour"); }
+    const sl = find("show-label");
+    if (sl != null) { patch.showLabel = sl === true; applied.push("Show label"); }
+    const bs = find("buffer-style");
+    if (bs === "capsule" || bs === "square" || bs === "flat") { patch.bufferStyle = bs; applied.push("Buffer style"); }
+    const fill = find("fill");
+    if (fill === "filled" || fill === "outlined" || fill === "hatched") { patch.fill = fill; applied.push("Fill"); }
+    const just = find("justification");
+    if (just === "left" || just === "center" || just === "right") { patch.method = just; applied.push("Justification"); }
+    if (Object.keys(patch).length) { setAddSegConfig((prev) => ({ ...prev, ...patch })); toast.success(`Applied segment defaults — ${applied.join(" · ")}`); }
+  }, [setAddSegConfig]);
+
+  /** Apply a `node` settings object (`Nodes/node_settings.pobj.json`, symbol "settings") to the node-marker
+   *  display defaults — Show Label / Shape / Style / Colour / Size / Hatch (style, spacing, weight) — so
+   *  every node without its own override renders with these. Read from each param's role + default. */
+  const applyNodeDefaults = useCallback((obj: ParametricObjectFile) => {
+    const find = (role: string) => obj.parameters.find((p) => (p.role ?? p.key) === role || p.key === role)?.default;
+    const patch: Partial<typeof nodeDisplayDefaults> = {};
+    const applied: string[] = [];
+    const sl = find("show-label");
+    if (sl != null) { patch.showLabel = sl === true; applied.push("Show label"); }
+    const shape = find("shape");
+    if (shape === "dot" || shape === "circle" || shape === "square" || shape === "triangle") { patch.dispShape = shape; applied.push("Shape"); }
+    const style = find("style");
+    if (style === "solid" || style === "dashed" || style === "dotted") { patch.dispStyle = style; applied.push("Style"); }
+    const color = find("color");
+    if (typeof color === "string" && color) { patch.dispColor = color; applied.push("Colour"); }
+    const size = find("size");
+    if (size != null && Number.isFinite(Number(size))) { patch.dispSize = Math.max(0.5, Number(size)); applied.push("Size"); }
+    const hatch = find("hatch");
+    if (hatch != null) { patch.hatch = hatch === true; applied.push("Hatch"); }
+    const hs = find("hatch-style");
+    if (hs === "diagonal" || hs === "dots") { patch.hatchStyle = hs; applied.push("Hatch style"); }
+    const hsp = find("hatch-spacing");
+    if (hsp != null && Number.isFinite(Number(hsp))) { patch.hatchSpacing = Math.max(2, Number(hsp)); applied.push("Spacing"); }
+    const hw = find("hatch-weight");
+    if (hw != null && Number.isFinite(Number(hw))) { patch.hatchWeight = Math.max(0.5, Number(hw)); applied.push("Weight"); }
+    if (Object.keys(patch).length) { setNodeDisplayDefaults((prev) => ({ ...prev, ...patch })); toast.success(`Applied node defaults — ${applied.join(" · ")}`); }
+  }, [setNodeDisplayDefaults]);
+
   /** Import a whole Floorplan-Tracer folder (picked via a directory input). Each `.json` under Nodes/ ,
    *  Segments/ , Spaces/ is parsed and tagged with its hostKind from the path, then ALL are merged into the
    *  library in ONE history step (a per-file loop would race on `historyRef.current` and keep only the last). */
@@ -4142,16 +4313,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       // ("Floorplan Tracer/Nodes/bed.pobj.json") or the subfolder itself ("Nodes/bed.pobj.json").
       const parts = ((file as { webkitRelativePath?: string }).webkitRelativePath || file.name).toLowerCase().split(/[\\/]+/);
       const has = (...names: string[]) => names.some((nm) => parts.includes(nm));
-      let hostKind: "node" | "segment" | "space" | undefined =
-        has("nodes", "node") ? "node" : has("segments", "segment") ? "segment" : has("spaces", "space") ? "space" : undefined;
+      let hostKind: "node" | "segment" | "space" | "canvas" | undefined =
+        has("nodes", "node") ? "node" : has("segments", "segment") ? "segment" : has("spaces", "space") ? "space" : has("canvas", "canvases") ? "canvas" : undefined;
       try {
         const parsed = JSON.parse(await file.text()) as Record<string, unknown>;
         if (!hostKind) {
           // Fallback when the browser didn't expose the folder structure: derive from the object's own
           // symbol so the set still lands in the right menu — door/window/wall → segment, floor → space,
-          // everything else (furniture, staircase, footing, …) → node.
+          // titleblock → canvas, everything else (furniture, staircase, footing, …) → node.
           const sym = (parsed.meta as { symbol?: string } | undefined)?.symbol;
-          hostKind = sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node";
+          hostKind = sym === "titleblock" ? "canvas" : sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node";
           bySymbol++;
         }
         const obj = buildParametricObjectFile(parsed, file.name, hostKind);
@@ -4161,23 +4332,41 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const n = Object.keys(additions).length;
     if (n === 0) { toast.error("No parametric objects found in the folder"); return; }
     const h = historyRef.current;
-    h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), ...additions } });
+    // A `titleblock` canvas object attaches to the sheet — seed canvasObjects[INFO_SHEET_ID] so it renders
+    // immediately (params start empty → each field falls back to its schema default), preserving any
+    // previously-entered values on re-import. A `settings` canvas object is applied to the editor below.
+    const titleblockObj = Object.values(additions).find((o) => o.hostKind === "canvas" && o.meta.symbol === "titleblock");
+    h.set({
+      ...h.state,
+      objectLibrary: { ...(h.state.objectLibrary ?? {}), ...additions },
+      ...(titleblockObj ? { canvasObjects: { ...(h.state.canvasObjects ?? {}), [INFO_SHEET_ID]: { id: h.state.canvasObjects?.[INFO_SHEET_ID]?.id ?? createId(), objectId: titleblockObj.meta.id, params: h.state.canvasObjects?.[INFO_SHEET_ID]?.params ?? {} } } } : {}),
+    });
+    const settingsObj = Object.values(additions).find((o) => o.hostKind === "canvas" && o.meta.symbol === "settings");
+    if (settingsObj) applyCanvasSettings(settingsObj);
+    const segSettingsObj = Object.values(additions).find((o) => o.hostKind === "segment" && o.meta.symbol === "settings");
+    if (segSettingsObj) applySegmentDefaults(segSettingsObj);
+    const nodeSettingsObj = Object.values(additions).find((o) => o.hostKind === "node" && o.meta.symbol === "settings");
+    if (nodeSettingsObj) applyNodeDefaults(nodeSettingsObj);
     const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
-    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${bySymbol ? ` (${bySymbol} by symbol)` : ""}${failed ? `, ${failed} failed` : ""}`);
-  }, [buildParametricObjectFile]);
+    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${bySymbol ? ` (${bySymbol} by symbol)` : ""}${failed ? `, ${failed} failed` : ""}`);
+  }, [buildParametricObjectFile, applyCanvasSettings, applySegmentDefaults, applyNodeDefaults, INFO_SHEET_ID]);
 
   /** Import the bundled object library straight from `public/objects/Floorplan Tracer` (no folder picker).
    *  Each `.pobj.json` is fetched by its relative URL, parsed, tagged with its subfolder's hostKind
    *  (Spaces → space, Segments → segment, Nodes → node), and merged into the library in one history step. */
   const autoImportObjectFolder = useCallback(async () => {
     const base = "/objects/Floorplan Tracer";
-    const files: { sub: "Spaces" | "Segments" | "Nodes"; file: string }[] = [
+    const files: { sub: "Spaces" | "Segments" | "Nodes" | "Canvas"; file: string }[] = [
+      { sub: "Canvas", file: "titleblock-a1.pobj.json" },
+      { sub: "Canvas", file: "settings.pobj.json" },
       { sub: "Spaces", file: "floor.pobj.json" },
       { sub: "Spaces", file: "massing.pobj.json" },
       { sub: "Spaces", file: "footprint-massing.pobj.json" },
+      { sub: "Segments", file: "segment_settings.pobj.json" },
       { sub: "Segments", file: "wall.pobj.json" },
       { sub: "Segments", file: "door.pobj.json" },
       { sub: "Segments", file: "window.pobj.json" },
+      { sub: "Nodes", file: "node_settings.pobj.json" },
       { sub: "Nodes", file: "chair.pobj.json" }, { sub: "Nodes", file: "table.pobj.json" },
       { sub: "Nodes", file: "desk.pobj.json" }, { sub: "Nodes", file: "sink.pobj.json" },
       { sub: "Nodes", file: "bathtub.pobj.json" }, { sub: "Nodes", file: "bookshelf.pobj.json" },
@@ -4188,7 +4377,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       { sub: "Nodes", file: "footing.pobj.json" }, { sub: "Nodes", file: "staircase.pobj.json" },
       { sub: "Nodes", file: "floorplan.pobj.json" }, { sub: "Nodes", file: "toilet.pobj.json" },
     ];
-    const hostKindOf = (sub: string): "node" | "segment" | "space" => (sub === "Spaces" ? "space" : sub === "Segments" ? "segment" : "node");
+    const hostKindOf = (sub: string): "node" | "segment" | "space" | "canvas" => (sub === "Spaces" ? "space" : sub === "Segments" ? "segment" : sub === "Canvas" ? "canvas" : "node");
     const additions: Record<string, ParametricObjectFile> = {};
     let failed = 0;
     await Promise.all(files.map(async ({ sub, file }) => {
@@ -4203,10 +4392,215 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const n = Object.keys(additions).length;
     if (n === 0) { toast.error("No objects found at public/objects/Floorplan Tracer"); return; }
     const h = historyRef.current;
-    h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), ...additions } });
+    // Seed the canvas sheet from the title-block object; apply the settings object (see importObjectFolder).
+    const titleblockObj = Object.values(additions).find((o) => o.hostKind === "canvas" && o.meta.symbol === "titleblock");
+    h.set({
+      ...h.state,
+      objectLibrary: { ...(h.state.objectLibrary ?? {}), ...additions },
+      ...(titleblockObj ? { canvasObjects: { ...(h.state.canvasObjects ?? {}), [INFO_SHEET_ID]: { id: h.state.canvasObjects?.[INFO_SHEET_ID]?.id ?? createId(), objectId: titleblockObj.meta.id, params: h.state.canvasObjects?.[INFO_SHEET_ID]?.params ?? {} } } } : {}),
+    });
+    const settingsObj = Object.values(additions).find((o) => o.hostKind === "canvas" && o.meta.symbol === "settings");
+    if (settingsObj) applyCanvasSettings(settingsObj);
+    const segSettingsObj = Object.values(additions).find((o) => o.hostKind === "segment" && o.meta.symbol === "settings");
+    if (segSettingsObj) applySegmentDefaults(segSettingsObj);
+    const nodeSettingsObj = Object.values(additions).find((o) => o.hostKind === "node" && o.meta.symbol === "settings");
+    if (nodeSettingsObj) applyNodeDefaults(nodeSettingsObj);
     const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
-    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${failed ? `, ${failed} failed` : ""}`);
-  }, [buildParametricObjectFile]);
+    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${failed ? `, ${failed} failed` : ""}`);
+  }, [buildParametricObjectFile, applyCanvasSettings, applySegmentDefaults, applyNodeDefaults, INFO_SHEET_ID]);
+
+  // ── Agent bridge — expose a small command API to an external MCP server so Claude can drive the LIVE
+  // canvas (see mcp/floorplan-bridge.mjs + mcp/README.md). Opt-in only (localStorage bp.agentBridge="1" or
+  // ?agent=1), so it's inert in normal use. Handlers read the live state via refs; a fresh pixels-per-metre
+  // ref keeps geometry sized correctly even after a scale recalibration. ──
+  const bridgePpmRef = useRef(pixelsPerMeter);
+  bridgePpmRef.current = pixelsPerMeter;
+
+  // Programmatic commit helpers for the bridge — the PROPER parametric-object drawing pipeline the UI uses,
+  // driven by explicit METRE coordinates instead of pointer clicks. A typed segment carries its `seg-type`
+  // (+ params) in graphAttrs; a door/window is a parametric object cut INTO a host wall as an opening; an
+  // object node attaches a parametric object via nodeMeta. Kept in a live ref (reassigned every render) so
+  // the once-registered bridge handlers always run against the current state + helpers. Mirrors the
+  // single-segment commit, placeOpeningOnWall, and the point-tool object placement respectively.
+  const bridgeApiRef = useRef<{
+    listDrawTools: () => unknown;
+    drawSegment: (a: Record<string, unknown>) => unknown;
+    placeOpening: (a: Record<string, unknown>) => unknown;
+    placeObject: (a: Record<string, unknown>) => unknown;
+  } | null>(null);
+  bridgeApiRef.current = (() => {
+    const ppm = pixelsPerMeter;
+    const numOf = (v: unknown, d = 0): number => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+    const lib = (): Record<string, ParametricObjectFile> => history.state.objectLibrary ?? {};
+    // Resolve a library object by exact id, else by symbol ("door" → door.single.v1) or display name.
+    const resolveObject = (idOrSymbol: string): { id: string; def: ParametricObjectFile } | null => {
+      const L = lib();
+      if (L[idOrSymbol]) return { id: idOrSymbol, def: L[idOrSymbol] };
+      const hit = Object.values(L).find((o) => o.meta.symbol === idOrSymbol || o.meta.name === idOrSymbol);
+      return hit ? { id: hit.meta.id, def: hit } : null;
+    };
+    // Full parameter set for an object: every declared param at its default, with caller overrides applied.
+    const paramsFor = (def: ParametricObjectFile, overrides?: Record<string, unknown>): Record<string, number | string | boolean> => {
+      const out: Record<string, number | string | boolean> = {};
+      for (const pr of def.parameters) {
+        const ov = overrides?.[pr.key];
+        out[pr.key] = (ov as number | string | boolean | undefined) ?? pr.default;
+      }
+      return out;
+    };
+    return {
+      // Enumerate what the agent can draw: the merged segment/node/space TYPE lists (mirroring the Add
+      // Segment / Add Node / Add Space dropdowns) plus every imported object's id / symbol / host / params.
+      listDrawTools: () => {
+        const objects = Object.values(lib())
+          .filter((o) => o.hostKind !== "canvas" && o.meta.symbol !== "settings")
+          .map((o) => ({
+            id: o.meta.id, name: o.meta.name, symbol: o.meta.symbol, hostKind: o.hostKind,
+            params: o.parameters.map((pr) => ({ key: pr.key, kind: pr.kind, default: pr.default, unit: (pr as ParametricObjectParam).unit })),
+          }));
+        return { tools: mergedDrawTools, objects, ppm };
+      },
+      // Draw a typed segment (wall / line / schema seg-type) between two METRE points — tags graphAttrs
+      // seg-type + params and auto-creates a layer for the type, exactly like Add Segment ▸ <type>.
+      drawSegment: (a) => {
+        const type = String(a.type ?? "wall");
+        const start = { x: numOf(a.x1) * ppm, y: numOf(a.y1) * ppm };
+        const end = { x: numOf(a.x2) * ppm, y: numOf(a.y2) * ppm };
+        if (Math.hypot(end.x - start.x, end.y - start.y) < 1) throw new Error("segment too short (start ≈ end)");
+        const isWall = type === "wall";
+        const thPx = a.thicknessM != null ? Math.max(1, numOf(a.thicknessM) * ppm) : wallThickness;
+        const segId = createId();
+        ensureLayerForType(type, typeof a.label === "string" ? a.label : undefined);
+        const params = (a.params && typeof a.params === "object") ? (a.params as Record<string, import("./types").GraphAttrValue>) : {};
+        const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
+        const segEntry = { ...(type !== "line" ? { "seg-type": type } : {}), ...(isWall ? { "wall-thickness": thPx / ppm } : {}), ...params };
+        const taggedGA = (type !== "line" || Object.keys(params).length > 0)
+          ? { ...ga0, segments: { ...(ga0.segments ?? {}), [segId]: { ...(ga0.segments?.[segId] ?? {}), ...segEntry } } }
+          : ga0;
+        // A bridge wall is a PARAMETRIC band, never a bare centre-line: honour an explicit `mode`, else the
+        // editor's current wall mode — but if that's "line" (the Add-Segment flow forces it) fall back to the
+        // parametric default so `draw_segment type="wall"` always renders a real, mitered wall.
+        const WALL_BAND_MODES: WallMode[] = ["fill", "outline", "mitered", "mitered-union"];
+        const modeArg = typeof a.mode === "string" ? (a.mode as WallMode) : undefined;
+        const wallMode: WallMode = modeArg && (WALL_BAND_MODES.includes(modeArg) || modeArg === "line")
+          ? modeArg
+          : WALL_BAND_MODES.includes(wallDrawMode) ? wallDrawMode : "mitered";
+        const wall: Wall = {
+          id: segId, start, end, thickness: thPx, color: wallColor, dashed: lineTypeDashed,
+          mode: isWall ? wallMode : "line", method: isWall ? wallDrawMethod : "center", segmentType: type,
+        };
+        history.set({ ...history.state, walls: splitWallsAtIntersections([...history.state.walls, wall]), graphAttrs: taggedGA });
+        return { segmentId: segId, type };
+      },
+      // Place a Door / Window parametric object INTO the nearest wall at a METRE point — splits the host into
+      // wall · opening · wall and drops the object into the opening (renders the leaf/swing / glazing). The
+      // remnants keep the host's identity + attachments. Mirrors placeOpeningOnWall.
+      placeOpening: (a) => {
+        const obj = resolveObject(String(a.object ?? a.objectId ?? a.kind ?? ""));
+        if (!obj) throw new Error(`object not found: "${String(a.object ?? a.kind)}" — call import_objects first`);
+        const sym = obj.def.meta.symbol;
+        if (sym !== "door" && sym !== "window") throw new Error(`${obj.id} is not a door/window (symbol="${sym}")`);
+        const defW = Number(obj.def.parameters.find((p) => p.key === "width")?.default);
+        const widthM = a.widthM != null ? numOf(a.widthM, defW) : (Number.isFinite(defW) ? defW : 0.9);
+        const Wpx = widthM * ppm;
+        const p = { x: numOf(a.x) * ppm, y: numOf(a.y) * ppm };
+        const hit = snapPointerToNearestWall(p, history.state.walls, Math.max(WALL_OPENING_PLACE_MAX_DIST, Wpx));
+        if (!hit) throw new Error("no wall near the given point to host the opening");
+        const host = history.state.walls.find((w) => w.id === hit.wallId);
+        if (!host) throw new Error("host wall not found");
+        const len = Math.hypot(host.end.x - host.start.x, host.end.y - host.start.y);
+        if (len <= Wpx) throw new Error(`host wall (${(len / ppm).toFixed(2)}m) too short for a ${widthM}m opening`);
+        const ux = (host.end.x - host.start.x) / len, uy = (host.end.y - host.start.y) / len;
+        const half = Wpx / 2;
+        const c = Math.min(Math.max(hit.t * len, half), len - half);
+        const ds = { x: host.start.x + ux * (c - half), y: host.start.y + uy * (c - half) };
+        const de = { x: host.start.x + ux * (c + half), y: host.start.y + uy * (c + half) };
+        const params = paramsFor(obj.def, { ...(a.params as Record<string, unknown> | undefined), width: widthM });
+        const segAtt: SegmentAttachment = { id: createId(), objectId: obj.id, params, t: 0.5, flip: a.flip === true };
+        const cloneHostAtts = (): SegmentAttachment[] => (host.attachments ?? []).map((x) => ({ ...x, id: createId() }));
+        const preAtts = cloneHostAtts(), postAtts = cloneHostAtts();
+        const pre: Wall = { ...host, id: createId(), start: host.start, end: ds, isObjectOpening: undefined, attachments: preAtts.length ? preAtts : undefined };
+        const opening: Wall = { ...host, id: createId(), start: ds, end: de, isObjectOpening: true, attachments: [...cloneHostAtts(), segAtt] };
+        const post: Wall = { ...host, id: createId(), start: de, end: host.end, isObjectOpening: undefined, attachments: postAtts.length ? postAtts : undefined };
+        const rest = history.state.walls.filter((w) => w.id !== host.id);
+        const fresh = [pre, opening, post].filter((w) => Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) > 0.1);
+        ensureLayerForType(sym, sym === "door" ? "Door" : "Window");
+        history.set({ ...history.state, walls: splitWallsAtIntersections([...rest, ...fresh]) });
+        return { openingId: opening.id, hostId: host.id, objectId: obj.id, widthM };
+      },
+      // Drop a parametric object as an object NODE at a METRE point (bed / sofa / column / staircase / …):
+      // a zero-length marker wall + graphAttrs node-type "object" + a nodeMeta attachment carrying the
+      // object's params (+ rotation). Mirrors the point tool's imported-object placement.
+      placeObject: (a) => {
+        const obj = resolveObject(String(a.object ?? a.objectId ?? ""));
+        if (!obj) throw new Error(`object not found: "${String(a.object)}" — call import_objects first`);
+        const place = { x: numOf(a.x) * ppm, y: numOf(a.y) * ppm };
+        const nodeWallId = createId();
+        const stableKey = [`${nodeWallId}:start`, `${nodeWallId}:end`].sort().join("|");
+        const params = paramsFor(obj.def, a.params as Record<string, unknown> | undefined);
+        params.rotation = numOf(a.rotation, 0);
+        const prevMeta = history.state.nodeMeta ?? {};
+        const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
+        ensureLayerForType(layerSlug(obj.def.meta.name || obj.id), obj.def.meta.name || obj.id);
+        const wall: Wall = { id: nodeWallId, start: place, end: place, thickness: 0.5, color: wallColor, dashed: false, mode: "line", method: "center", segmentType: "wall" };
+        const cur = prevMeta[stableKey] ?? {};
+        history.set({
+          ...history.state,
+          walls: [...history.state.walls, wall],
+          graphAttrs: { ...ga0, nodes: { ...(ga0.nodes ?? {}), [stableKey]: { ...(ga0.nodes?.[stableKey] ?? {}), "node-type": "object" } } },
+          nodeMeta: { ...prevMeta, [stableKey]: { ...cur, attachments: [...(cur.attachments ?? []), { id: createId(), objectId: obj.id, params, t: 0, flip: false }] } },
+        });
+        return { nodeKey: stableKey, objectId: obj.id };
+      },
+    };
+  })();
+  useEffect(() => {
+    if (!agentBridgeEnabled()) return;
+    registerAgentCommand("get_state", () => {
+      const s = historyRef.current.state;
+      return { walls: s.walls.length, manualRooms: s.rooms.length, objectsLoaded: Object.keys(s.objectLibrary ?? {}).length, ppm: bridgePpmRef.current, objectIds: Object.keys(s.objectLibrary ?? {}) };
+    });
+    registerAgentCommand("import_objects", async () => { await autoImportObjectFolder(); return { objectsLoaded: Object.keys(historyRef.current.state.objectLibrary ?? {}).length }; });
+    registerAgentCommand("clear_canvas", () => {
+      const h = historyRef.current;
+      h.set({ ...h.state, walls: [], rooms: [], objects: [], furniture: [], nodeMeta: {} });
+      return "cleared";
+    });
+    registerAgentCommand("draw_wall", (a) => {
+      const ppm = bridgePpmRef.current;
+      const num = (v: unknown, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+      const wall: Wall = {
+        id: createId(),
+        start: { x: num(a.x1) * ppm, y: num(a.y1) * ppm },
+        end: { x: num(a.x2) * ppm, y: num(a.y2) * ppm },
+        thickness: Math.max(1, num(a.thicknessM, 0.1) * ppm),
+        color: "#334155", segmentType: "wall", mode: "fill", method: "center",
+      };
+      const h = historyRef.current;
+      h.set({ ...h.state, walls: [...h.state.walls, wall] });
+      return { wallId: wall.id };
+    });
+    registerAgentCommand("apply_model", (a) => {
+      const before = historyRef.current.state;
+      const merged = applyAiReply(before, JSON.stringify((a as { model: unknown }).model));
+      const next: FloorPlanModel = {
+        ...merged,
+        walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, bridgePpmRef.current),
+        nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
+      };
+      historyRef.current.set(next);
+      return summarizeChange(before, next);
+    });
+    // ── PROPER parametric-object tools (preferred over draw_wall/apply_model): draw typed segments, cut
+    //    door/window objects into walls, and place object nodes — all via the same pipeline the UI uses. ──
+    registerAgentCommand("list_draw_tools", () => bridgeApiRef.current?.listDrawTools());
+    registerAgentCommand("draw_segment", (a) => bridgeApiRef.current?.drawSegment(a));
+    registerAgentCommand("place_opening", (a) => bridgeApiRef.current?.placeOpening(a));
+    registerAgentCommand("place_object", (a) => bridgeApiRef.current?.placeObject(a));
+    const stop = startAgentBridge();
+    return () => stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Attach a library object to a segment (seeded with the object's default param values), cutting an
    *  opening in the host wall: it's split into pre · opening · post, the opening piece carries the
@@ -4380,7 +4774,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // eval, which needs a ready source). When a "Schema to Drawing Tools" node is present, read its attached
   // Schema's segment `type` (seg-type) and node `type` (node-type) discriminators → options + icons for
   // the Add Segment / Add Node drawing dropdowns.
-  type DrawToolList = { value: string; label: string; icon?: string }[];
+  // `icon`: inline glyph (data-URI/URL string, or inline stroke-path data) carried from a pobj's `meta.icon`.
+  // `symbol`: the object's `meta.symbol`, so the toolbar can pick a built-in Lucide fallback even when `value`
+  // is an `obj:<id>` (which wouldn't match the symbol-keyed fallback map).
+  type DrawToolList = { value: string; label: string; icon?: import("./types").ParametricObjectIcon; symbol?: string }[];
   type DrawTools = { segments: DrawToolList; nodes: DrawToolList; spaces: DrawToolList } | undefined;
   // Core: derive Add Segment / Add Node / Add Space type lists (+icons) from a schema params object. Shared
   // by the flow-graph path and the standalone Template path.
@@ -4419,12 +4816,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // before host-tagging existed (or via the old path) still land in the right menu (door/window/wall →
     // segment, floor → space, everything else → node).
     const effKind = (o: ParametricObjectFile): "node" | "segment" | "space" => {
-      if (o.hostKind) return o.hostKind;
+      if (o.hostKind && o.hostKind !== "canvas") return o.hostKind;
       const s = o.meta.symbol;
       return s === "wall" || s === "door" || s === "window" ? "segment" : s === "floor" ? "space" : "node";
     };
+    // `canvas` objects (Layout title block) attach to the sheet; `settings` objects (canvas / category
+    // defaults) configure the editor on import — neither is a drawable element, so exclude both from the menus.
     const mk = (kind: "node" | "segment" | "space"): DrawToolList =>
-      Object.values(lib).filter((o) => effKind(o) === kind).map((o) => ({ value: `obj:${o.meta.id}`, label: o.meta.name || o.meta.id }));
+      Object.values(lib).filter((o) => o.hostKind !== "canvas" && o.meta.symbol !== "settings" && effKind(o) === kind).map((o) => ({ value: `obj:${o.meta.id}`, label: o.meta.name || o.meta.id, icon: o.meta.icon, symbol: o.meta.symbol }));
     return { nodes: mk("node"), segments: mk("segment"), spaces: mk("space") };
   }, [history.state.objectLibrary]);
   // Schema draw tools (template / flow) + imported-object tools, merged so both appear in the menus.
@@ -4833,11 +5232,33 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return out;
   }, [liveFlowGraph, templateSchemas]);
 
-  // Resolve the Information record → Layout title-block props (role-bound values from graphAttrs,
-  // falling back to schema/component defaults). Drives the LayoutSheet in "layout" view mode.
+  // The canvas-attached Layout title block (a `titleblock` parametric object), if one is attached to the
+  // sheet. Its `parameters` (with roles) + stored `params` drive both the Properties tab and the sheet.
+  const layoutSheetObj = useMemo(() => {
+    const sheet = history.state.canvasObjects?.[INFO_SHEET_ID];
+    const obj = sheet ? history.state.objectLibrary?.[sheet.objectId] : null;
+    return obj ? { obj, params: sheet!.params } : null;
+  }, [history.state.canvasObjects, history.state.objectLibrary, INFO_SHEET_ID]);
+
+  // Write one title-block field value onto the canvas object's params (null clears it → schema default).
+  const updateCanvasObjectParam = useCallback((key: string, value: import("./types").GraphAttrValue | null) => {
+    const h = historyRef.current;
+    const co = { ...(h.state.canvasObjects ?? {}) };
+    const sheet = co[INFO_SHEET_ID];
+    if (!sheet) return;
+    const params = { ...sheet.params };
+    if (value === null) delete params[key]; else params[key] = value;
+    co[INFO_SHEET_ID] = { ...sheet, params };
+    h.set({ ...h.state, canvasObjects: co });
+  }, [INFO_SHEET_ID]);
+
+  // Resolve the Layout title-block props. Prefers the canvas-attached object (its params → sheet fields);
+  // falls back to the legacy Information schema (template / flow Schema node → graphAttrs.information).
   const layoutInfoProps = useMemo(
-    () => resolveLayoutSheetProps(infoSchemaDefs, history.state.graphAttrs?.information?.[INFO_SHEET_ID]),
-    [infoSchemaDefs, history.state.graphAttrs],
+    () => layoutSheetObj
+      ? resolveLayoutSheetProps(layoutSheetObj.obj.parameters as unknown as import("./types").GraphPropDef[], layoutSheetObj.params)
+      : resolveLayoutSheetProps(infoSchemaDefs, history.state.graphAttrs?.information?.[INFO_SHEET_ID]),
+    [layoutSheetObj, infoSchemaDefs, history.state.graphAttrs, INFO_SHEET_ID],
   );
 
   // "Views" mode elevations from the canvas walls. SCHEMA-AWARE: each wall's type + wall height and each
@@ -17602,8 +18023,7 @@ User request: ${aiPrompt.trim()}`;
         // Add Node (point) tool persists across placements; Esc is the way out to Select. Drop the pending
         // imported-object attachment so re-entering Add Node doesn't keep placing the old object.
         if (tool === "point") {
-          pendingNodeObjectIdRef.current = null;
-          pendingNodeObjectParamsRef.current = null;
+          clearNodeObjectPlace();
           setTool("select");
           return;
         }
@@ -17795,6 +18215,18 @@ User request: ${aiPrompt.trim()}`;
         event.preventDefault();
         const cycle: ("center" | "inner" | "outer")[] = ["center", "inner", "outer"];
         setLengthDimMode((m) => cycle[(cycle.indexOf(m) + 1) % 3]);
+      }
+      // Add-Node imported object armed: Tab cycles which anchor of the object snaps to the cursor
+      // (Center → Top-Left → Top-Right → Bottom-Right → Bottom-Left).
+      if (event.key === "Tab" && tool === "point" && pendingNodeObjectIdRef.current) {
+        event.preventDefault();
+        setNodePlaceAnchor((a) => NODE_ANCHOR_CYCLE[(NODE_ANCHOR_CYCLE.indexOf(a) + 1) % NODE_ANCHOR_CYCLE.length]);
+      }
+      // Add-Node imported object armed: "R" cycles the placement rotation (0 → 90 → 180 → 270), applied to
+      // the ghost and stamped onto each node placed while the tool stays active (continuous strokes).
+      if (!inFormField && !event.ctrlKey && !event.metaKey && (event.key === "r" || event.key === "R") && tool === "point" && pendingNodeObjectIdRef.current) {
+        event.preventDefault();
+        setNodePlaceRotation((r) => (r + 90) % 360);
       }
       // "S" enters the Select tool in scope mode (starting at Node); Tab then cycles the scope. Mirrors the
       // Select-button reset so no stale Door/Window/Edge/Room/Furniture mode lingers. Ignored in form fields.
@@ -19842,14 +20274,29 @@ User request: ${aiPrompt.trim()}`;
       // from the popup choice (when it matches the armed object), else the object's defaults.
       const nodeObjId = pendingNodeObjectIdRef.current;
       const nodeObj = nodeObjId ? (history.state.objectLibrary ?? {})[nodeObjId] : null;
+      // Anchor-adjusted placement: for an armed object, offset the node centre so the chosen anchor of the
+      // object's bounding box lands on the clicked point (matches the ghost preview).
+      const place = nodeObjId ? nodePlacePoint(nodeObjId, snapped) : snapped;
+      // Display config from the Add Node dialog (armed on Start) — stamped onto every node dropped while the
+      // tool is active, so each carries the chosen shape / style / colour / size / hatch / label.
+      const nodeCfg = activeNodeConfigRef.current;
       let nodeMetaPatch: typeof history.state.nodeMeta | null = null;
-      if (nodeObj && nodeObjId) {
-        const chosen = pendingNodeObjectParamsRef.current?.objectId === nodeObjId ? pendingNodeObjectParamsRef.current.vals : null;
-        const params: Record<string, number | string | boolean> = {};
-        for (const pr of nodeObj.parameters) params[pr.key] = chosen?.[pr.key] ?? pr.default;
+      if ((nodeObj && nodeObjId) || nodeCfg) {
         const prevMeta = history.state.nodeMeta ?? {};
         const cur = prevMeta[nodeStableKey] ?? {};
-        nodeMetaPatch = { ...prevMeta, [nodeStableKey]: { ...cur, attachments: [...(cur.attachments ?? []), { id: createId(), objectId: nodeObjId, params, t: 0, flip: false }] } };
+        const displayFields = nodeCfg
+          ? { showLabel: nodeCfg.showLabel, dispShape: nodeCfg.dispShape, dispStyle: nodeCfg.dispStyle, dispColor: nodeCfg.dispColor, dispSize: nodeCfg.dispSize, hatch: nodeCfg.hatch, hatchStyle: nodeCfg.hatchStyle, hatchSpacing: nodeCfg.hatchSpacing, hatchWeight: nodeCfg.hatchWeight, hatchAngle: nodeCfg.hatchAngle }
+          : {};
+        let attachmentField: { attachments: NonNullable<NodeMeta["attachments"]> } | Record<string, never> = {};
+        if (nodeObj && nodeObjId) {
+          const chosen = pendingNodeObjectParamsRef.current?.objectId === nodeObjId ? pendingNodeObjectParamsRef.current.vals : null;
+          const params: Record<string, number | string | boolean> = {};
+          for (const pr of nodeObj.parameters) params[pr.key] = chosen?.[pr.key] ?? pr.default;
+          // Placement rotation ("R") — orient the placed instance to match the ghost.
+          params.rotation = nodePlaceRotationRef.current;
+          attachmentField = { attachments: [...(cur.attachments ?? []), { id: createId(), objectId: nodeObjId, params, t: 0, flip: false }] };
+        }
+        nodeMetaPatch = { ...prevMeta, [nodeStableKey]: { ...cur, ...displayFields, ...attachmentField } };
       }
       history.set({
         ...history.state,
@@ -19857,8 +20304,8 @@ User request: ${aiPrompt.trim()}`;
           ...history.state.walls,
           {
             id: nodeWallId,
-            start: { x: snapped.x, y: snapped.y },
-            end: { x: snapped.x, y: snapped.y },
+            start: { x: place.x, y: place.y },
+            end: { x: place.x, y: place.y },
             thickness: 0.5,
             color: wallColor,
             dashed: false,
@@ -20146,6 +20593,10 @@ User request: ${aiPrompt.trim()}`;
         if (tool === "single-segment" && singleSegStart) {
           const locked = constrainToAnchor(singleSegStart, snapped, event.evt.shiftKey);
           setSingleSegPreview(locked);
+        }
+        // Add Node imported-object armed: track the cursor so the ghost preview follows it.
+        if (tool === "point" && placingNodeObjectId) {
+          setNodeGhostPoint(snapped);
         }
         if (tool === "dimension" && dimensionStart) {
           setDimensionPreview(constrainToAnchor(dimensionStart, snapped, event.evt.shiftKey));
@@ -21168,6 +21619,9 @@ User request: ${aiPrompt.trim()}`;
     for (const w of history.state.walls) { addAtt(w.attachments); if (w.placementObjectId) usedIds.add(w.placementObjectId); }
     for (const r of exportRooms) addAtt(r.attachments);
     for (const m of Object.values(history.state.nodeMeta ?? {})) addAtt(m.attachments);
+    // Canvas-attached objects (Layout title block) aren't referenced by any element attachment — keep their
+    // library entry so canvasObjects still resolves on re-import.
+    for (const c of Object.values(history.state.canvasObjects ?? {})) if (c.objectId) usedIds.add(c.objectId);
     // Deep-scan an object's geometry for `{ "ref": "<id>" }` occurrences to follow composition dependencies.
     const collectRefs = (node: unknown, out: Set<string>): void => {
       if (Array.isArray(node)) { for (const x of node) collectRefs(x, out); return; }
@@ -22839,15 +23293,13 @@ User request: ${aiPrompt.trim()}`;
                 onAddFurniture={() => {
                   // Click-to-place-a-node mode: each click drops a node that auto-wires to Node to Object.
                   pendingNodeTypeRef.current = null;
-                  pendingNodeObjectIdRef.current = null;
-                  pendingNodeObjectParamsRef.current = null;
+                  clearNodeObjectPlace();
+                  activeNodeConfigRef.current = null;
                   setFurnitureNodeMode(true);
                   setTool("point");
                   toast.info("Click to drop a furniture node — press Esc when done");
                 }}
                 onCreateGrid={() => setGridDialogOpen(true)}
-                onOpenTemplate={() => setTemplateDialogOpen(true)}
-                templateActive={!!activeTemplate}
                 onImportObjects={(files) => { void importObjectFolder(files); }}
                 onImportObjectsAuto={() => { void autoImportObjectFolder(); }}
                 onSelectedGenElementChange={setSelectedGenElement}
@@ -22983,8 +23435,8 @@ User request: ${aiPrompt.trim()}`;
                 onAddNodeType={(nodeType) => {
                   // Reset any prior pending object first; the obj: branch below re-arms it. Schema-type
                   // branches leave it cleared so they place plain typed nodes (no object attachment).
-                  pendingNodeObjectIdRef.current = null;
-                  pendingNodeObjectParamsRef.current = null;
+                  clearNodeObjectPlace();
+                  activeNodeConfigRef.current = null; // schema-typed placement — no Add-Node dialog display config
                   // Imported parametric object picked. If it exposes parameters, pop the object-params dialog
                   // first so the user sets them once; placing starts on confirm. Parameterless objects start
                   // immediately. Either way the object then attaches to EVERY node dropped (ends on Esc).
@@ -23011,11 +23463,12 @@ User request: ${aiPrompt.trim()}`;
                 onPlainNodeClick={() => {
                   // Plain Add Node (point) — clear any pending schema node-type / furniture / object tag.
                   pendingNodeTypeRef.current = null;
-                  pendingNodeObjectIdRef.current = null;
-                  pendingNodeObjectParamsRef.current = null;
+                  clearNodeObjectPlace();
+                  activeNodeConfigRef.current = null;
                   setFurnitureNodeMode(false);
                   setTool("point");
                 }}
+                onOpenAddNodeDialog={() => { setAddNodeConfig(nodeDisplayDefaults); setAddNodeDialogOpen(true); }}
                 onAddSpaceCircleClick={() => {
                   // Start the click + drag/type-radius circle-space trace.
                   setSpaceCircleCenter(null);
@@ -23371,6 +23824,29 @@ User request: ${aiPrompt.trim()}`;
                     {horizontals.map((y) => (
                       <Line key={`h-${y}`} points={[worldMinX, y, worldMaxX, y]} stroke="#E2E8F0" strokeWidth={1 / scale} />
                     ))}
+                    {/* Origin reference — world (0,0) with +X (red, →) and +Y (green, ↓, world y is down)
+                        axis arrows. Constant on-screen size (lengths divided by scale). */}
+                    {(() => {
+                      const L = 64 / scale;      // axis length
+                      const head = 9 / scale;    // arrowhead size
+                      const sw = 1.75 / scale;
+                      const fs = 13 / scale;
+                      const xCol = "#ef4444", yCol = "#22c55e";
+                      return (
+                        <Group listening={false}>
+                          {/* +X axis (red, → right) */}
+                          <Line points={[0, 0, L, 0]} stroke={xCol} strokeWidth={sw} />
+                          <Line points={[L, 0, L - head, -head * 0.6, L - head, head * 0.6]} closed fill={xCol} stroke={xCol} strokeWidth={sw} lineJoin="round" />
+                          <Text x={L + 4 / scale} y={-fs * 0.6} text="X" fontSize={fs} fontStyle="bold" fill={xCol} />
+                          {/* +Y axis (green, ↓ down) */}
+                          <Line points={[0, 0, 0, L]} stroke={yCol} strokeWidth={sw} />
+                          <Line points={[0, L, -head * 0.6, L - head, head * 0.6, L - head]} closed fill={yCol} stroke={yCol} strokeWidth={sw} lineJoin="round" />
+                          <Text x={4 / scale} y={L + 2 / scale} text="Y" fontSize={fs} fontStyle="bold" fill={yCol} />
+                          {/* Origin marker */}
+                          <Circle x={0} y={0} radius={3.5 / scale} fill="#0f172a" />
+                        </Group>
+                      );
+                    })()}
                   </WorldViewport>
                 </Layer>
               );
@@ -24591,6 +25067,7 @@ User request: ${aiPrompt.trim()}`;
                           <Group key={att.id} listening={false}>
                             {g.fill.map((poly, i) => <Line key={`f${i}`} points={poly.flatMap((p) => [p.x, p.y])} closed stroke={g.color} strokeWidth={sw} fill={`${g.color}22`} lineJoin="round" />)}
                             {g.lines.map((ln, i) => <Line key={`l${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
+                            {g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" />)}
                           </Group>
                         );
                       }
@@ -24629,10 +25106,12 @@ User request: ${aiPrompt.trim()}`;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!obj?.geometry) return null;
                       const g = evalParametricGeometry(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef);
-                      if (!g.lines.length) return null;
+                      if (!g.lines.length && !g.refLines.length) return null;
                       return (
                         <Group key={`pobj-space-2d-${room.id}-${att.id}`} listening={false}>
                           {g.lines.map((ln, i) => <Line key={`l${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
+                          {/* Dashed construction/reference outlines (inset polygon · split line · optimise rect). */}
+                          {g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
                         </Group>
                       );
                     });
@@ -26208,7 +26687,7 @@ User request: ${aiPrompt.trim()}`;
                       LABELLED nodes (so plain junctions stay uncluttered), independent of the node-dot layer. */}
                   {wallNodes.map((node) => {
                     const meta = (history.state.nodeMeta ?? {})[node.stableKey];
-                    if (!meta?.label || meta.showLabel === false) return null;
+                    if (!meta?.label || (meta.showLabel ?? nodeDisplayDefaults.showLabel) === false) return null;
                     const label = meta.label;
                     const fs = Math.max(9, 12 / scale);
                     return (
@@ -26248,11 +26727,11 @@ User request: ${aiPrompt.trim()}`;
                       const mm = /(\d+)/.exec(dispMeta.connectedSpaceId);
                       return mm ? (visibleRooms[parseInt(mm[1], 10) - 1] ?? null) : null;
                     })();
-                    const dispShape = dispMeta?.dispShape ?? "dot";
-                    const dispStyle = dispMeta?.dispStyle ?? "solid";
-                    const dispMul = dispMeta?.dispSize && dispMeta.dispSize > 0 ? dispMeta.dispSize : 1;
+                    const dispShape = dispMeta?.dispShape ?? nodeDisplayDefaults.dispShape;
+                    const dispStyle = dispMeta?.dispStyle ?? nodeDisplayDefaults.dispStyle;
+                    const dispMul = dispMeta?.dispSize && dispMeta.dispSize > 0 ? dispMeta.dispSize : nodeDisplayDefaults.dispSize;
                     const baseR = ((isSelected ? 5 : nodeScope ? 4.5 : 3.5) / scale) * dispMul;
-                    const accent = isSelected ? "#3b82f6" : isHovered && nodeScope ? "#3b82f6" : (dispMeta?.dispColor ?? "#475569");
+                    const accent = isSelected ? "#3b82f6" : isHovered && nodeScope ? "#3b82f6" : (dispMeta?.dispColor ?? nodeDisplayDefaults.dispColor);
                     const ringStroke = isSelected ? "#1d4ed8" : (dispMeta?.dispColor ?? "#94a3b8");
                     return (
                       <Group key={`node-frag-${node.stableKey}`} listening>
@@ -26270,11 +26749,11 @@ User request: ${aiPrompt.trim()}`;
                       {/* Marker visual (Shape + Style) — non-interactive; the Circle below is the hit target. */}
                       <NodeMarker
                         cx={node.x} cy={node.y} r={baseR} shape={dispShape} style={dispStyle}
-                        hatch={!!dispMeta?.hatch}
-                        hatchStyle={dispMeta?.hatchStyle ?? "diagonal"}
-                        hatchSpacing={dispMeta?.hatchSpacing ?? 8}
-                        hatchAngle={dispMeta?.hatchAngle ?? 45}
-                        hatchWeight={dispMeta?.hatchWeight ?? 1}
+                        hatch={dispMeta?.hatch ?? nodeDisplayDefaults.hatch}
+                        hatchStyle={dispMeta?.hatchStyle ?? nodeDisplayDefaults.hatchStyle}
+                        hatchSpacing={dispMeta?.hatchSpacing ?? nodeDisplayDefaults.hatchSpacing}
+                        hatchAngle={dispMeta?.hatchAngle ?? nodeDisplayDefaults.hatchAngle}
+                        hatchWeight={dispMeta?.hatchWeight ?? nodeDisplayDefaults.hatchWeight}
                         fill={accent} stroke={ringStroke} sw={(isSelected ? 2 : 1) / scale}
                       />
                       <Circle
@@ -29626,6 +30105,31 @@ User request: ${aiPrompt.trim()}`;
                       </>
                     );
                   })() : null}
+                  {/* Add-Node imported-object ghost — a dashed, semi-transparent copy of the object's plan
+                      geometry that follows the cursor, so you can see where it will land. Tab cycles which
+                      anchor (Center / corners) snaps to the cursor; a crosshair marks that anchor point. */}
+                  {tool === "point" && placingNodeObjectId && nodeGhostPoint ? (() => {
+                    const obj = (history.state.objectLibrary ?? {})[placingNodeObjectId];
+                    if (!obj?.geometry) return null;
+                    const params = { ...armedNodeParams(placingNodeObjectId), rotation: nodePlaceRotation };
+                    const g = evalParametricGeometry(JSON.stringify(obj), { x: 0, y: 0 }, pixelsPerMeter, params, undefined, resolveObjectDef);
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    for (const poly of [...g.fill, ...g.lines]) for (const p of poly) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
+                    if (!isFinite(minX)) return null;
+                    const al = anchorLocal(nodePlaceAnchor, { minX, minY, maxX, maxY });
+                    const cx = nodeGhostPoint.x - al.x, cy = nodeGhostPoint.y - al.y;
+                    const sw = Math.max(0.75, 1.25 / scale);
+                    const T = (p: Point): [number, number] => [p.x + cx, p.y + cy];
+                    const ch = 6 / scale;
+                    return (
+                      <Group listening={false} opacity={0.6}>
+                        {g.fill.map((poly, i) => <Line key={`gf${i}`} points={poly.flatMap(T)} closed stroke={g.color} strokeWidth={sw} fill={`${g.color}22`} dash={[4, 4]} lineJoin="round" />)}
+                        {g.lines.map((ln, i) => <Line key={`gl${i}`} points={ln.flatMap(T)} stroke={g.color} strokeWidth={sw} dash={[4, 4]} lineJoin="round" />)}
+                        <Line points={[nodeGhostPoint.x - ch, nodeGhostPoint.y, nodeGhostPoint.x + ch, nodeGhostPoint.y]} stroke={g.color} strokeWidth={sw} listening={false} />
+                        <Line points={[nodeGhostPoint.x, nodeGhostPoint.y - ch, nodeGhostPoint.x, nodeGhostPoint.y + ch]} stroke={g.color} strokeWidth={sw} listening={false} />
+                      </Group>
+                    );
+                  })() : null}
                   {/* Add-Segment single-line preview: dashed line + live length label. */}
                   {tool === "single-segment" && singleSegStart && singleSegPreview ? (() => {
                     const a = singleSegStart;
@@ -30835,6 +31339,7 @@ User request: ${aiPrompt.trim()}`;
                 {selLabel && (<>{dot}<span>{selLabel}</span></>)}
                 {typedLabel && (<>{dot}<span className="font-semibold text-blue-600">{typedKind}: {typedLabel}▏</span></>)}
                 {orthoMode && (<>{dot}<span className="font-medium text-teal-700">Ortho</span></>)}
+                {tool === "point" && placingNodeObjectId && (<>{dot}<span className="font-medium text-indigo-600">Anchor: {NODE_ANCHOR_LABELS[nodePlaceAnchor]}</span>{dot}<span className="font-medium text-indigo-600">Rot: {nodePlaceRotation}°</span><span className="text-[10px] text-slate-400">(Tab ⇄ anchor · R ⇄ rotate)</span></>)}
               </div>
             );
           })()}
@@ -31073,13 +31578,21 @@ User request: ${aiPrompt.trim()}`;
               <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-4 p-3 pr-4 pb-6 pt-3">
 
-                {/* ── Layout sheet "Information" record — the title block's fields. Shown in Layout view
-                      mode; values are schema-driven (Schema node → Information Schema) and stored in
-                      graphAttrs.information, so editing here updates the sheet live. ── */}
+                {/* ── Layout sheet title block — the sheet's editable fields. Shown in Layout view mode.
+                      Preferred source: a canvas-attached `titleblock` parametric object (Import Objects →
+                      Canvas), whose params drive the sheet live. Falls back to the legacy Information
+                      Schema (Schema node → graphAttrs.information) when no object is attached. ── */}
                 {viewMode === "layout" && (
                   <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50/40 p-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Title Block · Information</p>
-                    {infoSchemaDefs.length > 0 ? (
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Title Block · {layoutSheetObj ? layoutSheetObj.obj.meta.name : "Information"}</p>
+                    {layoutSheetObj ? (
+                      <SchemaPropsBlock
+                        title={undefined}
+                        defs={layoutSheetObj.obj.parameters as unknown as import("./types").GraphPropDef[]}
+                        attrs={layoutSheetObj.params}
+                        onChange={updateCanvasObjectParam}
+                      />
+                    ) : infoSchemaDefs.length > 0 ? (
                       <SchemaPropsBlock
                         title={undefined}
                         defs={infoSchemaDefs}
@@ -31088,9 +31601,9 @@ User request: ${aiPrompt.trim()}`;
                       />
                     ) : (
                       <p className="rounded border border-dashed border-slate-300 bg-white p-2 text-[11px] leading-relaxed text-slate-500">
-                        Add an <b>Information Schema</b> section in a <b>Schema</b> node (e.g. the Floorplan
-                        Tracer flow) and give each row a title-block role (<code>project-name</code>,
-                        <code>scale</code>, …) to populate these fields.
+                        Attach a <b>Title Block</b> via <b>Import Objects</b> (a <code>Canvas</code> folder object),
+                        or add an <b>Information Schema</b> section in a <b>Schema</b> node and give each row a
+                        title-block role (<code>project-name</code>, <code>scale</code>, …) to populate these fields.
                       </p>
                     )}
                   </div>
@@ -32144,6 +32657,37 @@ User request: ${aiPrompt.trim()}`;
                         showPlacement={false}
                         title="Floor / Parametric Object"
                       />
+
+                      {/* Output Metrics — read-only published + derived outputs of the Space's attached
+                          parametric object(s) (e.g. Footprint Massing: FSI BUA, floors, coverage). Evaluated
+                          via evalParametricOutputs over the Space polygon (local metres). */}
+                      {(() => {
+                        const atts = selectedRoom.attachments ?? [];
+                        if (!atts.length || selectedRoom.points.length < 3) return null;
+                        const c = polygonCentroid(selectedRoom.points);
+                        const host = selectedRoom.points.map((p) => ({ x: (p.x - c.x) / pixelsPerMeter, y: (p.y - c.y) / pixelsPerMeter }));
+                        const rows: { name: string; value: string; unit?: string }[] = [];
+                        for (const att of atts) {
+                          const obj = (history.state.objectLibrary ?? {})[att.objectId];
+                          if (!obj?.geometry) continue;
+                          const out = evalParametricOutputs(JSON.stringify(obj), att.params, host, resolveObjectDef);
+                          if (out.ok) rows.push(...out.declared, ...out.derived);
+                        }
+                        if (!rows.length) return null;
+                        return (
+                          <div className="mt-2 rounded border border-emerald-200 bg-emerald-50/40 p-2">
+                            <p className="text-[9px] font-semibold uppercase tracking-wide text-emerald-700">Output Metrics</p>
+                            <div className="mt-1">
+                              {rows.map((r, i) => (
+                                <div key={`${r.name}-${i}`} className="flex items-center justify-between border-b border-emerald-100/60 py-0.5 last:border-0">
+                                  <span className="text-[11px] text-slate-600">{r.name}</span>
+                                  <span className="font-mono text-[11px] text-slate-800">{r.value}{r.unit ? ` ${r.unit}` : ""}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Native Space Type selector removed — space type is controlled via the Flow node
                           graph (Schema space discriminator). */}
@@ -34353,6 +34897,24 @@ User request: ${aiPrompt.trim()}`;
           setAddRoomMode(false);
           setTool("single-segment");
           setAddSegDialogOpen(false);
+        }}
+      />
+
+      {/* Add Node Dialog — prompts node display params (shape / style / colour / size / hatch / label),
+          then starts the point tool applying them to each dropped node. */}
+      <AddNodeDialog
+        open={addNodeDialogOpen}
+        onOpenChange={setAddNodeDialogOpen}
+        config={addNodeConfig}
+        onChange={(patch) => setAddNodeConfig((c) => ({ ...c, ...patch }))}
+        onStart={() => {
+          activeNodeConfigRef.current = { ...addNodeConfig };
+          // Plain Add Node with a display config — clear any pending schema node-type / furniture / object tag.
+          pendingNodeTypeRef.current = null;
+          clearNodeObjectPlace();
+          setFurnitureNodeMode(false);
+          setTool("point");
+          setAddNodeDialogOpen(false);
         }}
       />
 

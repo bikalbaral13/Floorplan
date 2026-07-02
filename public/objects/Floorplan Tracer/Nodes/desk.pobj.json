@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "desk.v1", "name": "Desk", "category": "Furniture/Office", "units": "m" },
+  "meta": { "id": "desk.v1", "name": "Desk", "category": "Furniture/Office", "units": "m", "icon": { "paths": ["M3 8h18", "M5 8v11", "M19 8v11", "M13 8h6v6h-6z", "M13 11h6"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 1.4, "min": 0.8, "max": 2.4, "step": 0.05, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.7, "min": 0.5, "max": 1.0, "step": 0.05, "unit": "m" },

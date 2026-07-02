@@ -53,8 +53,8 @@ const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Build", tools: ["floor-massing", "place-object", "frame-builder"] },
   { title: "Building", tools: ["wall-builder", "graph-to-room", "segment-to-door", "segment-to-window", "node-to-object", "segment-to-3d", "space-to-3d"] },
   { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d", "mesh-to-3d"] },
-  { title: "Parametric", tools: ["param-object", "param-grab", "param-output-metrics", "param-geometry", "param-render", "param-render-3d"] },
-  { title: "Calculate", tools: ["math", "random", "bua", "point", "file-upload", "text"] },
+  { title: "Parametric", tools: ["param-object", "param-grab", "param-output-metrics", "param-geometry", "param-render", "param-render-3d", "create-polygon", "create-segment", "create-arc", "create-box"] },
+  { title: "Calculate", tools: ["math", "random", "expr", "bua", "point", "file-upload", "text"] },
   { title: "Output", tools: ["output", "render", "analyse", "generate"] },
 ];
 
@@ -1892,6 +1892,40 @@ const makeNode = (
  *  REFERENCES a parameter (and is a real value-input of that tool — e.g. inset `uniformSetback`, optimise-rect
  *  `count`, massing `n`). Param-referenced op params are baked to the parameter's default as the node's literal
  *  value. Objects without a pipeline yield just Source + Input Props (nothing to chain). */
+// ── pobj → flow decompilation helpers (read-only visualisation) ──────────────────────────────────────
+/** Built-in functions / constants in the parametric expression language — excluded when detecting which
+ *  params / vars an expression depends on. */
+const POBJ_EXPR_FUNCS = new Set(["cos", "sin", "tan", "atan2", "pow", "sqrt", "min", "max", "floor", "ceil", "round", "abs", "PI", "hostArea"]);
+/** Identifiers in `expr` that name a known param / var (so an edge can be wired to that source). */
+const identsInExpr = (expr: string, known: Set<string>): string[] => {
+  const out = new Set<string>();
+  for (const m of String(expr).matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
+    const id = m[0];
+    if (!POBJ_EXPR_FUNCS.has(id) && known.has(id)) out.add(id);
+  }
+  return [...out];
+};
+/** Match a simple `A op B` expression (op ∈ + − × ÷, operands = identifier or number) → a Math node spec. */
+const simpleBinaryExpr = (expr: string): { a: string; b: string; op: string } | null => {
+  const m = String(expr).trim().match(/^(-?\d*\.?\d+|[A-Za-z_][A-Za-z0-9_]*)\s*([-+*/])\s*(-?\d*\.?\d+|[A-Za-z_][A-Za-z0-9_]*)$/);
+  if (!m) return null;
+  const op = ({ "+": "add", "-": "subtract", "*": "multiply", "/": "divide" } as Record<string, string>)[m[2]];
+  return op ? { a: m[1], b: m[3], op } : null;
+};
+/** Readable spec text for a geometry rule (poly / line / box), showing its coordinate expressions. */
+const ruleSpecText = (rule: Record<string, unknown>): { tool: string; spec: string } | null => {
+  const ptsText = (pts: unknown): string =>
+    Array.isArray(pts) ? pts.map((p) => (Array.isArray(p) ? `(${p[0]}, ${p[1]})` : "")).filter(Boolean).join("\n") : "";
+  const extrude = (o: Record<string, unknown>): string => (o.h0 != null || o.h1 != null ? `\nextrude ${o.h0 ?? 0} → ${o.h1 ?? 0}` : "");
+  const poly = rule.poly as Record<string, unknown> | undefined;
+  if (poly) return { tool: "create-polygon", spec: ptsText(poly.pts) + extrude(poly) };
+  const box = rule.box as Record<string, unknown> | undefined;
+  if (box) return { tool: "create-box", spec: `x: ${box.x0} … ${box.x1}\ny: ${box.y0} … ${box.y1}${extrude(box)}` };
+  const line = rule.line as Record<string, unknown> | undefined;
+  if (line) return { tool: rule.repeat != null ? "create-arc" : "create-segment", spec: ptsText(line.pts) };
+  return null;
+};
+
 const pobjToFlowGraph = (pobj: Record<string, unknown>): { version: number; nodes: unknown[]; edges: unknown[] } => {
   const params = Array.isArray(pobj.parameters) ? (pobj.parameters as Record<string, unknown>[]) : [];
   const paramKeys = new Set(params.map((p) => String(p.key)));
@@ -1943,6 +1977,66 @@ const pobjToFlowGraph = (pobj: Record<string, unknown>): { version: number; node
     prevId = nodeId;
     x += 260;
   }
+
+  // ── Vars (calculation chain) → a column of Math (simple A op B) / Expression nodes. Each var's referenced
+  //    params / earlier vars are wired into it (val-* → valin-*), so the calculation graph is visible. ──
+  const known = new Set<string>(paramKeys);
+  const varSourceOf: Record<string, { source: string; handle: string }> = {};
+  for (const k of paramKeys) varSourceOf[k] = { source: "input-props", handle: `val-${k}` };
+  const wireDep = (dep: string, targetId: string, targetHandle: string, idPrefix: string) => {
+    const src = varSourceOf[dep];
+    if (src) edges.push({ id: `${idPrefix}-${dep}-${targetId}`, source: src.source, target: targetId, sourceHandle: src.handle, targetHandle });
+  };
+  const vars = geom.vars && typeof geom.vars === "object" ? (geom.vars as Record<string, unknown>) : {};
+  let vy = 60;
+  for (const [name, exprRaw] of Object.entries(vars)) {
+    if (name.startsWith("_")) continue;
+    const expr = String(exprRaw);
+    const nid = `var_${name}`;
+    const deps = identsInExpr(expr, known);
+    const sb = simpleBinaryExpr(expr);
+    if (sb) {
+      const operand = (t: string): number => (paramKeys.has(t) ? Number(defaultOf(t)) || 0 : /^-?\d/.test(t) ? Number(t) : 0);
+      nodes.push({ id: nid, position: { x: 640, y: vy }, data: { tool: "math", params: { a: operand(sb.a), b: operand(sb.b), op: sb.op, round: "none", _label: name } } });
+      if (known.has(sb.a) || paramKeys.has(sb.a)) wireDep(sb.a, nid, "valin-a", "va");
+      if (known.has(sb.b) || paramKeys.has(sb.b)) wireDep(sb.b, nid, "valin-b", "vb");
+    } else {
+      nodes.push({ id: nid, position: { x: 640, y: vy }, data: { tool: "expr", params: { name, expr } } });
+      for (const dep of deps) wireDep(dep, nid, "valin-deps", "vd");
+    }
+    varSourceOf[name] = { source: nid, handle: sb ? "val-result" : "val-result" };
+    known.add(name);
+    vy += 130;
+  }
+
+  // ── Geometry rules (from geometry.cases) → Create Polygon / Segment / Arc / Box nodes. Each rule's
+  //    coordinate expressions are shown; the params / vars it references are wired in. Case + rule `when`
+  //    and `repeat` are noted on the node. ──
+  const cases = Array.isArray(geom.cases) ? (geom.cases as Record<string, unknown>[]) : [];
+  let gy = 60;
+  let gi = 0;
+  for (const c of cases) {
+    const caseWhen = typeof c.when === "string" ? c.when : "";
+    const localNames = c.vars && typeof c.vars === "object" ? Object.keys(c.vars as object).filter((k) => !k.startsWith("_")) : [];
+    const known2 = new Set<string>([...known, ...localNames]);
+    const rules = Array.isArray(c.rules) ? (c.rules as Record<string, unknown>[]) : [];
+    for (const rule of rules) {
+      const built = ruleSpecText(rule);
+      if (!built) continue;
+      gi += 1;
+      const nid = `geom_${gi}`;
+      const noteBits: string[] = [];
+      if (caseWhen) noteBits.push(`case: ${caseWhen}`);
+      if (typeof rule.when === "string") noteBits.push(`when: ${rule.when}`);
+      if (rule.repeat != null) noteBits.push(`repeat: ${rule.repeat}`);
+      const label = typeof rule.comment === "string" ? rule.comment : "";
+      nodes.push({ id: nid, position: { x: 980, y: gy }, data: { tool: built.tool, params: { label, spec: built.spec, note: noteBits.join(" · ") } } });
+      const depText = `${built.spec} ${String(rule.when ?? "")} ${String(rule.repeat ?? "")}`;
+      for (const dep of identsInExpr(depText, known2)) if (varSourceOf[dep]) wireDep(dep, nid, "valin-deps", "gd");
+      gy += 150;
+    }
+  }
+
   return { version: 1, nodes, edges };
 };
 

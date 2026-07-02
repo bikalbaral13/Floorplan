@@ -57,7 +57,10 @@
       "Bash(cd \"/d/MAIN/monica_recent/src/floorplan\" && grep -nE \"DEFAULT_SA_PARAMS|interface .* {$|type .* =\" simulatedAnnealing.ts | head -10)",
       "Bash(awk '/^const FloorPlanEditor|^export.*FloorPlanEditor/{print NR\": \"$0}' FloorPlanEditor.tsx)",
       "Bash(powershell -Command \"Select-String -Path 'D:\\\\MAIN\\\\monica_recent\\\\src\\\\floorplan\\\\FloorPlanEditor.tsx' -Pattern '<DifferentPointsBlock' | Select-Object LineNumber\")",
-      "WebSearch"
+      "WebSearch",
+      "mcp__floorplan-bridge__place_object",
+      "mcp__floorplan-bridge__draw_segment",
+      "mcp__floorplan-bridge__place_opening"
     ]
   }
 }

@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "fridge.v1", "name": "Fridge", "category": "Fixtures/Kitchen", "units": "m" },
+  "meta": { "id": "fridge.v1", "name": "Fridge", "category": "Fixtures/Kitchen", "units": "m", "icon": { "paths": ["M6 3h12v18H6z", "M6 10h12", "M9 6v2", "M9 13v3"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 0.7, "min": 0.5, "max": 1.1, "step": 0.05, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.7, "min": 0.5, "max": 0.9, "step": 0.05, "unit": "m" },

@@ -32,7 +32,7 @@ export const parseDimEdges = (v: unknown): number[] => {
 };
 export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen";
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "create-polygon" | "create-segment" | "create-arc" | "create-box";
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
@@ -4239,6 +4239,85 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "seed", label: "Seed", kind: "number", min: 1, step: 1 },
     ],
     hint: "Random number in [min, max] with N decimals. Seeded (stable) — press Re-roll for a new draw.",
+  },
+  // ── Parametric-object decomposition (read-only) — nodes emitted by "Load Parametric Object" to visualise
+  //    a .pobj.json's vars (Expression) + geometry rules (Create Polygon / Segment / Arc / Box) as a graph.
+  //    These are display-only: the flow evaluator ignores them (evalNode default), so they annotate structure
+  //    without recomputing geometry. ──
+  expr: {
+    type: "expr",
+    label: "Expression",
+    color: "#ca8a04",
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "deps", label: "inputs" }],
+    valueOutputs: [{ key: "result", label: "Result" }],
+    defaultParams: { name: "", expr: "" },
+    fields: [
+      { key: "name", label: "Name", kind: "text" },
+      { key: "expr", label: "Formula", kind: "textarea", placeholder: "e.g. swing * PI / 180" },
+    ],
+    hint: "A named variable = an expression over params / other vars (from a parametric object's geometry.vars).",
+  },
+  "create-polygon": {
+    type: "create-polygon",
+    label: "Create Polygon",
+    color: "#059669",
+    hasInput: false,
+    hasOutput: true,
+    valueInputs: [{ key: "deps", label: "params / vars" }],
+    defaultParams: { label: "", spec: "", note: "" },
+    fields: [
+      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
+      { key: "spec", label: "Points (x, y) · extrude", kind: "textarea" },
+      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
+    ],
+    hint: "A closed polygon (2D fill + optional 0→H extrude) — a parametric object's `poly` rule.",
+  },
+  "create-segment": {
+    type: "create-segment",
+    label: "Create Segment",
+    color: "#0d9488",
+    hasInput: false,
+    hasOutput: true,
+    valueInputs: [{ key: "deps", label: "params / vars" }],
+    defaultParams: { label: "", spec: "", note: "" },
+    fields: [
+      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
+      { key: "spec", label: "Points (x, y)", kind: "textarea" },
+      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
+    ],
+    hint: "An open polyline (2D stroke) — a parametric object's `line` rule.",
+  },
+  "create-arc": {
+    type: "create-arc",
+    label: "Create Arc",
+    color: "#0891b2",
+    hasInput: false,
+    hasOutput: true,
+    valueInputs: [{ key: "deps", label: "params / vars" }],
+    defaultParams: { label: "", spec: "", note: "" },
+    fields: [
+      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
+      { key: "spec", label: "Arc (repeated chords)", kind: "textarea" },
+      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
+    ],
+    hint: "An arc / swept polyline (repeated chords, e.g. a door swing) — a repeated `line` rule.",
+  },
+  "create-box": {
+    type: "create-box",
+    label: "Create Box",
+    color: "#b45309",
+    hasInput: false,
+    hasOutput: true,
+    valueInputs: [{ key: "deps", label: "params / vars" }],
+    defaultParams: { label: "", spec: "", note: "" },
+    fields: [
+      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
+      { key: "spec", label: "x0…x1 · y0…y1 · h0→h1", kind: "textarea" },
+      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
+    ],
+    hint: "An axis-aligned box (2D rect + 3D prism) — a parametric object's `box` rule.",
   },
   output: {
     type: "output",

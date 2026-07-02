@@ -1,0 +1,51 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "segment-settings",
+    "name": "Segment Settings",
+    "category": "Defaults",
+    "symbol": "settings"
+  },
+  "hostKind": "segment",
+  "parameters": [
+    { "key": "mode", "label": "Mode", "kind": "select", "default": "buffered", "role": "mode",
+      "options": [
+        { "value": "line", "label": "Line" },
+        { "value": "buffered", "label": "Buffered" }
+      ] },
+    { "key": "pathType", "label": "Path Type", "kind": "select", "default": "straight", "role": "path-type",
+      "options": [
+        { "value": "straight", "label": "Straight" },
+        { "value": "nurbs-through", "label": "NURBS · through vertices" },
+        { "value": "nurbs-smooth", "label": "NURBS · smooth" }
+      ] },
+    { "key": "thickness", "label": "Thickness", "kind": "number", "default": 0.24, "min": 0, "step": 0.01, "unit": "m", "role": "thickness" },
+    { "key": "lineStyle", "label": "Line Style", "kind": "select", "default": "solid", "role": "line-style",
+      "options": [
+        { "value": "solid", "label": "Solid" },
+        { "value": "dashed", "label": "Dashed" },
+        { "value": "dotted", "label": "Dotted" }
+      ] },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#94a3b8", "role": "color" },
+    { "key": "showLabel", "label": "Show Label", "kind": "checkbox", "default": true, "role": "show-label" },
+    { "key": "bufferStyle", "label": "Buffer Style", "kind": "select", "default": "flat", "role": "buffer-style",
+      "options": [
+        { "value": "capsule", "label": "Capsule" },
+        { "value": "square", "label": "Square" },
+        { "value": "flat", "label": "Flat (Butt)" }
+      ] },
+    { "key": "fill", "label": "Fill", "kind": "select", "default": "hatched", "role": "fill",
+      "options": [
+        { "value": "filled", "label": "Filled" },
+        { "value": "outlined", "label": "Outlined" },
+        { "value": "hatched", "label": "Hatched" }
+      ] },
+    { "key": "justification", "label": "Justification", "kind": "select", "default": "center", "role": "justification",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "right", "label": "Right" }
+      ] }
+  ]
+}

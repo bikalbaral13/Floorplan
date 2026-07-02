@@ -121,6 +121,8 @@ interface LeftToolbarProps {
   onAddSpaceType?: (spaceType: string) => void;
   /** Start the plain Add Node (point) tool, clearing any pending schema node-type tag. */
   onPlainNodeClick?: () => void;
+  /** Opens the Add Node dialog (node display params) before placing. */
+  onOpenAddNodeDialog?: () => void;
   /** Opens the GeoJSON file picker and imports polygons onto the OSM map. */
   onImportGeojson?: () => void;
 }
@@ -194,6 +196,7 @@ export const LeftToolbar = ({
   onAddSegmentType,
   onAddSpaceType,
   onPlainNodeClick,
+  onOpenAddNodeDialog,
   onImportGeojson,
 }: LeftToolbarProps) => (
   <div className="flex w-full flex-col items-stretch gap-2">
@@ -249,6 +252,7 @@ export const LeftToolbar = ({
       onAddSegmentType={onAddSegmentType}
       onAddSpaceType={onAddSpaceType}
       onPlainNodeClick={onPlainNodeClick}
+      onOpenAddNodeDialog={onOpenAddNodeDialog}
       onImportGeojson={onImportGeojson}
     />
 

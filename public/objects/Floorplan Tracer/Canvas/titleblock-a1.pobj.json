@@ -1,0 +1,59 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "titleblock-a1",
+    "name": "Title Block — A1",
+    "category": "Layout",
+    "symbol": "titleblock"
+  },
+  "hostKind": "canvas",
+  "parameters": [
+    { "key": "firmName", "label": "Firm Name", "kind": "text", "default": "CONSULTANCY / FIRM NAME", "role": "firm-name" },
+    { "key": "firmAddress", "label": "Firm Address", "kind": "text", "default": "Street Address, City, Country", "role": "firm-address" },
+    { "key": "firmContact", "label": "Firm Contact", "kind": "text", "default": "+00 000 0000  ·  info@firm.com", "role": "firm-contact" },
+
+    { "key": "projectName", "label": "Project Name", "kind": "text", "default": "PROJECT NAME", "role": "project-name" },
+    { "key": "projectAddress", "label": "Project Address", "kind": "text", "default": "Plot / Street, City", "role": "project-address" },
+    { "key": "client", "label": "Client", "kind": "text", "default": "CLIENT NAME", "role": "client" },
+
+    { "key": "drawingTitle", "label": "Drawing Title", "kind": "text", "default": "GROUND FLOOR PLAN", "role": "drawing-title" },
+    { "key": "discipline", "label": "Discipline", "kind": "text", "default": "ARCHITECTURAL", "role": "discipline" },
+    { "key": "status", "label": "Status", "kind": "select", "default": "FOR CONSTRUCTION", "role": "status",
+      "options": [
+        { "value": "FOR CONSTRUCTION", "label": "For Construction" },
+        { "value": "FOR TENDER", "label": "For Tender" },
+        { "value": "PRELIMINARY", "label": "Preliminary" },
+        { "value": "FOR APPROVAL", "label": "For Approval" },
+        { "value": "AS-BUILT", "label": "As-Built" }
+      ] },
+
+    { "key": "drawnBy", "label": "Drawn By", "kind": "text", "default": "—", "role": "drawn-by" },
+    { "key": "checkedBy", "label": "Checked By", "kind": "text", "default": "—", "role": "checked-by" },
+    { "key": "approvedBy", "label": "Approved By", "kind": "text", "default": "—", "role": "approved-by" },
+    { "key": "date", "label": "Date", "kind": "text", "default": "—", "role": "date" },
+    { "key": "scale", "label": "Scale", "kind": "text", "default": "1:100", "role": "scale" },
+    { "key": "projectNo", "label": "Project No", "kind": "text", "default": "—", "role": "project-no" },
+    { "key": "sheetNo", "label": "Sheet No", "kind": "text", "default": "A-101", "role": "sheet-no" },
+    { "key": "sheetSize", "label": "Sheet Size", "kind": "select", "default": "A1", "role": "sheet-size",
+      "options": [
+        { "value": "A0", "label": "A0" },
+        { "value": "A1", "label": "A1" },
+        { "value": "A2", "label": "A2" },
+        { "value": "A3", "label": "A3" },
+        { "value": "A4", "label": "A4" }
+      ] },
+    { "key": "revLevel", "label": "Revision", "kind": "text", "default": "0", "role": "revision-level" },
+    { "key": "northRotation", "label": "North Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°", "role": "north-rotation" },
+
+    { "key": "rev1No", "label": "Rev 1 · No", "kind": "text", "default": "", "role": "rev1-no" },
+    { "key": "rev1Date", "label": "Rev 1 · Date", "kind": "text", "default": "", "role": "rev1-date" },
+    { "key": "rev1Desc", "label": "Rev 1 · Description", "kind": "text", "default": "", "role": "rev1-desc" },
+    { "key": "rev1By", "label": "Rev 1 · By", "kind": "text", "default": "", "role": "rev1-by" },
+
+    { "key": "rev2No", "label": "Rev 2 · No", "kind": "text", "default": "", "role": "rev2-no" },
+    { "key": "rev2Date", "label": "Rev 2 · Date", "kind": "text", "default": "", "role": "rev2-date" },
+    { "key": "rev2Desc", "label": "Rev 2 · Description", "kind": "text", "default": "", "role": "rev2-desc" },
+    { "key": "rev2By", "label": "Rev 2 · By", "kind": "text", "default": "", "role": "rev2-by" }
+  ]
+}

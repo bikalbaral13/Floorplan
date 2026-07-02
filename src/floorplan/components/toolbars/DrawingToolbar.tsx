@@ -19,7 +19,6 @@ import {
   Dot,
   Sofa,
   Grid3x3,
-  LayoutTemplate,
   Waypoints,
   Square,
   Trash2,
@@ -29,7 +28,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToolButton } from "@/components/toolbutton";
-import type { SelectFilter, Tool } from "../../types";
+import type { ParametricObjectIcon, SelectFilter, Tool } from "../../types";
+
+/** One Add Segment / Node / Space menu entry: `value` commits the type (a schema seg-type or an `obj:<id>`),
+ *  `icon` is the object's inline glyph (rendered by {@link typeIcon}), `symbol` picks a built-in Lucide fallback. */
+type DrawToolEntry = { value: string; label: string; icon?: ParametricObjectIcon; symbol?: string };
 
 type EdgeMode = "connection" | null;
 
@@ -57,11 +60,6 @@ export interface DrawingToolbarProps {
   onAddFurniture: () => void;
   /** Open the Create Grid dialog (Add Node ▸ Grid) — drops a construction grid on the canvas. */
   onCreateGrid: () => void;
-  /** Open the Template dialog — load a schema/semantics template (Node / Segment / Space types +
-   *  properties + icons) into the drawing tools, Layers, and Properties tab. No flow / geometry. */
-  onOpenTemplate?: () => void;
-  /** True when a template is currently loaded (drives the Template button highlight). */
-  templateActive?: boolean;
   /** Import a folder of parametric objects (Nodes / Segments / Spaces of `.pobj.json`). Populates the
    *  Add Node / Add Segment / Add Space dropdowns from the imported objects' labels. */
   onImportObjects?: (files: File[]) => void;
@@ -111,20 +109,23 @@ export interface DrawingToolbarProps {
   singleSegType?: string;
   /** Schema-driven segment TYPES (from a "Schema to Drawing Tools" node) — value + label + SVG icon.
    *  When present these drive the Add Segment "draw as type" list (overriding the built-in door/window). */
-  schemaSegmentTools?: { value: string; label: string; icon?: string }[];
+  schemaSegmentTools?: DrawToolEntry[];
   /** Schema-driven node TYPES — added to the Add Node dropdown (object / junction / custom), with icons. */
-  schemaNodeTools?: { value: string; label: string; icon?: string }[];
+  schemaNodeTools?: DrawToolEntry[];
   /** Start placing nodes tagged with a schema node-type (object / junction / custom). */
   onAddNodeType?: (nodeType: string) => void;
   /** Pick a schema segment TYPE — the host pops the type's parameter dialog, then starts the draw. When
    *  set this supersedes the inline onSingleSegmentClick for schema types. */
   onAddSegmentType?: (segType: string, label: string) => void;
   /** Schema-driven space TYPES — added to the Add Space dropdown (room / open-space / custom), with icons. */
-  schemaSpaceTools?: { value: string; label: string; icon?: string }[];
+  schemaSpaceTools?: DrawToolEntry[];
   /** Start drawing a Space tagged with a schema space-type (room / open-space / custom). */
   onAddSpaceType?: (spaceType: string) => void;
   /** Start the plain Add Node (point) tool, clearing any pending schema node-type tag. */
   onPlainNodeClick?: () => void;
+  /** Opens the Add Node dialog (node display params) before placing. When omitted, the main Add Node
+   *  button falls back to `onPlainNodeClick` / starting the point tool directly. */
+  onOpenAddNodeDialog?: () => void;
   /** Opens the GeoJSON file picker and imports polygons onto the OSM map.
    *  Requires the Map layer to be visible with an anchor already set. */
   onImportGeojson?: () => void;
@@ -164,8 +165,19 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
   const SPACE_LUCIDE: Record<string, ReactNode> = {
     room: <Square className="h-4 w-4 text-green-700" />, "open-space": <Shapes className="h-4 w-4 text-lime-700" />,
   };
-  const typeIcon = (icon: string | undefined, fallback: ReactNode): ReactNode =>
-    icon ? <img src={icon} alt="" className="h-4 w-4 object-contain" /> : (fallback ?? <Slash className="h-4 w-4" />);
+  // Render an object's inline glyph: `{ paths }` → a themeable 24×24 stroke <svg> (inherits currentColor);
+  // a `src` string (data-URI / URL) → <img>; otherwise the built-in Lucide fallback, else a bare slash.
+  const typeIcon = (icon: ParametricObjectIcon | undefined, fallback: ReactNode): ReactNode => {
+    if (icon && typeof icon === "object" && Array.isArray(icon.paths)) {
+      return (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          {icon.paths.map((d, i) => <path key={i} d={d} />)}
+        </svg>
+      );
+    }
+    if (typeof icon === "string" && icon) return <img src={icon} alt="" className="h-4 w-4 object-contain" />;
+    return fallback ?? <Slash className="h-4 w-4" />;
+  };
   // Schema-driven type lists — populated ONLY when a "Schema to Drawing Tools" node is active. When empty,
   // the Add Segment / Add Node buttons have NO dropdown (main click = draw line / drop a point).
   const segTypeList = p.schemaSegmentTools ?? [];
@@ -180,19 +192,6 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
           {/* Set Scale moved to Preferences (top-right). Import Image + Map live in the top-right Files
               dropdown. The parent-provided top-tool slot (if any) still renders first. */}
           {p.topToolSlots && <div className="flex flex-col items-center gap-2">{p.topToolSlots}</div>}
-          {/* Template — load a schema/semantics template (segment / node / space TYPES + properties +
-              icons) into the drawing tools, Layers, and Properties. No geometry pipeline. */}
-          {p.onOpenTemplate && (
-            <div className="flex flex-col items-center gap-2">
-              <ToolButton
-                active={!!p.templateActive}
-                icon={<LayoutTemplate className="h-6 w-6 text-indigo-600" />}
-                label="Template"
-                onClick={p.onOpenTemplate}
-              />
-              <hr className="w-full border-slate-200" />
-            </div>
-          )}
           {/* Import Objects — pick a folder of `.pobj.json` (Nodes / Segments / Spaces); the imported
               objects' labels populate the Add Node / Add Segment / Add Space dropdowns. */}
           {p.onImportObjects && (
@@ -226,7 +225,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 className="h-9 w-9 p-0"
                 title="Add Node"
                 aria-label="Add Node"
-                onClick={() => { if (p.onPlainNodeClick) p.onPlainNodeClick(); else p.onToolChange("point"); }}
+                onClick={() => { if (p.onOpenAddNodeDialog) p.onOpenAddNodeDialog(); else if (p.onPlainNodeClick) p.onPlainNodeClick(); else p.onToolChange("point"); }}
               >
                 <CircleIcon className="h-6 w-6 fill-current text-slate-700" />
               </Button>
@@ -257,7 +256,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                           className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
                           onClick={() => { setAddNodeModeOpen(false); p.onAddNodeType?.(t.value); }}
                         >
-                          {typeIcon(t.icon, NODE_LUCIDE[t.value])}
+                          {typeIcon(t.icon, NODE_LUCIDE[t.symbol ?? t.value])}
                           {t.label}
                         </Button>
                       ))}
@@ -319,7 +318,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                             toast.info(`Draw a segment to place the ${t.label.toLowerCase()} — click start, then end`);
                           }}
                         >
-                          {typeIcon(t.icon, SEG_LUCIDE[t.value])}
+                          {typeIcon(t.icon, SEG_LUCIDE[t.symbol ?? t.value])}
                           {t.label}
                         </Button>
                       ))}
@@ -365,7 +364,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                     className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
                     onClick={() => { setAddSpaceOpen(false); p.onAddSpaceType?.(t.value); }}
                   >
-                    {typeIcon(t.icon, SPACE_LUCIDE[t.value])}
+                    {typeIcon(t.icon, SPACE_LUCIDE[t.symbol ?? t.value])}
                     {t.label}
                   </Button>
                 ))}

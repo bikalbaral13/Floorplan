@@ -16,7 +16,7 @@ import type { FlowMeshPrism } from "./meshTypes";
 import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
 // Flow op adapters reused verbatim by the pipeline runner — a pobj `pipeline` calls the SAME functions the
 // Flow editor dispatches to, so an object renders identically to the flow it was authored from.
-import { evalInset, evalOptimise } from "./evalNodes";
+import { evalInset, evalOptimise, evalSplit } from "./evalNodes";
 
 // ── Expression language ──────────────────────────────────────────────────────────────────────────────
 // Grammar (low→high precedence): ternary, ||, &&, == !=, < <= > >=, + -, * / %, unary - !, primary
@@ -160,8 +160,10 @@ const evalTruthy = (expr: unknown, sc: Scope): boolean => (expr == null ? true :
 // e.g. a door leaf rotated by its swing angle); a `line` rule is an open polyline (e.g. a swing arc, a
 // window's glazing/operation lines). Closed shapes fill + outline in plan and extrude h0→h1 in 3D; open
 // shapes only stroke in plan (no fill, no 3D). So one definition drives plan AND 3D from the same params.
-interface Shape { pts: Point[]; closed: boolean; h0: number; h1: number; }
-export interface ParametricGeometry { fill: Point[][]; lines: Point[][]; color: string; }
+interface Shape { pts: Point[]; closed: boolean; h0: number; h1: number; ref?: boolean; }
+/** `refLines` are dashed construction/reference outlines (e.g. a massing pipeline's inset polygon, split
+ *  line, optimise rectangle) — drawn in 2D only, never filled or extruded. */
+export interface ParametricGeometry { fill: Point[][]; lines: Point[][]; color: string; refLines: Point[][]; }
 
 const MAX_SHAPES = 4000;
 const MAX_REPEAT = 1000;
@@ -340,6 +342,26 @@ function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope
       case "optimise-rect":
         polys = polys.flatMap((poly) => evalOptimise(poly, rp, 1));
         break;
+      case "outline":
+        // Emit the CURRENT footprint set as flat reference outlines (dashed construction lines in 2D, skipped
+        // in 3D) without changing `polys` — so intermediate steps (inset polygon, optimise rect) stay visible.
+        for (const poly of polys) if (poly.length >= 3) shapes.push({ pts: copy(poly), closed: true, h0: 0, h1: 0, ref: true });
+        break;
+      case "split": {
+        // Cut each footprint into pieces (evalSplit). The `keep` piece (default 0 — e.g. buildable) continues
+        // downstream; the other pieces (e.g. amenity open space) are emitted as FLAT footprints (drawn in 2D,
+        // skipped in 3D). A degenerate split (no pieces) passes the polygon through unchanged.
+        const nextPolys: PolySet = [];
+        for (const poly of polys) {
+          const pieces = evalSplit(poly, rp, 1);
+          if (pieces.length === 0) { nextPolys.push(poly); continue; }
+          const keep = Math.max(0, Math.min(pieces.length - 1, Math.floor(num2(rp.keep, 0))));
+          nextPolys.push(pieces[keep]);
+          pieces.forEach((pc, i) => { if (i !== keep && pc.length >= 3) shapes.push({ pts: copy(pc), closed: true, h0: 0, h1: 0 }); });
+        }
+        polys = nextPolys;
+        break;
+      }
       case "floor-massing":
       case "extrude": {
         // Loft each current footprint into `n` stacked floors (massing) or a single solid (extrude).
@@ -531,12 +553,15 @@ const placer = (anchor: Point, ppm: number, rotDeg: number) => {
  *  projection). Closed shapes fill + outline; open shapes only stroke. Empty on parse error. */
 export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): ParametricGeometry {
   const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set() });
-  if (!built) return { fill: [], lines: [], color: "#0f766e" };
+  if (!built) return { fill: [], lines: [], color: "#0f766e", refLines: [] };
   const xf = placer(anchor, ppm, built.rotationDeg);
   const fill: Point[][] = [];
   const lines: Point[][] = [];
+  const refLines: Point[][] = [];
   for (const sh of built.shapes) {
     const ring = sh.pts.map((p) => xf(p.x, p.y));
+    // Reference outlines (from an `outline` op) → dashed construction lines only, never filled.
+    if (sh.ref) { refLines.push(sh.closed ? [...ring, ring[0]] : ring); continue; }
     if (sh.closed) {
       const closedRing = [...ring, ring[0]];
       fill.push(closedRing);
@@ -545,7 +570,7 @@ export function evalParametricGeometry(defText: string, anchor: Point, ppm: numb
       lines.push(ring);
     }
   }
-  return { fill, lines, color: built.color };
+  return { fill, lines, color: built.color, refLines };
 }
 
 /** Parse + evaluate a parametric definition into 3D mesh prisms anchored at `anchor` — one lofted prism per
@@ -733,6 +758,7 @@ export function evalParametricOutputs(defText: string, overrides?: Record<string
   if (built && built.shapes.length) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minH = Infinity, maxH = -Infinity, area = 0, vol = 0;
     for (const sh of built.shapes) {
+      if (sh.ref) continue; // reference/construction outlines aren't real footprint — exclude from metrics
       for (const p of sh.pts) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
       minH = Math.min(minH, sh.h0, sh.h1); maxH = Math.max(maxH, sh.h0, sh.h1);
       if (sh.closed) { const a = Math.abs(ringArea(sh.pts)); area += a; vol += a * Math.abs(sh.h1 - sh.h0); }

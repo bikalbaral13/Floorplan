@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "staircase.straight.v1", "name": "Staircase", "category": "Circulation/Stairs", "units": "m", "symbol": "staircase" },
+  "meta": { "id": "staircase.straight.v1", "name": "Staircase", "category": "Circulation/Stairs", "units": "m", "symbol": "staircase", "icon": { "paths": ["M3 20h5v-4h5v-4h5v-4h3"] } },
   "parameters": [
     { "key": "config", "label": "Configuration", "kind": "select", "default": "straight", "options": [
       { "value": "straight", "label": "Straight (going + landing)" },

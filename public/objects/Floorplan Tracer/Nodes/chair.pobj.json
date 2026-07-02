@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "chair.v1", "name": "Chair", "category": "Furniture/Seating", "units": "m" },
+  "meta": { "id": "chair.v1", "name": "Chair", "category": "Furniture/Seating", "units": "m", "icon": { "paths": ["M7 9h10v9H7z", "M7 9V6h10v3"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 0.5, "min": 0.35, "max": 0.8, "step": 0.01, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.5, "min": 0.35, "max": 0.8, "step": 0.01, "unit": "m" },

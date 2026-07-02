@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "footing.column.v1", "name": "Footing", "category": "Structure/Foundations", "units": "m" },
+  "meta": { "id": "footing.column.v1", "name": "Footing", "category": "Structure/Foundations", "units": "m", "icon": { "paths": ["M4 4h16v16H4z", "M8 8h8v8H8z", "M12 12h.01"] } },
   "parameters": [
     { "key": "type", "label": "Footing type", "kind": "select", "default": "sloped", "options": [
       { "value": "spread", "label": "Spread (flat RCC pad)" },

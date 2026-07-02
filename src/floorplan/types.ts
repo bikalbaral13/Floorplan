@@ -664,6 +664,10 @@ export interface ParametricObjectParam {
   label: string;
   kind: "number" | "select" | "checkbox" | "text" | "color";
   default: number | string | boolean;
+  /** Optional binding role. For a `canvas` / `titleblock` object, this maps the param onto a Layout
+   *  sheet field via {@link INFO_ROLE_TO_PROP} (e.g. "drawing-title", "scale", "north-rotation"). Mirrors
+   *  {@link GraphPropDef.role} so the same Properties renderer (`SchemaPropsBlock`) can drive it. */
+  role?: string;
   min?: number;
   max?: number;
   step?: number;
@@ -675,17 +679,26 @@ export interface ParametricObjectParam {
  *  schema + an optional declarative `geometry` block. When `geometry` is present, an attached instance
  *  renders its OWN lines (2D plan) and 3D mesh from the parameters (evaluated by `evalParametricGeometry` /
  *  `evalParametricPrisms`); otherwise it falls back to the placeholder `meta.symbol`. */
+/** Toolbar / menu glyph for a parametric object. Two inline forms, both self-contained in the `.pobj.json`:
+ *  - a `src` string — a `data:` URI or URL, rendered via `<img>` (any SVG/raster, but no `currentColor` theming);
+ *  - `{ paths }` — inline SVG stroke-path `d` strings, rendered into a fixed 24×24 `<svg>` that inherits
+ *    `currentColor` (themeable, safe — no arbitrary markup/scripts). Prefer this for monochrome toolbar icons. */
+export type ParametricObjectIcon = string | { paths: string[] };
+
 export interface ParametricObjectFile {
   kind: "parametric-object";
   version: number;
   /** `symbol` selects the placeholder 2D plan symbol drawn for instances ("door" swing, "window"
-   *  frame+glass, "staircase" steps) when the file has no `geometry` block. Defaults to "door". */
-  meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" | "floor" | "wall" | "massing" };
+   *  frame+glass, "staircase" steps) when the file has no `geometry` block. Defaults to "door".
+   *  `icon` is the toolbar/menu glyph (Add Segment/Node/Space dropdowns) — see {@link ParametricObjectIcon};
+   *  when absent the menu falls back to a built-in Lucide icon keyed by `symbol`. */
+  meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" | "floor" | "wall" | "massing" | "titleblock" | "settings"; icon?: ParametricObjectIcon };
   parameters: ParametricObjectParam[];
   /** Which host this object is drawn onto from the toolbar — set when imported via a Floorplan-Tracer
-   *  folder (Nodes → "node", Segments → "segment", Spaces → "space"). Drives the Add Node / Add Segment /
-   *  Add Space menus and the auto-attach when the matching element is drawn / selected. */
-  hostKind?: "node" | "segment" | "space";
+   *  folder (Nodes → "node", Segments → "segment", Spaces → "space", Canvas → "canvas"). Drives the
+   *  Add Node / Add Segment / Add Space menus and the auto-attach when the matching element is drawn /
+   *  selected. `canvas` objects (e.g. the Layout title block) attach to the project sheet, not an element. */
+  hostKind?: "node" | "segment" | "space" | "canvas";
   /** Declarative geometry generator (vars + cases + box rules with expression strings). Passed verbatim to
    *  `evalParametricGeometry` (plan) / `evalParametricPrisms` (3D mesh). Kept loose — the evaluator validates. */
   geometry?: Record<string, unknown>;
@@ -701,6 +714,15 @@ export interface SegmentAttachment {
   t: number;
   /** Mirror the object to the other side of the segment. */
   flip?: boolean;
+}
+
+/** An instance of a parametric object bound to the project canvas (not a node / segment / space) — e.g.
+ *  the Layout sheet title block. A sheet-level singleton, keyed by sheet id in {@link FloorPlanState.canvasObjects}.
+ *  `params` holds the per-instance field values (keyed by each param's `role ?? key`, matching SchemaPropsBlock). */
+export interface CanvasAttachment {
+  id: string;
+  objectId: string;
+  params: Record<string, number | string | boolean>;
 }
 
 export interface FurnitureItem {
@@ -977,9 +999,13 @@ export interface FloorPlanModel {
     graphs?: Record<string, Record<string, GraphAttrValue>>;
     /** Non-geometric "Information" records (e.g. the Layout title block), keyed by record id.
      *  Like `graphs`, these carry no canvas geometry — they hold schema-driven sheet metadata
-     *  (consultancy / project / scale / …) fed to the Layout sheet. */
+     *  (consultancy / project / scale / …) fed to the Layout sheet. Legacy: superseded by
+     *  {@link FloorPlanState.canvasObjects} when a `titleblock` parametric object is attached. */
     information?: Record<string, Record<string, GraphAttrValue>>;
   };
+  /** Canvas-attached parametric objects (e.g. the Layout title block), keyed by sheet id. Each entry is a
+   *  {@link CanvasAttachment} whose object lives in {@link objectLibrary}; its `params` drive the sheet. */
+  canvasObjects?: Record<string, CanvasAttachment>;
 }
 
 /** AutoCAD-style layer. Every drawable entity carries a `layerId` referencing one of these. */

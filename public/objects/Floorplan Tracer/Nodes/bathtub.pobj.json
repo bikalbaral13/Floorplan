@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "bathtub.v1", "name": "Bathtub", "category": "Fixtures/Bathroom", "units": "m" },
+  "meta": { "id": "bathtub.v1", "name": "Bathtub", "category": "Fixtures/Bathroom", "units": "m", "icon": { "paths": ["M4 11h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z", "M6 11V8a2 2 0 0 1 2-2", "M8 6h1"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 1.7, "min": 1.2, "max": 2.0, "step": 0.05, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.75, "min": 0.6, "max": 0.9, "step": 0.05, "unit": "m" },

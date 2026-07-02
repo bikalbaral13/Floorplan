@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "floorplan.bsp.v1", "name": "Floorplan", "category": "Layout/Floorplan", "units": "m" },
+  "meta": { "id": "floorplan.bsp.v1", "name": "Floorplan", "category": "Layout/Floorplan", "units": "m", "icon": { "paths": ["M3 3h18v18H3z", "M13 3v18", "M3 12h10", "M13 13h8", "M3 8h3"] } },
   "hostKind": "node",
   "description": "Procedural floor plan with three footprint MODES. `rectangular` = a seeded BSP that splits a W×D box into `rooms` cells (Random Layout jitters the splits; Seed repeats them) with partition + perimeter walls, a door swing on each partition + an entrance, and a window on every outer wall. `L-shape` / `T-shape` = a shaped shell with THICKER exterior walls (Exterior Wall); the entrance door and outer windows are COMPOSED from the separate Door (door.single.v1) and Window (window.standard.v1) objects via `ref` rules (each placed + rotated onto its wall, driven by Door Width / Window Width / Sill / Lintel), and — when Furnish is on — bed + sofa symbols, for a more realistic, professional 2D plan. (Composition needs Door + Window loaded in the object library.) A small North arrow is drawn on every mode. Footprint W×D derives from Rooms × Avg Area at the given Aspect; origin = node centre, X = width, Y = depth.",
   "parameters": [

@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "bench.v1", "name": "Bench", "category": "Furniture/Seating", "units": "m" },
+  "meta": { "id": "bench.v1", "name": "Bench", "category": "Furniture/Seating", "units": "m", "icon": { "paths": ["M3 10h18v3H3z", "M5 13v6", "M19 13v6"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 1.4, "min": 0.6, "max": 2.4, "step": 0.05, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.4, "min": 0.3, "max": 0.6, "step": 0.05, "unit": "m" },

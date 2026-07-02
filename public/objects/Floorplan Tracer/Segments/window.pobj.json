@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "window.standard.v1", "name": "Window", "category": "Openings/Windows", "units": "m", "symbol": "window" },
+  "meta": { "id": "window.standard.v1", "name": "Window", "category": "Openings/Windows", "units": "m", "symbol": "window", "icon": { "paths": ["M4 5h16v14H4z", "M12 5v14", "M4 12h16"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 1.2, "min": 0.3, "max": 4.0, "step": 0.05, "unit": "m" },
     { "key": "height", "label": "Height", "kind": "number", "default": 1.2, "min": 0.3, "max": 3.0, "step": 0.05, "unit": "m" },

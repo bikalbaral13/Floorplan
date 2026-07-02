@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "bookshelf.v1", "name": "Bookshelf", "category": "Furniture/Storage", "units": "m" },
+  "meta": { "id": "bookshelf.v1", "name": "Bookshelf", "category": "Furniture/Storage", "units": "m", "icon": { "paths": ["M4 4h16v16H4z", "M4 10h16", "M4 15h16", "M8 4v6", "M12 4v6", "M15 10v5"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 1.0, "min": 0.4, "max": 2.4, "step": 0.05, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.3, "min": 0.2, "max": 0.5, "step": 0.05, "unit": "m" },

@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "sofa.v2", "name": "Sofa", "category": "Furniture/Living", "units": "m" },
+  "meta": { "id": "sofa.v2", "name": "Sofa", "category": "Furniture/Living", "units": "m", "icon": { "paths": ["M4 11a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5H4z", "M4 16v2", "M20 16v2", "M7 9V7h10v2"] } },
   "parameters": [
     { "key": "seats", "label": "Seats", "kind": "number", "default": 3, "min": 1, "max": 5, "step": 1 },
     { "key": "seatWidth", "label": "Seat Width", "kind": "number", "default": 0.6, "min": 0.45, "max": 0.9, "step": 0.01, "unit": "m" },

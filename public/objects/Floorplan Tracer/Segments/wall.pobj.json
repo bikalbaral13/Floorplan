@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "wall.segment.v1", "name": "Wall", "category": "Architecture/Walls", "units": "m", "symbol": "wall" },
+  "meta": { "id": "wall.segment.v1", "name": "Wall", "category": "Architecture/Walls", "units": "m", "symbol": "wall", "icon": { "paths": ["M3 7h18", "M3 12h18", "M3 17h18", "M9 7v5", "M15 7v5", "M9 17v-5", "M15 17v-5"] } },
   "description": "Host-conforming wall. Attach to a SEGMENT (from Segment Properties): the wall takes the segment's length and its CANVAS thickness as the footprint — there are no plan-size parameters here (thickness comes from the segment). `height` extrudes that band upward from `base`, and `color` fills it in both the 2D plan and the 3D view. Because the footprint is the host segment, this object has no `geometry` block; the renderer builds the wall band from the host segment + these params. Unlike Door/Window objects it does NOT cut an opening in the segment.",
   "parameters": [
     { "key": "height", "label": "Wall height", "kind": "number", "default": 2.7, "min": 0.1, "max": 12, "step": 0.05, "unit": "m" },

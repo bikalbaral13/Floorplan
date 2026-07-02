@@ -1,7 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
-  "meta": { "id": "tv-unit.v1", "name": "TV Unit", "category": "Furniture/Living", "units": "m" },
+  "meta": { "id": "tv-unit.v1", "name": "TV Unit", "category": "Furniture/Living", "units": "m", "icon": { "paths": ["M3 5h18v11H3z", "M8 20h8", "M12 16v4"] } },
   "parameters": [
     { "key": "width", "label": "Width", "kind": "number", "default": 1.6, "min": 0.8, "max": 3.0, "step": 0.05, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.4, "min": 0.3, "max": 0.6, "step": 0.05, "unit": "m" },

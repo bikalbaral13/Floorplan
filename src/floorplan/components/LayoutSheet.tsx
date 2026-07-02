@@ -47,6 +47,8 @@ export interface LayoutSheetProps {
   sheetNo?: string;
   sheetSize?: string; // e.g. "A1"
   revisionLevel?: string;
+  /** North arrow rotation in degrees (clockwise). 0 = arrow points up. */
+  northRotation?: number;
 
   // Revision history.
   revisions?: SheetRevision[];
@@ -81,6 +83,7 @@ export function LayoutSheet({
   sheetNo = "A-101",
   sheetSize = "A1",
   revisionLevel = "0",
+  northRotation = 0,
   revisions = [],
   disclaimer = "© This drawing is the property of the firm and may not be reproduced or used without written consent. Do not scale off this drawing — use figured dimensions only. Contractor to verify all dimensions on site.",
   selected = false,
@@ -230,8 +233,11 @@ export function LayoutSheet({
     sectionContent.push(
       <g key="northscale">
         <circle cx={nCx} cy={nCy} r={nR} fill="#ffffff" stroke={ink} strokeWidth={1} />
-        <polygon points={`${nCx},${nCy - nR + 4} ${nCx - 5},${nCy + 4} ${nCx},${nCy} ${nCx + 5},${nCy + 4}`} fill={ink} />
-        {value("N", nCx, nCy + nR - 2, 8, 700, "middle")}
+        {/* Needle rotates with northRotation (clockwise); the "N" cap rotates with it so it tracks the arrow. */}
+        <g transform={northRotation ? `rotate(${northRotation} ${nCx} ${nCy})` : undefined}>
+          <polygon points={`${nCx},${nCy - nR + 4} ${nCx - 5},${nCy + 4} ${nCx},${nCy} ${nCx + 5},${nCy + 4}`} fill={ink} />
+          {value("N", nCx, nCy + nR - 2, 8, 700, "middle")}
+        </g>
         <line x1={stripX + stripW * 0.42} y1={b.y} x2={stripX + stripW * 0.42} y2={b.y + b.h} stroke={faint} strokeWidth={0.5} />
         {label("SCALE", stripX + stripW * 0.42 + padX, nCy - 4)}
         {value(scale, stripX + stripW * 0.42 + padX, nCy + 12, 13, 700)}
@@ -421,6 +427,13 @@ export function resolveLayoutSheetProps(
     }
   }
   if (revisions.length) out.revisions = revisions;
+
+  // North rotation — a number, so resolve it explicitly rather than through the string-valued role map.
+  const north = byRole("north-rotation");
+  if (north != null) {
+    const n = parseFloat(north);
+    if (Number.isFinite(n)) out.northRotation = n;
+  }
 
   return out;
 }
