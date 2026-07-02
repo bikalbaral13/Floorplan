@@ -1,0 +1,48 @@
+{
+  "kind": "parametric-object",
+  "version": 3,
+  "meta": { "id": "site.v1", "name": "Site", "category": "Architecture/Site", "units": "m" },
+  "description": "A footprint-only Site study (NO massing / no vertical extrusion — the result stays a flat 2D plan footprint). Attach to a SPACE (the plot). It runs three optional planning tools over the host footprint, each independently switched on/off by a checkbox toggle, so you can use all three, any two, one, or none: (1) INSET — set back the plot boundary (front applied to `frontEdgeIndex`, `remaining` to the other edges); (2) SPLIT — carve a buildable zone of a target area (`splitCoverage` × plot area) at `splitAngle`, keeping the `splitKeep` piece and emitting the remainder as a flat open-space footprint; (3) OPTIMISE RECTANGLE — pack the largest `optShape` (rectangle by default) into what remains. Each pipeline op carries a `when` gate reading its `use…` toggle: a disabled op is skipped and the footprint passes through unchanged. OUTPUTS are footprint metrics read via evalParametricOutputs and shown in Space Properties → Output Metrics.",
+  "parameters": [
+    { "key": "useInset", "label": "Use Inset", "kind": "checkbox", "default": true },
+    { "key": "useSplit", "label": "Use Split", "kind": "checkbox", "default": true },
+    { "key": "useOptimise", "label": "Use Optimise Rectangle", "kind": "checkbox", "default": true },
+
+    { "key": "front", "label": "Inset · Front Setback", "kind": "number", "default": 10.8, "min": 0, "max": 30, "step": 0.1, "unit": "m" },
+    { "key": "remaining", "label": "Inset · Side / Rear Setback", "kind": "number", "default": 3.2, "min": 0, "max": 30, "step": 0.1, "unit": "m" },
+    { "key": "frontEdgeIndex", "label": "Inset · Front Edge Index", "kind": "number", "default": 3, "min": 0, "max": 40, "step": 1 },
+
+    { "key": "splitCoverage", "label": "Split · Buildable Coverage", "kind": "number", "default": 0.5, "min": 0.05, "max": 1, "step": 0.01 },
+    { "key": "splitAngle", "label": "Split · Angle", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "splitKeep", "label": "Split · Keep Piece Index", "kind": "number", "default": 0, "min": 0, "max": 8, "step": 1 },
+
+    { "key": "optShape", "label": "Optimise · Shape", "kind": "select", "default": "rectangle", "options": ["rectangle", "lshape", "tshape", "zshape", "ishape", "cshape", "stepped", "cross"] },
+    { "key": "optCount", "label": "Optimise · Number of Rectangles", "kind": "number", "default": 1, "min": 1, "max": 10, "step": 1 },
+    { "key": "optReference", "label": "Optimise · Reference", "kind": "select", "default": "none", "options": ["none", "custom", "by-edge"] },
+    { "key": "optAxisAngle", "label": "Optimise · Axis Angle", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#4d7c0f" }
+  ],
+  "geometry": {
+    "vars": {
+      "_doc": "splitTarget = a fraction of the plot area, used as the split's target buildable area (m²).",
+      "splitTarget": "hostArea * splitCoverage"
+    },
+    "pipeline": [
+      { "op": "host" },
+      { "op": "inset", "when": "useInset", "params": { "mode": "front-remaining", "front": "front", "remaining": "remaining", "frontEdgeMode": "index", "frontEdgeIndex": "frontEdgeIndex", "inside": true } },
+      { "op": "outline", "when": "useInset" },
+      { "op": "split", "when": "useSplit", "params": { "mode": "target", "target": { "$expr": "splitTarget" }, "angle": "splitAngle", "keep": "splitKeep" } },
+      { "op": "outline", "when": "useSplit" },
+      { "op": "optimise-rect", "when": "useOptimise", "params": { "shape": "optShape", "count": "optCount", "reference": "optReference", "axisAngle": "optAxisAngle" } },
+      { "op": "fill" }
+    ]
+  },
+  "outputs": [
+    { "key": "plotArea", "label": "Plot Area", "expr": "hostArea", "unit": "m²" },
+    { "key": "useInset", "label": "Inset Enabled", "expr": "useInset ? 1 : 0" },
+    { "key": "useSplit", "label": "Split Enabled", "expr": "useSplit ? 1 : 0" },
+    { "key": "useOptimise", "label": "Optimise Enabled", "expr": "useOptimise ? 1 : 0" },
+    { "key": "splitTarget", "label": "Split Buildable Target", "expr": "useSplit ? splitTarget : 0", "unit": "m²" }
+  ]
+}

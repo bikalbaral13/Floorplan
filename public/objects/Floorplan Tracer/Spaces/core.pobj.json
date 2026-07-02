@@ -1,0 +1,76 @@
+{
+  "kind": "parametric-object",
+  "version": 3,
+  "meta": { "id": "core.v1", "name": "Core", "category": "Architecture/Core", "units": "m" },
+  "description": "A building CORE plan symbol (horizontal study only — flat 2D, no extrusion, drawn poché). Attach to a SPACE (the floor plate). It draws a classic central-core layout sized from component counts: fire stairs at both ends (with tread lines), passenger lift shafts (auto single- or double-banked around a lobby once there are ≥4 lifts, each shaft with the X plan symbol), service lift(s) appended to the second bank, an optional services RISER strip inside the core, and an optional back-to-back TOILET block along one face. Position via `coreType` preset (central / side / end — auto-offset estimated from the plate area) plus manual offsetX/offsetY and rotation. It does NOT carve the plate (symbol only); Output Metrics publish core area, net usable and plate efficiency so the horizontal fit can be tuned.",
+  "parameters": [
+    { "key": "coreType", "label": "Core Type", "kind": "select", "default": "central", "options": ["central", "side", "end"] },
+    { "key": "passengerLifts", "label": "Passenger Lifts", "kind": "number", "default": 4, "min": 1, "max": 12, "step": 1 },
+    { "key": "serviceLifts", "label": "Service Lifts", "kind": "number", "default": 1, "min": 0, "max": 4, "step": 1 },
+    { "key": "liftW", "label": "Lift Shaft Width", "kind": "number", "default": 2.5, "min": 1.8, "max": 3.5, "step": 0.05, "unit": "m" },
+    { "key": "liftD", "label": "Lift Shaft Depth", "kind": "number", "default": 2.7, "min": 2, "max": 3.5, "step": 0.05, "unit": "m" },
+    { "key": "lobbyW", "label": "Lift Lobby Width", "kind": "number", "default": 2.4, "min": 1.5, "max": 4, "step": 0.1, "unit": "m" },
+    { "key": "stairW", "label": "Stair Enclosure Width", "kind": "number", "default": 3.0, "min": 2.2, "max": 5, "step": 0.1, "unit": "m" },
+    { "key": "useRisers", "label": "Include Riser Strip", "kind": "checkbox", "default": true },
+    { "key": "riserW", "label": "Riser Strip Width", "kind": "number", "default": 1.2, "min": 0.6, "max": 3, "step": 0.1, "unit": "m" },
+    { "key": "useToilets", "label": "Include Toilet Block", "kind": "checkbox", "default": true },
+    { "key": "toiletD", "label": "Toilet Block Depth", "kind": "number", "default": 3.5, "min": 2, "max": 6, "step": 0.1, "unit": "m" },
+    { "key": "offsetX", "label": "Offset X", "kind": "number", "default": 0, "min": -100, "max": 100, "step": 0.1, "unit": "m" },
+    { "key": "offsetY", "label": "Offset Y", "kind": "number", "default": 0, "min": -100, "max": 100, "step": 0.1, "unit": "m" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#64748b" }
+  ],
+  "geometry": {
+    "vars": {
+      "_doc": "Bank arithmetic: ≥4 passenger lifts → double-banked (two rows facing across the lobby); service lifts join row B. Core length = stairs at both ends + longest lift run + optional riser strip. Core depth = one or two shaft rows + lobby. `est` ≈ plate side (√area) drives the side/end auto-offset presets.",
+      "rowA": "passengerLifts >= 4 ? ceil(passengerLifts / 2) : passengerLifts",
+      "rowBn": "(passengerLifts - rowA) + serviceLifts",
+      "twoRows": "rowBn > 0",
+      "midLen": "max(rowA, rowBn) * liftW",
+      "riserW2": "useRisers ? riserW : 0",
+      "coreLen": "midLen + 2 * stairW + riserW2",
+      "coreD": "twoRows ? 2 * liftD + lobbyW : liftD + lobbyW",
+      "coreArea": "coreLen * coreD + (useToilets ? midLen * toiletD : 0)",
+      "est": "sqrt(max(1, hostArea))",
+      "ox": "offsetX + (coreType == 'end' ? max(0, (est - coreLen) / 2) : 0)",
+      "oy": "offsetY + (coreType == 'side' ? max(0, (est - coreD) / 2) : 0)",
+      "xm0": "0 - coreLen / 2 + stairW"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "line": { "pts": [["ox - coreLen/2", "oy - coreD/2"], ["ox + coreLen/2", "oy - coreD/2"], ["ox + coreLen/2", "oy + coreD/2"], ["ox - coreLen/2", "oy + coreD/2"], ["ox - coreLen/2", "oy - coreD/2"]], "h0": 0, "h1": 0 } },
+
+          { "box": { "x0": "ox - coreLen/2", "x1": "ox - coreLen/2 + stairW", "y0": "oy - coreD/2", "y1": "oy + coreD/2", "h0": 0, "h1": 0 } },
+          { "repeat": 6, "as": "j", "line": { "pts": [["ox - coreLen/2", "oy - coreD/2 + (j+1) * coreD/7"], ["ox - coreLen/2 + stairW", "oy - coreD/2 + (j+1) * coreD/7"]], "h0": 0, "h1": 0 } },
+
+          { "box": { "x0": "ox + coreLen/2 - stairW", "x1": "ox + coreLen/2", "y0": "oy - coreD/2", "y1": "oy + coreD/2", "h0": 0, "h1": 0 } },
+          { "repeat": 6, "as": "j", "line": { "pts": [["ox + coreLen/2 - stairW", "oy - coreD/2 + (j+1) * coreD/7"], ["ox + coreLen/2", "oy - coreD/2 + (j+1) * coreD/7"]], "h0": 0, "h1": 0 } },
+
+          { "when": "useRisers", "box": { "x0": "ox + coreLen/2 - stairW - riserW", "x1": "ox + coreLen/2 - stairW", "y0": "oy - coreD/2", "y1": "oy + coreD/2", "h0": 0, "h1": 0 } },
+          { "when": "useRisers", "line": { "pts": [["ox + coreLen/2 - stairW - riserW", "oy - coreD/2"], ["ox + coreLen/2 - stairW", "oy + coreD/2"]], "h0": 0, "h1": 0 } },
+
+          { "repeat": "rowA", "as": "i", "box": { "x0": "ox + xm0 + i * liftW", "x1": "ox + xm0 + (i+1) * liftW", "y0": "oy - coreD/2", "y1": "oy - coreD/2 + liftD", "h0": 0, "h1": 0 } },
+          { "repeat": "rowA", "as": "i", "line": { "pts": [["ox + xm0 + i * liftW", "oy - coreD/2"], ["ox + xm0 + (i+1) * liftW", "oy - coreD/2 + liftD"]], "h0": 0, "h1": 0 } },
+          { "repeat": "rowA", "as": "i", "line": { "pts": [["ox + xm0 + i * liftW", "oy - coreD/2 + liftD"], ["ox + xm0 + (i+1) * liftW", "oy - coreD/2"]], "h0": 0, "h1": 0 } },
+
+          { "when": "twoRows", "repeat": "rowBn", "as": "i", "box": { "x0": "ox + xm0 + i * liftW", "x1": "ox + xm0 + (i+1) * liftW", "y0": "oy + coreD/2 - liftD", "y1": "oy + coreD/2", "h0": 0, "h1": 0 } },
+          { "when": "twoRows", "repeat": "rowBn", "as": "i", "line": { "pts": [["ox + xm0 + i * liftW", "oy + coreD/2 - liftD"], ["ox + xm0 + (i+1) * liftW", "oy + coreD/2"]], "h0": 0, "h1": 0 } },
+          { "when": "twoRows", "repeat": "rowBn", "as": "i", "line": { "pts": [["ox + xm0 + i * liftW", "oy + coreD/2"], ["ox + xm0 + (i+1) * liftW", "oy + coreD/2 - liftD"]], "h0": 0, "h1": 0 } },
+
+          { "when": "useToilets", "box": { "x0": "ox + xm0", "x1": "ox + xm0 + midLen", "y0": "oy - coreD/2 - toiletD", "y1": "oy - coreD/2", "h0": 0, "h1": 0 } },
+          { "when": "useToilets", "line": { "pts": [["ox + xm0 + midLen/2", "oy - coreD/2 - toiletD"], ["ox + xm0 + midLen/2", "oy - coreD/2"]], "h0": 0, "h1": 0 } }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "plateArea", "label": "Plate Area", "expr": "hostArea", "unit": "m²" },
+    { "key": "coreLen", "label": "Core Length", "expr": "coreLen", "unit": "m" },
+    { "key": "coreD", "label": "Core Depth", "expr": "coreD", "unit": "m" },
+    { "key": "coreArea", "label": "Core Area", "expr": "coreArea", "unit": "m²" },
+    { "key": "liftsTotal", "label": "Lifts Total", "expr": "passengerLifts + serviceLifts" },
+    { "key": "netUsable", "label": "Net Usable Area", "expr": "max(0, hostArea - coreArea)", "unit": "m²" },
+    { "key": "efficiency", "label": "Plate Efficiency", "expr": "hostArea > 0 ? (hostArea - coreArea) / hostArea : 0" }
+  ]
+}

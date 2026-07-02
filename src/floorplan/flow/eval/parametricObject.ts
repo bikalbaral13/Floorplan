@@ -331,6 +331,11 @@ function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope
   for (const opRaw of pipeline) {
     const op = asObj(opRaw);
     if (!op || typeof op.op !== "string") continue;
+    // Optional per-op gate: `when` is an expression over the param/var scope. Absent ⇒ always runs
+    // (back-compatible). Falsy ⇒ the op is skipped and the footprint passes through unchanged, so a
+    // boolean toggle parameter can enable/disable a pipeline stage (e.g. use inset / split / optimise
+    // independently). Mirrors the `when` guard on `cases` / `rules`.
+    if (op.when != null && !evalTruthy(op.when, scope)) continue;
     const rp = resolveOpParams(asObj(op.params) ?? {}, scope);
     switch (op.op) {
       case "host":
@@ -346,6 +351,12 @@ function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope
         // Emit the CURRENT footprint set as flat reference outlines (dashed construction lines in 2D, skipped
         // in 3D) without changing `polys` — so intermediate steps (inset polygon, optimise rect) stay visible.
         for (const poly of polys) if (poly.length >= 3) shapes.push({ pts: copy(poly), closed: true, h0: 0, h1: 0, ref: true });
+        break;
+      case "fill":
+        // Emit the CURRENT footprint set as SOLID flat closed shapes (filled + outlined in 2D, skipped in 3D
+        // because h0===h1) without changing `polys`. Lets a footprint-only object (no massing / extrude)
+        // publish a visible plan result — e.g. the final buildable footprint after inset → split → optimise.
+        for (const poly of polys) if (poly.length >= 3) shapes.push({ pts: copy(poly), closed: true, h0: 0, h1: 0 });
         break;
       case "split": {
         // Cut each footprint into pieces (evalSplit). The `keep` piece (default 0 — e.g. buildable) continues

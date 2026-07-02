@@ -3,7 +3,8 @@ import { Sparkles, ChevronDown, ChevronUp, Send, Loader2, Paperclip, X, FileText
 import { Button } from "@/components/ui/button";
 
 export interface ChatMessage {
-  role: "user" | "ai" | "error";
+  /** "tool" = one agent tool call / result line (rendered as a compact mono log row). */
+  role: "user" | "ai" | "error" | "tool";
   text: string;
 }
 
@@ -16,7 +17,10 @@ export interface ChatAIPanelProps {
   onSend: (prompt: string, file?: File) => void;
   /** True when the Gemini API key + model are set in Preferences. */
   configured: boolean;
-  /** The current (possibly user-edited) system prompt sent to the model. */
+  /** "agent" = tool-loop over the live canvas (default); "rewrite" = legacy one-shot JSON rewrite. */
+  mode: "agent" | "rewrite";
+  onModeChange: (mode: "agent" | "rewrite") => void;
+  /** The current (possibly user-edited) system prompt sent to the model (the ACTIVE mode's prompt). */
   systemPrompt: string;
   /** Update the system prompt (persisted by the parent). */
   onSystemPromptChange: (value: string) => void;
@@ -24,9 +28,10 @@ export interface ChatAIPanelProps {
   defaultSystemPrompt: string;
 }
 
-/** Foldable "Chat AI" bar pinned to the top of the canvas. Type an instruction + Enter; the parent sends the
- *  current canvas JSON to Gemini, rewrites it, and loads the result back. Shift+Enter inserts a newline. */
-export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSend, configured, systemPrompt, onSystemPromptChange, defaultSystemPrompt }: ChatAIPanelProps) => {
+/** Foldable "Chat AI" bar pinned to the top of the canvas. Type an instruction + Enter. Agent mode: the
+ *  model drives the live canvas through tools, each call logged into the transcript. Rewrite mode: the
+ *  parent sends the canvas JSON to Gemini and loads the rewritten model back. Shift+Enter = newline. */
+export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSend, configured, mode, onModeChange, systemPrompt, onSystemPromptChange, defaultSystemPrompt }: ChatAIPanelProps) => {
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [showSystem, setShowSystem] = useState(false);
@@ -69,8 +74,24 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
 
         {!collapsed && (
           <div className="border-t border-slate-100">
-            {/* System prompt — view / edit / paste / copy / reset the instruction sent to the model. */}
+            {/* Mode toggle + system prompt row. Agent = tool-loop on the live canvas; Rewrite = one-shot JSON. */}
             <div className="border-b border-slate-100 px-3 py-2">
+              <div className="mb-1.5 flex items-center gap-1 rounded-md bg-slate-100 p-0.5 text-[10px] font-medium">
+                {(["agent", "rewrite"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={
+                      "flex-1 rounded px-2 py-1 transition-colors " +
+                      (mode === m ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700")
+                    }
+                    onClick={() => onModeChange(m)}
+                    title={m === "agent" ? "The model edits the canvas step-by-step with tools (draw walls, place doors, attach objects…)" : "Legacy: the model rewrites the whole plan JSON in one shot"}
+                  >
+                    {m === "agent" ? "⚡ Agent" : "JSON Rewrite"}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => setShowSystem((v) => !v)}
@@ -131,22 +152,36 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
                 </p>
               )}
               {messages.map((m, i) => (
-                <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                  <div
-                    className={
-                      "max-w-[85%] whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-[11px] " +
-                      (m.role === "user"
-                        ? "bg-violet-600 text-white"
-                        : m.role === "error"
-                          ? "bg-rose-50 text-rose-700"
-                          : "bg-slate-100 text-slate-700")
-                    }
-                  >
-                    {m.text}
+                m.role === "tool" ? (
+                  // Agent tool activity — compact mono log line (▸ call / ✓ ✗ result).
+                  <div key={i} className="flex justify-start">
+                    <div className="max-w-[95%] truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-slate-500" title={m.text}>
+                      {m.text}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+                    <div
+                      className={
+                        "max-w-[85%] whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-[11px] " +
+                        (m.role === "user"
+                          ? "bg-violet-600 text-white"
+                          : m.role === "error"
+                            ? "bg-rose-50 text-rose-700"
+                            : "bg-slate-100 text-slate-700")
+                      }
+                    >
+                      {m.text}
+                    </div>
+                  </div>
+                )
               ))}
-              {busy && <div className="flex items-center gap-1.5 text-[11px] text-slate-400"><Loader2 className="h-3 w-3 animate-spin" /> Rewriting the plan…</div>}
+              {busy && (
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {mode === "agent" ? "Working — the agent is inspecting and editing the canvas…" : "Rewriting the plan…"}
+                </div>
+              )}
             </div>
 
             {/* Input. */}

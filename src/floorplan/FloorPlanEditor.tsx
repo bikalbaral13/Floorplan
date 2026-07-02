@@ -180,6 +180,7 @@ import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/
 import { ObjectParamsDialog } from "./components/dialogs/ObjectParamsDialog";
 import { ChatAIPanel, type ChatMessage } from "./components/ChatAIPanel";
 import { serializeForAI, chatEditModel, applyAiReply, summarizeChange, cutOpeningsForAttachments, normalizeNodeMetaKeys, DEFAULT_SYSTEM_PROMPT } from "./ai/aiChat";
+import { runAgentChat, AGENT_SYSTEM_PROMPT, buildDetailedObjectCatalog, type AgentToolApi, type AgentEvent } from "./ai/agentChat";
 import { registerAgentCommand, startAgentBridge, agentBridgeEnabled } from "./agentBridge";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
@@ -3560,11 +3561,23 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
   const [aiSendBusy, setAiSendBusy] = useState<boolean>(false);
   const [aiCollapsed, setAiCollapsed] = useState<boolean>(true);
+  /** Chat AI mode — "agent" (tool-loop over the live canvas, default) or "rewrite" (legacy one-shot JSON). */
+  const [aiMode, setAiMode] = useState<"agent" | "rewrite">(() => { try { return localStorage.getItem("bp.ai.mode") === "rewrite" ? "rewrite" : "agent"; } catch { return "agent"; } });
+  /** Editable system prompt for the AGENT mode (the rewrite mode keeps aiSystemPrompt). Key is versioned
+   *  (.v2 = JSON-first prompt) so shipping a new default replaces a stale stored copy of the old one. */
+  const [aiAgentSystemPrompt, setAiAgentSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.agentSystemPrompt.v2") || AGENT_SYSTEM_PROMPT; } catch { return AGENT_SYSTEM_PROMPT; } });
+  useEffect(() => { try { localStorage.setItem("bp.ai.mode", aiMode); } catch { /* ignore */ } }, [aiMode]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.agentSystemPrompt.v2", aiAgentSystemPrompt); } catch { /* ignore */ } }, [aiAgentSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.apiKey", aiApiKey); } catch { /* ignore */ } }, [aiApiKey]);
   useEffect(() => { try { localStorage.setItem("bp.ai.model", aiModel); } catch { /* ignore */ } }, [aiModel]);
   useEffect(() => { try { localStorage.setItem("bp.ai.systemPrompt", aiSystemPrompt); } catch { /* ignore */ } }, [aiSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.units.precision", String(decimalPrecision)); } catch { /* ignore */ } }, [decimalPrecision]);
-  /** Send the current canvas JSON + the user's instruction to Gemini, then load the rewritten JSON back. */
+  /** Live ref to autoImportObjectFolder (declared further down) — the agent's import_objects tool needs it,
+   *  but putting the callback itself in handleAiSend's deps would read it before initialization (TDZ). */
+  const autoImportObjectsRef = useRef<null | (() => Promise<void>)>(null);
+  /** Chat AI send. AGENT mode (default): run the tool-loop (agentChat.ts) — the model inspects the live
+   *  canvas and edits it through the same programmatic pipeline the MCP bridge uses, streaming each tool
+   *  call into the transcript. REWRITE mode (legacy): one-shot Gemini JSON rewrite of the whole model. */
   const handleAiSend = useCallback(async (prompt: string, file?: File) => {
     if (!aiApiKey.trim() || !aiModel.trim()) {
       toast.error("Set the Gemini API key + model in Preferences first");
@@ -3591,26 +3604,298 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           } catch { /* spatial detection optional — continue with image-only analysis */ }
         }
       }
-      const before = historyRef.current.state;
       const effectivePrompt = prompt || (file ? "Generate a floor plan that reproduces the attached drawing." : "");
-      const reply = await chatEditModel({ apiKey: aiApiKey, model: aiModel, json: serializeForAI(before), prompt: effectivePrompt, pixelsPerMeter, objectLibrary: before.objectLibrary, file: filePart, detections, systemPrompt: aiSystemPrompt });
-      const merged = applyAiReply(before, reply);
-      // Punch real openings for any door/window object the AI attached to a wall (mirrors the manual
-      // place-opening cut), and canonicalise nodeMeta keys so AI-placed NODE objects (furniture / staircase
-      // on degenerate marker walls) resolve to the right node stableKey.
-      const next: FloorPlanModel = {
-        ...merged,
-        walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, pixelsPerMeter),
-        nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
-      };
-      historyRef.current.set(next);
-      setAiMessages((m) => [...m, { role: "ai", text: summarizeChange(before, next) }]);
+
+      if (aiMode === "agent") {
+        // ── Agent mode: tools over the live canvas (see agentChat.ts for the tool set + system prompt). ──
+        const bridge = () => { const b = bridgeApiRef.current; if (!b) throw new Error("canvas api not ready"); return b; };
+        const applyModelJson = (json: string): unknown => {
+          const before = historyRef.current.state;
+          const merged = applyAiReply(before, json);
+          const next: FloorPlanModel = {
+            ...merged,
+            walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, bridgePpmRef.current),
+            nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
+          };
+          historyRef.current.set(next);
+          return summarizeChange(before, next);
+        };
+        const api: AgentToolApi = {
+          getState: () => {
+            const s = historyRef.current.state;
+            const u = s.imageUnderlay;
+            return {
+              walls: s.walls.length, manualRooms: s.rooms.length, spaces: visibleRoomsRef.current.length,
+              objectsLoaded: Object.keys(s.objectLibrary ?? {}).length, pixelsPerMeter: bridgePpmRef.current,
+              objectIds: Object.keys(s.objectLibrary ?? {}),
+              // Placed underlay rect (world px) — the image→world mapping anchor for tracing.
+              underlay: u ? { xPx: Math.round(u.x), yPx: Math.round(u.y), widthPx: Math.round(u.width * u.scale), heightPx: Math.round(u.height * u.scale) } : null,
+            };
+          },
+          getPlanJson: () => serializeForAI(historyRef.current.state),
+          listSpaces: () => {
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            const ppm = bridgePpmRef.current;
+            return visibleRoomsRef.current.map((r, i) => ({
+              label: r.label || `Space${String(i + 1).padStart(3, "0")}`,
+              roomType: r.roomType ?? "room",
+              areaM2: +(Math.abs(polygonArea(r.points)) / (ppm * ppm)).toFixed(2),
+              // Polygon in PIXEL coords — auto-detected rooms aren't in get_plan, so this is how the agent
+              // gets the loop corners it needs to emit a labelled rooms[] entry for an existing space.
+              pointsPx: r.points.map((pt) => ({ x: Math.round(pt.x), y: Math.round(pt.y) })),
+              attachedObjects: (r.attachments ?? []).map((a) => lib[a.objectId]?.meta.name ?? a.objectId),
+            }));
+          },
+          listDrawTools: () => bridge().listDrawTools(),
+          drawSegment: (a) => bridge().drawSegment(a),
+          placeOpening: (a) => bridge().placeOpening(a),
+          placeObject: (a) => bridge().placeObject(a),
+          attachSpaceObject: (a) => {
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            const idOrName = String(a.object ?? "");
+            const obj = lib[idOrName] ?? Object.values(lib).find((o) => o.meta.name === idOrName || o.meta.symbol === idOrName);
+            if (!obj) throw new Error(`object not found: "${idOrName}" — call import_objects / list_draw_tools first`);
+            if (obj.hostKind !== "space") throw new Error(`${obj.meta.id} is not a space object (hostKind=${obj.hostKind ?? "node"})`);
+            const rooms = visibleRoomsRef.current;
+            const label = String(a.space ?? "");
+            const im = /^\s*space\s*0*(\d+)\s*$/i.exec(label);
+            const room = im
+              ? rooms[parseInt(im[1], 10) - 1]
+              : rooms.find((r) => (r.label ?? "").trim().toLowerCase() === label.trim().toLowerCase());
+            if (!room) throw new Error(`space not found: "${label}" — call list_spaces for the available labels`);
+            const params: Record<string, number | string | boolean> = {};
+            for (const pr of obj.parameters) params[pr.key] = pr.default;
+            const over = (a.params && typeof a.params === "object" && !Array.isArray(a.params)) ? (a.params as Record<string, unknown>) : {};
+            for (const [k, v] of Object.entries(over)) if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") params[k] = v;
+            const att: SegmentAttachment = { id: createId(), objectId: obj.meta.id, params, t: 0, flip: false };
+            const h = historyRef.current;
+            // Auto-detected rooms aren't in history.state.rooms — promote to a manual room so the attachment persists.
+            if (room.id.startsWith(ROOM_AUTO_ID_PREFIX)) {
+              h.set({ ...h.state, rooms: [...h.state.rooms, { ...room, id: createId(), attachments: [...(room.attachments ?? []), att] }] });
+            } else {
+              h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === room.id ? { ...r, attachments: [...(r.attachments ?? []), att] } : r)) });
+            }
+            return { space: label, objectId: obj.meta.id, params };
+          },
+          setImageUnderlay: async (a) => {
+            // The attached message file (closure) becomes the canvas underlay — placed at (xM,yM), scaled so
+            // its full width spans worldWidthM metres. Mirrors the manual Image-import staging (natural size
+            // + scale multiplier, locked, Image layer) so the popover controls keep working on it.
+            if (!filePart) throw new Error("no image attached to this message — attach the drawing and resend");
+            if (!filePart.mimeType.startsWith("image/")) throw new Error(`attached file is ${filePart.mimeType}, not an image — attach a PNG/JPEG (PDFs: use the manual Image import, which rasterizes)`);
+            const worldWidthM = Number(a.worldWidthM);
+            if (!Number.isFinite(worldWidthM) || worldWidthM <= 0.5 || worldWidthM > 10000) throw new Error("worldWidthM must be a positive real-world width in metres");
+            const src = `data:${filePart.mimeType};base64,${filePart.data}`;
+            const img = await new Promise<HTMLImageElement>((res, rej) => {
+              const im = new window.Image();
+              im.onload = () => res(im);
+              im.onerror = () => rej(new Error("could not decode the attached image"));
+              im.src = src;
+            });
+            const ppm = bridgePpmRef.current;
+            const widthPx = worldWidthM * ppm;
+            const scale = widthPx / Math.max(1, img.width);
+            const xPx = (Number(a.xM) || 0) * ppm;
+            const yPx = (Number(a.yM) || 0) * ppm;
+            const opacity = typeof a.opacity === "number" && a.opacity > 0 && a.opacity <= 1 ? a.opacity : 0.5;
+            const h = historyRef.current;
+            h.set({ ...h.state, imageUnderlay: { src, x: xPx, y: yPx, width: img.width, height: img.height, opacity, scale, locked: true, layerId: DEFAULT_IMAGE_LAYER_ID } });
+            return { xPx: Math.round(xPx), yPx: Math.round(yPx), widthPx: Math.round(widthPx), heightPx: Math.round(img.height * scale), naturalWidth: img.width, naturalHeight: img.height };
+          },
+          alignUnderlay: (a) => {
+            // Two-point fit of the EXISTING underlay onto the drawn plan — the programmatic "Set Scale +
+            // drag": image point A (grid 0–1000 per axis) lands exactly on world point A; when B is given
+            // too, the underlay is uniformly rescaled so both correspondences hold (the drawn geometry is
+            // never touched — the plan from written dimensions is the truth, the image fits to it).
+            const h = historyRef.current;
+            const u = h.state.imageUnderlay;
+            if (!u) throw new Error("no image underlay on the canvas — call set_image_underlay first");
+            const ppm = bridgePpmRef.current;
+            const num = (v: unknown, name: string): number => { const n = Number(v); if (!Number.isFinite(n)) throw new Error(`${name} must be a number`); return n; };
+            // Grid coord → the point's offset within the image in NATURAL pixels.
+            const natA = { x: (num(a.aImageX, "aImageX") / 1000) * u.width, y: (num(a.aImageY, "aImageY") / 1000) * u.height };
+            const worldA = { x: num(a.aWorldXM, "aWorldXM") * ppm, y: num(a.aWorldYM, "aWorldYM") * ppm };
+            const bGiven = [a.bImageX, a.bImageY, a.bWorldXM, a.bWorldYM].filter((v) => v != null).length;
+            if (bGiven > 0 && bGiven < 4) throw new Error("pass ALL four b* fields for a two-point fit, or none to translate only");
+            let scale = u.scale;
+            let bResidualM: number | undefined;
+            if (bGiven === 4) {
+              const natB = { x: (num(a.bImageX, "bImageX") / 1000) * u.width, y: (num(a.bImageY, "bImageY") / 1000) * u.height };
+              const worldB = { x: num(a.bWorldXM, "bWorldXM") * ppm, y: num(a.bWorldYM, "bWorldYM") * ppm };
+              const dNat = Math.hypot(natB.x - natA.x, natB.y - natA.y);
+              const dWorld = Math.hypot(worldB.x - worldA.x, worldB.y - worldA.y);
+              if (dNat < 1e-6 || dWorld < 1e-6) throw new Error("reference points A and B must be distinct");
+              scale = dWorld / dNat;
+              // Fit quality: a single uniform scale puts A exactly on target; B misses by however much the
+              // image's outline aspect disagrees with the plan envelope (photo skew / corner mis-estimates).
+              // Report it in METRES so the agent can judge and retry with better corners.
+              const landB = { x: (worldA.x - natA.x * scale) + natB.x * scale, y: (worldA.y - natA.y * scale) + natB.y * scale };
+              bResidualM = +(Math.hypot(landB.x - worldB.x, landB.y - worldB.y) / ppm).toFixed(3);
+            }
+            const x = worldA.x - natA.x * scale;
+            const y = worldA.y - natA.y * scale;
+            h.set({ ...h.state, imageUnderlay: { ...u, x, y, scale } });
+            return {
+              xPx: Math.round(x), yPx: Math.round(y), widthPx: Math.round(u.width * scale), heightPx: Math.round(u.height * scale),
+              rescaledBy: +(scale / u.scale).toFixed(4),
+              ...(bResidualM != null ? { bResidualM, fit: bResidualM <= 0.15 ? "good" : "check corners — image may be skewed (photo) or the grid estimates are off" } : {}),
+            };
+          },
+          analyzeUnderlay: async (a) => {
+            // Vectorise the underlay (same raster→vector tracer as Image Tools ▸ Vectorize) and reduce the
+            // traced line-work to its CONVEX HULL. The hull's extreme corners are MEASURED reference points
+            // for align_underlay — far more accurate than the vision model's guessed grid coords. Grid
+            // values are fractions of the image (calibration-independent); world metres use the CURRENT
+            // underlay placement, so they shift once align_underlay runs (the grid values don't).
+            const u = historyRef.current.state.imageUnderlay;
+            if (!u) throw new Error("no image underlay — call set_image_underlay first");
+            const img = await new Promise<HTMLImageElement>((res, rej) => {
+              const im = new window.Image();
+              im.onload = () => res(im);
+              im.onerror = () => rej(new Error("could not decode the underlay image"));
+              im.src = u.src;
+            });
+            const w = img.naturalWidth || img.width, hPx = img.naturalHeight || img.height;
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = hPx;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("canvas 2d unavailable — cannot read image pixels");
+            ctx.drawImage(img, 0, 0, w, hPx);
+            const imgData = ctx.getImageData(0, 0, w, hPx);
+            const cm = (typeof a.colorMode === "string" && ["red", "black", "blue", "green", "all"].includes(a.colorMode) ? a.colorMode : "black") as VectorizeColorMode;
+            const numOr = (v: unknown, d: number): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d; };
+            const result = vectorizeImage(imgData.data, w, hPx, {
+              colorMode: cm, tolerance: numOr(a.tolerance, 50), dilate: 3,
+              minLength: numOr(a.minLength, 30), simplifyEpsilon: 1.5, snapTolerance: 6,
+            });
+            const pts: Point[] = [];
+            for (const pl of result.polylines) for (const pp of pl) pts.push({ x: pp[0], y: pp[1] });
+            if (pts.length < 3) throw new Error(`vectorisation found ${result.polylines.length} line(s) — retry with colorMode "all" or a higher tolerance`);
+            const hull = computeConvexHull(pts);
+            if (hull.length < 3) throw new Error("traced lines are degenerate (collinear) — retry with different vectorise settings");
+            const ppm = bridgePpmRef.current;
+            const asGrid = (pt: Point) => ({ gridX: +(pt.x / w * 1000).toFixed(1), gridY: +(pt.y / hPx * 1000).toFixed(1) });
+            const asWorld = (pt: Point) => ({ worldXM: +((u.x + pt.x * u.scale) / ppm).toFixed(3), worldYM: +((u.y + pt.y * u.scale) / ppm).toFixed(3) });
+            // Extreme corners by the standard diagonal scores (min/max of x±y over the hull).
+            const pick = (score: (pt: Point) => number) => hull.reduce((best, pt) => (score(pt) < score(best) ? pt : best), hull[0]);
+            const tl = pick((pt) => pt.x + pt.y), br = pick((pt) => -(pt.x + pt.y));
+            const tr = pick((pt) => pt.y - pt.x), bl = pick((pt) => pt.x - pt.y);
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const pt of hull) { minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y); maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y); }
+            return {
+              lines: result.polylines.length, graphNodes: result.nodeCount, hullPoints: hull.length,
+              naturalWidth: w, naturalHeight: hPx,
+              corners: {
+                topLeft: { ...asGrid(tl), ...asWorld(tl) },
+                topRight: { ...asGrid(tr), ...asWorld(tr) },
+                bottomRight: { ...asGrid(br), ...asWorld(br) },
+                bottomLeft: { ...asGrid(bl), ...asWorld(bl) },
+              },
+              bbox: {
+                ...asGrid({ x: minX, y: minY }),
+                widthGrid: +((maxX - minX) / w * 1000).toFixed(1), heightGrid: +((maxY - minY) / hPx * 1000).toFixed(1),
+                widthM: +((maxX - minX) * u.scale / ppm).toFixed(3), heightM: +((maxY - minY) * u.scale / ppm).toFixed(3),
+              },
+              hullGrid: hull.slice(0, 48).map(asGrid),
+            };
+          },
+          fitPlanToRect: (a) => {
+            // Per-axis hull-to-hull fit: scale + translate EVERY plan coordinate so the plan's bounding box
+            // exactly fills the target world rect (usually the image outline's hull from analyze_underlay).
+            // X and Y scale independently — axis-aligned walls stay axis-aligned, but drawn dimensions
+            // change; the agent is told to reserve this for dimensionless drawings / small residuals.
+            const ppm = bridgePpmRef.current;
+            const num = (v: unknown, name: string): number => { const n = Number(v); if (!Number.isFinite(n)) throw new Error(`${name} must be a number`); return n; };
+            const tx = num(a.xM, "xM") * ppm, ty = num(a.yM, "yM") * ppm;
+            const tw = num(a.widthM, "widthM") * ppm, th = num(a.heightM, "heightM") * ppm;
+            if (tw < 1 || th < 1) throw new Error("target rect is degenerate — width/height must be positive metres");
+            const h = historyRef.current;
+            const s = h.state;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const eat = (pt: Point) => { minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y); maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y); };
+            for (const wl of s.walls) { eat(wl.start); eat(wl.end); }
+            for (const r of s.rooms) for (const pt of r.points) eat(pt);
+            if (!Number.isFinite(minX) || maxX - minX < 1 || maxY - minY < 1) throw new Error("no plan geometry to fit — draw the plan first (apply_model)");
+            const sx = tw / (maxX - minX), sy = th / (maxY - minY);
+            const mapX = (x: number): number => tx + (x - minX) * sx;
+            const mapY = (y: number): number => ty + (y - minY) * sy;
+            const mapPt = (pt: Point): Point => ({ x: mapX(pt.x), y: mapY(pt.y) });
+            // Best-effort transform of annotation objects — x/y anchors, rect extents, Point[] and flat
+            // [x1,y1,…] point lists all follow the same per-axis map (agent-traced plans usually have none).
+            const mapObj = <T extends Record<string, unknown>>(o: T): T => {
+              const out: Record<string, unknown> = { ...o };
+              if (typeof o.x === "number" && typeof o.y === "number") { out.x = mapX(o.x); out.y = mapY(o.y); }
+              if (typeof o.width === "number") out.width = (o.width as number) * sx;
+              if (typeof o.height === "number") out.height = (o.height as number) * sy;
+              if (typeof o.radius === "number") out.radius = (o.radius as number) * ((sx + sy) / 2);
+              if (Array.isArray(o.points) && o.points.length) {
+                out.points = typeof o.points[0] === "number"
+                  ? (o.points as number[]).map((v, i) => (i % 2 === 0 ? mapX(v) : mapY(v)))
+                  : (o.points as Point[]).map(mapPt);
+              }
+              return out as T;
+            };
+            h.set({
+              ...s,
+              walls: s.walls.map((wl) => ({ ...wl, start: mapPt(wl.start), end: mapPt(wl.end) })),
+              rooms: s.rooms.map((r) => ({ ...r, points: r.points.map(mapPt) })),
+              objects: s.objects.map((o) => mapObj(o)),
+              furniture: s.furniture.map((f) => ({ ...f, x: mapX(f.x), y: mapY(f.y) })),
+            });
+            return {
+              scaledX: +sx.toFixed(4), scaledY: +sy.toFixed(4),
+              before: { widthM: +((maxX - minX) / ppm).toFixed(3), heightM: +((maxY - minY) / ppm).toFixed(3) },
+              after: { widthM: +(tw / ppm).toFixed(3), heightM: +(th / ppm).toFixed(3) },
+            };
+          },
+          applyModelJson,
+          clearCanvas: () => {
+            const h = historyRef.current;
+            h.set({ ...h.state, walls: [], rooms: [], objects: [], furniture: [], nodeMeta: {} });
+            return "cleared";
+          },
+          importObjects: async () => {
+            await autoImportObjectsRef.current?.();
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            // Return the detailed catalog so the model gains full param knowledge mid-run (the system-prompt
+            // copy was empty when the run started with an unloaded library).
+            return { objectsLoaded: Object.keys(lib).length, catalog: buildDetailedObjectCatalog(lib) };
+          },
+        };
+        const fmtEvent = (e: AgentEvent): string =>
+          e.type === "tool-call"
+            ? `▸ ${e.tool} ${JSON.stringify(e.input ?? {}).slice(0, 180)}`
+            : `${e.ok ? "✓" : "✗"} ${e.tool} — ${e.summary.slice(0, 240)}`;
+        const res = await runAgentChat({
+          apiKey: aiApiKey, model: aiModel, prompt: effectivePrompt, pixelsPerMeter, api,
+          systemPrompt: aiAgentSystemPrompt, file: filePart, detections,
+          // Live param knowledge of every placeable object, appended to the system prompt.
+          objectCatalog: buildDetailedObjectCatalog(historyRef.current.state.objectLibrary),
+          onEvent: (e) => setAiMessages((m) => [...m, { role: "tool", text: fmtEvent(e) }]),
+        });
+        setAiMessages((m) => [...m, { role: "ai", text: res.text.trim() || `Done (${res.steps} steps).` }]);
+      } else {
+        // ── Rewrite mode (legacy): one-shot whole-model JSON rewrite. ──
+        const before = historyRef.current.state;
+        const reply = await chatEditModel({ apiKey: aiApiKey, model: aiModel, json: serializeForAI(before), prompt: effectivePrompt, pixelsPerMeter, objectLibrary: before.objectLibrary, file: filePart, detections, systemPrompt: aiSystemPrompt });
+        const merged = applyAiReply(before, reply);
+        // Punch real openings for any door/window object the AI attached to a wall (mirrors the manual
+        // place-opening cut), and canonicalise nodeMeta keys so AI-placed NODE objects (furniture / staircase
+        // on degenerate marker walls) resolve to the right node stableKey.
+        const next: FloorPlanModel = {
+          ...merged,
+          walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, pixelsPerMeter),
+          nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
+        };
+        historyRef.current.set(next);
+        setAiMessages((m) => [...m, { role: "ai", text: summarizeChange(before, next) }]);
+      }
     } catch (e) {
       setAiMessages((m) => [...m, { role: "error", text: (e as Error)?.message ?? "Request failed" }]);
     } finally {
       setAiSendBusy(false);
     }
-  }, [aiApiKey, aiModel, pixelsPerMeter, aiSystemPrompt]);
+  }, [aiApiKey, aiModel, pixelsPerMeter, aiSystemPrompt, aiMode, aiAgentSystemPrompt]);
   const logOp = useCallback((entry: Omit<LoggedOp, "id" | "timestamp">) => {
     setActionLog((prev) => {
       const next = [...prev, { ...entry, id: createId(), timestamp: Date.now() }];
@@ -4362,6 +4647,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       { sub: "Spaces", file: "floor.pobj.json" },
       { sub: "Spaces", file: "massing.pobj.json" },
       { sub: "Spaces", file: "footprint-massing.pobj.json" },
+      { sub: "Spaces", file: "site.pobj.json" },
+      { sub: "Spaces", file: "core.pobj.json" },
       { sub: "Segments", file: "segment_settings.pobj.json" },
       { sub: "Segments", file: "wall.pobj.json" },
       { sub: "Segments", file: "door.pobj.json" },
@@ -4408,6 +4695,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
     toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${failed ? `, ${failed} failed` : ""}`);
   }, [buildParametricObjectFile, applyCanvasSettings, applySegmentDefaults, applyNodeDefaults, INFO_SHEET_ID]);
+  // Keep the Chat-AI agent's import_objects tool pointed at the live callback (declared above handleAiSend).
+  autoImportObjectsRef.current = autoImportObjectFolder;
 
   // ── Agent bridge — expose a small command API to an external MCP server so Claude can drive the LIVE
   // canvas (see mcp/floorplan-bridge.mjs + mcp/README.md). Opt-in only (localStorage bp.agentBridge="1" or
@@ -21609,37 +21898,13 @@ User request: ${aiPrompt.trim()}`;
       ...visibleRooms.filter((r) => r.id.startsWith(ROOM_AUTO_ID_PREFIX)),
       ...history.state.rooms,
     ];
-    // Prune the parametric-object library to only the objects actually USED on the canvas (segment / node /
-    // space attachments + placement walls) — not every imported file — so the export stays small. A used
-    // object that COMPOSES others via `ref` rules drags its dependencies in too (transitive closure), so a
-    // composed object (e.g. a Floorplan referencing Door / Window) still resolves on re-import.
-    const fullLib = history.state.objectLibrary ?? {};
-    const usedIds = new Set<string>();
-    const addAtt = (atts?: import("./types").SegmentAttachment[]) => { for (const a of atts ?? []) if (a.objectId) usedIds.add(a.objectId); };
-    for (const w of history.state.walls) { addAtt(w.attachments); if (w.placementObjectId) usedIds.add(w.placementObjectId); }
-    for (const r of exportRooms) addAtt(r.attachments);
-    for (const m of Object.values(history.state.nodeMeta ?? {})) addAtt(m.attachments);
-    // Canvas-attached objects (Layout title block) aren't referenced by any element attachment — keep their
-    // library entry so canvasObjects still resolves on re-import.
-    for (const c of Object.values(history.state.canvasObjects ?? {})) if (c.objectId) usedIds.add(c.objectId);
-    // Deep-scan an object's geometry for `{ "ref": "<id>" }` occurrences to follow composition dependencies.
-    const collectRefs = (node: unknown, out: Set<string>): void => {
-      if (Array.isArray(node)) { for (const x of node) collectRefs(x, out); return; }
-      if (node && typeof node === "object") {
-        for (const [k, v] of Object.entries(node)) {
-          if (k === "ref" && typeof v === "string") out.add(v); else collectRefs(v, out);
-        }
-      }
-    };
-    const queue = [...usedIds];
-    while (queue.length) {
-      const obj = fullLib[queue.pop()!];
-      if (!obj?.geometry) continue;
-      const refs = new Set<string>();
-      collectRefs(obj.geometry, refs);
-      for (const dep of refs) if (fullLib[dep] && !usedIds.has(dep)) { usedIds.add(dep); queue.push(dep); }
-    }
-    const usedLibrary = Object.fromEntries(Object.entries(fullLib).filter(([id]) => usedIds.has(id)));
+    // The parametric-object LIBRARY (full .pobj definitions — parameter schemas + geometry blocks) is NOT
+    // exported: instances already carry everything placement-specific (attachments with `objectId` + edited
+    // `params` on walls / rooms / nodeMeta, canvasObjects for the title block), and the definitions are
+    // restorable from the app's object files via Import Objects (ids match, e.g. door.single.v1). Keeping
+    // them out cuts the export to the actual plan data. On import, a library-less file keeps the session's
+    // currently loaded library (see importJsonFile).
+    const { objectLibrary: _lib, ...stateSansLibrary } = history.state;
     // Persist the current scale calibration (pixels-per-metre) alongside the
     // model so re-importing restores the same real-world scale. It lives in
     // component state, not the model, so it must be added explicitly here.
@@ -21647,7 +21912,7 @@ User request: ${aiPrompt.trim()}`;
     // label, category, …) and the custom-type registries
     // (customSegmentTypes / customRoomTypes) are part of history.state, so both
     // segment and space parameters round-trip through the spread below.
-    const payload = JSON.stringify({ ...history.state, rooms: exportRooms, objectLibrary: usedLibrary, pixelsPerMeter }, null, 2);
+    const payload = JSON.stringify({ ...stateSansLibrary, rooms: exportRooms, pixelsPerMeter }, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -21700,9 +21965,14 @@ User request: ${aiPrompt.trim()}`;
         // Seed any built-in default layers (incl. the Site cascade — Buildable /
         // Footprint / Basement / Inset Area) that the imported file is missing,
         // without disturbing the user's own custom layers or their order.
+        // Exports are library-less (attachments only carry objectId + params references), so when the file
+        // has no objectLibrary keep the SESSION's loaded definitions — attachments keep rendering. In a
+        // fresh session, Import Objects restores them (bundled ids match, e.g. door.single.v1).
+        const hasLibrary = model.objectLibrary && Object.keys(model.objectLibrary).length > 0;
         history.set(withLayerDefaults({
           ...initialModel,
           ...model,
+          ...(hasLibrary ? {} : { objectLibrary: history.state.objectLibrary ?? {} }),
           walls: splitWallsAtIntersections(model.walls ?? []),
         }));
         // Restore the saved scale calibration so dimensions match the export.
@@ -23625,7 +23895,9 @@ User request: ${aiPrompt.trim()}`;
 
         <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
         <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
-        {/* Chat AI — foldable bar pinned to the top of the canvas; rewrites the model JSON via Gemini. */}
+        {/* Chat AI — foldable bar pinned to the top of the canvas. Agent mode drives the live canvas via
+            tools (agentChat.ts); Rewrite mode is the legacy one-shot Gemini JSON rewrite. Each mode keeps
+            its own editable system prompt. */}
         <ChatAIPanel
           messages={aiMessages}
           busy={aiSendBusy}
@@ -23633,9 +23905,11 @@ User request: ${aiPrompt.trim()}`;
           onToggleCollapsed={() => setAiCollapsed((c) => !c)}
           onSend={handleAiSend}
           configured={!!aiApiKey.trim() && !!aiModel.trim()}
-          systemPrompt={aiSystemPrompt}
-          onSystemPromptChange={setAiSystemPrompt}
-          defaultSystemPrompt={DEFAULT_SYSTEM_PROMPT}
+          mode={aiMode}
+          onModeChange={setAiMode}
+          systemPrompt={aiMode === "agent" ? aiAgentSystemPrompt : aiSystemPrompt}
+          onSystemPromptChange={aiMode === "agent" ? setAiAgentSystemPrompt : setAiSystemPrompt}
+          defaultSystemPrompt={aiMode === "agent" ? AGENT_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT}
         />
         <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
           {/* Flow editor — node-graph pipeline that composes the stepwise tools (Inset,
@@ -24243,9 +24517,14 @@ User request: ${aiPrompt.trim()}`;
                       ? Math.max(0, Math.abs(polygonArea(renderOuter)) - renderHoles.reduce((s, h) => s + Math.abs(polygonArea(h)), 0))
                       : roomNetArea(room, visibleRooms);
                     const spaceAreaLabel = `Area: ${fmtArea(labelAreaPx)}`;
-                    // Any host-conforming parametric object (Floor, Massing, …) attached to this Space → its
-                    // colour fills the Space in 2D. Generic: keyed on having a geometry block, not a symbol.
-                    const floorAtt = room.attachments?.find((a) => (history.state.objectLibrary ?? {})[a.objectId]?.geometry);
+                    // A WHOLE-SPACE parametric object (Floor / Massing) attached to this Space → its colour
+                    // fills the Space in 2D. Keyed on symbol so a SUB-geometry object (e.g. Site: inset /
+                    // split / optimise) does NOT flood the whole plot — its own plan shapes render on top
+                    // (see the "Parametric objects attached to SPACES" group below) and stay legible.
+                    const floorAtt = room.attachments?.find((a) => {
+                      const o = (history.state.objectLibrary ?? {})[a.objectId];
+                      return o?.geometry && (o.meta.symbol === "floor" || o.meta.symbol === "massing");
+                    });
                     const floorFill = floorAtt && typeof floorAtt.params.color === "string" ? floorAtt.params.color : null;
                     return (
                       <Group key={roomReactKey}>
@@ -25097,7 +25376,7 @@ User request: ${aiPrompt.trim()}`;
                   {/* Parametric objects attached to SPACES — their plan geometry, evaluated from the file's
                       geometry block + the host (room) polygon. Same engine as nodes; the host footprint is
                       passed in local metres so e.g. a Massing tower draws its per-tier setback rings. */}
-                  {history.state.rooms.flatMap((room) => {
+                  {visibleRooms.flatMap((room) => {
                     if (room.points.length < 3) return [];
                     const c = polygonCentroid(room.points);
                     const hostLocal = room.points.map((p) => ({ x: (p.x - c.x) / pixelsPerMeter, y: (p.y - c.y) / pixelsPerMeter }));
@@ -25106,9 +25385,12 @@ User request: ${aiPrompt.trim()}`;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!obj?.geometry) return null;
                       const g = evalParametricGeometry(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef);
-                      if (!g.lines.length && !g.refLines.length) return null;
+                      if (!g.fill.length && !g.lines.length && !g.refLines.length) return null;
                       return (
                         <Group key={`pobj-space-2d-${room.id}-${att.id}`} listening={false}>
+                          {/* Solid plan result(s) — e.g. Site's final buildable footprint + any split open-space
+                              pieces (`fill` op / split remainder). Semi-transparent so overlaps stay legible. */}
+                          {g.fill.map((poly, i) => <Line key={`f${i}`} points={poly.flatMap((p) => [p.x, p.y])} closed fill={`${g.color}40`} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
                           {g.lines.map((ln, i) => <Line key={`l${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
                           {/* Dashed construction/reference outlines (inset polygon · split line · optimise rect). */}
                           {g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
