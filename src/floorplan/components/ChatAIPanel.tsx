@@ -8,6 +8,12 @@ export interface ChatMessage {
   text: string;
 }
 
+/** The Chat AI agent modes: "agent" = the Orchestrator (full tool-loop — canvas design + Flow building +
+ *  parametric library, default); "flow" = the Flow Agent (builds the node-graph Operations Pipeline);
+ *  "design" = the Design Agent (canvas design tools only); "parametric" = the Parametric Agent (object
+ *  library only: create / import / edit / delete .pobj definitions). */
+export type ChatAIMode = "agent" | "flow" | "design" | "parametric";
+
 export interface ChatAIPanelProps {
   messages: ChatMessage[];
   busy: boolean;
@@ -17,9 +23,9 @@ export interface ChatAIPanelProps {
   onSend: (prompt: string, file?: File) => void;
   /** True when the Gemini API key + model are set in Preferences. */
   configured: boolean;
-  /** "agent" = tool-loop over the live canvas (default); "rewrite" = legacy one-shot JSON rewrite. */
-  mode: "agent" | "rewrite";
-  onModeChange: (mode: "agent" | "rewrite") => void;
+  /** The active agent mode (see {@link ChatAIMode}). */
+  mode: ChatAIMode;
+  onModeChange: (mode: ChatAIMode) => void;
   /** The current (possibly user-edited) system prompt sent to the model (the ACTIVE mode's prompt). */
   systemPrompt: string;
   /** Update the system prompt (persisted by the parent). */
@@ -28,9 +34,18 @@ export interface ChatAIPanelProps {
   defaultSystemPrompt: string;
 }
 
-/** Foldable "Chat AI" bar pinned to the top of the canvas. Type an instruction + Enter. Agent mode: the
- *  model drives the live canvas through tools, each call logged into the transcript. Rewrite mode: the
- *  parent sends the canvas JSON to Gemini and loads the rewritten model back. Shift+Enter = newline. */
+/** Per-mode toggle labels + tooltips (order = display order). */
+const MODES: { key: ChatAIMode; label: string; title: string }[] = [
+  { key: "agent", label: "⚡ Orchestrator", title: "Orchestrator Agent — the full toolbox: canvas design + Flow building + parametric-library management (everything the specialist agents can do, combined)" },
+  { key: "flow", label: "⬡ Flow", title: "Flow Agent — builds the node-graph Flow (Operations Pipeline) step-by-step: nodes + connections" },
+  { key: "design", label: "✏ Design", title: "Design Agent — canvas design only: draw walls, cut openings, place & attach objects, label/merge spaces, underlays" },
+  { key: "parametric", label: "◇ Parametric", title: "Parametric Agent — object library only: create, edit, import and delete parametric objects (.pobj definitions)" },
+];
+
+/** Foldable "Chat AI" bar pinned to the top of the canvas. Type an instruction + Enter. Agent-family modes
+ *  (Orchestrator / Design / Parametric): the model drives the live canvas / object library through tools,
+ *  each call logged into the transcript. Flow mode: the model builds the node-graph Flow the same way.
+ *  Shift+Enter = newline. */
 export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSend, configured, mode, onModeChange, systemPrompt, onSystemPromptChange, defaultSystemPrompt }: ChatAIPanelProps) => {
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -46,6 +61,8 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
   }, [messages, busy, collapsed]);
 
   const clearFile = () => { setFile(null); if (fileRef.current) fileRef.current.value = ""; };
+  // Flow mode has no use for an attached drawing — drop any staged file when switching into it.
+  useEffect(() => { if (mode === "flow") { setFile(null); if (fileRef.current) fileRef.current.value = ""; } }, [mode]);
   const submit = () => {
     const p = draft.trim();
     if ((!p && !file) || busy) return;
@@ -74,21 +91,21 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
 
         {!collapsed && (
           <div className="border-t border-slate-100">
-            {/* Mode toggle + system prompt row. Agent = tool-loop on the live canvas; Rewrite = one-shot JSON. */}
+            {/* Mode toggle + system prompt row — Orchestrator / Flow / Design / Parametric agents. */}
             <div className="border-b border-slate-100 px-3 py-2">
               <div className="mb-1.5 flex items-center gap-1 rounded-md bg-slate-100 p-0.5 text-[10px] font-medium">
-                {(["agent", "rewrite"] as const).map((m) => (
+                {MODES.map((m) => (
                   <button
-                    key={m}
+                    key={m.key}
                     type="button"
                     className={
-                      "flex-1 rounded px-2 py-1 transition-colors " +
-                      (mode === m ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700")
+                      "flex-1 whitespace-nowrap rounded px-2 py-1 transition-colors " +
+                      (mode === m.key ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700")
                     }
-                    onClick={() => onModeChange(m)}
-                    title={m === "agent" ? "The model edits the canvas step-by-step with tools (draw walls, place doors, attach objects…)" : "Legacy: the model rewrites the whole plan JSON in one shot"}
+                    onClick={() => onModeChange(m.key)}
+                    title={m.title}
                   >
-                    {m === "agent" ? "⚡ Agent" : "JSON Rewrite"}
+                    {m.label}
                   </button>
                 ))}
               </div>
@@ -142,13 +159,30 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
                   Set your Gemini API key + model in <span className="font-medium">Preferences</span> (top-right ⚙) to use Chat AI.
                 </p>
               )}
-              {messages.length === 0 && configured && (
+              {messages.length === 0 && configured && mode === "flow" && (
+                <p className="text-[11px] text-slate-400">
+                  Build or edit the node-graph <span className="font-medium">Flow</span> (Operations Pipeline) — press Enter. E.g.
+                  <span className="italic"> “inset 1 m, fit a rectangle, then mass 5 floors upward”</span>,
+                  <span className="italic"> “split the plot 60/40 and optimise a rectangle in the larger piece”</span>, or
+                  <span className="italic"> “add a floor-count output driven by an FSI input”</span>.
+                </p>
+              )}
+              {messages.length === 0 && configured && mode === "parametric" && (
+                <p className="text-[11px] text-slate-400">
+                  Manage the parametric object <span className="font-medium">library</span> — press Enter. E.g.
+                  <span className="italic"> “create a round dining-table object with a diameter parameter”</span>,
+                  <span className="italic"> “give beds a taller default headboard”</span>, or
+                  <span className="italic"> “import the bundled objects”</span>.
+                </p>
+              )}
+              {messages.length === 0 && configured && (mode === "agent" || mode === "design") && (
                 <p className="text-[11px] text-slate-400">
                   Generate a new plan or edit the current one — press Enter. E.g.
                   <span className="italic"> “create a 2-bedroom apartment, ~60 m²”</span>,
                   <span className="italic"> “add a window on the south wall”</span>, or
                   <span className="italic"> “make all walls 0.2 m thick”</span>. Or attach an
                   <span className="font-medium"> image / PDF</span> floor plan (📎) and it'll be analysed and rebuilt.
+                  {mode === "agent" && <span> The Orchestrator can also build Flows and manage the object library.</span>}
                 </p>
               )}
               {messages.map((m, i) => (
@@ -179,7 +213,10 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
               {busy && (
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  {mode === "agent" ? "Working — the agent is inspecting and editing the canvas…" : "Rewriting the plan…"}
+                  {mode === "agent" ? "Working — the orchestrator is inspecting and editing the canvas…"
+                    : mode === "flow" ? "Building the flow — designing nodes and connections…"
+                    : mode === "design" ? "Working — the design agent is editing the canvas…"
+                    : "Working — managing the parametric object library…"}
                 </div>
               )}
             </div>
@@ -209,9 +246,11 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
                   variant="outline"
                   size="icon"
                   className="h-9 w-9 shrink-0"
-                  disabled={!configured || busy}
+                  disabled={!configured || busy || mode === "flow"}
                   onClick={() => fileRef.current?.click()}
-                  title="Attach an image or PDF floor plan to analyse"
+                  title={mode === "flow" ? "Attachments aren't used when building a flow"
+                    : mode === "parametric" ? "Attach a reference image of the object to model"
+                    : "Attach an image or PDF floor plan to analyse"}
                   aria-label="Attach a file"
                 >
                   <Paperclip className="h-4 w-4" />
@@ -219,7 +258,10 @@ export const ChatAIPanel = ({ messages, busy, collapsed, onToggleCollapsed, onSe
                 <textarea
                   className="max-h-28 min-h-[2.25rem] flex-1 resize-none rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-violet-400"
                   rows={1}
-                  placeholder={configured ? "Generate or edit the plan… (attach an image/PDF, Enter to send)" : "Set the Gemini key in Preferences first"}
+                  placeholder={!configured ? "Set the Gemini key in Preferences first"
+                    : mode === "flow" ? "Describe the flow to build… (Enter to send)"
+                    : mode === "parametric" ? "Create / edit / import / delete parametric objects… (Enter to send)"
+                    : "Generate or edit the plan… (attach an image/PDF, Enter to send)"}
                   value={draft}
                   disabled={!configured || busy}
                   onChange={(e) => setDraft(e.target.value)}

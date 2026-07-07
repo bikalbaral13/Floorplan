@@ -1,0 +1,45 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "room.v1",
+    "name": "Room",
+    "category": "Layout/Rooms",
+    "units": "m",
+    "icon": { "paths": ["M4 4h16v16H4z", "M4 9h6", "M10 4v5"] }
+  },
+  "description": "A ROOM as a first-class parametric child. Standalone it draws a clear `width × depth` room region (light fill + inner outline). Composed inside the Floorplan, one instance is emitted per BSP leaf (`room[k]`) with width/depth HARD-bound to that leaf's clear size — and the instance's Position slider acts on the room AS A BSP SEED: sliding it moves the split line that carved this room, so rooms can be grown / shrunk / shuffled from Properties alone. `minArea` / `maxArea` / `maxRatio` are per-instance CONSTRAINTS (free to edit on each room): when the room violates them (area out of range, or too elongated) a diagonal cross is drawn across the room as a visual flag, and the checks are published as outputs (area / ratio / Constraints OK). The fill also makes the whole room CLICKABLE on canvas for selecting it as a component.",
+  "parameters": [
+    { "key": "width", "label": "Clear Width", "kind": "number", "default": 4, "min": 0.5, "max": 30, "step": 0.05, "unit": "m" },
+    { "key": "depth", "label": "Clear Depth", "kind": "number", "default": 3.5, "min": 0.5, "max": 30, "step": 0.05, "unit": "m" },
+    { "key": "minArea", "label": "Min Area", "kind": "number", "default": 6, "min": 0, "max": 200, "step": 0.5, "unit": "m²" },
+    { "key": "maxArea", "label": "Max Area", "kind": "number", "default": 60, "min": 1, "max": 500, "step": 0.5, "unit": "m²" },
+    { "key": "maxRatio", "label": "Max W/D Ratio", "kind": "number", "default": 2.5, "min": 1, "max": 6, "step": 0.1 },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#93c5fd" }
+  ],
+  "geometry": {
+    "vars": {
+      "_doc": "Constraint checks over the clear plan: `ok` gates the violation cross. All flat 2D (h0=h1=0) — a room region is a plan concept; the walls around it own the 3D.",
+      "hw": "width / 2",
+      "hd": "depth / 2",
+      "area": "width * depth",
+      "ratio": "max(width, depth) / min(width, depth)",
+      "ok": "area >= minArea && area <= maxArea && ratio <= maxRatio"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "poly": { "pts": [["0 - hw", "0 - hd"], ["hw", "0 - hd"], ["hw", "hd"], ["0 - hw", "hd"]], "h0": 0, "h1": 0 } },
+          { "when": "!ok", "line": { "pts": [["0 - hw", "0 - hd"], ["hw", "hd"]], "h0": 0, "h1": 0 } },
+          { "when": "!ok", "line": { "pts": [["0 - hw", "hd"], ["hw", "0 - hd"]], "h0": 0, "h1": 0 } }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "area", "label": "Room Area", "expr": "area", "unit": "m²" },
+    { "key": "ratio", "label": "Aspect Ratio", "expr": "ratio" },
+    { "key": "ok", "label": "Constraints OK", "expr": "ok ? 1 : 0" }
+  ]
+}

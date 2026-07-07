@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input";
 import type { DrawPathStyle, Unit, WallMethod } from "../../types";
 
 /** The display parameters chosen before drawing a plain "Add Segment" line — mirrors the segment
- *  Display block (Mode / Buffer Style / Fill / Line Style / Colour / Thickness / Justification). */
+ *  Display block (Mode / Buffer Style / Fill / Line Style / Colour / Thickness / Justification).
+ *  "path" = the Buffered band PLUS a live Space derived from the connected run (Wall.asSpace). */
 export interface AddSegmentConfig {
-  mode: "line" | "buffered";
+  mode: "line" | "buffered" | "path";
   /** Path geometry: "straight" draws plain line segments; the NURBS options turn the drawn
    *  polyline chain into a smooth curve (interpolating through vertices, or smoothing them). */
   pathType: DrawPathStyle;
@@ -42,13 +43,20 @@ interface SegmentDisplayFieldsProps {
  *  parametric wall exposes the full set of segment display properties. */
 export const SegmentDisplayFields = ({ unit, config, onChange, onSubmit, autoFocusThickness }: SegmentDisplayFieldsProps) => (
   <>
-    {/* Mode */}
+    {/* Mode — Line (thin stroke), Buffered (thickness band) or Path (band + live Space). */}
     <div>
       <p className="mb-1 text-xs font-semibold text-slate-600">Mode</p>
       <div className="flex flex-wrap gap-1.5">
         <Button size="sm" variant={config.mode === "line" ? "default" : "outline"} onClick={() => onChange({ mode: "line" })}>Line</Button>
         <Button size="sm" variant={config.mode === "buffered" ? "default" : "outline"} onClick={() => onChange({ mode: "buffered" })}>Buffered</Button>
+        <Button size="sm" variant={config.mode === "path" ? "default" : "outline"} onClick={() => onChange({ mode: "path" })}>Path</Button>
       </div>
+      {config.mode === "path" && (
+        <p className="mt-0.5 text-[9px] text-slate-400">
+          Draws the same band AND derives a live Space from the connected run — select the Space to attach
+          objects; it follows segment edits. (Straight path type only; NURBS draws a curved ribbon.)
+        </p>
+      )}
     </div>
 
     {/* Path Type — Straight draws plain line segments; NURBS turns the drawn polyline chain into a
@@ -108,8 +116,8 @@ export const SegmentDisplayFields = ({ unit, config, onChange, onSubmit, autoFoc
       <input type="checkbox" className="h-4 w-4" checked={config.showLabel} onChange={(e) => onChange({ showLabel: e.target.checked })} />
     </label>
 
-    {/* Buffered-only options */}
-    {config.mode === "buffered" && (
+    {/* Band options (Buffered + Path modes) */}
+    {(config.mode === "buffered" || config.mode === "path") && (
       <>
         <div>
           <p className="mb-1 text-xs font-semibold text-slate-600">Buffer Style</p>

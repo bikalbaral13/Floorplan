@@ -1,7 +1,8 @@
-﻿import { forwardRef, Suspense, useImperativeHandle, useMemo, type ComponentProps, type ReactNode, type MutableRefObject } from "react";
+﻿import { forwardRef, Suspense, useImperativeHandle, useMemo, type ComponentProps, type CSSProperties, type ReactNode, type MutableRefObject } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Edges, OrbitControls, useTexture } from "@react-three/drei";
+import { Edges, Html, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import { CSG } from "three-csg-ts";
 import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
 import { computeMiteredUnion, computeMiteredWallPolygons } from "../wallGeometry";
 import type { Point } from "../types";
@@ -14,6 +15,94 @@ function EdgedMesh(props: ComponentProps<"mesh">) {
     <mesh {...props}>
       {props.children}
       <Edges color="#0f172a" threshold={15} lineWidth={1} />
+    </mesh>
+  );
+}
+
+/** Origin axis indicator — coloured arrows for the scene's X (red, →), Y-up (green, ↑) and Z (blue, depth)
+ *  axes with letter labels, so the 3D view reads like the 2D canvas. Matches the primitives' Position X/Y/Z
+ *  (Y is up). Labels are DOM overlays (drei Html) so they need no font asset and always face the camera. */
+function SceneAxes({ length = 5 }: { length?: number }) {
+  const arrows = useMemo(() => {
+    const mk = (dir: [number, number, number], color: number) =>
+      new THREE.ArrowHelper(new THREE.Vector3(...dir), new THREE.Vector3(0, 0, 0), length, color, length * 0.1, length * 0.06);
+    return [
+      mk([1, 0, 0], 0xef4444), // X — red
+      mk([0, 1, 0], 0x22c55e), // Y — green (up)
+      mk([0, 0, 1], 0x3b82f6), // Z — blue (depth)
+    ];
+  }, [length]);
+  const lbl = (color: string): CSSProperties => ({ color, fontWeight: 700, fontSize: 13, userSelect: "none", pointerEvents: "none", textShadow: "0 0 3px #fff, 0 0 3px #fff" });
+  const off = length * 1.09;
+  return (
+    <group>
+      {arrows.map((a, i) => <primitive key={i} object={a} />)}
+      <Html position={[off, 0, 0]} center style={{ pointerEvents: "none" }}><span style={lbl("#ef4444")}>X</span></Html>
+      <Html position={[0, off, 0]} center style={{ pointerEvents: "none" }}><span style={lbl("#16a34a")}>Y</span></Html>
+      <Html position={[0, 0, off]} center style={{ pointerEvents: "none" }}><span style={lbl("#2563eb")}>Z</span></Html>
+    </group>
+  );
+}
+
+/** Build a positioned THREE.Mesh for one 3D primitive descriptor — geometry per shape, then place/orient it
+ *  by its baked transform (translate m, rotate rad, mirror ±1 scale), resting on the floor plane. Used as a
+ *  CSG operand (positions are in local group space, NOT the +X auto-layout — so A and B can overlap). */
+function buildPrimitiveMesh(d: PrimMass3D): THREE.Mesh {
+  let geom: THREE.BufferGeometry;
+  let y: number;
+  if (d.shape === "cuboid") { y = d.height / 2; geom = new THREE.BoxGeometry(d.length, d.height, d.breadth); }
+  else if (d.shape === "sphere") { y = d.radius; geom = new THREE.SphereGeometry(d.radius, 32, 24); }
+  else if (d.shape === "cone") { y = d.height / 2; geom = new THREE.ConeGeometry(d.radius, d.height, 40); }
+  else if (d.shape === "cylinder") { y = d.height / 2; geom = new THREE.CylinderGeometry(d.radius, d.radius, d.height, 40); }
+  else { y = d.length / 2; geom = new THREE.BoxGeometry(d.length, d.length, d.length); }
+  const mesh = new THREE.Mesh(geom);
+  const tf = d.transform;
+  mesh.position.set(tf?.tx ?? 0, y + (tf?.ty ?? 0), tf?.tz ?? 0);
+  mesh.rotation.set(tf?.rx ?? 0, tf?.ry ?? 0, tf?.rz ?? 0);
+  mesh.scale.set(tf?.mx ?? 1, tf?.my ?? 1, tf?.mz ?? 1);
+  mesh.updateMatrix();
+  return mesh;
+}
+
+/** Build the mesh for one Boolean operand — a primitive, or (recursively) a nested Boolean node. */
+function buildOperandMesh(op: BoolOperand3D): THREE.Mesh {
+  return "prim" in op ? buildPrimitiveMesh(op.prim) : buildBoolNodeMesh(op.bool);
+}
+/** Evaluate a Boolean node → a THREE.Mesh, recursing into nested Booleans first (so chains like
+ *  (((body − bore) − hole1) − hole2)… evaluate bottom-up). Result geometry is in world space (identity matrix),
+ *  so it composes as an operand of the next CSG. */
+function buildBoolNodeMesh(node: BoolNode3D): THREE.Mesh {
+  const a = buildOperandMesh(node.a);
+  const b = buildOperandMesh(node.b);
+  a.updateMatrix(); b.updateMatrix();
+  return node.op === "intersect" ? CSG.intersect(a, b)
+    : node.op === "union" ? CSG.union(a, b)
+    : CSG.subtract(a, b); // subtract / difference → A − B
+}
+
+/** Render a Boolean (CSG) group: evaluate its operand tree (each primitive at its own world position),
+ *  run the mesh booleans (three-csg-ts), and draw the result in place. Recomputes only when the group
+ *  changes; a CSG failure (degenerate input) → null → skipped. */
+function BooleanMass({ group }: { group: BoolMass3D }) {
+  const geometry = useMemo(() => {
+    try {
+      return buildBoolNodeMesh({ op: group.op, a: group.a, b: group.b }).geometry;
+    } catch {
+      return null; // degenerate/non-manifold input — skip rather than crash the scene
+    }
+  }, [group]);
+  if (!geometry) return null;
+  const ds = group.display;
+  return (
+    <mesh geometry={geometry} position={[0, 0, 0]}>
+      <meshStandardMaterial
+        color={ds?.color ?? group.a.color ?? "#94a3b8"}
+        wireframe={ds?.wireframe ?? false}
+        transparent={(ds?.opacity ?? 1) < 1}
+        opacity={ds?.opacity ?? 1}
+        side={(ds?.opacity ?? 1) < 1 ? THREE.DoubleSide : THREE.FrontSide}
+      />
+      {ds?.showEdges && <Edges color="#0f172a" threshold={15} lineWidth={1} />}
     </mesh>
   );
 }
@@ -79,6 +168,18 @@ export interface SnapshotApi {
   captureAll: () => Promise<SnapshotResult[]>;
 }
 
+/** Display style from a downstream "Display 3D" node — colour / opacity / solid-vs-wireframe / edges. */
+type Display3DStyle = { color: string; opacity: number; wireframe: boolean; showEdges: boolean };
+/** A resolved 3D primitive: shape + (scale-baked) dimensions + baked transform (translate m, rotate rad,
+ *  mirror ±1 per axis) + optional Display 3D style. Mirrors FloorPlanEditor's PrimMass3D. */
+type PrimMass3D = { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string; transform?: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number }; display?: Display3DStyle };
+/** One operand of a Boolean op: a primitive, or a nested Boolean subtree (so Booleans chain). */
+type BoolOperand3D = { prim: PrimMass3D } | { bool: BoolNode3D };
+/** A Boolean (CSG) node: operation + two operands (each a primitive or another Boolean). */
+type BoolNode3D = { op: string; a: BoolOperand3D; b: BoolOperand3D };
+/** A render-root Boolean group: id + tree + optional Display 3D style. */
+type BoolMass3D = { id: string; op: string; a: BoolOperand3D; b: BoolOperand3D; display?: Display3DStyle };
+
 interface Props {
   model: FloorPlanModel;
   pixelsPerMeter: number;
@@ -122,7 +223,9 @@ interface Props {
    *  floor plane (baseY 0 → +height) or Down below it (−height → 0). Rendered as opaque blocks. */
   spaceMasses?: { id: string; points: Point[]; heightM: number; direction: "up" | "down"; color?: string; opacity?: number; showEdges?: boolean }[];
   /** Flow "Mass" primitive generators — a Cube / Cuboid / Sphere / Cone / Cylinder rendered standalone. */
-  primitiveMasses?: { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string }[];
+  primitiveMasses?: PrimMass3D[];
+  /** Flow "Boolean" (CSG) groups — each combines two primitives via union / subtract / intersect. */
+  booleanMasses?: BoolMass3D[];
   /** Flow "Mesh to 3D" output — generic 3D meshes (e.g. column footings) to render. Each is a set of
    *  lofted prisms in plan-px world coords + metre heights (see {@link FlowMesh}). */
   meshPreview?: FlowMesh[];
@@ -463,7 +566,7 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, meshPreview, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -710,6 +813,9 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
       <directionalLight position={[-15, 20, -10]} intensity={0.35} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[0, 1, 0]} />
 
+      {/* Origin axis indicator — X (red) / Y-up (green) / Z (blue) coloured arrows + labels, like the 2D canvas. */}
+      <SceneAxes length={5} />
+
       {/* Georeferenced map underlay as a ground plane (Approach A) — the building/massing sits on the map. */}
       {mapUnderlay && mapGroundGeom && (
         <Suspense fallback={null}>
@@ -777,8 +883,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
 
       {/* Flow "Mass" primitives — a Cube / Cuboid / Sphere / Cone / Cylinder per generator node, standing
            on the floor plane. Laid out along +X (6 m apart) so multiple generators don't overlap. */}
-      {(primitiveMasses ?? []).map((pm, i) => {
-        const sx = i * 6;
+      {(primitiveMasses ?? []).map((pm) => {
         let y: number;
         let geom: React.ReactNode;
         if (pm.shape === "cuboid") {
@@ -798,13 +903,38 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           y = pm.length / 2;
           geom = <boxGeometry args={[pm.length, pm.length, pm.length]} />;
         }
+        // Baked transform (primitive's own Position/Rotation/Scale + any wired Transform 3D): translate in
+        // world metres, rotation about the primitive's centre, scale sign carries the mirror; y adds the
+        // shape's half-height so Position Y is the base (Y=0 → resting on the floor). Uniform scale is in dims.
+        const tf = pm.transform;
+        // Display 3D style (colour / opacity / wireframe / edges) — defaults keep bare primitives visible.
+        const ds = pm.display;
+        const mirrored = tf ? tf.mx * tf.my * tf.mz < 0 : false;
         return (
-          <mesh key={`prim-mass-${pm.id}`} position={[sx, y, 0]}>
+          <mesh
+            key={`prim-mass-${pm.id}`}
+            position={[tf?.tx ?? 0, y + (tf?.ty ?? 0), tf?.tz ?? 0]}
+            rotation={[tf?.rx ?? 0, tf?.ry ?? 0, tf?.rz ?? 0]}
+            scale={[tf?.mx ?? 1, tf?.my ?? 1, tf?.mz ?? 1]}
+          >
             {geom}
-            <meshStandardMaterial color={pm.color ?? "#94a3b8"} />
+            <meshStandardMaterial
+              color={ds?.color ?? pm.color ?? "#94a3b8"}
+              wireframe={ds?.wireframe ?? false}
+              transparent={(ds?.opacity ?? 1) < 1}
+              opacity={ds?.opacity ?? 1}
+              side={mirrored || (ds?.opacity ?? 1) < 1 ? THREE.DoubleSide : THREE.FrontSide}
+            />
+            {ds?.showEdges && <Edges color="#0f172a" threshold={15} lineWidth={1} />}
           </mesh>
         );
       })}
+
+      {/* Flow "Boolean" (CSG) groups — each combines two primitives (union / subtract / intersect) into one
+           result mesh at the operands' true world positions (each primitive carries its own Position). */}
+      {(booleanMasses ?? []).map((bm) => (
+        <BooleanMass key={`bool-mass-${bm.id}`} group={bm} />
+      ))}
 
       {/* Flow "Mesh to 3D" — generic meshes (column footings, …) built from lofted prisms. */}
       {meshPreview && meshPreview.length > 0 && (

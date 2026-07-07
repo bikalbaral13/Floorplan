@@ -22,6 +22,8 @@
     { "key": "tankHeight", "label": "Cistern height", "kind": "number", "default": 0.79, "min": 0.64, "max": 0.95, "step": 0.01, "unit": "m" },
     { "key": "seatHeight", "label": "Seat (rim) height", "kind": "number", "default": 0.4, "min": 0.36, "max": 0.5, "step": 0.005, "unit": "m" },
     { "key": "lidClosed", "label": "Lid closed", "kind": "checkbox", "default": false },
+    { "key": "wallOffset", "label": "Offset from Wall", "kind": "number", "default": 0, "min": -2, "max": 2, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance from Floor", "kind": "number", "default": 0, "min": 0, "max": 2, "step": 0.01, "unit": "m" },
     { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
     { "key": "color", "label": "Colour", "kind": "color", "default": "#cbd5e1" }
   ],

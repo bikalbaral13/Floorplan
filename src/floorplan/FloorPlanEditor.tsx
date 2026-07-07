@@ -101,8 +101,9 @@ import type {
   WallMethod,
   WallMode,
 } from "./types";
-import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue } from "./types";
+import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue, PATH_SPACE_ID_PREFIX } from "./types";
 import { rasterizePdfFirstPage } from "./pdfRaster";
+import { saveLibraryFile, listLibraryFiles, deleteLibraryObjectFiles, POBJ_SUBFOLDER } from "./libraryFiles";
 import { vectorizeImage, type VectorizeColorMode } from "./algorithms/vector/vectorizeImage";
 import { detectObjects, splitDataUrl, DEFAULT_DETECTION_MODEL, type Detection, type DetectionMode } from "./algorithms/vision/geminiObjectDetection";
 import { MapTileLayer } from "./components/MapTileLayer";
@@ -114,6 +115,8 @@ import {
   draggingEdgeMidpoints,
   type MoveMeasureSegment,
 } from "./dragMeasurements";
+import { rasterUnion } from "./flow/eval/rasterUnion";
+import { polygonsInteriorsCross, polygonUnionVectorLoops } from "./flow/eval/vectorUnion";
 import {
   clampWallThicknessPx,
   computeMiteredUnion,
@@ -123,6 +126,7 @@ import {
   getWallThicknessHandleLayouts,
   getWallThicknessPreviewSegment,
   splitWallsAtIntersections,
+  traceClosedLoops,
   wallPolygonPoints,
   wallWithDefaults,
 } from "./wallGeometry";
@@ -179,8 +183,9 @@ import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/Ad
 import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/SegmentTypeParamsDialog";
 import { ObjectParamsDialog } from "./components/dialogs/ObjectParamsDialog";
 import { ChatAIPanel, type ChatMessage } from "./components/ChatAIPanel";
-import { serializeForAI, chatEditModel, applyAiReply, summarizeChange, cutOpeningsForAttachments, normalizeNodeMetaKeys, DEFAULT_SYSTEM_PROMPT } from "./ai/aiChat";
-import { runAgentChat, AGENT_SYSTEM_PROMPT, buildDetailedObjectCatalog, type AgentToolApi, type AgentEvent } from "./ai/agentChat";
+import { serializeForAI, applyAiReply, summarizeChange, cutOpeningsForAttachments, normalizeNodeMetaKeys } from "./ai/aiChat";
+import { runAgentChat, AGENT_SYSTEM_PROMPT, DESIGN_AGENT_SYSTEM_PROMPT, PARAMETRIC_AGENT_SYSTEM_PROMPT, buildDetailedObjectCatalog, type AgentToolApi, type AgentEvent } from "./ai/agentChat";
+import { runFlowAgent, FLOW_AGENT_SYSTEM_PROMPT, buildFlowToolCatalog, validateFlowGraph, type FlowAgentApi } from "./ai/flowAgent";
 import { registerAgentCommand, startAgentBridge, agentBridgeEnabled } from "./agentBridge";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
@@ -226,6 +231,7 @@ import { SchemaPropsBlock, SchemaMetricsBlock } from "./components/GraphSchemaBl
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "./algorithms/network/pipeNetworkSolver";
 import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries } from "./flow/flowTypes";
 import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs } from "./flow/eval/parametricObject";
+import { setFlowObjectLibrary, findLibraryObject, measureParametricObject } from "./flow/eval/objectFootprints";
 import type { FlowMesh } from "./flow/eval/meshTypes";
 import { layoutRooms } from "./flow/LayoutRoomsEditor";
 import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, type AutoPlaceEntry, type OpeningKind } from "./flow/autoFlow";
@@ -243,7 +249,7 @@ import { FlowOverlay, FLOORPLAN_SCHEMA_PARAMS } from "./flow/FlowOverlay";
 import { TemplateDialog, type TemplateParams, type TemplateSample } from "./components/dialogs/TemplateDialog";
 import { FlowParamsPanel } from "./flow/FlowParamsPanel";
 import { evaluateFlow, type FlowPreviewItem } from "./flow/eval/evaluateFlow";
-import { evalGraphMetrics, gridDefToField } from "./flow/eval/evalNodes";
+import { evalGraphMetrics, gridDefToField, evalSkeleton } from "./flow/eval/evalNodes";
 import { evaluateSpaceCondition } from "./flow/conditional";
 import { PlacementSymbol2D, placementFrameFromQuad, isPlacementSymbolKind } from "./placementSymbol2d";
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from "react-resizable-panels";
@@ -896,6 +902,249 @@ const bufferBandPoints = (a: Point, b: Point, thickness: number, style: "capsule
   return pts;
 };
 
+// ── Buffered-band → Space helpers (shared by "Convert to Space" and the live Path display mode) ──
+
+/** How far a band can extend from its centerline: full thickness for left/right justification
+ *  (the band sits wholly on one side), half for center. */
+const bandReach = (w: Wall): number => {
+  const ww = wallWithDefaults(w);
+  return ww.method === "left" || ww.method === "right" ? ww.thickness : ww.thickness / 2;
+};
+
+const pointSegDist = (p: Point, a: Point, b: Point): number => {
+  const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+  const t = l2 > 1e-9 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0;
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+};
+
+const segSegDist = (a1: Point, a2: Point, b1: Point, b2: Point): number => {
+  const o = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const s1 = o(a1, a2, b1), s2 = o(a1, a2, b2), s3 = o(b1, b2, a1), s4 = o(b1, b2, a2);
+  if (((s1 > 0 && s2 < 0) || (s1 < 0 && s2 > 0)) && ((s3 > 0 && s4 < 0) || (s3 < 0 && s4 > 0))) return 0;
+  return Math.min(pointSegDist(b1, a1, a2), pointSegDist(b2, a1, a2), pointSegDist(a1, b1, b2), pointSegDist(a2, b1, b2));
+};
+
+/** Do two buffered segments' bands touch? Centerline distance vs combined band reach (+2 px slack) —
+ *  covers shared endpoints, T-junctions against a side, and crossings alike. */
+const bandsTouch = (a: Wall, b: Wall): boolean =>
+  segSegDist(a.start, a.end, b.start, b.end) <= bandReach(a) + bandReach(b) + 2;
+
+/** Partition buffered segments into connected components of transitively-touching bands. */
+const groupTouchingBands = (members: Wall[]): Wall[][] => {
+  const groups: Wall[][] = [];
+  const seen = new Set<string>();
+  for (const seed of members) {
+    if (seen.has(seed.id)) continue;
+    seen.add(seed.id);
+    const grp: Wall[] = [];
+    const queue: Wall[] = [seed];
+    while (queue.length) {
+      const w = queue.pop()!;
+      grp.push(w);
+      for (const o of members) {
+        if (!seen.has(o.id) && bandsTouch(w, o)) { seen.add(o.id); queue.push(o); }
+      }
+    }
+    groups.push(grp);
+  }
+  return groups;
+};
+
+const ringSignedArea = (pts: Point[]): number => {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; s += a.x * b.y - b.x * a.y; }
+  return s / 2;
+};
+
+const pointInRing = (pt: Point, poly: Point[]): boolean => {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if (((a.y > pt.y) !== (b.y > pt.y)) && (pt.x < (b.x - a.x) * (pt.y - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+  }
+  return inside;
+};
+
+/** Union a group of band polygons into Space outlines. Bands that only ABUT or TOUCH take the exact
+ *  vector union (`polygonUnionVectorLoops`) — it splits edges at T-junction touch points before
+ *  dissolving shared seams, so a chain's first/last segment ending against another band's SIDE (not
+ *  its endpoint) still merges into one outline; holes (ring corridors) and disjoint extras preserved.
+ *  Bands whose interiors properly OVERLAP (crossings) fall back to `rasterUnion` — one merged outline.
+ *  The mitre seam-cancellation trace remains as a last-resort fallback. */
+const unionBandOutlines = (polyMap: Map<string, Point[]>): { outer: Point[]; holes: Point[][]; extras: Point[][] } | null => {
+  const memberPolys = [...polyMap.values()];
+  if (memberPolys.length === 0) return null;
+  const holes: Point[][] = [], extras: Point[][] = [];
+  let outer: Point[];
+  if (memberPolys.length > 1 && polygonsInteriorsCross(memberPolys)) {
+    const merged = rasterUnion(memberPolys, 600);
+    if (!merged || merged.length < 3) return null;
+    outer = merged;
+  } else {
+    let loops = polygonUnionVectorLoops(memberPolys, 1.5);
+    if (!loops || loops.length === 0) {
+      const { outerEdges } = computeMiteredUnion(polyMap);
+      loops = traceClosedLoops(outerEdges);
+    }
+    if (!loops || loops.length === 0) return null;
+    const sorted = loops.slice().sort((l1, l2) => Math.abs(ringSignedArea(l2)) - Math.abs(ringSignedArea(l1)));
+    outer = sorted[0];
+    for (const l of sorted.slice(1)) (pointInRing(l[0], outer) ? holes : extras).push(l);
+  }
+  // Coverage guarantee: every input band must end up inside the result (outer∖holes, or an extra).
+  // If the exact trace dropped one — any junction geometry we didn't foresee — escalate to the raster
+  // union, whose occupancy mask covers every input by construction (holes are lost on that path).
+  const centroidOf = (pts: Point[]): Point => {
+    let x = 0, y = 0;
+    for (const p of pts) { x += p.x; y += p.y; }
+    return { x: x / pts.length, y: y / pts.length };
+  };
+  const covered = (pt: Point) =>
+    (pointInRing(pt, outer) && !holes.some((h) => pointInRing(pt, h))) || extras.some((e) => pointInRing(pt, e));
+  if (!memberPolys.every((p) => covered(centroidOf(p)))) {
+    const merged = rasterUnion(memberPolys, 600);
+    if (merged && merged.length >= 3) return { outer: merged, holes: [], extras: [] };
+  }
+  return { outer, holes, extras };
+};
+
+/** Union ≥2 room polygons into ONE merged room and drop the interior divider walls — pure state-in /
+ *  state-out (no toasts, no selection), so the Space Properties "Merge" button and the Chat-AI agent's
+ *  merge_spaces tool share one implementation. Shared edges between adjacent polygons cancel
+ *  (computeMiteredUnion); the remaining outer edges are traced into loops and the largest loop becomes the
+ *  merged polygon. Walls whose midpoint lies strictly INSIDE the merged polygon (and off its boundary) are
+ *  the dissolved dividers — removed, except site/context segment types. Styling + label inherit from the
+ *  largest source room. */
+const mergeRoomsCore = (sourceRooms: Room[], stateWalls: Wall[]): { mergedRoom: Room; walls: Wall[]; wallsRemoved: number } | { error: string } => {
+  const polyMap = new Map<string, Point[]>();
+  for (const r of sourceRooms) {
+    if (r.points.length >= 3) polyMap.set(r.id, r.points);
+  }
+  if (polyMap.size < 2) return { error: "Selected spaces must each have at least 3 vertices" };
+  const { outerEdges } = computeMiteredUnion(polyMap);
+  if (outerEdges.length === 0) return { error: "Merge failed — selected spaces share no boundary" };
+  // Trace closed loops along the outer edges (same as runRoomPathSpace).
+  const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+  const used = new Array<boolean>(outerEdges.length).fill(false);
+  const loops: Point[][] = [];
+  for (let start = 0; start < outerEdges.length; start++) {
+    if (used[start]) continue;
+    used[start] = true;
+    const seed = outerEdges[start];
+    const loop: Point[] = [seed.a, seed.b];
+    let endKey = KEY(seed.b);
+    const startKey = KEY(seed.a);
+    for (let safety = 0; safety < outerEdges.length + 1; safety++) {
+      if (endKey === startKey) break;
+      let nextIdx = -1, reversed = false;
+      for (let i = 0; i < outerEdges.length; i++) {
+        if (used[i]) continue;
+        if (KEY(outerEdges[i].a) === endKey) { nextIdx = i; reversed = false; break; }
+        if (KEY(outerEdges[i].b) === endKey) { nextIdx = i; reversed = true; break; }
+      }
+      if (nextIdx === -1) break;
+      used[nextIdx] = true;
+      const ne = outerEdges[nextIdx];
+      const np = reversed ? ne.a : ne.b;
+      if (KEY(np) === startKey) break;
+      loop.push(np);
+      endKey = KEY(np);
+    }
+    if (loop.length >= 3) loops.push(loop);
+  }
+  if (loops.length === 0) return { error: "Merge failed — couldn't close the merged outline" };
+  // Pick the largest closed loop (shoelace area) — that's the union outline. If the selection contains
+  // multiple disjoint groups, only the biggest survives; re-select and merge the others separately.
+  const shoelace = (poly: Point[]) => {
+    let a = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length];
+      a += p.x * q.y - q.x * p.y;
+    }
+    return Math.abs(a) / 2;
+  };
+  loops.sort((a, b) => shoelace(b) - shoelace(a));
+  const mergedPolygon = loops[0];
+  // Inherit visual styling + label from the first (largest) source room.
+  const byArea = [...sourceRooms].sort((a, b) => shoelace(b.points) - shoelace(a.points));
+  const primary = byArea[0];
+  const mergedRoom: Room = {
+    ...primary,
+    id: createId(),
+    points: mergedPolygon,
+    label: primary.label ? `${primary.label} (merged)` : "Merged Space",
+  };
+  // Drop walls whose midpoint lies strictly inside the merged polygon AND is at least a couple of pixels
+  // away from the merged boundary — perimeter walls of the source spaces sit *on* the merged boundary and
+  // must be preserved; only walls fully interior to the union (the shared dividers) should disappear.
+  // Site / buildable / footprint / connection segments are preserved regardless (contextual semantics).
+  const pipMerged = (px: number, py: number): boolean => {
+    let inside = false;
+    for (let i = 0, j = mergedPolygon.length - 1; i < mergedPolygon.length; j = i++) {
+      const a = mergedPolygon[i], b = mergedPolygon[j];
+      if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+    }
+    return inside;
+  };
+  /** Perpendicular distance from a point to the polygon's nearest edge. */
+  const distToMergedBoundary = (px: number, py: number): number => {
+    let best = Infinity;
+    for (let i = 0; i < mergedPolygon.length; i++) {
+      const a = mergedPolygon[i], b = mergedPolygon[(i + 1) % mergedPolygon.length];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
+      const cx = a.x + t * dx, cy = a.y + t * dy;
+      const d = Math.hypot(px - cx, py - cy);
+      if (d < best) best = d;
+    }
+    return best;
+  };
+  const BOUNDARY_TOL = 2.5; // px — anything within this of the merged outline is a perimeter wall.
+  const PRESERVED_SEG_TYPES = new Set(["plot-boundary", "buildable-boundary", "footprint-boundary", "connection"]);
+  const walls = stateWalls.filter((w) => {
+    const st = w.segmentType ?? "wall";
+    if (PRESERVED_SEG_TYPES.has(st)) return true;
+    const mx = (w.start.x + w.end.x) / 2;
+    const my = (w.start.y + w.end.y) / 2;
+    if (!pipMerged(mx, my)) return true;                // outside the merge: keep.
+    if (distToMergedBoundary(mx, my) < BOUNDARY_TOL) return true; // on the outline: keep.
+    return false;                                        // strictly interior: drop.
+  });
+  return { mergedRoom, walls, wallsRemoved: stateWalls.length - walls.length };
+};
+
+// ── Host-adaptive parametric-object placement (attach ANY .pobj to node / segment / space) ──
+
+/** Axis-aligned bbox of point polylines (world px). Null when there are no points. */
+const polysBBox = (polys: Point[][]): { minX: number; minY: number; maxX: number; maxY: number } | null => {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const poly of polys) {
+    for (const p of poly) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+};
+
+/** Does a serialized .pobj adapt ITSELF to the attached host? True for host scope vars (hostW/…),
+ *  a `host` footprint rule, or a dissolved-flow `pipeline` — those render as-authored on a Space.
+ *  Objects that aren't host-aware (staircase, furniture …) get the generic fit-to-space transform. */
+const pobjIsHostAware = (defText: string): boolean =>
+  /hostW|hostH|hostArea|hostMin|hostMax|"host"|"pipeline"/.test(defText);
+
+/** Poll a ref-produced value until it is non-null or the deadline passes (agent bridges mount async —
+ *  e.g. the Flow overlay's flowApplyApiRef appears one render after setFlowOpen(true)). */
+const waitForRefValue = async <T,>(get: () => T | null | undefined, ms: number): Promise<T | null> => {
+  const t0 = Date.now();
+  let v = get();
+  while (!v && Date.now() - t0 < ms) { await new Promise((r) => setTimeout(r, 50)); v = get(); }
+  return v ?? null;
+};
+
 
 const distanceInUnit = (a: Point, b: Point, unit: Unit, pixelsPerMeter: number) => {
   const pxDistance = Math.hypot(a.x - b.x, a.y - b.y);
@@ -1323,6 +1572,85 @@ export type FloorPlanEditorProps = {
   projectId?: string;
 };
 
+/** Display style baked from a downstream "Display 3D" node — colour / opacity / solid-vs-wireframe / edges. */
+export type Display3DStyle = { color: string; opacity: number; wireframe: boolean; showEdges: boolean };
+/** A resolved 3D primitive for the 3D canvas: shape + (scale-baked) dimensions + a baked affine transform
+ *  (translate metres, rotate radians, mirror ±1 per axis). Produced from the Flow 3D-primitive nodes.
+ *  `display` is set when a Display 3D node is wired downstream (colour now lives there, not on the primitive). */
+export type PrimMass3D = {
+  id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string;
+  transform: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number };
+  display?: Display3DStyle;
+};
+/** One operand of a Boolean (CSG) op: a primitive, or a nested Boolean subtree (so Booleans chain). */
+export type BoolOperand3D = { prim: PrimMass3D } | { bool: BoolNode3D };
+/** A Boolean (CSG) node: operation + two operands (each a primitive or another Boolean). */
+export type BoolNode3D = { op: string; a: BoolOperand3D; b: BoolOperand3D };
+/** A render-root Boolean group: a Boolean node id + tree + the display style wired downstream. */
+export type BoolMass3D = { id: string; op: string; a: BoolOperand3D; b: BoolOperand3D; display?: Display3DStyle };
+
+// ── Bamboo-flute parametric chart ────────────────────────────────────────────────────────────────
+// An Input Properties node configured with the flute params (mode + D + t + L1..L10 + D1..D8) drives the
+// flute cylinders (marked with a `fluteRole`). Mode "scale" looks the dimensions up here by musical key;
+// mode "dimensions" reads the manual fields. Values are MILLIMETRES (as printed on the maker's chart).
+//
+// ⚠ TRANSCRIBED FROM A PHONE PHOTO — VERIFY. The total lengths (Lt) + diameters (D, t) are read from the
+// chart's columns; the per-hole SPACINGS use the C-Natural-Base proportions scaled to each flute's total
+// length (the segment columns are too low-res to read reliably). Correct any row here, or use Dimensions
+// mode for exact numbers.
+type FluteChartRow = { D: number; t: number; Lt: number; Dh: number[] };
+const FLUTE_HOLES_28 = [11, 8, 8.5, 9, 7, 11, 10, 5.5];
+const FLUTE_HOLES_22 = [9, 7, 7, 7.5, 6, 9, 8, 4.5];
+const FLUTE_HOLES_17 = [7, 5.5, 6, 6, 5, 7, 7, 3.5];
+export const FLUTE_CHART: Record<string, FluteChartRow> = {
+  "C Natural Base": { D: 28, t: 2, Lt: 841, Dh: FLUTE_HOLES_28 },
+  "C# Natural Base": { D: 28, t: 2, Lt: 791, Dh: FLUTE_HOLES_28 },
+  "D Natural Base": { D: 28, t: 2, Lt: 740, Dh: FLUTE_HOLES_28 },
+  "E Natural Base": { D: 28, t: 2, Lt: 717, Dh: FLUTE_HOLES_28 },
+  "D# Natural Base": { D: 28, t: 2, Lt: 694, Dh: FLUTE_HOLES_28 },
+  "F Natural Base": { D: 28, t: 2, Lt: 609, Dh: FLUTE_HOLES_28 },
+  "G Base": { D: 28, t: 2, Lt: 582, Dh: FLUTE_HOLES_28 },
+  "F# Base": { D: 28, t: 2, Lt: 564, Dh: FLUTE_HOLES_28 },
+  "G# Base": { D: 22, t: 1.5, Lt: 548, Dh: FLUTE_HOLES_22 },
+  "A Middle": { D: 22, t: 1.5, Lt: 514, Dh: FLUTE_HOLES_22 },
+  "A# Middle": { D: 22, t: 1.5, Lt: 484, Dh: FLUTE_HOLES_22 },
+  "B Middle": { D: 22, t: 1.5, Lt: 454, Dh: FLUTE_HOLES_22 },
+  "C Natural Medium": { D: 17, t: 1.5, Lt: 454, Dh: FLUTE_HOLES_17 },
+  "C# Natural Medium": { D: 17, t: 1.5, Lt: 433, Dh: FLUTE_HOLES_17 },
+  "D Natural Medium": { D: 17, t: 1.5, Lt: 408, Dh: FLUTE_HOLES_17 },
+  "D# Natural Medium": { D: 17, t: 1.5, Lt: 385, Dh: FLUTE_HOLES_17 },
+  "E Natural Medium": { D: 17, t: 1.5, Lt: 363, Dh: FLUTE_HOLES_17 },
+  "F Natural Medium": { D: 17, t: 1.5, Lt: 342, Dh: FLUTE_HOLES_17 },
+  "F# Natural Medium": { D: 17, t: 1.5, Lt: 323, Dh: FLUTE_HOLES_17 },
+  "G natural Small": { D: 17, t: 1.5, Lt: 304, Dh: FLUTE_HOLES_17 },
+  "G# Natural Small": { D: 17, t: 1.5, Lt: 287, Dh: FLUTE_HOLES_17 },
+  "C Natural Small": { D: 17, t: 1.5, Lt: 226, Dh: FLUTE_HOLES_17 },
+  "C# Natural Small": { D: 17, t: 1.5, Lt: 213, Dh: FLUTE_HOLES_17 },
+};
+export const FLUTE_KEYS = Object.keys(FLUTE_CHART);
+/** Per-hole spacings of the C-Natural-Base flute (L1..L10, mm) — used to proportion every other flute. */
+const FLUTE_BASE_PROP = [20, 25, 286, 65.9, 59, 66.2, 51.5, 87.2, 71.9, 109];
+const FLUTE_BASE_SUM = 841;
+/** Millimetres → 3D-scene units (chart is in mm; scale up so the flute is comfortably viewable). */
+const FLUTE_MM_TO_SCENE = 0.02;
+/** The 8 finger/blow holes as {height along the tube, radius}, plus the tube's outer/bore radii + length. */
+type FluteGeom = { R: number; r: number; Ltot: number; holes: { y: number; rad: number }[] };
+/** Full flute spec (mm): outer ⌀ D, wall t, 10 segment lengths L, 8 hole ⌀ Dh. */
+const fluteChartToSpec = (e: FluteChartRow): { D: number; t: number; L: number[]; Dh: number[] } =>
+  ({ D: e.D, t: e.t, L: FLUTE_BASE_PROP.map((p) => (p * e.Lt) / FLUTE_BASE_SUM), Dh: e.Dh });
+/** Turn a mm spec into scene-unit geometry: outer radius R, bore radius r, total length, and each hole's
+ *  centre height (cumulative segment position) + radius. */
+const computeFluteGeom = (s: { D: number; t: number; L: number[]; Dh: number[] }): FluteGeom => {
+  const sc = FLUTE_MM_TO_SCENE;
+  const R = (s.D / 2) * sc;
+  const r = Math.max(0.005, (s.D / 2 - s.t) * sc);
+  const segs = s.L.map((v) => v * sc);
+  const Ltot = segs.reduce((a, b) => a + b, 0);
+  const cum: number[] = []; let acc = 0; for (const gseg of segs) { acc += gseg; cum.push(acc); }
+  const holes = s.Dh.map((dh, i) => ({ y: cum[i + 1] ?? (Ltot * (i + 1)) / 9, rad: Math.max(0.003, (dh / 2) * sc) }));
+  return { R, r, Ltot, holes };
+};
+
 export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1332,11 +1660,20 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const { containerRef, size, scale, setScale, position, setPosition } = useCanvas();
   const history = useHistory<FloorPlanModel>(initialModel);
   const selection = useSelection();
+  /** Always-fresh mirror of the selection (and the selected wall NODE, whose state is declared further
+   *  down) so stable callbacks (the Chat-AI agent api) read the LIVE selection without re-subscribing. */
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const selectedNodeKeyRef = useRef<string | null>(null);
   // Declared early (before the auto-room memo) so room detection can read the live flow + scale: when a
   // "Graph to Room" node is present, auto-rooms are inset to the inner (clear) room by each wall's schema
   // thickness. (Both are also referenced widely below.)
   const [pixelsPerMeter, setPixelsPerMeter] = useState(50);
   const [liveFlowGraph, setLiveFlowGraph] = useState<SerializedFlow | null>(null);
+  /** Always-fresh mirror of liveFlowGraph, so stable callbacks (the Flow agent api) read the current graph
+   *  without re-subscribing. */
+  const liveFlowGraphRef = useRef<SerializedFlow | null>(null);
+  liveFlowGraphRef.current = liveFlowGraph;
   const autoRooms = useMemo(
     // BSP preview walls (isBspPreview) are excluded — same as inset preview walls — so the partition
     // shows only as ephemeral cut strokes during Live, never as real auto-rooms. The cells become
@@ -1440,6 +1777,55 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return layerLockedSet.has(id);
   }, [layerLockedSet]);
 
+  /** Mitered wall polygons — computed once when walls change, shared across all mitered wall renders. */
+  const miteredPolygons = useMemo(() => computeMiteredWallPolygons(history.state.walls), [history.state.walls]);
+  /** LIVE Path spaces — Display mode "Path" (`bufferStyle` + `asSpace`): each connected group of touching
+   *  path bands derives a Space from its union outline. Membership is CONTAGIOUS: any buffered band
+   *  (except NURBS ribbons) touching a flagged run joins its Space, so a corridor whose first/last
+   *  segments were drawn in plain Buffered mode (or lost the flag on any commit path) still reads as ONE
+   *  space — a group only exists at all when at least one member carries `asSpace`. Recomputed as
+   *  segments move; never stored in `history.state.rooms` (and so never persisted). Stable id
+   *  `path-space:<smallest member wall id>` keys the persisted `pathSpaceAttachments` map so attached
+   *  objects survive segment edits. */
+  const pathSpaces = useMemo(() => {
+    const seeds = history.state.walls.filter((w) => w.segmentType !== "path" && !!w.bufferStyle && w.asSpace);
+    if (seeds.length === 0) return [] as Room[];
+    const candidates = history.state.walls.filter((w) => !!w.bufferStyle && w.pathJoin !== "nurbs");
+    const attMap = history.state.pathSpaceAttachments ?? {};
+    const rooms: Room[] = [];
+    for (const grp of groupTouchingBands(candidates).filter((g) => g.some((w) => w.asSpace))) {
+      const polyMap = new Map<string, Point[]>();
+      for (const w of grp) {
+        const poly = miteredPolygons.get(w.id);
+        if (poly && poly.length >= 3) polyMap.set(w.id, poly);
+      }
+      if (polyMap.size === 0) continue;
+      const u = unionBandOutlines(polyMap);
+      if (!u) continue;
+      const primaryId = [...polyMap.keys()].sort()[0];
+      const primary = grp.find((w) => w.id === primaryId)!;
+      const mk = (points: Point[], suffix: string, hs?: Point[][]): Room => {
+        const id = `${PATH_SPACE_ID_PREFIX}${primaryId}${suffix}`;
+        return {
+          id,
+          points,
+          ...(hs && hs.length ? { holes: hs } : {}),
+          layerId: primary.layerId,
+          fill: "rgba(129, 140, 248, 0.18)",
+          stroke: primary.color || "#4f46e5",
+          roomType: "room",
+          region: "Corridor",
+          label: primary.label || "Path",
+          showLabel: true,
+          attachments: attMap[id] ?? [],
+        };
+      };
+      rooms.push(mk(u.outer, "", u.holes));
+      u.extras.forEach((pts, i) => rooms.push(mk(pts, `:x${i + 1}`)));
+    }
+    return rooms;
+  }, [history.state.walls, history.state.pathSpaceAttachments, miteredPolygons]);
+
   const visibleRooms = useMemo(() => {
     // Hide an auto-detected room if (a) its centroid is within 10 px of a manual
     // room's centroid (the original near-identical-region check), or (b) its centroid
@@ -1476,14 +1862,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         return manualRoom.points.length >= 3 && pip(ac.x, ac.y, manualRoom.points);
       });
     });
-    // Manual rooms rendered after (on top) so they receive clicks first.
+    // Manual rooms rendered after (on top) so they receive clicks first. LIVE Path spaces render
+    // between: derived like auto-rooms but explicit, so manual rooms never suppress them.
     // Layer-aware visibility filter: drop rooms whose layer is hidden.
     // Paint order: sort by layer.order so higher-order layers draw on top.
-    const combined = [...filteredAutoRooms, ...manualRooms];
+    const combined = [...filteredAutoRooms, ...pathSpaces, ...manualRooms];
     return combined.filter((r) => isLayerVisible(r.layerId)).slice().sort(compareByLayer);
-  }, [manualRooms, autoRooms, isLayerVisible, compareByLayer]);
-  /** Mitered wall polygons — computed once when walls change, shared across all mitered wall renders. */
-  const miteredPolygons = useMemo(() => computeMiteredWallPolygons(history.state.walls), [history.state.walls]);
+  }, [manualRooms, autoRooms, pathSpaces, isLayerVisible, compareByLayer]);
   const miteredUnion = useMemo(() => computeMiteredUnion(miteredPolygons), [miteredPolygons]);
   /** All mitered-polygon outline edges, used by the "Mitered Points" snap (Preferences → Snapping) — the
    *  pointer/node projects onto the nearest point ALONG these lines (corners included), not just vertices. */
@@ -1734,26 +2119,27 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [nodeObjExpanded, setNodeObjExpanded] = useState<boolean>(true);
 
   /** Buffered-segment UNION outline — active only when the "Buffered Segment Joins" preference is
-   *  "mitered-union". Unions every Buffered display band into one seamless outline (boundary edges), so
-   *  connected segments read as a single corridor with no internal corner seams. */
+   *  "mitered-union". Reuses the per-wall MITERED polygons (so the outer boundary is identical to the
+   *  "Mitered" mode), then unions them via edge-cancellation: the seam edge at a junction appears
+   *  identically (reversed) in both adjacent mitered polygons and drops out of `outerEdges`, leaving one
+   *  seamless outline. (The raw rectangular bands only OVERLAP at corners — no coincident edges — so they
+   *  can never cancel; unioning them produced stepped corners and stray joint lines.) */
   const bufferedUnion = useMemo(() => {
     if (bufferJoinMode !== "mitered-union") return null;
     const polys = new Map<string, Point[]>();
     let color = "#334155", anyFilled = false;
     for (const w of history.state.walls) {
       if (w.segmentType === "path" || !w.bufferStyle) continue;
-      const flat = bufferBandPoints(w.start, w.end, w.thickness ?? 0, w.bufferStyle);
-      if (flat.length < 6) continue;
-      const ring: Point[] = [];
-      for (let i = 0; i + 1 < flat.length; i += 2) ring.push({ x: flat[i], y: flat[i + 1] });
-      polys.set(w.id, ring);
+      const mitre = miteredPolygons.get(w.id);
+      if (!mitre || mitre.length < 3) continue;
+      polys.set(w.id, mitre);
       color = w.color;
       if (w.mode !== "outline") anyFilled = true;
     }
     if (polys.size === 0) return null;
-    const { fills } = computeMiteredUnion(polys);
-    return { fills, color, fillUnion: anyFilled };
-  }, [bufferJoinMode, history.state.walls]);
+    const { fills, outerEdges } = computeMiteredUnion(polys);
+    return { fills, outerEdges, color, fillUnion: anyFilled };
+  }, [bufferJoinMode, history.state.walls, miteredPolygons]);
 
   /** Compute capsule polygons (line buffered by thickness/2 with semicircular caps) for all walls. */
   const capsulePolygons = useMemo(() => {
@@ -2072,6 +2458,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     (objId: string): string | null => { const o = history.state.objectLibrary?.[objId]; return o ? JSON.stringify(o) : null; },
     [history.state.objectLibrary],
   );
+  // Mirror the live object library into the flow-eval registry so the pure eval/compile paths (Place
+  // Object's parametric entries) and the PlaceObjectEditor dropdown can resolve objectIds without the
+  // library being threaded through evaluateFlow's signature.
+  useEffect(() => { setFlowObjectLibrary(history.state.objectLibrary); }, [history.state.objectLibrary]);
   /** Whether the current length labels carry their own inline unit (ft-inches) so callers skip the unit suffix. */
   const lenInlineUnit = useMemo(() => lengthHasInlineUnit(unit, displayUnitOpts), [unit, displayUnitOpts]);
   /** Show Center Dimension (Preferences): when on, the live wall-trace preview also dimensions the
@@ -2158,7 +2548,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [addNodeConfig, setAddNodeConfig] = useState<NodeDisplayConfig>(NODE_DISPLAY_DEFAULTS);
   const activeNodeConfigRef = useRef<NodeDisplayConfig | null>(null);
   /** Active Add-Segment display config (set when the dialog starts a draw) — applied to each drawn line. */
-  const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered"; pathType: DrawPathStyle; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod; showLabel: boolean } | null>(null);
+  const activeSegmentConfigRef = useRef<{ thicknessPx: number; lineStyle: "solid" | "dashed" | "dotted"; color: string; mode: "line" | "buffered" | "path"; pathType: DrawPathStyle; bufferStyle: "capsule" | "square" | "flat"; fill: "filled" | "outlined" | "hatched"; method: WallMethod; showLabel: boolean } | null>(null);
   /** Hover span for click-to-place door/window on a wall (Add Segment → Door/Window): the opening's
    *  two endpoints on the host wall + whether it fits, so the preview shows where the click lands. */
   const [openingPlacePreview, setOpeningPlacePreview] = useState<{ ds: Point; de: Point } | null>(null);
@@ -2513,6 +2903,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [wallPropsTab, setWallPropsTab] = useState<"properties" | "metrics">("properties");
   /** Properties|Metrics tab in the node (point) properties block. */
   const [nodePropsTab, setNodePropsTab] = useState<"properties" | "metrics">("properties");
+  /** Selected NESTED component instance of a parametric attachment (SketchUp-style): the attachment id +
+   *  the ref-instance path inside it. Drives the Components editor expansion + the canvas accent highlight.
+   *  Attachment ids are globally unique (createId), so no host discriminator is needed. */
+  const [selectedComponent, setSelectedComponent] = useState<{ attId: string; path: string } | null>(null);
   /** Properties|Metrics tab in the graph (Select → Graph scope) properties block. */
   const [graphPropsTab, setGraphPropsTab] = useState<"properties" | "metrics">("properties");
   /** When true, the Properties and Metrics panes render side-by-side (and the panel auto-widens)
@@ -2758,6 +3152,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const flowPanelRef = useRef<ImperativePanelHandle>(null);
   /** Pure-evaluated Flow pipeline output polygons, rendered as a canvas overlay (preview). */
   const [flowPreview, setFlowPreview] = useState<FlowPreviewItem[]>([]);
+  /** Ref mirror of the OVERLAY's live preview — the agent's flow_apply reads it (after the eval settles)
+   *  to summarise what each node produced without racing React state. */
+  const flowPreviewRef = useRef<FlowPreviewItem[]>([]);
   /** Display ids (e.g. "Space001") of Space nodes whose eye is toggled off in the Flow editor — those
    *  spaces are hidden on the canvas while the editor drives the view. */
   const [hiddenFlowSpaceIds, setHiddenFlowSpaceIds] = useState<string[]>([]);
@@ -2822,7 +3219,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       for (const att of meta[node.stableKey]?.attachments ?? []) {
         const obj = lib[att.objectId];
         if (!obj?.geometry) continue;
-        const prisms = evalParametricPrisms(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef);
+        const prisms = evalParametricPrisms(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef, att.childParams);
         if (prisms.length) out.push({ id: `pobj-${node.stableKey}-${att.id}`, prisms });
       }
     }
@@ -2848,7 +3245,21 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       for (const att of room.attachments ?? []) {
         const obj = lib[att.objectId];
         if (!obj?.geometry) continue;
-        const prisms = evalParametricPrisms(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef);
+        const defText = JSON.stringify(obj);
+        let prisms = evalParametricPrisms(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams);
+        // Generic FIT-TO-SPACE (mirrors the 2D overlay): non-host-aware objects scale uniformly in PLAN
+        // to the Space bbox, centred in it; heights stay true. Host-aware objects extrude as-authored.
+        if (prisms.length && !pobjIsHostAware(defText)) {
+          const gb = polysBBox(prisms.flatMap((p) => [p.bottom, p.top]));
+          const rb = polysBBox([room.points]);
+          if (gb && rb) {
+            const s = Math.min((rb.maxX - rb.minX) / Math.max(1e-6, gb.maxX - gb.minX), (rb.maxY - rb.minY) / Math.max(1e-6, gb.maxY - gb.minY));
+            const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
+            const rcx = (rb.minX + rb.maxX) / 2, rcy = (rb.minY + rb.maxY) / 2;
+            const tp = (p: Point): Point => ({ x: rcx + (p.x - gcx) * s, y: rcy + (p.y - gcy) * s });
+            prisms = prisms.map((p) => ({ ...p, bottom: p.bottom.map(tp), top: p.top.map(tp) }));
+          }
+        }
         if (prisms.length) out.push({ id: `pobj-space-${room.id}-${att.id}`, prisms });
       }
     }
@@ -2856,7 +3267,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const atts = w.attachments ?? [];
       const wallAtt = atts.find((a) => lib[a.objectId]?.meta.symbol === "wall");
       const openAtt = atts.find((a) => { const s = lib[a.objectId]?.meta.symbol; return s === "door" || s === "window"; });
-      if (!wallAtt && !openAtt) continue;
+      // GENERIC parametric objects on a segment (staircase, furniture, …) — everything with a geometry
+      // block that isn't the wall band or a door/window opening; host-aligned below like the 2D branch.
+      const genericAtts = atts.filter((a) => { const o = lib[a.objectId]; const s = o?.meta.symbol; return !!o?.geometry && s !== "wall" && s !== "door" && s !== "window"; });
+      if (!wallAtt && !openAtt && genericAtts.length === 0) continue;
       const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy);
       if (L < 1e-6) continue;
       // Extrude the MITERED footprint (same polygon the 2D plan uses) so corners join cleanly in 3D
@@ -2897,10 +3311,29 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (oObj?.geometry) {
           const cx = (w.start.x + w.end.x) / 2, cy = (w.start.y + w.end.y) / 2;
           const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-          const prisms = evalParametricPrisms(JSON.stringify(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle }, undefined, resolveObjectDef);
+          const prisms = evalParametricPrisms(JSON.stringify(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle }, undefined, resolveObjectDef, openAtt.childParams);
           const lifted = wbase ? prisms.map((p) => ({ ...p, yBottom: p.yBottom + wbase, yTop: p.yTop + wbase })) : prisms;
           if (lifted.length) out.push({ id: `opening-${w.id}-${openAtt.id}`, prisms: lifted });
         }
+      }
+      // Generic objects → evaluate un-rotated at the segment midpoint, then HOST-ALIGN in plan (mirrors
+      // the 2D branch): X extent stretched to the segment length, depth centred on the line, rotated with
+      // the segment. Heights stay true.
+      for (const att of genericAtts) {
+        const gObj = lib[att.objectId]!;
+        const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
+        const prisms = evalParametricPrisms(JSON.stringify(gObj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
+        if (!prisms.length) continue;
+        const gb = polysBBox(prisms.flatMap((p) => [p.bottom, p.top]));
+        if (!gb) continue;
+        const sxF = L / Math.max(1e-6, gb.maxX - gb.minX);
+        const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
+        const ux = dx / L, uy = dy / L;
+        const tp = (p: Point): Point => {
+          const lx = (p.x - gcx) * sxF, ly = p.y - gcy;
+          return { x: mid.x + ux * lx + nx * ly, y: mid.y + uy * lx + ny * ly };
+        };
+        out.push({ id: `pobj-seg-${w.id}-${att.id}`, prisms: prisms.map((p) => ({ ...p, bottom: p.bottom.map(tp), top: p.top.map(tp) })) });
       }
     }
     return out;
@@ -3377,7 +3810,6 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [aiApiKey, setAiApiKey] = useState<string>(() => { try { return localStorage.getItem("bp.ai.apiKey") ?? ""; } catch { return ""; } });
   const [aiModel, setAiModel] = useState<string>(() => { try { return localStorage.getItem("bp.ai.model") || "gemini-3-flash-preview"; } catch { return "gemini-3-flash-preview"; } });
   /** Editable system prompt for Chat AI (overrides the default). Persisted; empty falls back to the default. */
-  const [aiSystemPrompt, setAiSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.systemPrompt") || DEFAULT_SYSTEM_PROMPT; } catch { return DEFAULT_SYSTEM_PROMPT; } });
   const [aiBusy, setAiBusy] = useState<boolean>(false);
   const [aiLastResponse, setAiLastResponse] = useState<string>("");
 
@@ -3556,28 +3988,49 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [odMode, setOdMode] = useState<DetectionMode>("box");
   const [odBusy, setOdBusy] = useState<boolean>(false);
   const [objectDetections, setObjectDetections] = useState<Detection[]>([]);
-  // Chat AI (foldable canvas bar) — rewrites the model JSON via Gemini. Reuses the existing aiApiKey/aiModel
-  // (one Gemini key for all AI); its own message list + busy + fold state. Key/model persisted to localStorage.
+  // Chat AI (foldable canvas bar) — agentic tool-loops over the live canvas / Flow graph / object library
+  // via Gemini. Reuses the existing aiApiKey/aiModel (one Gemini key for all AI); its own message list +
+  // busy + fold state. Key/model persisted to localStorage.
   const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
   const [aiSendBusy, setAiSendBusy] = useState<boolean>(false);
   const [aiCollapsed, setAiCollapsed] = useState<boolean>(true);
-  /** Chat AI mode — "agent" (tool-loop over the live canvas, default) or "rewrite" (legacy one-shot JSON). */
-  const [aiMode, setAiMode] = useState<"agent" | "rewrite">(() => { try { return localStorage.getItem("bp.ai.mode") === "rewrite" ? "rewrite" : "agent"; } catch { return "agent"; } });
-  /** Editable system prompt for the AGENT mode (the rewrite mode keeps aiSystemPrompt). Key is versioned
-   *  (.v2 = JSON-first prompt) so shipping a new default replaces a stale stored copy of the old one. */
-  const [aiAgentSystemPrompt, setAiAgentSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.agentSystemPrompt.v2") || AGENT_SYSTEM_PROMPT; } catch { return AGENT_SYSTEM_PROMPT; } });
+  /** Chat AI mode — "agent" = the Orchestrator (full tool-loop over the live canvas + Flow gateway +
+   *  parametric library, default); "flow" = tool-loop that builds the node-graph Flow (Operations
+   *  Pipeline); "design" = canvas-design-only tool-loop; "parametric" = object-library-only tool-loop.
+   *  (A legacy stored "rewrite" falls back to "agent" — the one-shot JSON mode was removed.) */
+  const [aiMode, setAiMode] = useState<"agent" | "flow" | "design" | "parametric">(() => { try { const m = localStorage.getItem("bp.ai.mode"); return m === "flow" || m === "design" || m === "parametric" ? m : "agent"; } catch { return "agent"; } });
+  /** Editable system prompt for the AGENT (Orchestrator) mode. Key is versioned so shipping a new default
+   *  replaces a stale stored copy of the old one. */
+  // v8: Orchestrator rename + the PARAMETRIC OBJECT LIBRARY section (list/get/save/delete object tools)
+  // joined the v7 FURNISH recipe, SELECTION & SPACE EDITING, SELF-REVIEW step, design doctrine, FLOW
+  // ENGINE gateway and corridor/cores recipe. The key is versioned on every new default — the mount
+  // effect persists even an UNEDITED prompt, so an old key would mask code updates.
+  const [aiAgentSystemPrompt, setAiAgentSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.agentSystemPrompt.v8") || AGENT_SYSTEM_PROMPT; } catch { return AGENT_SYSTEM_PROMPT; } });
+  /** Editable system prompt for the FLOW mode (builds the node graph). v2: FURNISH recipe + parametric
+   *  place-object entries. */
+  const [aiFlowSystemPrompt, setAiFlowSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.flowSystemPrompt.v2") || FLOW_AGENT_SYSTEM_PROMPT; } catch { return FLOW_AGENT_SYSTEM_PROMPT; } });
+  /** Editable system prompt for the DESIGN mode (canvas-design tools only). */
+  const [aiDesignSystemPrompt, setAiDesignSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.designSystemPrompt.v1") || DESIGN_AGENT_SYSTEM_PROMPT; } catch { return DESIGN_AGENT_SYSTEM_PROMPT; } });
+  /** Editable system prompt for the PARAMETRIC mode (object-library tools only). */
+  const [aiParametricSystemPrompt, setAiParametricSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.parametricSystemPrompt.v1") || PARAMETRIC_AGENT_SYSTEM_PROMPT; } catch { return PARAMETRIC_AGENT_SYSTEM_PROMPT; } });
   useEffect(() => { try { localStorage.setItem("bp.ai.mode", aiMode); } catch { /* ignore */ } }, [aiMode]);
-  useEffect(() => { try { localStorage.setItem("bp.ai.agentSystemPrompt.v2", aiAgentSystemPrompt); } catch { /* ignore */ } }, [aiAgentSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.agentSystemPrompt.v8", aiAgentSystemPrompt); } catch { /* ignore */ } }, [aiAgentSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.flowSystemPrompt.v2", aiFlowSystemPrompt); } catch { /* ignore */ } }, [aiFlowSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.designSystemPrompt.v1", aiDesignSystemPrompt); } catch { /* ignore */ } }, [aiDesignSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.parametricSystemPrompt.v1", aiParametricSystemPrompt); } catch { /* ignore */ } }, [aiParametricSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.apiKey", aiApiKey); } catch { /* ignore */ } }, [aiApiKey]);
   useEffect(() => { try { localStorage.setItem("bp.ai.model", aiModel); } catch { /* ignore */ } }, [aiModel]);
-  useEffect(() => { try { localStorage.setItem("bp.ai.systemPrompt", aiSystemPrompt); } catch { /* ignore */ } }, [aiSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.units.precision", String(decimalPrecision)); } catch { /* ignore */ } }, [decimalPrecision]);
   /** Live ref to autoImportObjectFolder (declared further down) — the agent's import_objects tool needs it,
    *  but putting the callback itself in handleAiSend's deps would read it before initialization (TDZ). */
   const autoImportObjectsRef = useRef<null | (() => Promise<void>)>(null);
-  /** Chat AI send. AGENT mode (default): run the tool-loop (agentChat.ts) — the model inspects the live
-   *  canvas and edits it through the same programmatic pipeline the MCP bridge uses, streaming each tool
-   *  call into the transcript. REWRITE mode (legacy): one-shot Gemini JSON rewrite of the whole model. */
+  /** Live ref to buildParametricObjectFile (declared further down) — the agent's save_object tool runs the
+   *  SAME parse + normalise the manual .pobj import uses (same TDZ guard as autoImportObjectsRef). */
+  const buildParametricObjectFileRef = useRef<null | ((parsed: Record<string, unknown>, fileName: string, hostKind?: "node" | "segment" | "space" | "canvas") => ParametricObjectFile)>(null);
+  /** Chat AI send. AGENT-family modes ("agent" = Orchestrator, "design", "parametric"): run the tool-loop
+   *  (agentChat.ts) with that mode's tool subset — the model inspects the live canvas / object library and
+   *  edits through the same programmatic pipeline the MCP bridge uses, streaming each tool call into the
+   *  transcript. FLOW mode: tool-loop that builds the node-graph Flow (flowAgent.ts). */
   const handleAiSend = useCallback(async (prompt: string, file?: File) => {
     if (!aiApiKey.trim() || !aiModel.trim()) {
       toast.error("Set the Gemini API key + model in Preferences first");
@@ -3605,9 +4058,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         }
       }
       const effectivePrompt = prompt || (file ? "Generate a floor plan that reproduces the attached drawing." : "");
+      // One transcript line per agent tool call/result (shared by the canvas Agent and the Flow agent).
+      const fmtEvent = (e: AgentEvent): string =>
+        e.type === "tool-call"
+          ? `▸ ${e.tool} ${JSON.stringify(e.input ?? {}).slice(0, 180)}`
+          : `${e.ok ? "✓" : "✗"} ${e.tool} — ${e.summary.slice(0, 240)}`;
 
-      if (aiMode === "agent") {
-        // ── Agent mode: tools over the live canvas (see agentChat.ts for the tool set + system prompt). ──
+      if (aiMode !== "flow") {
+        // ── Agent-family modes (Orchestrator / Design / Parametric): tools over the live canvas + object
+        //    library; the mode picks the tool subset + default system prompt (see agentChat.ts). ──
         const bridge = () => { const b = bridgeApiRef.current; if (!b) throw new Error("canvas api not ready"); return b; };
         const applyModelJson = (json: string): unknown => {
           const before = historyRef.current.state;
@@ -3619,6 +4078,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           };
           historyRef.current.set(next);
           return summarizeChange(before, next);
+        };
+        // Space-label → visible room (shared by attach_space_object / merge_spaces): "SpaceNNN"
+        // resolves by index into the visible list, anything else by case-insensitive label match.
+        const roomByLabel = (label: string): Room | undefined => {
+          const rooms = visibleRoomsRef.current;
+          const im = /^\s*space\s*0*(\d+)\s*$/i.exec(label);
+          return im
+            ? rooms[parseInt(im[1], 10) - 1]
+            : rooms.find((r) => (r.label ?? "").trim().toLowerCase() === label.trim().toLowerCase());
         };
         const api: AgentToolApi = {
           getState: () => {
@@ -3646,6 +4114,94 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
               attachedObjects: (r.attachments ?? []).map((a) => lib[a.objectId]?.meta.name ?? a.objectId),
             }));
           },
+          getSelection: () => {
+            // The user's LIVE canvas selection (shift-click multi-selects segments + spaces; the Node
+            // select scope adds a wall junction) — how the agent grounds "this / these / the selected …"
+            // instructions. Spaces report the SAME labels list_spaces would, so the two interoperate.
+            const s = historyRef.current.state;
+            const ppm = bridgePpmRef.current;
+            const lib = s.objectLibrary ?? {};
+            const objName = (objectId: string): string => lib[objectId]?.meta.name ?? objectId;
+            const rooms = visibleRoomsRef.current;
+            const mFix = (v: number): number => +(v / ppm).toFixed(2);
+            const items: Record<string, unknown>[] = [];
+            for (const id of selectionRef.current.selectedIds) {
+              const w = s.walls.find((wl) => wl.id === id);
+              if (w) {
+                items.push({
+                  kind: "segment", id, segmentType: w.segmentType ?? "wall",
+                  startM: { x: mFix(w.start.x), y: mFix(w.start.y) },
+                  endM: { x: mFix(w.end.x), y: mFix(w.end.y) },
+                  lengthM: +(Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) / ppm).toFixed(2),
+                  attachedObjects: (w.attachments ?? []).map((at) => objName(at.objectId)),
+                });
+                continue;
+              }
+              const ri = rooms.findIndex((r) => r.id === id);
+              if (ri >= 0) {
+                const r = rooms[ri];
+                items.push({
+                  kind: "space",
+                  label: r.label || `Space${String(ri + 1).padStart(3, "0")}`,
+                  roomType: r.roomType ?? "room",
+                  areaM2: +(Math.abs(polygonArea(r.points)) / (ppm * ppm)).toFixed(2),
+                  pointsPx: r.points.map((pt) => ({ x: Math.round(pt.x), y: Math.round(pt.y) })),
+                  attachedObjects: (r.attachments ?? []).map((at) => objName(at.objectId)),
+                });
+                continue;
+              }
+              const o = s.objects.find((ob) => ob.id === id);
+              if (o) { items.push({ kind: "object", id, objectKind: o.kind }); continue; }
+              const f = s.furniture.find((fu) => fu.id === id);
+              if (f) { items.push({ kind: "furniture", id, type: f.type, xM: mFix(f.x), yM: mFix(f.y), rotation: f.rotation }); continue; }
+              items.push({ kind: "unknown", id });
+            }
+            const nodeKey = selectedNodeKeyRef.current;
+            if (nodeKey) {
+              const meta = (s.nodeMeta ?? {})[nodeKey];
+              items.push({ kind: "node", nodeKey, attachedObjects: (meta?.attachments ?? []).map((at) => objName(at.objectId)) });
+            }
+            return {
+              count: items.length, items,
+              ...(items.length ? {} : { hint: "nothing is selected on the canvas — ask the user to select (shift-click multi-selects), or resolve targets by label via list_spaces" }),
+            };
+          },
+          mergeSpaces: (a) => {
+            const labels = Array.isArray(a.spaces) ? (a.spaces as unknown[]).map((v) => String(v)) : [];
+            let sources: Room[];
+            if (labels.length > 0) {
+              sources = labels.map((label) => {
+                const room = roomByLabel(label);
+                if (!room) throw new Error(`space not found: "${label}" — call list_spaces for the available labels`);
+                return room;
+              });
+            } else {
+              // No labels ⇒ operate on the user's live selection (the "merge these" case).
+              const sel = new Set(selectionRef.current.selectedIds);
+              sources = visibleRoomsRef.current.filter((r) => sel.has(r.id));
+            }
+            const uniq = [...new Map(sources.map((r) => [r.id, r])).values()];
+            if (uniq.length < 2) {
+              throw new Error(labels.length
+                ? "pass at least 2 DISTINCT space labels to merge"
+                : "fewer than 2 spaces are selected on the canvas — pass their labels in `spaces` (see list_spaces / get_selection)");
+            }
+            const res = mergeRoomsCore(uniq, historyRef.current.state.walls);
+            if ("error" in res) throw new Error(res.error);
+            const label = typeof a.label === "string" && a.label.trim() ? a.label.trim() : undefined;
+            const mergedRoom = label ? { ...res.mergedRoom, label } : res.mergedRoom;
+            // Only manual rooms live in history.state.rooms — auto-detected sources stay derived from
+            // walls and are hidden post-merge because their centroid falls inside the new manual polygon.
+            const sourceIdSet = new Set(uniq.map((r) => r.id));
+            const h = historyRef.current;
+            h.set({ ...h.state, walls: res.walls, rooms: [...h.state.rooms.filter((r) => !sourceIdSet.has(r.id)), mergedRoom] });
+            const ppm = bridgePpmRef.current;
+            return {
+              merged: uniq.length, label: mergedRoom.label,
+              areaM2: +(Math.abs(polygonArea(mergedRoom.points)) / (ppm * ppm)).toFixed(2),
+              dividerWallsRemoved: res.wallsRemoved,
+            };
+          },
           listDrawTools: () => bridge().listDrawTools(),
           drawSegment: (a) => bridge().drawSegment(a),
           placeOpening: (a) => bridge().placeOpening(a),
@@ -3656,12 +4212,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             const obj = lib[idOrName] ?? Object.values(lib).find((o) => o.meta.name === idOrName || o.meta.symbol === idOrName);
             if (!obj) throw new Error(`object not found: "${idOrName}" — call import_objects / list_draw_tools first`);
             if (obj.hostKind !== "space") throw new Error(`${obj.meta.id} is not a space object (hostKind=${obj.hostKind ?? "node"})`);
-            const rooms = visibleRoomsRef.current;
             const label = String(a.space ?? "");
-            const im = /^\s*space\s*0*(\d+)\s*$/i.exec(label);
-            const room = im
-              ? rooms[parseInt(im[1], 10) - 1]
-              : rooms.find((r) => (r.label ?? "").trim().toLowerCase() === label.trim().toLowerCase());
+            const room = roomByLabel(label);
             if (!room) throw new Error(`space not found: "${label}" — call list_spaces for the available labels`);
             const params: Record<string, number | string | boolean> = {};
             for (const pr of obj.parameters) params[pr.key] = pr.default;
@@ -3861,41 +4413,241 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             // copy was empty when the run started with an unloaded library).
             return { objectsLoaded: Object.keys(lib).length, catalog: buildDetailedObjectCatalog(lib) };
           },
+          // ── Parametric library management (the Parametric agent's core; the Orchestrator has it too):
+          //    list / read / create-or-overwrite / delete `.pobj` definitions in the project library. ──
+          listObjects: () => {
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            return {
+              count: Object.keys(lib).length,
+              objects: Object.values(lib).map((o) => ({
+                id: o.meta.id, name: o.meta.name, hostKind: o.hostKind ?? "node", symbol: o.meta.symbol,
+                category: o.meta.category, params: o.parameters.length, hasGeometry: !!o.geometry,
+              })),
+            };
+          },
+          getObjectDefinition: (id: string) => {
+            const obj = (historyRef.current.state.objectLibrary ?? {})[id];
+            if (!obj) throw new Error(`object not found: "${id}" — call list_objects for the available ids`);
+            return obj;
+          },
+          saveObject: async (a) => {
+            const build = buildParametricObjectFileRef.current;
+            if (!build) throw new Error("editor not ready — retry");
+            let parsed: Record<string, unknown>;
+            try {
+              const v = JSON.parse(a.definitionJson) as unknown;
+              if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
+              parsed = v as Record<string, unknown>;
+            } catch {
+              throw new Error(`definitionJson is not a valid JSON object: ${a.definitionJson.slice(0, 80)}`);
+            }
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            const declaredId = typeof (parsed.meta as Record<string, unknown> | undefined)?.id === "string" ? String((parsed.meta as Record<string, unknown>).id) : "";
+            const hostOk = (v: unknown): v is "node" | "segment" | "space" | "canvas" => v === "node" || v === "segment" || v === "space" || v === "canvas";
+            // Host resolution: explicit arg > the file's own hostKind > keep an existing object's > derive
+            // from the symbol (same fallback the folder import uses) so the object lands in the right menu.
+            const sym = (parsed.meta as { symbol?: string } | undefined)?.symbol;
+            const hostKind = hostOk(a.hostKind) ? a.hostKind
+              : hostOk(parsed.hostKind) ? parsed.hostKind
+              : (declaredId ? lib[declaredId]?.hostKind : undefined)
+                ?? (sym === "titleblock" ? "canvas" : sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node");
+            const obj = build(parsed, declaredId || "object", hostKind);
+            const isUpdate = !!lib[obj.meta.id];
+            const h = historyRef.current;
+            h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [obj.meta.id]: obj } });
+            // Render self-check: evaluate the SAVED definition with its default params so the agent learns
+            // whether instances will actually draw (2D plan shapes) and extrude (3D prisms) — a definition
+            // can be well-formed JSON yet render nothing (rules outside cases[], expression typos, every
+            // h0 == h1, a `when` gate that never fires). Space objects get a dummy 10×10 m host so
+            // host/pipeline rules evaluate; `ref` rules resolve against the live library.
+            const defText = JSON.stringify(obj);
+            const dummyHost = obj.hostKind === "space" ? [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] : undefined;
+            const resolveLib = (rid: string): string | null => { const o = (historyRef.current.state.objectLibrary ?? {})[rid]; return o ? JSON.stringify(o) : null; };
+            let render = { plan2dShapes: 0, planLines: 0, prisms3d: 0 };
+            try {
+              const g = evalParametricGeometry(defText, { x: 0, y: 0 }, 100, undefined, dummyHost, resolveLib);
+              render = { plan2dShapes: g.fill.length, planLines: g.lines.length, prisms3d: evalParametricPrisms(defText, { x: 0, y: 0 }, 100, undefined, dummyHost, resolveLib).length };
+            } catch { /* keep zeros — reported through renderWarning below */ }
+            // Settings carriers legitimately have no geometry; canvas (sheet) objects are legitimately flat.
+            const wantsGeometry = obj.meta.symbol !== "settings";
+            const wants3d = wantsGeometry && (obj.hostKind ?? "node") !== "canvas";
+            const renderWarning = !wantsGeometry ? undefined
+              : !obj.geometry ? "no geometry block — placed instances draw only the placeholder meta.symbol, not real 2D/3D geometry"
+              : render.plan2dShapes + render.planLines === 0 ? "geometry evaluated to ZERO 2D shapes with default params — rules must sit inside geometry.cases[].rules (or a pipeline) and expressions/when gates must produce visible shapes; fix and save again"
+              : wants3d && render.prisms3d === 0 ? "renders in 2D but has NO 3D volume — every closed rule has h0 == h1; give the object's real elements a height span (h1 > h0)"
+              : undefined;
+            // Persist the definition to disk too — public/Library/Parametric Objects/<Sub>/<id>.pobj.json
+            // via the dev-server Library bridge (the browser alone can't write repo files). Fails soft
+            // with fileError on production/static hosting, where only the in-app library is updated.
+            const fileRes = await saveLibraryFile(
+              `Parametric Objects/${POBJ_SUBFOLDER[obj.hostKind ?? "node"]}/${obj.meta.id}.pobj.json`,
+              JSON.stringify(obj, null, 2),
+            );
+            return {
+              action: isUpdate ? "updated" : "created", id: obj.meta.id, name: obj.meta.name, hostKind: obj.hostKind ?? "node", params: obj.parameters.length, hasGeometry: !!obj.geometry,
+              render, ...(renderWarning ? { renderWarning } : {}),
+              ...(fileRes.ok
+                ? { file: `public/Library/${fileRes.path}` }
+                : { fileError: `not written to disk (${fileRes.error ?? "Library bridge unavailable"}) — the object exists in the in-app library only` }),
+            };
+          },
+          deleteObjects: async (a) => {
+            const ids = (a.ids ?? []).map(String);
+            if (!ids.length) throw new Error("pass at least one object id (see list_objects)");
+            const h = historyRef.current;
+            const s = h.state;
+            const lib = s.objectLibrary ?? {};
+            const missing = ids.filter((id) => !lib[id]);
+            if (missing.length) throw new Error(`object(s) not found: ${missing.join(", ")} — call list_objects for the available ids`);
+            // Usage census — placed instances referencing the id would fall back to a placeholder symbol.
+            const usage = (id: string): number => {
+              let n = 0;
+              for (const w of s.walls) n += (w.attachments ?? []).filter((at) => at.objectId === id).length;
+              for (const r of s.rooms) n += (r.attachments ?? []).filter((at) => at.objectId === id).length;
+              for (const meta of Object.values(s.nodeMeta ?? {})) n += (meta?.attachments ?? []).filter((at) => at.objectId === id).length;
+              for (const co of Object.values(s.canvasObjects ?? {})) if (co?.objectId === id) n++;
+              return n;
+            };
+            const inUse = ids.map((id) => ({ id, instances: usage(id) })).filter((u) => u.instances > 0);
+            if (inUse.length && !a.force) {
+              throw new Error(`in use on the canvas: ${inUse.map((u) => `${u.id} (${u.instances})`).join(", ")} — remove the placed instances first, or pass force: true to delete the definition anyway`);
+            }
+            const nextLib = { ...lib };
+            for (const id of ids) delete nextLib[id];
+            h.set({ ...s, objectLibrary: nextLib });
+            // Mirror the delete to disk: remove the matching .pobj files from public/Library/Parametric
+            // Objects (dev bridge; no-op on production hosting) so a later Import Objects doesn't resurrect them.
+            const fileRes = await deleteLibraryObjectFiles(ids);
+            return {
+              deleted: ids, remaining: Object.keys(nextLib).length,
+              ...(fileRes ? { filesDeleted: fileRes.deleted } : {}),
+              ...(inUse.length ? { warning: `placed instances now render as placeholder symbols: ${inUse.map((u) => u.id).join(", ")}` } : {}),
+            };
+          },
+          // ── Flow gateway: the node-graph ALGORITHM ENGINE exposed to the canvas agent (skeletonise,
+          //    inset, voronoi, unions, generative layouts …). flow_apply loads + live-evaluates a graph in
+          //    the Flow overlay; flow_commit runs the SAME commit path as the panel's Run button. ──
+          flowNodeCatalog: () => buildFlowToolCatalog(),
+          flowApply: async (graphJson: string) => {
+            let parsed: SerializedFlow;
+            try {
+              const v = JSON.parse(graphJson) as unknown;
+              if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
+              parsed = v as SerializedFlow;
+            } catch {
+              throw new Error(`graphJson is not a valid JSON object: ${graphJson.slice(0, 80)}`);
+            }
+            if (!Array.isArray(parsed.nodes)) throw new Error('graphJson must have a "nodes" array');
+            // Mount the Flow overlay (no-ops when already open) so the bridge + live evaluation exist and
+            // the user watches the agent's graph arrive.
+            setFlowMinimized(false); setFlowOpen(true);
+            const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
+            let applied: number;
+            if (bridge) applied = bridge.applyGraph(parsed);
+            else { setLiveFlowGraph(parsed); flowGraphRef.current = parsed; applied = parsed.nodes?.length ?? 0; }
+            const check = validateFlowGraph(parsed);
+            // Let the overlay's live evaluation settle (evaluate + ~80 ms preview debounce), then summarise
+            // what each node produced so the model can verify BEFORE committing.
+            await new Promise((r) => setTimeout(r, 800));
+            const preview = flowPreviewRef.current.map((it) => ({
+              nodeId: it.nodeId, tool: it.tool, polygons: it.polygons.length,
+              ...(it.openPath ? { openPaths: true } : {}),
+              ...(it.massing ? { floors: it.massing.floors } : {}),
+              ...(it.condition ? { condition: it.condition } : {}),
+              ...(it.isFinal ? { final: true } : {}),
+            }));
+            return { applied, ok: check.ok, opCount: check.opCount, errors: check.errors, warnings: check.warnings, preview };
+          },
+          flowCommit: async () => {
+            const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
+            if (!bridge) return { error: "Flow overlay is not available — call flow_apply first" };
+            const r = bridge.runCommit();
+            if (!r.ok) return { error: r.error ?? "commit failed" };
+            // Give the recipe engine a beat to write history, then report the canvas effect.
+            await new Promise((res) => setTimeout(res, 400));
+            const s = historyRef.current.state;
+            return { ok: true, committedNodes: r.committedNodeIds?.length ?? 0, walls: s.walls.length, manualRooms: s.rooms.length };
+          },
+          // ── Self-review: render the drawn plan to a PNG the (multimodal) model can SEE. The crop is the
+          //    CONTENT bbox in stage coords (Konva redraws all layers into the export canvas, so geometry
+          //    outside the visible viewport is captured too); the longer edge is capped ≈1280 px. ──
+          snapshotCanvas: () => {
+            const stage = stageRef.current;
+            if (!stage) return { error: "canvas stage not ready" };
+            const s = historyRef.current.state;
+            const pts: Point[] = [
+              ...s.walls.flatMap((w) => [w.start, w.end]),
+              ...s.rooms.flatMap((r) => r.points),
+              ...visibleRoomsRef.current.flatMap((r) => r.points),
+            ];
+            if (!pts.length) return { error: "canvas is empty — nothing to snapshot" };
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const p of pts) {
+              if (p.x < minX) minX = p.x;
+              if (p.y < minY) minY = p.y;
+              if (p.x > maxX) maxX = p.x;
+              if (p.y > maxY) maxY = p.y;
+            }
+            const pad = 60; // world-px margin so dimension labels / door swings stay in frame
+            minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+            // World → stage (screen) coords: the stage carries the pan/zoom transform.
+            const sc = stage.scaleX() || 1;
+            const x = minX * sc + stage.x(), y = minY * sc + stage.y();
+            const w = (maxX - minX) * sc, h = (maxY - minY) * sc;
+            if (!(w > 4 && h > 4)) return { error: "plan extent is degenerate" };
+            const pixelRatio = Math.max(0.05, Math.min(2, 1280 / Math.max(w, h)));
+            const dataUrl = stage.toDataURL({ x, y, width: w, height: h, pixelRatio, mimeType: "image/png" });
+            return {
+              widthM: +((maxX - minX) / pixelsPerMeter).toFixed(2),
+              heightM: +((maxY - minY) / pixelsPerMeter).toFixed(2),
+              dataUrl,
+            };
+          },
         };
-        const fmtEvent = (e: AgentEvent): string =>
-          e.type === "tool-call"
-            ? `▸ ${e.tool} ${JSON.stringify(e.input ?? {}).slice(0, 180)}`
-            : `${e.ok ? "✓" : "✗"} ${e.tool} — ${e.summary.slice(0, 240)}`;
         const res = await runAgentChat({
           apiKey: aiApiKey, model: aiModel, prompt: effectivePrompt, pixelsPerMeter, api,
-          systemPrompt: aiAgentSystemPrompt, file: filePart, detections,
+          // "agent" = the Orchestrator (all tools); "design" / "parametric" run the same loop on a subset.
+          toolset: aiMode === "agent" ? "orchestrator" : aiMode,
+          systemPrompt: aiMode === "agent" ? aiAgentSystemPrompt : aiMode === "design" ? aiDesignSystemPrompt : aiParametricSystemPrompt,
+          file: filePart, detections,
           // Live param knowledge of every placeable object, appended to the system prompt.
           objectCatalog: buildDetailedObjectCatalog(historyRef.current.state.objectLibrary),
           onEvent: (e) => setAiMessages((m) => [...m, { role: "tool", text: fmtEvent(e) }]),
         });
         setAiMessages((m) => [...m, { role: "ai", text: res.text.trim() || `Done (${res.steps} steps).` }]);
       } else {
-        // ── Rewrite mode (legacy): one-shot whole-model JSON rewrite. ──
-        const before = historyRef.current.state;
-        const reply = await chatEditModel({ apiKey: aiApiKey, model: aiModel, json: serializeForAI(before), prompt: effectivePrompt, pixelsPerMeter, objectLibrary: before.objectLibrary, file: filePart, detections, systemPrompt: aiSystemPrompt });
-        const merged = applyAiReply(before, reply);
-        // Punch real openings for any door/window object the AI attached to a wall (mirrors the manual
-        // place-opening cut), and canonicalise nodeMeta keys so AI-placed NODE objects (furniture / staircase
-        // on degenerate marker walls) resolve to the right node stableKey.
-        const next: FloorPlanModel = {
-          ...merged,
-          walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, pixelsPerMeter),
-          nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
+        // ── Flow mode: tool-loop that BUILDS the node-graph Flow (see ai/flowAgent.ts). ──
+        // Ensure the Flow panel is mounted so the user watches it build and the apply bridge
+        // (flowApplyApiRef) is available (both setters are no-ops when it's already open).
+        setFlowMinimized(false); setFlowOpen(true);
+        const emptyFlow: SerializedFlow = { version: 1, nodes: [], edges: [] };
+        const flowApi: FlowAgentApi = {
+          // Prefer the open overlay's live graph; fall back to the mirror when it hasn't mounted yet.
+          getFlow: () => flowApplyApiRef.current?.getGraph() ?? flowGraphRef.current ?? liveFlowGraphRef.current ?? emptyFlow,
+          applyFlow: async (graph) => {
+            const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
+            if (bridge) return bridge.applyGraph(graph);
+            // Overlay still not mounted — seed the live graph so it loads when the panel opens.
+            const g = graph as SerializedFlow;
+            setLiveFlowGraph(g); flowGraphRef.current = g;
+            return Array.isArray(graph.nodes) ? graph.nodes.length : 0;
+          },
         };
-        historyRef.current.set(next);
-        setAiMessages((m) => [...m, { role: "ai", text: summarizeChange(before, next) }]);
+        const res = await runFlowAgent({
+          apiKey: aiApiKey, model: aiModel, prompt: effectivePrompt, api: flowApi,
+          systemPrompt: aiFlowSystemPrompt,
+          // Object ids the flow may reference (place-object / node-to-object).
+          objectCatalog: buildDetailedObjectCatalog(historyRef.current.state.objectLibrary),
+          onEvent: (e) => setAiMessages((m) => [...m, { role: "tool", text: fmtEvent(e) }]),
+        });
+        setAiMessages((m) => [...m, { role: "ai", text: res.text.trim() || `Done (${res.steps} steps).` }]);
       }
     } catch (e) {
       setAiMessages((m) => [...m, { role: "error", text: (e as Error)?.message ?? "Request failed" }]);
     } finally {
       setAiSendBusy(false);
     }
-  }, [aiApiKey, aiModel, pixelsPerMeter, aiSystemPrompt, aiMode, aiAgentSystemPrompt]);
+  }, [aiApiKey, aiModel, pixelsPerMeter, aiMode, aiAgentSystemPrompt, aiFlowSystemPrompt, aiDesignSystemPrompt, aiParametricSystemPrompt]);
   const logOp = useCallback((entry: Omit<LoggedOp, "id" | "timestamp">) => {
     setActionLog((prev) => {
       const next = [...prev, { ...entry, id: createId(), timestamp: Date.now() }];
@@ -3933,6 +4685,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
 
   /** Selected wall node (junction point). */
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
+  selectedNodeKeyRef.current = selectedNodeKey;
+  // Drop the nested-component selection (and its canvas highlight) once nothing is selected any more.
+  useEffect(() => {
+    if (selectedComponent && !selectedNodeKey && selection.selectedIds.length === 0) setSelectedComponent(null);
+  }, [selectedComponent, selectedNodeKey, selection.selectedIds]);
   /** Whether the image underlay is the current selection (via the "Image" select scope). Drives the
    *  Properties panel (Scale / Opacity) and the on-canvas selection highlight. */
   const [imageSelected, setImageSelected] = useState<boolean>(false);
@@ -4486,16 +5243,26 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         : rawIcon && typeof rawIcon === "object" && Array.isArray((rawIcon as { paths?: unknown }).paths)
           ? { paths: (rawIcon as { paths: unknown[] }).paths.filter((d): d is string => typeof d === "string" && !!d) }
           : undefined;
+    // Carry the declarative geometry block through so attached instances render their own 2D lines + 3D mesh.
+    // Tolerance: a `rules` array written DIRECTLY under geometry (a common authoring slip — the evaluator
+    // only reads cases[].rules or a pipeline, so top-level rules would silently render NOTHING) is wrapped
+    // into a single default case.
+    let geometry = parsed.geometry && typeof parsed.geometry === "object" && !Array.isArray(parsed.geometry) ? { ...(parsed.geometry as Record<string, unknown>) } : undefined;
+    if (geometry && Array.isArray(geometry.rules) && !Array.isArray(geometry.cases) && !Array.isArray(geometry.pipeline)) {
+      geometry = { ...geometry, cases: [{ rules: geometry.rules }] };
+      delete geometry.rules;
+    }
     return {
       kind: "parametric-object",
       version: Number(parsed.version) || 1,
       meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : meta.symbol === "floor" ? "floor" : meta.symbol === "wall" ? "wall" : meta.symbol === "massing" ? "massing" : meta.symbol === "titleblock" ? "titleblock" : meta.symbol === "settings" ? "settings" : undefined, ...(icon ? { icon } : {}) },
       parameters: params,
       ...(hostKind ? { hostKind } : {}),
-      // Carry the declarative geometry block through so attached instances render their own 2D lines + 3D mesh.
-      ...(parsed.geometry && typeof parsed.geometry === "object" && !Array.isArray(parsed.geometry) ? { geometry: parsed.geometry as Record<string, unknown> } : {}),
+      ...(geometry ? { geometry } : {}),
     };
   }, []);
+  // Keep the Chat-AI agent's save_object tool pointed at the live parser (declared above handleAiSend).
+  buildParametricObjectFileRef.current = buildParametricObjectFile;
 
   /** Import a single `.pobj.json` parametric object file into the project library (persisted in history). */
   const importParametricObject = useCallback(async (file: File, hostKind?: "node" | "segment" | "space") => {
@@ -4536,7 +5303,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const patch: Partial<AddSegmentConfig> = {};
     const applied: string[] = [];
     const mode = find("mode");
-    if (mode === "line" || mode === "buffered") { patch.mode = mode; applied.push("Mode"); }
+    if (mode === "line" || mode === "buffered" || mode === "path") { patch.mode = mode; applied.push("Mode"); }
     const pt = find("path-type");
     if (pt === "straight" || pt === "nurbs-through" || pt === "nurbs-smooth") { patch.pathType = pt; applied.push("Path"); }
     const th = find("thickness");
@@ -4584,7 +5351,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     if (Object.keys(patch).length) { setNodeDisplayDefaults((prev) => ({ ...prev, ...patch })); toast.success(`Applied node defaults — ${applied.join(" · ")}`); }
   }, [setNodeDisplayDefaults]);
 
-  /** Import a whole Floorplan-Tracer folder (picked via a directory input). Each `.json` under Nodes/ ,
+  /** Import a whole parametric-object folder (picked via a directory input, e.g. public/Library/Parametric
+   *  Objects). Each `.json` under Nodes/ ,
    *  Segments/ , Spaces/ is parsed and tagged with its hostKind from the path, then ALL are merged into the
    *  library in ONE history step (a per-file loop would race on `historyRef.current` and keep only the last). */
   const importObjectFolder = useCallback(async (files: File[]) => {
@@ -4595,7 +5363,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       if (!file.name.toLowerCase().endsWith(".json")) continue;
       // Primary: tag by the subfolder this file lives in. Split the relative path on either separator and
       // match a folder segment EXACTLY (singular or plural) — robust whether the picked root is the parent
-      // ("Floorplan Tracer/Nodes/bed.pobj.json") or the subfolder itself ("Nodes/bed.pobj.json").
+      // ("Parametric Objects/Nodes/bed.pobj.json" under public/Library) or the subfolder itself ("Nodes/bed.pobj.json").
       const parts = ((file as { webkitRelativePath?: string }).webkitRelativePath || file.name).toLowerCase().split(/[\\/]+/);
       const has = (...names: string[]) => names.some((nm) => parts.includes(nm));
       let hostKind: "node" | "segment" | "space" | "canvas" | undefined =
@@ -4636,12 +5404,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${bySymbol ? ` (${bySymbol} by symbol)` : ""}${failed ? `, ${failed} failed` : ""}`);
   }, [buildParametricObjectFile, applyCanvasSettings, applySegmentDefaults, applyNodeDefaults, INFO_SHEET_ID]);
 
-  /** Import the bundled object library straight from `public/objects/Floorplan Tracer` (no folder picker).
-   *  Each `.pobj.json` is fetched by its relative URL, parsed, tagged with its subfolder's hostKind
-   *  (Spaces → space, Segments → segment, Nodes → node), and merged into the library in one history step. */
+  /** Import the object library straight from `public/Library/Parametric Objects` (no folder picker).
+   *  In dev the folder is listed LIVE through the Library bridge (vite.config.ts), so agent-saved
+   *  objects (save_object writes `<id>.pobj.json` there) import alongside the bundled set; production
+   *  static hosting can't list directories, so a bundled fallback manifest is used. Each `.pobj.json`
+   *  is fetched by its relative URL, parsed, tagged with its subfolder's hostKind (Spaces → space,
+   *  Segments → segment, Nodes → node), and merged into the library in one history step.
+   *  NEW bundled objects belong in that folder (Library/Flows and Library/Designs hold flow/design JSON). */
   const autoImportObjectFolder = useCallback(async () => {
-    const base = "/objects/Floorplan Tracer";
-    const files: { sub: "Spaces" | "Segments" | "Nodes" | "Canvas"; file: string }[] = [
+    const base = "/Library/Parametric Objects";
+    const fallback: { sub: "Spaces" | "Segments" | "Nodes" | "Canvas"; file: string }[] = [
       { sub: "Canvas", file: "titleblock-a1.pobj.json" },
       { sub: "Canvas", file: "settings.pobj.json" },
       { sub: "Spaces", file: "floor.pobj.json" },
@@ -4649,6 +5421,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       { sub: "Spaces", file: "footprint-massing.pobj.json" },
       { sub: "Spaces", file: "site.pobj.json" },
       { sub: "Spaces", file: "core.pobj.json" },
+      { sub: "Spaces", file: "Corridoor.pobj.json" },
+      { sub: "Spaces", file: "floor-plate.pobj.json" },
       { sub: "Segments", file: "segment_settings.pobj.json" },
       { sub: "Segments", file: "wall.pobj.json" },
       { sub: "Segments", file: "door.pobj.json" },
@@ -4663,7 +5437,19 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       { sub: "Nodes", file: "wardrobe.pobj.json" }, { sub: "Nodes", file: "sofa.pobj.json" },
       { sub: "Nodes", file: "footing.pobj.json" }, { sub: "Nodes", file: "staircase.pobj.json" },
       { sub: "Nodes", file: "floorplan.pobj.json" }, { sub: "Nodes", file: "toilet.pobj.json" },
+      { sub: "Nodes", file: "room.pobj.json" },
     ];
+    // Live listing first (dev bridge): "Nodes/fan.v1.pobj.json" → { sub: "Nodes", file: "fan.v1.pobj.json" }.
+    const subOk = (v: string): v is "Spaces" | "Segments" | "Nodes" | "Canvas" => v === "Spaces" || v === "Segments" || v === "Nodes" || v === "Canvas";
+    const listed = await listLibraryFiles("Parametric Objects");
+    const files = listed?.length
+      ? listed
+          .map((rel) => {
+            const i = rel.indexOf("/");
+            return i > 0 ? { sub: rel.slice(0, i), file: rel.slice(i + 1) } : null;
+          })
+          .filter((f): f is { sub: "Spaces" | "Segments" | "Nodes" | "Canvas"; file: string } => !!f && subOk(f.sub) && !!f.file)
+      : fallback;
     const hostKindOf = (sub: string): "node" | "segment" | "space" | "canvas" => (sub === "Spaces" ? "space" : sub === "Segments" ? "segment" : sub === "Canvas" ? "canvas" : "node");
     const additions: Record<string, ParametricObjectFile> = {};
     let failed = 0;
@@ -4677,7 +5463,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       } catch { failed++; }
     }));
     const n = Object.keys(additions).length;
-    if (n === 0) { toast.error("No objects found at public/objects/Floorplan Tracer"); return; }
+    if (n === 0) { toast.error("No objects found at public/Library/Parametric Objects"); return; }
     const h = historyRef.current;
     // Seed the canvas sheet from the title-block object; apply the settings object (see importObjectFolder).
     const titleblockObj = Object.values(additions).find((o) => o.hostKind === "canvas" && o.meta.symbol === "titleblock");
@@ -4954,6 +5740,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     h.set({ ...h.state, walls: h.state.walls.map((w) => (w.id === wallId ? { ...w, attachments: (w.attachments ?? []).map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)) } : w)) });
   }, []);
 
+  /** Set one param override on a NESTED component instance of an attachment (SketchUp-style: edit the door
+   *  inside THIS core). `path` is the ref-instance path from evalParametricRefs. Shared by all host kinds. */
+  const setAttChildParam = (a: SegmentAttachment, path: string, key: string, value: number | string | boolean): SegmentAttachment =>
+    ({ ...a, childParams: { ...a.childParams, [path]: { ...a.childParams?.[path], [key]: value } } });
+
+  const updateSegmentAttachmentChildParam = useCallback((wallId: string, attId: string, path: string, key: string, value: number | string | boolean) => {
+    const h = historyRef.current;
+    h.set({ ...h.state, walls: h.state.walls.map((w) => (w.id === wallId ? { ...w, attachments: (w.attachments ?? []).map((a) => (a.id === attId ? setAttChildParam(a, path, key, value) : a)) } : w)) });
+  }, []);
+
   // ── Parametric objects attached to a NODE (stored in nodeMeta.attachments) ──
   const patchNodeAttachments = useCallback((stableKey: string, fn: (list: SegmentAttachment[]) => SegmentAttachment[]) => {
     const h = historyRef.current;
@@ -4978,9 +5774,22 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     patchNodeAttachments(stableKey, (list) => list.map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)));
   }, [patchNodeAttachments]);
 
+  const updateNodeAttachmentChildParam = useCallback((stableKey: string, attId: string, path: string, key: string, value: number | string | boolean) => {
+    patchNodeAttachments(stableKey, (list) => list.map((a) => (a.id === attId ? setAttChildParam(a, path, key, value) : a)));
+  }, [patchNodeAttachments]);
+
   // ── Parametric objects attached to a SPACE (stored in room.attachments — e.g. a Floor slab) ──
   // Auto-detected rooms have no entry in history.state.rooms, so attaching promotes them to a manual room
   // first (fresh id + the attachment), mirroring `assignRoomLabel`, so the floor persists across wall edits.
+  // LIVE Path spaces (`path-space:` ids) are recomputed from their segments, so promoting would freeze
+  // them — their attachments live in the persisted `pathSpaceAttachments` map instead, keyed by the
+  // stable derived-room id; the pathSpaces memo mirrors them back onto the derived room.
+  const patchPathSpaceAttachments = useCallback((roomId: string, fn: (list: SegmentAttachment[]) => SegmentAttachment[]) => {
+    const h = historyRef.current;
+    const map = h.state.pathSpaceAttachments ?? {};
+    h.set({ ...h.state, pathSpaceAttachments: { ...map, [roomId]: fn(map[roomId] ?? []) } });
+  }, []);
+
   const attachObjectToSpace = useCallback((room: Room, objectId: string) => {
     const h = historyRef.current;
     const obj = (h.state.objectLibrary ?? {})[objectId];
@@ -4988,24 +5797,34 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const params: Record<string, number | string | boolean> = {};
     for (const pr of obj.parameters) params[pr.key] = pr.default;
     const att: SegmentAttachment = { id: createId(), objectId, params, t: 0, flip: false };
-    if (room.id.startsWith(ROOM_AUTO_ID_PREFIX)) {
+    if (room.id.startsWith(PATH_SPACE_ID_PREFIX)) {
+      patchPathSpaceAttachments(room.id, (list) => [...list, att]);
+    } else if (room.id.startsWith(ROOM_AUTO_ID_PREFIX)) {
       const newRoom: Room = { ...room, id: createId(), attachments: [...(room.attachments ?? []), att] };
       h.set({ ...h.state, rooms: [...h.state.rooms, newRoom] });
       selection.selectOne(newRoom.id);
     } else {
       h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === room.id ? { ...r, attachments: [...(r.attachments ?? []), att] } : r)) });
     }
-  }, [selection]);
+  }, [selection, patchPathSpaceAttachments]);
 
   const detachSpaceObject = useCallback((roomId: string, attId: string) => {
+    if (roomId.startsWith(PATH_SPACE_ID_PREFIX)) { patchPathSpaceAttachments(roomId, (list) => list.filter((a) => a.id !== attId)); return; }
     const h = historyRef.current;
     h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === roomId ? { ...r, attachments: (r.attachments ?? []).filter((a) => a.id !== attId) } : r)) });
-  }, []);
+  }, [patchPathSpaceAttachments]);
 
   const updateSpaceAttachmentParam = useCallback((roomId: string, attId: string, key: string, value: number | string | boolean) => {
+    if (roomId.startsWith(PATH_SPACE_ID_PREFIX)) { patchPathSpaceAttachments(roomId, (list) => list.map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a))); return; }
     const h = historyRef.current;
     h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === roomId ? { ...r, attachments: (r.attachments ?? []).map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)) } : r)) });
-  }, []);
+  }, [patchPathSpaceAttachments]);
+
+  const updateSpaceAttachmentChildParam = useCallback((roomId: string, attId: string, path: string, key: string, value: number | string | boolean) => {
+    if (roomId.startsWith(PATH_SPACE_ID_PREFIX)) { patchPathSpaceAttachments(roomId, (list) => list.map((a) => (a.id === attId ? setAttChildParam(a, path, key, value) : a))); return; }
+    const h = historyRef.current;
+    h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === roomId ? { ...r, attachments: (r.attachments ?? []).map((a) => (a.id === attId ? setAttChildParam(a, path, key, value) : a)) } : r)) });
+  }, [patchPathSpaceAttachments]);
 
   // One-shot Space-object attach: when an object was picked from Add Space with nothing selected, attach it
   // to the next space the user selects (spaces are auto-detected, so selection is the natural trigger).
@@ -5438,20 +6257,175 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
 
   // Primitive 3D masses from "Mass" generator nodes — Cube / Cuboid / Sphere / Cone / Cylinder rendered
   // directly in the 3D view (no canvas footprint; a standalone primitive per node).
-  const primitiveMasses = useMemo(() => {
-    const nodes = liveFlowGraph?.nodes?.filter((n) => n.data?.tool === "mass") ?? [];
-    return nodes.map((n) => {
-      const p = n.data.params as Record<string, unknown>;
-      return {
-        id: n.id,
-        shape: typeof p.shape === "string" ? p.shape : "cube",
-        length: Number(p.length) || 3,
-        breadth: Number(p.breadth) || 2,
-        height: Number(p.height) || 3,
-        radius: Number(p.radius) || 1.5,
-        color: typeof p.color === "string" ? p.color : "#94a3b8",
+  const { primitiveMasses, booleanMasses } = useMemo<{ primitiveMasses: PrimMass3D[]; booleanMasses: BoolMass3D[] }>(() => {
+    // The generic Mass node reads its shape from params; the dedicated 3D-primitive nodes (3D Primitives
+    // block) fix the shape by their tool name — the tool string IS the shape ("cuboid" / "cylinder" / …).
+    const PRIM_TOOLS = new Set(["mass", "cuboid", "cylinder", "sphere", "cone"]);
+    const g = liveFlowGraph;
+    if (!g?.nodes) return { primitiveMasses: [], booleanMasses: [] };
+    const byId = new Map(g.nodes.map((n) => [n.id, n]));
+    const edges = g.edges ?? [];
+    const nn = (v: unknown, d: number) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
+    const isValGin = (h: string | null | undefined) => !!h && (h.startsWith("valin-") || h.startsWith("gin-"));
+    // Main (geometry) edges only — ignore value/gin handles when following the transform chain.
+    const outMain = (nid: string) => edges.filter((e) => e.source === nid && !isValGin(e.targetHandle));
+    const inEdge = (nid: string, handle: string | null) =>
+      edges.find((e) => e.target === nid && (handle ? e.targetHandle === handle : !isValGin(e.targetHandle)));
+    // Follow the main-output chain forward (through any Transform 3D) and return the first Display 3D node's
+    // style, if one is wired downstream. This is where a primitive's/boolean's colour + draw style come from.
+    const displayStyleFrom = (startId: string): Display3DStyle | undefined => {
+      const seen = new Set<string>();
+      let cur: string | undefined = startId;
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        const next = outMain(cur).map((e) => byId.get(e.target)).find((m) => m?.data?.tool === "transform-3d" || m?.data?.tool === "display-3d");
+        if (!next) return undefined;
+        if (next.data.tool === "display-3d") {
+          const dp = next.data.params as Record<string, unknown>;
+          return {
+            color: typeof dp.color === "string" ? dp.color : "#94a3b8",
+            opacity: Math.max(0, Math.min(1, nn(dp.opacity, 1))),
+            wireframe: dp.displayType === "wireframe",
+            showEdges: dp.showEdges === true,
+          };
+        }
+        cur = next.id; // Transform 3D — keep walking toward a possible Display 3D
+      }
+      return undefined;
+    };
+    // Accumulate the affine transform for a primitive: START from the primitive's OWN Position / Rotation /
+    // Scale fields, then walk primitive → Transform 3D → … adding each downstream Transform 3D on top (a
+    // linear chain: translate/rotate sum, scale multiplies, mirror toggles per axis). Fan-out uses the first.
+    const accumulate = (startId: string, prim: Record<string, unknown>) => {
+      const tf = {
+        tx: nn(prim.posX, 0), ty: nn(prim.posY, 0), tz: nn(prim.posZ, 0),
+        rx: nn(prim.rotX, 0), ry: nn(prim.rotY, 0), rz: nn(prim.rotZ, 0),
+        scale: nn(prim.scale, 1) || 1, mx: 1, my: 1, mz: 1,
       };
-    });
+      const seen = new Set<string>();
+      let cur = startId;
+      for (;;) {
+        const next = outMain(cur).map((e) => byId.get(e.target)).find((m) => m?.data?.tool === "transform-3d");
+        if (!next || seen.has(next.id)) break;
+        seen.add(next.id);
+        const p = next.data.params as Record<string, unknown>;
+        tf.tx += nn(p.translateX, 0); tf.ty += nn(p.translateY, 0); tf.tz += nn(p.translateZ, 0);
+        tf.rx += nn(p.rotateX, 0); tf.ry += nn(p.rotateY, 0); tf.rz += nn(p.rotateZ, 0);
+        tf.scale *= nn(p.scale, 1) || 1;
+        const m = typeof p.mirror === "string" ? p.mirror : "none";
+        if (m === "x") tf.mx *= -1; else if (m === "y") tf.my *= -1; else if (m === "z") tf.mz *= -1;
+        cur = next.id;
+      }
+      return tf;
+    };
+    // Flute driver: a flute-configured Input Properties node (props include a "mode" + "L1") supplies the
+    // dimensions. Scale mode → look the row up in FLUTE_CHART by the selected key; Dimensions mode → read
+    // the manual D / t / L1..L10 / D1..D8 fields. The resulting geometry overrides any cylinder carrying a
+    // `fluteRole` marker (body / bore / hole), so the whole flute is driven by this one control node.
+    const fluteGeom: FluteGeom | null = (() => {
+      const propsOf = (node: { data?: { params?: unknown } }): Array<{ id?: string; value?: unknown }> => {
+        const pr = (node.data?.params as { props?: unknown } | undefined)?.props;
+        return Array.isArray(pr) ? (pr as Array<{ id?: string; value?: unknown }>) : [];
+      };
+      const ip = g.nodes.find((n) => n.data?.tool === "input-props" && propsOf(n).some((p) => p?.id === "mode") && propsOf(n).some((p) => p?.id === "L1"));
+      if (!ip) return null;
+      const props = propsOf(ip);
+      const gv = (id: string, d: number) => { const p = props.find((q) => q?.id === id); const v = Number(p?.value); return Number.isFinite(v) ? v : d; };
+      const gs = (id: string, d: string) => { const p = props.find((q) => q?.id === id); return typeof p?.value === "string" ? p.value : d; };
+      const spec = gs("mode", "dimensions") === "scale"
+        ? fluteChartToSpec(FLUTE_CHART[gs("scale", FLUTE_KEYS[0])] ?? FLUTE_CHART[FLUTE_KEYS[0]])
+        : { D: gv("D", 28), t: gv("t", 2), L: Array.from({ length: 10 }, (_, i) => gv(`L${i + 1}`, 0)), Dh: Array.from({ length: 8 }, (_, i) => gv(`D${i + 1}`, 8)) };
+      return computeFluteGeom(spec);
+    })();
+    // Override a flute cylinder's dimension/placement params from the computed flute geometry.
+    const applyFluteRole = (p0: Record<string, unknown>, tool: string): Record<string, unknown> => {
+      const role = typeof p0.fluteRole === "string" ? p0.fluteRole : "";
+      if (!fluteGeom || !role || tool !== "cylinder") return p0;
+      if (role === "body") return { ...p0, radius: fluteGeom.R, height: fluteGeom.Ltot, posY: 0, rotX: 0 };
+      if (role === "bore") return { ...p0, radius: fluteGeom.r, height: fluteGeom.Ltot + 0.6, posY: -0.3, rotX: 0 };
+      if (role === "hole") {
+        const h = fluteGeom.holes[Math.max(0, Math.round(nn(p0.holeIndex, 1)) - 1)];
+        if (!h) return { ...p0, radius: 0 }; // no data for this hole index → collapse it away
+        const hh = fluteGeom.R * 2 + 0.3; // pierce fully through both walls
+        return { ...p0, radius: h.rad, height: hh, posY: h.y - hh / 2, rotX: 90 };
+      }
+      return p0;
+    };
+    // Build a descriptor (shape + scaled dims + baked transform) for every primitive, keyed by node id.
+    const descById = new Map<string, PrimMass3D>();
+    const primNodes = g.nodes.filter((n) => PRIM_TOOLS.has(n.data?.tool as string));
+    for (const n of primNodes) {
+      const tool = n.data.tool as string;
+      const p = applyFluteRole(n.data.params as Record<string, unknown>, tool);
+      const tf = accumulate(n.id, p);
+      const s = tf.scale; // uniform scale baked into the dimensions so the mesh still rests on the floor
+      descById.set(n.id, {
+        id: n.id,
+        shape: tool === "mass" ? (typeof p.shape === "string" ? p.shape : "cube") : tool,
+        length: nn(p.length, 3) * s,
+        breadth: nn(p.breadth, 2) * s,
+        height: nn(p.height, 3) * s,
+        radius: nn(p.radius, 1.5) * s,
+        color: typeof p.color === "string" ? p.color : "#94a3b8",
+        transform: {
+          tx: tf.tx, ty: tf.ty, tz: tf.tz,
+          rx: (tf.rx * Math.PI) / 180, ry: (tf.ry * Math.PI) / 180, rz: (tf.rz * Math.PI) / 180,
+          mx: tf.mx, my: tf.my, mz: tf.mz,
+        },
+        display: displayStyleFrom(n.id),
+      });
+    }
+    // Boolean nodes: resolve each input (A = main, B = gin-b) to an OPERAND — a primitive descriptor or a
+    // nested Boolean subtree (so Booleans CHAIN: (((main − bore) − hole1) − hole2)…). Walks back through any
+    // Transform 3D. Consumed primitives render only as the CSG result. Function decls (hoisted) → mutual
+    // recursion; `seen` guards against cycles.
+    const consumedPrims = new Set<string>();
+    function resolveOperand(fromId: string, handle: string | null, seen: Set<string>): BoolOperand3D | undefined {
+      let cur = inEdge(fromId, handle)?.source;
+      const local = new Set<string>();
+      while (cur && !local.has(cur)) {
+        local.add(cur);
+        const node = byId.get(cur);
+        if (!node) return undefined;
+        const t = node.data.tool as string;
+        if (PRIM_TOOLS.has(t)) { consumedPrims.add(cur); const d = descById.get(cur); return d ? { prim: d } : undefined; }
+        if (t === "boolean-3d") { const tree = resolveBoolTree(cur, seen); return tree ? { bool: tree } : undefined; }
+        if (t === "transform-3d") { cur = inEdge(cur, null)?.source; continue; }
+        return undefined;
+      }
+      return undefined;
+    }
+    function resolveBoolTree(boolId: string, seen: Set<string>): BoolNode3D | undefined {
+      if (seen.has(boolId)) return undefined;
+      const seen2 = new Set(seen); seen2.add(boolId);
+      const a = resolveOperand(boolId, null, seen2);
+      const b = resolveOperand(boolId, "gin-b", seen2);
+      if (!a || !b) return undefined;
+      const op = typeof byId.get(boolId)!.data.params.op === "string" ? (byId.get(boolId)!.data.params.op as string) : "union";
+      return { op, a, b };
+    }
+    // A Boolean is a RENDER ROOT unless its output feeds another Boolean (through Transform 3D) — those are
+    // consumed as sub-trees.
+    const feedsBoolean = (boolId: string): boolean => {
+      const seen = new Set<string>(); let cur: string | undefined = boolId;
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        const next = outMain(cur).map((e) => byId.get(e.target)).find((m) => m?.data?.tool === "boolean-3d" || m?.data?.tool === "transform-3d");
+        if (!next) return false;
+        if (next.data.tool === "boolean-3d") return true;
+        cur = next.id;
+      }
+      return false;
+    };
+    const groups: BoolMass3D[] = [];
+    for (const bn of g.nodes.filter((n) => n.data?.tool === "boolean-3d")) {
+      if (feedsBoolean(bn.id)) continue; // consumed as a sub-tree of a downstream Boolean
+      const tree = resolveBoolTree(bn.id, new Set());
+      if (!tree) continue;
+      groups.push({ id: bn.id, op: tree.op, a: tree.a, b: tree.b, display: displayStyleFrom(bn.id) });
+    }
+    const prims = primNodes.map((n) => descById.get(n.id)!).filter((d) => !consumedPrims.has(d.id));
+    return { primitiveMasses: prims, booleanMasses: groups };
   }, [liveFlowGraph]);
 
   // Resolve the active component schemas from the live flow. Two sources, schema NODE first:
@@ -5616,6 +6590,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const flowGraphRef = useRef<SerializedFlow | null>(null);
   // Bridge to set a flow node param from the Properties tab while the overlay is open (kept in sync).
   const flowParamApiRef = useRef<((nodeId: string, key: string, value: unknown) => void) | null>(null);
+  // Bridge for the Chat AI Flow agent: read the live graph + apply a generated one (set by the open overlay;
+  // when closed the agent reads liveFlowGraph and applying seeds it, then opens the overlay).
+  const flowApplyApiRef = useRef<{
+    getGraph: () => SerializedFlow;
+    applyGraph: (g: { nodes?: unknown[]; edges?: unknown[] }) => number;
+    compile: () => { ok: boolean; error?: string; opCount?: number; committedNodeIds: string[] };
+    runCommit: () => { ok: boolean; error?: string; committedNodeIds?: string[] };
+  } | null>(null);
   // Last mirrored graph signature (structure + params, ignoring node positions) — skips re-mirroring on
   // pure node drags so we don't churn state on every pixel.
   const lastFlowSigRef = useRef<string>("");
@@ -6663,7 +7645,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             "piano","tv-unit","fridge","toilet","bathtub",
             "guitar","whiteboard","flute","clock","mirror",
           ]);
-          type RawObj = { length: number; breadth: number; position: number; setback?: number; height?: number; clearance?: number; kind?: string; accountWallThickness?: boolean; locked?: boolean };
+          type RawObj = { length: number; breadth: number; position: number; setback?: number; height?: number; clearance?: number; kind?: string; objectId?: string; accountWallThickness?: boolean; locked?: boolean };
           const objs = Array.isArray(p.objects) ? (p.objects as RawObj[]) : [];
           // Flow Place Object sets `asObjectNodes` → the runner emits selectable object NODES instead of
           // footprint-quad walls. Tagged per-object so the runner can branch without an extra ref.
@@ -6677,6 +7659,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             setback: typeof o.setback === "number" ? Math.max(0, o.setback) : 0,
             clearance: typeof o.clearance === "number" ? Math.max(0, o.clearance) : 0,
             kind: typeof o.kind === "string" && ALLOWED_KINDS.has(o.kind) ? (o.kind as PlacedObjectKind) : undefined,
+            // Parametric library entry — the runner places the real .pobj attachment for it.
+            objectId: typeof o.objectId === "string" && o.objectId.trim() ? o.objectId.trim() : undefined,
             accountWallThickness: typeof o.accountWallThickness === "boolean" ? o.accountWallThickness : true,
             locked: o.locked === true,
             asNode,
@@ -6747,6 +7731,29 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           if (Array.isArray(p.seeds)) setDelaunaySeedsByRoom((prev) => ({ ...prev, [roomId]: rescaleSeedsToRoom(p.seeds as Array<{ x: number; y: number }>, currentRoom.points) }));
           await tick();
           runnersRef.current!.delaunay(currentRoom, opSilent);
+        } else if (tool === "skeleton" && p.makePath && (p.type ?? "straight-skeleton") === "straight-skeleton") {
+          // Make-path skeleton: the FLOW NODE itself emits the clean constant-width UNION BAND
+          // (evalSkeleton → skeletonPathBands — seamless mitred corridor, no per-edge facets). Commit
+          // THAT as corridor Space(s), matching the live preview exactly, instead of replaying the
+          // legacy runner (which drew one path wall per tiny skeleton edge → tapered/meshy joins).
+          // Silent runs skip: the flow's own live preview already shows the band.
+          if (!opSilent) {
+            const loops = evalSkeleton(currentRoom.points, p, pixelsPerMeter).filter((l) => l.length >= 3);
+            if (loops.length) {
+              const h = historyRef.current;
+              const newRooms: Room[] = loops.map((points, i) => ({
+                id: createId(),
+                points,
+                fill: "rgba(14, 165, 233, 0.35)",
+                stroke: "#0369a1",
+                roomType: "room",
+                region: "Corridor",
+                label: loops.length > 1 ? `Skeleton Path ${i + 1}` : "Skeleton Path",
+                showLabel: true,
+              }));
+              h.set({ ...h.state, rooms: [...h.state.rooms, ...newRooms] });
+            }
+          }
         } else if (tool === "skeleton") {
           if (typeof p.type === "string") setSkeletonType(p.type as "sampled-voronoi" | "segment-sweepline" | "straight-skeleton");
           if (typeof p.samples === "number") setSkeletonSamples(p.samples as number);
@@ -9981,142 +10988,90 @@ User request: ${aiPrompt.trim()}`;
     return true;
   }, [miteredPolygons, getCurrentWallStyle]);
 
-  /** Merge ≥2 currently-selected manual rooms into a single room. Uses the same
-   *  edge-cancellation algorithm as `computeMiteredUnion` — shared edges between
-   *  adjacent room polygons cancel; the remaining outer edges trace the merged
-   *  outline. The largest closed loop becomes the merged polygon; the source rooms
-   *  are dropped from history. Auto-detected rooms (which regenerate from walls) are
-   *  ignored — only entries in `history.state.rooms` are eligible. */
+  /** "Convert to Space" (Segment Properties → Display, Buffered mode). Materialises the union outline
+   *  of a buffered run as a manual Room — a one-shot snapshot: the Space does NOT follow later segment
+   *  edits. Scope: with 2+ buffered segments shift-selected, exactly those; otherwise every buffered
+   *  segment whose band TOUCHES the clicked one, transitively (centerline distance ≤ combined band
+   *  reach — covers endpoint joints, T-junctions against a side, and crossings, which an endpoint-only
+   *  walk misses). Geometry: when the bands only abut (flush mitre seams) the exact seam-cancellation
+   *  union runs (holes + disjoint extras preserved); when band interiors overlap (T-junctions) it falls
+   *  back to `rasterUnion` — one merged outline, same fallback the Flow union node uses. Lands on the
+   *  auto "Corridor" layer and is region-tagged Corridor, so a space-connected object (e.g. Corridoor)
+   *  can attach in Space Properties. */
+  const convertBufferedToSpace = useCallback((wall: Wall) => {
+    const all = historyRef.current.state.walls;
+    const isBuffered = (w: Wall) => w.segmentType !== "path" && !!w.bufferStyle;
+    if (!isBuffered(wall)) { toast.error("Convert to Space needs a Buffered display segment"); return; }
+    // Band polygon (mitered — flush at proper joints) for every buffered segment.
+    const polyOf = new Map<string, Point[]>();
+    const wallById = new Map<string, Wall>();
+    for (const w of all) {
+      if (!isBuffered(w)) continue;
+      const poly = miteredPolygons.get(w.id);
+      if (poly && poly.length >= 3) { polyOf.set(w.id, poly); wallById.set(w.id, w); }
+    }
+    if (!polyOf.has(wall.id)) { toast.error("No band outline found for this segment"); return; }
+    // Explicit multi-selection of buffered segments wins; else the connected component of TOUCHING
+    // bands containing the clicked segment (see `bandsTouch` — covers endpoint joints, T-junctions
+    // against a side, and crossings alike).
+    const selSet = new Set(selection.selectedIds);
+    const selectedBuffered = all.filter((w) => selSet.has(w.id) && polyOf.has(w.id));
+    let members: Wall[];
+    if (selectedBuffered.length >= 2) {
+      members = selectedBuffered.some((w) => w.id === wall.id) ? selectedBuffered : [wall, ...selectedBuffered];
+    } else {
+      members = groupTouchingBands([...wallById.values()]).find((grp) => grp.some((w) => w.id === wall.id)) ?? [wall];
+    }
+    const polyMap = new Map(members.map((w) => [w.id, polyOf.get(w.id)!] as const));
+    const u = unionBandOutlines(polyMap);
+    if (!u) { toast.error("Could not union the buffered bands"); return; }
+    const { outer, holes, extras } = u;
+    const layer = ensureLayerForType("corridor", "Corridor");
+    const mkRoom = (points: Point[], i: number, hs?: Point[][]): Room => ({
+      id: createId(),
+      points,
+      ...(hs && hs.length ? { holes: hs } : {}),
+      layerId: layer,
+      fill: "rgba(129, 140, 248, 0.25)",
+      stroke: wall.color || "#4f46e5",
+      roomType: "room",
+      region: "Corridor",
+      label: extras.length ? `Corridor ${i + 1}` : "Corridor",
+      showLabel: true,
+    });
+    const newRooms: Room[] = [mkRoom(outer, 0, holes), ...extras.map((pts, i) => mkRoom(pts, i + 1))];
+    const h = historyRef.current;
+    h.set({ ...h.state, rooms: [...h.state.rooms, ...newRooms] });
+    selection.selectOne(newRooms[0].id);
+    toast.success(`Created ${newRooms.length} Corridor space${newRooms.length > 1 ? "s" : ""} from ${members.length} buffered segment${members.length > 1 ? "s" : ""} — attach objects in Space Properties`);
+  }, [miteredPolygons, ensureLayerForType, selection]);
+
+  /** Merge ≥2 currently-selected manual rooms into a single room (thin UI wrapper over
+   *  `mergeRoomsCore` — shared with the agent's merge_spaces tool). Reads from visibleRoomsRef so the
+   *  merge handles BOTH manual rooms (entries in history.state.rooms) and auto-detected rooms (computed
+   *  from walls): only manual sources are removed on commit — auto sources stay in `walls` and the
+   *  auto-room filter hides them post-merge because their centroid falls inside the new manual polygon. */
   const mergeSelectedRooms = useCallback(() => {
     const selectedIds = new Set(selection.selectedIds);
-    // Read from visibleRoomsRef so the merge handles BOTH manual rooms (entries in
-    // history.state.rooms) and auto-detected rooms (computed from walls). When we
-    // commit, only manual sources are removed — auto sources stay in `walls` and
-    // the auto-room filter hides them post-merge because their centroid will fall
-    // inside the new manual polygon.
     const sourceRooms = visibleRoomsRef.current.filter((r) => selectedIds.has(r.id));
     if (sourceRooms.length < 2) {
       toast.info("Select 2 or more spaces (shift-click) then press Merge again");
       return;
     }
-    const polyMap = new Map<string, Point[]>();
-    for (const r of sourceRooms) {
-      if (r.points.length >= 3) polyMap.set(r.id, r.points);
-    }
-    if (polyMap.size < 2) {
-      toast.error("Selected spaces must each have at least 3 vertices");
+    const res = mergeRoomsCore(sourceRooms, historyRef.current.state.walls);
+    if ("error" in res) {
+      toast.error(res.error);
       return;
     }
-    const { outerEdges } = computeMiteredUnion(polyMap);
-    if (outerEdges.length === 0) {
-      toast.error("Merge failed — selected spaces share no boundary");
-      return;
-    }
-    // Trace closed loops along the outer edges (same as runRoomPathSpace).
-    const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
-    const used = new Array<boolean>(outerEdges.length).fill(false);
-    const loops: Point[][] = [];
-    for (let start = 0; start < outerEdges.length; start++) {
-      if (used[start]) continue;
-      used[start] = true;
-      const seed = outerEdges[start];
-      const loop: Point[] = [seed.a, seed.b];
-      let endKey = KEY(seed.b);
-      const startKey = KEY(seed.a);
-      for (let safety = 0; safety < outerEdges.length + 1; safety++) {
-        if (endKey === startKey) break;
-        let nextIdx = -1, reversed = false;
-        for (let i = 0; i < outerEdges.length; i++) {
-          if (used[i]) continue;
-          if (KEY(outerEdges[i].a) === endKey) { nextIdx = i; reversed = false; break; }
-          if (KEY(outerEdges[i].b) === endKey) { nextIdx = i; reversed = true; break; }
-        }
-        if (nextIdx === -1) break;
-        used[nextIdx] = true;
-        const ne = outerEdges[nextIdx];
-        const np = reversed ? ne.a : ne.b;
-        if (KEY(np) === startKey) break;
-        loop.push(np);
-        endKey = KEY(np);
-      }
-      if (loop.length >= 3) loops.push(loop);
-    }
-    if (loops.length === 0) {
-      toast.error("Merge failed — couldn't close the merged outline");
-      return;
-    }
-    // Pick the largest closed loop (shoelace area) — that's the union outline. If the
-    // selection contains multiple disjoint groups, only the biggest survives; the user
-    // can re-select and merge the others separately.
-    const shoelace = (poly: Point[]) => {
-      let a = 0;
-      for (let i = 0; i < poly.length; i++) {
-        const p = poly[i], q = poly[(i + 1) % poly.length];
-        a += p.x * q.y - q.x * p.y;
-      }
-      return Math.abs(a) / 2;
-    };
-    loops.sort((a, b) => shoelace(b) - shoelace(a));
-    const mergedPolygon = loops[0];
-    // Inherit visual styling + label from the first (largest) source room.
-    sourceRooms.sort((a, b) => shoelace(b.points) - shoelace(a.points));
-    const primary = sourceRooms[0];
-    const mergedRoom = {
-      ...primary,
-      id: createId(),
-      points: mergedPolygon,
-      label: primary.label ? `${primary.label} (merged)` : "Merged Space",
-    };
-    // Only manual rooms live in history.state.rooms — auto-detected ones disappear
-    // when their centroid falls inside the new manual polygon (visibleRooms filter).
     const sourceIdSet = new Set(sourceRooms.map((r) => r.id));
     const h = historyRef.current;
-    // Drop walls whose midpoint lies strictly inside the merged polygon AND is at
-    // least a couple of pixels away from the merged boundary — perimeter walls of
-    // the source spaces sit *on* the merged boundary and must be preserved; only
-    // walls fully interior to the union (the shared dividers) should disappear.
-    // Site / buildable / footprint / connection segments are preserved regardless
-    // since they carry contextual semantics.
-    const pipMerged = (px: number, py: number): boolean => {
-      let inside = false;
-      for (let i = 0, j = mergedPolygon.length - 1; i < mergedPolygon.length; j = i++) {
-        const a = mergedPolygon[i], b = mergedPolygon[j];
-        if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
-      }
-      return inside;
-    };
-    /** Perpendicular distance from a point to the polygon's nearest edge. */
-    const distToMergedBoundary = (px: number, py: number): number => {
-      let best = Infinity;
-      for (let i = 0; i < mergedPolygon.length; i++) {
-        const a = mergedPolygon[i], b = mergedPolygon[(i + 1) % mergedPolygon.length];
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const len2 = dx * dx + dy * dy;
-        const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
-        const cx = a.x + t * dx, cy = a.y + t * dy;
-        const d = Math.hypot(px - cx, py - cy);
-        if (d < best) best = d;
-      }
-      return best;
-    };
-    const BOUNDARY_TOL = 2.5; // px — anything within this of the merged outline is a perimeter wall.
-    const PRESERVED_SEG_TYPES = new Set(["plot-boundary", "buildable-boundary", "footprint-boundary", "connection"]);
-    const walls = h.state.walls.filter((w) => {
-      const st = w.segmentType ?? "wall";
-      if (PRESERVED_SEG_TYPES.has(st)) return true;
-      const mx = (w.start.x + w.end.x) / 2;
-      const my = (w.start.y + w.end.y) / 2;
-      if (!pipMerged(mx, my)) return true;                // outside the merge: keep.
-      if (distToMergedBoundary(mx, my) < BOUNDARY_TOL) return true; // on the outline: keep.
-      return false;                                        // strictly interior: drop.
-    });
     h.set({
       ...h.state,
-      walls,
-      rooms: [...h.state.rooms.filter((r) => !sourceIdSet.has(r.id)), mergedRoom],
+      walls: res.walls,
+      rooms: [...h.state.rooms.filter((r) => !sourceIdSet.has(r.id)), res.mergedRoom],
     });
-    selection.selectOne(mergedRoom.id);
-    toast.success(`Merged ${sourceRooms.length} spaces into "${mergedRoom.label}"`);
+    selection.selectOne(res.mergedRoom.id);
+    toast.success(`Merged ${sourceRooms.length} spaces into "${res.mergedRoom.label}"`);
   }, [selection]);
 
   /** Convert the path segments drawn via the Drawing toolbar's "Draw Path" button into a
@@ -11724,6 +12679,41 @@ User request: ${aiPrompt.trim()}`;
         const stableKey = [`${id}:start`, `${id}:end`].sort().join("|");
         const cx = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
         const cy = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+        // Parametric entry (objectId) → the node carries the REAL .pobj as an attachment (same shape the
+        // Add-Node dialog / agent place_object create), rotated to lie along the boundary edge. The
+        // solver's footprint used the object's measured bbox, so the attachment must land exactly on it:
+        // the object's bbox centre can be offset from its anchor — subtract that offset (rotated into
+        // edge space) from the footprint centre to get the anchor point.
+        const pobj = obj.objectId ? findLibraryObject(obj.objectId) : undefined;
+        if (pobj) {
+          const rotDeg = (Math.atan2(corners[1].y - corners[0].y, corners[1].x - corners[0].x) * 180) / Math.PI;
+          const m = measureParametricObject(pobj.meta.id);
+          const rad = (rotDeg * Math.PI) / 180, cosR = Math.cos(rad), sinR = Math.sin(rad);
+          const offX = (m?.offsetXM ?? 0) * pixelsPerMeter, offY = (m?.offsetYM ?? 0) * pixelsPerMeter;
+          const ax = cx - (offX * cosR - offY * sinR);
+          const ay = cy - (offX * sinR + offY * cosR);
+          const attParams: Record<string, number | string | boolean> = {};
+          for (const pr of pobj.parameters) attParams[pr.key] = pr.default;
+          attParams.rotation = ((rotDeg % 360) + 360) % 360;
+          // The node position already realises the wall offset (solver setback) — zero the attachment's
+          // own wallOffset so the geometry isn't shifted twice; clearance carries through so the 3D mesh
+          // lifts off the floor by the entry's (or the object's default) clearance.
+          attParams.wallOffset = 0;
+          attParams.clearance = Math.max(0, obj.clearance ?? 0);
+          allWalls.push({
+            id, start: { x: ax, y: ay }, end: { x: ax, y: ay },
+            thickness: 0.5, color: "#334155", dashed: false, mode: "line",
+            method: "center", segmentType: "wall",
+          });
+          nodeMetaAdds[stableKey] = {
+            label: pobj.meta.name,
+            attachments: [{ id: createId(), objectId: pobj.meta.id, params: attParams, t: 0, flip: false }],
+            ...(connectedSpaceId
+              ? { connectedSpaceId, boundaryPosition: Math.max(0, Math.min(100, (chosenArc / perim) * 100)), boundarySetback: obj.setback ?? 0 }
+              : {}),
+          };
+          continue;
+        }
         // "fridge" has no node-catalog symbol but "refrigerator" does — alias so it renders nicely.
         const nodeKind = obj.kind === "fridge" ? "refrigerator" : obj.kind;
         allWalls.push({
@@ -18500,7 +19490,7 @@ User request: ${aiPrompt.trim()}`;
         setWallMethodForUi(next);
       }
       // Buffered Add-Segment trace: Tab cycles which face a typed length refers to (Center → Inner → Outer).
-      if (event.key === "Tab" && tool === "single-segment" && activeSegmentConfigRef.current?.mode === "buffered") {
+      if (event.key === "Tab" && tool === "single-segment" && (activeSegmentConfigRef.current?.mode === "buffered" || activeSegmentConfigRef.current?.mode === "path")) {
         event.preventDefault();
         const cycle: ("center" | "inner" | "outer")[] = ["center", "inner", "outer"];
         setLengthDimMode((m) => cycle[(cycle.indexOf(m) + 1) % 3]);
@@ -19949,7 +20939,8 @@ User request: ${aiPrompt.trim()}`;
         showLabel: c.showLabel,
       };
     }
-    const buffered = c.mode === "buffered";
+    // "path" = the buffered band PLUS `asSpace` — the connected run derives a live Space (pathSpaces memo).
+    const buffered = c.mode === "buffered" || c.mode === "path";
     return {
       thickness: c.thicknessPx,
       color: c.color,
@@ -19960,6 +20951,7 @@ User request: ${aiPrompt.trim()}`;
       bufferStyle: buffered ? c.bufferStyle : undefined,
       hatch: buffered && c.fill === "hatched",
       ...(buffered && c.fill === "hatched" ? { hatchStyle: "diagonal" as const } : {}),
+      ...(c.mode === "path" ? { asSpace: true } : {}),
       showLabel: c.showLabel,
     };
   };
@@ -19967,7 +20959,7 @@ User request: ${aiPrompt.trim()}`;
   /** Buffered Add-Segment trace thickness in the active display unit (0 when not tracing a buffered line). */
   const bufferedTraceThicknessUnit = (): number => {
     const c = activeSegmentConfigRef.current;
-    if (!c || c.mode !== "buffered" || tool !== "single-segment") return 0;
+    if (!c || (c.mode !== "buffered" && c.mode !== "path") || tool !== "single-segment") return 0;
     return mInUnit(c.thicknessPx / pixelsPerMeter);
   };
   /** Map a typed length (in the active unit) to the CENTERLINE length the engine draws, honouring the
@@ -20452,7 +21444,7 @@ User request: ${aiPrompt.trim()}`;
       // Drawing a line / wall segment also drops a Dimension annotation beside it (Dimension layer) —
       // selectable + styleable in Properties. Door / window openings aren't dimensioned, and BUFFERED
       // segments are skipped too (they render their own Outer / Inner face dimensions instead).
-      const isBufferedSeg = singleSegType === "line" && activeSegmentConfigRef.current?.mode === "buffered";
+      const isBufferedSeg = singleSegType === "line" && (activeSegmentConfigRef.current?.mode === "buffered" || activeSegmentConfigRef.current?.mode === "path");
       // NURBS path lines render as a smooth ribbon, not a straight stroke — a per-chord dimension would
       // mislead, so skip it (matches how buffered segments render their own face dimensions instead).
       const isNurbsLine = singleSegType === "line" && (activeSegmentConfigRef.current?.pathType ?? "straight") !== "straight";
@@ -21920,6 +22912,14 @@ User request: ${aiPrompt.trim()}`;
     anchor.download = "floorplan.json";
     anchor.click();
     URL.revokeObjectURL(url);
+    // Library convention: designs live in public/Library/Designs. In dev the bridge writes the file
+    // there directly (timestamped, no overwrites); otherwise fall back to the downloaded copy + hint.
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    void saveLibraryFile(`Designs/floorplan-${stamp}.json`, payload).then((r) =>
+      r.ok
+        ? toast.success(`Design saved to public/Library/${r.path}`)
+        : toast.success("Design exported — keep bundled designs in public/Library/Designs"),
+    );
   };
 
   /** Export the Architectural view to a professional DXF. The model is first reduced to a clean,
@@ -23895,9 +24895,9 @@ User request: ${aiPrompt.trim()}`;
 
         <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
         <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
-        {/* Chat AI — foldable bar pinned to the top of the canvas. Agent mode drives the live canvas via
-            tools (agentChat.ts); Rewrite mode is the legacy one-shot Gemini JSON rewrite. Each mode keeps
-            its own editable system prompt. */}
+        {/* Chat AI — foldable bar pinned to the top of the canvas. Four agent modes, each with its own
+            editable system prompt: Orchestrator (full tool-loop: canvas + Flow + parametric library),
+            Flow (builds the node graph), Design (canvas tools only), Parametric (object library only). */}
         <ChatAIPanel
           messages={aiMessages}
           busy={aiSendBusy}
@@ -23907,9 +24907,9 @@ User request: ${aiPrompt.trim()}`;
           configured={!!aiApiKey.trim() && !!aiModel.trim()}
           mode={aiMode}
           onModeChange={setAiMode}
-          systemPrompt={aiMode === "agent" ? aiAgentSystemPrompt : aiSystemPrompt}
-          onSystemPromptChange={aiMode === "agent" ? setAiAgentSystemPrompt : setAiSystemPrompt}
-          defaultSystemPrompt={aiMode === "agent" ? AGENT_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT}
+          systemPrompt={aiMode === "agent" ? aiAgentSystemPrompt : aiMode === "flow" ? aiFlowSystemPrompt : aiMode === "design" ? aiDesignSystemPrompt : aiParametricSystemPrompt}
+          onSystemPromptChange={aiMode === "agent" ? setAiAgentSystemPrompt : aiMode === "flow" ? setAiFlowSystemPrompt : aiMode === "design" ? setAiDesignSystemPrompt : setAiParametricSystemPrompt}
+          defaultSystemPrompt={aiMode === "agent" ? AGENT_SYSTEM_PROMPT : aiMode === "flow" ? FLOW_AGENT_SYSTEM_PROMPT : aiMode === "design" ? DESIGN_AGENT_SYSTEM_PROMPT : PARAMETRIC_AGENT_SYSTEM_PROMPT}
         />
         <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
           {/* Flow editor — node-graph pipeline that composes the stepwise tools (Inset,
@@ -23987,6 +24987,7 @@ User request: ${aiPrompt.trim()}`;
                   rooms={visibleRooms}
                   spaceMasses={spaceMasses}
                   primitiveMasses={primitiveMasses}
+                  booleanMasses={booleanMasses}
                   pixelsPerMeter={pixelsPerMeter}
                   placementMode={
                     // Union fill mode forces primitive rendering for placement objects so they don't
@@ -25230,13 +26231,24 @@ User request: ${aiPrompt.trim()}`;
 
                   {/* Buffered-segment union — when "Mitered Union" join mode is active, the per-wall bands
                       render invisibly (hit-only) and the merged corridor is drawn here as one seamless
-                      filled + outlined shape (no internal corner seams). */}
+                      shape: every mitered polygon fills WITHOUT stroke (a same-colour hairline stroke
+                      hides anti-aliasing seams between flush fills), then only the union's outer
+                      (non-shared) edges are stroked — the junction seam lines cancel out. */}
                   {bufferedUnion && bufferedUnion.fills.map((poly, i) => (
                     <Line
                       key={`bufu-${i}`}
                       points={poly.flatMap((p) => [p.x, p.y])}
                       closed
                       fill={bufferedUnion.fillUnion ? bufferedUnion.color : "rgba(0,0,0,0)"}
+                      stroke={bufferedUnion.fillUnion ? bufferedUnion.color : undefined}
+                      strokeWidth={bufferedUnion.fillUnion ? 0.5 : undefined}
+                      listening={false}
+                    />
+                  ))}
+                  {bufferedUnion && bufferedUnion.outerEdges.map((edge, i) => (
+                    <Line
+                      key={`bufu-edge-${i}`}
+                      points={[edge.a.x, edge.a.y, edge.b.x, edge.b.y]}
                       stroke={bufferedUnion.color}
                       strokeWidth={Math.max(0.75, 1 / scale)}
                       listening={false}
@@ -25257,6 +26269,31 @@ User request: ${aiPrompt.trim()}`;
                       const widthM = (typeof att.params.width === "number" ? att.params.width : Number(att.params.width)) || Number(obj?.parameters.find((p) => p.key === "width")?.default) || 0.9;
                       const spanPx = isOpening ? L : widthM * pixelsPerMeter;
                       const color = typeof att.params.color === "string" ? att.params.color : (symbol === "window" ? "#0891b2" : "#b45309");
+
+                      // GENERIC parametric object on a SEGMENT (staircase, furniture, …): evaluate its plan
+                      // geometry un-rotated at the segment midpoint, then HOST-ALIGN it — the plan's X extent
+                      // stretches to the segment length, its depth stays natural centred on the line, and the
+                      // whole thing rotates with the segment. Door / window / wall keep their symbol branches.
+                      if (obj?.geometry && symbol !== "door" && symbol !== "window" && symbol !== "wall") {
+                        const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
+                        const g = evalParametricGeometry(JSON.stringify(obj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
+                        if (!g.fill.length && !g.lines.length) return null;
+                        const gb = polysBBox([...g.fill, ...g.lines]);
+                        if (!gb) return null;
+                        const sxF = L / Math.max(1e-6, gb.maxX - gb.minX);
+                        const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
+                        const mapPoly = (poly: Point[]) => poly.flatMap((p) => {
+                          const lx = (p.x - gcx) * sxF, ly = p.y - gcy;
+                          return [mid.x + ux * lx + nx * ly, mid.y + uy * lx + ny * ly];
+                        });
+                        return (
+                          <Group key={att.id} listening={false}>
+                            {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} points={mapPoly(poly)} closed stroke={col} strokeWidth={sw} fill={`${col}22`} lineJoin="round" />; })}
+                            {g.lines.map((ln, i) => <Line key={`l${i}`} points={mapPoly(ln)} stroke={g.lineColor?.[i] ?? g.color} strokeWidth={sw} lineJoin="round" />)}
+                            {g.refLines.map((ln, i) => <Line key={`r${i}`} points={mapPoly(ln)} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" />)}
+                          </Group>
+                        );
+                      }
 
                       if (symbol === "wall") {
                         // When the host segment is itself a buffered band (bufferStyle set — e.g. the wall
@@ -25340,13 +26377,30 @@ User request: ${aiPrompt.trim()}`;
                       // (the instance's edited params override the file defaults). Falls back to the
                       // hardcoded staircase placeholder below for objects without geometry.
                       if (obj?.geometry) {
-                        const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef);
+                        const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
+                        // Selected NESTED component (Components editor / canvas click) → overdraw in accent.
+                        const selPath = selectedComponent?.attId === att.id ? selectedComponent.path : null;
+                        const isSel = (src?: string) => !!selPath && !!src && (src === selPath || src.startsWith(`${selPath}/`));
+                        // SketchUp-style drill-in: in Select+Node mode, clicking a composed child (its shapes
+                        // carry the instance path as the Konva `name`) selects host node + that component; a
+                        // click on the object's own geometry (empty name) selects the node, clearing the child.
+                        const canDrill = tool === "select" && selectFilter === "node";
+                        const pick = (e: Konva.KonvaEventObject<Event>) => {
+                          e.cancelBubble = true;
+                          const src = typeof e.target?.name === "function" ? e.target.name() : "";
+                          setSelectedNodeKey(node.stableKey);
+                          selection.clearSelection();
+                          setSelectedGenElement(null);
+                          setSelectedComponent(src ? { attId: att.id, path: src } : null);
+                        };
+                        const hitW = Math.max(6 / scale, sw * 4);
                         return (
-                          <Group key={att.id} listening={false}>
-                            {g.fill.map((poly, i) => <Line key={`f${i}`} points={poly.flatMap((p) => [p.x, p.y])} closed stroke={g.color} strokeWidth={sw} fill={`${g.color}22`} lineJoin="round" />)}
-                            {g.lines.map((ln, i) => <Line key={`l${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
-                            {g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" />)}
+                          <Group key={att.id} listening={canDrill} onClick={pick} onTap={pick}>
+                            {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} name={g.fillSrc?.[i] ?? ""} points={poly.flatMap((p) => [p.x, p.y])} closed stroke={col} strokeWidth={sw} fill={`${col}22`} lineJoin="round" hitStrokeWidth={hitW} />; })}
+                            {g.lines.map((ln, i) => <Line key={`l${i}`} name={g.lineSrc?.[i] ?? ""} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.lineColor?.[i] ?? g.color} strokeWidth={sw} lineJoin="round" hitStrokeWidth={hitW} />)}
+                            {g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
+                            {selPath && g.lines.map((ln, i) => (isSel(g.lineSrc?.[i]) ? <Line key={`hl${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#3b82f6" strokeWidth={sw * 2} lineJoin="round" listening={false} /> : null))}
                           </Group>
                         );
                       }
@@ -25384,16 +26438,35 @@ User request: ${aiPrompt.trim()}`;
                     return (room.attachments ?? []).map((att) => {
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!obj?.geometry) return null;
-                      const g = evalParametricGeometry(JSON.stringify(obj), c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef);
+                      const defText = JSON.stringify(obj);
+                      const g = evalParametricGeometry(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams);
                       if (!g.fill.length && !g.lines.length && !g.refLines.length) return null;
+                      // Generic FIT-TO-SPACE: an object that doesn't adapt itself to the host (no host vars /
+                      // `host` rule / pipeline — e.g. a staircase) is uniformly scaled to the Space bbox and
+                      // centred in it. Host-aware objects (Floor, Massing, Site, Floor Plate…) render as-is.
+                      let mapPoly = (poly: Point[]) => poly.flatMap((p) => [p.x, p.y]);
+                      if (!pobjIsHostAware(defText)) {
+                        const gb = polysBBox([...g.fill, ...g.lines]);
+                        const rb = polysBBox([room.points]);
+                        if (gb && rb) {
+                          const s = Math.min((rb.maxX - rb.minX) / Math.max(1e-6, gb.maxX - gb.minX), (rb.maxY - rb.minY) / Math.max(1e-6, gb.maxY - gb.minY));
+                          const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
+                          const rcx = (rb.minX + rb.maxX) / 2, rcy = (rb.minY + rb.maxY) / 2;
+                          mapPoly = (poly) => poly.flatMap((p) => [rcx + (p.x - gcx) * s, rcy + (p.y - gcy) * s]);
+                        }
+                      }
+                      // Selected NESTED component (Components editor) → overdraw its polylines in accent.
+                      const selPath = selectedComponent?.attId === att.id ? selectedComponent.path : null;
+                      const isSel = (src?: string) => !!selPath && !!src && (src === selPath || src.startsWith(`${selPath}/`));
                       return (
                         <Group key={`pobj-space-2d-${room.id}-${att.id}`} listening={false}>
                           {/* Solid plan result(s) — e.g. Site's final buildable footprint + any split open-space
                               pieces (`fill` op / split remainder). Semi-transparent so overlaps stay legible. */}
-                          {g.fill.map((poly, i) => <Line key={`f${i}`} points={poly.flatMap((p) => [p.x, p.y])} closed fill={`${g.color}40`} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
-                          {g.lines.map((ln, i) => <Line key={`l${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.color} strokeWidth={sw} lineJoin="round" />)}
+                          {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} points={mapPoly(poly)} closed fill={`${col}40`} stroke={col} strokeWidth={sw} lineJoin="round" />; })}
+                          {g.lines.map((ln, i) => <Line key={`l${i}`} points={mapPoly(ln)} stroke={g.lineColor?.[i] ?? g.color} strokeWidth={sw} lineJoin="round" />)}
                           {/* Dashed construction/reference outlines (inset polygon · split line · optimise rect). */}
-                          {g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
+                          {g.refLines.map((ln, i) => <Line key={`r${i}`} points={mapPoly(ln)} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
+                          {selPath && g.lines.map((ln, i) => (isSel(g.lineSrc?.[i]) ? <Line key={`hl${i}`} points={mapPoly(ln)} stroke="#3b82f6" strokeWidth={sw * 2} lineJoin="round" /> : null))}
                         </Group>
                       );
                     });
@@ -30475,7 +31548,7 @@ User request: ${aiPrompt.trim()}`;
                     // (width + cap style + fill) instead of a thin line, so a buffered segment looks the same
                     // while hovering as it will once committed.
                     const segCfg = activeSegmentConfigRef.current;
-                    const bufferedPreview = !!segCfg && segCfg.mode === "buffered" && singleSegType !== "wall";
+                    const bufferedPreview = !!segCfg && (segCfg.mode === "buffered" || segCfg.mode === "path") && singleSegType !== "wall";
                     return (
                       <>
                         {bandPolys.length ? (
@@ -31680,6 +32753,7 @@ User request: ${aiPrompt.trim()}`;
               injectOpeningRef={flowInjectOpeningRef}
               injectWallGraphRef={flowInjectWallGraphRef}
               injectNodeObjectRef={flowInjectNodeObjectRef}
+              flowApiRef={flowApplyApiRef}
               onRunLayoutGen={onRunLayoutGenStable}
               onRunAnneal={onRunAnnealStable}
               onAddRoom={onAddRoomStable}
@@ -31749,7 +32823,7 @@ User request: ${aiPrompt.trim()}`;
                   toast.success(`Committed ${newSegWalls.length} segment${newSegWalls.length === 1 ? "" : "s"} from flow`);
                 }
               }}
-              onPreview={setFlowPreview}
+              onPreview={(items) => { flowPreviewRef.current = items; setFlowPreview(items); }}
               sourcePolygon={selectedRoom?.points ?? []}
               pixelsPerMeter={pixelsPerMeter}
               selectedRoomLabel={selectedRoom?.label ?? (selectedRoom ? "selected space" : null)}
@@ -32111,11 +33185,13 @@ User request: ${aiPrompt.trim()}`;
                           expanded={true}
                           setExpanded={() => {}}
                           wallLevels={wallLevels}
-                          mode={selectedWall.bufferStyle ? "buffered" : "line"}
+                          mode={selectedWall.bufferStyle ? (selectedWall.asSpace ? "path" : "buffered") : "line"}
                           onModeChange={(m) => {
-                            // Buffered defaults to Outlined (mode "outline"); switching back to Line drops the buffer + hatch.
-                            if (m === "buffered") applySegmentDisplay(selectedWall.id, { mode: (!selectedWall.mode || selectedWall.mode === "line") ? "outline" : selectedWall.mode, bufferStyle: selectedWall.bufferStyle ?? "capsule" }, {});
-                            else applySegmentDisplay(selectedWall.id, { mode: "line", bufferStyle: undefined, hatch: false }, { hatch: false });
+                            // Buffered/Path default to Outlined (mode "outline"); Path additionally derives a live
+                            // Space from the connected run (asSpace). Switching back to Line drops buffer + hatch.
+                            if (m === "buffered") applySegmentDisplay(selectedWall.id, { mode: (!selectedWall.mode || selectedWall.mode === "line") ? "outline" : selectedWall.mode, bufferStyle: selectedWall.bufferStyle ?? "capsule", asSpace: undefined }, {});
+                            else if (m === "path") applySegmentDisplay(selectedWall.id, { mode: (!selectedWall.mode || selectedWall.mode === "line") ? "outline" : selectedWall.mode, bufferStyle: selectedWall.bufferStyle ?? "capsule", asSpace: true }, {});
+                            else applySegmentDisplay(selectedWall.id, { mode: "line", bufferStyle: undefined, asSpace: undefined, hatch: false }, { hatch: false });
                           }}
                           bufferStyle={selectedWall.bufferStyle ?? "capsule"}
                           onBufferStyleChange={(s) => applySegmentDisplay(selectedWall.id, { bufferStyle: s }, {})}
@@ -32136,6 +33212,7 @@ User request: ${aiPrompt.trim()}`;
                             if ("hatchAngle" in patch) attrs["hatch-angle"] = patch.hatchAngle ?? null;
                             applySegmentDisplay(selectedWall.id, patch, attrs);
                           }}
+                          onConvertToSpace={() => convertBufferedToSpace(selectedWall)}
                           onToggleShowDirection={(show) => applySegmentDisplay(selectedWall.id, { showDirection: show }, { "show-direction": show })}
                           onFlipDirection={() => {
                             history.set({
@@ -32181,6 +33258,9 @@ User request: ${aiPrompt.trim()}`;
                           onDetach={(attId) => detachSegmentObject(selectedWall.id, attId)}
                           onUpdateAttachment={(attId, patch) => updateSegmentAttachment(selectedWall.id, attId, patch)}
                           onUpdateParam={(attId, key, value) => updateSegmentAttachmentParam(selectedWall.id, attId, key, value)}
+                          onUpdateChildParam={(attId, path, key, value) => updateSegmentAttachmentChildParam(selectedWall.id, attId, path, key, value)}
+                          selectedComponent={selectedComponent}
+                          onSelectComponent={(attId, path) => setSelectedComponent(path ? { attId, path } : null)}
                         />
                         {/* Imported-schema properties (the Schema node's Segment section — Type discriminator
                             + type-conditional fields via showIf). Mirrors the Node Properties tab. */}
@@ -32936,6 +34016,9 @@ User request: ${aiPrompt.trim()}`;
                         onDetach={(attId) => detachSpaceObject(selectedRoom.id, attId)}
                         onUpdateAttachment={() => {}}
                         onUpdateParam={(attId, key, value) => updateSpaceAttachmentParam(selectedRoom.id, attId, key, value)}
+                        onUpdateChildParam={(attId, path, key, value) => updateSpaceAttachmentChildParam(selectedRoom.id, attId, path, key, value)}
+                        selectedComponent={selectedComponent}
+                        onSelectComponent={(attId, path) => setSelectedComponent(path ? { attId, path } : null)}
                         showPlacement={false}
                         title="Floor / Parametric Object"
                       />
@@ -34615,6 +35698,9 @@ User request: ${aiPrompt.trim()}`;
                             onDetach={(attId) => detachNodeObject(node.stableKey, attId)}
                             onUpdateAttachment={() => {}}
                             onUpdateParam={(attId, key, value) => updateNodeAttachmentParam(node.stableKey, attId, key, value)}
+                            onUpdateChildParam={(attId, path, key, value) => updateNodeAttachmentChildParam(node.stableKey, attId, path, key, value)}
+                            selectedComponent={selectedComponent}
+                            onSelectComponent={(attId, path) => setSelectedComponent(path ? { attId, path } : null)}
                           />
                         </>}
                       </div>

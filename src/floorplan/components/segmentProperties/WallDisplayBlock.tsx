@@ -11,9 +11,10 @@ export interface WallDisplayBlockProps {
   onToggleShowDirection: (show: boolean) => void;
   /** Swap the wall's source and target endpoints (visual direction reverse). */
   onFlipDirection: () => void;
-  /** Display mode — "line" (thin styled stroke) or "buffered" (thickness band with a cap style). */
-  mode: "line" | "buffered";
-  onModeChange: (m: "line" | "buffered") => void;
+  /** Display mode — "line" (thin styled stroke), "buffered" (thickness band with a cap style) or
+   *  "path" (same band, but the connected run also derives a LIVE Space that objects can attach to). */
+  mode: "line" | "buffered" | "path";
+  onModeChange: (m: "line" | "buffered" | "path") => void;
   /** Buffer cap style, used when mode === "buffered". */
   bufferStyle: "capsule" | "square" | "flat";
   onBufferStyleChange: (s: "capsule" | "square" | "flat") => void;
@@ -28,6 +29,9 @@ export interface WallDisplayBlockProps {
   onColorChange: (color: string) => void;
   /** Patch one or more hatch-fill fields on the segment. */
   onHatchChange: (patch: Partial<Pick<Wall, "hatch" | "hatchStyle" | "hatchSpacing" | "hatchAngle" | "hatchWeight">>) => void;
+  /** Buffered mode only — materialise the connected buffered run's mitered-union outline as a Space
+   *  (one-shot snapshot; the new Space does not follow later segment edits). */
+  onConvertToSpace?: () => void;
 }
 
 /** Per-wall rendering toggles — direction arrow visibility, flip endpoints, and a
@@ -44,16 +48,23 @@ export const WallDisplayBlock = (p: WallDisplayBlockProps) => (
     </button>
     {p.expanded && (
       <>
-        {/* Mode — Line (thin styled stroke) or Buffered (thickness band with a cap style). */}
+        {/* Mode — Line (thin styled stroke), Buffered (thickness band) or Path (band + live Space). */}
         <div>
           <span className="text-[10px] text-slate-400">Mode</span>
           <div className="mt-0.5 flex flex-wrap gap-1.5">
             <Button size="sm" variant={p.mode === "line" ? "default" : "outline"} onClick={() => p.onModeChange("line")}>Line</Button>
             <Button size="sm" variant={p.mode === "buffered" ? "default" : "outline"} onClick={() => p.onModeChange("buffered")}>Buffered</Button>
+            <Button size="sm" variant={p.mode === "path" ? "default" : "outline"} onClick={() => p.onModeChange("path")}>Path</Button>
           </div>
+          {p.mode === "path" && (
+            <p className="mt-0.5 text-[9px] text-slate-400">
+              Path draws the same band AND derives a live Space from the connected run — select the Space
+              to attach objects; it follows segment edits automatically.
+            </p>
+          )}
         </div>
-        {/* Buffer Style — only meaningful in Buffered mode (cap geometry of the thickness band). */}
-        {p.mode === "buffered" && (
+        {/* Buffer Style — cap geometry of the thickness band (Buffered + Path modes). */}
+        {(p.mode === "buffered" || p.mode === "path") && (
           <div>
             <span className="text-[10px] text-slate-400">Buffer Style</span>
             <div className="mt-0.5 flex flex-wrap gap-1.5">
@@ -63,9 +74,9 @@ export const WallDisplayBlock = (p: WallDisplayBlockProps) => (
             </div>
           </div>
         )}
-        {/* Fill — Buffered mode only: Filled / Outlined (default) / Hatched. Picking Hatched here is the
+        {/* Fill — Buffered/Path modes: Filled / Outlined (default) / Hatched. Picking Hatched here is the
             hatch toggle (no separate "Use Hatch" checkbox); its sub-options appear below. */}
-        {p.mode === "buffered" && (
+        {(p.mode === "buffered" || p.mode === "path") && (
           <div className="space-y-1.5">
             <span className="text-[10px] text-slate-400">Fill</span>
             <div className="mt-0.5 flex flex-wrap gap-1.5">
@@ -126,6 +137,19 @@ export const WallDisplayBlock = (p: WallDisplayBlockProps) => (
             )}
           </div>
         )}
+        {/* Convert to Space — buffered mode only: snapshot the connected run's band outline as a Space
+            so objects (e.g. the Corridoor parametric object) can attach to it. */}
+        {p.mode === "buffered" && p.onConvertToSpace && (
+          <div>
+            <Button variant="outline" size="sm" className="w-full text-[11px]" onClick={p.onConvertToSpace}>
+              Convert to Space
+            </Button>
+            <p className="mt-0.5 text-[9px] text-slate-400">
+              Makes a Space from the buffered run's outline (snapshot — it won't follow later segment edits).
+              Shift-select several buffered segments to convert exactly those.
+            </p>
+          </div>
+        )}
         {/* Line style — solid / dashed / dotted (overrides the legacy dashed flag). */}
         <div>
           <span className="text-[10px] text-slate-400">Line Style</span>
@@ -160,9 +184,9 @@ export const WallDisplayBlock = (p: WallDisplayBlockProps) => (
             <span className="text-[10px] text-slate-500">{p.selectedWall.color || "#334155"}</span>
           </div>
         </div>
-        {/* Justification — only applies to a Buffered band (which side of the centerline it sits on).
+        {/* Justification — only applies to a band (which side of the centerline it sits on).
             A Line segment has no width, so it's hidden in Line mode. */}
-        {p.mode === "buffered" && (
+        {(p.mode === "buffered" || p.mode === "path") && (
           <div>
             <span className="text-[10px] text-slate-400">Justification</span>
             <div className="mt-0.5 flex flex-wrap gap-1.5">

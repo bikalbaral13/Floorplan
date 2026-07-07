@@ -1,0 +1,1524 @@
+{
+  "version": 1,
+  "id": "parametric-floorplan",
+  "title": "Parametric Floorplan",
+  "category": "Floorplan",
+  "description": "Floorplan Tracer PLUS all four elevations. The schema-driven plan (walls / doors / windows / objects) feeds Front / Back / Left / Right elevation projections (Tier-A schematic: outline rects + openings at sill/lintel + ground line), each stamped at its own Node — change the plan and every elevation updates. Draw walls / doors / windows from the Add Segment dropdown; point each placement Node at a sheet node id (or grab a selection).",
+  "nodes": [
+    {
+      "id": "schema",
+      "position": {
+        "x": 12,
+        "y": -1270
+      },
+      "data": {
+        "tool": "schema",
+        "params": {
+          "name": "Element Schema",
+          "nodeProps": [
+            {
+              "id": "n_type",
+              "key": "type",
+              "label": "Type",
+              "kind": "select",
+              "unit": "",
+              "def": "junction",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "object",
+                "junction",
+                "staircase"
+              ],
+              "role": "node-type",
+              "optionIcons": {
+                "object": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%225%22%20y%3D%225%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%221%22%2F%3E%3Cline%20x1%3D%225%22%20y1%3D%225%22%20x2%3D%2219%22%20y2%3D%2219%22%2F%3E%3C%2Fsvg%3E",
+                "junction": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223%22%20fill%3D%22%230f172a%22%20stroke%3D%22none%22%2F%3E%3Cpath%20d%3D%22M12%203v5M12%2016v5M3%2012h5M16%2012h5%22%2F%3E%3C%2Fsvg%3E",
+                "staircase": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%2020h4v-4h4v-4h4v-4h4v-4h2%22%2F%3E%3C%2Fsvg%3E"
+              }
+            },
+            {
+              "id": "n_kind",
+              "key": "objectKind",
+              "label": "Object",
+              "kind": "select",
+              "unit": "",
+              "def": "bed",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "bed",
+                "sofa",
+                "table",
+                "chair",
+                "sink"
+              ],
+              "role": "object-kind",
+              "showIf": {
+                "when": "type",
+                "equals": "object"
+              },
+              "optionIcons": {
+                "bed": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%226%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%221%22%2F%3E%3Cline%20x1%3D%229%22%20y1%3D%226%22%20x2%3D%229%22%20y2%3D%2218%22%2F%3E%3C%2Fsvg%3E",
+                "sofa": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%229%22%20width%3D%2218%22%20height%3D%229%22%20rx%3D%222%22%2F%3E%3Cline%20x1%3D%223%22%20y1%3D%2212%22%20x2%3D%2221%22%20y2%3D%2212%22%2F%3E%3C%2Fsvg%3E",
+                "table": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%225%22%20y%3D%225%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%221%22%2F%3E%3C%2Fsvg%3E",
+                "chair": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%227%22%20y%3D%2210%22%20width%3D%2210%22%20height%3D%228%22%20rx%3D%221%22%2F%3E%3Cpath%20d%3D%22M7%2010V6h10v4%22%2F%3E%3C%2Fsvg%3E",
+                "sink": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%224%22%20y%3D%226%22%20width%3D%2216%22%20height%3D%2212%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2213%22%20r%3D%221.6%22%2F%3E%3Cline%20x1%3D%2212%22%20y1%3D%226%22%20x2%3D%2212%22%20y2%3D%229%22%2F%3E%3C%2Fsvg%3E"
+              }
+            },
+            {
+              "id": "n_w",
+              "key": "objWidth",
+              "label": "Width",
+              "kind": "number",
+              "unit": "m",
+              "def": 1,
+              "min": 0.1,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "role": "obj-width",
+              "showIf": {
+                "when": "type",
+                "equals": "object"
+              }
+            },
+            {
+              "id": "n_h",
+              "key": "objHeight",
+              "label": "Depth",
+              "kind": "number",
+              "unit": "m",
+              "def": 1,
+              "min": 0.1,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "role": "obj-height",
+              "showIf": {
+                "when": "type",
+                "equals": "object"
+              }
+            },
+            {
+              "id": "n_rot",
+              "key": "objRotation",
+              "label": "Rotation",
+              "kind": "number",
+              "unit": "°",
+              "def": 0,
+              "min": 0,
+              "max": 360,
+              "step": 5,
+              "options": [],
+              "role": "obj-rotation",
+              "showIf": {
+                "when": "type",
+                "equals": "object"
+              }
+            },
+            {
+              "id": "n_anchor",
+              "key": "objAnchor",
+              "label": "Anchor",
+              "kind": "select",
+              "unit": "",
+              "def": "center",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "center",
+                "top-left",
+                "top-right",
+                "bottom-left",
+                "bottom-right"
+              ],
+              "role": "obj-anchor",
+              "showIf": {
+                "when": "type",
+                "equals": "object"
+              }
+            },
+            {
+              "id": "n_sconfig",
+              "key": "stairConfig",
+              "label": "Configuration",
+              "kind": "select",
+              "unit": "",
+              "def": "straight",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "straight",
+                "u-shape",
+                "u-shape-mid"
+              ],
+              "role": "stair-config",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_ssteps",
+              "key": "stairSteps",
+              "label": "Number of steps",
+              "kind": "number",
+              "unit": "",
+              "def": 14,
+              "min": 2,
+              "max": 60,
+              "step": 1,
+              "options": [],
+              "role": "stair-steps",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_stread",
+              "key": "stairTread",
+              "label": "Tread (going)",
+              "kind": "number",
+              "unit": "m",
+              "def": 0.28,
+              "min": 0.2,
+              "max": 0.45,
+              "step": 0.005,
+              "options": [],
+              "role": "stair-tread",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_swidth",
+              "key": "stairWidth",
+              "label": "Width",
+              "kind": "number",
+              "unit": "m",
+              "def": 1,
+              "min": 0.6,
+              "max": 3,
+              "step": 0.05,
+              "options": [],
+              "role": "stair-width",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_sdir",
+              "key": "stairDirection",
+              "label": "Direction",
+              "kind": "select",
+              "unit": "",
+              "def": "ltr",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "ltr",
+                "rtl"
+              ],
+              "role": "stair-direction",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_smid",
+              "key": "stairMidSteps",
+              "label": "Mid / split steps",
+              "kind": "number",
+              "unit": "",
+              "def": 0,
+              "min": 0,
+              "max": 40,
+              "step": 1,
+              "options": [],
+              "role": "stair-mid-steps",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_sland",
+              "key": "stairLandingWidth",
+              "label": "Landing depth",
+              "kind": "number",
+              "unit": "m",
+              "def": 1,
+              "min": 0.5,
+              "max": 3,
+              "step": 0.05,
+              "options": [],
+              "role": "stair-landing-width",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_sspace",
+              "key": "stairMidSpace",
+              "label": "Mid space",
+              "kind": "number",
+              "unit": "m",
+              "def": 0.1,
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "options": [],
+              "role": "stair-mid-space",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_scuts",
+              "key": "stairLandingCuts",
+              "label": "Landing cuts",
+              "kind": "number",
+              "unit": "",
+              "def": 1,
+              "min": 1,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "role": "stair-landing-cuts",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_srot",
+              "key": "stairRotation",
+              "label": "Rotation",
+              "kind": "number",
+              "unit": "°",
+              "def": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": [],
+              "role": "stair-rotation",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_scol",
+              "key": "stairColor",
+              "label": "Color",
+              "kind": "color",
+              "unit": "",
+              "def": "#0f766e",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "stair-color",
+              "showIf": {
+                "when": "type",
+                "equals": "staircase"
+              }
+            },
+            {
+              "id": "n_col",
+              "key": "nodeColor",
+              "label": "Color",
+              "kind": "color",
+              "unit": "",
+              "def": "#475569",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "node-color"
+            }
+          ],
+          "segmentProps": [
+            {
+              "id": "s_type",
+              "key": "type",
+              "label": "Type",
+              "kind": "select",
+              "unit": "",
+              "def": "line",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "wall",
+                "door",
+                "window",
+                "line"
+              ],
+              "role": "seg-type",
+              "optionIcons": {
+                "wall": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%2210%22%20width%3D%2218%22%20height%3D%224%22%20rx%3D%220.5%22%20fill%3D%22%230f172a%22%20stroke%3D%22none%22%2F%3E%3C%2Fsvg%3E",
+                "door": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%2019V6%22%2F%3E%3Cpath%20d%3D%22M6%206a13%2013%200%200%201%2012%2013%22%2F%3E%3Cline%20x1%3D%226%22%20y1%3D%2219%22%20x2%3D%2218%22%20y2%3D%2219%22%2F%3E%3C%2Fsvg%3E",
+                "window": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%229%22%20width%3D%2218%22%20height%3D%226%22%20rx%3D%220.5%22%2F%3E%3Cline%20x1%3D%2212%22%20y1%3D%229%22%20x2%3D%2212%22%20y2%3D%2215%22%2F%3E%3C%2Fsvg%3E",
+                "line": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cline%20x1%3D%224%22%20y1%3D%2220%22%20x2%3D%2220%22%20y2%3D%224%22%2F%3E%3C%2Fsvg%3E"
+              }
+            },
+            {
+              "id": "s_wt",
+              "key": "wallThickness",
+              "label": "Wall Thickness",
+              "kind": "number",
+              "unit": "m",
+              "def": 0.23,
+              "min": 0.05,
+              "max": 0.6,
+              "step": 0.01,
+              "options": [],
+              "role": "wall-thickness",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_wjust",
+              "key": "wallJustification",
+              "label": "Justification",
+              "kind": "select",
+              "unit": "",
+              "def": "center",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "inner",
+                "center",
+                "outer"
+              ],
+              "role": "wall-justification",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_wh",
+              "key": "wallHeight",
+              "label": "Wall Height",
+              "kind": "number",
+              "unit": "m",
+              "def": 3,
+              "min": 0,
+              "max": 10,
+              "step": 0.05,
+              "options": [],
+              "role": "wall-height",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_wunion",
+              "key": "wallUnion",
+              "label": "Union",
+              "kind": "checkbox",
+              "unit": "",
+              "def": true,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "wall-union",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_wodim",
+              "key": "showOuterDim",
+              "label": "Show Outer Dimension",
+              "kind": "checkbox",
+              "unit": "",
+              "def": true,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "show-outer-dim",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_widim",
+              "key": "showInnerDim",
+              "label": "Show Inner Dimension",
+              "kind": "checkbox",
+              "unit": "",
+              "def": true,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "show-inner-dim",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_wcdim",
+              "key": "showCenterDim",
+              "label": "Show Center Dimension",
+              "kind": "checkbox",
+              "unit": "",
+              "def": false,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "show-center-dim",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_woffdim",
+              "key": "offsetDim",
+              "label": "Offsetted Dimension",
+              "kind": "checkbox",
+              "unit": "",
+              "def": false,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "offset-dim",
+              "showIf": {
+                "when": "type",
+                "equals": "wall"
+              }
+            },
+            {
+              "id": "s_dshape",
+              "key": "doorShape",
+              "label": "Shape",
+              "kind": "select",
+              "unit": "",
+              "def": "arc",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "polygon",
+                "arc",
+                "detailed"
+              ],
+              "role": "door-shape",
+              "showIf": {
+                "when": "type",
+                "equals": "door"
+              }
+            },
+            {
+              "id": "s_dthk",
+              "key": "doorThickness",
+              "label": "Leaf Thickness",
+              "kind": "number",
+              "unit": "m",
+              "def": 0.05,
+              "min": 0.01,
+              "max": 0.5,
+              "step": 0.01,
+              "options": [],
+              "role": "door-thickness",
+              "showIf": {
+                "when": "type",
+                "equals": "door"
+              }
+            },
+            {
+              "id": "s_dhinge",
+              "key": "doorHinge",
+              "label": "Hinge",
+              "kind": "select",
+              "unit": "",
+              "def": "left",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "left",
+                "right"
+              ],
+              "role": "door-hinge",
+              "showIf": {
+                "when": "type",
+                "equals": "door"
+              }
+            },
+            {
+              "id": "s_dswing",
+              "key": "doorSwing",
+              "label": "Swing",
+              "kind": "select",
+              "unit": "",
+              "def": "left",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "left",
+                "right"
+              ],
+              "role": "door-placement",
+              "showIf": {
+                "when": "type",
+                "equals": "door"
+              }
+            },
+            {
+              "id": "s_dlintel",
+              "key": "doorLintel",
+              "label": "Lintel Height",
+              "kind": "number",
+              "unit": "m",
+              "def": 2.1,
+              "min": 0,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "role": "lintel-height",
+              "showIf": {
+                "when": "type",
+                "equals": "door"
+              }
+            },
+            {
+              "id": "s_dcol",
+              "key": "doorColor",
+              "label": "Color",
+              "kind": "color",
+              "unit": "",
+              "def": "#9333ea",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "door-color",
+              "showIf": {
+                "when": "type",
+                "equals": "door"
+              }
+            },
+            {
+              "id": "s_wshape",
+              "key": "windowShape",
+              "label": "Shape",
+              "kind": "select",
+              "unit": "",
+              "def": "lines",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "polygon",
+                "lines",
+                "detailed"
+              ],
+              "role": "window-shape",
+              "showIf": {
+                "when": "type",
+                "equals": "window"
+              }
+            },
+            {
+              "id": "s_wthk",
+              "key": "windowThickness",
+              "label": "Thickness",
+              "kind": "number",
+              "unit": "m",
+              "def": 0.1,
+              "min": 0.02,
+              "max": 0.6,
+              "step": 0.01,
+              "options": [],
+              "role": "window-thickness",
+              "showIf": {
+                "when": "type",
+                "equals": "window"
+              }
+            },
+            {
+              "id": "s_wpanes",
+              "key": "windowPanes",
+              "label": "Panes",
+              "kind": "number",
+              "unit": "",
+              "def": 2,
+              "min": 1,
+              "max": 8,
+              "step": 1,
+              "options": [],
+              "role": "window-panes",
+              "showIf": {
+                "when": "type",
+                "equals": "window"
+              }
+            },
+            {
+              "id": "s_wsill",
+              "key": "windowSill",
+              "label": "Sill Height",
+              "kind": "number",
+              "unit": "m",
+              "def": 0.9,
+              "min": 0,
+              "max": 3,
+              "step": 0.05,
+              "options": [],
+              "role": "sill-height",
+              "showIf": {
+                "when": "type",
+                "equals": "window"
+              }
+            },
+            {
+              "id": "s_wlintel",
+              "key": "windowLintel",
+              "label": "Lintel Height",
+              "kind": "number",
+              "unit": "m",
+              "def": 2.1,
+              "min": 0,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "role": "lintel-height",
+              "showIf": {
+                "when": "type",
+                "equals": "window"
+              }
+            },
+            {
+              "id": "s_wcol",
+              "key": "windowColor",
+              "label": "Color",
+              "kind": "color",
+              "unit": "",
+              "def": "#0891b2",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "window-color",
+              "showIf": {
+                "when": "type",
+                "equals": "window"
+              }
+            }
+          ],
+          "spaceProps": [
+            {
+              "id": "sp_type",
+              "key": "type",
+              "label": "Type",
+              "kind": "select",
+              "unit": "",
+              "def": "room",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "room",
+                "open-space"
+              ],
+              "role": "space-type",
+              "optionIcons": {
+                "room": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%2010%2012%204l8%206v9a1%201%200%200%201-1%201H5a1%201%200%200%201-1-1z%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2214%22%20width%3D%224%22%20height%3D%226%22%2F%3E%3C%2Fsvg%3E",
+                "open-space": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%230f172a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%2218%22%20height%3D%2218%22%20rx%3D%221%22%20stroke-dasharray%3D%223%203%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223.5%22%2F%3E%3C%2Fsvg%3E"
+              }
+            },
+            {
+              "id": "sp_maxa",
+              "key": "maxArea",
+              "label": "Maximum Area",
+              "kind": "number",
+              "unit": "m²",
+              "def": 0,
+              "min": 0,
+              "max": 100000,
+              "step": 1,
+              "options": [],
+              "role": "max-area",
+              "showIf": {
+                "when": "type",
+                "equals": "room"
+              }
+            },
+            {
+              "id": "sp_mina",
+              "key": "minArea",
+              "label": "Minimum Area",
+              "kind": "number",
+              "unit": "m²",
+              "def": 0,
+              "min": 0,
+              "max": 100000,
+              "step": 1,
+              "options": [],
+              "role": "min-area",
+              "showIf": {
+                "when": "type",
+                "equals": "room"
+              }
+            },
+            {
+              "id": "sp_maxr",
+              "key": "maxRatio",
+              "label": "Maximum Ratio",
+              "kind": "number",
+              "unit": "",
+              "def": 0,
+              "min": 0,
+              "max": 100,
+              "step": 0.1,
+              "options": [],
+              "role": "max-ratio",
+              "showIf": {
+                "when": "type",
+                "equals": "room"
+              }
+            }
+          ],
+          "graphProps": [],
+          "settingsProps": [
+            {
+              "id": "set_ortho",
+              "key": "ortho",
+              "label": "Ortho",
+              "kind": "checkbox",
+              "unit": "",
+              "def": true,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "ortho"
+            },
+            {
+              "id": "set_units",
+              "key": "units",
+              "label": "Units",
+              "kind": "select",
+              "unit": "",
+              "def": "m",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "m",
+                "ft",
+                "cm"
+              ],
+              "role": "units"
+            },
+            {
+              "id": "set_nsnap",
+              "key": "nodeSnapRadius",
+              "label": "Node Snap Radius",
+              "kind": "number",
+              "unit": "px",
+              "def": 14,
+              "min": 0,
+              "max": 30,
+              "step": 1,
+              "options": [],
+              "role": "node-snap-radius"
+            },
+            {
+              "id": "set_ssnap",
+              "key": "spineSnapRadius",
+              "label": "Wall-Spine Snap Radius",
+              "kind": "number",
+              "unit": "px",
+              "def": 14,
+              "min": 0,
+              "max": 56,
+              "step": 1,
+              "options": [],
+              "role": "spine-snap-radius"
+            },
+            {
+              "id": "set_vimage",
+              "key": "showImage",
+              "label": "Image",
+              "kind": "checkbox",
+              "unit": "",
+              "def": true,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "show-image"
+            },
+            {
+              "id": "set_vmap",
+              "key": "showMap",
+              "label": "Map",
+              "kind": "checkbox",
+              "unit": "",
+              "def": false,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "show-map"
+            }
+          ],
+          "informationProps": [
+            {
+              "id": "i_dtitle",
+              "key": "drawingTitle",
+              "label": "Drawing Title",
+              "kind": "text",
+              "unit": "",
+              "def": "GROUND FLOOR PLAN",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "drawing-title"
+            },
+            {
+              "id": "i_disc",
+              "key": "discipline",
+              "label": "Discipline",
+              "kind": "text",
+              "unit": "",
+              "def": "ARCHITECTURAL",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "discipline"
+            },
+            {
+              "id": "i_status",
+              "key": "status",
+              "label": "Status",
+              "kind": "select",
+              "unit": "",
+              "def": "FOR CONSTRUCTION",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "FOR CONSTRUCTION",
+                "FOR TENDER",
+                "PRELIMINARY",
+                "FOR APPROVAL",
+                "AS-BUILT"
+              ],
+              "role": "status"
+            },
+            {
+              "id": "i_firm",
+              "key": "firmName",
+              "label": "Designed By (Firm)",
+              "kind": "text",
+              "unit": "",
+              "def": "CONSULTANCY / FIRM NAME",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "firm-name"
+            },
+            {
+              "id": "i_firmaddr",
+              "key": "firmAddress",
+              "label": "Firm Address",
+              "kind": "text",
+              "unit": "",
+              "def": "Street Address, City, Country",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "firm-address"
+            },
+            {
+              "id": "i_firmcontact",
+              "key": "firmContact",
+              "label": "Firm Contact",
+              "kind": "text",
+              "unit": "",
+              "def": "+00 000 0000 · info@firm.com",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "firm-contact"
+            },
+            {
+              "id": "i_proj",
+              "key": "projectName",
+              "label": "Project Name",
+              "kind": "text",
+              "unit": "",
+              "def": "PROJECT NAME",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "project-name"
+            },
+            {
+              "id": "i_projaddr",
+              "key": "projectAddress",
+              "label": "Project Address",
+              "kind": "text",
+              "unit": "",
+              "def": "Plot / Street, City",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "project-address"
+            },
+            {
+              "id": "i_client",
+              "key": "client",
+              "label": "Client",
+              "kind": "text",
+              "unit": "",
+              "def": "CLIENT NAME",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "client"
+            },
+            {
+              "id": "i_drawn",
+              "key": "drawnBy",
+              "label": "Drawn By",
+              "kind": "text",
+              "unit": "",
+              "def": "—",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "drawn-by"
+            },
+            {
+              "id": "i_checked",
+              "key": "checkedBy",
+              "label": "Checked By",
+              "kind": "text",
+              "unit": "",
+              "def": "—",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "checked-by"
+            },
+            {
+              "id": "i_approved",
+              "key": "approvedBy",
+              "label": "Approved By",
+              "kind": "text",
+              "unit": "",
+              "def": "—",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "approved-by"
+            },
+            {
+              "id": "i_date",
+              "key": "date",
+              "label": "Date",
+              "kind": "text",
+              "unit": "",
+              "def": "—",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "date"
+            },
+            {
+              "id": "i_scale",
+              "key": "scale",
+              "label": "Scale",
+              "kind": "text",
+              "unit": "",
+              "def": "1:100",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "scale"
+            },
+            {
+              "id": "i_projno",
+              "key": "projectNo",
+              "label": "Project No",
+              "kind": "text",
+              "unit": "",
+              "def": "—",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "project-no"
+            },
+            {
+              "id": "i_sheetno",
+              "key": "sheetNo",
+              "label": "Sheet No",
+              "kind": "text",
+              "unit": "",
+              "def": "A-101",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "sheet-no"
+            },
+            {
+              "id": "i_sheetsize",
+              "key": "sheetSize",
+              "label": "Sheet Size",
+              "kind": "select",
+              "unit": "",
+              "def": "A1",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [
+                "A0",
+                "A1",
+                "A2",
+                "A3",
+                "A4"
+              ],
+              "role": "sheet-size"
+            },
+            {
+              "id": "i_revlevel",
+              "key": "revisionLevel",
+              "label": "Revision",
+              "kind": "text",
+              "unit": "",
+              "def": "0",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "revision-level"
+            },
+            {
+              "id": "i_r1no",
+              "key": "rev1No",
+              "label": "Rev 1 · No",
+              "kind": "text",
+              "unit": "",
+              "def": "",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "rev1-no"
+            },
+            {
+              "id": "i_r1date",
+              "key": "rev1Date",
+              "label": "Rev 1 · Date",
+              "kind": "text",
+              "unit": "",
+              "def": "",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "rev1-date"
+            },
+            {
+              "id": "i_r1desc",
+              "key": "rev1Desc",
+              "label": "Rev 1 · Description",
+              "kind": "text",
+              "unit": "",
+              "def": "",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "rev1-desc"
+            },
+            {
+              "id": "i_r1by",
+              "key": "rev1By",
+              "label": "Rev 1 · By",
+              "kind": "text",
+              "unit": "",
+              "def": "",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "rev1-by"
+            },
+            {
+              "id": "i_disc2",
+              "key": "disclaimer",
+              "label": "Disclaimer",
+              "kind": "text",
+              "unit": "",
+              "def": "© Property of the firm. Do not scale — use figured dimensions. Verify all dimensions on site.",
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "disclaimer"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "canvas",
+      "position": {
+        "x": 540,
+        "y": -1160
+      },
+      "data": {
+        "tool": "canvas-source",
+        "params": {}
+      }
+    },
+    {
+      "id": "doors",
+      "position": {
+        "x": 988,
+        "y": -1336
+      },
+      "data": {
+        "tool": "segment-to-door",
+        "params": {
+          "shape": "arc",
+          "thickness": 0.05,
+          "hinge": "left",
+          "swing": "left",
+          "lintelHeight": 2.1,
+          "color": "#9333ea"
+        }
+      }
+    },
+    {
+      "id": "windows",
+      "position": {
+        "x": 945,
+        "y": -1104
+      },
+      "data": {
+        "tool": "segment-to-window",
+        "params": {
+          "shape": "lines",
+          "thickness": 0.1,
+          "panes": 2,
+          "sillHeight": 0.9,
+          "lintelHeight": 2.1,
+          "color": "#0891b2"
+        }
+      }
+    },
+    {
+      "id": "walls",
+      "position": {
+        "x": 912,
+        "y": -874
+      },
+      "data": {
+        "tool": "wall-builder",
+        "params": {
+          "thicknessMm": 230,
+          "justification": "center",
+          "height": 3,
+          "union": true,
+          "showOuterDim": true,
+          "showInnerDim": true,
+          "showCenterDim": false,
+          "offsetDim": false,
+          "dimGap": 0.18
+        }
+      }
+    },
+    {
+      "id": "objects",
+      "position": {
+        "x": 894,
+        "y": -764
+      },
+      "data": {
+        "tool": "node-to-object",
+        "params": {
+          "kind": "bed",
+          "width": 1.5,
+          "height": 2,
+          "rotation": 0,
+          "anchor": "center"
+        }
+      }
+    },
+    {
+      "id": "schemaTools",
+      "position": {
+        "x": 540,
+        "y": -980
+      },
+      "data": {
+        "tool": "schema-to-drawing",
+        "params": {}
+      }
+    },
+    {
+      "id": "elevFront",
+      "position": {
+        "x": 560,
+        "y": -640
+      },
+      "data": {
+        "tool": "floorplan-to-front-elevation",
+        "params": {
+          "height": 3,
+          "color": "#0f172a"
+        }
+      }
+    },
+    {
+      "id": "elevBack",
+      "position": {
+        "x": 560,
+        "y": -520
+      },
+      "data": {
+        "tool": "floorplan-to-back-elevation",
+        "params": {
+          "height": 3,
+          "color": "#0f172a"
+        }
+      }
+    },
+    {
+      "id": "elevLeft",
+      "position": {
+        "x": 560,
+        "y": -400
+      },
+      "data": {
+        "tool": "floorplan-to-left-elevation",
+        "params": {
+          "height": 3,
+          "color": "#0f172a"
+        }
+      }
+    },
+    {
+      "id": "elevRight",
+      "position": {
+        "x": 560,
+        "y": -280
+      },
+      "data": {
+        "tool": "floorplan-to-right-elevation",
+        "params": {
+          "height": 3,
+          "color": "#0f172a"
+        }
+      }
+    },
+    {
+      "id": "placeFront",
+      "position": {
+        "x": 880,
+        "y": -640
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "id": "Node001",
+          "grabFromSelection": false,
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "placeBack",
+      "position": {
+        "x": 880,
+        "y": -520
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "id": "Node002",
+          "grabFromSelection": false,
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "placeLeft",
+      "position": {
+        "x": 880,
+        "y": -400
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "id": "Node003",
+          "grabFromSelection": false,
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "placeRight",
+      "position": {
+        "x": 880,
+        "y": -280
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "id": "Node004",
+          "grabFromSelection": false,
+          "outputMode": "single"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schema",
+      "target": "canvas",
+      "sourceHandle": "out-0",
+      "targetHandle": null
+    },
+    {
+      "id": "e2",
+      "source": "canvas",
+      "target": "doors",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e3",
+      "source": "canvas",
+      "target": "windows",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e4",
+      "source": "canvas",
+      "target": "walls",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e5",
+      "source": "canvas",
+      "target": "objects",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e6",
+      "source": "schema",
+      "target": "schemaTools",
+      "sourceHandle": null,
+      "targetHandle": "gin-schema"
+    },
+    {
+      "id": "e7",
+      "source": "canvas",
+      "target": "elevFront",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e8",
+      "source": "canvas",
+      "target": "elevBack",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e9",
+      "source": "canvas",
+      "target": "elevLeft",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e10",
+      "source": "canvas",
+      "target": "elevRight",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e11",
+      "source": "elevFront",
+      "target": "placeFront",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e12",
+      "source": "elevBack",
+      "target": "placeBack",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e13",
+      "source": "elevLeft",
+      "target": "placeLeft",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e14",
+      "source": "elevRight",
+      "target": "placeRight",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    }
+  ]
+}

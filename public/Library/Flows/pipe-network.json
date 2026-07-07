@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "id": "pipe-network",
+  "title": "Pipe Network Solver",
+  "category": "Networks",
+  "description": "Schema → Graph → Pipe Network Solver → Output Schema. Hydraulic solve (Todini). Edit per-node demand/elevation and per-segment diameter/roughness in the Properties tab; results in Metrics.",
+  "nodes": [
+    {
+      "id": "schema",
+      "position": {
+        "x": 0,
+        "y": 120
+      },
+      "data": {
+        "tool": "schema",
+        "params": {
+          "name": "Pipe Network",
+          "nodeProps": [
+            {
+              "id": "n_d",
+              "key": "demand",
+              "label": "Demand",
+              "kind": "number",
+              "unit": "L/s",
+              "def": 0,
+              "min": 0,
+              "max": 1000,
+              "step": 0.1,
+              "options": [],
+              "role": "demand"
+            },
+            {
+              "id": "n_e",
+              "key": "elevation",
+              "label": "Elevation",
+              "kind": "number",
+              "unit": "m",
+              "def": 0,
+              "min": -100,
+              "max": 1000,
+              "step": 0.1,
+              "options": [],
+              "role": "elevation"
+            },
+            {
+              "id": "n_f",
+              "key": "fixedHead",
+              "label": "Fixed head (source)",
+              "kind": "checkbox",
+              "unit": "",
+              "def": false,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "fixedHead"
+            }
+          ],
+          "segmentProps": [
+            {
+              "id": "s_d",
+              "key": "diameter",
+              "label": "Diameter",
+              "kind": "number",
+              "unit": "mm",
+              "def": 100,
+              "min": 0,
+              "max": 2000,
+              "step": 1,
+              "options": [],
+              "role": "diameter"
+            },
+            {
+              "id": "s_r",
+              "key": "roughness",
+              "label": "Roughness (C)",
+              "kind": "number",
+              "unit": "",
+              "def": 130,
+              "min": 0,
+              "max": 1000,
+              "step": 1,
+              "options": [],
+              "role": "roughness"
+            }
+          ],
+          "spaceProps": [],
+          "graphProps": []
+        }
+      }
+    },
+    {
+      "id": "graph",
+      "position": {
+        "x": 250,
+        "y": 0
+      },
+      "data": {
+        "tool": "graph-source",
+        "params": {
+          "id": "",
+          "grabFromSelection": true,
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "pipe",
+      "position": {
+        "x": 500,
+        "y": 80
+      },
+      "data": {
+        "tool": "pipe-solver",
+        "params": {
+          "formula": "hazen-williams",
+          "maxIter": 60,
+          "tolerance": 0.001
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 760,
+        "y": 80
+      },
+      "data": {
+        "tool": "output-schema",
+        "params": {
+          "name": "Hydraulic Results",
+          "nodeProps": [
+            {
+              "id": "r_h",
+              "key": "head",
+              "label": "Head",
+              "kind": "number",
+              "unit": "m",
+              "def": 0,
+              "min": 0,
+              "max": 1000,
+              "step": 0.01,
+              "options": [],
+              "role": ""
+            },
+            {
+              "id": "r_p",
+              "key": "pressure",
+              "label": "Pressure",
+              "kind": "number",
+              "unit": "m",
+              "def": 0,
+              "min": 0,
+              "max": 1000,
+              "step": 0.01,
+              "options": [],
+              "role": ""
+            }
+          ],
+          "segmentProps": [
+            {
+              "id": "r_q",
+              "key": "discharge",
+              "label": "Discharge",
+              "kind": "number",
+              "unit": "L/s",
+              "def": 0,
+              "min": 0,
+              "max": 1000,
+              "step": 0.01,
+              "options": [],
+              "role": ""
+            },
+            {
+              "id": "r_v",
+              "key": "velocity",
+              "label": "Velocity",
+              "kind": "number",
+              "unit": "m/s",
+              "def": 0,
+              "min": 0,
+              "max": 1000,
+              "step": 0.01,
+              "options": [],
+              "role": ""
+            }
+          ],
+          "spaceProps": [],
+          "graphProps": []
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schema",
+      "target": "graph",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e2",
+      "source": "schema",
+      "target": "pipe",
+      "sourceHandle": null,
+      "targetHandle": "gin-schema"
+    },
+    {
+      "id": "e3",
+      "source": "graph",
+      "target": "pipe",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e4",
+      "source": "pipe",
+      "target": "out",
+      "sourceHandle": null,
+      "targetHandle": null
+    }
+  ]
+}

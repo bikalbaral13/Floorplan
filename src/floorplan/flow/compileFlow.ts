@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import { FLOW_TOOLS, parseSplitRatios, parseNumberList, placeObjectEntries, randomOptimiseRectParams, type FlowNodeData } from "./flowTypes";
+import { resolvePlaceObjectParams } from "./eval/objectFootprints";
 
 export interface CompileResult {
   /** Pretty-printed recipe JSON: { operations: [...] }. Empty object on error. */
@@ -97,6 +98,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     const data = dataOf(node);
     if (data.tool === "source") continue;
     if (data.tool === "space-creator") continue; // generator → emitted as a top-level `create`, not an op
+    if (data.tool === "rectangle" || data.tool === "circle") continue; // 2D primitive generator → preview-only (no recipe runner)
     if (data.tool === "graph-source") continue; // graph generator → preview-only (no recipe runner)
     if (data.tool === "grid-source") continue; // canvas grid reference → preview-only (no recipe runner)
     if (data.tool === "segment-source") continue; // segment generator → preview-only (no recipe runner)
@@ -198,13 +200,16 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     }
     // Place Object's recipe handler expects an `objects` array. The node already stores its objects
     // under params.objects (back-compat: an older flat single-object node is normalised here too).
+    // Parametric entries (objectId) resolve their dims from the measured library object BEFORE the
+    // coercion bakes defaults, so the commit places the same footprint the live preview solved.
     if (data.tool === "place-object") {
       params = {
         // Flow Place Object drops selectable "object" NODES (point + NodeMeta) on the canvas — not the
         // dummy footprint-quad walls the Space-tool block emits. The recipe handler reads this flag.
         asObjectNodes: true,
-        objects: placeObjectEntries(data.params).map((o) => ({
+        objects: placeObjectEntries(resolvePlaceObjectParams(data.params)).map((o) => ({
           kind: o.kind,
+          ...(o.objectId ? { objectId: o.objectId } : {}),
           length: o.length,
           breadth: o.breadth,
           height: o.height,

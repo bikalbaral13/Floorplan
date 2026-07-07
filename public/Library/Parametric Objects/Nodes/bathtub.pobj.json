@@ -6,6 +6,8 @@
     { "key": "width", "label": "Width", "kind": "number", "default": 1.7, "min": 1.2, "max": 2.0, "step": 0.05, "unit": "m" },
     { "key": "depth", "label": "Depth", "kind": "number", "default": 0.75, "min": 0.6, "max": 0.9, "step": 0.05, "unit": "m" },
     { "key": "height", "label": "Height", "kind": "number", "default": 0.55, "min": 0.4, "max": 0.7, "step": 0.01, "unit": "m" },
+    { "key": "wallOffset", "label": "Offset from Wall", "kind": "number", "default": 0, "min": -2, "max": 2, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance from Floor", "kind": "number", "default": 0, "min": 0, "max": 2, "step": 0.01, "unit": "m" },
     { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
     { "key": "color", "label": "Colour", "kind": "color", "default": "#38bdf8" }
   ],

@@ -7,6 +7,7 @@ import {
   PLACE_OBJECT_DEFAULT_ENTRY,
   type PlaceObjectEntry,
 } from "./flowTypes";
+import { getFlowObjectLibrary, measureParametricObject, symbolKindForObject } from "./eval/objectFootprints";
 
 /** Multi-object editor for the Place Object node — renders one card per object in `params.objects`,
  *  each repeating the node's per-object field template (kind + length/breadth/position/setback/height/
@@ -39,9 +40,35 @@ export const PlaceObjectEditor = ({
     if (highlightIndex != null) highlightRef.current?.scrollIntoView({ block: "nearest" });
   }, [highlightIndex]);
 
+  // Node-hosted parametric library objects (furniture/fixtures) selectable per entry — the library is
+  // mirrored in by the host (setFlowObjectLibrary), so an empty list just means nothing is imported yet.
+  const libraryObjects = Object.values(getFlowObjectLibrary())
+    .filter((o) => (o.hostKind ?? "node") === "node" && o.meta.symbol !== "settings")
+    .sort((a, b) => a.meta.name.localeCompare(b.meta.name));
+
   const setObjects = (next: PlaceObjectEntry[]) => onParamChange("objects", next);
   const setField = (i: number, key: keyof PlaceObjectEntry, value: unknown) =>
     setObjects(entries.map((e, idx) => (idx === i ? { ...e, [key]: value } : e)));
+  // Pick a parametric object for an entry: store its id and seed the sliders from the object's MEASURED
+  // footprint (bbox) + mesh height, so the solver and the sliders agree; the user may still fine-tune.
+  const pickObject = (i: number, objectId: string) => {
+    if (!objectId) {
+      setObjects(entries.map((e, idx) => {
+        if (idx !== i) return e;
+        const { objectId: _drop, ...rest } = e;
+        return rest as PlaceObjectEntry;
+      }));
+      return;
+    }
+    const file = getFlowObjectLibrary()[objectId];
+    const m = measureParametricObject(objectId);
+    setObjects(entries.map((e, idx) => (idx === i ? {
+      ...e,
+      objectId,
+      ...(m ? { length: +m.lengthM.toFixed(2), breadth: +m.breadthM.toFixed(2), height: +m.heightM.toFixed(2) } : {}),
+      ...(file ? { kind: symbolKindForObject(file) } : {}),
+    } : e)));
+  };
   const toggleLock = (i: number) =>
     setObjects(entries.map((e, idx) => (idx === i ? { ...e, locked: !e.locked } : e)));
   const addObject = () => setObjects([...entries, { ...PLACE_OBJECT_DEFAULT_ENTRY }]);
@@ -88,7 +115,27 @@ export const PlaceObjectEditor = ({
               </button>
             </div>
           </div>
+          {/* Parametric library object picker — "Custom box" keeps the hand-sized footprint; picking an
+              object measures its real footprint into the sliders and commits the actual .pobj node. */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] text-slate-500">Object</span>
+            <select
+              className={`h-6 w-28 rounded border border-slate-200 px-1 text-[10px]${nd}`}
+              value={entry.objectId ?? ""}
+              onChange={(e) => pickObject(i, e.target.value)}
+            >
+              <option value="">Custom box</option>
+              {libraryObjects.map((o) => (
+                <option key={o.meta.id} value={o.meta.id}>{o.meta.name}</option>
+              ))}
+            </select>
+          </div>
+          {entry.objectId && (
+            <div className="text-[9px] leading-3 text-slate-400">size measured from the object — sliders fine-tune</div>
+          )}
           {fields.map((f) => {
+            // The Type (preview symbol) select is auto-derived for parametric entries — hide it.
+            if (f.key === "kind" && entry.objectId) return null;
             const val = entry[f.key as keyof PlaceObjectEntry];
             if (f.kind === "select") {
               return (

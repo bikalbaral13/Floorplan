@@ -1,0 +1,154 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "fan.ceiling.v1",
+    "name": "Ceiling Fan",
+    "category": "Fixtures/Electrical",
+    "icon": {
+      "paths": [
+        "M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0",
+        "M12 10V4",
+        "M12 14v6",
+        "M10 12H4",
+        "M14 12h6"
+      ]
+    }
+  },
+  "parameters": [
+    {
+      "key": "blades",
+      "label": "Blades",
+      "kind": "number",
+      "default": 3,
+      "min": 2,
+      "max": 8,
+      "step": 1
+    },
+    {
+      "key": "radius",
+      "label": "Radius",
+      "kind": "number",
+      "default": 0.6,
+      "min": 0.2,
+      "max": 1.5,
+      "unit": "m"
+    },
+    {
+      "key": "bladeWidth",
+      "label": "Blade Width",
+      "kind": "number",
+      "default": 0.15,
+      "min": 0.05,
+      "max": 0.4,
+      "unit": "m"
+    },
+    {
+      "key": "hubRadius",
+      "label": "Hub Radius",
+      "kind": "number",
+      "default": 0.1,
+      "min": 0.05,
+      "max": 0.3,
+      "unit": "m"
+    },
+    {
+      "key": "rodLength",
+      "label": "Rod Length",
+      "kind": "number",
+      "default": 0.3,
+      "min": 0,
+      "max": 2,
+      "unit": "m"
+    },
+    {
+      "key": "clearance",
+      "label": "Clearance",
+      "kind": "number",
+      "default": 2.4,
+      "min": 0,
+      "max": 10,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "unit": "°"
+    },
+    {
+      "key": "color",
+      "label": "Color",
+      "kind": "color",
+      "default": "#94a3b8"
+    }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "angleStep": "2 * PI / blades",
+      "bw2": "bladeWidth / 2"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Hub",
+            "circle": {
+              "cx": 0,
+              "cy": 0,
+              "r": "hubRadius",
+              "h0": 0,
+              "h1": 0.08
+            }
+          },
+          {
+            "comment": "Rod",
+            "circle": {
+              "cx": 0,
+              "cy": 0,
+              "r": 0.02,
+              "h0": 0.08,
+              "h1": "0.08 + rodLength"
+            }
+          },
+          {
+            "comment": "Blades",
+            "repeat": "blades",
+            "as": "k",
+            "vars": {
+              "a": "k * angleStep",
+              "cosA": "cos(a)",
+              "sinA": "sin(a)"
+            },
+            "poly": {
+              "pts": [
+                [
+                  "hubRadius * cosA - (-bw2) * sinA",
+                  "hubRadius * sinA + (-bw2) * cosA"
+                ],
+                [
+                  "radius * cosA - (-bw2) * sinA",
+                  "radius * sinA + (-bw2) * cosA"
+                ],
+                [
+                  "radius * cosA - (bw2) * sinA",
+                  "radius * sinA + (bw2) * cosA"
+                ],
+                [
+                  "hubRadius * cosA - (bw2) * sinA",
+                  "hubRadius * sinA + (bw2) * cosA"
+                ]
+              ],
+              "h0": 0.03,
+              "h1": 0.05
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

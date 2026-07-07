@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "id": "layout-generation",
+  "title": "Layout Generation",
+  "category": "Layout",
+  "description": "Generate a multi-room layout inside a selected Space. Select a plot/floor Space on the canvas (the Space node grabs it), then press Generate on the Layout Generation node — it runs the floorplan generator and loads it as the editable canvas layout: drag the room seeds, and the connection / repulsion lines show between rooms. Run Annealing optimises the seed positions (simulated annealing). Room count / floor area / SA score feed the Output node; the Input Properties node exposes Min Room Area / Wall Width / SA Iterations as sliders.",
+  "nodes": [
+    {
+      "id": "src",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "id": "",
+          "grabFromSelection": true
+        }
+      }
+    },
+    {
+      "id": "ip",
+      "position": {
+        "x": 0,
+        "y": 220
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "minArea",
+              "name": "Min Room Area",
+              "type": "range",
+              "value": 12,
+              "min": 2,
+              "max": 80,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "wallWidth",
+              "name": "Wall Width",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.05,
+              "max": 0.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "saIterations",
+              "name": "SA Iterations",
+              "type": "range",
+              "value": 600,
+              "min": 50,
+              "max": 3000,
+              "step": 50,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "layoutgen",
+      "position": {
+        "x": 380,
+        "y": 60
+      },
+      "data": {
+        "tool": "layout-gen",
+        "params": {
+          "rooms": [
+            {
+              "label": "Living",
+              "minArea": 18,
+              "maxArea": 0,
+              "maxRatio": 2.5
+            },
+            {
+              "label": "Kitchen",
+              "minArea": 8,
+              "maxArea": 0,
+              "maxRatio": 2.5
+            },
+            {
+              "label": "Bedroom",
+              "minArea": 12,
+              "maxArea": 0,
+              "maxRatio": 2.5
+            },
+            {
+              "label": "Bathroom",
+              "minArea": 4,
+              "maxArea": 0,
+              "maxRatio": 3
+            }
+          ],
+          "algorithm": "bsp",
+          "wallWidth": 0.15,
+          "connections": "Living-Kitchen, Living-Bedroom",
+          "repulsions": "",
+          "saIterations": 600
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 800,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Rooms"
+            },
+            {
+              "id": "s2",
+              "label": "Floor Area (m²)"
+            },
+            {
+              "id": "s3",
+              "label": "SA Score"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "src",
+      "target": "layoutgen",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e2",
+      "source": "ip",
+      "target": "layoutgen",
+      "sourceHandle": "val-minArea",
+      "targetHandle": "valin-minArea"
+    },
+    {
+      "id": "e3",
+      "source": "ip",
+      "target": "layoutgen",
+      "sourceHandle": "val-wallWidth",
+      "targetHandle": "valin-wallWidth"
+    },
+    {
+      "id": "e4",
+      "source": "ip",
+      "target": "layoutgen",
+      "sourceHandle": "val-saIterations",
+      "targetHandle": "valin-saIterations"
+    },
+    {
+      "id": "e5",
+      "source": "layoutgen",
+      "target": "out",
+      "sourceHandle": "val-rooms",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e6",
+      "source": "layoutgen",
+      "target": "out",
+      "sourceHandle": "val-area",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e7",
+      "source": "layoutgen",
+      "target": "out",
+      "sourceHandle": "val-score",
+      "targetHandle": "valin-s3"
+    }
+  ]
+}

@@ -17,6 +17,9 @@ export type PlacedObject = {
   setback?: number;
   clearance?: number;
   kind?: PlacedObjectKind;
+  /** Parametric-object library id (Flow Place Object entries) — the runner places the real .pobj as a
+   *  node ATTACHMENT instead of a 2D-symbol object node. Dims above are already resolved from it. */
+  objectId?: string;
   locked?: boolean;
   accountWallThickness?: boolean;
   /** When true the placement runner emits a selectable "object" NODE (point + NodeMeta) instead of a

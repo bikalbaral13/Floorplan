@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { Upload, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "../../types";
+import { evalParametricRefs, type RefInstance } from "../../flow/eval/parametricObject";
 
 export interface SegmentObjectBlockProps {
   expanded: boolean;
@@ -19,6 +20,14 @@ export interface SegmentObjectBlockProps {
   onUpdateAttachment: (attId: string, patch: Partial<SegmentAttachment>) => void;
   /** Set one Input Property value on an attachment. */
   onUpdateParam: (attId: string, key: string, value: number | string | boolean) => void;
+  /** Set one param override on a NESTED component instance (`ref` inside the object). Enables the
+   *  SketchUp-style Components editor when provided. */
+  onUpdateChildParam?: (attId: string, path: string, key: string, value: number | string | boolean) => void;
+  /** Currently selected nested component (attachment id + ref-instance path) — expands its editor here and
+   *  highlights its geometry on the canvas. */
+  selectedComponent?: { attId: string; path: string } | null;
+  /** Select (path) / deselect (null) a nested component. */
+  onSelectComponent?: (attId: string, path: string | null) => void;
   /** Show host placement controls (position along segment + flip). Off for point hosts like nodes. */
   showPlacement?: boolean;
   /** Heading + empty-state label, so the block reads naturally on a node too. */
@@ -79,6 +88,111 @@ export const ParamField = ({ def, value, onChange }: { def: ParametricObjectPara
   );
 };
 
+/** Nested COMPONENTS editor (SketchUp-style) for one attachment: enumerates the `ref` instances the object
+ *  actually emits with the current params, lets the user select one (canvas highlights it) and edit its
+ *  params per instance. Keys the PARENT binds via the ref's `params` are driven — shown locked with the
+ *  computed value; the rest write to `attachment.childParams[path]`. */
+const AttachmentComponents = ({ att, obj, library, selected, onSelect, onUpdateChildParam }: {
+  att: SegmentAttachment;
+  obj: ParametricObjectFile;
+  library: Record<string, ParametricObjectFile>;
+  selected: { attId: string; path: string } | null;
+  onSelect: (attId: string, path: string | null) => void;
+  onUpdateChildParam: (attId: string, path: string, key: string, value: number | string | boolean) => void;
+}) => {
+  const refs: RefInstance[] = useMemo(() => {
+    if (!obj.geometry) return [];
+    const resolve = (id: string): string | null => (library[id] ? JSON.stringify(library[id]) : null);
+    try { return evalParametricRefs(JSON.stringify(obj), att.params, undefined, resolve, att.childParams); } catch { return []; }
+  }, [obj, library, att.params, att.childParams]);
+  if (refs.length === 0) return null;
+  return (
+    <div className="space-y-1 border-t border-slate-200 pt-1.5">
+      <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Components ({refs.length})</span>
+      <div className="max-h-64 space-y-1 overflow-y-auto">
+      {refs.map((inst) => {
+        const child = library[inst.refId];
+        const isSel = selected?.attId === att.id && selected.path === inst.path;
+        const overrides = att.childParams?.[inst.path] ?? {};
+        return (
+          <div key={inst.path} className={`rounded border ${isSel ? "border-blue-400 bg-blue-50/60" : "border-slate-200 bg-white"}`}>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-1.5 py-1 text-left"
+              onClick={() => onSelect(att.id, isSel ? null : inst.path)}
+              title={isSel ? "Deselect component" : "Select component (highlights on canvas)"}
+            >
+              <span className={`text-[10px] font-medium ${isSel ? "text-blue-700" : "text-slate-600"}`}>
+                {child?.meta.name ?? inst.refId}
+                {!child && <span className="text-rose-500"> (missing)</span>}
+              </span>
+              <span className="font-mono text-[9px] text-slate-400">{inst.path}</span>
+            </button>
+            {isSel && child && (
+              <div className="space-y-1 border-t border-blue-100 px-1.5 py-1.5">
+                {/* Placement — position along the host feature (wall / room boundary) for generator-placed
+                    instances, plus free X/Y nudges + extra rotation for every instance. Stored as reserved
+                    childParams keys (_pos/_dx/_dy/_rot) consumed by the PARENT's placement, not the child. */}
+                {inst.placeable && (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500">Position</span>
+                      <span className="font-mono text-[10px] text-slate-500">{Math.round(Number(overrides._pos ?? inst.pos ?? 50))}%</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={100} step={0.5} className="w-full"
+                      value={Number(overrides._pos ?? inst.pos ?? 50)}
+                      onChange={(e) => onUpdateChildParam(att.id, inst.path, "_pos", parseFloat(e.target.value))}
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-1">
+                  {([["_dx", "Offset X"], ["_dy", "Offset Y"], ["_rot", "Rotate °"]] as const).map(([k, label]) => (
+                    <label key={k} className="block">
+                      <span className="text-[9px] text-slate-400">{label}</span>
+                      <input
+                        type="number" step={k === "_rot" ? 5 : 0.05}
+                        className="mt-0.5 h-6 w-full rounded border border-slate-200 bg-white px-1 text-[10px] font-mono"
+                        value={typeof overrides[k] === "number" ? (overrides[k] as number) : 0}
+                        onChange={(e) => { const n = parseFloat(e.target.value); if (isFinite(n)) onUpdateChildParam(att.id, inst.path, k, n); }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                {child.parameters.map((def) => {
+                  const bound = Object.prototype.hasOwnProperty.call(inst.bound, def.key);
+                  if (bound) {
+                    // Driven by the parent's ref binding — value comes from the parent's scope, locked here.
+                    return (
+                      <div key={def.key} className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-slate-400">{def.label}{def.unit ? ` (${def.unit})` : ""}</span>
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-500" title="Driven by the parent object">
+                          {String(inst.bound[def.key])} · driven
+                        </span>
+                      </div>
+                    );
+                  }
+                  // Soft-bound keys initialise to the parent's suggested value; an instance override wins.
+                  const soft = Object.prototype.hasOwnProperty.call(inst.soft, def.key) ? inst.soft[def.key] : undefined;
+                  return (
+                    <ParamField
+                      key={def.key}
+                      def={def}
+                      value={overrides[def.key] ?? soft}
+                      onChange={(val) => onUpdateChildParam(att.id, inst.path, def.key, val)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      </div>
+    </div>
+  );
+};
+
 /** Segment Properties block to attach parametric objects (Door / Window / …) loaded from files. Import a
  *  `.pobj.json` into the project library, attach an instance to the segment, then edit its Input
  *  Properties + position here. */
@@ -131,6 +245,17 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
                 {obj?.parameters.map((def) => (
                   <ParamField key={def.key} def={def} value={att.params[def.key]} onChange={(val) => p.onUpdateParam(att.id, def.key, val)} />
                 ))}
+                {/* Nested components (ref rules) — select + edit per instance, SketchUp-style. */}
+                {obj && p.onUpdateChildParam && p.onSelectComponent && (
+                  <AttachmentComponents
+                    att={att}
+                    obj={obj}
+                    library={p.library}
+                    selected={p.selectedComponent ?? null}
+                    onSelect={p.onSelectComponent}
+                    onUpdateChildParam={p.onUpdateChildParam}
+                  />
+                )}
                 {/* Host placement (segment only — a node is a point). */}
                 {p.showPlacement !== false && (
                   <>

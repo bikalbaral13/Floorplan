@@ -14,9 +14,20 @@
 import type { Point } from "../../types";
 import type { FlowMeshPrism } from "./meshTypes";
 import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
+// The package ships an ESM bundle whose only export is `default`, but its .d.ts declares named
+// exports — so resolve the callable object defensively across bundler/interop modes.
+import * as PolygonClippingNS from "polygon-clipping";
 // Flow op adapters reused verbatim by the pipeline runner — a pobj `pipeline` calls the SAME functions the
 // Flow editor dispatches to, so an object renders identically to the flow it was authored from.
 import { evalInset, evalOptimise, evalSplit } from "./evalNodes";
+
+// Boolean-ops handle for the optional per-rule `clip` (intersect a closed shape with the host footprint).
+type ClipRing = [number, number][];
+type ClipPolygon = ClipRing[];
+type ClipMultiPolygon = ClipPolygon[];
+const pc: { intersection: (subject: ClipMultiPolygon | ClipPolygon, ...clips: (ClipMultiPolygon | ClipPolygon)[]) => ClipMultiPolygon } =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (PolygonClippingNS as any).default ?? (PolygonClippingNS as any);
 
 // ── Expression language ──────────────────────────────────────────────────────────────────────────────
 // Grammar (low→high precedence): ternary, ||, &&, == !=, < <= > >=, + -, * / %, unary - !, primary
@@ -160,10 +171,17 @@ const evalTruthy = (expr: unknown, sc: Scope): boolean => (expr == null ? true :
 // e.g. a door leaf rotated by its swing angle); a `line` rule is an open polyline (e.g. a swing arc, a
 // window's glazing/operation lines). Closed shapes fill + outline in plan and extrude h0→h1 in 3D; open
 // shapes only stroke in plan (no fill, no 3D). So one definition drives plan AND 3D from the same params.
-interface Shape { pts: Point[]; closed: boolean; h0: number; h1: number; ref?: boolean; }
+/** `src` names the ref-instance PATH a shape came from (e.g. "door.single.v1" or "stair/door[2]") — unset on
+ *  the object's own shapes. It survives into the 2D/3D projections so hosts can highlight / hit-test a nested
+ *  component (SketchUp-style) without the engine knowing about selection. `color` is the CHILD's own resolved
+ *  colour — composed doors stay door-coloured instead of inheriting the parent tint. */
+interface Shape { pts: Point[]; closed: boolean; h0: number; h1: number; ref?: boolean; src?: string; color?: string; }
 /** `refLines` are dashed construction/reference outlines (e.g. a massing pipeline's inset polygon, split
- *  line, optimise rectangle) — drawn in 2D only, never filled or extruded. */
-export interface ParametricGeometry { fill: Point[][]; lines: Point[][]; color: string; refLines: Point[][]; }
+ *  line, optimise rectangle) — drawn in 2D only, never filled or extruded.
+ *  `fillSrc`/`lineSrc` parallel `fill`/`lines`: the ref-instance path of each polyline (undefined = the
+ *  object's own geometry) so hosts can tint a selected nested component. `fillColor`/`lineColor` parallel
+ *  them too: a composed child's own colour (undefined = use the object-level `color`). */
+export interface ParametricGeometry { fill: Point[][]; lines: Point[][]; color: string; refLines: Point[][]; fillSrc?: (string | undefined)[]; lineSrc?: (string | undefined)[]; fillColor?: (string | undefined)[]; lineColor?: (string | undefined)[]; }
 
 const MAX_SHAPES = 4000;
 const MAX_REPEAT = 1000;
@@ -173,9 +191,26 @@ const MAX_REF_DEPTH = 8;
 /** Resolves a referenced object's id (`meta.id`) → its definition JSON text, or null if unknown. Supplied by
  *  the host (built from the object library) so the engine can COMPOSE objects without bundling the library. */
 export type ObjectResolver = (id: string) => string | null;
-/** Threaded through nested evaluation for `ref` rules: how to resolve children, current depth, and the set of
- *  ids already on the stack (cycle guard). Absent → `ref` rules are skipped (engine stays self-contained). */
-interface RefCtx { resolve?: ObjectResolver; depth: number; seen: Set<string>; }
+/** Per-INSTANCE parameter overrides for nested components, keyed by ref-instance path → {paramKey: value}.
+ *  Stored by the host on the attachment (SketchUp-style "edit the nested door of THIS core"). Keys the parent
+ *  binds via the rule's `params` stay DRIVEN — an instance override never beats a parent binding. */
+export type ChildParams = Record<string, Record<string, number | string | boolean>>;
+/** One ref instance actually emitted during evaluation (when/case/repeat already applied): its stable path,
+ *  the referenced object id, and the parent-bound param values (these render locked in a component editor).
+ *  `soft` holds SOFT-bound values (rule `defaults` / generator suggestions): used as the child's defaults but
+ *  an instance override WINS — the editor shows them editable, initialised to the computed value. `placeable`
+ *  marks instances whose position is host-parameterised (a `_pos` 0–100 slider applies); `pos` echoes the
+ *  resolved position so the slider initialises correctly. */
+export interface RefInstance { path: string; refId: string; bound: Record<string, number | string | boolean>; soft: Record<string, number | string | boolean>; placeable?: boolean; pos?: number; }
+/** Reserved per-instance PLACEMENT override keys (stored in the same childParams map as param overrides,
+ *  but consumed by the PARENT's placement instead of the child's scope): `_pos` = 0–100 position along the
+ *  host feature (wall / room boundary) for placeable instances; `_dx`/`_dy` = metre nudges in the parent's
+ *  local frame; `_rot` = extra rotation in degrees. */
+const PLACE_KEYS = new Set(["_pos", "_dx", "_dy", "_rot"]);
+/** Threaded through nested evaluation for `ref` rules: how to resolve children, current depth, the set of
+ *  ids already on the stack (cycle guard), the instance-path prefix, per-instance overrides, and an optional
+ *  collector filled with each emitted instance. Absent → `ref` rules are skipped (engine stays self-contained). */
+interface RefCtx { resolve?: ObjectResolver; depth: number; seen: Set<string>; path?: string; childParams?: ChildParams; refs?: RefInstance[]; }
 const asObj = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 const asArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -195,8 +230,16 @@ const rectPts = (x0: number, y0: number, x1: number, y1: number): Point[] => [{ 
 interface Rect { x0: number; y0: number; x1: number; y1: number; }
 interface WallSeg { x0: number; y0: number; x1: number; y1: number; }
 
-function generateFloorplan(sc: Scope, shapes: Shape[]): void {
+/** Placement contract for composed children (see instantiateRef): literal {x,y,rot} or a function of the
+ *  instance's `_pos` override returning the placement + the resolved pct (for the UI slider). */
+type EmitRef = (
+  refId: string, baseSeg: string, hard: Record<string, unknown>, soft: Record<string, unknown>,
+  place: { x: number; y: number; rot: number; scl?: number } | ((pos: number | undefined) => { x: number; y: number; rot: number; scl?: number; pos?: number }),
+) => boolean;
+
+function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?: (baseSeg: string, key: string) => number | string | boolean | undefined): void {
   const num = (k: string, d: number): number => { const v = sc[k]; const n = typeof v === "number" ? v : Number(v); return Number.isFinite(n) ? n : d; };
+  const flag = (k: string): boolean => { const v = sc[k]; return v === true || v === 1 || v === "true"; };
   const W = Math.max(2, num("W", 10));
   const D = Math.max(2, num("D", 8));
   const rooms = Math.max(1, Math.min(40, Math.round(num("rooms", 4))));
@@ -206,72 +249,180 @@ function generateFloorplan(sc: Scope, shapes: Shape[]): void {
   const lintel = Math.max(sill + 0.1, num("lintelHeight", 2.1));
   const dw = Math.max(0.5, num("doorWidth", 0.9));
   const winw = Math.max(0.3, num("windowWidth", 1.2));
-  const rv = sc["random"];
-  const random = rv === true || rv === 1 || rv === "true";
+  const random = flag("random");
   const rng = mulberry32(Math.max(1, Math.round(num("seed", 1))));
   const ox = -W / 2, oy = -D / 2;
 
-  // Seeded BSP: split to exactly `rooms` leaves, recording each split line as a partition wall.
+  // Seeded BSP: split to exactly `rooms` leaves, recording each split line as a partition wall + each leaf
+  // cell. ROOMS AS SEEDS: every leaf except the first is the FIRST leaf of exactly one split's B-group
+  // (pre-order recursion ⇒ a bijection), so that room's `_pos` slider (peeked BEFORE splitting) overrides
+  // THAT split's ratio (0→0.2 … 100→0.8) — sliding a room moves the split line that carves it. The pct
+  // actually used is recorded per room so its slider initialises to the live split position.
   const walls: WallSeg[] = [];
-  const rec = (r: Rect, n: number): void => {
-    if (n <= 1 || shapes.length > MAX_SHAPES) return;
+  const leaves: Rect[] = [];
+  const splitPctByRoom = new Map<number, number>();
+  const rec = (r: Rect, n: number, leafStart: number): void => {
+    if (n <= 1 || shapes.length > MAX_SHAPES) { leaves.push(r); return; }
     const na = Math.floor(n / 2), nb = n - na;
     const w = r.x1 - r.x0, h = r.y1 - r.y0;
     let ratio = na / n;
     if (random) ratio += (rng() - 0.5) * 0.2;
+    const controller = leafStart + na;
+    const posOv = peek?.(`room[${controller}]`, "_pos");
+    if (typeof posOv === "number") ratio = 0.2 + (Math.min(100, Math.max(0, posOv)) / 100) * 0.6;
     ratio = Math.max(0.2, Math.min(0.8, ratio));
+    splitPctByRoom.set(controller, ((ratio - 0.2) / 0.6) * 100);
     if (w >= h) {
       const xs = r.x0 + w * ratio;
       walls.push({ x0: xs, y0: r.y0, x1: xs, y1: r.y1 });
-      rec({ ...r, x1: xs }, na); rec({ ...r, x0: xs }, nb);
+      rec({ ...r, x1: xs }, na, leafStart); rec({ ...r, x0: xs }, nb, leafStart + na);
     } else {
       const ys = r.y0 + h * ratio;
       walls.push({ x0: r.x0, y0: ys, x1: r.x1, y1: ys });
-      rec({ ...r, y1: ys }, na); rec({ ...r, y0: ys }, nb);
+      rec({ ...r, y1: ys }, na, leafStart); rec({ ...r, y0: ys }, nb, leafStart + na);
     }
   };
-  rec({ x0: 0, y0: 0, x1: W, y1: D }, rooms);
+  rec({ x0: 0, y0: 0, x1: W, y1: D }, rooms, 0);
   const partitionCount = walls.length;
   // Perimeter walls.
   walls.push({ x0: 0, y0: 0, x1: W, y1: 0 }, { x0: 0, y0: D, x1: W, y1: D }, { x0: 0, y0: 0, x1: 0, y1: D }, { x0: W, y0: 0, x1: W, y1: D });
 
   // Floor slab (just below the walls).
   shapes.push({ pts: rectPts(ox, oy, ox + W, oy + D), closed: true, h0: -0.02, h1: 0 });
-  // Wall boxes (extruded to wall height).
-  for (const s of walls) {
+
+  // Rooms: each BSP leaf is a COMPOSED Room child (`room[k]`) — clear width/depth HARD-bound to the leaf,
+  // constraints (min/max area, max ratio) free per instance, the light fill making the whole room clickable
+  // on canvas. The Position slider of every room except room[0] drives its OWN BSP split (see above).
+  for (let k = 0; k < leaves.length; k++) {
+    const r = leaves[k];
+    const cwid = r.x1 - r.x0 - ww, cdep = r.y1 - r.y0 - ww;
+    if (cwid < 0.3 || cdep < 0.3) continue;
+    const cx = ox + (r.x0 + r.x1) / 2, cy = oy + (r.y0 + r.y1) / 2;
+    const pct = splitPctByRoom.get(k);
+    emitRef?.(
+      "room.v1", `room[${k}]`, { width: cwid, depth: cdep }, {},
+      pct == null ? { x: cx, y: cy, rot: 0 } : () => ({ x: cx, y: cy, rot: 0, pos: pct }),
+    );
+  }
+
+  // Walls: COMPOSED from the library Wall when possible (instance path `wall[k]` — so each wall's thickness
+  // and height are individually overridable; hatch poché comes from the wall object). Length + mitre cuts
+  // are HARD (the plan owns layout and joints); thickness/height are SOFT. Perimeter runs (the last 4) meet
+  // on TRUE MITRED diagonals — exact centreline lengths with ±1 end cuts (outer corner extends, inner
+  // retracts), so corners join seam-to-seam with no overlap in 2D or 3D; partitions butt in square. Falls
+  // back to the inline (half-thickness-extended) box without a library.
+  const perimMiters: [number, number][] = [[-1, -1], [1, 1], [1, 1], [-1, -1]]; // bottom, top, left, right
+  for (let wi = 0; wi < walls.length; wi++) {
+    const s = walls[wi];
     const vert = Math.abs(s.x1 - s.x0) < 1e-6;
+    const perim = wi >= partitionCount;
+    const [mA, mB] = perim ? perimMiters[wi - partitionCount] : [0, 0];
+    const len = vert ? s.y1 - s.y0 : s.x1 - s.x0;
+    const composed = emitRef?.(
+      "wall.segment.v1", `wall[${wi}]`, { length: len, miterA: mA, miterB: mB }, { thickness: ww, height: wh },
+      { x: ox + (s.x0 + s.x1) / 2, y: oy + (s.y0 + s.y1) / 2, rot: vert ? 90 : 0 },
+    );
+    if (composed) continue;
+    const ext = perim ? ww : 0;
     const pts = vert
-      ? rectPts(ox + s.x0 - ww / 2, oy + s.y0, ox + s.x0 + ww / 2, oy + s.y1)
-      : rectPts(ox + s.x0, oy + s.y0 - ww / 2, ox + s.x1, oy + s.y0 + ww / 2);
+      ? rectPts(ox + s.x0 - ww / 2, oy + s.y0 - ext / 2, ox + s.x0 + ww / 2, oy + s.y1 + ext / 2)
+      : rectPts(ox + s.x0 - ext / 2, oy + s.y0 - ww / 2, ox + s.x1 + ext / 2, oy + s.y0 + ww / 2);
     shapes.push({ pts, closed: true, h0: 0, h1: wh });
   }
 
-  // Door swing symbol (2D): hinge + open leaf + quarter-circle arc. `vert` walls open into +x, else +y.
-  const door = (cx: number, cy: number, vert: boolean): void => {
-    const hx = ox + cx, hy = oy + cy;
+  // Opening spans: a door/window slides ONLY within ITS room edge, not the full split line / facade.
+  // For a partition: the longest overlap between a leaf pair facing each other across it (the actual
+  // doorway wall of two rooms). For a facade: the widest single leaf edge on that side.
+  const EPS = 1e-6;
+  const doorSpanOnPartition = (s: WallSeg, vert: boolean): [number, number] | null => {
+    let best: [number, number] | null = null;
+    for (const a of leaves) {
+      for (const b of leaves) {
+        const facing = vert
+          ? Math.abs(a.x1 - s.x0) < EPS && Math.abs(b.x0 - s.x0) < EPS
+          : Math.abs(a.y1 - s.y0) < EPS && Math.abs(b.y0 - s.y0) < EPS;
+        if (!facing) continue;
+        const lo = Math.max(vert ? a.y0 : a.x0, vert ? b.y0 : b.x0, vert ? s.y0 : s.x0);
+        const hi = Math.min(vert ? a.y1 : a.x1, vert ? b.y1 : b.x1, vert ? s.y1 : s.x1);
+        if (hi - lo >= dw + 0.3 && (!best || hi - lo > best[1] - best[0])) best = [lo, hi];
+      }
+    }
+    return best;
+  };
+  const facadeSpan = (side: "bottom" | "top" | "left" | "right", minLen: number): [number, number] | null => {
+    let best: [number, number] | null = null;
+    for (const l of leaves) {
+      const on = side === "bottom" ? Math.abs(l.y0) < EPS : side === "top" ? Math.abs(l.y1 - D) < EPS
+        : side === "left" ? Math.abs(l.x0) < EPS : Math.abs(l.x1 - W) < EPS;
+      if (!on) continue;
+      const span: [number, number] = side === "bottom" || side === "top" ? [l.x0, l.x1] : [l.y0, l.y1];
+      if (span[1] - span[0] >= minLen && (!best || span[1] - span[0] > best[1] - best[0])) best = span;
+    }
+    return best;
+  };
+
+  // Door: COMPOSED from the library Door when possible (instance path `door[k]`), positioned by `_pos`
+  // WITHIN its room-edge span (clamped clear of the span ends). `vert` walls open into +x (rotation 270),
+  // else +y. Falls back to the inline hinge + leaf + quarter-arc symbol without a library.
+  let doorIdx = 0;
+  const door = (fixed: number, span: [number, number], vert: boolean, defPct: number): void => {
+    const [a, b] = span;
+    const lo = a + dw / 2 + 0.15, hi = b - dw / 2 - 0.15;
+    const at = (pct: number) => Math.min(hi, Math.max(lo, a + (pct / 100) * (b - a)));
+    const composed = emitRef?.(
+      "door.single.v1", `door[${doorIdx++}]`, { width: dw, height: Math.min(2.1, wh) }, {},
+      (pos) => {
+        const pct = typeof pos === "number" ? pos : defPct;
+        const c = at(pct);
+        return vert ? { x: ox + fixed, y: oy + c, rot: 270, pos: pct } : { x: ox + c, y: oy + fixed, rot: 0, pos: pct };
+      },
+    );
+    if (composed) return;
+    const c = at(defPct);
+    const hx = vert ? ox + fixed : ox + c - dw / 2, hy = vert ? oy + c - dw / 2 : oy + fixed;
     const arc: Point[] = [];
     for (let i = 0; i <= 8; i++) {
-      const a = (i / 8) * (Math.PI / 2);
-      arc.push(vert ? { x: hx + dw * Math.sin(a), y: hy + dw * Math.cos(a) } : { x: hx + dw * Math.cos(a), y: hy + dw * Math.sin(a) });
+      const ang = (i / 8) * (Math.PI / 2);
+      arc.push(vert ? { x: hx + dw * Math.sin(ang), y: hy + dw * Math.cos(ang) } : { x: hx + dw * Math.cos(ang), y: hy + dw * Math.sin(ang) });
     }
     const tip = vert ? { x: hx + dw, y: hy } : { x: hx, y: hy + dw };
     shapes.push({ pts: [{ x: hx, y: hy }, tip], closed: false, h0: 0, h1: 0 });
     shapes.push({ pts: arc, closed: false, h0: 0, h1: 0 });
   };
-  // A door on each partition wall (centred), if the wall is long enough.
+  // A door on each partition wall — inside the longest facing-room span (skip when nothing fits).
   for (let i = 0; i < partitionCount; i++) {
     const s = walls[i];
     const vert = Math.abs(s.x1 - s.x0) < 1e-6;
-    const len = vert ? s.y1 - s.y0 : s.x1 - s.x0;
-    if (len < dw + 0.3) continue;
-    if (vert) door(s.x0, (s.y0 + s.y1) / 2 - dw / 2, true);
-    else door((s.x0 + s.x1) / 2 - dw / 2, s.y0, false);
+    const span = doorSpanOnPartition(s, vert);
+    if (!span) continue;
+    door(vert ? s.x0 : s.y0, span, vert, 50);
   }
-  // Entrance door on the bottom edge.
-  door(W / 2 - dw / 2, 0, false);
+  // Entrance door on the bottom edge — within the widest bottom room's edge.
+  const entranceSpan = facadeSpan("bottom", dw + 0.3) ?? [0, W];
+  door(0, entranceSpan, false, 50);
 
-  // Window: a 2D glazing line on the wall centreline + a 3D glazing box (sill → lintel). One per edge.
-  const win = (cx: number, cy: number, horizontal: boolean): void => {
+  // Window: COMPOSED from the library Window when possible (instance path `window[k]`), positioned by
+  // `_pos` WITHIN the widest room edge on its facade; sill/lintel drive its 3D glazing. Falls back to the
+  // inline glazing line + sill→lintel box. One per facade.
+  let winIdx = 0;
+  const win = (side: "bottom" | "top" | "left" | "right", defPct: number): void => {
+    const horizontal = side === "bottom" || side === "top";
+    const fixed = side === "bottom" ? 0 : side === "top" ? D : side === "left" ? 0 : W;
+    const span = facadeSpan(side, winw + 0.4) ?? (horizontal ? [0, W] as [number, number] : [0, D] as [number, number]);
+    const [a, b] = span;
+    const lo = a + winw / 2 + 0.2, hi = b - winw / 2 - 0.2;
+    const at = (pct: number) => Math.min(hi, Math.max(lo, a + (pct / 100) * (b - a)));
+    const composed = emitRef?.(
+      "window.standard.v1", `window[${winIdx++}]`,
+      { width: winw, thickness: ww, sillHeight: sill, lintelHeight: lintel }, {},
+      (pos) => {
+        const pct = typeof pos === "number" ? pos : defPct;
+        const c = at(pct);
+        return horizontal ? { x: ox + c, y: oy + fixed, rot: 0, pos: pct } : { x: ox + fixed, y: oy + c, rot: 90, pos: pct };
+      },
+    );
+    if (composed) return;
+    const c = at(defPct), cx = horizontal ? c : fixed, cy = horizontal ? fixed : c;
     if (horizontal) {
       shapes.push({ pts: [{ x: ox + cx - winw / 2, y: oy + cy }, { x: ox + cx + winw / 2, y: oy + cy }], closed: false, h0: 0, h1: 0 });
       shapes.push({ pts: rectPts(ox + cx - winw / 2, oy + cy - ww / 2, ox + cx + winw / 2, oy + cy + ww / 2), closed: true, h0: sill, h1: lintel });
@@ -280,7 +431,65 @@ function generateFloorplan(sc: Scope, shapes: Shape[]): void {
       shapes.push({ pts: rectPts(ox + cx - ww / 2, oy + cy - winw / 2, ox + cx + ww / 2, oy + cy + winw / 2), closed: true, h0: sill, h1: lintel });
     }
   };
-  win(W / 2, 0, true); win(W / 2, D, true); win(0, D / 2, false); win(W, D / 2, false);
+  win("bottom", 25);  // 25% keeps clear of the entrance when they share the room edge
+  win("top", 50);
+  win("left", 50);
+  win("right", 50);
+
+  // Furnish (composition only — needs the library): rooms get ROLES by size — the largest leaf is the
+  // LIVING room (sofa + TV unit + dining table), the smallest (when ≥3 rooms) is the BATHROOM (toilet +
+  // sink), every other big-enough cell is a BEDROOM (bed + wardrobe). Each piece is placed ALONG ITS ROOM'S
+  // BOUNDARY (back to the wall, facing inward) at a per-instance `_pos` (0–100 around the room perimeter,
+  // walking bottom → right → top → left), so every piece can be slid around its room from Properties.
+  if (flag("furnish") && emitRef) {
+    const cells = leaves
+      .map((r) => ({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, area: (r.x1 - r.x0) * (r.y1 - r.y0) }))
+      .sort((a, b) => b.area - a.area);
+    // Boundary placer for one piece in one cell: `back` = clearance from the wall face to the piece origin.
+    const alongBoundary = (cell: Rect, refId: string, seg: string, back: number, defPct: number): void => {
+      const x0 = cell.x0 + ww / 2 + back, x1 = cell.x1 - ww / 2 - back;
+      const y0 = cell.y0 + ww / 2 + back, y1 = cell.y1 - ww / 2 - back;
+      const w = x1 - x0, h = y1 - y0;
+      if (w < 0.3 || h < 0.3) return;
+      const P = 2 * (w + h);
+      emitRef(refId, seg, {}, {}, (pos) => {
+        const pct = typeof pos === "number" ? Math.min(100, Math.max(0, pos)) : defPct;
+        let d = (pct / 100) * P;
+        // bottom → right → top → left; back always to the nearer wall (child "back" convention: +Y local).
+        if (d <= w) return { x: ox + x0 + d, y: oy + y0, rot: 180, pos: pct };
+        d -= w;
+        if (d <= h) return { x: ox + x1, y: oy + y0 + d, rot: 270, pos: pct };
+        d -= h;
+        if (d <= w) return { x: ox + x1 - d, y: oy + y1, rot: 0, pos: pct };
+        d -= w;
+        return { x: ox + x0, y: oy + y1 - Math.min(d, h), rot: 90, pos: pct };
+      });
+    };
+    // Default positions as perimeter pcts: mid-bottom / mid-right / mid-top of the piece's own inset ring.
+    const pcts = (cell: Rect, back: number) => {
+      const w = cell.x1 - cell.x0 - ww - 2 * back, h = cell.y1 - cell.y0 - ww - 2 * back;
+      const P = Math.max(0.01, 2 * (w + h));
+      return { bottom: (w / 2 / P) * 100, right: ((w + h / 2) / P) * 100, top: ((w + h + w / 2) / P) * 100 };
+    };
+    let bedIdx = 0;
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i];
+      const cw = c.x1 - c.x0, chh = c.y1 - c.y0;
+      const isBath = cells.length >= 3 && i === cells.length - 1;
+      if (i === 0) {
+        if (cw >= 2.6 && chh >= 2.2) alongBoundary(c, "sofa.v2", "sofa[0]", 0.55, pcts(c, 0.55).bottom);
+        if (cw >= 2.4 && chh >= 2.2) alongBoundary(c, "tv-unit.v1", "tv[0]", 0.25, pcts(c, 0.25).top);
+        if (cw >= 3.4 && chh >= 3.4) alongBoundary(c, "table.dining.v1", "table[0]", 1.2, pcts(c, 1.2).right);
+      } else if (isBath) {
+        alongBoundary(c, "toilet.v1", "toilet[0]", 0.4, 12);
+        alongBoundary(c, "sink.v1", "sink[0]", 0.3, 60);
+      } else if (cw >= 2.4 && chh >= 2.8) {
+        alongBoundary(c, "bed.v2", `bed[${bedIdx}]`, 1.15, pcts(c, 1.15).bottom);
+        if (cw >= 3.0) alongBoundary(c, "wardrobe.v2", `wardrobe[${bedIdx}]`, 0.35, pcts(c, 0.35).top);
+        bedIdx++;
+      }
+    }
+  }
 }
 
 /** The neutral model: the shape stack plus its colour + plan rotation. Both the 2D plan and the 3D mesh are
@@ -298,6 +507,27 @@ const ringArea = (pts: Point[]): number => {
   let a = 0;
   for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p.x * q.y - q.x * p.y; }
   return Math.abs(a) / 2;
+};
+
+/** Host-derived scope vars available to every expression: `hostArea` (m²) plus the host bounding box in
+ *  LOCAL METRES (origin at the anchor/centroid, so min/max are signed): `hostMinX/hostMaxX/hostMinY/
+ *  hostMaxY` and the spans `hostW`/`hostH`. All 0 without a host, so self-contained objects are unaffected. */
+const injectHostScope = (scope: Scope, host?: Point[]): void => {
+  const ok = !!host && host.length >= 3;
+  scope.hostArea = ok ? ringArea(host!) : 0;
+  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  if (ok) {
+    minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+    for (const p of host!) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  scope.hostMinX = minX; scope.hostMaxX = maxX;
+  scope.hostMinY = minY; scope.hostMaxY = maxY;
+  scope.hostW = maxX - minX; scope.hostH = maxY - minY;
 };
 
 // ── Op pipeline (the "dissolved flow") ───────────────────────────────────────────────────────────────
@@ -421,10 +651,27 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
     if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") scope[k] = v;
   }
   scope.PI = Math.PI;
-  // Host footprint area (m²) — handy for area-driven rules; 0 when there's no host.
-  scope.hostArea = host && host.length >= 3 ? ringArea(host) : 0;
+  // Host footprint area (m²) + bounding box — handy for area/bbox-driven rules; all 0 without a host.
+  injectHostScope(scope, host);
   const color = typeof scope.color === "string" && scope.color ? scope.color : "#0f766e";
   const rotationDeg = Number(scope.rotation) || 0;
+
+  // Reserved placement params (declared per-object, both default 0; no-ops when absent): `wallOffset`
+  // nudges the WHOLE plan geometry along the object's local −Y before the rotation is applied — the
+  // "offset from wall" knob for furniture (sign flips the side); `clearance` lifts every shape's height
+  // span, raising the 3D mesh off the floor (wall-hung tv-units, mirrors, counters) without touching the
+  // 2D plan. Flat 2D-only shapes (h0 === h1) stay flat — they lift equally and still emit no prism.
+  const wallOffsetM = Number(scope.wallOffset) || 0;
+  const clearanceM = Number(scope.clearance) || 0;
+  const applyPlacementOffsets = (shs: Shape[]): Shape[] => {
+    if (!wallOffsetM && !clearanceM) return shs;
+    return shs.map((sh) => ({
+      ...sh,
+      pts: wallOffsetM ? sh.pts.map((p) => ({ x: p.x, y: p.y - wallOffsetM })) : sh.pts,
+      h0: sh.h0 + clearanceM,
+      h1: sh.h1 + clearanceM,
+    }));
+  };
 
   const geom = asObj(def.geometry);
   if (!geom) return { shapes: [], color, rotationDeg };
@@ -440,7 +687,7 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
   // A `pipeline` (op list) takes precedence over `cases`/`rules`: run the dissolved-flow ops over the host
   // footprint and return their Shape stack directly.
   const pipeline = asArr(geom.pipeline);
-  if (pipeline.length > 0) return { shapes: runObjectPipeline(pipeline, host, scope), color, rotationDeg };
+  if (pipeline.length > 0) return { shapes: applyPlacementOffsets(runObjectPipeline(pipeline, host, scope)), color, rotationDeg };
 
   // First matching case (no `when` ⇒ always matches).
   let chosen: Record<string, unknown> | null = null;
@@ -455,44 +702,129 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
   applyVars(chosen.vars, sc);
 
   const shapes: Shape[] = [];
+  // Stable ref-instance paths: `rule.id` (author-set) ?? the ref id, plus `[i]` for repeat iterations and a
+  // `#n` suffix when the same base occurs again (rule order — stable while the geometry doesn't restructure).
+  const refPathCounts = new Map<string, number>();
+  /** Instantiate a referenced object and merge its transformed shapes — the ONE composition primitive,
+   *  shared by declarative `ref` rules and procedural generators (BSP floorplan). `baseSeg` is the instance
+   *  path segment before occurrence disambiguation (e.g. "door" / "window[3]").
+   *  Override precedence per key: `hard` (parent-bound, always driven) > per-instance `childParams` >
+   *  `soft` (parent suggestions the instance may override) > the child's own defaults.
+   *  `place` is either a literal placement or a FUNCTION of the instance's `_pos` (0–100) — how generators
+   *  offer host-parameterised positions (along a wall / a room boundary); the resolved pct is echoed into
+   *  ctx.refs so a UI slider initialises right. `_dx`/`_dy`/`_rot` instance keys nudge any placement.
+   *  Tags every merged shape with the full path (`src`) + the child's own colour. Returns false when
+   *  composition is unavailable (no resolver / unknown id / cycle) so callers can fall back inline. */
+  const instantiateRef = (
+    refId: string, baseSeg: string,
+    hard: Record<string, unknown>, soft: Record<string, unknown>,
+    place: { x: number; y: number; rot: number; scl?: number } | ((pos: number | undefined) => { x: number; y: number; rot: number; scl?: number; pos?: number }),
+  ): boolean => {
+    if (!ctx?.resolve || ctx.depth >= MAX_REF_DEPTH || ctx.seen.has(refId)) return false;
+    const childText = ctx.resolve(refId);
+    if (!childText) return false;
+    let seg = baseSeg;
+    const occ = refPathCounts.get(seg) ?? 0;
+    refPathCounts.set(seg, occ + 1);
+    if (occ > 0) seg = `${seg}#${occ}`;
+    const fullPath = ctx.path ? `${ctx.path}/${seg}` : seg;
+    // Split the instance overrides: reserved placement keys stay with the PARENT; the rest go to the child.
+    const instAll = ctx.childParams?.[fullPath] ?? {};
+    const instParams: Record<string, number | string | boolean> = {};
+    for (const [k, v] of Object.entries(instAll)) if (!PLACE_KEYS.has(k)) instParams[k] = v;
+    const posOv = typeof instAll._pos === "number" ? instAll._pos : undefined;
+    const dx = typeof instAll._dx === "number" ? instAll._dx : 0;
+    const dy = typeof instAll._dy === "number" ? instAll._dy : 0;
+    const drot = typeof instAll._rot === "number" ? instAll._rot : 0;
+    const placed = typeof place === "function" ? place(posOv) : place;
+    ctx.refs?.push({
+      path: fullPath, refId,
+      bound: { ...(hard as Record<string, number | string | boolean>) },
+      soft: { ...(soft as Record<string, number | string | boolean>) },
+      placeable: typeof place === "function",
+      pos: typeof place === "function" ? (placed.pos ?? posOv) : undefined,
+    });
+    const merged = { ...soft, ...instParams, ...hard };
+    const child = buildParametricShapes(childText, merged, undefined, {
+      resolve: ctx.resolve, depth: ctx.depth + 1, seen: new Set([...ctx.seen, refId]),
+      path: fullPath, childParams: ctx.childParams, refs: ctx.refs,
+    });
+    if (!child) return false;
+    // The placement rotation + `_rot` + the child's own `rotation` param all rotate about the child origin.
+    const th = (placed.rot + drot + (child.rotationDeg || 0)) * Math.PI / 180;
+    const cs = Math.cos(th), sn = Math.sin(th);
+    const tx = placed.x + dx, ty = placed.y + dy, scl = placed.scl ?? 1;
+    for (const csh of child.shapes) {
+      if (shapes.length >= MAX_SHAPES) break;
+      shapes.push({
+        pts: csh.pts.map((p) => ({ x: tx + (p.x * cs - p.y * sn) * scl, y: ty + (p.x * sn + p.y * cs) * scl })),
+        closed: csh.closed, h0: csh.h0, h1: csh.h1, src: csh.src ?? fullPath, color: csh.color ?? child.color,
+      });
+    }
+    return true;
+  };
+  // Optional rule-level `clip` (an expression) on box/circle/poly: truthy ⇒ the closed shape is
+  // INTERSECTED with the host footprint (a piece per intersection polygon; the shape vanishes when fully
+  // outside). Lets a band span the host bbox yet stay inside a non-rectangular space. No host / open
+  // lines / falsy clip ⇒ pushed unchanged.
+  const pushClosed = (pts: Point[], h0: number, h1: number, clip: boolean): void => {
+    if (!clip || !host || host.length < 3) { shapes.push({ pts, closed: true, h0, h1 }); return; }
+    // polygon-clipping wants each ring explicitly closed (first === last).
+    const ring = (ps: Point[]): ClipRing => { const r: ClipRing = ps.map((p) => [p.x, p.y]); if (r.length) r.push([r[0][0], r[0][1]]); return r; };
+    let mp: ClipMultiPolygon = [];
+    try { mp = pc.intersection([ring(pts)], [ring(host)]); } catch { /* degenerate input → no overlap */ }
+    for (const poly of mp) {
+      if (shapes.length >= MAX_SHAPES) return;
+      // Both inputs are simple rings, so each piece is hole-free — keep the outer ring, drop the closer.
+      const opts = (poly[0] ?? []).map(([x, y]) => ({ x, y }));
+      if (opts.length > 1) { const a = opts[0], b = opts[opts.length - 1]; if (Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9) opts.pop(); }
+      if (opts.length >= 3) shapes.push({ pts: opts, closed: true, h0, h1 });
+    }
+  };
   // Rule kinds: `box` → closed axis-aligned quad; `circle` → closed regular N-gon (a 2D circle / a 3D
   // CYLINDER when h0≠h1) at (cx,cy) radius r, `sides` segments (default 24); `poly`/`line` → corners from a
   // `pts` list of [xExpr, yExpr] pairs (poly closed/extruded, line open/2D-only); `host` → the HOST footprint
   // optionally `scale`d about its centroid and/or `inset` inward (metres; negative = outset), extruded h0→h1.
   const emit = (rule: Record<string, unknown>, s: Scope): void => {
     if (shapes.length >= MAX_SHAPES) return;
+    // Rule-level `vars` — evaluated per EMISSION on a scope copy, so inside a `repeat` they can depend
+    // on the loop index (per-blade/per-step angles) and never leak across iterations or rules. They are
+    // NOT visible to the rule's own `when`/`repeat` (both evaluated before emission).
+    if (rule.vars != null) { const s2: Scope = { ...s }; applyVars(rule.vars, s2); s = s2; }
     // Composition: a `ref` rule instantiates ANOTHER object by id and merges its shapes. The child is
     // evaluated with `params` (each an expression in THIS scope) as overrides, then transformed by the rule's
-    // x / y / rotation / scale (rotation composes with the child's own `rotation` param). Recursion is guarded
-    // by depth + a visited-id set (cycles). Needs a resolver (host-supplied); without one, refs are skipped.
+    // x / y / rotation / scale. Recursion is guarded by depth + a visited-id set (cycles). Needs a resolver
+    // (host-supplied); without one, refs are skipped.
     if (typeof rule.ref === "string") {
-      if (!ctx?.resolve || ctx.depth >= MAX_REF_DEPTH || ctx.seen.has(rule.ref)) return;
-      const childText = ctx.resolve(rule.ref);
-      if (!childText) return;
-      const childOverrides: Record<string, unknown> = {};
-      const pobj = asObj(rule.params);
-      if (pobj) for (const [k, ex] of Object.entries(pobj)) childOverrides[k] = evalRaw(ex, s);
-      const child = buildParametricShapes(childText, childOverrides, undefined, {
-        resolve: ctx.resolve, depth: ctx.depth + 1, seen: new Set([...ctx.seen, rule.ref]),
+      // Instance path: base [+ repeat index]; occurrence suffix added inside instantiateRef — the address
+      // for per-instance overrides + selection (e.g. "door" / "window[3]" / "stair/door").
+      const base = typeof rule.id === "string" && rule.id ? rule.id : rule.ref;
+      const loopIdx = rule.repeat != null ? toNum(s[typeof rule.as === "string" ? rule.as : "i"]) : null;
+      const seg = loopIdx != null ? `${base}[${loopIdx}]` : base;
+      // `params` = HARD bindings (always driven by the parent); `defaults` = SOFT bindings (the parent's
+      // suggestion — a per-instance override wins). Both are expressions in the parent scope.
+      const evalMap = (spec: unknown): Record<string, unknown> => {
+        const out: Record<string, unknown> = {};
+        const o = asObj(spec);
+        if (o) for (const [k, ex] of Object.entries(o)) out[k] = evalRaw(ex, s);
+        return out;
+      };
+      instantiateRef(rule.ref, seg, evalMap(rule.params), evalMap(rule.defaults), {
+        x: evalNum(rule.x, s), y: evalNum(rule.y, s),
+        rot: evalNum(rule.rotation, s) || 0, scl: rule.scale != null ? evalNum(rule.scale, s) : 1,
       });
-      if (child) {
-        const tx = evalNum(rule.x, s), ty = evalNum(rule.y, s);
-        const scl = rule.scale != null ? evalNum(rule.scale, s) : 1;
-        // The ref's own rotation + the child's `rotation` param both rotate about the child origin → sum them.
-        const th = ((evalNum(rule.rotation, s) || 0) + (child.rotationDeg || 0)) * Math.PI / 180;
-        const cs = Math.cos(th), sn = Math.sin(th);
-        for (const csh of child.shapes) {
-          if (shapes.length >= MAX_SHAPES) break;
-          shapes.push({
-            pts: csh.pts.map((p) => ({ x: tx + (p.x * cs - p.y * sn) * scl, y: ty + (p.x * sn + p.y * cs) * scl })),
-            closed: csh.closed, h0: csh.h0, h1: csh.h1,
-          });
-        }
-      }
       return;
     }
-    // Procedural floorplan generator (seeded BSP → walls + floor + door/window symbols).
-    if (asObj(rule.floorplan) || rule.floorplan === true) { generateFloorplan(s, shapes); return; }
+    // Procedural floorplan generator (seeded BSP → rooms + walls + floor + door/window/furniture). Gets the
+    // same composition primitive, so its parts are REAL child components when a library is available
+    // (falling back to inline symbols without one). `peekChild` lets the generator read an instance's
+    // placement override BEFORE emitting it — how a room's Position slider can drive the BSP split that
+    // carves that room (the value must exist before the geometry it influences is built).
+    const peekChild = (baseSeg: string, key: string): number | string | boolean | undefined => {
+      const fullPath = ctx?.path ? `${ctx.path}/${baseSeg}` : baseSeg;
+      return ctx?.childParams?.[fullPath]?.[key];
+    };
+    if (asObj(rule.floorplan) || rule.floorplan === true) { generateFloorplan(s, shapes, instantiateRef, peekChild); return; }
     // Host footprint primitive — extrude the attached space's polygon (a uniform `scale` about its centroid
     // then a parallel `inset`). One generic op set drives every host-conforming object: a Floor is a single
     // un-tapered slab; a Massing tower repeats this per floor with a per-tier inset / scale. No host → skip.
@@ -516,10 +848,11 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
       shapes.push({ pts: pts.map((p) => ({ x: p.x, y: p.y })), closed: true, h0: evalNum(hostRule.h0, s), h1: evalNum(hostRule.h1, s) });
       return;
     }
+    const clip = rule.clip != null && evalTruthy(rule.clip, s);
     const box = asObj(rule.box);
     if (box) {
       const x0 = evalNum(box.x0, s), x1 = evalNum(box.x1, s), y0 = evalNum(box.y0, s), y1 = evalNum(box.y1, s);
-      shapes.push({ pts: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], closed: true, h0: evalNum(box.h0, s), h1: evalNum(box.h1, s) });
+      pushClosed([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], evalNum(box.h0, s), evalNum(box.h1, s), clip);
       return;
     }
     const circle = asObj(rule.circle);
@@ -528,7 +861,7 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
       const sides = Math.max(3, Math.min(64, Math.round(circle.sides != null ? evalNum(circle.sides, s) : 24)));
       const pts: Point[] = [];
       for (let i = 0; i < sides; i++) { const a = (i / sides) * 2 * Math.PI; pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
-      shapes.push({ pts, closed: true, h0: evalNum(circle.h0, s), h1: evalNum(circle.h1, s) });
+      pushClosed(pts, evalNum(circle.h0, s), evalNum(circle.h1, s), clip);
       return;
     }
     const poly = asObj(rule.poly);
@@ -537,7 +870,8 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
     if (!spec) return;
     const pts = asArr(spec.pts).map((pair) => { const a = asArr(pair); return { x: evalNum(a[0], s), y: evalNum(a[1], s) }; });
     if (pts.length < 2) return;
-    shapes.push({ pts, closed: !!poly, h0: evalNum(spec.h0, s), h1: evalNum(spec.h1, s) });
+    if (poly) { pushClosed(pts, evalNum(spec.h0, s), evalNum(spec.h1, s), clip); return; }
+    shapes.push({ pts, closed: false, h0: evalNum(spec.h0, s), h1: evalNum(spec.h1, s) });
   };
   for (const r of asArr(chosen.rules)) {
     const rule = asObj(r);
@@ -551,7 +885,7 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
       emit(rule, sc);
     }
   }
-  return { shapes, color, rotationDeg };
+  return { shapes: applyPlacementOffsets(shapes), color, rotationDeg };
 }
 
 /** Local point (x,y in metres) → world point at `anchor`, scaled by `ppm`, rotated `rotDeg°` about the node. */
@@ -561,14 +895,19 @@ const placer = (anchor: Point, ppm: number, rotDeg: number) => {
 };
 
 /** Parse + evaluate a parametric definition into canvas polylines anchored at `anchor` (the top-down PLAN
- *  projection). Closed shapes fill + outline; open shapes only stroke. Empty on parse error. */
-export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): ParametricGeometry {
-  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set() });
+ *  projection). Closed shapes fill + outline; open shapes only stroke. Empty on parse error.
+ *  `childParams` = per-instance overrides for nested `ref` components (keyed by instance path). */
+export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): ParametricGeometry {
+  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams });
   if (!built) return { fill: [], lines: [], color: "#0f766e", refLines: [] };
   const xf = placer(anchor, ppm, built.rotationDeg);
   const fill: Point[][] = [];
   const lines: Point[][] = [];
   const refLines: Point[][] = [];
+  const fillSrc: (string | undefined)[] = [];
+  const lineSrc: (string | undefined)[] = [];
+  const fillColor: (string | undefined)[] = [];
+  const lineColor: (string | undefined)[] = [];
   for (const sh of built.shapes) {
     const ring = sh.pts.map((p) => xf(p.x, p.y));
     // Reference outlines (from an `outline` op) → dashed construction lines only, never filled.
@@ -576,28 +915,45 @@ export function evalParametricGeometry(defText: string, anchor: Point, ppm: numb
     if (sh.closed) {
       const closedRing = [...ring, ring[0]];
       fill.push(closedRing);
+      fillSrc.push(sh.src);
+      fillColor.push(sh.color);
       lines.push(closedRing);
+      lineSrc.push(sh.src);
+      lineColor.push(sh.color);
     } else {
       lines.push(ring);
+      lineSrc.push(sh.src);
+      lineColor.push(sh.color);
     }
   }
-  return { fill, lines, color: built.color, refLines };
+  return { fill, lines, color: built.color, refLines, fillSrc, lineSrc, fillColor, lineColor };
 }
 
 /** Parse + evaluate a parametric definition into 3D mesh prisms anchored at `anchor` — one lofted prism per
  *  CLOSED shape with a non-zero height span (footprint extruded h0→h1 metres). Open shapes / flat shapes are
  *  skipped. Same shape stack as the plan, so 3D is driven by the SAME parameters. Empty on parse error. */
-export function evalParametricPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): FlowMeshPrism[] {
-  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set() });
+export function evalParametricPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): FlowMeshPrism[] {
+  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams });
   if (!built) return [];
   const xf = placer(anchor, ppm, built.rotationDeg);
   const prisms: FlowMeshPrism[] = [];
   for (const sh of built.shapes) {
     if (!sh.closed || sh.h0 === sh.h1) continue;
     const foot = sh.pts.map((p) => xf(p.x, p.y));
-    prisms.push({ bottom: foot, top: foot, yBottom: Math.min(sh.h0, sh.h1), yTop: Math.max(sh.h0, sh.h1), color: built.color });
+    // A composed child keeps its own colour in 3D too (door leaf stays door-coloured).
+    prisms.push({ bottom: foot, top: foot, yBottom: Math.min(sh.h0, sh.h1), yTop: Math.max(sh.h0, sh.h1), color: sh.color ?? built.color });
   }
   return prisms;
+}
+
+/** Enumerate the `ref` component instances a definition ACTUALLY emits with the given params (when/case/
+ *  repeat applied) — the rows of a nested-component editor. Each row: stable instance `path`, referenced
+ *  object id, and the parent-BOUND param values (locked/driven in the UI; everything else is free to
+ *  override per instance via `childParams`). Empty without a resolver or on parse error. */
+export function evalParametricRefs(defText: string, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): RefInstance[] {
+  const refs: RefInstance[] = [];
+  buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams, refs });
+  return refs;
 }
 
 // ── Geometry inspection (formulas + live values) ─────────────────────────────────────────────────────
@@ -622,7 +978,7 @@ export function inspectParametricGeometry(defText: string, overrides?: Record<st
   const def = asObj(parsed);
   if (!def) return empty;
 
-  // Parameter defaults → scope, then overrides; PI + hostArea injected as in buildParametricShapes.
+  // Parameter defaults → scope, then overrides; PI + host scope injected as in buildParametricShapes.
   const scope: Scope = {};
   for (const p of asArr(def.parameters)) {
     const o = asObj(p);
@@ -634,7 +990,7 @@ export function inspectParametricGeometry(defText: string, overrides?: Record<st
     if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") scope[k] = v;
   }
   scope.PI = Math.PI;
-  scope.hostArea = host && host.length >= 3 ? ringArea(host) : 0;
+  injectHostScope(scope, host);
 
   const params: GeomInspectRow[] = [];
   for (const p of asArr(def.parameters)) {
@@ -682,13 +1038,13 @@ export function inspectParametricGeometry(defText: string, overrides?: Record<st
     const hostRule = asObj(rule.host);
     if (hostRule) return { label: "host", fields: fieldRows(hostRule, ["scale", "inset", "h0", "h1"], s) };
     const box = asObj(rule.box);
-    if (box) return { label: "box", fields: fieldRows(box, ["x0", "x1", "y0", "y1", "h0", "h1"], s) };
+    if (box) return { label: "box", fields: [...fieldRows(box, ["x0", "x1", "y0", "y1", "h0", "h1"], s), ...fieldRows(rule, ["clip"], s)] };
     const circle = asObj(rule.circle);
-    if (circle) return { label: "circle", fields: fieldRows(circle, ["cx", "cy", "r", "sides", "h0", "h1"], s) };
+    if (circle) return { label: "circle", fields: [...fieldRows(circle, ["cx", "cy", "r", "sides", "h0", "h1"], s), ...fieldRows(rule, ["clip"], s)] };
     const spec = asObj(rule.poly) ?? asObj(rule.line);
     if (spec) {
       const ptsN = asArr(spec.pts).length;
-      return { label: asObj(rule.poly) ? "poly" : "line", fields: [{ name: "pts", expr: `${ptsN} point(s)`, value: String(ptsN) }, ...fieldRows(spec, ["h0", "h1"], s)] };
+      return { label: asObj(rule.poly) ? "poly" : "line", fields: [{ name: "pts", expr: `${ptsN} point(s)`, value: String(ptsN) }, ...fieldRows(spec, ["h0", "h1"], s), ...(asObj(rule.poly) ? fieldRows(rule, ["clip"], s) : [])] };
     }
     return null;
   };
@@ -728,7 +1084,7 @@ export function evalParametricOutputs(defText: string, overrides?: Record<string
   const def = asObj(parsed);
   if (!def) return empty;
 
-  // Full scope: parameter defaults → overrides → PI/hostArea → geometry vars → chosen-case vars.
+  // Full scope: parameter defaults → overrides → PI/host scope → geometry vars → chosen-case vars.
   const scope: Scope = {};
   for (const p of asArr(def.parameters)) {
     const o = asObj(p);
@@ -740,7 +1096,7 @@ export function evalParametricOutputs(defText: string, overrides?: Record<string
     if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") scope[k] = v;
   }
   scope.PI = Math.PI;
-  scope.hostArea = host && host.length >= 3 ? ringArea(host) : 0;
+  injectHostScope(scope, host);
   const geom = asObj(def.geometry);
   if (geom) {
     const applyVars = (vo: unknown, sc: Scope): void => {

@@ -695,3 +695,41 @@ export function computeMiteredUnion(
   }
   return { fills, outerEdges };
 }
+
+/**
+ * Chain unordered boundary edges (typically `computeMiteredUnion().outerEdges`) into closed
+ * loops of ordered points. Endpoints match on a 0.01-px rounding key — union edges at a shared
+ * junction reuse the exact same mitre points, so the walk closes without a tolerance search.
+ * Same tracing the Path-Setter "path → space" and Merge-Spaces features use.
+ */
+export function traceClosedLoops(outerEdges: { a: Point; b: Point }[]): Point[][] {
+  const KEY = (p: Point) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+  const used = new Array<boolean>(outerEdges.length).fill(false);
+  const loops: Point[][] = [];
+  for (let start = 0; start < outerEdges.length; start++) {
+    if (used[start]) continue;
+    used[start] = true;
+    const seed = outerEdges[start];
+    const loop: Point[] = [seed.a, seed.b];
+    let endKey = KEY(seed.b);
+    const startKey = KEY(seed.a);
+    for (let safety = 0; safety < outerEdges.length + 1; safety++) {
+      if (endKey === startKey) break;
+      let nextIdx = -1, reversed = false;
+      for (let i = 0; i < outerEdges.length; i++) {
+        if (used[i]) continue;
+        if (KEY(outerEdges[i].a) === endKey) { nextIdx = i; reversed = false; break; }
+        if (KEY(outerEdges[i].b) === endKey) { nextIdx = i; reversed = true; break; }
+      }
+      if (nextIdx === -1) break;
+      used[nextIdx] = true;
+      const ne = outerEdges[nextIdx];
+      const np = reversed ? ne.a : ne.b;
+      if (KEY(np) === startKey) break;
+      loop.push(np);
+      endKey = KEY(np);
+    }
+    if (loop.length >= 3) loops.push(loop);
+  }
+  return loops;
+}

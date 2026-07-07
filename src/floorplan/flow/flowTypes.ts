@@ -32,7 +32,7 @@ export const parseDimEdges = (v: unknown): number[] => {
 };
 export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "create-polygon" | "create-segment" | "create-arc" | "create-box";
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "create-polygon" | "create-segment" | "create-arc" | "create-box" | "rectangle" | "circle" | "cuboid" | "cylinder" | "sphere" | "cone" | "transform-3d" | "boolean-3d" | "display-3d";
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
@@ -246,6 +246,11 @@ export const outputSlots = (params: Record<string, unknown>): OutputSlot[] => {
  *  (mirrors the Place Object Along Boundary block in the Space tools). */
 export interface PlaceObjectEntry {
   kind: string;
+  /** Parametric-object library id (e.g. "sofa.v2") — when set, the entry places THAT object: dimensions
+   *  not explicitly overridden are measured from the object's own geometry (resolvePlaceObjectParams in
+   *  eval/objectFootprints), and the commit drops the real .pobj attachment node instead of a 2D-symbol
+   *  box. `kind` then only picks the live-preview symbol. */
+  objectId?: string;
   /** Length along the boundary edge (m). */
   length: number;
   /** Breadth / depth into the space (m). */
@@ -339,6 +344,7 @@ export const placeObjectEntries = (params: Record<string, unknown>): PlaceObject
       height: Number(src.height) || PLACE_OBJECT_DEFAULT_ENTRY.height,
       clearance: Number.isFinite(Number(src.clearance)) ? Number(src.clearance) : PLACE_OBJECT_DEFAULT_ENTRY.clearance,
     };
+    if (typeof src.objectId === "string" && src.objectId.trim()) e.objectId = src.objectId.trim();
     if (src.locked === true) e.locked = true;
     return e;
   };
@@ -946,7 +952,7 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "makePath", label: "Make path", kind: "checkbox", showIf: (p) => p.type === "straight-skeleton" },
       { key: "pathWidth", label: "Path width", kind: "range", min: 0, max: 50, step: 0.1, unit: "m", showIf: (p) => p.type === "straight-skeleton" && Boolean(p.makePath) },
     ],
-    hint: "Medial axis of the space → closed Regions (spaces, default) or Branches (lines). Prune+Join reduces the region count.",
+    hint: "Medial axis of the space → closed Regions (spaces, default) or Branches (lines). Prune+Join reduces the region count. Longest branch keeps only the main run; Make path turns the branches into ONE seamless constant-width band (closed polygons) of Path width.",
   },
   "place-object": {
     type: "place-object",
@@ -969,7 +975,7 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "height", label: "Height", kind: "range", min: 0.05, max: 3, step: 0.05, unit: "m" },
       { key: "clearance", label: "Clearance", kind: "range", min: 0, max: 3, step: 0.05, unit: "m" },
     ],
-    hint: "Place one or more object footprints along the input space's boundary.",
+    hint: "Place one or more objects along the input space's boundary — pick a parametric library object (size auto-measured) or a custom box.",
   },
   bsp: {
     type: "bsp",
@@ -1378,6 +1384,9 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // Polygon viewer offset). No geometry of its own.
     hasInput: false,
     hasOutput: false,
+    // Wireable value inputs (amber, left) — a wired number overrides the typed X / Y (each endpoint sits on
+    // its field row). Publishes the resolved X / Y on val-x / val-y.
+    valueInputs: [{ key: "x", label: "X" }, { key: "y", label: "Y" }],
     valueOutputs: [{ key: "x", label: "X", unit: "m" }, { key: "y", label: "Y", unit: "m" }],
     defaultParams: { x: 0, y: 0 },
     fields: [
@@ -1385,6 +1394,47 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "y", label: "Y", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
     ],
     hint: "An (x, y) point in metres — feeds val-x / val-y (e.g. a Visibility viewer offset).",
+  },
+  rectangle: {
+    type: "rectangle",
+    label: "Rectangle",
+    color: "#0891b2",
+    // 2D primitive generator (no geometry input): a Length × Breadth rectangle centred at (Center X,
+    // Center Y) in metres, optionally rotated. Emits a polygon Space — feed it into the Space pipeline
+    // exactly like a Space source. Also publishes val-length / val-breadth for wiring downstream.
+    hasInput: false,
+    hasOutput: true,
+    // Wireable value inputs (amber, left) — a wired number overrides the matching param; each endpoint sits
+    // on its own field row (Length / Breadth / Center X / Center Y / Rotation).
+    valueInputs: [{ key: "length", label: "Length" }, { key: "breadth", label: "Breadth" }, { key: "centerX", label: "Center X" }, { key: "centerY", label: "Center Y" }, { key: "rotation", label: "Rotation" }],
+    valueOutputs: [{ key: "length", label: "Length", unit: "m" }, { key: "breadth", label: "Breadth", unit: "m" }],
+    defaultParams: { length: 4, breadth: 3, centerX: 0, centerY: 0, rotation: 0 },
+    fields: [
+      { key: "length", label: "Length", kind: "range", min: 0.5, max: 100, step: 0.5, unit: "m" },
+      { key: "breadth", label: "Breadth", kind: "range", min: 0.5, max: 100, step: 0.5, unit: "m" },
+      { key: "centerX", label: "Center X", kind: "number", step: 0.5, unit: "m" },
+      { key: "centerY", label: "Center Y", kind: "number", step: 0.5, unit: "m" },
+      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
+    ],
+    hint: "2D primitive — a Length × Breadth rectangle centred at (X, Y) in metres. Emits a Space polygon.",
+  },
+  circle: {
+    type: "circle",
+    label: "Circle",
+    color: "#0891b2",
+    // 2D primitive generator (no geometry input): a circle of `radius` (48-gon) centred at (Center X,
+    // Center Y) in metres. Emits a polygon Space — feed it into the Space pipeline like a source. Also
+    // publishes val-radius for wiring downstream.
+    hasInput: false,
+    hasOutput: true,
+    valueOutputs: [{ key: "radius", label: "Radius", unit: "m" }],
+    defaultParams: { radius: 3, centerX: 0, centerY: 0 },
+    fields: [
+      { key: "radius", label: "Radius", kind: "range", min: 0.5, max: 50, step: 0.5, unit: "m" },
+      { key: "centerX", label: "Center X", kind: "number", step: 0.5, unit: "m" },
+      { key: "centerY", label: "Center Y", kind: "number", step: 0.5, unit: "m" },
+    ],
+    hint: "2D primitive — a circle of the given radius centred at (X, Y) in metres. Emits a Space polygon.",
   },
   visibility: {
     type: "visibility",
@@ -2535,7 +2585,12 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     hasInput: true,
     hasOutput: true,
     outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: { outputMode: "single" },
+    defaultParams: { outputMode: "single", minArea: 0 },
+    // Live face metrics — what a downstream Output node reads (spaces found + their total area).
+    valueOutputs: [
+      { key: "spaces", label: "Spaces" },
+      { key: "totalArea", label: "Total area", unit: "m²" },
+    ],
     fields: [
       {
         key: "outputMode",
@@ -2546,8 +2601,10 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
           { value: "perCell", label: "Per space (one each)" },
         ],
       },
+      // Drop noise faces (text boxes, hatching, dimension loops) below this area.
+      { key: "minArea", label: "Min area", kind: "range", min: 0, max: 50, step: 0.5, unit: "m²" },
     ],
-    hint: "Convert a graph into Spaces — the bounded faces of the network. Single → all spaces on one endpoint; per space → one endpoint each.",
+    hint: "Convert a graph into Spaces — the bounded faces of the network. Min area drops noise faces (text boxes, hatching). Single → all spaces on one endpoint; per space → one endpoint each.",
   },
   "longest-branch": {
     type: "longest-branch",
@@ -3696,6 +3753,175 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "A primitive 3D Mass — Cube (Length) · Cuboid (Length × Breadth × Height) · Sphere (Radius) · Cone (Radius, Height) · Cylinder (Radius, Height). Rendered in the 3D view as a starting Mass.",
   },
+  cuboid: {
+    type: "cuboid",
+    label: "Cuboid",
+    color: "#0e7490",
+    // 3D primitive generator (no input): a Length × Breadth × Height box standing on the floor plane,
+    // rendered in the 3D view (host-driven, like Mass — but fixed to a cuboid). Set its colour.
+    hasInput: false,
+    hasOutput: true,
+    defaultParams: { length: 3, breadth: 2, height: 3, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
+    fields: [
+      { key: "length", label: "Length", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
+      { key: "breadth", label: "Breadth", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
+      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
+      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
+    ],
+    hint: "3D primitive — a Length × Breadth × Height cuboid at Position (X/Y/Z, base on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
+  },
+  cylinder: {
+    type: "cylinder",
+    label: "Cylinder",
+    color: "#0e7490",
+    // 3D primitive generator (no input): a Radius × Height cylinder standing on the floor plane, rendered
+    // in the 3D view (host-driven, like Mass — fixed to a cylinder).
+    hasInput: false,
+    hasOutput: true,
+    defaultParams: { radius: 1.5, height: 3, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
+    fields: [
+      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m" },
+      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
+      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
+    ],
+    hint: "3D primitive — a Cylinder of the given Radius and Height at Position (X/Y/Z, base on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
+  },
+  sphere: {
+    type: "sphere",
+    label: "Sphere",
+    color: "#0e7490",
+    // 3D primitive generator (no input): a Sphere of the given Radius, rendered in the 3D view (host-driven,
+    // like Mass — fixed to a sphere).
+    hasInput: false,
+    hasOutput: true,
+    defaultParams: { radius: 1.5, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
+    fields: [
+      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m" },
+      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
+    ],
+    hint: "3D primitive — a Sphere of the given Radius at Position (X/Y/Z, resting on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
+  },
+  cone: {
+    type: "cone",
+    label: "Cone",
+    color: "#0e7490",
+    // 3D primitive generator (no input): a Radius × Height cone standing on the floor plane, rendered in the
+    // 3D view (host-driven, like Mass — fixed to a cone).
+    hasInput: false,
+    hasOutput: true,
+    defaultParams: { radius: 1.5, height: 3, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
+    fields: [
+      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m" },
+      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
+      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
+    ],
+    hint: "3D primitive — a Cone of the given Radius and Height at Position (X/Y/Z, base on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
+  },
+  "transform-3d": {
+    type: "transform-3d",
+    label: "Transform 3D",
+    color: "#7e22ce",
+    // 3D op: affine-transform an upstream 3D primitive (Cuboid / Cylinder / Sphere / Cone / Mass) —
+    // Translate (X/Y/Z, metres) · Rotate (about X/Y/Z, degrees) · uniform Scale · Mirror across a plane.
+    // Host-applied: the mesh collector walks primitive → Transform 3D → … and bakes the accumulated
+    // transform onto the rendered mesh. Chain several to stack transforms. Y is up; Z is depth.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { translateX: 0, translateY: 0, translateZ: 0, rotateX: 0, rotateY: 0, rotateZ: 0, scale: 1, mirror: "none" },
+    fields: [
+      { key: "translateX", label: "Move X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "translateY", label: "Move Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "translateZ", label: "Move Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
+      { key: "rotateX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotateY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "rotateZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
+      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
+      {
+        key: "mirror", label: "Mirror", kind: "select",
+        options: [
+          { value: "none", label: "None" },
+          { value: "x", label: "Across YZ (flip X)" },
+          { value: "y", label: "Across XZ (flip Y)" },
+          { value: "z", label: "Across XY (flip Z)" },
+        ],
+      },
+    ],
+    hint: "Transform a 3D primitive — Translate (X/Y/Z) · Rotate (X/Y/Z) · uniform Scale · Mirror across a plane. Wire a Cuboid / Cylinder / Sphere / Cone in; chain several to stack. Y is up.",
+  },
+  "boolean-3d": {
+    type: "boolean-3d",
+    label: "Boolean",
+    color: "#7e22ce",
+    // 3D CSG op: combine two 3D primitives (A = main input, B = second "B" input) via a mesh boolean —
+    // Union (A ∪ B) · Subtract (A − B) · Difference (A − B) · Intersection (A ∩ B). Host-applied: the mesh
+    // collector resolves the two upstream primitives (through any Transform 3D) and the 3D canvas runs the
+    // actual CSG (three-csg-ts). Position B relative to A with a Transform 3D so they overlap meaningfully.
+    hasInput: true,
+    hasOutput: true,
+    geomInputs: [{ key: "b", label: "B" }],
+    defaultParams: { op: "union" },
+    fields: [
+      {
+        key: "op", label: "Operation", kind: "select",
+        options: [
+          { value: "union", label: "Union (A ∪ B)" },
+          { value: "subtract", label: "Subtract (A − B)" },
+          { value: "difference", label: "Difference (A − B)" },
+          { value: "intersect", label: "Intersection (A ∩ B)" },
+        ],
+      },
+    ],
+    hint: "Boolean (CSG) of two 3D primitives — Union · Subtract · Difference · Intersection. Wire primitive A into the main input and primitive B into the B input; move B (via Transform 3D) so they overlap.",
+  },
+  "display-3d": {
+    type: "display-3d",
+    label: "Display 3D",
+    color: "#7e22ce",
+    // 3D styling pass-through: wire a 3D primitive / Transform 3D / Boolean in, and it renders in the 3D
+    // view with this Colour, Opacity, draw Type (Solid / Wireframe) and optional edge lines. Host-applied —
+    // the mesh collector finds the display node downstream of a primitive/boolean and bakes its style. This
+    // is where colour lives now (the primitive nodes no longer carry a colour of their own).
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { color: "#94a3b8", opacity: 1, displayType: "solid", showEdges: false },
+    fields: [
+      { key: "color", label: "Color", kind: "color" },
+      { key: "opacity", label: "Opacity", kind: "range", min: 0, max: 1, step: 0.05 },
+      {
+        key: "displayType", label: "Type", kind: "select",
+        options: [
+          { value: "solid", label: "Solid" },
+          { value: "wireframe", label: "Wireframe" },
+        ],
+      },
+      { key: "showEdges", label: "Show edges", kind: "checkbox" },
+    ],
+    hint: "Style a 3D primitive / Boolean for the 3D view — Colour · Opacity · Solid or Wireframe · Show edges. Wire a Cuboid / Cylinder / Sphere / Cone / Boolean in.",
+  },
   "inset-3d": {
     type: "inset-3d",
     label: "Inset 3D",
@@ -3773,10 +3999,18 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "snapTolerance", label: "Node snap" },
       { key: "connectGap", label: "Bridge gaps" },
     ],
+    // Live trace quality readouts (also the Auto-Tune objective): closed faces ≥ Min space area,
+    // dangling degree-1 endpoints (broken loops), and traced polyline count.
+    valueOutputs: [
+      { key: "spaces", label: "Spaces" },
+      { key: "openEnds", label: "Open ends" },
+      { key: "lines", label: "Lines" },
+    ],
     defaultParams: {
       colorMode: "black", tolerance: 50, despeckle: 12, dilate: 3, spurLength: 10,
       simplifyEpsilon: 2, minLength: 30, snapTolerance: 8, connectGap: 12,
       mergeAngle: 7, orthoSnap: 0, orthoTol: 10,
+      tuneMinArea: 1, tuneColour: false,
     },
     fields: [
       {
@@ -3813,8 +4047,12 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       { key: "orthoSnap", label: "Ortho snap", kind: "checkbox" },
       // How far off-axis an edge may be and still get squared up.
       { key: "orthoTol", label: "Ortho window", kind: "range", min: 1, max: 30, step: 1, unit: "°", showIf: (p) => !!p.orthoSnap },
+      // Auto-Tune scoring floor: faces smaller than this don't count as spaces (text boxes, hatching).
+      { key: "tuneMinArea", label: "Min space area", kind: "range", min: 0, max: 50, step: 0.5, unit: "m²" },
+      // Auto-Tune also sweeps the colour mode (for drawings whose line colour is unknown).
+      { key: "tuneColour", label: "Tune colour too", kind: "checkbox" },
     ],
-    hint: "Trace the image's lines into a connected node/edge graph — colour filter, despeckle, gap-close, spur pruning, simplify, vertex snap, endpoint bridging (T-junctions), ortho straightening and collinear merging. Feeds the Graph nodes.",
+    hint: "Trace the image's lines into a connected node/edge graph — colour filter, despeckle, gap-close, spur pruning, simplify, vertex snap, endpoint bridging (T-junctions), ortho straightening and collinear merging. Feeds the Graph nodes. AUTO-TUNE loops these parameters against the image, scores each combo on closed spaces found (minus noise faces and open ends) and bakes the best values back into the sliders — no manual hit-and-trial.",
   },
   "object-detection": {
     type: "object-detection",
@@ -4483,6 +4721,9 @@ export interface FlowNodeData extends Record<string, unknown> {
   onRunRender?: (nodeId: string, params: Record<string, unknown>) => void;
   /** Injected by the host — the Object Detection node's "Detect" action (runs Gemini, bakes `_boxes`). */
   onRunDetect?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Vectorisation node's "Auto-Tune" action (sweeps the tracing parameters
+   *  against the loaded image, scores combos on closed spaces found, bakes the best values back). */
+  onRunVectorTune?: (nodeId: string, params: Record<string, unknown>) => void;
   /** Injected by the host — the Analyse node's "Analyse" action (sends a file/url to Gemini, bakes `_result`). */
   onRunAnalyse?: (nodeId: string, params: Record<string, unknown>) => void;
   /** Injected by the host — the Generate node's "Generate" action (image/video/music via Google AI, bakes `_resultUrl`). */

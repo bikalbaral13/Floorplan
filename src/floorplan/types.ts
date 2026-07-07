@@ -75,6 +75,10 @@ export interface Wall {
    *  style (capsule = rounded, square = extended, flat = butt), surviving Graph view. Absent = Line mode
    *  (thin styled stroke). Mirrors the flow "Display Segment" node's buffer style. */
   bufferStyle?: "capsule" | "square" | "flat";
+  /** Display block "Path" mode (requires `bufferStyle`): besides the band, the connected run of touching
+   *  path segments derives a LIVE Space (union outline, recomputed as segments move — never persisted in
+   *  `rooms`). Space attachments for it live in `FloorPlanModel.pathSpaceAttachments`. */
+  asSpace?: boolean;
   /** How the start→end spine aligns to the wall thickness */
   method?: WallMethod;
   /** Segment type: built-in (`wall` / `door` / `window` / `plot-boundary` / `path`) or a
@@ -427,6 +431,11 @@ export interface AreaTypeDef {
   params: ParamDef[];
 }
 
+/** Id prefix of LIVE Path spaces (derived from `asSpace` buffered segments — see Wall.asSpace).
+ *  Rooms with this prefix are recomputed, never persisted, and their attachments live in
+ *  `FloorPlanModel.pathSpaceAttachments`. */
+export const PATH_SPACE_ID_PREFIX = "path-space:";
+
 export interface Room {
   id: string;
   points: Point[];
@@ -710,6 +719,10 @@ export interface SegmentAttachment {
   id: string;
   objectId: string;
   params: Record<string, number | string | boolean>;
+  /** Per-instance overrides for NESTED components (`ref` rules inside the object), keyed by ref-instance
+   *  path (e.g. "door.single.v1", "window[2]") → {paramKey: value}. SketchUp-style nested editing: params the
+   *  parent binds in its `ref.params` stay driven by the parent; these overrides cover the free ones. */
+  childParams?: Record<string, Record<string, number | string | boolean>>;
   /** Position along the host segment, 0 (start) → 1 (end). */
   t: number;
   /** Mirror the object to the other side of the segment. */
@@ -987,6 +1000,10 @@ export interface FloorPlanModel {
   pixelsPerMeter?: number;
   /** Per-node metadata (label / column / tree), keyed by node stableKey. See {@link NodeMeta}. */
   nodeMeta?: Record<string, NodeMeta>;
+  /** Parametric objects attached to LIVE Path spaces (Display mode "Path"), keyed by the derived
+   *  room id (`path-space:<smallest member wall id>`). The rooms themselves are recomputed from the
+   *  path segments and never stored in `rooms`, so their attachments persist here instead. */
+  pathSpaceAttachments?: Record<string, SegmentAttachment[]>;
   /** Schema-defined attribute values for canvas components, edited in the Properties tab.
    *  `nodes` is keyed by node stableKey, `segments` by wall id, `spaces` by room id and
    *  `graphs` by graph display id; each entry maps a schema property key → its value. Only

@@ -14,6 +14,7 @@ import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDet
 import { toFootingSpec, footingElevationPolys, footingPlanPolys, footingMeshPrisms } from "./footing";
 import { toStaircaseSpec, staircaseElevationPolys, staircaseMeshPrisms, type ElevationView } from "./staircase";
 import { evalParametricGeometry, evalParametricPrisms } from "./parametricObject";
+import { resolvePlaceObjectParams } from "./objectFootprints";
 import { floorplanElevationPolys, type ElevSeg, type ElevKind, type ElevationView as FloorElevView } from "./floorplanElevation";
 import type { FlowMesh, FlowMeshPrism } from "./meshTypes";
 import { conditionMetricValue, evaluateSpaceCondition } from "../conditional";
@@ -280,8 +281,11 @@ function offsetPolyline(pts: Point[], d: number): Point[] {
 /** The imported underlay image fed into the flow (RGBA buffer + its world placement box). */
 export interface FlowImage { data: Uint8ClampedArray; w: number; h: number; box: { x: number; y: number; scale: number }; key: string }
 // Cache vectorisation results (keyed on image + params) so the heavy trace only re-runs when something
-// it depends on actually changes — not on every unrelated flow re-eval.
-const vectorizeCache = new Map<string, Point[][]>();
+// it depends on actually changes — not on every unrelated flow re-eval. openEnds (degree-1 graph
+// endpoints) rides along since it needs the trace's node/edge graph, gone once the result is cached.
+const vectorizeCache = new Map<string, { world: Point[][]; openEnds: number }>();
+// Face metrics per (trace, ppm, min-area) — the vectorise node's Spaces/Open ends/Lines readouts.
+const vectorizeMetricsCache = new Map<string, { spaces: number; openEnds: number; lines: number }>();
 // Cache pipe-network solves (keyed on graph signature + schema + params).
 const pipeSolveCache = new Map<string, PipeSolveResult>();
 
@@ -421,7 +425,8 @@ function evalNode(tool: FlowToolType, input: Point[], params: Record<string, unk
     case "inset": return evalInset(input, params, ppm);
     case "optimise-rect": return evalOptimise(input, params, ppm);
     case "split": return evalSplit(input, params, ppm);
-    case "place-object": return evalPlaceObject(input, params, ppm);
+    // Entries referencing a parametric library object get their dims measured from the object first.
+    case "place-object": return evalPlaceObject(input, resolvePlaceObjectParams(params), ppm);
     case "bsp": return evalBsp(input, params, ppm);
     case "voronoi": return evalVoronoi(input, params, ppm);
     case "skeleton": return evalSkeleton(input, params, ppm);
@@ -559,7 +564,7 @@ export function evaluateFlow(
 
   // Reachability from source nodes (only connected tools are active).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "pipe-solver" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "footing" || dataOf(n).tool === "staircase" || dataOf(n).tool === "schema-to-drawing").map((n) => n.id);
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "rectangle" || dataOf(n).tool === "circle" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "pipe-solver" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "footing" || dataOf(n).tool === "staircase" || dataOf(n).tool === "schema-to-drawing").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
@@ -872,6 +877,36 @@ export function evaluateFlow(
       }
       continue;
     }
+    // Rectangle / Circle (2D primitive generators, no input) — synthesise a polygon centred at (centerX,
+    // centerY) in metres and publish it as this node's output, exactly like a Space source. Also expose the
+    // defining dimensions as scalar values (val-length / val-breadth, or val-radius) for downstream wiring.
+    if (data.tool === "rectangle" || data.tool === "circle") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const cx = createAnchor.x + num(gp.centerX, 0) * ppm;
+      const cy = createAnchor.y + num(gp.centerY, 0) * ppm;
+      let poly: Point[] = [];
+      if (data.tool === "rectangle") {
+        const w = Math.max(0.1, num(gp.length, 4)) * ppm;
+        const h = Math.max(0.1, num(gp.breadth, 3)) * ppm;
+        const rot = num(gp.rotation, 0) * Math.PI / 180;
+        const cos = Math.cos(rot), sin = Math.sin(rot);
+        poly = [{ x: -w / 2, y: -h / 2 }, { x: w / 2, y: -h / 2 }, { x: w / 2, y: h / 2 }, { x: -w / 2, y: h / 2 }]
+          .map((p) => ({ x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos }));
+        nodeValues.set(id, { length: num(gp.length, 4), breadth: num(gp.breadth, 3) });
+      } else {
+        const r = Math.max(0.1, num(gp.radius, 3)) * ppm;
+        const n = 48;
+        for (let i = 0; i < n; i++) { const a = (i / n) * 2 * Math.PI; poly.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
+        nodeValues.set(id, { radius: num(gp.radius, 3) });
+      }
+      outputs.set(id, poly.length >= 3 ? [poly] : []);
+      if (poly.length >= 3) {
+        const isFinal = succs.get(id)!.length === 0;
+        items.push({ nodeId: id, tool: data.tool, polygons: [poly], color: FLOW_TOOLS[data.tool].color, isFinal, valueInputs: Object.keys(vin).length ? vin : undefined });
+      }
+      continue;
+    }
     // File Upload (value source): publish the chosen file's path as a `val-path` text value for
     // downstream value inputs / the Output node. No geometry.
     if (data.tool === "file-upload") {
@@ -963,11 +998,14 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "param-output-metrics", polygons: [], color: FLOW_TOOLS["param-output-metrics"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
-    // Point (value source): publish its (x, y) as val-x / val-y for downstream value inputs. No geometry.
+    // Point (value source): publish its (x, y) as val-x / val-y for downstream value inputs. A wired
+    // valin-x / valin-y overrides the typed value. No geometry.
     if (data.tool === "point") {
-      const vals = { x: num(data.params.x, 0), y: num(data.params.y, 0) };
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const vals = { x: num(gp.x, 0), y: num(gp.y, 0) };
       nodeValues.set(id, vals);
-      items.push({ nodeId: id, tool: "point", polygons: [], color: FLOW_TOOLS.point.color, isFinal: false, values: vals });
+      items.push({ nodeId: id, tool: "point", polygons: [], color: FLOW_TOOLS.point.color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
     // Parameter Manipulator (value source): publishes its Start value on `val-result` so the wire to the
@@ -1435,18 +1473,39 @@ export function evaluateFlow(
         orthoTol: num(vparams.orthoTol, 10),
       };
       const cacheKey = `${flowImage.key}:${flowImage.w}x${flowImage.h}:${vp.colorMode}:${vp.tolerance}:${vp.despeckle}:${vp.dilate}:${vp.spurLength}:${vp.simplifyEpsilon}:${vp.minLength}:${vp.snapTolerance}:${vp.connectGap}:${vp.mergeAngle}:${vp.orthoSnap ? 1 : 0}:${vp.orthoTol}`;
-      let world = vectorizeCache.get(cacheKey);
-      if (!world) {
+      let cached = vectorizeCache.get(cacheKey);
+      if (!cached) {
         const res = vectorizeImage(flowImage.data, flowImage.w, flowImage.h, vp);
         const { x: ox, y: oy, scale: s } = flowImage.box;
-        world = res.polylines.map((pl) => pl.map(([px, py]) => ({ x: ox + px * s, y: oy + py * s })));
+        const world = res.polylines.map((pl) => pl.map(([px, py]) => ({ x: ox + px * s, y: oy + py * s })));
+        // Degree-1 endpoints = broken loops (spaces that can't close) — the trace-quality readout.
+        const deg = new Array<number>(res.nodes.length).fill(0);
+        for (const [a, b] of res.edges) { deg[a]++; deg[b]++; }
+        let openEnds = 0;
+        for (const d of deg) if (d === 1) openEnds++;
+        cached = { world, openEnds };
         if (vectorizeCache.size > 24) vectorizeCache.clear();
-        vectorizeCache.set(cacheKey, world);
+        vectorizeCache.set(cacheKey, cached);
       }
-      const segs = world.filter((seg) => seg.length >= 2);
+      const segs = cached.world.filter((seg) => seg.length >= 2);
       outputs.set(id, segs);
       handleGroups.set(id, [segs]);
-      if (segs.length > 0) items.push({ nodeId: id, tool: "vectorise", polygons: segs, color: FLOW_TOOLS.vectorise.color, isFinal: succs.get(id)!.length === 0, openPath: true, valueInputs: Object.keys(vin).length ? vin : undefined });
+      // Trace-quality metrics (the Auto-Tune objective, live on the node): closed faces ≥ Min space
+      // area, open ends, traced lines. Faces depend on ppm + the area floor → own cache key.
+      const tuneMinArea = Math.max(0, num(vparams.tuneMinArea, 1));
+      const mKey = `${cacheKey}|${ppm}|${tuneMinArea}`;
+      let vvals = vectorizeMetricsCache.get(mKey);
+      if (!vvals) {
+        const faces = evalGraphToSpaces(segs, ppm, pathEdges);
+        const ppm2 = ppm * ppm || 1;
+        let spacesN = 0;
+        for (const f of faces) if (Math.abs(polygonArea(f)) / ppm2 >= tuneMinArea) spacesN++;
+        vvals = { spaces: spacesN, openEnds: cached.openEnds, lines: segs.length };
+        if (vectorizeMetricsCache.size > 48) vectorizeMetricsCache.clear();
+        vectorizeMetricsCache.set(mKey, vvals);
+      }
+      nodeValues.set(id, vvals);
+      if (segs.length > 0) items.push({ nodeId: id, tool: "vectorise", polygons: segs, color: FLOW_TOOLS.vectorise.color, isFinal: succs.get(id)!.length === 0, openPath: true, values: vvals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
     // Object Detection: emit the baked bounding boxes (`_boxes`, world polygons from the async Gemini run)
@@ -2373,10 +2432,18 @@ export function evaluateFlow(
     // Graph to Spaces: extract the graph's bounded faces as Spaces. "single" → all on one endpoint;
     // "perCell" → one endpoint per space.
     if (data.tool === "graph-to-spaces") {
-      const faces = evalGraphToSpaces(inputPolylinesOf(id), ppm, pathEdges);
+      let faces = evalGraphToSpaces(inputPolylinesOf(id), ppm, pathEdges);
+      // Area floor — drop noise faces (text boxes, hatching, dimension loops) below Min area.
+      const ppm2 = ppm * ppm || 1;
+      const minA = Math.max(0, num(data.params.minArea, 0));
+      if (minA > 0) faces = faces.filter((f) => Math.abs(polygonArea(f)) / ppm2 >= minA);
+      let totalArea = 0;
+      for (const f of faces) totalArea += Math.abs(polygonArea(f)) / ppm2;
       outputs.set(id, faces);
       handleGroups.set(id, data.params.outputMode === "single" ? [faces] : faces.map((p) => [p]));
-      if (faces.length > 0) items.push({ nodeId: id, tool: "graph-to-spaces", polygons: faces, color: FLOW_TOOLS["graph-to-spaces"].color, isFinal: succs.get(id)!.length === 0, cellCount: faces.length });
+      const gvals = { spaces: faces.length, totalArea };
+      nodeValues.set(id, gvals);
+      if (faces.length > 0) items.push({ nodeId: id, tool: "graph-to-spaces", polygons: faces, color: FLOW_TOOLS["graph-to-spaces"].color, isFinal: succs.get(id)!.length === 0, cellCount: faces.length, values: gvals });
       continue;
     }
     // Graph Metrics: measure the incoming graph's topology and forward the graph unchanged so it can
@@ -2463,7 +2530,8 @@ export function evaluateFlow(
     // furniture symbols (matching the committed placement) rather than plain boxes. The geometry
     // output threaded downstream is the footprints themselves.
     if (data.tool === "place-object") {
-      const placed = evalPlaceObjectDetailed(input, evalParams, ppm);
+      // Parametric entries (objectId) size themselves from the library object's measured footprint.
+      const placed = evalPlaceObjectDetailed(input, resolvePlaceObjectParams(evalParams), ppm);
       const polygons = placed.map((p) => p.polygon);
       outputs.set(id, polygons);
       if (polygons.length > 0) {

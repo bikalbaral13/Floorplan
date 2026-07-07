@@ -1,0 +1,63 @@
+{
+  "kind": "parametric-object",
+  "version": 3,
+  "meta": { "id": "corridoor.v1", "name": "Corridoor", "category": "Architecture/Circulation", "units": "m" },
+  "description": "CORRIDOR spine for the corridor + cores recipe (2D plan band, extruded `thickness` m in 3D as a thin coloured slab). Attach to a SPACE (the floorplate): `shape` picks horizontal (a run across the plate through the centre), vertical, cross (both, crossing at the centre), or l-shape (west arm + south arm meeting at the centre); each arm is `width` clear (default 2 m) and spans the host bounding box edge-to-edge automatically (detached fallback 24 m). `offset` slides each arm off the centreline perpendicular to its run (horizontal arm up/down, vertical arm left/right; + = toward +X/+Y i.e. right/down in plan; cross & l-shape move both arms, so the junction shifts diagonally). `clipInside` (default on) intersects the band with the host space polygon so nothing sticks outside a non-rectangular plate. Pair it with `floor_plate.v1` on the SAME space — give the plate `corrW` = this `width` and an `axis` matching an arm so its core row butts this corridor. Outputs: corridor area, width check.",
+  "parameters": [
+    { "key": "width", "label": "Clear Width", "kind": "number", "default": 2, "min": 0.9, "max": 4, "step": 0.1, "unit": "m" },
+    { "key": "shape", "label": "Shape", "kind": "select", "default": "horizontal", "options": ["horizontal", "vertical", "cross", "l-shape"] },
+    { "key": "offset", "label": "Offset", "kind": "number", "default": 0, "min": -20, "max": 20, "step": 0.1, "unit": "m" },
+    { "key": "clipInside", "label": "Clip Inside Space", "kind": "checkbox", "default": true },
+    { "key": "thickness", "label": "Slab Thickness", "kind": "number", "default": 0.1, "min": 0.01, "max": 1, "step": 0.01, "unit": "m" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#38bdf8" }
+  ],
+  "geometry": {
+    "vars": {
+      "_doc": "Boxes extrude 0→thickness so the corridor reads as a thin coloured slab in 3D, and carry `clip: clipInside` so the band is intersected with the host polygon when the checkbox is on. Arms span the host bounding box (Lx across, Ly down); without a host both fall back to 24 m and the shape centres on the anchor. bcx/bcy = bbox centre; ocx/ocy = centre + offset (vertical arms sit at x=ocx, horizontal arms at y=ocy). hw = half width. l-shape = west arm (west edge → shifted centre) + south arm (shifted centre → south edge), overlapping width² at the corner. corrArea is bbox-analytic (subtracts the crossing/corner overlap; ignores clipping and off-plate overhang).",
+      "hasHost": "(hostW > 0 && hostH > 0) ? 1 : 0",
+      "Lx": "hasHost ? hostW : 24",
+      "Ly": "hasHost ? hostH : 24",
+      "bcx": "hasHost ? (hostMinX + hostMaxX) / 2 : 0",
+      "bcy": "hasHost ? (hostMinY + hostMaxY) / 2 : 0",
+      "ocx": "bcx + offset",
+      "ocy": "bcy + offset",
+      "hx": "Lx / 2",
+      "hy": "Ly / 2",
+      "hw": "width / 2",
+      "corrArea": "shape == 'horizontal' ? width * Lx : (shape == 'vertical' ? width * Ly : (shape == 'cross' ? width * Lx + width * Ly - width * width : width * max(0, hx + offset + hw) + width * max(0, hy - offset + hw) - width * width))",
+      "widthOk": "width >= 1.2 ? 1 : 0"
+    },
+    "cases": [
+      {
+        "when": "shape == 'horizontal'",
+        "rules": [
+          { "clip": "clipInside", "box": { "x0": "bcx - hx", "x1": "bcx + hx", "y0": "ocy - hw", "y1": "ocy + hw", "h0": 0, "h1": "thickness" } }
+        ]
+      },
+      {
+        "when": "shape == 'vertical'",
+        "rules": [
+          { "clip": "clipInside", "box": { "x0": "ocx - hw", "x1": "ocx + hw", "y0": "bcy - hy", "y1": "bcy + hy", "h0": 0, "h1": "thickness" } }
+        ]
+      },
+      {
+        "when": "shape == 'cross'",
+        "rules": [
+          { "clip": "clipInside", "box": { "x0": "bcx - hx", "x1": "bcx + hx", "y0": "ocy - hw", "y1": "ocy + hw", "h0": 0, "h1": "thickness" } },
+          { "clip": "clipInside", "box": { "x0": "ocx - hw", "x1": "ocx + hw", "y0": "bcy - hy", "y1": "bcy + hy", "h0": 0, "h1": "thickness" } }
+        ]
+      },
+      {
+        "rules": [
+          { "clip": "clipInside", "box": { "x0": "bcx - hx", "x1": "ocx + hw", "y0": "ocy - hw", "y1": "ocy + hw", "h0": 0, "h1": "thickness" } },
+          { "clip": "clipInside", "box": { "x0": "ocx - hw", "x1": "ocx + hw", "y0": "ocy - hw", "y1": "bcy + hy", "h0": 0, "h1": "thickness" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "corr_w", "label": "Clear Width", "expr": "width", "unit": "m" },
+    { "key": "corrArea", "label": "Corridor Area", "expr": "corrArea", "unit": "m²" },
+    { "key": "widthOk", "label": "Width ≥ 1.2 m", "expr": "widthOk" }
+  ]
+}

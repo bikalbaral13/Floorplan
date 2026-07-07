@@ -21,7 +21,7 @@ import { computeRectanglePacking, computeRandomRectanglePacking } from "../../al
 import { relaxVoronoiSeeds } from "../../algorithms/partitioning/cvtRelaxation";
 import { polygonArea, polygonCentroid, longestEdgeIndex } from "../../algorithms/geometry/polygon";
 import { rasterUnion } from "./rasterUnion";
-import { polygonUnionVector } from "./vectorUnion";
+import { polygonUnionVector, polygonUnionVectorLoops, polygonsInteriorsCross } from "./vectorUnion";
 import { sutherlandHodgmanClip } from "../../algorithms/geometry/sutherlandHodgman";
 import { type BspSeed } from "../../algorithms/partitioning/bsp";
 import { computeBspCellsAdvanced, parseBspConnections } from "../../algorithms/partitioning/bspAdvanced";
@@ -2840,13 +2840,41 @@ export function evalVoronoiBloom(polylines: Point[][], boundary: Point[] | null,
   return out;
 }
 
-/** Skeleton → the medial axis / straight skeleton as a set of line segments. Each segment is
- *  returned as a 2-point polyline (p1, p2) so the Flow canvas preview draws it as a line (a closed
- *  2-point Konva Line is just the segment). Mirrors the Skeleton block's three pipelines via the
- *  shared `computePolygonSkeleton` — `samples` (sampled-voronoi / sweepline) and `pruneEnds`
- *  (straight-skeleton) are honoured; the straight-skeleton refinements (Longest branch, Level > 1,
- *  Make path, Simplify) are commit-only and not reflected in the live preview. */
-export function evalSkeleton(inputPts: Point[], params: Record<string, unknown>, _ppm: number): Point[][] {
+/** Constant-width PATH BAND around branch polylines (the skeleton's Make-path): every segment becomes a
+ *  centred wall stub of `widthPx`, the mitred polygons (flush at shared junctions) union into ONE seamless
+ *  band — the exact corridor machinery: vector union with T-junction edge-splitting, raster fallback when
+ *  interiors properly cross. Returns closed loop polygon(s), largest first — no per-segment facet seams,
+ *  no tapered wedges. */
+export function skeletonPathBands(lines: Point[][], widthPx: number): Point[][] {
+  const walls: Wall[] = [];
+  let i = 0;
+  for (const pl of lines) {
+    for (let k = 0; k + 1 < pl.length; k++) {
+      const a = pl[k], b = pl[k + 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < 0.5) continue;
+      walls.push({ id: `skp-${i++}`, start: a, end: b, thickness: widthPx, color: "#000", method: "center" } as Wall);
+    }
+  }
+  if (!walls.length) return [];
+  const mitred = [...computeMiteredWallPolygons(walls).values()].filter((p) => p.length >= 3);
+  if (!mitred.length) return [];
+  if (mitred.length > 1 && polygonsInteriorsCross(mitred)) {
+    const merged = rasterUnion(mitred, 600);
+    return merged && merged.length >= 3 ? [merged] : mitred;
+  }
+  const loops = polygonUnionVectorLoops(mitred, 1.5);
+  if (!loops || !loops.length) return mitred;
+  return loops.slice().sort((l1, l2) => Math.abs(polygonArea(l2)) - Math.abs(polygonArea(l1)));
+}
+
+/** Skeleton → the medial axis / straight skeleton. Default output: each segment as a 2-point polyline
+ *  (p1, p2) so the Flow canvas preview draws it as a line. Mirrors the Skeleton block's three pipelines
+ *  via the shared `computePolygonSkeleton` — `samples` (sampled-voronoi / sweepline) and `pruneEnds`
+ *  (straight-skeleton) are honoured, and so are the straight-skeleton refinements: `longestBranch`
+ *  (keep only the weighted-diameter polyline) and `makePath`/`pathWidth` (emit the clean constant-width
+ *  UNION BAND around the branches as closed polygon(s) — see skeletonPathBands). `level` > 1 (recursive
+ *  region skeletons) and `simplify` remain commit-only. */
+export function evalSkeleton(inputPts: Point[], params: Record<string, unknown>, ppm: number): Point[][] {
   if (inputPts.length < 3) return [];
   const type = (typeof params.type === "string" ? params.type : "straight-skeleton") as SkeletonType;
   const edges = computePolygonSkeleton(inputPts, type, {
@@ -2856,7 +2884,15 @@ export function evalSkeleton(inputPts: Point[], params: Record<string, unknown>,
   // Optional midpoint reduction — thins interior segments, anchored at junctions/tips (so the
   // join-to-boundary tips, computed separately, stay aligned).
   const reduced = reduceSkeletonByMidpoints(edges, num(params.reduceLevel, 0));
-  return reduced.map((e) => [e.p1, e.p2]);
+  let lines: Point[][] = reduced.map((e) => [e.p1, e.p2]);
+  // Longest branch — the single weighted-diameter path through the branch graph.
+  if (type === "straight-skeleton" && Boolean(params.longestBranch)) lines = evalLongestBranch(lines);
+  // Make path — the constant-width union band (closed polygons) instead of raw lines.
+  if (type === "straight-skeleton" && Boolean(params.makePath)) {
+    const widthPx = Math.max(0.05, num(params.pathWidth, 1)) * (ppm > 0 ? ppm : 1);
+    return skeletonPathBands(lines, widthPx);
+  }
+  return lines;
 }
 
 /** Skeleton → closed FACE polygons: the regions the medial axis carves the space into. Builds a planar
@@ -2865,7 +2901,9 @@ export function evalSkeleton(inputPts: Point[], params: Record<string, unknown>,
  *  segments (pruned + joined) → fewer, larger regions. Sliver faces (<0.05 m²) are dropped. */
 export function evalSkeletonRegions(inputPts: Point[], params: Record<string, unknown>, ppm: number): Point[][] {
   if (inputPts.length < 3) return [];
-  const lines: [Point, Point][] = evalSkeleton(inputPts, params, ppm).map((s) => [s[0], s[1]]);
+  // Regions are carved by the branch LINES — force makePath off so evalSkeleton can't hand back band
+  // polygons here (Make path only applies to the "branches" emit).
+  const lines: [Point, Point][] = evalSkeleton(inputPts, { ...params, makePath: false }, ppm).map((s) => [s[0], s[1]]);
   // Join-to-boundary completions re-close the faces when the skeleton tips were pruned back.
   if (params.type === "straight-skeleton" && Boolean(params.pruneEnds) && Boolean(params.joinToBoundary)) {
     lines.push(...computeSkeletonBoundaryJoins(inputPts, "straight-skeleton").map((e) => [e.p1, e.p2]));

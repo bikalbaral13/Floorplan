@@ -32,6 +32,9 @@ import { evaluateFlow, type FlowPreviewItem } from "./eval/evaluateFlow";
 import { inspectParametricGeometry, evalParametricOutputs, type GeomInspection, type ParamOutputs } from "./eval/parametricObject";
 import type { GridField } from "./eval/evalNodes";
 import { detectObjects, splitDataUrl } from "../algorithms/vision/geminiObjectDetection";
+import { tuneVectorise } from "./vectorTune";
+import type { VectorizeParams, VectorizeColorMode } from "../algorithms/vector/vectorizeImage";
+import { saveLibraryFile, listLibraryFiles } from "../libraryFiles";
 import { parseBspConnections, serializeBspConnections } from "../algorithms/partitioning/bspAdvanced";
 import type { PipeGraphInput } from "../algorithms/network/pipeNetworkSolver";
 
@@ -41,6 +44,8 @@ const nextId = (tool: string) => `${tool}_${nodeSeq++}`;
 /** Palette grouping — the left "Add" rail is split into foldable category blocks (in this order). */
 const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Canvas", tools: ["canvas-source", "separate"] },
+  { title: "2D Primitives", tools: ["point", "rectangle", "circle"] },
+  { title: "3D Primitives", tools: ["cuboid", "cylinder", "sphere", "cone", "transform-3d", "boolean-3d", "display-3d"] },
   { title: "Space", tools: ["source", "space-creator", "space-geometry", "pull", "transform", "hatching", "dimension", "area-dimension", "input-props", "schema", "output-schema", "schema-to-drawing", "schema-to-layers", "merge", "layout-gen"] },
   { title: "Reshape", tools: ["inset", "optimise-rect", "smoothing", "densify", "bounding-shape", "convex-hull", "contour"] },
   { title: "Partition", tools: ["split", "bsp", "voronoi", "treemap", "rect-pack", "convex-decomp", "mesh", "circle-packing", "skeleton", "visibility"] },
@@ -54,28 +59,10 @@ const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Building", tools: ["wall-builder", "graph-to-room", "segment-to-door", "segment-to-window", "node-to-object", "segment-to-3d", "space-to-3d"] },
   { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d", "mesh-to-3d"] },
   { title: "Parametric", tools: ["param-object", "param-grab", "param-output-metrics", "param-geometry", "param-render", "param-render-3d", "create-polygon", "create-segment", "create-arc", "create-box"] },
-  { title: "Calculate", tools: ["math", "random", "expr", "bua", "point", "file-upload", "text"] },
+  { title: "Calculate", tools: ["math", "random", "expr", "bua", "file-upload", "text"] },
   { title: "Output", tools: ["output", "render", "analyse", "generate"] },
 ];
 
-/** A reusable node-graph preset shown in the right "Workflow templates" rail. Stored with template-local
- *  node ids + relative positions; {@link insertWorkflow} remaps the ids and offsets the positions when
- *  it appends the cluster into the live graph. A node may be a `group` container (with width/height + a
- *  `label` param) and other nodes may set `parentId` to nest inside it (their x/y are then RELATIVE to the
- *  group's top-left, matching the export format). */
-interface WorkflowTemplate {
-  id: string;
-  title: string;
-  description: string;
-  nodes: { id: string; tool: FlowToolType | "group"; x: number; y: number; params?: Record<string, unknown>; type?: "group"; width?: number; height?: number; parentId?: string }[];
-  edges: { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }[];
-}
-
-// Build a SchemaPropEntry-shaped row (matches what the Schema node reads). Keeps the templates terse.
-const sProp = (id: string, key: string, label: string, kind: "number" | "checkbox", def: number | boolean, role: string, unit = "", min = 0, max = 1000, step = 1) =>
-  ({ id, key, label, kind, unit, def, min, max, step, options: [] as string[], role });
-const rProp = (id: string, key: string, label: string, unit: string, step: number) =>
-  ({ id, key, label, kind: "number" as const, unit, def: 0, min: 0, max: 1000, step, options: [] as string[], role: "" });
 // Inline monochrome SVG → data URL, for default per-option type icons in the schema. encodeURIComponent
 // keeps it valid in an <img src> (handles #, quotes, etc.).
 const svgIcon = (body: string): string =>
@@ -227,57 +214,6 @@ export const FLOORPLAN_SCHEMA_PARAMS = {
   ],
 };
 
-// Starter parametric definition for the "Parametric Workflow" template's Parametric Object textbox — a
-// self-contained staircase (parameters + declarative geometry rules) that the Parametric Renderer evaluates
-// into plan lines. Mirrors buildStaircaseBoxes, so it reproduces the Node-to-Staircase plan from a file.
-const STAIRCASE_DEFINITION = JSON.stringify({
-  kind: "parametric-object",
-  meta: { name: "Staircase", units: "m" },
-  parameters: [
-    { key: "config", label: "Configuration", kind: "select", default: "straight", options: [{ value: "straight", label: "Straight" }, { value: "u-shape", label: "U-shape (180°)" }, { value: "u-shape-mid", label: "U-shape + mid" }] },
-    { key: "steps", label: "Steps", kind: "number", default: 14, min: 2, max: 60, step: 1 },
-    { key: "tread", label: "Tread (going)", kind: "number", default: 0.28, min: 0.2, max: 0.45, step: 0.005 },
-    { key: "riser", label: "Riser", kind: "number", default: 0.17, min: 0.1, max: 0.25, step: 0.005 },
-    { key: "width", label: "Width", kind: "number", default: 1.0, min: 0.6, max: 3, step: 0.05 },
-    { key: "direction", label: "Direction", kind: "select", default: "ltr", options: [{ value: "ltr", label: "Left → Right" }, { value: "rtl", label: "Right → Left" }] },
-    { key: "midSteps", label: "Mid / split steps", kind: "number", default: 0, min: 0, max: 40, step: 1 },
-    { key: "landingWidth", label: "Landing depth", kind: "number", default: 1.0, min: 0.5, max: 3, step: 0.05 },
-    { key: "midSpace", label: "Mid space", kind: "number", default: 0.1, min: 0, max: 1, step: 0.05 },
-    { key: "rotation", label: "Rotation", kind: "number", default: 0, min: 0, max: 360, step: 1 },
-    { key: "color", label: "Colour", kind: "color", default: "#0f766e" },
-  ],
-  geometry: {
-    emit: "boxes",
-    vars: {
-      N: "max(2, round(steps))", T: "max(0.05, tread)", W: "max(0.1, width)",
-      L: "max(0, landingWidth)", G: "max(0, midSpace)", R: "max(0.05, riser)",
-      MS: "round(midSteps)", dir: "direction == 'rtl' ? -1 : 1",
-    },
-    cases: [
-      { when: "config == 'straight'", rules: [
-        { repeat: "N", as: "i", box: { x0: "dir*i*T", x1: "dir*(i+1)*T", y0: "0", y1: "W", h0: "0", h1: "(i+1)*R" } },
-        { when: "L > 0", box: { x0: "dir*N*T", x1: "dir*(N*T + L)", y0: "0", y1: "W", h0: "0", h1: "N*R" } },
-      ] },
-      { when: "config == 'u-shape'",
-        vars: { n1: "(MS > 0 && MS < N) ? MS : floor(N/2)", n2: "N - n1", xt: "dir*n1*T", xl: "xt + dir*L" },
-        rules: [
-          { repeat: "n1", as: "i", box: { x0: "dir*i*T", x1: "dir*(i+1)*T", y0: "0", y1: "W", h0: "0", h1: "(i+1)*R" } },
-          { box: { x0: "xt", x1: "xl", y0: "0", y1: "2*W + G", h0: "0", h1: "n1*R" } },
-          { repeat: "n2", as: "j", box: { x0: "xt - dir*j*T", x1: "xt - dir*(j+1)*T", y0: "W + G", y1: "2*W + G", h0: "0", h1: "(n1 + j + 1)*R" } },
-        ] },
-      { when: "config == 'u-shape-mid'",
-        vars: { mid: "(MS > 0 && MS < N - 1) ? MS : max(1, round(N/3))", rem: "max(2, N - mid)", a: "ceil(rem/2)", b: "rem - a", xt: "dir*a*T", xr: "xt + dir*W", y2: "W + mid*T", y3: "y2 + W" },
-        rules: [
-          { repeat: "a", as: "i", box: { x0: "dir*i*T", x1: "dir*(i+1)*T", y0: "0", y1: "W", h0: "0", h1: "(i+1)*R" } },
-          { box: { x0: "xt", x1: "xr", y0: "0", y1: "W", h0: "0", h1: "a*R" } },
-          { repeat: "mid", as: "k", box: { x0: "xt", x1: "xr", y0: "W + k*T", y1: "W + (k+1)*T", h0: "0", h1: "(a + k + 1)*R" } },
-          { box: { x0: "xt", x1: "xr", y0: "y2", y1: "y3", h0: "0", h1: "(a + mid)*R" } },
-          { repeat: "b", as: "j", box: { x0: "xt - dir*j*T", x1: "xt - dir*(j+1)*T", y0: "y2", y1: "y3", h0: "0", h1: "(a + mid + j + 1)*R" } },
-        ] },
-    ],
-  },
-}, null, 2);
-
 /** Build the Grab Parameters node's interactive control list from a parametric definition's `parameters`
  *  (number→slider, select→options, checkbox, text/color→textbox). Preserves the user's CURRENT value for
  *  any parameter whose key still exists (so edits survive re-syncs); seeds from the parameter default
@@ -331,489 +267,6 @@ const bakeParamDefaults = (defText: string, props: InputProp[]): string => {
   } catch { return defText; }
 };
 
-/** Built-in workflow templates, grouped into foldable categories on the right rail. */
-const WORKFLOW_CATEGORIES: { title: string; workflows: WorkflowTemplate[] }[] = [
-  {
-    title: "Floorplan",
-    workflows: [
-      {
-        id: "floorplan-tracer",
-        title: "Floorplan Tracer",
-        description: "Element Schema + Canvas → schema-driven Walls / Doors / Windows + Objects. Type-driven Segment (Wall/Door/Window/Line) and Node (Object/Junction) property schemas attach to the canvas; set a component's Type and edit its fields in the Properties tab and the matching wall / door / window / object symbol redraws. Roots on the whole canvas graph — no selection needed.",
-        nodes: [
-          { id: "schema", tool: "schema", x: 12, y: -1270, params: FLOORPLAN_SCHEMA_PARAMS },
-          // Canvas — receives the Schema (attaches the type-driven Node/Segment schemas to the canvas
-          // components) and feeds the pipeline from its Segments bundle (out-2).
-          { id: "canvas", tool: "canvas-source", x: 540, y: -1160, params: {} },
-          // Doors — schema-driven door symbols on door-typed segments (roles door-shape / door-hinge /
-          // door-placement). Self-filters to "door"-typed segments. Fed from the canvas Segments bundle (out-2).
-          { id: "doors", tool: "segment-to-door", x: 988, y: -1336, params: { shape: "arc", thickness: 0.05, hinge: "left", swing: "left", lintelHeight: 2.1, color: "#9333ea" } },
-          // Windows — schema-driven window symbols on window-typed segments (roles window-shape /
-          // window-thickness / window-panes). Self-filters to "window"-typed segments. Fed from out-2.
-          { id: "windows", tool: "segment-to-window", x: 945, y: -1104, params: { shape: "lines", thickness: 0.1, panes: 2, sillHeight: 0.9, lintelHeight: 2.1, color: "#0891b2" } },
-          // Walls — schema-driven mitred walls: the Wall Builder strokes the canvas graph's wall segments
-          // into a mitred ribbon, taking each wall's THICKNESS from the Segment schema (role wall-thickness).
-          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: true, showOuterDim: true, showInnerDim: true, showCenterDim: false, offsetDim: false, dimGap: 0.18 } },
-          // Rooms — inner (clear) rooms: its presence makes the canvas auto-rooms inset to the inner wall
-          // faces by half each wall's schema thickness, so room area excludes the walls. Fed the Canvas
-          // Graph (out-3) + the Schema (per-wall thickness). The rooms stay selectable Spaces.
-          { id: "rooms", tool: "graph-to-room", x: 1240, y: -874, params: {} },
-          // Objects — schema-driven furniture symbols on object-typed nodes (roles object-kind / obj-width /
-          // obj-height / obj-rotation / obj-anchor). Self-filters to "object"-typed nodes. Fed from Nodes (out-1).
-          { id: "objects", tool: "node-to-object", x: 894, y: -764, params: { kind: "bed", width: 1.5, height: 2, rotation: 0, anchor: "center" } },
-          // Staircases — schema-driven 2D plan stairs on staircase-typed nodes (self-filters to "staircase").
-          // Fed from Nodes (out-1). Edit the stair shape on this node's params.
-          { id: "staircases", tool: "node-to-staircase", x: 894, y: -560, params: { config: "straight", steps: 14, tread: 0.28, width: 1.0, direction: "ltr", color: "#0f766e" } },
-          // Brings the schema's segment / node TYPES (with icons) into the Add Segment / Add Node drawing
-          // dropdowns, so you can draw Wall / Door / Window and place Object / Junction / Staircase directly.
-          { id: "schemaTools", tool: "schema-to-drawing", x: 540, y: -980, params: {} },
-          // Brings the schema's segment / node TYPES into the Layers panel as foldable Segment / Node
-          // layer blocks (Wall / Door / Window / Line · Junction / Object). Live — removes with the flow.
-          { id: "schemaLayers", tool: "schema-to-layers", x: 540, y: -800, params: {} },
-        ],
-        edges: [
-          { source: "schema", target: "canvas", sourceHandle: "out-0" },
-          // Canvas Segments bundle (out-2) → doors / windows / walls (each self-filters by type).
-          { source: "canvas", target: "doors", sourceHandle: "out-2" },
-          { source: "canvas", target: "windows", sourceHandle: "out-2" },
-          { source: "canvas", target: "walls", sourceHandle: "out-2" },
-          // Canvas Graph (out-3) → Rooms (inner clear rooms); Schema → Rooms for per-wall thickness.
-          { source: "canvas", target: "rooms", sourceHandle: "out-3" },
-          { source: "schema", target: "rooms", targetHandle: "gin-schema" },
-          // Canvas Nodes bundle (out-1) → objects (self-filters to "object"-typed nodes).
-          { source: "canvas", target: "objects", sourceHandle: "out-1" },
-          // Canvas Nodes bundle (out-1) → staircases (self-filters to "staircase"-typed nodes).
-          { source: "canvas", target: "staircases", sourceHandle: "out-1" },
-          // Schema → Drawing Tools: surface the schema's types in the drawing dropdowns.
-          { source: "schema", target: "schemaTools", targetHandle: "gin-schema" },
-          // Schema → Layers: surface the schema's types as foldable layer blocks in the Layers panel.
-          { source: "schema", target: "schemaLayers", targetHandle: "gin-schema" },
-        ],
-      },
-      {
-        id: "parametric-floorplan",
-        title: "Parametric Floorplan",
-        description: "Floorplan Tracer PLUS all four elevations. The schema-driven plan (walls / doors / windows / objects) feeds Front / Back / Left / Right elevation projections (Tier-A schematic: outline rects + openings at sill/lintel + ground line), each stamped at its own Node — change the plan and every elevation updates. Draw walls / doors / windows from the Add Segment dropdown; point each placement Node at a sheet node id (or grab a selection).",
-        nodes: [
-          { id: "schema", tool: "schema", x: 12, y: -1270, params: FLOORPLAN_SCHEMA_PARAMS },
-          { id: "canvas", tool: "canvas-source", x: 540, y: -1160, params: {} },
-          { id: "doors", tool: "segment-to-door", x: 988, y: -1336, params: { shape: "arc", thickness: 0.05, hinge: "left", swing: "left", lintelHeight: 2.1, color: "#9333ea" } },
-          { id: "windows", tool: "segment-to-window", x: 945, y: -1104, params: { shape: "lines", thickness: 0.1, panes: 2, sillHeight: 0.9, lintelHeight: 2.1, color: "#0891b2" } },
-          { id: "walls", tool: "wall-builder", x: 912, y: -874, params: { thicknessMm: 230, justification: "center", height: 3, union: true, showOuterDim: true, showInnerDim: true, showCenterDim: false, offsetDim: false, dimGap: 0.18 } },
-          { id: "objects", tool: "node-to-object", x: 894, y: -764, params: { kind: "bed", width: 1.5, height: 2, rotation: 0, anchor: "center" } },
-          { id: "schemaTools", tool: "schema-to-drawing", x: 540, y: -980, params: {} },
-          // Elevations — project the wall / door / window graph onto each cardinal plane (Tier-A).
-          { id: "elevFront", tool: "floorplan-to-front-elevation", x: 560, y: -640, params: { height: 3, color: "#0f172a" } },
-          { id: "elevBack", tool: "floorplan-to-back-elevation", x: 560, y: -520, params: { height: 3, color: "#0f172a" } },
-          { id: "elevLeft", tool: "floorplan-to-left-elevation", x: 560, y: -400, params: { height: 3, color: "#0f172a" } },
-          { id: "elevRight", tool: "floorplan-to-right-elevation", x: 560, y: -280, params: { height: 3, color: "#0f172a" } },
-          // Placement Nodes — stamp each elevation at a sheet node (edit the id, or switch to grab-from-selection).
-          { id: "placeFront", tool: "node-source", x: 880, y: -640, params: { id: "Node001", grabFromSelection: false, outputMode: "single" } },
-          { id: "placeBack", tool: "node-source", x: 880, y: -520, params: { id: "Node002", grabFromSelection: false, outputMode: "single" } },
-          { id: "placeLeft", tool: "node-source", x: 880, y: -400, params: { id: "Node003", grabFromSelection: false, outputMode: "single" } },
-          { id: "placeRight", tool: "node-source", x: 880, y: -280, params: { id: "Node004", grabFromSelection: false, outputMode: "single" } },
-        ],
-        edges: [
-          { source: "schema", target: "canvas", sourceHandle: "out-0" },
-          { source: "canvas", target: "doors", sourceHandle: "out-2" },
-          { source: "canvas", target: "windows", sourceHandle: "out-2" },
-          { source: "canvas", target: "walls", sourceHandle: "out-2" },
-          { source: "canvas", target: "objects", sourceHandle: "out-1" },
-          { source: "schema", target: "schemaTools", targetHandle: "gin-schema" },
-          // Canvas Segments (out-2) feed each elevation; the schema (attached to Canvas) supplies heights.
-          { source: "canvas", target: "elevFront", sourceHandle: "out-2" },
-          { source: "canvas", target: "elevBack", sourceHandle: "out-2" },
-          { source: "canvas", target: "elevLeft", sourceHandle: "out-2" },
-          { source: "canvas", target: "elevRight", sourceHandle: "out-2" },
-          // Each elevation → its placement Node (stamped at the node's point).
-          { source: "elevFront", target: "placeFront", targetHandle: "gin-stamp" },
-          { source: "elevBack", target: "placeBack", targetHandle: "gin-stamp" },
-          { source: "elevLeft", target: "placeLeft", targetHandle: "gin-stamp" },
-          { source: "elevRight", target: "placeRight", targetHandle: "gin-stamp" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Layout",
-    workflows: [
-      {
-        id: "layout-generation",
-        title: "Layout Generation",
-        description: "Generate a multi-room layout inside a selected Space. Select a plot/floor Space on the canvas (the Space node grabs it), then press Generate on the Layout Generation node — it runs the floorplan generator and loads it as the editable canvas layout: drag the room seeds, and the connection / repulsion lines show between rooms. Run Annealing optimises the seed positions (simulated annealing). Room count / floor area / SA score feed the Output node; the Input Properties node exposes Min Room Area / Wall Width / SA Iterations as sliders.",
-        nodes: [
-          { id: "src", tool: "source", x: 0, y: 0, params: { id: "", grabFromSelection: true } },
-          { id: "ip", tool: "input-props", x: 0, y: 220, params: { props: [
-            { id: "minArea", name: "Min Room Area", type: "range", value: 12, min: 2, max: 80, step: 1, options: [] },
-            { id: "wallWidth", name: "Wall Width", type: "range", value: 0.15, min: 0.05, max: 0.4, step: 0.01, options: [] },
-            { id: "saIterations", name: "SA Iterations", type: "range", value: 600, min: 50, max: 3000, step: 50, options: [] }
-          ] } },
-          { id: "layoutgen", tool: "layout-gen", x: 380, y: 60, params: { rooms: [
-            { label: "Living", minArea: 18, maxArea: 0, maxRatio: 2.5 },
-            { label: "Kitchen", minArea: 8, maxArea: 0, maxRatio: 2.5 },
-            { label: "Bedroom", minArea: 12, maxArea: 0, maxRatio: 2.5 },
-            { label: "Bathroom", minArea: 4, maxArea: 0, maxRatio: 3 }
-          ], algorithm: "bsp", wallWidth: 0.15, connections: "Living-Kitchen, Living-Bedroom", repulsions: "", saIterations: 600 } },
-          { id: "out", tool: "output", x: 800, y: 60, params: { slots: [
-            { id: "s1", label: "Rooms" },
-            { id: "s2", label: "Floor Area (m²)" },
-            { id: "s3", label: "SA Score" }
-          ] } }
-        ],
-        edges: [
-          { source: "src", target: "layoutgen" },
-          { source: "ip", target: "layoutgen", sourceHandle: "val-minArea", targetHandle: "valin-minArea" },
-          { source: "ip", target: "layoutgen", sourceHandle: "val-wallWidth", targetHandle: "valin-wallWidth" },
-          { source: "ip", target: "layoutgen", sourceHandle: "val-saIterations", targetHandle: "valin-saIterations" },
-          { source: "layoutgen", target: "out", sourceHandle: "val-rooms", targetHandle: "valin-s1" },
-          { source: "layoutgen", target: "out", sourceHandle: "val-area", targetHandle: "valin-s2" },
-          { source: "layoutgen", target: "out", sourceHandle: "val-score", targetHandle: "valin-s3" }
-        ],
-      },
-    ],
-  },
-  {
-    title: "Site",
-    workflows: [
-      {
-        id: "site-massing",
-        title: "Site Massing",
-        description: "Full site-massing study from a selected plot Space: setbacks (Inset) → split into Amenity Open Space + buildable → Optimise Rectangle → extrude tower floors (upward) + a basement podium (downward). Alongside, an FSI BUA statement (basic / premium / TDR / scheme / fungible) and Non-FSI BUA (parking + other) are computed in Math nodes and collected in an Output node (areas, floor counts, building height, GCR, total BUA). Wire it to a plot Space (the Space node grabs the selection).",
-        nodes: [
-          { id: "g_fsi", tool: "group", type: "group", x: -409, y: 471, width: 700, height: 900, params: { label: "FSI BUA Statement" } },
-          { id: "g_nonfsi", tool: "group", type: "group", x: -420, y: 1500, width: 460, height: 300, params: { label: "Non-FSI BUA" } },
-          { id: "g_massing", tool: "group", type: "group", x: 360, y: -160, width: 1000, height: 800, params: { label: "Massing Pipeline" } },
-          { id: "g_out", tool: "group", type: "group", x: 360, y: 720, width: 580, height: 560, params: { label: "Measurements & Output" } },
-          { id: "source_9", tool: "source", x: -1128, y: -703, params: { id: "Space001", grabFromSelection: true } },
-          { id: "ip", tool: "input-props", x: -1040, y: -471, params: { props: [
-            { id: "amenityOsRate", name: "Amenity OS Rate", type: "range", value: 0.1, min: 0, max: 1, step: 0.01, options: [] },
-            { id: "losRate", name: "LOS Rate", type: "range", value: 0.15, min: 0, max: 1, step: 0.01, options: [] },
-            { id: "basicFsi", name: "Basic FSI", type: "range", value: 1, min: 0, max: 5, step: 0.1, options: [] },
-            { id: "premiumFsi", name: "Premium FSI", type: "range", value: 0.5, min: 0, max: 5, step: 0.1, options: [] },
-            { id: "tdr", name: "TDR FSI", type: "range", value: 0.9, min: 0, max: 5, step: 0.1, options: [] },
-            { id: "fung", name: "Fungible Rate", type: "range", value: 0.35, min: 0, max: 1, step: 0.01, options: [] },
-            { id: "schemeFsi", name: "Scheme FSI (m2)", type: "range", value: 11721.6, min: 0, max: 50000, step: 0.1, options: [] },
-            { id: "inSitu", name: "In-Situ FSI", type: "range", value: 2, min: 0, max: 5, step: 0.1, options: [] },
-            { id: "carParks", name: "Car Parks", type: "range", value: 417, min: 0, max: 2000, step: 1, options: [] },
-            { id: "areaPerCarPark", name: "Area/Car Park", type: "text", value: "30", min: 0, max: 100, step: 1, options: [] },
-            { id: "otherNonFsi", name: "Other Non-FSI", type: "text", value: "6000", min: 0, max: 50000, step: 1, options: [] },
-            { id: "wings", name: "Wings / Cores", type: "range", value: 4, min: 1, max: 20, step: 1, options: [] },
-            { id: "podiumOffset", name: "Podium Offset", type: "range", value: 2.8, min: 0, max: 20, step: 0.1, options: [] },
-            { id: "front", name: "Front Setback", type: "range", value: 10.8, min: 0, max: 30, step: 0.1, options: [] },
-            { id: "remaining", name: "Other Setback", type: "range", value: 3.2, min: 0, max: 30, step: 0.1, options: [] },
-            { id: "edgeIndex", name: "Front Edge Index", type: "range", value: 3, min: 0, max: 19, step: 1, options: [] },
-            { id: "axisTilt", name: "Axis Tilt", type: "range", value: 99, min: 0, max: 360, step: 1, options: [] },
-            { id: "rectangles", name: "Rectangles", type: "range", value: 1, min: 1, max: 10, step: 1, options: [] },
-            { id: "splitAngle", name: "Split Angle", type: "range", value: 271, min: 0, max: 360, step: 1, options: [] },
-            { id: "p_1_nnz6", name: "Optimise axis tilt ", type: "checkbox", value: false, min: 0, max: 10, step: 1, options: [] },
-            { id: "p_1_k0gu", name: "Floor Height", type: "range", value: 3.2, min: 0, max: 10, step: 0.1, options: [] }
-          ] } },
-          { id: "sg_plot", tool: "space-geometry", x: -397, y: -152, params: {} },
-          { id: "math_6", tool: "math", x: -342, y: -26, params: { a: 0.1, b: 8140, op: "multiply", round: "ceil" } },
-          { id: "m_amenity", tool: "math", parentId: "g_fsi", x: 16, y: 44, params: { a: 8140, b: 0.1, op: "multiply", round: "none" } },
-          { id: "m_netplot", tool: "math", parentId: "g_fsi", x: 16, y: 240, params: { a: 8140, b: 814, op: "subtract", round: "none" } },
-          { id: "m_zonal", tool: "math", parentId: "g_fsi", x: 16, y: 436, params: { a: 7326, b: 1, op: "multiply", round: "none" } },
-          { id: "m_premium", tool: "math", parentId: "g_fsi", x: 16, y: 632, params: { a: 7326, b: 0.5, op: "multiply", round: "none" } },
-          { id: "m_tdr", tool: "math", parentId: "g_fsi", x: 236, y: 44, params: { a: 7326, b: 0.9, op: "multiply", round: "none" } },
-          { id: "m_premtdr", tool: "math", parentId: "g_fsi", x: 236, y: 240, params: { a: 3663, b: 6593.4, op: "add", round: "none" } },
-          { id: "m_premtdrscheme", tool: "math", parentId: "g_fsi", x: 236, y: 436, params: { a: 10256.4, b: 11721.6, op: "add", round: "none" } },
-          { id: "m_totalexfung", tool: "math", parentId: "g_fsi", x: 236, y: 632, params: { a: 7326, b: 21978, op: "add", round: "none" } },
-          { id: "m_fungzonal", tool: "math", parentId: "g_fsi", x: 456, y: 44, params: { a: 7326, b: 0.35, op: "multiply", round: "none" } },
-          { id: "m_fungothers", tool: "math", parentId: "g_fsi", x: 456, y: 289, params: { a: 21978, b: 0.35, op: "multiply", round: "none" } },
-          { id: "m_fungtotal", tool: "math", parentId: "g_fsi", x: 456, y: 436, params: { a: 2564.1, b: 7692.3, op: "add", round: "none" } },
-          { id: "m_fsibua", tool: "math", parentId: "g_fsi", x: 456, y: 632, params: { a: 29304, b: 10256.4, op: "add", round: "none" } },
-          { id: "m_parking", tool: "math", parentId: "g_nonfsi", x: 16, y: 44, params: { a: 417, b: "30", op: "multiply", round: "none" } },
-          { id: "m_nonfsibua", tool: "math", parentId: "g_nonfsi", x: 236, y: 44, params: { a: 12510, b: "6000", op: "add", round: "none" } },
-          { id: "inset_1", tool: "inset", parentId: "g_massing", x: 16, y: 44, params: { mode: "front-remaining", uniformSetback: 0.25, inside: true, front: 10.8, remaining: 3.2, frontEdgeMode: "index", frontEdgeIndex: 3, inputCount: 1 } },
-          { id: "split_4", tool: "split", parentId: "g_massing", x: 256, y: 44, params: { type: "normal", mode: "target", count: 2, angle: 271, target: 814, splitAlongMinorPrincipalAxis: false, stripLength: 1, stripPosition: 50, principalMethod: "pca", ratios: "90,10", handleCount: 2 } },
-          { id: "optimise-rect_1", tool: "optimise-rect", parentId: "g_massing", x: 496, y: 44, params: { shape: "rectangle", reference: "custom", referenceEdge: 0, axisAngle: 99, count: 1, union: true, shrinkEnabled: false, targetArea: 50, shrinkAngle: 0, shrinkSlide: 0, optimiseShrinkEnabled: false, exactArea: false, optimiseAxisTilt: 0, inputCount: 1 } },
-          { id: "floor-massing_1", tool: "floor-massing", parentId: "g_massing", x: 736, y: 44, params: { direction: "upward", n: 8, inputCount: 1 } },
-          { id: "inset_2", tool: "inset", parentId: "g_massing", x: 16, y: 400, params: { mode: "equal", uniformSetback: 2.8, inside: false, front: 0, remaining: 0, inputCount: 1 } },
-          { id: "floor-massing_2", tool: "floor-massing", parentId: "g_massing", x: 290, y: 377, params: { direction: "downward", n: 4, inputCount: 1 } },
-          { id: "m_floors", tool: "math", parentId: "g_massing", x: 496, y: 400, params: { a: 39560.4, b: 4957.582344629365, op: "divide", round: "ceil" } },
-          { id: "m_bfloors", tool: "math", parentId: "g_massing", x: 736, y: 400, params: { a: 18510, b: 5832.273365089326, op: "divide", round: "ceil" } },
-          { id: "sg_buildable", tool: "space-geometry", parentId: "g_out", x: 5, y: 41, params: {} },
-          { id: "sg_footprint", tool: "space-geometry", parentId: "g_out", x: 0, y: 204, params: {} },
-          { id: "sg_basement", tool: "space-geometry", parentId: "g_out", x: 16, y: 356, params: {} },
-          { id: "output_5", tool: "output", parentId: "g_out", x: 347, y: 110, params: { slots: [
-            { id: "s1", label: "Inset Area" },
-            { id: "s_1_ni97", label: "Amenities Open Space Area" },
-            { id: "s_2_hs1v", label: "Buildable Area" },
-            { id: "s_3_f5ah", label: "Building Footprint Area" },
-            { id: "s_4_r12i", label: "Basement Area" },
-            { id: "s_5_x4jw", label: "FSI BUA" },
-            { id: "s_6_i37o", label: "Non-FSI BUA" },
-            { id: "s_7_drvb", label: "Number of Floors" },
-            { id: "s_8_nhlw", label: "Number of Basement Floors" },
-            { id: "s_1_cgd3", label: "Total Height of Building" },
-            { id: "s_1_p7i2", label: "Layout Open Space" },
-            { id: "s_2_h1jl", label: "Ground Coverage Ratio" },
-            { id: "s_3_psip", label: "Total BUA Area" },
-            { id: "s_4_6yku", label: "" }
-          ] } },
-          { id: "math_10", tool: "math", x: 1164, y: 525, params: { a: 4, b: 3.2, op: "multiply", round: "ceil" } },
-          { id: "math_11", tool: "math", x: 648, y: 1278, params: { a: 5698.088194873841, b: 4957.582344629365, op: "subtract", round: "ceil" } },
-          { id: "math_12", tool: "math", x: 0, y: -21, params: { a: 4957.582344629365, b: 8140, op: "divide", round: "none" } },
-          { id: "math_13", tool: "math", x: 442, y: 1435, params: { a: 39560.4, b: 18510, op: "add", round: "ceil" } }
-        ],
-        edges: [
-          { source: "ip", target: "inset_1" },
-          { source: "inset_1", target: "split_4" },
-          { source: "optimise-rect_1", target: "floor-massing_1" },
-          { source: "optimise-rect_1", target: "inset_2" },
-          { source: "inset_2", target: "floor-massing_2" },
-          { source: "optimise-rect_1", target: "sg_footprint" },
-          { source: "floor-massing_2", target: "sg_basement" },
-          { source: "ip", target: "inset_1", sourceHandle: "val-front", targetHandle: "valin-front" },
-          { source: "ip", target: "inset_1", sourceHandle: "val-remaining", targetHandle: "valin-remaining" },
-          { source: "ip", target: "inset_1", sourceHandle: "val-edgeIndex", targetHandle: "valin-frontEdgeIndex" },
-          { source: "ip", target: "split_4", sourceHandle: "val-ratio", targetHandle: "valin-ratios" },
-          { source: "ip", target: "split_4", sourceHandle: "val-splitAngle", targetHandle: "valin-angle" },
-          { source: "ip", target: "optimise-rect_1", sourceHandle: "val-axisTilt", targetHandle: "valin-axisAngle" },
-          { source: "ip", target: "optimise-rect_1", sourceHandle: "val-rectangles", targetHandle: "valin-count" },
-          { source: "ip", target: "inset_2", sourceHandle: "val-podiumOffset", targetHandle: "valin-uniformSetback" },
-          { source: "sg_plot", target: "m_amenity", sourceHandle: "val-area", targetHandle: "valin-a" },
-          { source: "ip", target: "m_amenity", sourceHandle: "val-amenityOsRate", targetHandle: "valin-b" },
-          { source: "sg_plot", target: "m_netplot", sourceHandle: "val-area", targetHandle: "valin-a" },
-          { source: "m_amenity", target: "m_netplot", sourceHandle: "val-result", targetHandle: "valin-b" },
-          { source: "m_netplot", target: "m_zonal", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "m_zonal", sourceHandle: "val-basicFsi", targetHandle: "valin-b" },
-          { source: "m_netplot", target: "m_premium", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "m_premium", sourceHandle: "val-premiumFsi", targetHandle: "valin-b" },
-          { source: "m_netplot", target: "m_tdr", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "m_tdr", sourceHandle: "val-tdr", targetHandle: "valin-b" },
-          { source: "m_premium", target: "m_premtdr", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "m_tdr", target: "m_premtdr", sourceHandle: "val-result", targetHandle: "valin-b" },
-          { source: "m_premtdr", target: "m_premtdrscheme", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "m_premtdrscheme", sourceHandle: "val-schemeFsi", targetHandle: "valin-b" },
-          { source: "m_zonal", target: "m_totalexfung", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "m_premtdrscheme", target: "m_totalexfung", sourceHandle: "val-result", targetHandle: "valin-b" },
-          { source: "m_zonal", target: "m_fungzonal", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "m_fungzonal", sourceHandle: "val-fung", targetHandle: "valin-b" },
-          { source: "m_premtdrscheme", target: "m_fungothers", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "m_fungothers", sourceHandle: "val-fung", targetHandle: "valin-b" },
-          { source: "m_fungzonal", target: "m_fungtotal", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "m_fungothers", target: "m_fungtotal", sourceHandle: "val-result", targetHandle: "valin-b" },
-          { source: "m_totalexfung", target: "m_fsibua", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "m_fungtotal", target: "m_fsibua", sourceHandle: "val-result", targetHandle: "valin-b" },
-          { source: "ip", target: "m_parking", sourceHandle: "val-carParks", targetHandle: "valin-a" },
-          { source: "ip", target: "m_parking", sourceHandle: "val-areaPerCarPark", targetHandle: "valin-b" },
-          { source: "m_parking", target: "m_nonfsibua", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "m_nonfsibua", sourceHandle: "val-otherNonFsi", targetHandle: "valin-b" },
-          { source: "m_fsibua", target: "m_floors", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "optimise-rect_1", target: "m_floors", sourceHandle: "val-area", targetHandle: "valin-b" },
-          { source: "m_floors", target: "floor-massing_1", sourceHandle: "val-result", targetHandle: "valin-n" },
-          { source: "m_nonfsibua", target: "m_bfloors", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "inset_2", target: "m_bfloors", sourceHandle: "val-area", targetHandle: "valin-b" },
-          { source: "m_bfloors", target: "floor-massing_2", sourceHandle: "val-result", targetHandle: "valin-n" },
-          { source: "inset_1", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s1" },
-          { source: "m_amenity", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_1_ni97" },
-          { source: "sg_buildable", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s_2_hs1v" },
-          { source: "sg_footprint", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s_3_f5ah" },
-          { source: "sg_basement", target: "output_5", sourceHandle: "val-area", targetHandle: "valin-s_4_r12i" },
-          { source: "m_fsibua", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_5_x4jw" },
-          { source: "m_nonfsibua", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_6_i37o" },
-          { source: "floor-massing_1", target: "output_5", sourceHandle: "val-floors", targetHandle: "valin-s_7_drvb" },
-          { source: "floor-massing_2", target: "output_5", sourceHandle: "val-floors", targetHandle: "valin-s_8_nhlw" },
-          { source: "split_4", target: "optimise-rect_1", sourceHandle: "out-1" },
-          { source: "split_4", target: "sg_buildable", sourceHandle: "out-1" },
-          { source: "ip", target: "math_6", sourceHandle: "val-amenityOsRate", targetHandle: "valin-a" },
-          { source: "sg_plot", target: "math_6", sourceHandle: "val-area", targetHandle: "valin-b" },
-          { source: "math_6", target: "split_4", sourceHandle: "val-result", targetHandle: "valin-target" },
-          { source: "ip", target: "optimise-rect_1", sourceHandle: "val-p_1_nnz6", targetHandle: "valin-optimiseAxisTilt" },
-          { source: "source_9", target: "ip" },
-          { source: "source_9", target: "sg_plot" },
-          { source: "math_10", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_1_cgd3" },
-          { source: "m_bfloors", target: "math_10", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "ip", target: "math_10", sourceHandle: "val-p_1_k0gu", targetHandle: "valin-b" },
-          { source: "sg_buildable", target: "math_11", sourceHandle: "val-area", targetHandle: "valin-a" },
-          { source: "sg_footprint", target: "math_11", sourceHandle: "val-area", targetHandle: "valin-b" },
-          { source: "math_11", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_1_p7i2" },
-          { source: "math_12", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_2_h1jl" },
-          { source: "sg_footprint", target: "math_12", sourceHandle: "val-area", targetHandle: "valin-a" },
-          { source: "sg_plot", target: "math_12", sourceHandle: "val-area", targetHandle: "valin-b" },
-          { source: "m_fsibua", target: "math_13", sourceHandle: "val-result", targetHandle: "valin-a" },
-          { source: "m_nonfsibua", target: "math_13", sourceHandle: "val-result", targetHandle: "valin-b" },
-          { source: "math_13", target: "output_5", sourceHandle: "val-result", targetHandle: "valin-s_3_psip" }
-        ],
-      },
-    ],
-  },
-  {
-    title: "Parametric",
-    workflows: [
-      {
-        id: "parametric-workflow",
-        title: "Parametric Workflow",
-        description: "Parametric Object (a definition textbox) → Grab Input Parameters (interactive sliders) → Parametric Renderer (2D plan) + Parametric 3D Renderer → Mesh to 3D, all anchored at a selected Canvas Node. Grab Input Parameters auto-builds a control per parameter; move its sliders and BOTH the 2D plan and the 3D mesh redraw from the same parameters. Pre-loaded with a self-contained staircase; select a node on the canvas (the Node source grabs the selection). Hit-and-trial: tweak the JSON in the Parametric Object box (or the sliders) to change the geometry, no code.",
-        nodes: [
-          // The parametric object's definition lives entirely in this textbox (parameters + geometry rules).
-          { id: "obj", tool: "param-object", x: 12, y: 40, params: { definition: STAIRCASE_DEFINITION } },
-          // Interactive control panel — one slider/dropdown per parameter, baked from the definition.
-          { id: "grab", tool: "param-grab", x: 360, y: 40, params: { props: [] } },
-          // The canvas anchor — grabs the currently-selected node (or set an explicit id).
-          { id: "node", tool: "node-source", x: 360, y: 620, params: { id: "", grabFromSelection: true, outputMode: "single" } },
-          // 2D: evaluates the (value-applied) definition at the node and draws its plan lines on the canvas.
-          { id: "render", tool: "param-render", x: 720, y: 180, params: { definition: "" } },
-          // 3D: evaluates the SAME definition into a mesh at the node (footprints extruded by height).
-          { id: "render3d", tool: "param-render-3d", x: 720, y: 420, params: { definition: "" } },
-          // Terminal: shows the parametric mesh in the 3D view.
-          { id: "meshto3d", tool: "mesh-to-3d", x: 1060, y: 420, params: {} },
-        ],
-        edges: [
-          // Definition → Grab Parameters (val-def → valin-def): controls auto-populate from the parameters.
-          { source: "obj", target: "grab", sourceHandle: "val-def", targetHandle: "valin-def" },
-          // Grab Parameters → both renderers: the definition with the user's slider values baked into defaults.
-          { source: "grab", target: "render", sourceHandle: "val-def", targetHandle: "valin-def" },
-          { source: "grab", target: "render3d", sourceHandle: "val-def", targetHandle: "valin-def" },
-          // Selected canvas node point → both renderers' main geometry input (the placement anchor).
-          { source: "node", target: "render", sourceHandle: "out-0" },
-          { source: "node", target: "render3d", sourceHandle: "out-0" },
-          // 3D mesh → Mesh to 3D terminal (shows in the 3D view).
-          { source: "render3d", target: "meshto3d" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Structure",
-    workflows: [
-      {
-        id: "structural-template",
-        title: "Structural Template",
-        description: "Canvas (graph) → Frame Builder ← Schema → Output Schema. Columns at nodes (W×H), beams along segments, optional subtract. The Schema's node TYPE (Column) and segment TYPE (Beam) — with icons — surface in the Add Node / Add Segment drawing dropdowns. Edit per-component sizing/hatch in the Properties tab.",
-        nodes: [
-          {
-            id: "schema", tool: "schema", x: -74, y: 188,
-            params: {
-              name: "Structural Schema",
-              nodeProps: [
-                // Node TYPE discriminator (drives the Add Node dropdown) + column sizing read by the Frame Builder.
-                xProp("n_type", "type", "Type", "select", "column", { role: "node-type", options: ["column"], optionIcons: { column: svgIcon(`<rect x="6" y="6" width="12" height="12" rx="1" fill="#0f172a" stroke="none"/>`) } }),
-                sProp("n_w", "width", "Width", "number", 300, "col-width", "mm", 0, 2000, 10),
-                sProp("n_h", "height", "Height", "number", 450, "col-height", "mm", 0, 3000, 10),
-                sProp("n_x", "hatch", "Hatch", "checkbox", false, "hatch"),
-              ],
-              segmentProps: [
-                // Segment TYPE discriminator (drives the Add Segment dropdown) + beam sizing read by the Frame Builder.
-                xProp("s_type", "type", "Type", "select", "beam", { role: "seg-type", options: ["beam"], optionIcons: { beam: svgIcon(`<rect x="3" y="9" width="18" height="6" rx="0.5"/><line x1="3" y1="12" x2="21" y2="12"/>`) } }),
-                sProp("s_w", "width", "Width", "number", 230, "beam-width", "mm", 0, 1000, 10),
-                sProp("s_x", "hatch", "Hatch", "checkbox", false, "hatch"),
-              ],
-              spaceProps: [],
-              graphProps: [sProp("g_s", "subtract", "Subtract beams from columns", "checkbox", true, "subtract")],
-            },
-          },
-          { id: "canvas", tool: "canvas-source", x: -20, y: -131, params: {} },
-          { id: "frame", tool: "frame-builder", x: 580, y: 180, params: { columnWidthMm: 300, columnHeightMm: 450, beamWidthMm: 230, subtract: true } },
-          {
-            id: "out", tool: "output-schema", x: 840, y: 180,
-            params: {
-              name: "Frame Results",
-              nodeProps: [rProp("r_cw", "columnWidth", "Column W", "mm", 1), rProp("r_ca", "columnArea", "Column area", "m²", 0.001)],
-              segmentProps: [rProp("r_bl", "beamLength", "Beam length", "m", 0.001), rProp("r_ba", "beamArea", "Beam area", "m²", 0.001)],
-              spaceProps: [], graphProps: [],
-            },
-          },
-          // Brings the schema's Column / Beam types (with icons) into the Add Node / Add Segment dropdowns.
-          { id: "schemaTools", tool: "schema-to-drawing", x: -74, y: 470, params: {} },
-        ],
-        edges: [
-          { source: "schema", target: "frame", targetHandle: "gin-schema" },
-          { source: "frame", target: "out" },
-          // Canvas Segments bundle (out-3) feeds the Frame Builder's main geometry input.
-          { source: "canvas", target: "frame", sourceHandle: "out-3" },
-          // Schema → Drawing Tools: surface Column / Beam types in the drawing dropdowns.
-          { source: "schema", target: "schemaTools", targetHandle: "gin-schema" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Networks",
-    workflows: [
-      {
-        id: "pipe-network",
-        title: "Pipe Network Solver",
-        description: "Schema → Graph → Pipe Network Solver → Output Schema. Hydraulic solve (Todini). Edit per-node demand/elevation and per-segment diameter/roughness in the Properties tab; results in Metrics.",
-        nodes: [
-          {
-            id: "schema", tool: "schema", x: 0, y: 120,
-            params: {
-              name: "Pipe Network",
-              nodeProps: [
-                sProp("n_d", "demand", "Demand", "number", 0, "demand", "L/s", 0, 1000, 0.1),
-                sProp("n_e", "elevation", "Elevation", "number", 0, "elevation", "m", -100, 1000, 0.1),
-                sProp("n_f", "fixedHead", "Fixed head (source)", "checkbox", false, "fixedHead"),
-              ],
-              segmentProps: [
-                sProp("s_d", "diameter", "Diameter", "number", 100, "diameter", "mm", 0, 2000, 1),
-                sProp("s_r", "roughness", "Roughness (C)", "number", 130, "roughness", "", 0, 1000, 1),
-              ],
-              spaceProps: [], graphProps: [],
-            },
-          },
-          { id: "graph", tool: "graph-source", x: 250, y: 0, params: { id: "", grabFromSelection: true, outputMode: "single" } },
-          { id: "pipe", tool: "pipe-solver", x: 500, y: 80, params: { formula: "hazen-williams", maxIter: 60, tolerance: 0.001 } },
-          {
-            id: "out", tool: "output-schema", x: 760, y: 80,
-            params: {
-              name: "Hydraulic Results",
-              nodeProps: [rProp("r_h", "head", "Head", "m", 0.01), rProp("r_p", "pressure", "Pressure", "m", 0.01)],
-              segmentProps: [rProp("r_q", "discharge", "Discharge", "L/s", 0.01), rProp("r_v", "velocity", "Velocity", "m/s", 0.01)],
-              spaceProps: [], graphProps: [],
-            },
-          },
-        ],
-        edges: [
-          { source: "schema", target: "graph" },
-          { source: "schema", target: "pipe", targetHandle: "gin-schema" },
-          { source: "graph", target: "pipe" },
-          { source: "pipe", target: "out" },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Hydrology",
-    workflows: [
-      {
-        id: "watershed-delineation",
-        title: "Watershed Delineation",
-        description: "Grid → synthetic DEM (Grid Field) → Fill Depressions → Flow Direction → Flow Accumulation → Grid Threshold (streams) → Marching Squares (stream lines); Flow Direction → Watershed (basin). Create a Grid on the canvas (its lattice is the DEM extent); tune the DEM ramp + stream threshold and the channel network + catchment update live.",
-        nodes: [
-          // Grid (grid-source) — grabs the Grid currently selected on the canvas; its lattice is the DEM extent.
-          { id: "grid", tool: "grid-source", x: 0, y: 0, params: { id: "", grabFromSelection: true } },
-          // Synthetic DEM — a directional elevation ramp + random jitter over the lattice (the terrain).
-          { id: "dem", tool: "grid-field", x: 260, y: 0, params: { direction: "top-bottom", high: 100, low: 0, randomness: 0.35, seed: 7, inciseOccupied: false, showCellValues: false } },
-          // Hydrologically condition the DEM so every cell drains to the border (Priority-Flood + ε).
-          { id: "filled", tool: "fill-depressions", x: 520, y: 0, params: { epsilon: 0.01, edgesAreOutlets: true, highlightFilled: false, showCellValues: false } },
-          // D8 steepest-descent flow direction per cell.
-          { id: "flowdir", tool: "flow-direction", x: 780, y: 0, params: { method: "d8", showArrows: true, colorByDirection: false } },
-          // Upstream contributing cells per cell — high values are channels.
-          { id: "flowacc", tool: "flow-accumulation", x: 1040, y: -130, params: { asArea: false, logDisplay: true, showCellValues: false } },
-          // Threshold the accumulation → a 0/1 stream mask (raise the threshold for fewer / larger channels).
-          { id: "streams", tool: "grid-threshold", x: 1300, y: -130, params: { op: ">", threshold: 20, passColor: "#1d4ed8", showFail: false } },
-          // Vectorise the stream mask into channel polylines.
-          { id: "streamlines", tool: "marching-squares", x: 1560, y: -130, params: { levels: 1 } },
-          // Delineate the catchment draining to the lowest cell, over the flow-direction field.
-          { id: "basin", tool: "watershed", x: 1040, y: 150, params: { useLowestCell: true, fillColor: "#0ea5e9", showBoundary: true } },
-        ],
-        edges: [
-          { source: "grid", target: "dem" },
-          { source: "dem", target: "filled" },
-          { source: "filled", target: "flowdir" },
-          { source: "flowdir", target: "flowacc" },
-          { source: "flowacc", target: "streams" },
-          { source: "streams", target: "streamlines" },
-          // Branch: the basin is delineated straight from the flow-direction field.
-          { source: "flowdir", target: "basin" },
-        ],
-      },
-    ],
-  },
-];
-
 // Unique id for an Output-node metric slot (unique within a node is enough; keep globally unique anyway).
 let slotSeq = 1;
 const nextSlotId = () => `s_${slotSeq++}_${Math.random().toString(36).slice(2, 6)}`;
@@ -821,107 +274,8 @@ const nextSlotId = () => `s_${slotSeq++}_${Math.random().toString(36).slice(2, 6
 // --- Generate-node helper (image / video / music via the Google AI API) ---
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Human-readable catalog of every node tool + its params, derived from FLOW_TOOLS. Fed to the AI
- *  "Generate JSON" feature so the model emits valid tools/params. */
-const buildToolCatalog = (): string =>
-  Object.values(FLOW_TOOLS)
-    .map((def) => {
-      if (def.type === "source") return `- "source": pipeline input (the selected space). Exactly one, id "source", params {}.`;
-      const fieldDesc = def.fields
-        .map((f) => {
-          if (f.kind === "select") return `${f.key} ∈ {${(f.options ?? []).map((o) => o.value).join(", ")}}`;
-          if (f.kind === "range" || f.kind === "number") return `${f.key}: number${f.min != null ? ` ${f.min}..${f.max}` : ""}`;
-          if (f.kind === "checkbox") return `${f.key}: boolean`;
-          return `${f.key}: string`;
-        })
-        .join("; ");
-      const outN = def.outputCount ? "multi-geometry-output (out-0, out-1, …)" : def.hasOutput ? "1 geometry output (sourceHandle null)" : "no geometry output";
-      const valOut = def.valueOutputs?.length ? ` value-OUT: ${def.valueOutputs.map((v) => `val-${v.key}`).join(", ")};` : "";
-      const valIn = def.valueInputs?.length ? ` value-IN: ${def.valueInputs.map((v) => `valin-${v.key}`).join(", ")};` : "";
-      // Extra geometry inputs (e.g. a Schema node into gin-schema) + named output endpoints (canvas-source).
-      const geomIn = def.geomInputs?.length ? ` geom-IN: ${def.geomInputs.map((g) => `gin-${g.key}`).join(", ")};` : "";
-      const outLabels = def.outputLabels?.length ? ` output endpoints: ${def.outputLabels.map((l, i) => `out-${i}=${l}`).join(", ")};` : "";
-      // Dynamic-handle nodes don't list handles via valueInputs/valueOutputs — describe them inline.
-      const dynamic = def.type === "input-props"
-        ? " DYNAMIC value-OUT: one val-<propId> per entry in params.props;"
-        : def.type === "output"
-        ? " DYNAMIC value-IN: one valin-<slotId> per entry in params.slots;"
-        : "";
-      return `- "${def.type}" (${def.label}); ${outN};${valOut}${valIn}${geomIn}${outLabels}${dynamic} params: ${fieldDesc || "none"}; defaults: ${JSON.stringify(def.defaultParams)}`;
-    })
-    .join("\n");
-
-/** System instruction for AI flow generation — schema rules + the live tool catalog. */
-const FLOW_GEN_INSTRUCTION = `You generate a node-graph "Flow" for an architecture floor-plan tool. Respond with ONLY a JSON object — no prose, no markdown fences.
-
-Schema:
-{
-  "version": 1,
-  "nodes": [ {
-    "id": string,
-    "position": { "x": number, "y": number },
-    "data": { "tool": string, "params": object },
-    "type"?: "group",        // ONLY for group container boxes
-    "parentId"?: string,     // ONLY for nodes placed inside a group
-    "width"?: number, "height"?: number   // ONLY for group containers (box size)
-  } ],
-  "edges": [ { "id": string, "source": nodeId, "target": nodeId, "sourceHandle": string|null, "targetHandle": string|null } ]
-}
-
-General rules:
-- Pick a ROOT for the geometry based on the request:
-  • SPACE flows (inset / split / massing / optimise-rect …) root on ONE "source" node: {"id":"source","position":{"x":80,"y":200},"data":{"tool":"source","params":{}}} — the selected space.
-  • GRAPH / FLOORPLAN flows (walls, doors, windows, objects, dimensions, pipe/frame solvers) root on "canvas-source" (the whole canvas, 5 typed outputs: out-0 Spaces, out-1 Nodes, out-2 Segments, out-3 Graph, out-4 Images) or "graph-source" / "segment-source" / "node-source". These do NOT need a "source" node and are independent of the current selection.
-- Other node ids are "<tool>_<n>" (e.g. "inset_1"). Lay nodes left→right: x grows ~260 per stage, vary y.
-- The first geometry tool connects from the chosen root. Use ONLY the tools/params in the catalog. Start from each tool's "defaults" and change only what the request needs; keep values within the stated ranges/options.
-
-Required overall structure for SPACE flows (rooted on "source" — skip this for graph/floorplan flows, which use schemas + Building nodes instead):
-- INPUTS FIRST: include exactly one "input-props" (Input Properties) node, wired from "source". Put every important/adjustable parameter the design depends on there (setbacks, FSI rates, floor counts, ratios, angles, target areas, toggles, …) as props, and drive the downstream nodes by wiring its val-<propId> outputs into their valin-* handles — do NOT hard-code those numbers directly in the consuming nodes when they are meant to be user-tunable.
-- ALGORITHMS / CALCULATIONS IN THE MIDDLE: between inputs and outputs put the geometry tools (inset, split, optimise-rect, bsp, voronoi, massing, …) and the math chain (space-geometry to measure, math nodes for formulas) that transform the space and compute values.
-- OUTPUTS LAST: include exactly one "output" (Output Metrics) node and wire every important result into its slots (areas via val-area, computed values via val-result, floor counts via val-floors, …), giving each slot a clear label. This is the single place the user reads results.
-- So the canonical flow is: source → input-props → (algorithms + calculations) → output. Group these stages for clarity when the graph is large.
-
-Connections — there are TWO kinds of edges:
-1. GEOMETRY (a space/polygon flows downstream): sourceHandle = null for a 1-output node, or "out-0"/"out-1"/… for a multi-geometry-output node (split, bsp, voronoi, conditional; conditional out-0 = TRUE, out-1 = FALSE). targetHandle = null.
-2. VALUE (a single number/string flows into a parameter): sourceHandle = "val-<key>" (a node's value-OUT), targetHandle = "valin-<key>" (the consumer's value-IN). Use these to feed computed numbers between nodes. The catalog lists each node's value-OUT / value-IN handle ids.
-
-Key value-driven nodes:
-- "math": result = a (op) b. Wire numbers into valin-a / valin-b; it exposes val-result. op ∈ {add, subtract, multiply, divide}; round ∈ {none, ceil, floor, round}. Chain several math nodes for a multi-step formula (one binary op each), e.g. plot×rate, then a−b, then ÷ area with round "ceil" to get floor counts.
-- "space-geometry": measures the input space → value-OUT val-area (m²), val-perimeter (m), val-vertices (count); also forwards the space on its geometry output.
-- "floor-massing": value-IN valin-n (floor count); value-OUT val-floors.
-- "inset"/"optimise-rect": value-OUT val-area. "optimise-rect" also takes valin-axisAngle / valin-count / valin-optimiseAxisTilt. "split" takes valin-ratios / valin-angle / valin-target (target = first-piece area, only in Target sizing).
-
-Special DYNAMIC nodes:
-- "input-props" (Input Properties): the single place for the flow's adjustable inputs. Takes the Space and forwards it. params = { "props": [ { "id": string, "name": string, "type": "range"|"select"|"checkbox"|"text", "value": number|string|boolean, "min": number, "max": number, "step": number, "options": string[] } ] }. Each prop exposes a value-OUT "val-<propId>". Define your sliders/options/checkboxes/text here and wire their val-<propId> into downstream valin-* handles.
-- "output" (Output Metrics): terminal collector shown in the Metrics tab. params = { "slots": [ { "id": string, "label": string } ] }. Each slot is a value-IN "valin-<slotId>"; wire any node's val-* output into it (give the slot a clear label).
-
-Schemas (per-component properties — for graph/floorplan flows):
-- "schema" (Input Schema): defines properties attached to canvas components. params = { "name"?: string, "nodeProps": [], "segmentProps": [], "spaceProps": [], "graphProps": [] }. Each entry = { "id": string, "key": string, "label": string, "kind": "number"|"select"|"checkbox"|"text"|"color", "unit": string, "def": number|string|boolean, "min": number, "max": number, "step": number, "options": string[], "role": string, "showIf"?: { "when": string, "equals": string|number|boolean } }. Wire its OUTPUT (sourceHandle null) into a "canvas-source"/"graph-source"/"segment-source"/"node-source"/"source" node OR into a processor's "gin-schema" handle — the properties then appear (and are editable per component) in the Properties tab, stored by their "role".
-  • "showIf" makes a property type-driven (e.g. door fields only when a "type" select === "door"). The "role" is what processors read (see below).
-- "output-schema": per-component RESULT rows (Metrics tab). Same four prop lists; wire a processor's OUTPUT into it. Row keys must match the result keys the processor writes (e.g. frame-builder: columnWidth/columnArea, beamLength/beamArea; wall-builder: wallThickness/wallLength; pipe-solver: head/pressure, discharge/velocity).
-
-Building & floorplan nodes (consume a Graph/Canvas and read per-component schema values by ROLE):
-- "frame-builder": Graph in → columns at each node (roles col-width/col-height) + beams along each segment (role beam-width), optional graph-level subtract. Wire a "schema" into its "gin-schema". Emits Spaces; wire its output into an "output-schema" for Metrics.
-- "wall-builder" (Graph to Walls): Graph in → mitred walls; each wall's thickness/justification come from the segment schema (roles wall-thickness / wall-justification) via "gin-schema". Only "wall"-typed segments are drawn.
-- "segment-to-door": a SEGMENT in → a door symbol. params: shape ∈ {polygon, arc, detailed}, thickness, hinge ∈ {left,right}, swing ∈ {left,right}.
-- "segment-to-window": a SEGMENT in → a window symbol. params: shape ∈ {polygon, lines, detailed}, thickness, panes.
-- "node-to-object": a NODE in → a furniture symbol. params: kind (bed/sofa/table/…), width, height, rotation, anchor.
-- Feed these from canvas-source: out-2 = Segments → segment-to-door/window; out-1 = Nodes → node-to-object; out-3 = Graph → frame-builder/wall-builder. Doors/windows/objects can also be filtered from a graph's segments/nodes.
-
-Display nodes (styling pass-throughs — restyle but keep the geometry flowing):
-- "hatching" (Display Space): a Space in → colour/opacity, plus an optional hatch fill (hatch + hatchStyle ∈ {diagonal,dots} + spacing/angle/weight). Passes the space through.
-- "display-segment": a SEGMENT in. mode ∈ {line, buffered}. line: lineStyle + color + showDirection (centerline pass-through). buffered: thickness + justification ∈ {left,center,right} + bufferStyle ∈ {capsule,square,flat} + optional hatch → a Space.
-- "display-node": a NODE in → marker shape/style/color/size + optional hatch.
-
-Floorplan example (no "source" node): "canvas-source" → "schema" (Node type {node|object} + Segment type {wall|door|window} with showIf-gated fields) attached to it, AND canvas out-3 → "wall-builder" (gin-schema ← the schema) → "dimension"; canvas out-2 filtered → "segment-to-door"/"segment-to-window"; canvas out-1 → "node-to-object".
-
-Grouping (optional, VISUAL ONLY — never affects computation):
-- To organize a busy graph, add group containers. A group node: { "id": "g_<name>", "type": "group", "position": {abs x,y}, "width": number, "height": number, "data": { "tool": "group", "params": { "label": "Group Title" } } }.
-- Put member nodes inside by setting their "parentId" to the group id; their "position" is then RELATIVE to the group's top-left (small offsets inside the box, leaving ~40px top for the label). Size the box big enough to contain its children.
-- List every group node BEFORE its child nodes in the array. Do NOT place the "source" node inside a group.
-
-Available tools (handles + params + defaults):
-${buildToolCatalog()}`;
+/** (The AI flow-generation catalog + one-shot instruction moved to ai/flowAgent.ts — the agentic Flow tab
+ *  in Chat AI replaced the one-shot "Generate flow with AI" panel.) */
 
 /** Generic op node — header + param fields + handles. Reads/writes graph state via
  *  the `onParamChange` callback the host injects into node data. */
@@ -1436,6 +790,27 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             <span>→ {d.params._pass ? "TRUE" : "FALSE"}</span>
           </div>
         )}
+        {/* Vectorisation Auto-Tune: sweep the tracing params against the image, score on closed spaces
+            found, bake the best combo back into the sliders. Live progress under the button. */}
+        {d.tool === "vectorise" && (
+          <div className="space-y-1 pt-0.5">
+            <Button
+              size="sm"
+              className="h-7 w-full gap-1.5 px-2 text-[11px] nodrag"
+              disabled={Boolean(d.params._busy)}
+              onClick={() => d.onRunVectorTune?.(id, d.params)}
+            >
+              {d.params._busy
+                ? <><Loader2 className="h-3 w-3 animate-spin" /> Tuning…</>
+                : <><Wand2 className="h-3 w-3" /> Auto-Tune</>}
+            </Button>
+            {typeof d.params._tuneStatus === "string" && d.params._tuneStatus && (
+              <p className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] leading-tight text-violet-700 nodrag">
+                {String(d.params._tuneStatus)}
+              </p>
+            )}
+          </div>
+        )}
         {/* Render action: Generate button + result image + download link. */}
         {d.tool === "render" && (
           <div className="space-y-1.5">
@@ -1845,6 +1220,18 @@ export interface FlowOverlayProps {
   injectWallGraphRef?: MutableRefObject<(() => void) | null>;
   /** Bridge to mirror a freshly-placed furniture node as a Node → Node to Object chain. */
   injectNodeObjectRef?: MutableRefObject<((nodeId: string) => void) | null>;
+  /** Host-held bridge for the Chat AI Flow agent: READ the live graph + APPLY a generated one (through the
+   *  overlay's importFlowData, which normalises + re-attaches node callbacks). Assigned while mounted,
+   *  cleared on unmount; when closed the host falls back to liveFlowGraph. */
+  flowApiRef?: MutableRefObject<{
+    getGraph: () => SerializedFlow;
+    applyGraph: (g: { nodes?: unknown[]; edges?: unknown[] }) => number;
+    /** Compile-check the LIVE graph (the same compileFlow the Run button uses). */
+    compile: () => { ok: boolean; error?: string; opCount?: number; committedNodeIds: string[] };
+    /** Run-commit the live pipeline into the canvas — exactly the panel's Run button (recipe engine +
+     *  committedNodeIds), with the error returned instead of toasted so agents can react. */
+    runCommit: () => { ok: boolean; error?: string; committedNodeIds?: string[] };
+  } | null>;
   /** Host action: run the floorplan generator for a Layout Generation node (loads the editable canvas
    *  layout — draggable seeds, connections/repulsions). The node passes its id + params. */
   onRunLayoutGen?: (nodeId: string, params: Record<string, unknown>) => void;
@@ -1858,6 +1245,7 @@ interface NodeCallbacks {
   onParamChange: (nodeId: string, key: string, value: unknown) => void;
   onRunRender: (nodeId: string, params: Record<string, unknown>) => void;
   onRunDetect: (nodeId: string, params: Record<string, unknown>) => void;
+  onRunVectorTune: (nodeId: string, params: Record<string, unknown>) => void;
   onRunAnalyse: (nodeId: string, params: Record<string, unknown>) => void;
   onRunGenerate: (nodeId: string, params: Record<string, unknown>) => void;
   onRunLayoutGen: (nodeId: string, params: Record<string, unknown>) => void;
@@ -1882,7 +1270,7 @@ const makeNode = (
     position: pos,
     // Every node (Space included) is deletable, so the canvas can be emptied completely.
     deletable: true,
-    data: { tool, params: { ...def.defaultParams }, onParamChange: cb.onParamChange, onRunRender: cb.onRunRender, onRunDetect: cb.onRunDetect, onRunAnalyse: cb.onRunAnalyse, onRunGenerate: cb.onRunGenerate, onRunLayoutGen: cb.onRunLayoutGen, onRunAnneal: cb.onRunAnneal, onAddRoom: cb.onAddRoom } as FlowNodeData,
+    data: { tool, params: { ...def.defaultParams }, onParamChange: cb.onParamChange, onRunRender: cb.onRunRender, onRunDetect: cb.onRunDetect, onRunVectorTune: cb.onRunVectorTune, onRunAnalyse: cb.onRunAnalyse, onRunGenerate: cb.onRunGenerate, onRunLayoutGen: cb.onRunLayoutGen, onRunAnneal: cb.onRunAnneal, onAddRoom: cb.onAddRoom } as FlowNodeData,
   };
 };
 
@@ -2053,11 +1441,6 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   const toggleCat = useCallback((title: string) => {
     setCollapsedCats((prev) => { const next = new Set(prev); if (next.has(title)) next.delete(title); else next.add(title); return next; });
   }, []);
-  // Right "Workflow templates" rail — foldable category blocks (mirrors the left palette).
-  const [collapsedWorkflowCats, setCollapsedWorkflowCats] = useState<Set<string>>(new Set());
-  const toggleWorkflowCat = useCallback((title: string) => {
-    setCollapsedWorkflowCats((prev) => { const next = new Set(prev); if (next.has(title)) next.delete(title); else next.add(title); return next; });
-  }, []);
   const toggleFoldAll = useCallback(() => {
     setFoldAll((prev) => {
       const next = !prev;
@@ -2166,6 +1549,56 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       onParamChange(nodeId, "_busy", false);
     }
   }, [onParamChange]);
+
+  // Auto-Tune action (Vectorisation): coordinate-descent over the tracing parameters against the loaded
+  // underlay — every candidate runs the REAL vectorise → faces pipeline and is scored on closed spaces
+  // found (minus noise faces / open ends). Progress streams into the node's `_tuneStatus` line; the best
+  // combo is baked back into the node's sliders, so the live preview lands on the winning trace.
+  const onRunVectorTune = useCallback(async (nodeId: string, params: Record<string, unknown>) => {
+    const img = imageDataRef.current;
+    if (!img) { toast.error("Load an image first (drop a PNG/JPG onto the canvas) — the Image node feeds the tuner."); return; }
+    const n = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d);
+    // Same param→VectorizeParams mapping the flow eval uses, so tuning starts from what's previewing.
+    const base: VectorizeParams = {
+      colorMode: (typeof params.colorMode === "string" ? params.colorMode : "black") as VectorizeColorMode,
+      tolerance: n(params.tolerance, 50),
+      despeckle: Math.max(0, n(params.despeckle, 0)),
+      dilate: Math.max(1, Math.round(n(params.dilate, 3))),
+      spurLength: Math.max(0, Math.round(n(params.spurLength, 0))),
+      simplifyEpsilon: n(params.simplifyEpsilon, 1.5),
+      minLength: n(params.minLength, 30),
+      snapTolerance: n(params.snapTolerance, 6),
+      connectGap: Math.max(0, n(params.connectGap, 0)),
+      mergeAngle: Math.max(0, n(params.mergeAngle, 0)),
+      orthoSnap: !!params.orthoSnap,
+      orthoTol: n(params.orthoTol, 10),
+    };
+    onParamChange(nodeId, "_busy", true);
+    onParamChange(nodeId, "_tuneStatus", "starting…");
+    try {
+      const res = await tuneVectorise({
+        img, ppm: props.pixelsPerMeter, base,
+        minAreaM2: Math.max(0, n(params.tuneMinArea, 1)),
+        tuneColour: params.tuneColour === true,
+        pathEdges: props.pathEdges ?? [],
+        onProgress: (msg, frac) => onParamChange(nodeId, "_tuneStatus", `${Math.round(frac * 100)}% · ${msg}`),
+      });
+      for (const [k, v] of Object.entries({
+        colorMode: res.params.colorMode, tolerance: res.params.tolerance, despeckle: res.params.despeckle,
+        dilate: res.params.dilate, spurLength: res.params.spurLength, snapTolerance: res.params.snapTolerance,
+        connectGap: res.params.connectGap,
+      })) onParamChange(nodeId, k, v);
+      onParamChange(nodeId, "_tuneStatus", `✔ ${res.spaces} space${res.spaces === 1 ? "" : "s"} · ${res.openEnds} open ends · ${res.lines} lines · score ${res.score.toFixed(1)} (${res.tried} runs)`);
+      if (res.spaces === 0) toast.warning("Auto-tune found no closed spaces — try Tune colour (the drawing's line colour may differ) or lower Min space area.");
+      else toast.success(`Auto-tune done — ${res.spaces} space${res.spaces === 1 ? "" : "s"} found`);
+    } catch (e) {
+      onParamChange(nodeId, "_tuneStatus", "✖ tuning failed");
+      toast.error("Auto-tune failed");
+      console.error("Vectorise auto-tune failed:", e);
+    } finally {
+      onParamChange(nodeId, "_busy", false);
+    }
+  }, [onParamChange, props.pixelsPerMeter, props.pathEdges]);
 
   // Analyse action: send a media file (PDF / image / audio / video) to Gemini with a system prompt and
   // bake the model's text answer onto the node. Media source: the File input (a data URL, baked under
@@ -2366,11 +1799,11 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   const annealCb = props.onRunAnneal;
   const addRoomCb = props.onAddRoom;
   const nodeCb = useMemo<NodeCallbacks>(() => ({
-    onParamChange, onRunRender, onRunDetect, onRunAnalyse, onRunGenerate,
+    onParamChange, onRunRender, onRunDetect, onRunVectorTune, onRunAnalyse, onRunGenerate,
     onRunLayoutGen: (nodeId, params) => layoutGenCb?.(nodeId, params),
     onRunAnneal: (nodeId, params) => annealCb?.(nodeId, params),
     onAddRoom: (nodeId, params) => addRoomCb?.(nodeId, params),
-  }), [onParamChange, onRunRender, onRunDetect, onRunAnalyse, onRunGenerate, layoutGenCb, annealCb, addRoomCb]);
+  }), [onParamChange, onRunRender, onRunDetect, onRunVectorTune, onRunAnalyse, onRunGenerate, layoutGenCb, annealCb, addRoomCb]);
 
   // Keep every Space (source) node with "Grab ID from selection" on synced to ALL currently-selected
   // spaces' ids (comma-separated), so one Space node can output several spaces at once. Falls back to the
@@ -2475,69 +1908,6 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       return [...ns, makeNode(tool, { x, y }, nodeCb)];
     });
   }, [setNodes, nodeCb]);
-
-  // Drop a workflow template into the graph: append its nodes/edges with FRESH ids (so re-inserting or
-  // overlapping ids never collide) and positions offset to the right of the existing content.
-  const insertWorkflow = useCallback((tpl: WorkflowTemplate) => {
-    if (!tpl.nodes.length) return;
-    // Offset only TOP-LEVEL nodes (groups + ungrouped ops); grouped children keep their parent-relative x/y.
-    const topLevel = tpl.nodes.filter((n) => !n.parentId);
-    const minTx = Math.min(...topLevel.map((n) => n.x));
-    const minTy = Math.min(...topLevel.map((n) => n.y));
-    setNodes((ns) => {
-      const baseX = ns.length
-        ? Math.max(...ns.map((n) => n.position.x + (n.measured?.width ?? n.width ?? 220))) + 80
-        : 80;
-      const baseY = 100;
-      // Pre-assign fresh ids for ALL nodes so parentId / edge references can be remapped.
-      const idMap = new Map<string, string>();
-      for (const tn of tpl.nodes) idMap.set(tn.id, nextId(tn.type === "group" || tn.tool === "group" ? "group" : tn.tool));
-      const newNodes: Node[] = tpl.nodes.map((tn) => {
-        const newId = idMap.get(tn.id)!;
-        const isGroup = tn.type === "group" || tn.tool === "group";
-        const def = isGroup ? undefined : FLOW_TOOLS[tn.tool as FlowToolType];
-        const position = tn.parentId ? { x: tn.x, y: tn.y } : { x: baseX + (tn.x - minTx), y: baseY + (tn.y - minTy) };
-        const node: Node = {
-          id: newId,
-          type: isGroup ? "group" : "op",
-          position,
-          deletable: true,
-          data: isGroup
-            ? ({ tool: "group", params: { ...(tn.params ?? {}) } } as unknown as FlowNodeData)
-            : ({
-                tool: tn.tool as FlowToolType,
-                params: { ...(def?.defaultParams ?? {}), ...(tn.params ?? {}) },
-                onParamChange: nodeCb.onParamChange,
-                onRunRender: nodeCb.onRunRender,
-                onRunDetect: nodeCb.onRunDetect,
-                onRunAnalyse: nodeCb.onRunAnalyse,
-                onRunGenerate: nodeCb.onRunGenerate,
-                onRunLayoutGen: nodeCb.onRunLayoutGen,
-                onRunAnneal: nodeCb.onRunAnneal,
-                onAddRoom: nodeCb.onAddRoom,
-              } as FlowNodeData),
-        };
-        if (isGroup) node.style = { width: tn.width ?? 240, height: tn.height ?? 160 };
-        if (tn.parentId) { node.parentId = idMap.get(tn.parentId)!; node.extent = "parent"; }
-        return node;
-      });
-      // React Flow requires a parent (group) node to precede its children in the array — groups first.
-      newNodes.sort((a, b) => (a.type === "group" ? 0 : 1) - (b.type === "group" ? 0 : 1));
-      // Edges reference template-local ids → remap to the freshly-minted node ids.
-      setEdges((es) => [
-        ...es,
-        ...tpl.edges.map((te, i) => ({
-          id: `wf-${idMap.get(te.source)}-${idMap.get(te.target)}-${i}`,
-          source: idMap.get(te.source)!,
-          target: idMap.get(te.target)!,
-          sourceHandle: te.sourceHandle ?? null,
-          targetHandle: te.targetHandle ?? null,
-          animated: true,
-        })),
-      ]);
-      return [...ns, ...newNodes];
-    });
-  }, [setNodes, setEdges, nodeCb]);
 
   const onConnect = useCallback((c: Connection) => setEdges((es) => addEdge({ ...c, animated: true }, es)), [setEdges]);
 
@@ -2708,6 +2078,14 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     a.download = "flow.json";
     a.click();
     URL.revokeObjectURL(url);
+    // Library convention: flows live in public/Library/Flows. In dev the bridge writes the file
+    // there directly (timestamped, no overwrites); otherwise fall back to the downloaded copy + hint.
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    void saveLibraryFile(`Flows/flow-${stamp}.json`, exportText).then((r) =>
+      r.ok
+        ? toast.success(`Flow saved to public/Library/${r.path}`)
+        : toast.success("Flow exported — keep bundled flows in public/Library/Flows"),
+    );
   }, [exportText]);
 
   // Build live nodes/edges from a parsed flow object and load them into the graph. Throws on a bad
@@ -2726,7 +2104,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
         deletable: true,
         data: isGroup
           ? ({ tool: "group", params: { ...(n.data?.params ?? {}) } } as unknown as FlowNodeData)
-          : ({ tool, params: { ...(n.data?.params ?? {}) }, onParamChange: nodeCb.onParamChange, onRunRender: nodeCb.onRunRender, onRunDetect: nodeCb.onRunDetect, onRunAnalyse: nodeCb.onRunAnalyse, onRunGenerate: nodeCb.onRunGenerate, onRunLayoutGen: nodeCb.onRunLayoutGen, onRunAnneal: nodeCb.onRunAnneal, onAddRoom: nodeCb.onAddRoom } as FlowNodeData),
+          : ({ tool, params: { ...(n.data?.params ?? {}) }, onParamChange: nodeCb.onParamChange, onRunRender: nodeCb.onRunRender, onRunDetect: nodeCb.onRunDetect, onRunVectorTune: nodeCb.onRunVectorTune, onRunAnalyse: nodeCb.onRunAnalyse, onRunGenerate: nodeCb.onRunGenerate, onRunLayoutGen: nodeCb.onRunLayoutGen, onRunAnneal: nodeCb.onRunAnneal, onAddRoom: nodeCb.onAddRoom } as FlowNodeData),
       };
       // Grouped child → reattach to its parent (position stays parent-relative, constrained to the box).
       if (typeof n.parentId === "string") { node.parentId = n.parentId; node.extent = "parent"; }
@@ -2872,6 +2250,13 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     return () => { injectNodeObjectRef.current = null; };
   }, [injectNodeObjectRef, buildGraph, importFlowData]);
 
+  // Bridge for the Chat AI Flow agent: read the live graph (buildGraph) + apply a generated one
+  // (importFlowData normalises + re-attaches node callbacks). Assigned while mounted; the host reads
+  // liveFlowGraph when the overlay is closed.
+  // (flowApiRef registration lives further down, after `compiled` + `sourcesReady` exist — the bridge
+  //  exposes compile/runCommit which close over them.)
+  const flowApiRef = props.flowApiRef;
+
   const importFlow = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -2923,60 +2308,30 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     }
   }, [pasteText, importFlowData]);
 
-  // ── AI "Generate JSON": describe a flow in plain language → Gemini emits flow JSON → import it. ──
-  const [genOpen, setGenOpen] = useState(false);
-  const [genApiKey, setGenApiKey] = useState<string>(() => {
-    try { return localStorage.getItem("flow-gen-api-key") ?? ""; } catch { return ""; }
-  });
-  const [genModel, setGenModel] = useState<string>(() => {
-    try { return localStorage.getItem("flow-gen-model") || "gemini-3-flash-preview"; } catch { return "gemini-3-flash-preview"; }
-  });
-  const [genPrompt, setGenPrompt] = useState("");
-  const [genBusy, setGenBusy] = useState(false);
-
-  const generateFlow = useCallback(async () => {
-    const apiKey = genApiKey.trim();
-    if (!apiKey) { toast.error("Add a Google AI Studio API key"); return; }
-    if (!genPrompt.trim()) { toast.error("Describe the flow to generate"); return; }
-    const model = genModel.trim() || "gemini-3-flash-preview";
-    setGenBusy(true);
+  // ── Bundled Library flows (public/Library/Flows) — listed live via the dev Library bridge so the
+  // Import dropdown loads them in one click. Replaces the old built-in workflow-templates rail: the
+  // templates now ship as JSON files in that folder. Null/empty = bridge unavailable (production
+  // build) → the section hides; the same files still import via "Upload .json file". ──
+  const [libraryFlows, setLibraryFlows] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!importOpen) return;
+    let cancelled = false;
+    void listLibraryFiles("Flows").then((files) => { if (!cancelled) setLibraryFlows(files); });
+    return () => { cancelled = true; };
+  }, [importOpen]);
+  const importLibraryFlow = useCallback(async (file: string) => {
     try {
-      try { localStorage.setItem("flow-gen-api-key", apiKey); } catch { /* ignore */ }
-      try { localStorage.setItem("flow-gen-model", model); } catch { /* ignore */ }
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: FLOW_GEN_INSTRUCTION }] },
-          contents: [{ parts: [{ text: genPrompt }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
-        }),
-      });
-      if (!res.ok) { toast.error(`Generation failed (${res.status})`); console.error(await res.text()); return; }
-      const json = await res.json();
-      const text: string = (json?.candidates?.[0]?.content?.parts ?? [])
-        .map((p: { text?: string }) => p.text ?? "")
-        .join("");
-      // responseMimeType:"application/json" should yield pure JSON; fall back to extracting the first {…}.
-      let parsed: { nodes?: unknown[]; edges?: unknown[] } | null = null;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        const a = text.indexOf("{"), b = text.lastIndexOf("}");
-        if (a >= 0 && b > a) { try { parsed = JSON.parse(text.slice(a, b + 1)); } catch { /* ignore */ } }
-      }
-      if (!parsed) { toast.error("Model returned invalid JSON"); console.error("Gen response:", text); return; }
-      const count = importFlowData(parsed);
-      setGenOpen(false);
-      toast.success(`Generated flow — ${count} node${count === 1 ? "" : "s"}`);
-    } catch (e) {
-      toast.error("Generation error");
-      console.error(e);
-    } finally {
-      setGenBusy(false);
+      const res = await fetch(encodeURI(`/Library/Flows/${file}`));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const parsed = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; title?: unknown };
+      const n = importFlowData(parsed);
+      toast.success(`Imported ${typeof parsed.title === "string" && parsed.title ? parsed.title : file} — ${n} node${n === 1 ? "" : "s"}`);
+      setImportOpen(false);
+    } catch (err) {
+      toast.error(`Couldn't load ${file}`);
+      console.error("Library flow import failed:", err);
     }
-  }, [genApiKey, genModel, genPrompt, importFlowData]);
+  }, [importFlowData]);
 
   // When a Split node's piece count shrinks, drop edges that referenced a now-gone output handle
   // (e.g. an edge from "out-4" after Pieces dropped to 3) so they don't dangle.
@@ -3172,6 +2527,25 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   // Ready once ≥1 root is actually usable (a resolved Space, a Creator, a Selected Graph, an Image, or the
   // Canvas) and no Space node has a typed-but-unmatched id.
   const sourcesReady = (anySpaceReady || hasCreator || hasGraphRoot || hasImageRoot || hasCanvasRoot) && !badSource;
+  // Bridge for the Chat-AI agents (the Flow agent + the canvas agent's flow_* gateway): read the live
+  // graph, apply a generated one, compile-check it, and RUN-COMMIT the evaluated pipeline into the
+  // canvas — the exact same compiled JSON + committedNodeIds path as the panel's Run button.
+  const onRunCommitProp = props.onRunCommit;
+  useEffect(() => {
+    if (!flowApiRef) return;
+    flowApiRef.current = {
+      getGraph: buildGraph,
+      applyGraph: importFlowData,
+      compile: () => ({ ok: !compiled.error, error: compiled.error || undefined, opCount: compiled.opCount, committedNodeIds: compiled.committedNodeIds ?? [] }),
+      runCommit: () => {
+        if (compiled.error) return { ok: false, error: `flow does not compile: ${compiled.error}` };
+        if (!sourcesReady) return { ok: false, error: 'a source node has no input — set its id param (e.g. "Space001") or turn on grabFromSelection with a space selected' };
+        onRunCommitProp(compiled.json, compiled.committedNodeIds);
+        return { ok: true, committedNodeIds: compiled.committedNodeIds };
+      },
+    };
+    return () => { flowApiRef.current = null; };
+  }, [flowApiRef, buildGraph, importFlowData, compiled, sourcesReady, onRunCommitProp]);
   const createAnchor = props.createAnchor ?? { x: 0, y: 0 };
   // Key over all per-source polygons so the heavy eval only re-runs when some space's geometry changes.
   const sourcesKey = sourceEntries.map((e) => `${e.nodeId}:${e.polys.map((poly) => poly.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(";")).join("&")}`).join("|");
@@ -3600,9 +2974,6 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
           <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]" onClick={openExport} title="Export this flow — view/copy the JSON, then optionally save to a file">
             <Download className="h-3.5 w-3.5" /> Export
           </Button>
-          <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]" onClick={() => setGenOpen((v) => !v)} title="Generate a flow with AI">
-            <Sparkles className="h-3.5 w-3.5" /> Generate Flow
-          </Button>
           <div className="mx-0.5 h-5 w-px bg-slate-200" />
           <Button variant="ghost" size="sm" className="h-7 px-2" onClick={props.onMinimize} title="Minimize — collapse to a bar; the flow keeps running and the canvas gets the space">
             <Minus className="h-3.5 w-3.5" />
@@ -3614,7 +2985,8 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             <X className="h-3.5 w-3.5" /> Close
           </Button>
 
-          {/* Import dropdown — upload a .json file OR paste flow JSON directly. */}
+          {/* Import dropdown — the bundled Library/Flows list (one click), upload a .json file, OR
+              paste flow JSON directly. */}
           {importOpen && (
             <div className="absolute right-0 top-9 z-50 w-80 space-y-2 rounded-md border border-slate-200 bg-white p-2.5 shadow-lg">
               <div className="flex items-center justify-between">
@@ -3623,6 +2995,27 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
+              {libraryFlows && libraryFlows.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <span className="text-[9px] uppercase tracking-wide text-slate-400">Library/Flows</span>
+                    <div className="h-px flex-1 bg-slate-200" />
+                  </div>
+                  <div className="max-h-44 space-y-1 overflow-y-auto">
+                    {libraryFlows.map((f) => (
+                      <Button key={f} variant="outline" size="sm" className="h-7 w-full justify-start gap-1.5 px-2 text-[11px]" title={`public/Library/Flows/${f}`} onClick={() => void importLibraryFlow(f)}>
+                        <FilePlus className="h-3 w-3 shrink-0" /> {f.replace(/\.json$/i, "")}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <span className="text-[9px] uppercase tracking-wide text-slate-400">or upload</span>
+                    <div className="h-px flex-1 bg-slate-200" />
+                  </div>
+                </>
+              )}
               <Button variant="outline" size="sm" className="h-7 w-full gap-1.5 text-[11px]" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-3.5 w-3.5" /> Upload .json file
               </Button>
@@ -3674,55 +3067,6 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             </div>
           )}
 
-          {/* AI flow-generation dropdown */}
-          {genOpen && (
-            <div className="absolute right-0 top-9 z-50 w-80 space-y-2 rounded-md border border-slate-200 bg-white p-2.5 shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-700">Generate flow with AI</span>
-                <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setGenOpen(false)}>
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-500">Model</span>
-                <input
-                  type="text"
-                  className="h-7 w-full rounded border border-slate-200 px-1.5 text-[11px]"
-                  value={genModel}
-                  onChange={(e) => setGenModel(e.target.value)}
-                  placeholder="gemini-3-flash-preview"
-                />
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-500">API key</span>
-                <input
-                  type="password"
-                  className="h-7 w-full rounded border border-slate-200 px-1.5 text-[11px]"
-                  value={genApiKey}
-                  onChange={(e) => setGenApiKey(e.target.value)}
-                  placeholder="Google AI Studio key"
-                />
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-500">Prompt</span>
-                <textarea
-                  className="w-full resize-y rounded border border-slate-200 px-1.5 py-1 text-[11px]"
-                  rows={3}
-                  value={genPrompt}
-                  onChange={(e) => setGenPrompt(e.target.value)}
-                  placeholder="e.g. Inset 1 m, fit a rectangle, then massing 5 floors upward and render it"
-                />
-              </div>
-              <Button size="sm" className="h-7 w-full gap-1.5 text-[11px]" disabled={genBusy} onClick={generateFlow}>
-                {genBusy
-                  ? <><Loader2 className="h-3 w-3 animate-spin" /> Generating…</>
-                  : <><Sparkles className="h-3 w-3" /> Generate &amp; Import</>}
-              </Button>
-              <span className="block text-[9px] leading-tight text-slate-400">
-                Replaces the current graph with the generated nodes &amp; connections.
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -3786,38 +3130,6 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
           </ReactFlow>
         </div>
 
-        {/* Workflow templates — vertical right rail (foldable categories, mirrors the left palette). Each
-            entry drops a ready-wired cluster (Schema → Graph → processor → Output Schema) into the graph. */}
-        <div className="flex w-48 flex-col gap-1 overflow-y-auto border-l border-slate-200 bg-white/70 px-2 py-2">
-          <span className="px-1 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400">Workflow templates</span>
-          {WORKFLOW_CATEGORIES.map((cat) => {
-            const catOpen = !collapsedWorkflowCats.has(cat.title);
-            return (
-              <div key={cat.title} className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={() => toggleWorkflowCat(cat.title)}
-                  className="flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                >
-                  {catOpen ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-                  {cat.title}
-                </button>
-                {catOpen && cat.workflows.map((wf) => (
-                  <Button
-                    key={wf.id}
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-full justify-start gap-1.5 px-2 text-[11px]"
-                    title={wf.description}
-                    onClick={() => insertWorkflow(wf)}
-                  >
-                    <Plus className="h-3 w-3 shrink-0" /> {wf.title}
-                  </Button>
-                ))}
-              </div>
-            );
-          })}
-        </div>
       </div>
 
       {/* Footer — compile status + run */}

@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "id": "watershed-delineation",
+  "title": "Watershed Delineation",
+  "category": "Hydrology",
+  "description": "Grid → synthetic DEM (Grid Field) → Fill Depressions → Flow Direction → Flow Accumulation → Grid Threshold (streams) → Marching Squares (stream lines); Flow Direction → Watershed (basin). Create a Grid on the canvas (its lattice is the DEM extent); tune the DEM ramp + stream threshold and the channel network + catchment update live.",
+  "nodes": [
+    {
+      "id": "grid",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {
+        "tool": "grid-source",
+        "params": {
+          "id": "",
+          "grabFromSelection": true
+        }
+      }
+    },
+    {
+      "id": "dem",
+      "position": {
+        "x": 260,
+        "y": 0
+      },
+      "data": {
+        "tool": "grid-field",
+        "params": {
+          "direction": "top-bottom",
+          "high": 100,
+          "low": 0,
+          "randomness": 0.35,
+          "seed": 7,
+          "inciseOccupied": false,
+          "inciseDepth": 20,
+          "lowColor": "#1e3a8a",
+          "highColor": "#ef4444",
+          "showCellValues": false
+        }
+      }
+    },
+    {
+      "id": "filled",
+      "position": {
+        "x": 520,
+        "y": 0
+      },
+      "data": {
+        "tool": "fill-depressions",
+        "params": {
+          "epsilon": 0.01,
+          "edgesAreOutlets": true,
+          "highlightFilled": false,
+          "fillColor": "#0ea5e9",
+          "lowColor": "#1e3a8a",
+          "highColor": "#ef4444",
+          "showCellValues": false
+        }
+      }
+    },
+    {
+      "id": "flowdir",
+      "position": {
+        "x": 780,
+        "y": 0
+      },
+      "data": {
+        "tool": "flow-direction",
+        "params": {
+          "method": "d8",
+          "showArrows": true,
+          "colorByDirection": false,
+          "showCellValues": false
+        }
+      }
+    },
+    {
+      "id": "flowacc",
+      "position": {
+        "x": 1040,
+        "y": -130
+      },
+      "data": {
+        "tool": "flow-accumulation",
+        "params": {
+          "asArea": false,
+          "logDisplay": true,
+          "lowColor": "#f1f5f9",
+          "highColor": "#1d4ed8",
+          "showCellValues": false
+        }
+      }
+    },
+    {
+      "id": "streams",
+      "position": {
+        "x": 1300,
+        "y": -130
+      },
+      "data": {
+        "tool": "grid-threshold",
+        "params": {
+          "op": ">",
+          "threshold": 20,
+          "passColor": "#1d4ed8",
+          "failColor": "#475569",
+          "showFail": false,
+          "showCellValues": false
+        }
+      }
+    },
+    {
+      "id": "streamlines",
+      "position": {
+        "x": 1560,
+        "y": -130
+      },
+      "data": {
+        "tool": "marching-squares",
+        "params": {
+          "levels": 1
+        }
+      }
+    },
+    {
+      "id": "basin",
+      "position": {
+        "x": 1040,
+        "y": 150
+      },
+      "data": {
+        "tool": "watershed",
+        "params": {
+          "useLowestCell": true,
+          "col": 0,
+          "row": 0,
+          "fillColor": "#0ea5e9",
+          "showBoundary": true,
+          "showCellValues": false
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "grid",
+      "target": "dem",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e2",
+      "source": "dem",
+      "target": "filled",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e3",
+      "source": "filled",
+      "target": "flowdir",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e4",
+      "source": "flowdir",
+      "target": "flowacc",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e5",
+      "source": "flowacc",
+      "target": "streams",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e6",
+      "source": "streams",
+      "target": "streamlines",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e7",
+      "source": "flowdir",
+      "target": "basin",
+      "sourceHandle": null,
+      "targetHandle": null
+    }
+  ]
+}

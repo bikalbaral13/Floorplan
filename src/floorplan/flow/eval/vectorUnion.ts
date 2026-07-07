@@ -21,10 +21,32 @@ const segmentsProperlyCross = (p1: Point, p2: Point, p3: Point, p4: Point, eps =
          ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps));
 };
 
-export function polygonUnionVector(polysIn: Point[][], tol = 0.5, keepCollinear = false): Point[] | null {
+/** True when any two polygons' edges properly cross (interiors overlap) — the case the exact
+ *  dissolve-shared-edges union cannot handle and `rasterUnion` must take over. */
+export function polygonsInteriorsCross(polysIn: Point[][], eps = 1e-6): boolean {
+  const polys = polysIn.filter((p) => p.length >= 3);
+  for (let i = 0; i < polys.length; i++) {
+    for (let j = i + 1; j < polys.length; j++) {
+      const A = polys[i], B = polys[j];
+      for (let a = 0; a < A.length; a++) {
+        const a1 = A[a], a2 = A[(a + 1) % A.length];
+        for (let b = 0; b < B.length; b++) {
+          if (segmentsProperlyCross(a1, a2, B[b], B[(b + 1) % B.length], eps)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** All-loops variant of {@link polygonUnionVector}: same T-junction split + shared-edge dissolve +
+ *  most-clockwise trace, but returns EVERY traced loop (outer boundary, hole rings, disjoint islands)
+ *  instead of only the largest. Callers classify: largest |area| = outer, loops inside it = holes,
+ *  the rest = separate regions. Null under the same conditions as the single-loop version. */
+export function polygonUnionVectorLoops(polysIn: Point[][], tol = 0.5, keepCollinear = false): Point[][] | null {
   const polys = polysIn.filter((p) => p.length >= 3).map((p) => (signedArea(p) < 0 ? [...p].reverse() : p.slice()));
   if (polys.length === 0) return null;
-  if (polys.length === 1) return polys[0];
+  if (polys.length === 1) return [polys[0]];
 
   // Bail to the raster path if any two polygons' interiors overlap (proper edge crossing) — the
   // dissolve-shared-edges method is only exact for abutting / touching polygons.
@@ -123,17 +145,25 @@ export function polygonUnionVector(polysIn: Point[][], tol = 0.5, keepCollinear 
   }
   if (loops.length === 0) return null;
 
+  // keepCollinear: retain the collinear breakpoints where abutting pieces meet (e.g. a partition wall's
+  // faces along a straight outer edge → the wall thickness reads as its own segment when dimensioned).
+  // Otherwise collapse collinear runs to one vertex per corner, per loop.
+  return loops.map((lp) => {
+    if (keepCollinear) return lp;
+    const compact: Point[] = [];
+    for (let i = 0; i < lp.length; i++) {
+      const a = lp[(i - 1 + lp.length) % lp.length], b = lp[i], c = lp[(i + 1) % lp.length];
+      if (Math.abs(crossZ(a, b, c)) > tol * tol) compact.push(b);
+    }
+    return compact.length >= 3 ? compact : lp;
+  });
+}
+
+export function polygonUnionVector(polysIn: Point[][], tol = 0.5, keepCollinear = false): Point[] | null {
+  const loops = polygonUnionVectorLoops(polysIn, tol, keepCollinear);
+  if (!loops || loops.length === 0) return null;
   // Largest-area loop = the outer union boundary.
   let best = loops[0], bestA = -Infinity;
   for (const lp of loops) { const ar = Math.abs(signedArea(lp)); if (ar > bestA) { bestA = ar; best = lp; } }
-  // keepCollinear: retain the collinear breakpoints where abutting pieces meet (e.g. a partition wall's
-  // faces along a straight outer edge → the wall thickness reads as its own segment when dimensioned).
-  if (keepCollinear) return best;
-  // Otherwise collapse collinear runs to one vertex per corner.
-  const compact: Point[] = [];
-  for (let i = 0; i < best.length; i++) {
-    const a = best[(i - 1 + best.length) % best.length], b = best[i], c = best[(i + 1) % best.length];
-    if (Math.abs(crossZ(a, b, c)) > tol * tol) compact.push(b);
-  }
-  return compact.length >= 3 ? compact : best;
+  return best;
 }
