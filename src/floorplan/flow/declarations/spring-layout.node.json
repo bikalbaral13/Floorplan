@@ -1,0 +1,23 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "spring-layout",
+  "meta": { "label": "Spring Layout", "category": "Graph", "color": "#6366f1" },
+  "description": "Spring (force-directed) layout that PRESERVES every segment and edge — every vertex is relaxed (no degree-2 contraction), each input polyline re-emitted with new coordinates. Same segment & edge count, new positions.",
+  "instructions": "A Fruchterman–Reingold spring layout that runs on EVERY vertex (no degree-2 contraction) — no node is merged, no segment dropped. Each input polyline is re-emitted with its vertices moved to relaxed positions, so the output has the SAME segment and edge count as the input, just new coordinates. Deterministic (initialised from the input positions), so the preview is stable.\n\n`iterations` = passes; `edgeLength` = spring rest length; `repulsion` = all-pairs push-apart strength; `step` (Energy) = how far nodes may move per iteration (cools to 0). All three main params are wireable.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "iterations", "label": "Iterations" },
+      { "key": "edgeLength", "label": "Edge length" },
+      { "key": "repulsion", "label": "Repulsion" }
+    ]
+  },
+  "parameters": [
+    { "key": "iterations", "label": "Iterations", "kind": "range", "default": 100, "min": 1, "max": 500, "step": 1 },
+    { "key": "edgeLength", "label": "Edge length", "kind": "range", "default": 5, "min": 0.2, "max": 50, "step": 0.2, "unit": "m" },
+    { "key": "repulsion", "label": "Repulsion", "kind": "range", "default": 1, "min": 0, "max": 5, "step": 0.05 },
+    { "key": "step", "label": "Energy", "kind": "range", "default": 1, "min": 0.1, "max": 3, "step": 0.1 }
+  ]
+}

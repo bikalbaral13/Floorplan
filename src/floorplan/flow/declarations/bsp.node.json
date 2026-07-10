@@ -1,0 +1,60 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "bsp",
+  "meta": { "label": "BSP", "category": "Partition", "color": "#c026d3" },
+  "description": "Binary-space-partition the input space into one cell per seed. Equal/weighted shares are measured on the clipped area (inside the boundary). Squarified layout keeps cells near-square; the adjacency matrix forces ticked pairs to share a wall.",
+  "materialisesSpace": true,
+  "instructions": "Binary-space-partitions the input Space into one cell per seed (`seeds`). Balance (`balance`) = Equal area or Weighted (a `weights` comma ratio list) — measured on the CLIPPED area (inside the boundary, so equal = equal m² even on L/concave shapes). Layout (`layout`) = Slicing (recursive BSP) or Squarified (near-square cells); `maxRatio` is a soft aspect target for slicing.\n\n`useConnection` reveals an adjacency matrix on the node — tick pairs to force those cells to share a wall. `tiltAngle` rotates the cut frame. Preview openings (outer per-cell / inner per shared edge) draw door gaps so rooms read as connected. One handle per cell, or a single bundle. Tilt / max-aspect are wireable.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : (handleCount >= 1 ? min(40, round(handleCount)) : max(1, min(30, round(seeds))))",
+    "valueInputs": [
+      { "key": "tiltAngle", "label": "Tilt" },
+      { "key": "maxRatio", "label": "Max aspect" }
+    ]
+  },
+  "defaults": { "connections": "" },
+  "parameters": [
+    { "key": "seeds", "label": "Cells", "kind": "range", "default": 3, "min": 1, "max": 30, "step": 1 },
+    { "key": "tiltAngle", "label": "Tilt", "kind": "range", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    {
+      "key": "balance",
+      "label": "Balance",
+      "kind": "select",
+      "default": "equal",
+      "options": [
+        { "value": "equal", "label": "Equal area" },
+        { "value": "weighted", "label": "Weighted (ratios)" }
+      ]
+    },
+    { "key": "weights", "label": "Weights", "kind": "text", "default": "", "placeholder": "1, 2, 1", "showWhen": "balance == 'weighted'" },
+    {
+      "key": "layout",
+      "label": "Layout",
+      "kind": "select",
+      "default": "strip",
+      "options": [
+        { "value": "strip", "label": "Slicing (BSP)" },
+        { "value": "squarify", "label": "Squarified (treemap)" }
+      ]
+    },
+    { "key": "maxRatio", "label": "Max aspect", "kind": "range", "default": 0, "min": 0, "max": 6, "step": 0.1, "showWhen": "layout != 'squarify'" },
+    { "key": "useConnection", "label": "Use adjacency", "kind": "checkbox", "default": false },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per cell (one each)" },
+        { "value": "single", "label": "Single (all cells)" }
+      ]
+    },
+    { "key": "showOuterOpenings", "label": "Show outer openings", "kind": "checkbox", "default": false },
+    { "key": "outerOpeningWidth", "label": "Outer opening width", "kind": "range", "default": 1.0, "min": 0.3, "max": 3, "step": 0.05, "unit": "m", "showWhen": "showOuterOpenings" },
+    { "key": "showInnerOpenings", "label": "Show inner openings", "kind": "checkbox", "default": false },
+    { "key": "innerOpeningWidth", "label": "Inner opening width", "kind": "range", "default": 0.9, "min": 0.3, "max": 3, "step": 0.05, "unit": "m", "showWhen": "showInnerOpenings" }
+  ]
+}

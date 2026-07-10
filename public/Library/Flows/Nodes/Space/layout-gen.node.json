@@ -1,0 +1,45 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "layout-gen",
+  "meta": { "label": "Layout Generation", "category": "Space", "color": "#9333ea" },
+  "description": "Generate a multi-room layout inside the wired Space — set each room's Min/Max area + max aspect Ratio. Draggable seeds + connection/repulsion lines on the canvas; each room's Area/Ratio is colour-coded green (ok) / red (violated). Run Annealing to optimise.",
+  "instructions": "A front-end to the interactive floorplan generator. Wire a Space (boundary) into the input, set the rooms / algorithm / connections / repulsions, then press Generate — the host runs the generator and loads it as the canvas's editable layout (draggable seeds, connection/repulsion lines, Add Room all work on the canvas). Run Annealing optimises the seed positions.\n\nThe `rooms` list (label + min/max area + max aspect ratio) is edited by the on-node rooms editor; the canvas colour-codes each generated room's Area / Ratio against it (green ok / red violated). `algorithm` = BSP (recursive split) or RDG (room graph). Room count / floor area / SA score are published for an Output node.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "wallWidth", "label": "Wall width" },
+      { "key": "saIterations", "label": "SA iterations" }
+    ],
+    "valueOutputs": [
+      { "key": "rooms", "label": "Rooms" },
+      { "key": "area", "label": "Floor area", "unit": "m²" },
+      { "key": "score", "label": "SA score" }
+    ]
+  },
+  "defaults": {
+    "rooms": [
+      { "label": "Living", "minArea": 18, "maxArea": 0, "maxRatio": 2.5 },
+      { "label": "Kitchen", "minArea": 8, "maxArea": 0, "maxRatio": 2.5 },
+      { "label": "Bedroom", "minArea": 12, "maxArea": 0, "maxRatio": 2.5 },
+      { "label": "Bathroom", "minArea": 4, "maxArea": 0, "maxRatio": 3 }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "algorithm",
+      "label": "Algorithm",
+      "kind": "select",
+      "default": "bsp",
+      "options": [
+        { "value": "bsp", "label": "BSP (recursive split)" },
+        { "value": "rdg", "label": "RDG (room graph)" }
+      ]
+    },
+    { "key": "wallWidth", "label": "Wall Width", "kind": "range", "default": 0.15, "min": 0.05, "max": 0.4, "step": 0.01, "unit": "m" },
+    { "key": "connections", "label": "Connections (A-B, …)", "kind": "text", "default": "Living-Kitchen, Living-Bedroom", "placeholder": "Living-Kitchen, Living-Bedroom" },
+    { "key": "repulsions", "label": "Repulsions (A-B, …)", "kind": "text", "default": "", "placeholder": "Kitchen-Bathroom" },
+    { "key": "saIterations", "label": "SA Iterations", "kind": "range", "default": 600, "min": 50, "max": 3000, "step": 50 }
+  ]
+}

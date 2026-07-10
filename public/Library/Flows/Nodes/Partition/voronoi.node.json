@@ -1,0 +1,44 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "voronoi",
+  "materialisesSpace": true,
+  "meta": { "label": "Voronoi", "category": "Partition", "color": "#2563eb" },
+  "description": "Voronoi-partition the space — one cell per vertex, or per random seed (uncheck 'Use vertices'). Rectilinear = BSP-like axis-aligned cells (concave-safe). Relax = Lloyd/CVT.",
+  "instructions": "Voronoi-partitions the Space. Seed source: the polygon's vertices (`useVertices` on → one cell per vertex) or `seeds` random interior points (off). `metric` = Euclidean / Manhattan / Chebyshev (the latter two give blockier cells). `relax` runs Lloyd/CVT relaxation; `rectilinear` produces BSP-like axis-aligned (staircase) cells oriented to the principal axis (concave-safe).\n\nOne output handle per cell, or a single bundle (`outputMode`). Seed count is wireable. NOTE: the live cell count bakes on evaluation.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(2, min(40, round(vertexCount)))",
+    "valueInputs": [
+      { "key": "seeds", "label": "Seeds" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "metric",
+      "label": "Type",
+      "kind": "select",
+      "default": "euclidean",
+      "options": [
+        { "value": "euclidean", "label": "Euclidean" },
+        { "value": "manhattan", "label": "Manhattan" },
+        { "value": "chebyshev", "label": "Chebyshev" }
+      ]
+    },
+    { "key": "useVertices", "label": "Use vertices as seeds", "kind": "checkbox", "default": true },
+    { "key": "seeds", "label": "Seeds", "kind": "range", "default": 8, "min": 2, "max": 40, "step": 1, "showWhen": "!useVertices" },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per cell (one each)" },
+        { "value": "single", "label": "Single (all cells)" }
+      ]
+    },
+    { "key": "relax", "label": "Relax seeds", "kind": "checkbox", "default": false },
+    { "key": "rectilinear", "label": "Rectilinear (grid)", "kind": "checkbox", "default": false }
+  ]
+}

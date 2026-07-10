@@ -1,0 +1,16 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "output-schema",
+  "meta": { "label": "Output Schema", "category": "Space", "color": "#9333ea" },
+  "description": "Define which solver results show per component (Node / Segment / Space / Graph). Wire a solver's output into this node — row keys match the solver's result keys; label/unit/step style the Metrics rows.",
+  "instructions": "A terminal (input only) — defines which RESULT rows a solver publishes into each component's Metrics tab, via the same four foldable sections as Input Schema (Node / Segment / Space / Graph).\n\nWire a solver's output (e.g. Pipe Network Solver) into it: each row's key must MATCH a result the solver writes (e.g. node head / pressure; segment discharge / velocity / headloss / unitHeadloss); label/unit set the display, step sets the decimals.\n\nNOTE: the four sections are edited by the on-node schema editor; `name` is an optional label.",
+  "handles": {
+    "input": true,
+    "output": false
+  },
+  "defaults": { "nodeProps": [], "segmentProps": [], "spaceProps": [], "graphProps": [] },
+  "parameters": [
+    { "key": "name", "label": "Name", "kind": "text", "default": "", "placeholder": "Schema name (optional)" }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "wall-clock.v1",
+    "name": "Wall Clock",
+    "category": "Decor/Wall",
+    "units": "m",
+    "icon": { "paths": ["M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0", "M12 7v5l3 2"] }
+  },
+  "parameters": [
+    { "key": "diameter", "label": "Diameter", "kind": "number", "default": 0.32, "min": 0.1, "max": 0.9, "step": 0.01, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.05, "min": 0.02, "max": 0.15, "step": 0.005, "unit": "m" },
+    { "key": "bezel", "label": "Bezel width", "kind": "number", "default": 0.02, "min": 0, "max": 0.08, "step": 0.005, "unit": "m" },
+    { "key": "ticks", "label": "Hour marks", "kind": "number", "default": 12, "min": 0, "max": 12, "step": 1 },
+    { "key": "tickSize", "label": "Mark size", "kind": "number", "default": 0.012, "min": 0.004, "max": 0.04, "step": 0.002, "unit": "m" },
+    { "key": "showHands", "label": "Show hands", "kind": "checkbox", "default": true },
+    { "key": "hourAngle", "label": "Hour hand angle", "kind": "number", "default": 300, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "minuteAngle", "label": "Minute hand angle", "kind": "number", "default": 60, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "handWidth", "label": "Hand width", "kind": "number", "default": 0.01, "min": 0.004, "max": 0.03, "step": 0.002, "unit": "m" },
+    { "key": "sides", "label": "Roundness", "kind": "number", "default": 32, "min": 8, "max": 64, "step": 1 },
+    { "key": "frameColor", "label": "Bezel color", "kind": "color", "default": "#1f2937" },
+    { "key": "color", "label": "Dial color", "kind": "color", "default": "#f8fafc" },
+    { "key": "handColor", "label": "Hand / mark color", "kind": "color", "default": "#111827" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -0.5, "max": 0.5, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Mount height", "kind": "number", "default": 1.6, "min": 0, "max": 2.5, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "R": "diameter / 2",
+      "dialR": "R - bezel",
+      "nsides": "max(8, round(sides))",
+      "ntick": "max(0, round(ticks))",
+      "front": "depth",
+      "hourL": "dialR * 0.5",
+      "minL": "dialR * 0.82",
+      "ha": "hourAngle * PI / 180",
+      "ma": "minuteAngle * PI / 180",
+      "hw": "handWidth / 2"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Bezel / case puck", "circle": { "cx": 0, "cy": 0, "r": "R", "sides": "nsides", "h0": 0, "h1": "depth", "color": "frameColor" } },
+          { "comment": "Dial face on the front", "circle": { "cx": 0, "cy": 0, "r": "dialR", "sides": "nsides", "h0": "front", "h1": "front + 0.004", "color": "color" } },
+          {
+            "comment": "Hour marks around the dial",
+            "when": "ntick > 0",
+            "repeat": "ntick",
+            "as": "k",
+            "vars": { "a": "k * 2 * PI / ntick", "px": "sin(a) * dialR * 0.85", "py": "cos(a) * dialR * 0.85" },
+            "circle": { "cx": "px", "cy": "py", "r": "tickSize / 2", "sides": 8, "h0": "front + 0.004", "h1": "front + 0.008", "color": "handColor" }
+          },
+          {
+            "comment": "Hour hand",
+            "when": "showHands",
+            "vars": { "hx": "sin(ha)", "hy": "cos(ha)", "px": "cos(ha)", "py": "-sin(ha)" },
+            "poly": {
+              "pts": [ [ "px * hw", "py * hw" ], [ "hourL * hx + px * hw", "hourL * hy + py * hw" ], [ "hourL * hx - px * hw", "hourL * hy - py * hw" ], [ "-px * hw", "-py * hw" ] ],
+              "h0": "front + 0.008", "h1": "front + 0.011", "color": "handColor"
+            }
+          },
+          {
+            "comment": "Minute hand",
+            "when": "showHands",
+            "vars": { "hx": "sin(ma)", "hy": "cos(ma)", "px": "cos(ma)", "py": "-sin(ma)" },
+            "poly": {
+              "pts": [ [ "px * hw * 0.7", "py * hw * 0.7" ], [ "minL * hx + px * hw * 0.7", "minL * hy + py * hw * 0.7" ], [ "minL * hx - px * hw * 0.7", "minL * hy - py * hw * 0.7" ], [ "-px * hw * 0.7", "-py * hw * 0.7" ] ],
+              "h0": "front + 0.011", "h1": "front + 0.014", "color": "handColor"
+            }
+          },
+          { "comment": "Centre cap", "circle": { "cx": 0, "cy": 0, "r": "handWidth", "sides": 10, "h0": "front + 0.008", "h1": "front + 0.016", "color": "handColor" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "face", "label": "Dial diameter", "expr": "dialR * 2", "unit": "m" }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "node-source",
+  "meta": { "label": "Node", "category": "Node", "color": "#4f46e5" },
+  "description": "Pipeline input — selected node(s)/point(s) by id (Select → Node scope, or grab from selection). Emits each as a point; feed into Buffer to get a disk Space.",
+  "instructions": "Pipeline input — emits the selected canvas node(s) (junction points) as single points, scoped by Select → Node. References nodes by display id (e.g. Node001, comma-separated); with 'Grab ID from selection' on, the id stays synced to the node selection. One output handle per node, or a single bundle (`outputMode`).\n\nSTAMP: wire a Footing → Footing-to-Plan / Elevation / 3D-Mesh (or any origin-relative drawing / mesh) into the Stamp input and the node stamps a copy at each of its point(s) — placement by location.\n\nTIP: wire the point output into Bloom / Buffer to grow each point into a Space.",
+  "handles": {
+    "input": false,
+    "output": true,
+    "geomInputs": [
+      { "key": "stamp", "label": "Stamp" }
+    ],
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(60, round(handleCount)))"
+  },
+  "parameters": [
+    { "key": "grabFromSelection", "label": "Grab ID from selection", "kind": "checkbox", "default": true },
+    { "key": "id", "label": "ID", "kind": "text", "default": "", "placeholder": "node id (e.g. Node001)", "showWhen": "!grabFromSelection" },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "single",
+      "options": [
+        { "value": "single", "label": "Single (all)" },
+        { "value": "perCell", "label": "Per node (one each)" }
+      ]
+    }
+  ]
+}

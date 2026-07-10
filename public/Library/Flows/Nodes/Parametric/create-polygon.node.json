@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "create-polygon",
+  "label": "Create Polygon",
+  "category": "Parametric",
+  "description": "A closed polygon (2D fill + optional 0→H extrude) — a parametric object's `poly` rule.",
+  "params": {
+    "label": "",
+    "spec": "",
+    "note": ""
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "visibility",
+  "meta": { "label": "Visibility Polygon", "category": "Partition", "color": "#65a30d" },
+  "description": "Visibility polygon from a viewer point (offset from centroid) or sampled along an edge.",
+  "instructions": "Computes the visibility region of the Space from a viewer. TYPE (`mode`)\n• point — a single viewer at (`x`, `y`) metres offset from the space centroid (0,0 = centroid). Wire a Point node into the X / Y value inputs.\n• segment — sample along edge `edgeIndex`, producing one visibility region per sample.\n\nIn segment mode, one output handle per sample or a single bundle (`outputMode`); point mode is a single output. NOTE: sample count bakes on evaluation.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "(mode != 'segment' || outputMode == 'single') ? 1 : max(1, min(40, round(handleCount)))",
+    "valueInputs": [
+      { "key": "x", "label": "Viewer X" },
+      { "key": "y", "label": "Viewer Y" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "mode",
+      "label": "Type",
+      "kind": "select",
+      "default": "point",
+      "options": [
+        { "value": "point", "label": "Point (viewer)" },
+        { "value": "segment", "label": "Segment (edge)" }
+      ]
+    },
+    { "key": "x", "label": "Viewer X", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m", "showWhen": "mode != 'segment'" },
+    { "key": "y", "label": "Viewer Y", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m", "showWhen": "mode != 'segment'" },
+    { "key": "edgeIndex", "label": "Edge", "kind": "range", "default": 0, "min": 0, "max": 19, "step": 1, "showWhen": "mode == 'segment'" },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "single",
+      "options": [
+        { "value": "single", "label": "Single (all)" },
+        { "value": "perCell", "label": "Per sample (one each)" }
+      ],
+      "showWhen": "mode == 'segment'"
+    }
+  ]
+}

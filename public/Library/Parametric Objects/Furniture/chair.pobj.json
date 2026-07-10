@@ -1,0 +1,166 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "chair.v1",
+    "name": "Chair",
+    "category": "Furniture/Seating",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M7 9h10v9H7z",
+        "M7 9V6h10v3"
+      ]
+    }
+  },
+  "parameters": [
+    {
+      "key": "width",
+      "label": "Width",
+      "kind": "number",
+      "default": 0.5,
+      "min": 0.35,
+      "max": 0.8,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "depth",
+      "label": "Depth",
+      "kind": "number",
+      "default": 0.5,
+      "min": 0.35,
+      "max": 0.8,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "height",
+      "label": "Back Height",
+      "kind": "number",
+      "default": 0.9,
+      "min": 0.7,
+      "max": 1.2,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "wallOffset",
+      "label": "Offset from Wall",
+      "kind": "number",
+      "default": 0,
+      "min": -2,
+      "max": 2,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "clearance",
+      "label": "Clearance from Floor",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 2,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "°"
+    },
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "color",
+      "default": "#f59e0b"
+    }
+  ],
+  "geometry": {
+    "description": "Chair: four legs (0–0.42), a seat slab (0.42–0.47) and a backrest at +Y (0.47–Height).",
+    "emit": "shapes",
+    "vars": {
+      "W": "width",
+      "D": "depth",
+      "H": "height"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "leg FL",
+            "box": {
+              "x0": "-W/2",
+              "x1": "-W/2 + 0.05",
+              "y0": "-D/2",
+              "y1": "-D/2 + 0.05",
+              "h0": "0",
+              "h1": "0.42"
+            }
+          },
+          {
+            "comment": "leg FR",
+            "box": {
+              "x0": "W/2 - 0.05",
+              "x1": "W/2",
+              "y0": "-D/2",
+              "y1": "-D/2 + 0.05",
+              "h0": "0",
+              "h1": "0.42"
+            }
+          },
+          {
+            "comment": "leg BL",
+            "box": {
+              "x0": "-W/2",
+              "x1": "-W/2 + 0.05",
+              "y0": "D/2 - 0.05",
+              "y1": "D/2",
+              "h0": "0",
+              "h1": "0.42"
+            }
+          },
+          {
+            "comment": "leg BR",
+            "box": {
+              "x0": "W/2 - 0.05",
+              "x1": "W/2",
+              "y0": "D/2 - 0.05",
+              "y1": "D/2",
+              "h0": "0",
+              "h1": "0.42"
+            }
+          },
+          {
+            "comment": "seat",
+            "box": {
+              "x0": "-W/2",
+              "x1": "W/2",
+              "y0": "-D/2",
+              "y1": "D/2",
+              "h0": "0.42",
+              "h1": "0.47"
+            }
+          },
+          {
+            "comment": "backrest",
+            "box": {
+              "x0": "-W/2",
+              "x1": "W/2",
+              "y0": "D/2 - 0.05",
+              "y1": "D/2",
+              "h0": "0.47",
+              "h1": "H"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "hostKind": "node"
+}

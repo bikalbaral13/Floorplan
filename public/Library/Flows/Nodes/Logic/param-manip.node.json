@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "param-manip",
+  "label": "Parameter Manipulator",
+  "category": "Logic",
+  "description": "Feedback controller — drives a node's value-input, sweeping it from Start to End by Delta (Increment / Decrement) until a wired Conditional's test is met. Wire Value → a node's param, and a Conditional's Met → Signal.",
+  "params": {
+    "mode": "increment",
+    "delta": 0.5,
+    "start": 0,
+    "end": 20,
+    "value": 1
+  }
+}

@@ -25,6 +25,10 @@ export function agentBridgeEnabled(): boolean {
 
 let running = false;
 
+/** Per-tab identity for the bridge's single-client latch: the server only feeds commands to ONE tab
+ *  (preferring the focused one), so a duplicate/stale ?agent=1 tab can never steal half the stream. */
+const CLIENT_ID = Math.random().toString(36).slice(2, 10);
+
 /** Start the long-poll loop against the MCP server's HTTP channel. Idempotent; returns a stop function.
  *  Network errors (server not up yet) back off and retry, so order-of-startup doesn't matter. */
 export function startAgentBridge(base = "http://127.0.0.1:41414"): () => void {
@@ -35,7 +39,8 @@ export function startAgentBridge(base = "http://127.0.0.1:41414"): () => void {
   const loop = async (): Promise<void> => {
     while (!stopped) {
       try {
-        const res = await fetch(`${base}/next`, { method: "GET" });
+        const focused = typeof document !== "undefined" && document.hasFocus() ? "1" : "0";
+        const res = await fetch(`${base}/next?client=${CLIENT_ID}&focused=${focused}`, { method: "GET" });
         const cmd = (await res.json()) as { id?: string; tool?: string; args?: Record<string, unknown> };
         if (cmd && cmd.id && cmd.tool) {
           let ok = true;

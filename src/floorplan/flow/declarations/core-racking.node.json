@@ -1,0 +1,38 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "core-racking",
+  "materialisesSpace": true,
+  "meta": { "label": "Core Racking", "category": "Partition", "color": "#7c3aed" },
+  "description": "Rack a row of fixed-size rectangular core Spaces (length × breadth m) along a corridor band's long sides. Feed it a Corridoor output; cores stamp every length + gap along the run, flush to the corridor edge.",
+  "instructions": "Lines a corridor band with fixed-size rectangular \"core\" Spaces. Wire a corridor BAND (typically the Corridoor node's output) into the input: its oriented bounding box gives the run axis and width.\n\n• length — core size ALONG the corridor run (m); breadth — size AWAY from the corridor (m).\n• gap — spacing between adjacent cores along the run; margin — setback from each corridor end.\n• side — stamp cores on both sides, or only the left / right of the run.\n• orientation — auto uses the band's long axis; force horizontal / vertical for square-ish inputs.\n\nEmits one rectangle Space per placed core. Typical chain: Space → Corridoor → Core Racking.",
+  "handles": { "input": true, "output": true },
+  "parameters": [
+    { "key": "length", "label": "Core length", "kind": "range", "default": 4, "min": 0.5, "max": 20, "step": 0.1, "unit": "m" },
+    { "key": "breadth", "label": "Core breadth", "kind": "range", "default": 4, "min": 0.5, "max": 20, "step": 0.1, "unit": "m" },
+    { "key": "gap", "label": "Gap", "kind": "range", "default": 0.5, "min": 0, "max": 10, "step": 0.1, "unit": "m" },
+    { "key": "margin", "label": "End margin", "kind": "range", "default": 0, "min": 0, "max": 10, "step": 0.1, "unit": "m" },
+    {
+      "key": "side",
+      "label": "Side",
+      "kind": "select",
+      "default": "both",
+      "options": [
+        { "value": "both", "label": "Both sides" },
+        { "value": "left", "label": "Left only" },
+        { "value": "right", "label": "Right only" }
+      ]
+    },
+    {
+      "key": "orientation",
+      "label": "Orientation",
+      "kind": "select",
+      "default": "auto",
+      "options": [
+        { "value": "auto", "label": "Auto (run axis)" },
+        { "value": "horizontal", "label": "Horizontal" },
+        { "value": "vertical", "label": "Vertical" }
+      ]
+    }
+  ]
+}

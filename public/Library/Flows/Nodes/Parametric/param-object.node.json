@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "param-object",
+  "label": "Parametric Object",
+  "category": "Parametric",
+  "description": "A self-contained parametric object definition (parameters + geometry rules). Outputs it on val-def → wire into a Parametric Renderer.",
+  "params": {
+    "definition": ""
+  }
+}

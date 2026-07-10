@@ -1,0 +1,47 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "bloom",
+  "meta": { "label": "Bloom", "category": "Node", "color": "#7c3aed" },
+  "description": "Grow each input node/point into a Space — Polygon (n-gon; 4 sides → width × height rectangle; regular or irregular), Circle (radius), or Ellipse (width × height). Feeds the Space pipeline.",
+  "instructions": "Grows each incoming node/point into a Space. FORM (`form`)\n• polygon — an n-gon of `sides` sides (regular, or irregular jittered by `jitter` / `seed`); when sides = 4 it's a rectangle sized by `width` × `height` (radius ignored).\n• circle — of `radius`.\n• ellipse — with `width` × `height` axes.\n\nWire nodes / points in (e.g. from a Node source); the output Space feeds the Space pipeline. `radius` and `sides` are wireable.\n\nTIP: use it to turn junction points into room seeds; Irregular polygons give organic footprints.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "radius", "label": "Radius" },
+      { "key": "sides", "label": "Sides" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "form",
+      "label": "Form",
+      "kind": "select",
+      "default": "polygon",
+      "options": [
+        { "value": "polygon", "label": "Polygon" },
+        { "value": "circle", "label": "Circle" },
+        { "value": "ellipse", "label": "Ellipse" }
+      ]
+    },
+    { "key": "sides", "label": "Sides", "kind": "range", "default": 6, "min": 3, "max": 16, "step": 1, "showWhen": "form == 'polygon'" },
+    { "key": "radius", "label": "Radius", "kind": "range", "default": 1, "min": 0.05, "max": 10, "step": 0.05, "unit": "m", "showWhen": "form == 'circle' || (form == 'polygon' && sides != 4)" },
+    { "key": "width", "label": "Width", "kind": "range", "default": 2, "min": 0.05, "max": 20, "step": 0.05, "unit": "m", "showWhen": "form == 'ellipse' || (form == 'polygon' && sides == 4)" },
+    { "key": "height", "label": "Height", "kind": "range", "default": 2, "min": 0.05, "max": 20, "step": 0.05, "unit": "m", "showWhen": "form == 'ellipse' || (form == 'polygon' && sides == 4)" },
+    { "key": "rotation", "label": "Rotation", "kind": "range", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    {
+      "key": "regularity",
+      "label": "Shape",
+      "kind": "select",
+      "default": "regular",
+      "options": [
+        { "value": "regular", "label": "Regular" },
+        { "value": "irregular", "label": "Irregular" }
+      ],
+      "showWhen": "form == 'polygon'"
+    },
+    { "key": "jitter", "label": "Jitter", "kind": "range", "default": 0.3, "min": 0, "max": 1, "step": 0.05, "showWhen": "form == 'polygon' && regularity == 'irregular'" },
+    { "key": "seed", "label": "Seed", "kind": "range", "default": 1, "min": 1, "max": 999, "step": 1, "showWhen": "form == 'polygon' && regularity == 'irregular'" }
+  ]
+}

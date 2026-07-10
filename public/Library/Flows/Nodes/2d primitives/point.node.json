@@ -1,0 +1,28 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "point",
+  "meta": {
+    "label": "Point",
+    "category": "2d primitives",
+    "color": "#ca8a04"
+  },
+  "description": "An (x, y) point in metres — feeds val-x / val-y (e.g. a Visibility viewer offset).",
+  "instructions": "A value source — publishes an (x, y) point in metres on `val-x` / `val-y` (it has no geometry of its own). Wire those outputs into any node that takes a scalar or a viewer offset (e.g. a Visibility Polygon's viewer X/Y). The X/Y can themselves be driven by wiring numbers into `valin-x` / `valin-y`.\n\nTIP: use it as a single adjustable coordinate that several downstream nodes read — move the point and everything that references it follows.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "x", "label": "X" },
+      { "key": "y", "label": "Y" }
+    ],
+    "valueOutputs": [
+      { "key": "x", "label": "X", "unit": "m" },
+      { "key": "y", "label": "Y", "unit": "m" }
+    ]
+  },
+  "parameters": [
+    { "key": "x", "label": "X", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "y", "label": "Y", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" }
+  ]
+}

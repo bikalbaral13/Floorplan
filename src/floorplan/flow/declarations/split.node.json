@@ -1,0 +1,73 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "split",
+  "materialisesSpace": true,
+  "meta": { "label": "Split", "category": "Partition", "color": "#0d9488" },
+  "description": "Cut the input space into N partitions on the Partitions layer.",
+  "instructions": "Cuts the input Space into N partitions. TYPE (`type`)\n• normal — Equal-area / Target-area / Ratio sizing into `count` pieces, cut along `angle` (or the minor principal axis).\n• strip — a centred strip of `stripLength` (m) at `stripPosition` (%).\n• principal — split across the long axis by PCA / min-area OBB / straight-skeleton.\n\nSizing (`mode`, normal only): equal / target (`target` = first-piece m²) / ratio (`ratios` comma list → one piece per entry). One output handle per piece, or a single bundle (`outputMode`). Angle / ratios / first-piece-area are wireable.\n\nNOTE: the live handle count bakes from the actual cut on evaluation; before that, ratio mode shows a provisional count.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : (handleCount >= 1 ? min(40, round(handleCount)) : (type == 'strip' ? 3 : max(1, min(12, round(count)))))",
+    "valueInputs": [
+      { "key": "ratios", "label": "Ratios" },
+      { "key": "angle", "label": "Angle" },
+      { "key": "target", "label": "First piece area" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "type",
+      "label": "Type",
+      "kind": "select",
+      "default": "normal",
+      "options": [
+        { "value": "normal", "label": "Normal" },
+        { "value": "strip", "label": "Strip" },
+        { "value": "principal", "label": "Principal Axes" }
+      ]
+    },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per piece (one each)" },
+        { "value": "single", "label": "Single (all pieces)" }
+      ]
+    },
+    { "key": "count", "label": "Pieces", "kind": "range", "default": 2, "min": 2, "max": 12, "step": 1, "showWhen": "(type == 'normal' && mode != 'ratio') || type == 'principal'" },
+    {
+      "key": "principalMethod",
+      "label": "Method",
+      "kind": "select",
+      "default": "pca",
+      "options": [
+        { "value": "pca", "label": "PCA (moments)" },
+        { "value": "obb", "label": "Min-area OBB" },
+        { "value": "skeleton", "label": "Straight Skeleton" }
+      ],
+      "showWhen": "type == 'principal'"
+    },
+    {
+      "key": "mode",
+      "label": "Sizing",
+      "kind": "select",
+      "default": "equal",
+      "options": [
+        { "value": "equal", "label": "Equal (area)" },
+        { "value": "target", "label": "Target area" },
+        { "value": "ratio", "label": "Ratio" }
+      ],
+      "showWhen": "type == 'normal'"
+    },
+    { "key": "target", "label": "First piece area", "kind": "range", "default": 20, "min": 1, "max": 200, "step": 1, "unit": "m²", "showWhen": "type == 'normal' && mode == 'target'" },
+    { "key": "ratios", "label": "Ratios", "kind": "text", "default": "1, 2, 1", "placeholder": "1, 2, 1", "showWhen": "type == 'normal' && mode == 'ratio'" },
+    { "key": "splitAlongMinorPrincipalAxis", "label": "Along minor axis", "kind": "checkbox", "default": false, "showWhen": "type == 'normal'" },
+    { "key": "angle", "label": "Angle", "kind": "range", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°", "showWhen": "type != 'principal' && !splitAlongMinorPrincipalAxis" },
+    { "key": "stripLength", "label": "Strip length", "kind": "range", "default": 1, "min": 0.1, "max": 20, "step": 0.05, "unit": "m", "showWhen": "type == 'strip'" },
+    { "key": "stripPosition", "label": "Strip position", "kind": "range", "default": 50, "min": 0, "max": 100, "step": 1, "unit": "%", "showWhen": "type == 'strip'" }
+  ]
+}

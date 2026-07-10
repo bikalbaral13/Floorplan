@@ -1,0 +1,68 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "gravity-dam.v1",
+    "name": "Gravity Dam",
+    "category": "Hydraulics/Dam",
+    "units": "m",
+    "icon": { "paths": ["M5 20L8 4h4l6 16z", "M2 12h6", "M4 9h4", "M3 15h5"] }
+  },
+  "parameters": [
+    { "key": "height", "label": "Dam height H", "kind": "number", "default": 30, "min": 3, "max": 120, "step": 1, "unit": "m" },
+    { "key": "crestWidth", "label": "Crest width", "kind": "number", "default": 4, "min": 1, "max": 20, "step": 0.5, "unit": "m" },
+    { "key": "baseWidth", "label": "Base width", "kind": "number", "default": 22, "min": 3, "max": 120, "step": 1, "unit": "m" },
+    { "key": "upstreamBatter", "label": "US batter (H:V)", "kind": "number", "default": 0.05, "min": 0, "max": 0.5, "step": 0.01 },
+    { "key": "downstreamSlope", "label": "DS slope (H:V)", "kind": "number", "default": 0.7, "min": 0.3, "max": 1.2, "step": 0.05 },
+    { "key": "headwater", "label": "Headwater depth", "kind": "number", "default": 28, "min": 0, "max": 120, "step": 1, "unit": "m" },
+    { "key": "tailwater", "label": "Tailwater depth", "kind": "number", "default": 3, "min": 0, "max": 60, "step": 1, "unit": "m" },
+    { "key": "silt_height", "label": "Silt height", "kind": "number", "default": 2, "min": 0, "max": 30, "step": 0.5, "unit": "m" },
+    { "key": "length", "label": "Dam length", "kind": "number", "default": 40, "min": 2, "max": 300, "step": 1, "unit": "m" },
+    { "key": "reservoirExtent", "label": "Reservoir shown", "kind": "number", "default": 25, "min": 0, "max": 200, "step": 5, "unit": "m" },
+    { "key": "layers", "label": "Section facets", "kind": "number", "default": 10, "min": 3, "max": 24, "step": 1 },
+    { "key": "color", "label": "Concrete color", "kind": "color", "default": "#9ca3af" },
+    { "key": "waterColor", "label": "Water color", "kind": "color", "default": "#38bdf8" },
+    { "key": "siltColor", "label": "Silt color", "kind": "color", "default": "#78350f" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -50, "max": 50, "step": 1, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 20, "step": 0.5, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Concrete gravity dam — trapezoidal section with an upstream batter and downstream slope, extruded along its length (local Y). Heel upstream (−X), toe downstream (+X); reservoir + silt shown on the US side. Section built from stacked z-layers.",
+    "vars": {
+      "H": "height",
+      "B2": "baseWidth / 2",
+      "L2": "length / 2",
+      "nL": "max(3, round(layers))"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Dam body — stacked layers; US face batters in, DS face slopes in with height",
+            "repeat": "nL",
+            "as": "k",
+            "vars": {
+              "z0": "k / nL * H",
+              "z1": "(k + 1) / nL * H",
+              "zm": "(k + 0.5) / nL * H",
+              "usX": "-B2 + upstreamBatter * zm",
+              "dsX": "B2 - downstreamSlope * zm"
+            },
+            "box": { "x0": "min(usX, dsX - 0.1)", "x1": "dsX", "y0": "-L2", "y1": "L2", "h0": "z0", "h1": "z1", "color": "color" }
+          },
+          { "comment": "Reservoir water on the upstream side", "when": "reservoirExtent > 0 && headwater > 0", "box": { "x0": "-B2 - reservoirExtent", "x1": "-B2 + upstreamBatter * headwater * 0.5", "y0": "-L2", "y1": "L2", "h0": 0, "h1": "headwater", "color": "waterColor" } },
+          { "comment": "Tailwater on the downstream side", "when": "tailwater > 0", "box": { "x0": "B2 - downstreamSlope * tailwater", "x1": "B2 + reservoirExtent * 0.4", "y0": "-L2", "y1": "L2", "h0": 0, "h1": "tailwater", "color": "waterColor" } },
+          { "comment": "Silt accumulation at the heel", "when": "silt_height > 0", "box": { "x0": "-B2 - reservoirExtent * 0.35", "x1": "-B2 + upstreamBatter * silt_height", "y0": "-L2", "y1": "L2", "h0": 0, "h1": "silt_height", "color": "siltColor" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "baseW", "label": "Base width", "expr": "baseWidth", "unit": "m" },
+    { "key": "slenderness", "label": "Base / height", "expr": "baseWidth / height" },
+    { "key": "concreteVol", "label": "Concrete volume", "expr": "round(0.5 * (crestWidth + baseWidth) * height * length)", "unit": "m³" },
+    { "key": "hydroForce", "label": "Water force (per m)", "expr": "round(0.5 * 9.81 * headwater * headwater)", "unit": "kN/m" }
+  ]
+}

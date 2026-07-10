@@ -1,0 +1,77 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "mandir.v1",
+    "name": "Mandir (Puja Unit)",
+    "category": "Puja/Worship",
+    "units": "m",
+    "icon": { "paths": ["M12 2l3 4h-6z", "M6 6h12v3H6z", "M7 9v9h10V9", "M9 18v-4h6v4", "M12 9v2"] }
+  },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 0.9, "min": 0.4, "max": 2, "step": 0.05, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.5, "min": 0.3, "max": 1, "step": 0.05, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 1.5, "min": 0.6, "max": 2.4, "step": 0.05, "unit": "m" },
+    { "key": "platformHeight", "label": "Platform height", "kind": "number", "default": 0.45, "min": 0.1, "max": 1, "step": 0.05, "unit": "m" },
+    { "key": "pillars", "label": "Front pillars", "kind": "number", "default": 2, "min": 0, "max": 6, "step": 1 },
+    { "key": "canopyTiers", "label": "Canopy tiers", "kind": "number", "default": 3, "min": 1, "max": 6, "step": 1 },
+    { "key": "domes", "label": "Domes (shikhara)", "kind": "number", "default": 3, "min": 0, "max": 7, "step": 1 },
+    { "key": "domeHeight", "label": "Dome height", "kind": "number", "default": 0.22, "min": 0.08, "max": 0.5, "step": 0.02, "unit": "m" },
+    { "key": "color", "label": "Wood color", "kind": "color", "default": "#92400e" },
+    { "key": "trimColor", "label": "Trim / dome color", "kind": "color", "default": "#f59e0b" },
+    { "key": "deckColor", "label": "Deck color", "kind": "color", "default": "#b45309" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -0.5, "max": 0.5, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 1.5, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "w2": "width / 2", "d2": "depth / 2", "H": "height",
+      "pf": "platformHeight",
+      "canopyBase": "platformHeight + (height * 0.72 - platformHeight)",
+      "shrineTop": "height * 0.72",
+      "nt": "max(1, round(canopyTiers))",
+      "nd": "max(0, round(domes))",
+      "npil": "max(0, round(pillars))"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Base platform", "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": 0, "h1": "pf", "color": "color" } },
+          { "comment": "Deck top", "box": { "x0": "-w2 - 0.02", "x1": "w2 + 0.02", "y0": "-d2 - 0.02", "y1": "d2 + 0.02", "h0": "pf", "h1": "pf + 0.03", "color": "deckColor" } },
+          { "comment": "Back panel", "box": { "x0": "-w2", "x1": "w2", "y0": "d2 - 0.06", "y1": "d2", "h0": "pf", "h1": "shrineTop", "color": "color" } },
+          { "comment": "Left side panel", "box": { "x0": "-w2", "x1": "-w2 + 0.06", "y0": "-d2", "y1": "d2", "h0": "pf", "h1": "shrineTop", "color": "color" } },
+          { "comment": "Right side panel", "box": { "x0": "w2 - 0.06", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": "pf", "h1": "shrineTop", "color": "color" } },
+          {
+            "comment": "Front pillars",
+            "when": "npil > 0",
+            "repeat": "npil",
+            "as": "k",
+            "vars": { "px": "npil == 1 ? 0 : -w2 + 0.08 + k * (width - 0.16) / (npil - 1)" },
+            "circle": { "cx": "px", "cy": "-d2 + 0.06", "r": 0.035, "sides": 10, "h0": "pf", "h1": "shrineTop", "color": "trimColor" }
+          },
+          {
+            "comment": "Tiered canopy roof — stacked shrinking slabs",
+            "repeat": "nt",
+            "as": "k",
+            "vars": { "sc": "1 - k * 0.16", "tz": "shrineTop + k * (domeHeight * 0.5 + 0.03)" },
+            "box": { "x0": "-w2 * sc - 0.03", "x1": "w2 * sc + 0.03", "y0": "-d2 * sc - 0.03", "y1": "d2 * sc + 0.03", "h0": "tz", "h1": "tz + 0.04", "color": "trimColor" }
+          },
+          {
+            "comment": "Domes / shikhara spires across the top",
+            "when": "nd > 0",
+            "repeat": "nd",
+            "as": "k",
+            "vars": { "dx": "nd == 1 ? 0 : -w2 * 0.6 + k * (width * 1.2 - 0.16) / (nd - 1) - 0 + 0", "base": "shrineTop + nt * (domeHeight * 0.5 + 0.03)" },
+            "circle": { "cx": "nd == 1 ? 0 : (-w2 * 0.7 + k * (width * 1.4) / (nd - 1))", "cy": 0, "r": "min(w2 * 0.28, 0.12)", "sides": 12, "h0": "base", "h1": "base + domeHeight", "color": "trimColor" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "shelfArea", "label": "Deck area", "expr": "width * depth", "unit": "m²" },
+    { "key": "totalHeight", "label": "Total height", "expr": "clearance + height", "unit": "m" }
+  ]
+}

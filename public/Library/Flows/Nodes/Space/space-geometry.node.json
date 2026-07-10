@@ -1,0 +1,18 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "space-geometry",
+  "meta": { "label": "Space Geometry", "category": "Space", "color": "#0891b2" },
+  "description": "Measure the input space — outputs Area, Perimeter and vertex count.",
+  "instructions": "Measures the input Space. Forwards the polygon unchanged on the main output (so it can sit inline in a pipeline) and exposes three scalar value outputs: `val-area` (m²), `val-perimeter` (m), and `val-vertices` (count).\n\nTIP: wire val-area into a Math node (e.g. area ÷ target → count), or into an Output node's Metrics.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueOutputs": [
+      { "key": "area", "label": "Area", "unit": "m²" },
+      { "key": "perimeter", "label": "Perimeter", "unit": "m" },
+      { "key": "vertices", "label": "Vertices" }
+    ]
+  },
+  "parameters": []
+}

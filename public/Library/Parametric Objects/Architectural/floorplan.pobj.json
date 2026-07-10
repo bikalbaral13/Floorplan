@@ -1,0 +1,888 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "floorplan.bsp.v1",
+    "name": "Floorplan",
+    "category": "Layout/Floorplan",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 3h18v18H3z",
+        "M13 3v18",
+        "M3 12h10",
+        "M13 13h8",
+        "M3 8h3"
+      ]
+    }
+  },
+  "hostKind": "node",
+  "description": "Procedural floor plan where EVERYTHING is a COMPOSED CHILD COMPONENT — walls, doors, windows and furniture are `ref` instances of the library Wall / Door / Window / Bed / Wardrobe / Sofa / TV / Table / Toilet / Sink objects — so each instance is individually selectable (Components list / canvas click), per-instance overridable, and REPOSITIONABLE from Properties without touching the canvas. Walls: each wall run is a Wall child (`wall[k]` / wall_s…) with its LENGTH driven by the plan and its THICKNESS + HEIGHT soft-bound — editable per wall; perimeter runs extend half a thickness past the corners so joints close flush in 2D and 3D. Doors/windows: `_pos` slider slides each along ITS wall (clamped clear of corners); every instance also takes Offset X/Y + Rotate nudges. `rectangular` = seeded BSP into `rooms` cells (Random Layout jitters; Seed repeats); a Door per partition + entrance (door[0..n]), a Window per facade (window[0..3], bottom one defaults beside the entrance), and — with Furnish on — rooms get ROLES by size: the largest is the LIVING room (Sofa + TV unit + dining Table), the smallest (≥3 rooms) is the BATHROOM (Toilet + Sink), the rest are BEDROOMS (Bed + Wardrobe); each piece is placed along its room's boundary, back to the wall facing inward, with its own `_pos` slider (0–100 around the room perimeter). `L-shape` / `T-shape` = shaped shells from Wall children (thicker Exterior Wall), entrance Door + Windows + bed/sofa/table composed onto them. Composition needs the library loaded (Import Objects); without it the BSP falls back to inline symbols (L/T walls need the library). North arrow optional. Footprint W×D derives from Rooms × Avg Area at the given Aspect; origin = node centre.",
+  "parameters": [
+    {
+      "key": "mode",
+      "label": "Mode",
+      "kind": "select",
+      "default": "rectangular",
+      "options": [
+        {
+          "value": "rectangular",
+          "label": "Rectangular (BSP rooms)"
+        },
+        {
+          "value": "L-shape",
+          "label": "L-shape"
+        },
+        {
+          "value": "T-shape",
+          "label": "T-shape"
+        }
+      ]
+    },
+    {
+      "key": "rooms",
+      "label": "Number of Rooms",
+      "kind": "number",
+      "default": 5,
+      "min": 1,
+      "max": 30,
+      "step": 1
+    },
+    {
+      "key": "roomArea",
+      "label": "Avg Room Area",
+      "kind": "number",
+      "default": 14,
+      "min": 4,
+      "max": 60,
+      "step": 1,
+      "unit": "m²"
+    },
+    {
+      "key": "aspect",
+      "label": "Plan Aspect (W/D)",
+      "kind": "number",
+      "default": 1.4,
+      "min": 0.5,
+      "max": 3,
+      "step": 0.1
+    },
+    {
+      "key": "sizeMode",
+      "label": "Boundary Size",
+      "kind": "select",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto (Rooms × Area)"
+        },
+        {
+          "value": "inner",
+          "label": "Inner Dim X × Y"
+        },
+        {
+          "value": "outer",
+          "label": "Outer Dim X × Y"
+        }
+      ]
+    },
+    {
+      "key": "dimX",
+      "label": "Dim X",
+      "kind": "number",
+      "default": 12,
+      "min": 3,
+      "max": 60,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "dimY",
+      "label": "Dim Y",
+      "kind": "number",
+      "default": 9,
+      "min": 3,
+      "max": 60,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "wallWidth",
+      "label": "Interior Wall",
+      "kind": "number",
+      "default": 0.12,
+      "min": 0.05,
+      "max": 0.4,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "extWall",
+      "label": "Exterior Wall",
+      "kind": "number",
+      "default": 0.23,
+      "min": 0.1,
+      "max": 0.5,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "wallHeight",
+      "label": "Wall Height",
+      "kind": "number",
+      "default": 2.8,
+      "min": 2,
+      "max": 4,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "sillHeight",
+      "label": "Window Sill Height",
+      "kind": "number",
+      "default": 0.9,
+      "min": 0,
+      "max": 1.5,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "lintelHeight",
+      "label": "Window Lintel Height",
+      "kind": "number",
+      "default": 2.1,
+      "min": 1.5,
+      "max": 3.5,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "doorWidth",
+      "label": "Door Width",
+      "kind": "number",
+      "default": 0.9,
+      "min": 0.6,
+      "max": 1.4,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "windowWidth",
+      "label": "Window Width",
+      "kind": "number",
+      "default": 1.2,
+      "min": 0.4,
+      "max": 3,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "furnish",
+      "label": "Furnish",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "showNorth",
+      "label": "North Arrow",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "random",
+      "label": "Random Layout",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "kind": "number",
+      "default": 1,
+      "min": 1,
+      "max": 9999,
+      "step": 1
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "°"
+    },
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "color",
+      "default": "#334155"
+    }
+  ],
+  "geometry": {
+    "description": "Rectangular → built-in BSP generator, which now COMPOSES its doors (door.single.v1), windows (window.standard.v1) and furniture (sofa.v2 / table.dining.v1 in the largest room, bed.v2 elsewhere, gated by Furnish) as ref children with stable instance paths (door[k] / window[k] / bed[k] / sofa[0] / table[0]); inline symbols only as a no-library fallback. L / T → explicit floor slab + thick perimeter walls, then the entrance Door + outer Windows + bed/sofa/table COMPOSED via `ref` rules (params = expressions in this scope; x/y/rotation place them). North arrow drawn on every mode.",
+    "emit": "shapes",
+    "vars": {
+      "_doc": "Boundary sizing: `auto` derives W×D (centreline span) from Rooms × Avg Area at Aspect; `inner`/`outer` take Dim X/Y as the CLEAR inner (or overall outer) boundary dimensions and convert to the centreline using the perimeter wall thickness (Interior Wall in rectangular mode, Exterior Wall for L/T shells).",
+      "area": "max(4, rooms * roomArea)",
+      "Wauto": "sqrt(area * max(0.2, aspect))",
+      "pT": "mode == 'rectangular' ? wallWidth : extWall",
+      "W": "sizeMode == 'inner' ? dimX + pT : (sizeMode == 'outer' ? dimX - pT : Wauto)",
+      "D": "sizeMode == 'inner' ? dimY + pT : (sizeMode == 'outer' ? dimY - pT : area / Wauto)",
+      "ww": "wallWidth",
+      "wh": "wallHeight",
+      "eh": "extWall / 2",
+      "sill": "sillHeight",
+      "lintel": "max(sillHeight + 0.1, lintelHeight)",
+      "dw": "doorWidth",
+      "wdw": "windowWidth",
+      "dhx": "-dw/2",
+      "dhy": "-D/2 + eh",
+      "nx": "W/2 + 0.95",
+      "ny": "D/2 - 0.55"
+    },
+    "cases": [
+      {
+        "comment": "L-SHAPE — vertical arm (width lw) + horizontal arm (depth ld); notch top-right.",
+        "when": "mode == 'L-shape'",
+        "vars": {
+          "lw": "W * 0.45",
+          "ld": "D * 0.45",
+          "bx": "-W/2 + W*0.45/2",
+          "by": "D*0.45/2",
+          "sx": "W*0.45/2",
+          "sy": "-D/2 + D*0.45/2"
+        },
+        "rules": [
+          {
+            "comment": "floor slab",
+            "poly": {
+              "h0": "-0.02",
+              "h1": "0",
+              "pts": [
+                [
+                  "-W/2",
+                  "-D/2"
+                ],
+                [
+                  "W/2",
+                  "-D/2"
+                ],
+                [
+                  "W/2",
+                  "-D/2 + ld"
+                ],
+                [
+                  "-W/2 + lw",
+                  "-D/2 + ld"
+                ],
+                [
+                  "-W/2 + lw",
+                  "D/2"
+                ],
+                [
+                  "-W/2",
+                  "D/2"
+                ]
+              ]
+            }
+          },
+          {
+            "comment": "wall: bottom — COMPOSED Wall child (length driven; thickness/height soft-bound, per-wall overridable).",
+            "ref": "wall.segment.v1",
+            "id": "wall_s",
+            "x": "0",
+            "y": "-D/2",
+            "rotation": 0,
+            "params": {
+              "length": "W",
+              "miterA": -1,
+              "miterB": -1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: right (lower arm)",
+            "ref": "wall.segment.v1",
+            "id": "wall_e",
+            "x": "W/2",
+            "y": "-D/2 + ld/2",
+            "rotation": 90,
+            "params": {
+              "length": "ld",
+              "miterA": -1,
+              "miterB": -1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: notch bottom",
+            "ref": "wall.segment.v1",
+            "id": "wall_notch_s",
+            "x": "lw/2",
+            "y": "-D/2 + ld",
+            "rotation": 0,
+            "params": {
+              "length": "W - lw",
+              "miterA": -1,
+              "miterB": 1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: notch left",
+            "ref": "wall.segment.v1",
+            "id": "wall_notch_w",
+            "x": "-W/2 + lw",
+            "y": "ld/2",
+            "rotation": 90,
+            "params": {
+              "length": "D - ld",
+              "miterA": 1,
+              "miterB": -1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: top (left arm)",
+            "ref": "wall.segment.v1",
+            "id": "wall_n",
+            "x": "0 - W/2 + lw/2",
+            "y": "D/2",
+            "rotation": 0,
+            "params": {
+              "length": "lw",
+              "miterA": 1,
+              "miterB": 1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: left",
+            "ref": "wall.segment.v1",
+            "id": "wall_w",
+            "x": "-W/2",
+            "y": "0",
+            "rotation": 90,
+            "params": {
+              "length": "D",
+              "miterA": 1,
+              "miterB": 1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "entrance door — COMPOSED from the Door object (ref). Only width/height passed; leaves/hinge/swing/frame use the door's own defaults.",
+            "ref": "door.single.v1",
+            "id": "door",
+            "x": "0",
+            "y": "-D/2",
+            "rotation": "0",
+            "params": {
+              "width": "dw",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "window A (bottom wall) — COMPOSED from the Window object (ref).",
+            "ref": "window.standard.v1",
+            "id": "windowA",
+            "x": "W*0.28",
+            "y": "-D/2",
+            "rotation": "0",
+            "params": {
+              "width": "wdw",
+              "thickness": "extWall",
+              "sillHeight": "sill",
+              "lintelHeight": "lintel"
+            }
+          },
+          {
+            "comment": "window B (left wall) — COMPOSED from the Window object (ref), rotated 90° so the opening runs along the wall.",
+            "ref": "window.standard.v1",
+            "id": "windowB",
+            "x": "-W/2",
+            "y": "D*0.18",
+            "rotation": "90",
+            "params": {
+              "width": "wdw",
+              "thickness": "extWall",
+              "sillHeight": "sill",
+              "lintelHeight": "lintel"
+            }
+          },
+          {
+            "comment": "bed — COMPOSED from the Bed object (ref); its own defaults, all overridable per instance.",
+            "when": "furnish",
+            "ref": "bed.v2",
+            "id": "bed",
+            "x": "bx",
+            "y": "by",
+            "rotation": 0
+          },
+          {
+            "comment": "sofa — COMPOSED from the Sofa object (ref); rotation 180 puts its back to −Y.",
+            "when": "furnish",
+            "ref": "sofa.v2",
+            "id": "sofa",
+            "x": "sx",
+            "y": "sy",
+            "rotation": 180
+          },
+          {
+            "comment": "dining table — COMPOSED from the Table object (ref), in front of the sofa.",
+            "when": "furnish",
+            "ref": "table.dining.v1",
+            "id": "table",
+            "x": "sx",
+            "y": "sy + 1.0",
+            "rotation": 0
+          },
+          {
+            "comment": "north ring",
+            "when": "showNorth",
+            "circle": {
+              "cx": "nx",
+              "cy": "ny",
+              "r": "0.42",
+              "sides": "24",
+              "h0": "0",
+              "h1": "0"
+            }
+          },
+          {
+            "comment": "north shaft",
+            "when": "showNorth",
+            "line": {
+              "h0": "0",
+              "h1": "0",
+              "pts": [
+                [
+                  "nx",
+                  "ny-0.3"
+                ],
+                [
+                  "nx",
+                  "ny+0.18"
+                ]
+              ]
+            }
+          },
+          {
+            "comment": "north head",
+            "when": "showNorth",
+            "poly": {
+              "h0": "0",
+              "h1": "0",
+              "pts": [
+                [
+                  "nx",
+                  "ny+0.42"
+                ],
+                [
+                  "nx-0.12",
+                  "ny+0.12"
+                ],
+                [
+                  "nx+0.12",
+                  "ny+0.12"
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "comment": "T-SHAPE — top bar (depth tt) + centred stem (width sw).",
+        "when": "mode == 'T-shape'",
+        "vars": {
+          "tt": "D * 0.42",
+          "sw": "W * 0.42",
+          "ty": "D/2 - D*0.42",
+          "bx": "-W/4",
+          "by": "(D/2 - D*0.42 + D/2)/2",
+          "sx": "0",
+          "sy": "(-D/2 + D/2 - D*0.42)/2"
+        },
+        "rules": [
+          {
+            "comment": "floor slab",
+            "poly": {
+              "h0": "-0.02",
+              "h1": "0",
+              "pts": [
+                [
+                  "-sw/2",
+                  "-D/2"
+                ],
+                [
+                  "sw/2",
+                  "-D/2"
+                ],
+                [
+                  "sw/2",
+                  "ty"
+                ],
+                [
+                  "W/2",
+                  "ty"
+                ],
+                [
+                  "W/2",
+                  "D/2"
+                ],
+                [
+                  "-W/2",
+                  "D/2"
+                ],
+                [
+                  "-W/2",
+                  "ty"
+                ],
+                [
+                  "-sw/2",
+                  "ty"
+                ]
+              ]
+            }
+          },
+          {
+            "comment": "wall: stem bottom — COMPOSED Wall child (length driven; thickness/height soft-bound, per-wall overridable).",
+            "ref": "wall.segment.v1",
+            "id": "wall_s",
+            "x": "0",
+            "y": "-D/2",
+            "rotation": 0,
+            "params": {
+              "length": "sw",
+              "miterA": -1,
+              "miterB": -1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: stem right",
+            "ref": "wall.segment.v1",
+            "id": "wall_stem_e",
+            "x": "sw/2",
+            "y": "(ty - D/2)/2",
+            "rotation": 90,
+            "params": {
+              "length": "ty + D/2",
+              "miterA": -1,
+              "miterB": 1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: bar bottom-right",
+            "ref": "wall.segment.v1",
+            "id": "wall_bar_se",
+            "x": "(sw + W)/4",
+            "y": "ty",
+            "rotation": 0,
+            "params": {
+              "length": "W/2 - sw/2",
+              "miterA": 1,
+              "miterB": -1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: bar right",
+            "ref": "wall.segment.v1",
+            "id": "wall_e",
+            "x": "W/2",
+            "y": "(ty + D/2)/2",
+            "rotation": 90,
+            "params": {
+              "length": "D/2 - ty",
+              "miterA": -1,
+              "miterB": -1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: top",
+            "ref": "wall.segment.v1",
+            "id": "wall_n",
+            "x": "0",
+            "y": "D/2",
+            "rotation": 0,
+            "params": {
+              "length": "W",
+              "miterA": 1,
+              "miterB": 1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: bar left",
+            "ref": "wall.segment.v1",
+            "id": "wall_w",
+            "x": "-W/2",
+            "y": "(ty + D/2)/2",
+            "rotation": 90,
+            "params": {
+              "length": "D/2 - ty",
+              "miterA": 1,
+              "miterB": 1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: bar bottom-left",
+            "ref": "wall.segment.v1",
+            "id": "wall_bar_sw",
+            "x": "0 - (sw + W)/4",
+            "y": "ty",
+            "rotation": 0,
+            "params": {
+              "length": "W/2 - sw/2",
+              "miterA": -1,
+              "miterB": 1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "wall: stem left",
+            "ref": "wall.segment.v1",
+            "id": "wall_stem_w",
+            "x": "-sw/2",
+            "y": "(ty - D/2)/2",
+            "rotation": 90,
+            "params": {
+              "length": "ty + D/2",
+              "miterA": 1,
+              "miterB": -1
+            },
+            "defaults": {
+              "thickness": "extWall",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "entrance door — COMPOSED from the Door object (ref).",
+            "ref": "door.single.v1",
+            "id": "door",
+            "x": "0",
+            "y": "-D/2",
+            "rotation": "0",
+            "params": {
+              "width": "dw",
+              "height": "wh"
+            }
+          },
+          {
+            "comment": "window A (top wall) — COMPOSED from the Window object (ref).",
+            "ref": "window.standard.v1",
+            "id": "windowA",
+            "x": "0",
+            "y": "D/2",
+            "rotation": "0",
+            "params": {
+              "width": "wdw",
+              "thickness": "extWall",
+              "sillHeight": "sill",
+              "lintelHeight": "lintel"
+            }
+          },
+          {
+            "comment": "window B (bar-right wall) — COMPOSED from the Window object (ref), rotated 90°.",
+            "ref": "window.standard.v1",
+            "id": "windowB",
+            "x": "W/2",
+            "y": "ty + (D/2-ty)/2",
+            "rotation": "90",
+            "params": {
+              "width": "wdw",
+              "thickness": "extWall",
+              "sillHeight": "sill",
+              "lintelHeight": "lintel"
+            }
+          },
+          {
+            "comment": "bed — COMPOSED from the Bed object (ref); its own defaults, all overridable per instance.",
+            "when": "furnish",
+            "ref": "bed.v2",
+            "id": "bed",
+            "x": "bx",
+            "y": "by",
+            "rotation": 0
+          },
+          {
+            "comment": "sofa — COMPOSED from the Sofa object (ref); rotation 180 puts its back to −Y.",
+            "when": "furnish",
+            "ref": "sofa.v2",
+            "id": "sofa",
+            "x": "sx",
+            "y": "sy",
+            "rotation": 180
+          },
+          {
+            "comment": "dining table — COMPOSED from the Table object (ref), in front of the sofa.",
+            "when": "furnish",
+            "ref": "table.dining.v1",
+            "id": "table",
+            "x": "sx",
+            "y": "sy + 1.5",
+            "rotation": 0
+          },
+          {
+            "comment": "north ring",
+            "when": "showNorth",
+            "circle": {
+              "cx": "nx",
+              "cy": "ny",
+              "r": "0.42",
+              "sides": "24",
+              "h0": "0",
+              "h1": "0"
+            }
+          },
+          {
+            "comment": "north shaft",
+            "when": "showNorth",
+            "line": {
+              "h0": "0",
+              "h1": "0",
+              "pts": [
+                [
+                  "nx",
+                  "ny-0.3"
+                ],
+                [
+                  "nx",
+                  "ny+0.18"
+                ]
+              ]
+            }
+          },
+          {
+            "comment": "north head",
+            "when": "showNorth",
+            "poly": {
+              "h0": "0",
+              "h1": "0",
+              "pts": [
+                [
+                  "nx",
+                  "ny+0.42"
+                ],
+                [
+                  "nx-0.12",
+                  "ny+0.12"
+                ],
+                [
+                  "nx+0.12",
+                  "ny+0.12"
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "comment": "RECTANGULAR (default) — built-in seeded-BSP floorplan + north arrow.",
+        "rules": [
+          {
+            "floorplan": true
+          },
+          {
+            "comment": "north ring",
+            "when": "showNorth",
+            "circle": {
+              "cx": "nx",
+              "cy": "ny",
+              "r": "0.42",
+              "sides": "24",
+              "h0": "0",
+              "h1": "0"
+            }
+          },
+          {
+            "comment": "north shaft",
+            "when": "showNorth",
+            "line": {
+              "h0": "0",
+              "h1": "0",
+              "pts": [
+                [
+                  "nx",
+                  "ny-0.3"
+                ],
+                [
+                  "nx",
+                  "ny+0.18"
+                ]
+              ]
+            }
+          },
+          {
+            "comment": "north head",
+            "when": "showNorth",
+            "poly": {
+              "h0": "0",
+              "h1": "0",
+              "pts": [
+                [
+                  "nx",
+                  "ny+0.42"
+                ],
+                [
+                  "nx-0.12",
+                  "ny+0.12"
+                ],
+                [
+                  "nx+0.12",
+                  "ny+0.12"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

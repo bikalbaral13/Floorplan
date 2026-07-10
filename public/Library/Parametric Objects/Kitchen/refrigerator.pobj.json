@@ -1,0 +1,173 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "refrigerator.v1",
+    "name": "Refrigerator",
+    "category": "Fixtures/Kitchen",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M5 3h14v18H5z",
+        "M5 9h14",
+        "M8 5v2",
+        "M8 12v4",
+        "M12 9v12"
+      ]
+    }
+  },
+  "parameters": [
+    {
+      "key": "width",
+      "label": "Width",
+      "kind": "number",
+      "default": 0.8,
+      "min": 0.5,
+      "max": 1.2,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "depth",
+      "label": "Depth",
+      "kind": "number",
+      "default": 0.75,
+      "min": 0.5,
+      "max": 0.9,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "height",
+      "label": "Height",
+      "kind": "number",
+      "default": 1.85,
+      "min": 1.2,
+      "max": 2.2,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "doubleDoor",
+      "label": "Double door",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "wallOffset",
+      "label": "Offset from Wall",
+      "kind": "number",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "clearance",
+      "label": "Clearance (off floor)",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 2,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "deg"
+    },
+    {
+      "key": "color",
+      "label": "Color",
+      "kind": "color",
+      "default": "#94a3b8"
+    }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Body + door leaf/leaves (front at -Y) + handles. One extruded rule set renders plan and 3D; clearance lifts the cabinet if needed.",
+    "emit": "shapes",
+    "vars": {
+      "w2": "width / 2",
+      "d2": "depth / 2",
+      "doorT": "0.05",
+      "gap": "0.008"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "cabinet body",
+            "box": {
+              "x0": "-w2",
+              "x1": "w2",
+              "y0": "-d2 + doorT",
+              "y1": "d2",
+              "h0": 0,
+              "h1": "height"
+            }
+          },
+          {
+            "comment": "single full-width door",
+            "when": "!doubleDoor",
+            "box": {
+              "x0": "-w2",
+              "x1": "w2",
+              "y0": "-d2",
+              "y1": "-d2 + doorT",
+              "h0": 0,
+              "h1": "height"
+            }
+          },
+          {
+            "comment": "french doors (left/right leaf)",
+            "when": "doubleDoor",
+            "repeat": "2",
+            "as": "k",
+            "box": {
+              "x0": "k == 0 ? -w2 : gap",
+              "x1": "k == 0 ? -gap : w2",
+              "y0": "-d2",
+              "y1": "-d2 + doorT",
+              "h0": 0,
+              "h1": "height"
+            }
+          },
+          {
+            "comment": "centre handles (double door)",
+            "when": "doubleDoor",
+            "repeat": "2",
+            "as": "k",
+            "box": {
+              "x0": "k == 0 ? -0.05 : 0.02",
+              "x1": "k == 0 ? -0.02 : 0.05",
+              "y0": "-d2 - 0.03",
+              "y1": "-d2",
+              "h0": "height * 0.45",
+              "h1": "height * 0.93"
+            }
+          },
+          {
+            "comment": "side handle (single door)",
+            "when": "!doubleDoor",
+            "box": {
+              "x0": "-w2 + 0.04",
+              "x1": "-w2 + 0.07",
+              "y0": "-d2 - 0.03",
+              "y1": "-d2",
+              "h0": "height * 0.45",
+              "h1": "height * 0.93"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

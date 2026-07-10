@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "id": "corridoor-generator",
+  "title": "Corridoor Generator",
+  "category": "Space",
+  "description": "Generate a Corridoor Space INSIDE any selected Space (rectangular, L-shape, T/I-shape, stepped or irregular). Three Shape branches — pick one by keeping it connected (or preview all three and delete the spares after commit): 1) RECTANGULAR — Optimise Rectangle inscribes the largest rectangle, its skeleton main run becomes a straight corridor band. 2) L-SHAPE — Optimise Rectangle inscribes the largest L, its skeleton spine (longest branch through the corner) becomes a bent corridor band. 3) SKELETONED — the space's own straight-skeleton network becomes a full corridor web. WIDTH: set 'Path width' on the branch's Skeleton node (it is the corridor width, in metres — node params drive the COMMIT; wired sliders only drive the preview). Run Flow commits each band as a Space with region 'Corridor' (label 'Skeleton Path' — rename to Corridoor in Space Properties). Note: branches 1–2 also commit their inscribed rectangle/L guide Space (delete it if unwanted), and the L branch produces nothing on spaces without a notch (a plain rectangle has no inscribed L).",
+  "nodes": [
+    {
+      "id": "src",
+      "position": { "x": -560, "y": 330 },
+      "data": {
+        "tool": "source",
+        "params": { "id": "", "grabFromSelection": true }
+      }
+    },
+    {
+      "id": "g_rect",
+      "type": "group",
+      "position": { "x": -260, "y": -40 },
+      "width": 640,
+      "height": 240,
+      "data": { "tool": "group", "params": { "label": "Shape 1 · Rectangular — straight main run (width = Path width on Skeleton)" } }
+    },
+    {
+      "id": "g_lshape",
+      "type": "group",
+      "position": { "x": -260, "y": 250 },
+      "width": 640,
+      "height": 240,
+      "data": { "tool": "group", "params": { "label": "Shape 2 · L-shape — bent spine (needs a notched space)" } }
+    },
+    {
+      "id": "g_skel",
+      "type": "group",
+      "position": { "x": -260, "y": 540 },
+      "width": 640,
+      "height": 240,
+      "data": { "tool": "group", "params": { "label": "Shape 3 · Skeletoned — full medial-axis network" } }
+    },
+    {
+      "id": "or_rect",
+      "position": { "x": 30, "y": 60 },
+      "parentId": "g_rect",
+      "data": {
+        "tool": "optimise-rect",
+        "params": {
+          "shape": "rectangle",
+          "reference": "none",
+          "referenceEdge": 0,
+          "axisAngle": 0,
+          "minNotch": 0,
+          "minThickness": 0,
+          "steps": 3,
+          "count": 1,
+          "gap": 0,
+          "union": false,
+          "optimiseAxisTilt": false,
+          "shrinkEnabled": false,
+          "targetArea": 50,
+          "shrinkAngle": 0,
+          "shrinkSlide": 0,
+          "optimiseShrinkEnabled": false,
+          "exactArea": false,
+          "outputMode": "perCell",
+          "random": false,
+          "seed": 1,
+          "inputCount": 1
+        }
+      }
+    },
+    {
+      "id": "sk_rect",
+      "position": { "x": 340, "y": 60 },
+      "parentId": "g_rect",
+      "data": {
+        "tool": "skeleton",
+        "params": {
+          "type": "straight-skeleton",
+          "emit": "branches",
+          "samples": 8,
+          "level": 1,
+          "reduceLevel": 0,
+          "pruneEnds": true,
+          "joinToBoundary": false,
+          "longestBranch": true,
+          "makePath": true,
+          "pathWidth": 1.2,
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "or_lshape",
+      "position": { "x": 30, "y": 60 },
+      "parentId": "g_lshape",
+      "data": {
+        "tool": "optimise-rect",
+        "params": {
+          "shape": "lshape",
+          "reference": "none",
+          "referenceEdge": 0,
+          "axisAngle": 0,
+          "minNotch": 0.5,
+          "minThickness": 0.5,
+          "steps": 3,
+          "count": 1,
+          "gap": 0,
+          "union": false,
+          "optimiseAxisTilt": false,
+          "shrinkEnabled": false,
+          "targetArea": 50,
+          "shrinkAngle": 0,
+          "shrinkSlide": 0,
+          "optimiseShrinkEnabled": false,
+          "exactArea": false,
+          "outputMode": "perCell",
+          "random": false,
+          "seed": 1,
+          "inputCount": 1
+        }
+      }
+    },
+    {
+      "id": "sk_lshape",
+      "position": { "x": 340, "y": 60 },
+      "parentId": "g_lshape",
+      "data": {
+        "tool": "skeleton",
+        "params": {
+          "type": "straight-skeleton",
+          "emit": "branches",
+          "samples": 8,
+          "level": 1,
+          "reduceLevel": 0,
+          "pruneEnds": true,
+          "joinToBoundary": false,
+          "longestBranch": true,
+          "makePath": true,
+          "pathWidth": 1.2,
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "sk_skel",
+      "position": { "x": 340, "y": 60 },
+      "parentId": "g_skel",
+      "data": {
+        "tool": "skeleton",
+        "params": {
+          "type": "straight-skeleton",
+          "emit": "branches",
+          "samples": 8,
+          "level": 1,
+          "reduceLevel": 0,
+          "pruneEnds": true,
+          "joinToBoundary": false,
+          "longestBranch": false,
+          "makePath": true,
+          "pathWidth": 1.2,
+          "outputMode": "single"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e_src_or_rect", "source": "src", "target": "or_rect", "sourceHandle": null, "targetHandle": null },
+    { "id": "e_or_sk_rect", "source": "or_rect", "target": "sk_rect", "sourceHandle": null, "targetHandle": null },
+    { "id": "e_src_or_lshape", "source": "src", "target": "or_lshape", "sourceHandle": null, "targetHandle": null },
+    { "id": "e_or_sk_lshape", "source": "or_lshape", "target": "sk_lshape", "sourceHandle": null, "targetHandle": null },
+    { "id": "e_src_sk_skel", "source": "src", "target": "sk_skel", "sourceHandle": null, "targetHandle": null }
+  ]
+}

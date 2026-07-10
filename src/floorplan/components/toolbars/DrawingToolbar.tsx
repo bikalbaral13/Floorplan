@@ -63,9 +63,9 @@ export interface DrawingToolbarProps {
   /** Import a folder of parametric objects (Nodes / Segments / Spaces of `.pobj.json`). Populates the
    *  Add Node / Add Segment / Add Space dropdowns from the imported objects' labels. */
   onImportObjects?: (files: File[]) => void;
-  /** Import the bundled object library directly (no folder picker). When set, the Import Objects button
-   *  calls this instead of opening the directory dialog. */
-  onImportObjectsAuto?: () => void;
+  /** Handle the Import Objects button click — the host opens its Import Objects picker dialog (select
+   *  library objects / folders, or browse this device). When set, it supersedes the inline directory input. */
+  onImportObjectsClick?: () => void;
   /** Clears any currently-selected generated element when starting a Door/Window/Connection tool. */
   onSelectedGenElementChange: (value: null) => void;
   /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
@@ -192,14 +192,16 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
           {/* Set Scale moved to Preferences (top-right). Import Image + Map live in the top-right Files
               dropdown. The parent-provided top-tool slot (if any) still renders first. */}
           {p.topToolSlots && <div className="flex flex-col items-center gap-2">{p.topToolSlots}</div>}
-          {/* Import Objects — pick a folder of `.pobj.json` (Nodes / Segments / Spaces); the imported
-              objects' labels populate the Add Node / Add Segment / Add Space dropdowns. */}
+          {/* Import Objects — opens the host's picker dialog (select multiple library objects / folders,
+              or browse `.pobj.json` files / a folder from this device); the imported objects' labels
+              populate the Add Node / Add Segment / Add Space dropdowns. Falls back to the inline
+              directory input when no dialog handler is provided. */}
           {p.onImportObjects && (
             <div className="flex flex-col items-center gap-2">
               <ToolButton
                 icon={<Upload className="h-6 w-6 text-teal-600" />}
                 label="Import Objects"
-                onClick={() => (p.onImportObjectsAuto ? p.onImportObjectsAuto() : objectsFileRef.current?.click())}
+                onClick={() => (p.onImportObjectsClick ? p.onImportObjectsClick() : objectsFileRef.current?.click())}
               />
               <input
                 ref={objectsFileRef}

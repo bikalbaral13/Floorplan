@@ -1,0 +1,42 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "convex-decomp",
+  "materialisesSpace": true,
+  "meta": { "label": "Convex Decomposition", "category": "Partition", "color": "#6d28d9" },
+  "description": "Decompose a concave space — exact convex (Hertel–Mehlhorn / Bayazit / ACD / Steiner) or Neck-cut into a few large blocks at narrow waists.",
+  "instructions": "Splits a concave Space into convex pieces by one of five methods (`type`): Hertel–Mehlhorn / Bayazit / ACD (approximate, uses `tolerance`) / Steiner (edge extension) / Neck-cut (a few large blocks, cut only at narrow waists per `neckRatio`).\n\nOne output handle PER convex piece, or a single bundle (`outputMode`). NOTE: the piece count depends on the polygon and bakes live on evaluation.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(pieceCount)))"
+  },
+  "defaults": { "pieceCount": 1 },
+  "parameters": [
+    {
+      "key": "type",
+      "label": "Type",
+      "kind": "select",
+      "default": "hertel-mehlhorn",
+      "options": [
+        { "value": "hertel-mehlhorn", "label": "Hertel–Mehlhorn" },
+        { "value": "bayazit", "label": "Bayazit" },
+        { "value": "acd", "label": "ACD (approximate)" },
+        { "value": "steiner", "label": "Steiner (edge extension)" },
+        { "value": "neck-cut", "label": "Neck-cut (big blocks)" }
+      ]
+    },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per piece (one each)" },
+        { "value": "single", "label": "Single (all pieces)" }
+      ]
+    },
+    { "key": "tolerance", "label": "Tolerance", "kind": "range", "default": 10, "min": 0, "max": 40, "step": 0.5, "unit": "°", "showWhen": "type == 'acd'" },
+    { "key": "neckRatio", "label": "Neck sensitivity", "kind": "range", "default": 3, "min": 1.5, "max": 8, "step": 0.1, "showWhen": "type == 'neck-cut'" }
+  ]
+}

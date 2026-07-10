@@ -1,0 +1,17 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "convex-hull",
+  "meta": {
+    "label": "Convex Hull",
+    "category": "Reshape",
+    "color": "#0369a1"
+  },
+  "description": "Wrap the input space in its convex hull (smallest enclosing convex polygon).",
+  "instructions": "Wraps the input Space in its convex hull — the smallest convex polygon containing every vertex → one output Space. No parameters.\n\nTIP: use it to regularise a jagged or concave outline before massing / area take-off, or to get a clean envelope around a cluster of points or rooms. Wire a Space into the input handle.",
+  "handles": {
+    "input": true,
+    "output": true
+  },
+  "parameters": []
+}

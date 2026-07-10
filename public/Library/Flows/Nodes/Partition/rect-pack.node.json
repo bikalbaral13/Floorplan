@@ -1,0 +1,51 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "rect-pack",
+  "meta": { "label": "Rectangle Packing", "category": "Partition", "color": "#ea580c" },
+  "description": "Pack fixed-size rectangles (units) into the space — Grid (aligned/optimised) or Random (scattered, any angle). Count or fill, with gap. Outputs placed count + utilization %.",
+  "instructions": "Packs FIXED-size rectangles (one unit type, `width` × `height`) into the Space — `count` items, or 0 = fill. `placement` = Grid (regular, optionally `optimiseOrientation` or aligned via `alignToAxis` / manual `tilt`) or Random (scatter at random positions/angles, `seed`-stable, packing hard until full). `gap` (m) spaces them; `allowRotate` lets units turn 90°.\n\nClipped to the outline (concave-safe). One output Space per placed rectangle (or a single bundle via `outputMode`); also publishes `val-placed` (count) + `val-utilization` (%). Count is wireable.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(200, round(handleCount)))",
+    "valueInputs": [
+      { "key": "count", "label": "Count" }
+    ],
+    "valueOutputs": [
+      { "key": "placed", "label": "Placed" },
+      { "key": "utilization", "label": "Utilization", "unit": "%" }
+    ]
+  },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "range", "default": 6, "min": 0.5, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "range", "default": 9, "min": 0.5, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "count", "label": "Count (0 = fill)", "kind": "range", "default": 0, "min": 0, "max": 200, "step": 1 },
+    { "key": "gap", "label": "Gap", "kind": "range", "default": 0, "min": 0, "max": 10, "step": 0.05, "unit": "m" },
+    {
+      "key": "placement",
+      "label": "Placement",
+      "kind": "select",
+      "default": "grid",
+      "options": [
+        { "value": "grid", "label": "Grid" },
+        { "value": "random", "label": "Random" }
+      ]
+    },
+    { "key": "seed", "label": "Seed", "kind": "number", "default": 1, "min": 1, "step": 1, "showWhen": "placement == 'random'" },
+    { "key": "allowRotate", "label": "Allow rotation", "kind": "checkbox", "default": true },
+    { "key": "optimiseOrientation", "label": "Optimise orientation", "kind": "checkbox", "default": false, "showWhen": "placement != 'random'" },
+    { "key": "alignToAxis", "label": "Align to axis", "kind": "checkbox", "default": true, "showWhen": "placement == 'random' || !optimiseOrientation" },
+    { "key": "tilt", "label": "Tilt", "kind": "range", "default": 0, "min": 0, "max": 180, "step": 1, "unit": "°", "showWhen": "(placement == 'random' || !optimiseOrientation) && !alignToAxis" },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per rect (one each)" },
+        { "value": "single", "label": "Single (all)" }
+      ]
+    }
+  ]
+}

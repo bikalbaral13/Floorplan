@@ -1,0 +1,36 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "treemap",
+  "materialisesSpace": true,
+  "meta": { "label": "Squarified Treemap", "category": "Partition", "color": "#0891b2" },
+  "description": "Squarified treemap — pack N weighted, aspect-balanced rectangles into the space (concave-safe). One Space per cell.",
+  "instructions": "Partitions the Space into `count` weighted rectangles with aspect ratios kept near 1 (squarified), clipped to the outline (concave-safe) and aligned to the principal axis (or a manual `tiltAngle`). `weights` is a comma list of relative areas (blank = equal). One output Space per cell.\n\nPreview openings (outer per-cell / inner per shared edge) draw door gaps so cells read as connected. One handle per cell, or a single bundle (`outputMode`). Cell count is wireable.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(60, round(handleCount)))",
+    "valueInputs": [
+      { "key": "count", "label": "Cells" }
+    ]
+  },
+  "parameters": [
+    { "key": "count", "label": "Cells", "kind": "range", "default": 6, "min": 1, "max": 30, "step": 1 },
+    { "key": "tiltAngle", "label": "Tilt", "kind": "range", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°" },
+    { "key": "weights", "label": "Weights", "kind": "text", "default": "", "placeholder": "1, 2, 1 (blank = equal)" },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per cell (one each)" },
+        { "value": "single", "label": "Single (all)" }
+      ]
+    },
+    { "key": "showOuterOpenings", "label": "Show outer openings", "kind": "checkbox", "default": false },
+    { "key": "outerOpeningWidth", "label": "Outer opening width", "kind": "range", "default": 1.0, "min": 0.3, "max": 3, "step": 0.05, "unit": "m", "showWhen": "showOuterOpenings" },
+    { "key": "showInnerOpenings", "label": "Show inner openings", "kind": "checkbox", "default": false },
+    { "key": "innerOpeningWidth", "label": "Inner opening width", "kind": "range", "default": 0.9, "min": 0.3, "max": 3, "step": 0.05, "unit": "m", "showWhen": "showInnerOpenings" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "schema-to-drawing",
+  "meta": { "label": "Schema to Drawing Tools", "category": "Space", "color": "#9333ea" },
+  "description": "Bring an attached Schema's segment & node TYPES (with icons) into the Add Segment / Add Node drawing dropdowns.",
+  "instructions": "Reads an attached Schema's segment `type` (role seg-type) and node `type` (role node-type) discriminators — their options + per-option icons — and surfaces them to the host so they appear as tools in the Add Segment / Add Node drawing dropdowns (augmenting and overriding the built-ins by value). Wire a Schema into the Schema input. No geometry output.",
+  "handles": {
+    "input": true,
+    "output": false,
+    "geomInputs": [
+      { "key": "schema", "label": "Schema" }
+    ]
+  },
+  "parameters": []
+}

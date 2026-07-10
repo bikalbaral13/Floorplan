@@ -20,6 +20,8 @@ import * as PolygonClippingNS from "polygon-clipping";
 // Flow op adapters reused verbatim by the pipeline runner — a pobj `pipeline` calls the SAME functions the
 // Flow editor dispatches to, so an object renders identically to the flow it was authored from.
 import { evalInset, evalOptimise, evalSplit } from "./evalNodes";
+// Safe expression engine (shared with the node-declaration schema loader) — see ./expr.
+import { evalNum, evalRaw, evalTruthy, toNum, type Scope } from "./expr";
 
 // Boolean-ops handle for the optional per-rule `clip` (intersect a closed shape with the host footprint).
 type ClipRing = [number, number][];
@@ -30,140 +32,8 @@ const pc: { intersection: (subject: ClipMultiPolygon | ClipPolygon, ...clips: (C
   (PolygonClippingNS as any).default ?? (PolygonClippingNS as any);
 
 // ── Expression language ──────────────────────────────────────────────────────────────────────────────
-// Grammar (low→high precedence): ternary, ||, &&, == !=, < <= > >=, + -, * / %, unary - !, primary
-// (number | 'string' | ident | call | (expr)). Functions below; identifiers resolve from the scope.
-
-type Scope = Record<string, number | string | boolean>;
-type Thunk = (sc: Scope) => number | string | boolean;
-
-const FUNCS: Record<string, (...a: number[]) => number> = {
-  min: Math.min, max: Math.max, floor: Math.floor, ceil: Math.ceil, round: Math.round, abs: Math.abs, sqrt: Math.sqrt,
-  // Trig (radians) + pow — for rotated leaves, swing arcs, etc. `PI` is injected into the scope as a value.
-  cos: Math.cos, sin: Math.sin, tan: Math.tan, atan2: Math.atan2, pow: Math.pow,
-};
-
-const toNum = (x: number | string | boolean): number =>
-  typeof x === "number" ? x : typeof x === "boolean" ? (x ? 1 : 0) : (parseFloat(x) || 0);
-const truthy = (x: number | string | boolean): boolean =>
-  typeof x === "boolean" ? x : typeof x === "number" ? x !== 0 : x !== "";
-// Equality: exact match, or numeric match only when BOTH sides parse to finite numbers (so 'ltr' != 'rtl').
-const eq = (a: number | string | boolean, b: number | string | boolean): boolean => {
-  if (a === b) return true;
-  const na = Number(a), nb = Number(b);
-  return Number.isFinite(na) && Number.isFinite(nb) && na === nb;
-};
-
-interface Tok { t: "num" | "str" | "id" | "op"; v: string; }
-const tokenize = (src: string): Tok[] => {
-  const toks: Tok[] = [];
-  const two = new Set(["==", "!=", "<=", ">=", "&&", "||"]);
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === " " || c === "\t" || c === "\n" || c === "\r") { i++; continue; }
-    if (c === "'" || c === '"') {
-      let j = i + 1, s = "";
-      while (j < src.length && src[j] !== c) { s += src[j]; j++; }
-      toks.push({ t: "str", v: s }); i = j + 1; continue;
-    }
-    if (/[0-9]/.test(c) || (c === "." && /[0-9]/.test(src[i + 1] ?? ""))) {
-      let j = i, s = "";
-      while (j < src.length && /[0-9.]/.test(src[j])) { s += src[j]; j++; }
-      toks.push({ t: "num", v: s }); i = j; continue;
-    }
-    if (/[A-Za-z_]/.test(c)) {
-      let j = i, s = "";
-      while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) { s += src[j]; j++; }
-      toks.push({ t: "id", v: s }); i = j; continue;
-    }
-    const pair = src.slice(i, i + 2);
-    if (two.has(pair)) { toks.push({ t: "op", v: pair }); i += 2; continue; }
-    toks.push({ t: "op", v: c }); i++;
-  }
-  return toks;
-};
-
-const parse = (toks: Tok[]): Thunk => {
-  let pos = 0;
-  const peek = (): Tok | undefined => toks[pos];
-  const eat = (v?: string): Tok => { const t = toks[pos]; if (v && (!t || t.v !== v)) throw new Error(`expected ${v}`); pos++; return t!; };
-
-  const binL = (next: () => Thunk, ops: string[]): Thunk => {
-    let left = next();
-    while (peek() && ops.includes(peek()!.v)) {
-      const op = eat().v; const right = next(); const l = left;
-      left = (sc) => {
-        const a = l(sc), b = right(sc);
-        switch (op) {
-          case "*": return toNum(a) * toNum(b);
-          case "/": return toNum(a) / toNum(b);
-          case "%": return toNum(a) % toNum(b);
-          case "+": return toNum(a) + toNum(b);
-          case "-": return toNum(a) - toNum(b);
-          case "<": return toNum(a) < toNum(b);
-          case "<=": return toNum(a) <= toNum(b);
-          case ">": return toNum(a) > toNum(b);
-          case ">=": return toNum(a) >= toNum(b);
-          case "==": return eq(a, b);
-          case "!=": return !eq(a, b);
-          default: return 0;
-        }
-      };
-    }
-    return left;
-  };
-
-  const primary = (): Thunk => {
-    const t = peek();
-    if (!t) throw new Error("unexpected end");
-    if (t.v === "(") { eat("("); const e = ternary(); eat(")"); return e; }
-    if (t.v === "-") { eat("-"); const e = primary(); return (sc) => -toNum(e(sc)); }
-    if (t.v === "!") { eat("!"); const e = primary(); return (sc) => !truthy(e(sc)); }
-    if (t.t === "num") { eat(); const n = parseFloat(t.v); return () => n; }
-    if (t.t === "str") { eat(); const s = t.v; return () => s; }
-    if (t.t === "id") {
-      eat();
-      if (peek()?.v === "(") {
-        eat("(");
-        const args: Thunk[] = [];
-        if (peek()?.v !== ")") { args.push(ternary()); while (peek()?.v === ",") { eat(","); args.push(ternary()); } }
-        eat(")");
-        const fn = FUNCS[t.v];
-        return (sc) => (fn ? fn(...args.map((a) => toNum(a(sc)))) : 0);
-      }
-      const name = t.v;
-      return (sc) => (name in sc ? sc[name] : 0);
-    }
-    throw new Error(`unexpected ${t.v}`);
-  };
-  const mul = () => binL(primary, ["*", "/", "%"]);
-  const add = () => binL(mul, ["+", "-"]);
-  const cmp = () => binL(add, ["<", "<=", ">", ">="]);
-  const equ = () => binL(cmp, ["==", "!="]);
-  const and = (): Thunk => { let l = equ(); while (peek()?.v === "&&") { eat(); const r = equ(); const a = l; l = (sc) => truthy(a(sc)) && truthy(r(sc)); } return l; };
-  const or = (): Thunk => { let l = and(); while (peek()?.v === "||") { eat(); const r = and(); const a = l; l = (sc) => truthy(a(sc)) || truthy(r(sc)); } return l; };
-  function ternary(): Thunk {
-    const c = or();
-    if (peek()?.v === "?") { eat("?"); const a = ternary(); eat(":"); const b = ternary(); return (sc) => (truthy(c(sc)) ? a(sc) : b(sc)); }
-    return c;
-  }
-  return ternary();
-};
-
-// Parsed-expression cache (definitions are static, so the same string parses once across all instances).
-const astCache = new Map<string, Thunk>();
-const compile = (expr: string): Thunk => {
-  let n = astCache.get(expr);
-  if (!n) { n = parse(tokenize(expr)); astCache.set(expr, n); }
-  return n;
-};
-const evalRaw = (expr: unknown, sc: Scope): number | string | boolean => {
-  if (typeof expr === "number" || typeof expr === "boolean") return expr;
-  if (typeof expr !== "string" || !expr.trim()) return 0;
-  try { return compile(expr)(sc); } catch { return 0; }
-};
-const evalNum = (expr: unknown, sc: Scope): number => toNum(evalRaw(expr, sc));
-const evalTruthy = (expr: unknown, sc: Scope): boolean => (expr == null ? true : truthy(evalRaw(expr, sc)));
+// The parser/evaluator now lives in the dependency-free ./expr module (shared with the node-declaration
+// schema loader). `Scope`, `toNum`, `evalRaw`, `evalNum`, `evalTruthy` are imported at the top of the file.
 
 // ── Geometry build ───────────────────────────────────────────────────────────────────────────────────
 // Neutral primitive: a polygon/polyline of local-metre points, with a height span. A `box` rule is sugar
@@ -767,8 +637,8 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
   // INTERSECTED with the host footprint (a piece per intersection polygon; the shape vanishes when fully
   // outside). Lets a band span the host bbox yet stay inside a non-rectangular space. No host / open
   // lines / falsy clip ⇒ pushed unchanged.
-  const pushClosed = (pts: Point[], h0: number, h1: number, clip: boolean): void => {
-    if (!clip || !host || host.length < 3) { shapes.push({ pts, closed: true, h0, h1 }); return; }
+  const pushClosed = (pts: Point[], h0: number, h1: number, clip: boolean, color?: string): void => {
+    if (!clip || !host || host.length < 3) { shapes.push({ pts, closed: true, h0, h1, ...(color ? { color } : {}) }); return; }
     // polygon-clipping wants each ring explicitly closed (first === last).
     const ring = (ps: Point[]): ClipRing => { const r: ClipRing = ps.map((p) => [p.x, p.y]); if (r.length) r.push([r[0][0], r[0][1]]); return r; };
     let mp: ClipMultiPolygon = [];
@@ -778,7 +648,7 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
       // Both inputs are simple rings, so each piece is hole-free — keep the outer ring, drop the closer.
       const opts = (poly[0] ?? []).map(([x, y]) => ({ x, y }));
       if (opts.length > 1) { const a = opts[0], b = opts[opts.length - 1]; if (Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9) opts.pop(); }
-      if (opts.length >= 3) shapes.push({ pts: opts, closed: true, h0, h1 });
+      if (opts.length >= 3) shapes.push({ pts: opts, closed: true, h0, h1, ...(color ? { color } : {}) });
     }
   };
   // Rule kinds: `box` → closed axis-aligned quad; `circle` → closed regular N-gon (a 2D circle / a 3D
@@ -828,6 +698,12 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
     // Host footprint primitive — extrude the attached space's polygon (a uniform `scale` about its centroid
     // then a parallel `inset`). One generic op set drives every host-conforming object: a Floor is a single
     // un-tapered slab; a Massing tower repeats this per floor with a per-tier inset / scale. No host → skip.
+    // Optional per-rule `color` — an EXPRESSION over the scope: reference a color-kind parameter by key
+    // (e.g. "band1") or quote a literal ("'#b91c1c'"). Overrides the object's reserved colour for THIS
+    // rule's shapes only (multi-colour objects: resistor bands, striped awnings; ternaries over a repeat
+    // index work — "k == 0 ? band1 : band2"). Non-string results are ignored → object colour.
+    const rcRaw = rule.color != null ? evalRaw(rule.color, s) : undefined;
+    const ruleColor = typeof rcRaw === "string" && rcRaw ? rcRaw : undefined;
     const hostRule = asObj(rule.host);
     if (hostRule) {
       if (!host || host.length < 3) return;
@@ -845,14 +721,14 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
         if (!r.valid || r.pts.length < 3) return;
         pts = r.pts;
       }
-      shapes.push({ pts: pts.map((p) => ({ x: p.x, y: p.y })), closed: true, h0: evalNum(hostRule.h0, s), h1: evalNum(hostRule.h1, s) });
+      shapes.push({ pts: pts.map((p) => ({ x: p.x, y: p.y })), closed: true, h0: evalNum(hostRule.h0, s), h1: evalNum(hostRule.h1, s), ...(ruleColor ? { color: ruleColor } : {}) });
       return;
     }
     const clip = rule.clip != null && evalTruthy(rule.clip, s);
     const box = asObj(rule.box);
     if (box) {
       const x0 = evalNum(box.x0, s), x1 = evalNum(box.x1, s), y0 = evalNum(box.y0, s), y1 = evalNum(box.y1, s);
-      pushClosed([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], evalNum(box.h0, s), evalNum(box.h1, s), clip);
+      pushClosed([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], evalNum(box.h0, s), evalNum(box.h1, s), clip, ruleColor);
       return;
     }
     const circle = asObj(rule.circle);
@@ -861,7 +737,7 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
       const sides = Math.max(3, Math.min(64, Math.round(circle.sides != null ? evalNum(circle.sides, s) : 24)));
       const pts: Point[] = [];
       for (let i = 0; i < sides; i++) { const a = (i / sides) * 2 * Math.PI; pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
-      pushClosed(pts, evalNum(circle.h0, s), evalNum(circle.h1, s), clip);
+      pushClosed(pts, evalNum(circle.h0, s), evalNum(circle.h1, s), clip, ruleColor);
       return;
     }
     const poly = asObj(rule.poly);
@@ -870,8 +746,8 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
     if (!spec) return;
     const pts = asArr(spec.pts).map((pair) => { const a = asArr(pair); return { x: evalNum(a[0], s), y: evalNum(a[1], s) }; });
     if (pts.length < 2) return;
-    if (poly) { pushClosed(pts, evalNum(spec.h0, s), evalNum(spec.h1, s), clip); return; }
-    shapes.push({ pts, closed: false, h0: evalNum(spec.h0, s), h1: evalNum(spec.h1, s) });
+    if (poly) { pushClosed(pts, evalNum(spec.h0, s), evalNum(spec.h1, s), clip, ruleColor); return; }
+    shapes.push({ pts, closed: false, h0: evalNum(spec.h0, s), h1: evalNum(spec.h1, s), ...(ruleColor ? { color: ruleColor } : {}) });
   };
   for (const r of asArr(chosen.rules)) {
     const rule = asObj(r);

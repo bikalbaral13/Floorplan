@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "segment-to-door",
+  "label": "Segment to Door",
+  "category": "Building",
+  "description": "Draw a door on each input segment — polygon (filled), arc + two lines, or detailed (leaf + swing with hinge/swing side).",
+  "params": {
+    "shape": "arc",
+    "thickness": 0.05,
+    "hinge": "left",
+    "swing": "left",
+    "lintelHeight": 2.1,
+    "color": "#9333ea"
+  }
+}

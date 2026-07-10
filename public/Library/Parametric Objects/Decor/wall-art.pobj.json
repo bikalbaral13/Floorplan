@@ -1,0 +1,54 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "wall-art.v1",
+    "name": "Framed Wall Art",
+    "category": "Decor/Wall",
+    "units": "m",
+    "icon": { "paths": ["M4 5h16v14H4z", "M4 15l4 -4l3 3l4 -5l5 6"] }
+  },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 0.7, "min": 0.15, "max": 3, "step": 0.01, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 0.9, "min": 0.15, "max": 3, "step": 0.01, "unit": "m" },
+    { "key": "depth", "label": "Depth (protrusion)", "kind": "number", "default": 0.04, "min": 0.01, "max": 0.2, "step": 0.005, "unit": "m" },
+    { "key": "frameWidth", "label": "Frame width", "kind": "number", "default": 0.05, "min": 0, "max": 0.2, "step": 0.005, "unit": "m" },
+    { "key": "matWidth", "label": "Mount / mat width", "kind": "number", "default": 0.06, "min": 0, "max": 0.3, "step": 0.005, "unit": "m" },
+    { "key": "frameColor", "label": "Frame color", "kind": "color", "default": "#78350f" },
+    { "key": "matColor", "label": "Mat color", "kind": "color", "default": "#f5f5f4" },
+    { "key": "color", "label": "Artwork color", "kind": "color", "default": "#64748b" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -0.5, "max": 0.5, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Mount height (bottom)", "kind": "number", "default": 1.1, "min": 0, "max": 2.5, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "w2": "width / 2",
+      "d2": "depth / 2",
+      "fw": "min(frameWidth, min(width, height) / 2 - 0.005)",
+      "mw": "matWidth",
+      "innerX": "w2 - fw",
+      "innerTop": "height - fw",
+      "artX": "max(0.005, w2 - fw - mw)",
+      "artTop": "max(fw + 0.005, height - fw - mw)",
+      "artBot": "min(artTop - 0.005, fw + mw)",
+      "frontY0": "d2 - min(0.01, depth * 0.4)"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Frame — bottom rail", "when": "fw > 0", "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": 0, "h1": "fw", "color": "frameColor" } },
+          { "comment": "Frame — top rail", "when": "fw > 0", "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": "innerTop", "h1": "height", "color": "frameColor" } },
+          { "comment": "Frame — left rail", "when": "fw > 0", "box": { "x0": "-w2", "x1": "-innerX", "y0": "-d2", "y1": "d2", "h0": "fw", "h1": "innerTop", "color": "frameColor" } },
+          { "comment": "Frame — right rail", "when": "fw > 0", "box": { "x0": "innerX", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": "fw", "h1": "innerTop", "color": "frameColor" } },
+          { "comment": "Mat / mount board (fills behind the artwork)", "box": { "x0": "-innerX", "x1": "innerX", "y0": "-d2", "y1": "frontY0", "h0": "fw", "h1": "innerTop", "color": "matColor" } },
+          { "comment": "Artwork panel on the front face", "box": { "x0": "-artX", "x1": "artX", "y0": "frontY0", "y1": "d2", "h0": "artBot", "h1": "artTop", "color": "color" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "area", "label": "Frame area", "expr": "width * height", "unit": "m²" }
+  ]
+}

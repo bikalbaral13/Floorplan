@@ -1,0 +1,30 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "transform-3d",
+  "meta": { "label": "Transform 3D", "category": "3d primitives", "color": "#7e22ce" },
+  "description": "Transform a 3D primitive — Translate (X/Y/Z) · Rotate (X/Y/Z) · uniform Scale · Mirror across a plane. Wire a Cuboid / Cylinder / Sphere / Cone in; chain several to stack. Y is up.",
+  "instructions": "Affine-transforms an upstream 3D primitive (Cuboid / Cylinder / Sphere / Cone / Mass): Translate (X/Y/Z, m) · Rotate about X/Y/Z (°) · uniform Scale · Mirror across a plane. Y is up, Z is depth. Chain several to stack transforms. Wire a primitive into the input; wire the output into Display 3D or Boolean.\n\nTIP: use it to position primitive B relative to A before a Boolean, or to mirror a form across a plane.",
+  "handles": { "input": true, "output": true },
+  "parameters": [
+    { "key": "translateX", "label": "Move X", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "translateY", "label": "Move Y (up)", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "translateZ", "label": "Move Z", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "rotateX", "label": "Rotate X", "kind": "range", "default": 0, "min": -180, "max": 180, "step": 1, "unit": "°" },
+    { "key": "rotateY", "label": "Rotate Y", "kind": "range", "default": 0, "min": -180, "max": 180, "step": 1, "unit": "°" },
+    { "key": "rotateZ", "label": "Rotate Z", "kind": "range", "default": 0, "min": -180, "max": 180, "step": 1, "unit": "°" },
+    { "key": "scale", "label": "Scale", "kind": "range", "default": 1, "min": 0.1, "max": 5, "step": 0.05 },
+    {
+      "key": "mirror",
+      "label": "Mirror",
+      "kind": "select",
+      "default": "none",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "x", "label": "Across YZ (flip X)" },
+        { "value": "y", "label": "Across XZ (flip Y)" },
+        { "value": "z", "label": "Across XY (flip Z)" }
+      ]
+    }
+  ]
+}

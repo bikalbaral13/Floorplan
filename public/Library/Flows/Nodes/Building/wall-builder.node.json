@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "wall-builder",
+  "label": "Graph to Walls",
+  "category": "Building",
+  "description": "Stroke a graph into mitred walls, taking each wall's thickness from the Segment schema (role wall-thickness). The wall solid follows Justification (default center); the centerline is always what you snap to. Show Inner / Outer Dimension dimension the room-facing and street-facing faces — inner vs outer is decided from the enclosed room geometry; Show Center Dimension dimensions the centerline. Wire a Schema node into the Schema input; only wall-typed segments are drawn.",
+  "params": {
+    "thicknessMm": 230,
+    "justification": "center",
+    "height": 3,
+    "union": true,
+    "showOuterDim": false,
+    "showInnerDim": false,
+    "showCenterDim": false,
+    "offsetDim": false,
+    "dimGap": 0.18
+  }
+}

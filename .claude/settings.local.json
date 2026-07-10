@@ -60,7 +60,17 @@
       "WebSearch",
       "mcp__floorplan-bridge__place_object",
       "mcp__floorplan-bridge__draw_segment",
-      "mcp__floorplan-bridge__place_opening"
+      "mcp__floorplan-bridge__place_opening",
+      "PowerShell(Stop-Process -Id 7008 -Force -Confirm:$false -ErrorAction SilentlyContinue)",
+      "PowerShell(\"killed\")",
+      "mcp__floorplan-bridge__get_state",
+      "mcp__floorplan-bridge__clear_canvas",
+      "Bash(curl -s -X POST http://127.0.0.1:41414/enqueue -H \"content-type: application/json\" -d '{\"tool\":\"list_spaces\",\"args\":{}}')",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); r=d.get\\('result',[]\\); print\\(json.dumps\\([{k:v for k,v in s.items\\(\\) if k!='pointsPx'} for s in r], indent=1\\)\\); print\\('points:', [len\\(s.get\\('pointsPx',[]\\)\\) for s in r]\\)\")",
+      "Bash(curl -s -X POST http://127.0.0.1:41414/enqueue -H \"content-type: application/json\" -d '{\"tool\":\"flow_commit\",\"args\":{}}')",
+      "Bash(curl -s -X POST http://127.0.0.1:41414/enqueue -H \"content-type: application/json\" -d '{\"tool\":\"get_flow\",\"args\":{}}')",
+      "Bash(curl -s -X POST http://127.0.0.1:41414/enqueue -H \"content-type: application/json\" -d '{\"tool\":\"compile_flow\",\"args\":{}}')",
+      "Bash(python -)"
     ]
   }
 }

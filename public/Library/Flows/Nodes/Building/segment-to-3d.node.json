@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "segment-to-3d",
+  "label": "Segment to 3D",
+  "category": "Building",
+  "description": "Extrude each input segment into a 3D wall of the given Height, Upwards from the floor or Downwards below it.",
+  "params": {
+    "height": 2.7,
+    "direction": "up"
+  }
+}

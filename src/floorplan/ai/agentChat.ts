@@ -11,6 +11,7 @@
 import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
+import { listLibraryFiles } from "../libraryFiles";
 import type { Detection } from "../algorithms/vision/geminiObjectDetection";
 import type { ParametricObjectFile, ParametricObjectParam } from "../types";
 
@@ -76,8 +77,9 @@ export interface AgentToolApi {
   applyModelJson: (json: string) => unknown;
   /** Wipe walls / rooms / objects / furniture / nodeMeta. */
   clearCanvas: () => unknown;
-  /** Import the bundled parametric object library (public/Library/Parametric Objects). */
-  importObjects: () => Promise<unknown> | unknown;
+  /** Import the parametric object library (public/Library/Parametric Objects) — all of it, or only the
+   *  given category folders (Kitchen / Electrical / Architectural / …). */
+  importObjects: (a?: { categories?: string[] }) => Promise<unknown> | unknown;
   /** Library-management read side: every object's id / name / hostKind / symbol / category / param count. */
   listObjects: () => unknown;
   /** One object's COMPLETE stored `.pobj` definition (meta + parameters + hostKind + geometry) — for editing. */
@@ -111,7 +113,7 @@ export type AgentEvent =
 // section constants so the modes never drift apart.
 
 /** The JSON-FIRST working style shared by the canvas-editing modes (orchestrator + design). */
-const P_JSON_FIRST = `You work JSON-FIRST: read the plan with get_plan, design the change, then write it back with ONE apply_model call carrying the COMPLETE updated FloorPlanModel JSON. The granular tools (draw_segment, place_opening, place_object, attach_space_object, merge_spaces) exist for micro-tweaks, structured edits and verification — the JSON is your primary medium because it lets you compose walls, openings, labels and furniture in one coherent, flexible edit.`;
+const P_JSON_FIRST = `You work JSON-FIRST: read the plan with get_plan, design the change, then write it back with ONE apply_model call carrying the COMPLETE updated FloorPlanModel JSON. The granular tools (draw_segment, place_opening, place_object, attach_space_object, merge_spaces) exist for micro-tweaks, structured edits and verification — the JSON is your primary medium because it lets you compose walls, openings and furniture in one coherent, flexible edit.`;
 
 const P_CANVAS_WORKFLOW = `WORKFLOW (every request):
 1) INSPECT — get_state first (cheap counts). If objectsLoaded is 0, call import_objects (it returns the full object catalog). If the instruction refers to unnamed targets — "this room", "these", "the selected walls", "the highlighted space" — call get_selection and operate on EXACTLY those entities (fall back to asking/list_spaces only when the selection is empty). For any real edit, call get_plan to read the current JSON.
@@ -119,11 +121,11 @@ const P_CANVAS_WORKFLOW = `WORKFLOW (every request):
 3) WRITE — apply_model with the WHOLE updated model. Start from the get_plan JSON: keep every element and field you are not changing (ids stable, layers/graphAttrs/canvasObjects verbatim); add/modify/remove only what the instruction requires.
 4) VERIFY — get_state / list_spaces and confirm the expected wall/space counts and labels appeared.
 5) SELF-REVIEW (mandatory after drawing or editing a plan) — call snapshot_canvas and STUDY the returned image (top = NORTH). Grade it against the request AND the DEFAULT DESIGN DOCTRINE below:
-   • every requested room present, sized and labelled as asked; realistic proportions;
+   • every requested room present as a CLOSED wall loop, sized as asked; realistic proportions;
    • connectivity: a door on every STRICTLY-CONNECTED pair, every room reachable, NO door/adjacency from the STRICTLY-NOT-CONNECTED list;
    • windows on the exterior walls of every habitable room; entrance door placed sensibly;
    • furniture: right set for each room's function, fully inside its room, rotated to the correct facing, clear of door swings;
-   • geometry hygiene: no overlapping/stray walls, no unlabelled spaces, no rooms swallowed by others;
+   • geometry hygiene: no overlapping/stray walls, no GAPS in a room's wall loop (a Space only auto-detects from a fully closed loop), no rooms swallowed by others;
    • Vastu zoning where the user gave no explicit placement.
 6) REPORT + PROPOSE — 1–3 plain sentences on what changed (no JSON in chat), then a NUMBERED list of the specific defects the image review found, each with its concrete fix (e.g. "1. Kitchen door opens into the toilet wall — move door to the dining side, t≈0.6"). FINISH by asking the user whether to apply them: "Apply these improvements? (yes / list numbers)". DO NOT apply them in this run — stop and wait; the user's reply arrives as your next instruction, then apply exactly the accepted ones. If the review finds nothing wrong, say so and skip the question.`;
 
@@ -138,8 +140,11 @@ const P_JSON_SPEC = `FLOORPLANMODEL JSON SPEC (what apply_model accepts):
 - NODE OBJECTS (furniture / staircase — every catalog object with host: node) — a marker wall + a nodeMeta entry:
   1) walls[] gets { "id":"n-1", "start":{"x":X,"y":Y}, "end":{"x":X,"y":Y}, "thickness":0.5, "color":"#334155", "mode":"line", "method":"center", "segmentType":"wall" }  (start == end = the object's centre point, INSIDE the room)
   2) nodeMeta["n-1:end|n-1:start"] = { "attachments":[ { "id":"na-1", "objectId":"bed.v2", "params":{ ..., "rotation":<deg> }, "t":0, "flip":false } ] }
-- SPACE LABELS — to NAME a space, add a rooms[] entry whose polygon matches the enclosed loop: { "id":"room-1", "points":[loop corner points], "label":"Bedroom", "fill":"rgba(34,197,94,0.2)", "stroke":"#16A34A" }. Its id must NOT start with "auto-room:". The app then hides the duplicate auto-detected room (centroid match) and shows your labelled one. LABEL EVERY enclosed space by function. Space-hosted objects (Site / Core / Floor / Massing) attach through a labelled room's own "attachments" array (objectId + full params).
-- objects[] / furniture[] — keep as-is (usually []); legacy annotation arrays. rooms[] entries you did NOT add for labelling (auto-room:*) can be omitted — they regenerate from walls.
+- PATH / CORRIDOR (a linear route whose Space FOLLOWS the segments) — when the user asks to DRAW a "path", "corridoor"/"corridor", "walkway", "passage" or "circulation" ROUTE, draw a run of BAND segments flagged asSpace (this IS the Add-Segment "Path" mode). Each segment of the run:
+  { "id":"p-1", "start":{"x":..,"y":..}, "end":{"x":..,"y":..}, "thickness":<clearWidth_m × ppm>, "color":"#334155", "segmentType":"line", "mode":"outline", "method":"center", "bufferStyle":"capsule", "asSpace":true, "lineStyle":"solid", "showLabel":true, "layerId":"wall", "label":"Corridoor" }
+  Segments that SHARE endpoint coordinates merge into ONE live Corridor Space that RECOMPUTES as the segments move — so the space always follows your edits (draw turns/branches as extra segments joined at a shared node). thickness = the clear path width in metres × ppm (a 1.2 m corridor → 1.2 × ppm). Keep asSpace:true AND bufferStyle (capsule | square | flat) on EVERY segment of the run. Do NOT set segmentType:"path" (that is the separate NURBS curved-ribbon variant and does NOT seed the live Space; leave it "line"), and do NOT add a rooms[] entry — the Corridor Space is derived automatically (region "Corridor") and auto-named. To attach an object to it, use attach_space_object with the derived Space's label from list_spaces. (This DRAWS a standalone route; to instead cut a corridor + cores INSIDE an existing floorplate, use the SPACE-OBJECT corridoor recipe below.)
+- SPACES — do NOT hand-author rooms[] for wall-enclosed rooms. The app AUTO-DETECTS each Space from its closed wall loop, and that Space moves and reshapes WITH the walls whenever a segment is edited or dragged. A manual rooms[] polygon is STATIC: it stays put while the real walls (and their auto-Space) move, leaving a duplicate that no longer matches — so NEVER add a rooms[] entry just to name, colour or outline a room. Keep rooms[] EMPTY ([]) and draw ONLY the walls that enclose each space; the Space appears automatically (generically named Space001, Space002… — that label is fine). To attach a space-hosted parametric object (Site / Core / Floor / Massing) to a space, call the attach_space_object tool with the space's label from list_spaces — do NOT create a rooms[] entry for it.
+- rooms[] / objects[] / furniture[] — keep EMPTY ([]). Spaces regenerate from the wall loops and follow them; objects[]/furniture[] are legacy annotation arrays you never author (furniture is placed via nodeMeta as above).
 - Set params ONLY from the object's catalog entry below — key, kind, range and options must match exactly; omitted params take their defaults.`;
 
 const P_ARCH_RULES = `ARCHITECTURAL PLACEMENT RULES:
@@ -196,11 +201,12 @@ TWO space objects attached to ONE space solve this; each reads the SPACE's bound
 
 const P_FURNISH_RECIPE_FLOW = `FURNISH RECIPE — MAKE A ROOM + PLACE FURNITURE PROPERLY (requests like "make a room, then place a sofa, table, wardrobe and bed in it"): the Flow's place-object node is the LAYOUT SOLVER — it takes PARAMETRIC library objects, sizes each from the object's real geometry, starts from seed-randomised positions and slides them along the room boundary until nothing overlaps and corners stay clear. Prefer it over hand-computing coordinates whenever 2+ furniture pieces go into one room:
 1) import_objects if objectsLoaded is 0 (you need the objectIds, e.g. bed.v2 / sofa.v2 / table.v2 / wardrobe.v1 — exact ids are in your object catalog).
-2) Ensure the ROOM exists: apply_model a closed wall loop with a labelled rooms[] entry (realistic size for the furniture set — a 4 × 5 m bedroom fits bed+wardrobe+table), or reuse an existing space; then list_spaces for its label.
+2) Ensure the ROOM exists: apply_model a closed wall loop (realistic size for the furniture set — a 4 × 5 m bedroom fits bed+wardrobe+table) — the Space auto-detects from the loop, no rooms[] entry — or reuse an existing space; then list_spaces for its label.
 3) flow_apply ONE graph: {"version":1,"nodes":[{"id":"source_1","position":{"x":80,"y":200},"data":{"tool":"source","params":{"id":"<SpaceLabel>"}}},{"id":"place-object_1","position":{"x":360,"y":200},"data":{"tool":"place-object","params":{"objects":[{"objectId":"sofa.v2"},{"objectId":"table.v2"},{"objectId":"wardrobe.v1"},{"objectId":"bed.v2"}],"seed":3}}}],"edges":[{"id":"e1","source":"source_1","target":"place-object_1","sourceHandle":null,"targetHandle":null}]}
    Entries need ONLY objectId — length/breadth/height are measured from the object automatically (override position 0–100 / setback in metres per entry only when the user pins a spot; NEVER invent dims for parametric entries).
 4) Check the preview: polygons should equal the number of objects. Fewer = some didn't fit — enlarge the room, drop an object, or re-apply with a different seed (the seed re-rolls the random initial arrangement; the solver then de-overlaps it).
 5) flow_commit — each footprint becomes a REAL parametric object node on the canvas (selectable, boundary-following). VERIFY with get_state and the snapshot self-review.
+6) CLEAR THE FLOW after committing — flow_apply an EMPTY graph {"version":1,"nodes":[],"edges":[]} — BEFORE you furnish the next room. The place-object flow is ONE-SHOT PER ROOM: if you leave the committed place-object node in the graph and build the next room on top of it, re-evaluating/committing re-places the PREVIOUS room's objects (duplicates piling up) and its now-stale source still points at the old space. So furnish rooms strictly one at a time — a full apply → commit → CLEAR cycle per room — never batch several rooms into one persistent graph.
 place_object (granular tool) stays for dropping ONE object at an exact point; the flow node is for laying out SEVERAL objects in a space properly.`;
 
 const P_FLOW_ENGINE = `FLOW ENGINE (algorithms beyond your direct tools — skeletonisation, inset/offset, voronoi/BSP partitions, boolean unions, generative layouts, graph solvers):
@@ -218,7 +224,7 @@ const P_TRACING = `TRACING AN ATTACHED DRAWING (import the image onto the canvas
 When the user attaches a floor-plan image and asks to trace / replicate / reproduce it, the deliverable is the drawing REBUILT as live geometry with the image SNAPPED exactly underneath it. The plan drawn from the WRITTEN dimensions is the truth; the image is then fitted onto the plan — never the other way round. Follow this sequence:
 1) READ — identify every room (name labels like HALL, BED ROOM, KITCHEN), wall, door, window, stair, and every WRITTEN dimension. Convert imperial to metres exactly: 1' = 0.3048 m, 1" = 0.0254 m (e.g. 11'-0" = 3.353, 15'-11½" = 4.864, 6'-8" = 2.032). Written dimensions are the truth — never size rooms by eye when a number is legible. Work out the building outline's overall envelope W_m × H_m (sum of the written dims + wall thicknesses).
 2) IMPORT THE IMAGE — set_image_underlay { worldWidthM: rough estimate of the full image width in metres } (envelope width ÷ its approximate fraction of the image is fine — precision comes in step 4).
-3) DRAW FROM DIMENSIONS — ONE apply_model with the whole plan in CLEAN DIMENSION SPACE: put the building outline's TOP-LEFT OUTER CORNER at world (0,0) and lay out every wall from the written dimensions (pixel = metres × pixelsPerMeter). Wall loops per room, doors/windows as attachments (t from their position in the drawing), a labelled rooms[] entry per room using the drawing's names, stairs/fixtures as node objects. Do NOT include imageUnderlay in the JSON — it is preserved automatically.
+3) DRAW FROM DIMENSIONS — ONE apply_model with the whole plan in CLEAN DIMENSION SPACE: put the building outline's TOP-LEFT OUTER CORNER at world (0,0) and lay out every wall from the written dimensions (pixel = metres × pixelsPerMeter). Wall loops per room (each Space auto-detects from its closed loop — NO rooms[] entries), doors/windows as attachments (t from their position in the drawing), stairs/fixtures as node objects. Do NOT include imageUnderlay in the JSON — it is preserved automatically.
 4) FIND EXACT REFERENCE CORNERS — analyze_underlay: it vectorises the underlay image and returns the traced drawing's CONVEX HULL with precise extreme corners in grid coords. These are MEASURED from the image's actual line-work — always prefer them over visual estimates. If \`lines\` is tiny (< ~10) the trace missed the drawing: retry with colorMode "all" and/or tolerance 80–110 (photographed drawings), before falling back to visually estimated corners.
 5) SNAP THE IMAGE ONTO THE PLAN — ONE align_underlay call using the hull corners of the BUILDING OUTLINE (the hull ignores paper margins by construction): A = corners.topLeft → world (0, 0); B = corners.bottomRight → world (W_m, H_m). This is the "Set Scale + drag": it rescales AND repositions the image so the corners coincide with the drawn plan. Point A lands exactly; the result's bResidualM tells you how far B missed (uniform fit) — ≤ 0.15 m is a good sync, larger means the corners are off or the photo is skewed: retry with corrected corners (you may also swap which corner is A so the error sits where it matters least). Caveat: if the drawing has dimension lines / text OUTSIDE the building outline, the hull includes them — then the hull bbox is the DRAWING extent, not the wall outline; compensate by mapping the hull corners to the matching world points of that larger extent (e.g. outline minus the dimension-band offset), or use the second-innermost corner estimates.
 6) VERIFY + REPORT — get_state: the underlay rect should now tightly bracket the plan envelope. Report the envelope you drew ("outline 8.4 m × 16.2 m") and the fit quality (bResidualM).
@@ -236,7 +242,7 @@ const P_POBJ_FORMAT = `PARAMETRIC OBJECT FILE FORMAT (.pobj JSON — what save_o
 - parameters: [ { "key", "label", "kind": "number"|"select"|"checkbox"|"text"|"color" (ONLY these five), "default", "min"?/"max"?/"step"?/"unit"? (number), "options"?: [{"value","label"}] (select) } ]. Reserved keys the engine honours when declared: "rotation" (degrees), "color", "wallOffset" (m — shifts the plan along local −Y before rotation), "clearance" (m — the ENGINE lifts every shape's h0/h1 by it: author all heights floor-relative starting at 0 and NEVER add clearance into h0/h1 expressions yourself — it would apply twice; use it for wall-hung / ceiling-mounted objects like TV units or fans).
 - hostKind: which element hosts an instance — "node" (point-placed: furniture, fixtures, stairs), "segment" (on a wall: doors, windows, wall types), "space" (attached to a room polygon: floor, massing, site, core), "canvas" (sheet-level: title block).
 - geometry: { "description"?, "emit": "shapes", "vars"?: { name: "expr", … } (ordered — later vars may use earlier ones), "cases": [ { "when"?: "expr" (first truthy case wins; omit for the default case), "vars"?: {…}, "rules": […] } ] } — OR a "pipeline" (below), which takes precedence over cases. Rules MUST sit inside cases[].rules (a single default case is fine) — a bare top-level geometry.rules array is a format error the evaluator ignores. No geometry ⇒ instances draw only the placeholder meta.symbol (a bare marker — never acceptable for a physical object).
-- RULES — geometry in LOCAL METRES, origin at the object's anchor/centre; h0→h1 = vertical span in metres (h0 == h1 ⇒ flat 2D-only shape; different ⇒ extruded 3D prism). RENDER CONTRACT: every CLOSED shape (box / circle / poly / host) draws in the 2D plan (filled + outlined) AND extrudes to a 3D prism when h1 > h0 — ONE well-heighted rule set drives BOTH views, so give every physical element its real height span (an object whose rules are all h0 == h1 is INVISIBLE in 3D) and add flat (h0==h1) or "line" rules only for plan-only symbology (swing arcs, direction marks). There is NO per-rule "color" key — the reserved color PARAMETER tints the whole object (composed "ref" children keep their own). Optional per rule: "comment", "when": "expr" (skip when falsy), "repeat": "expr" + "as": "k" (loop, k = 0…n−1), "vars": {…} (rule-local, re-evaluated each repeat iteration so they may use the loop index — e.g. per-blade angles; NOT visible to that rule's own when/repeat), "clip": "expr" (truthy ⇒ intersect the closed shape with the host footprint). Exactly ONE geometry key per rule:
+- RULES — geometry in LOCAL METRES, origin at the object's anchor/centre; h0→h1 = vertical span in metres (h0 == h1 ⇒ flat 2D-only shape; different ⇒ extruded 3D prism). RENDER CONTRACT: every CLOSED shape (box / circle / poly / host) draws in the 2D plan (filled + outlined) AND extrudes to a 3D prism when h1 > h0 — ONE well-heighted rule set drives BOTH views, so give every physical element its real height span (an object whose rules are all h0 == h1 is INVISIBLE in 3D) and add flat (h0==h1) or "line" rules only for plan-only symbology (swing arcs, direction marks). Optional per-rule "color": an EXPRESSION — reference a color-kind parameter by KEY (e.g. "band1") or quote a literal ("'#b91c1c'") — overriding the reserved color param for that rule's shapes only (multi-colour objects like resistor bands; ternaries over the repeat index work: "k == 0 ? band1 : k == 1 ? band2 : band3"). Omit it and the shape takes the object's color param; composed "ref" children keep their own. Optional per rule: "comment", "when": "expr" (skip when falsy), "repeat": "expr" + "as": "k" (loop, k = 0…n−1), "vars": {…} (rule-local, re-evaluated each repeat iteration so they may use the loop index — e.g. per-blade angles; NOT visible to that rule's own when/repeat), "clip": "expr" (truthy ⇒ intersect the closed shape with the host footprint). Exactly ONE geometry key per rule:
   · "box": { "x0","x1","y0","y1","h0","h1" } — axis-aligned extruded quad
   · "circle": { "cx","cy","r","sides"? (default 24), "h0","h1" } — disc, or cylinder when h0≠h1
   · "poly": { "pts": [["xExpr","yExpr"], …], "h0","h1" } — closed extruded polygon
@@ -262,8 +268,17 @@ const P_RASTER_SPACES = `RASTER → SPACES (auto-trace a scanned plan / survey s
 const P_LIBRARY_PATHS = `LIBRARY FOLDER (repo files under public/Library — served at /Library; the single home for bundled assets):
 - Flows → public/Library/Flows/<name>.json (flow-graph JSON)
 - Designs → public/Library/Designs/<name>.json (exported canvas-design JSON)
-- Parametric objects → public/Library/Parametric Objects/{Canvas|Nodes|Segments|Spaces}/<name>.pobj.json — the set import_objects loads
-save_object saves to the LIVE in-app library AND writes the file to public/Library/Parametric Objects/<Canvas|Nodes|Segments|Spaces>/<meta.id>.pobj.json — its result's "file" field is the written path (REPORT it to the user); a "fileError" instead means the dev-server bridge is off and the object exists in the app only. delete_object removes the matching Library files too. Whenever a NEW flow, design or parametric object is kept as a FILE, it ALWAYS belongs in the matching public/Library subfolder above — the old public/objects and public/flows folders no longer exist.`;
+- Parametric objects → public/Library/Parametric Objects/<Category>/<name>.pobj.json — folders are organised by CATEGORY (Kitchen / Furniture / Bathroom / Electrical / Structural / Architectural / Site / System), NOT by hostKind: the hostKind lives INSIDE each file. import_objects loads every .pobj in the whole tree — or ONLY the folders the user asks for via its categories argument ("import the architectural objects" → categories: ["Architectural"]; "kitchen + electrical" → ["Kitchen","Electrical"]); its result's availableCategories names the folders that exist.
+save_object saves to the LIVE in-app library AND writes the file to public/Library/Parametric Objects/<Category>/<meta.id>.pobj.json (category folder derived from meta.category — so ALWAYS give objects a sensible meta.category like "Fixtures/Kitchen" or "MEP/Electrical") — its result's "file" field is the written path (REPORT it to the user); a "fileError" instead means the dev-server bridge is off and the object exists in the app only. delete_object removes the matching Library files too. Whenever a NEW flow, design or parametric object is kept as a FILE, it ALWAYS belongs in the matching public/Library subfolder above — the old public/objects and public/flows folders no longer exist.`;
+
+/** How to reuse saved WHOLE-PLAN designs from public/Library/Designs (distinct from the parametric OBJECT
+ *  library). For any mode whose toolset includes list_designs + import_design (Design + Orchestrator). */
+const P_DESIGN_LIBRARY = `SAVED DESIGNS (public/Library/Designs — complete exported floor-plans: walls, spaces, openings, furniture, layers and scale in ONE FloorPlanModel JSON — NOT the same as the parametric OBJECT library):
+- WHEN: the user says "open / load / import / reuse / continue the <name> design (or plan / floorplan)", or wants to start from an existing plan rather than draw from scratch.
+- list_designs — lists the saved design files (Designs-relative paths, e.g. "floorplan-2026-07-09.json"). Call it FIRST to discover what exists (match the user's name against the list; if none match, tell them and list what IS there).
+- import_design { path } — loads the chosen file and REPLACES the entire canvas with that plan. Then edit it with apply_model / the granular tools exactly like any other plan.
+- AFTER importing: the plan's placed parametric objects restore by id — if any show as bare markers, call import_objects to load their definitions. Then run get_state + the mandatory snapshot_canvas self-review before continuing.
+- You LOAD designs, you don't write them (the app's Export saves a design to public/Library/Designs/<name>.json). Never invent a filename — always pick a real path from list_designs.`;
 
 /** Orchestrator-only section: the library-management tools + when to reach for them. */
 const P_PARAMETRIC_LIBRARY = `PARAMETRIC OBJECT LIBRARY (create / adjust / delete object DEFINITIONS):
@@ -297,6 +312,8 @@ ${P_FLOW_ENGINE}
 
 ${P_PARAMETRIC_LIBRARY}
 
+${P_DESIGN_LIBRARY}
+
 ${P_LIBRARY_PATHS}
 
 ${P_TRACING}
@@ -304,7 +321,7 @@ ${P_TRACING}
 ${P_RASTER_SPACES}`;
 
 /** Design-agent ("design" mode) instructions — canvas design only: no Flow gateway, no library management. */
-export const DESIGN_AGENT_SYSTEM_PROMPT = `You are the Design Agent for a live 2D architectural CAD canvas, scoped to CANVAS DESIGN actions only: drawing walls/segments, cutting door/window openings, placing node objects, attaching space objects, labelling/merging spaces, image underlays and plan fitting. You have NO Flow tools (the node-graph Flow / Operations Pipeline belongs to the Flow Agent) and NO library-management tools (creating / editing / deleting parametric object DEFINITIONS belongs to the Parametric Agent — you PLACE existing library objects). When a request needs those, do your design part and tell the user which chat mode handles the rest. ${P_JSON_FIRST}
+export const DESIGN_AGENT_SYSTEM_PROMPT = `You are the Design Agent for a live 2D architectural CAD canvas, scoped to CANVAS DESIGN actions only: drawing walls/segments, cutting door/window openings, placing node objects, attaching space objects, merging spaces, image underlays and plan fitting. You have NO Flow tools (the node-graph Flow / Operations Pipeline belongs to the Flow Agent) and NO library-management tools (creating / editing / deleting parametric object DEFINITIONS belongs to the Parametric Agent — you PLACE existing library objects). When a request needs those, do your design part and tell the user which chat mode handles the rest. ${P_JSON_FIRST}
 
 ${P_CANVAS_WORKFLOW}
 
@@ -322,6 +339,8 @@ ${P_CORRIDOR_RECIPE}
 
 FURNISHING A ROOM (design scope): place furniture piece-by-piece — one place_object call per piece (metre coordinates, rotation facing into the room) — or compose the whole set as nodeMeta entries in ONE apply_model edit. Compute positions from the room polygon yourself: every piece fully inside its room, nothing overlapping, door swings + ≥ 0.9 m circulation kept clear. (The automatic multi-object layout solver is a Flow node — available in the Orchestrator and Flow Agent modes.)
 
+${P_DESIGN_LIBRARY}
+
 ${P_LIBRARY_PATHS}
 
 ${P_TRACING}
@@ -332,7 +351,7 @@ ${P_RASTER_SPACES}`;
 export const PARAMETRIC_AGENT_SYSTEM_PROMPT = `You are the Parametric Object Agent for a live 2D/3D architectural CAD app. Your domain is the parametric object LIBRARY only: you CREATE new .pobj object definitions, EDIT existing ones, IMPORT the bundled library and DELETE objects. You do NOT draw on the canvas (walls / rooms / placing objects = the Design Agent) and you do NOT build node-graph Flows (= the Flow Agent) — when a request needs those, do the library part and tell the user which chat mode handles the rest.
 
 WORKFLOW (every request):
-1) INSPECT — get_state (objectsLoaded count) + list_objects for the current catalog. If the user wants the standard bundled set, import_objects loads it.
+1) INSPECT — get_state (objectsLoaded count) + list_objects for the current catalog. If the user wants the standard bundled set, import_objects loads it — scope with categories (e.g. ["Kitchen"] or ["Architectural"]) when they ask for one discipline only.
 2) EDIT = READ → MODIFY → WRITE: get_object for the CURRENT definition, change only what the instruction requires (keep meta.id to overwrite in place; keep every parameter/rule you are not changing), then save_object with the COMPLETE definition.
 3) CREATE — design real-world geometry in metres; expose every dimension a user would tune as a parameter with a sensible default/min/max/step; drive the geometry rules from parameters/vars so the 2D plan and the 3D mesh both follow. Model each element as a CLOSED shape with its REAL height span so it exists in 3D (chair: legs 0→0.42, seat 0.42→0.45, backrest 0.45→0.85; ceiling fan: hub 0→0.15 + blades + rod, with the reserved clearance param carrying the 2.4 m mounting height). A NEW meta.id creates a new object.
 4) VERIFY — read save_object's result: action / params / file (the .pobj path written under public/Library) AND the render self-check render: { plan2dShapes, planLines, prisms3d } + renderWarning. A physical object REQUIRES plan2dShapes ≥ 1 AND prisms3d ≥ 1 — any renderWarning means instances show as a bare placeholder in 2D and/or nothing in 3D: fix the geometry (rules inside cases[].rules, real h0→h1 spans, expression typos, when-gates) and save again. On an { error } fix the JSON and save again — never repeat the identical call.
@@ -433,7 +452,7 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("get_plan", () => p.api.getPlanJson()),
     }),
     list_spaces: tool({
-      description: "All visible spaces (auto-detected from wall loops + manual) with display label (e.g. \"Space001\"), room type, area in m², polygon corner points in PIXELS (pointsPx — use these as the rooms[] entry's points when labelling an existing space), and attached parametric objects.",
+      description: "All visible spaces (auto-detected from wall loops) with display label (e.g. \"Space001\"), room type, area in m², polygon corner points in PIXELS (pointsPx), and attached parametric objects. Use a space's label to target it with attach_space_object / merge_spaces — do NOT copy pointsPx into a rooms[] entry (that makes a STATIC room that won't follow the walls).",
       inputSchema: z.object({}),
       execute: wrap("list_spaces", () => p.api.listSpaces()),
     }),
@@ -457,9 +476,38 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("list_draw_tools", () => p.api.listDrawTools()),
     }),
     import_objects: tool({
-      description: "Load the bundled parametric object library from public/Library/Parametric Objects (walls, doors, windows, furniture, Floor/Massing/Site/Core space objects). Call once when objectsLoaded is 0. Returns the detailed object catalog (ids + params) to place from.",
+      description: "Load the parametric object library from public/Library/Parametric Objects (bundled + agent-saved). The Library is organised by CATEGORY folder — Kitchen, Furniture, Bathroom, Electrical, Structural, Architectural, Site, System — and the optional `categories` imports ONLY those folders (case-insensitive), e.g. [\"Architectural\"] for walls/doors/windows or [\"Kitchen\",\"Electrical\"]; omit it to load EVERYTHING. The result's availableCategories lists the folders that exist. Call when objectsLoaded is 0 or the needed objects aren't loaded; returns the detailed object catalog (ids + params) to place from.",
+      inputSchema: z.object({
+        categories: z.array(z.string()).optional().describe('Library category folders to import, e.g. ["Architectural"] — omit for ALL'),
+      }),
+      execute: wrap("import_objects", (a: { categories?: string[] }) => p.api.importObjects(a)),
+    }),
+    list_designs: tool({
+      description: "List saved DESIGN files under public/Library/Designs — each is a complete exported floor-plan (FloorPlanModel JSON: walls, spaces, openings, furniture, layers, scale). Returns Designs-relative paths, e.g. \"floorplan-2026-07-09.json\". Call before import_design to discover what's available.",
       inputSchema: z.object({}),
-      execute: wrap("import_objects", () => p.api.importObjects()),
+      execute: wrap("list_designs", async () => {
+        const files = await listLibraryFiles("Designs");
+        return { files: (files ?? []).filter((f) => f.toLowerCase().endsWith(".json")) };
+      }),
+    }),
+    import_design: tool({
+      description: "Load a saved DESIGN from public/Library/Designs and REPLACE the whole canvas with it (walls, spaces, openings, furniture, layers, scale). `path` is Designs-relative (from list_designs), e.g. \"floorplan-2026-07-09.json\". This is how you reuse or continue a previously exported plan. The file's parametric objects are restored by id — run import_objects too if placed objects render as bare markers. After loading, VERIFY with get_state / snapshot_canvas, then edit with apply_model as usual.",
+      inputSchema: z.object({
+        path: z.string().describe('Designs-relative file, e.g. "floorplan-2026-07-09.json" or "Designs/foo.json"'),
+      }),
+      execute: wrap("import_design", async (a: { path: string }) => {
+        const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/").replace(/^Designs\//i, "");
+        const res = await fetch(encodeURI(`/Library/Designs/${rel}`));
+        if (!res.ok) throw new Error(`design not found: ${rel} (HTTP ${res.status}) — check list_designs`);
+        const json = await res.text();
+        let parsed: unknown;
+        try { parsed = JSON.parse(json); } catch { throw new Error(`design ${rel} is not valid JSON`); }
+        if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { walls?: unknown }).walls)) {
+          throw new Error(`design ${rel} is not a FloorPlanModel (no walls[])`);
+        }
+        const applied = p.api.applyModelJson(json);
+        return { ok: true, path: `Designs/${rel}`, applied };
+      }),
     }),
     list_objects: tool({
       description: "Summary catalog of the parametric object LIBRARY: every object's id, name, hostKind, symbol, category and parameter count. The read side of library management — see get_object for one full definition.",
@@ -474,7 +522,7 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("get_object", (a: { id: string }) => p.api.getObjectDefinition(a.id)),
     }),
     save_object: tool({
-      description: "CREATE a new parametric object or OVERWRITE an existing one (same meta.id): pass the COMPLETE .pobj definition as a JSON string (kind \"parametric-object\" + meta + parameters + optional geometry/outputs — see PARAMETRIC OBJECT FILE FORMAT in your instructions). Optional hostKind picks the Add menu that hosts it (default: kept for an existing id, else derived from meta.symbol). The saved definition applies immediately — placed instances re-render with it — and the file is written to public/Library/Parametric Objects/<Sub>/<meta.id>.pobj.json (the result's \"file\"). The result's render self-check { plan2dShapes, planLines, prisms3d } + renderWarning tells you whether it actually draws in 2D and 3D — fix the geometry and re-save while a renderWarning remains.",
+      description: "CREATE a new parametric object or OVERWRITE an existing one (same meta.id): pass the COMPLETE .pobj definition as a JSON string (kind \"parametric-object\" + meta + parameters + optional geometry/outputs — see PARAMETRIC OBJECT FILE FORMAT in your instructions). Optional hostKind picks the Add menu that hosts it (default: kept for an existing id, else derived from meta.symbol). The saved definition applies immediately — placed instances re-render with it — and the file is written to public/Library/Parametric Objects/<Category>/<meta.id>.pobj.json, the folder derived from meta.category (the result's \"file\"). The result's render self-check { plan2dShapes, planLines, prisms3d } + renderWarning tells you whether it actually draws in 2D and 3D — fix the geometry and re-save while a renderWarning remains.",
       inputSchema: z.object({
         definitionJson: z.string().describe("The complete .pobj file as a JSON string"),
         hostKind: z.enum(["node", "segment", "space", "canvas"]).optional().describe("Which host element instances attach to (drives the Add Node / Segment / Space menus)"),
@@ -625,7 +673,7 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       },
     }),
     apply_model: tool({
-      description: "PRIMARY write path (JSON-first): replace the plan with the COMPLETE updated FloorPlanModel JSON — walls (+wall/door/window attachments), nodeMeta furniture, labelled rooms — per the JSON SPEC in your instructions. Start from get_plan's JSON and keep everything you aren't changing. Pixel coordinates = metres × pixelsPerMeter. Returns a change summary.",
+      description: "PRIMARY write path (JSON-first): replace the plan with the COMPLETE updated FloorPlanModel JSON — walls (+wall/door/window attachments) and nodeMeta furniture (rooms[] stays EMPTY — Spaces auto-detect from the wall loops and follow them) — per the JSON SPEC in your instructions. Start from get_plan's JSON and keep everything you aren't changing. Pixel coordinates = metres × pixelsPerMeter. Returns a change summary.",
       inputSchema: z.object({
         modelJson: z.string().describe("The COMPLETE FloorPlanModel as a JSON string"),
       }),
@@ -639,9 +687,9 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
   const SUBSETS: Record<Exclude<AgentToolset, "orchestrator">, readonly (keyof typeof allTools)[]> = {
     design: [
       "get_state", "get_plan", "list_spaces", "get_selection", "merge_spaces", "list_draw_tools",
-      "import_objects", "draw_segment", "place_opening", "place_object", "attach_space_object",
-      "set_image_underlay", "align_underlay", "analyze_underlay", "fit_plan_to_rect", "clear_canvas",
-      "snapshot_canvas", "apply_model",
+      "import_objects", "list_designs", "import_design", "draw_segment", "place_opening", "place_object",
+      "attach_space_object", "set_image_underlay", "align_underlay", "analyze_underlay", "fit_plan_to_rect",
+      "clear_canvas", "snapshot_canvas", "apply_model",
     ],
     parametric: ["get_state", "list_objects", "get_object", "save_object", "delete_object", "import_objects"],
   };

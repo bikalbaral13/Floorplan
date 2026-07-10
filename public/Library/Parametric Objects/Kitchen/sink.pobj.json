@@ -1,0 +1,168 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "sink.v1",
+    "name": "Sink",
+    "category": "Fixtures/Bathroom",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 10h16v2a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z",
+        "M12 10V6a2 2 0 0 1 2-2h2",
+        "M12 13h.01"
+      ]
+    }
+  },
+  "parameters": [
+    {
+      "key": "width",
+      "label": "Width",
+      "kind": "number",
+      "default": 0.6,
+      "min": 0.4,
+      "max": 1.2,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "depth",
+      "label": "Depth",
+      "kind": "number",
+      "default": 0.5,
+      "min": 0.35,
+      "max": 0.7,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "height",
+      "label": "Counter Height",
+      "kind": "number",
+      "default": 0.85,
+      "min": 0.7,
+      "max": 1,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "wallOffset",
+      "label": "Offset from Wall",
+      "kind": "number",
+      "default": 0,
+      "min": -2,
+      "max": 2,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "clearance",
+      "label": "Clearance from Floor",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 2,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "°"
+    },
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "color",
+      "default": "#06b6d4"
+    }
+  ],
+  "geometry": {
+    "description": "Counter sink: counter slab (Height−0.05 → Height), a recessed basin (octagon, dropped below the top) and a faucet block at the back (+Y).",
+    "emit": "shapes",
+    "vars": {
+      "W": "width",
+      "D": "depth",
+      "H": "height",
+      "ct": "H - 0.05",
+      "rx": "W/2 - 0.08",
+      "ry": "D/2 - 0.1",
+      "by": "-0.02"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "counter",
+            "box": {
+              "x0": "-W/2",
+              "x1": "W/2",
+              "y0": "-D/2",
+              "y1": "D/2",
+              "h0": "ct",
+              "h1": "H"
+            }
+          },
+          {
+            "comment": "basin (octagon, recessed)",
+            "poly": {
+              "h0": "H - 0.18",
+              "h1": "ct",
+              "pts": [
+                [
+                  "rx",
+                  "by"
+                ],
+                [
+                  "0.707*rx",
+                  "by + 0.707*ry"
+                ],
+                [
+                  "0",
+                  "by + ry"
+                ],
+                [
+                  "-0.707*rx",
+                  "by + 0.707*ry"
+                ],
+                [
+                  "-rx",
+                  "by"
+                ],
+                [
+                  "-0.707*rx",
+                  "by - 0.707*ry"
+                ],
+                [
+                  "0",
+                  "by - ry"
+                ],
+                [
+                  "0.707*rx",
+                  "by - 0.707*ry"
+                ]
+              ]
+            }
+          },
+          {
+            "comment": "faucet",
+            "box": {
+              "x0": "-0.03",
+              "x1": "0.03",
+              "y0": "D/2 - 0.08",
+              "y1": "D/2 - 0.02",
+              "h0": "H",
+              "h1": "H + 0.15"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "hostKind": "node"
+}

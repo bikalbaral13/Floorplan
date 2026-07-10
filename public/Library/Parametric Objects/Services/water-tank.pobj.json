@@ -1,0 +1,73 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "water-tank.v1",
+    "name": "Water Tank",
+    "category": "Services/Plumbing",
+    "units": "m",
+    "icon": { "paths": ["M6 8h12v11a2 2 0 0 1 -2 2H8a2 2 0 0 1 -2 -2z", "M6 8c0 -2 3 -3 6 -3s6 1 6 3", "M9 12h6"] }
+  },
+  "parameters": [
+    { "key": "shape", "label": "Shape", "kind": "select", "default": "cylindrical", "options": [ { "value": "cylindrical", "label": "Cylindrical" }, { "value": "rectangular", "label": "Rectangular" } ] },
+    { "key": "diameter", "label": "Diameter", "kind": "number", "default": 1.1, "min": 0.4, "max": 3, "step": 0.05, "unit": "m" },
+    { "key": "width", "label": "Width (rect)", "kind": "number", "default": 1.2, "min": 0.4, "max": 3, "step": 0.05, "unit": "m" },
+    { "key": "depth", "label": "Depth (rect)", "kind": "number", "default": 0.9, "min": 0.4, "max": 3, "step": 0.05, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 1.2, "min": 0.4, "max": 3, "step": 0.05, "unit": "m" },
+    { "key": "overhead", "label": "On stand (overhead)", "kind": "checkbox", "default": false },
+    { "key": "legHeight", "label": "Stand height", "kind": "number", "default": 1.5, "min": 0.3, "max": 6, "step": 0.1, "unit": "m" },
+    { "key": "lidDome", "label": "Domed lid", "kind": "checkbox", "default": true },
+    { "key": "sides", "label": "Roundness", "kind": "number", "default": 28, "min": 6, "max": 48, "step": 1 },
+    { "key": "color", "label": "Tank color", "kind": "color", "default": "#0369a1" },
+    { "key": "lidColor", "label": "Lid color", "kind": "color", "default": "#075985" },
+    { "key": "legColor", "label": "Stand color", "kind": "color", "default": "#334155" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -1, "max": 1, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 3, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "R": "diameter / 2",
+      "w2": "width / 2",
+      "d2": "depth / 2",
+      "lift": "overhead ? legHeight : 0",
+      "top": "(overhead ? legHeight : 0) + height",
+      "nsides": "max(6, round(sides))",
+      "legX": "shape == 'cylindrical' ? R * 0.72 : w2 * 0.85",
+      "legY": "shape == 'cylindrical' ? R * 0.72 : d2 * 0.85"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Support legs (overhead stand)",
+            "when": "overhead",
+            "repeat": 4,
+            "as": "k",
+            "vars": { "cx": "(k == 0 || k == 3 ? 1 : -1) * legX", "cy": "(k < 2 ? 1 : -1) * legY" },
+            "box": { "x0": "cx - 0.05", "x1": "cx + 0.05", "y0": "cy - 0.05", "y1": "cy + 0.05", "h0": 0, "h1": "lift + 0.1", "color": "legColor" }
+          },
+          { "comment": "Stand cross-brace platform", "when": "overhead", "box": { "x0": "-legX - 0.06", "x1": "legX + 0.06", "y0": "-legY - 0.06", "y1": "legY + 0.06", "h0": "lift", "h1": "lift + 0.06", "color": "legColor" } },
+          { "comment": "Tank body — cylindrical", "when": "shape == 'cylindrical'", "circle": { "cx": 0, "cy": 0, "r": "R", "sides": "nsides", "h0": "lift", "h1": "top", "color": "color" } },
+          { "comment": "Tank body — rectangular", "when": "shape == 'rectangular'", "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": "lift", "h1": "top", "color": "color" } },
+          { "comment": "Flat lid rim — cylindrical", "when": "shape == 'cylindrical'", "circle": { "cx": 0, "cy": 0, "r": "R * 1.04", "sides": "nsides", "h0": "top", "h1": "top + 0.05", "color": "lidColor" } },
+          { "comment": "Flat lid rim — rectangular", "when": "shape == 'rectangular'", "box": { "x0": "-w2 * 1.04", "x1": "w2 * 1.04", "y0": "-d2 * 1.04", "y1": "d2 * 1.04", "h0": "top", "h1": "top + 0.05", "color": "lidColor" } },
+          {
+            "comment": "Domed lid — stacked shrinking rings",
+            "when": "lidDome && shape == 'cylindrical'",
+            "repeat": 4,
+            "as": "k",
+            "vars": { "t": "(k + 0.5) / 4", "rr": "R * sqrt(max(0.02, 1 - t * t))" },
+            "circle": { "cx": 0, "cy": 0, "r": "rr", "sides": "nsides", "h0": "top + 0.05 + k / 4 * R * 0.5", "h1": "top + 0.05 + (k + 1) / 4 * R * 0.5", "color": "lidColor" }
+          },
+          { "comment": "Inlet cap", "circle": { "cx": "shape == 'cylindrical' ? R * 0.5 : w2 * 0.5", "cy": 0, "r": 0.05, "sides": 10, "h0": "top + 0.05", "h1": "top + 0.14", "color": "legColor" } },
+          { "comment": "Outlet valve", "circle": { "cx": "shape == 'cylindrical' ? R : w2", "cy": 0, "r": 0.04, "sides": 8, "h0": "lift + 0.12", "h1": "lift + 0.2", "color": "legColor" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "capacity", "label": "Capacity", "expr": "round((shape == 'cylindrical' ? PI * R * R : width * depth) * height * 1000)", "unit": "L" }
+  ]
+}

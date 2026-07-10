@@ -1,0 +1,67 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "socket.v1",
+    "name": "Socket / Switch",
+    "category": "MEP/Electrical",
+    "units": "m",
+    "icon": { "paths": ["M5 4h14v16H5z", "M10 9m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0", "M14 9m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0", "M9 14h6"] }
+  },
+  "parameters": [
+    { "key": "gangs", "label": "Modules (gangs)", "kind": "number", "default": 2, "min": 1, "max": 8, "step": 1 },
+    { "key": "moduleType", "label": "Module type", "kind": "select", "default": "socket", "options": [ { "value": "socket", "label": "Socket" }, { "value": "switch", "label": "Switch" } ] },
+    { "key": "moduleWidth", "label": "Module width", "kind": "number", "default": 0.05, "min": 0.03, "max": 0.09, "step": 0.005, "unit": "m" },
+    { "key": "plateHeight", "label": "Plate height", "kind": "number", "default": 0.086, "min": 0.05, "max": 0.16, "step": 0.005, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.012, "min": 0.005, "max": 0.04, "step": 0.002, "unit": "m" },
+    { "key": "color", "label": "Plate color", "kind": "color", "default": "#f8fafc" },
+    { "key": "moduleColor", "label": "Module color", "kind": "color", "default": "#e2e8f0" },
+    { "key": "holeColor", "label": "Detail color", "kind": "color", "default": "#475569" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -0.3, "max": 0.3, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Mount height", "kind": "number", "default": 0.3, "min": 0, "max": 2, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "ng": "max(1, round(gangs))",
+      "mw": "moduleWidth",
+      "plateW": "max(1, round(gangs)) * moduleWidth + 0.024",
+      "pw2": "(max(1, round(gangs)) * moduleWidth + 0.024) / 2",
+      "d2": "depth / 2",
+      "H": "plateHeight",
+      "totW": "max(1, round(gangs)) * moduleWidth"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Face plate", "box": { "x0": "-pw2", "x1": "pw2", "y0": "-d2", "y1": "d2", "h0": 0, "h1": "H", "color": "color" } },
+          {
+            "comment": "Module bodies",
+            "repeat": "ng",
+            "as": "k",
+            "vars": { "mx": "-totW / 2 + (k + 0.5) * mw" },
+            "box": { "x0": "mx - mw * 0.4", "x1": "mx + mw * 0.4", "y0": "d2", "y1": "d2 + 0.004", "h0": "H * 0.18", "h1": "H * 0.82", "color": "moduleColor" }
+          },
+          {
+            "comment": "Socket pin holes",
+            "when": "moduleType == 'socket'",
+            "repeat": "ng * 2",
+            "as": "k",
+            "vars": { "g": "floor(k / 2)", "side": "k % 2 == 0 ? -1 : 1", "mx": "-totW / 2 + (g + 0.5) * mw + side * mw * 0.18" },
+            "circle": { "cx": "mx", "cy": "d2 + 0.004", "r": "mw * 0.08", "sides": 8, "h0": "H * 0.42", "h1": "H * 0.42 + 0.004", "color": "holeColor" }
+          },
+          {
+            "comment": "Switch rocker bars",
+            "when": "moduleType == 'switch'",
+            "repeat": "ng",
+            "as": "k",
+            "vars": { "mx": "-totW / 2 + (k + 0.5) * mw" },
+            "box": { "x0": "mx - mw * 0.28", "x1": "mx + mw * 0.28", "y0": "d2 + 0.004", "y1": "d2 + 0.008", "h0": "H * 0.3", "h1": "H * 0.7", "color": "holeColor" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [ { "key": "modules", "label": "Modules", "expr": "round(gangs)" } ]
+}

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "graph-to-room",
+  "label": "Graph to Room",
+  "category": "Building",
+  "description": "Forms inner (clear) rooms from the wall graph — each wall-bounded face is inset by half its schema thickness to the inner wall faces. The rooms stay selectable Spaces carrying the Schema's Space properties. Wire the Canvas Graph (out-3) in; attach a Schema for per-wall thickness.",
+  "params": {}
+}

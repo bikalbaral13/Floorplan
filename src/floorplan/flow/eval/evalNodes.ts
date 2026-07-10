@@ -25,7 +25,7 @@ import { polygonUnionVector, polygonUnionVectorLoops, polygonsInteriorsCross } f
 import { sutherlandHodgmanClip } from "../../algorithms/geometry/sutherlandHodgman";
 import { type BspSeed } from "../../algorithms/partitioning/bsp";
 import { computeBspCellsAdvanced, parseBspConnections } from "../../algorithms/partitioning/bspAdvanced";
-import { computePolygonPrincipalAxes, type PrincipalAxesMethod } from "../../algorithms/geometry/principalAxes";
+import { computePolygonPrincipalAxes, computePolygonMinAreaOBB, type PrincipalAxesMethod } from "../../algorithms/geometry/principalAxes";
 import { evaluateSpaceCondition } from "../conditional";
 import { computeBoundingCircle, computeBoundingEllipse, computeBoundingNGon } from "../../algorithms/geometry/boundingShapes";
 import { computeConvexHull } from "../../algorithms/partitioning/convexHull";
@@ -44,8 +44,227 @@ import { computeOptimiseSteppedShape } from "../../algorithms/layout/optimiseSte
 import { computeOptimiseCrossShape } from "../../algorithms/layout/optimiseCrossShape";
 import { computeInCircles } from "../../algorithms/layout/inCircles";
 import { computeVisibilityPolygon, sampleSegmentInside } from "../../algorithms/geometry/visibilityPolygon";
+// The package ships an ESM bundle whose only export is `default`, but its .d.ts declares named
+// exports — resolve the callable object defensively across bundler/interop modes (see columnClip.ts).
+import * as PolygonClippingNS from "polygon-clipping";
 
 const num = (v: unknown, d: number): number => (typeof v === "number" && isFinite(v) ? v : d);
+
+type PcRing = [number, number][];
+type PcMultiPolygon = PcRing[][];
+const pc: {
+  union: (geom: PcMultiPolygon | PcRing[], ...geoms: (PcMultiPolygon | PcRing[])[]) => PcMultiPolygon;
+  intersection: (subject: PcMultiPolygon | PcRing[], ...clips: (PcMultiPolygon | PcRing[])[]) => PcMultiPolygon;
+  difference: (subject: PcMultiPolygon | PcRing[], ...clips: (PcMultiPolygon | PcRing[])[]) => PcMultiPolygon;
+} =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (PolygonClippingNS as any).default ?? (PolygonClippingNS as any);
+
+/** One Corridoor piece: an outer boundary + any holes (the Insetted loop's courtyard(s)). */
+export interface CorridoorPiece { points: Point[]; holes: Point[][] }
+
+// polygon-clipping ring (explicitly closed) ⇄ Point[] helpers for the Corridoor evals.
+const ptsToPcRing = (pts: Point[]): PcRing => {
+  const r: PcRing = pts.map((p) => [p.x, p.y] as [number, number]);
+  if (r.length) r.push([r[0][0], r[0][1]]); // polygon-clipping wants first === last
+  return r;
+};
+const pcRingToPts = (ring: PcRing): Point[] => {
+  const pts = ring.map(([x, y]) => ({ x, y }));
+  // Drop the duplicate closing vertex.
+  if (pts.length > 1 && Math.abs(pts[0].x - pts[pts.length - 1].x) < 1e-9 && Math.abs(pts[0].y - pts[pts.length - 1].y) < 1e-9) pts.pop();
+  return pts;
+};
+const pcResultToPieces = (mp: PcMultiPolygon): CorridoorPiece[] =>
+  mp.map((poly) => ({
+    points: pcRingToPts(poly[0] ?? []),
+    holes: poly.slice(1).map(pcRingToPts).filter((h) => h.length >= 3),
+  })).filter((p) => p.points.length >= 3);
+
+/** Distance from point `p` to segment a–b (same units as the inputs). */
+const pointSegDist = (p: Point, a: Point, b: Point): number => {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+};
+
+/** True when `p` lies within `tol` of the polygon's boundary (any edge). */
+const pointOnPolygonBoundary = (p: Point, poly: Point[], tol: number): boolean => {
+  for (let i = 0; i < poly.length; i++) if (pointSegDist(p, poly[i], poly[(i + 1) % poly.length]) <= tol) return true;
+  return false;
+};
+
+/** The INTERIOR partition lines of a set of cells (the network a partitioner carves inside the space):
+ *  every cell edge whose midpoint is NOT on the space boundary. Shared edges appear twice, but the
+ *  downstream width-band union collapses the duplicates. */
+const interiorCellEdges = (cells: Point[][], space: Point[], tolPx: number): Point[][] => {
+  const out: Point[][] = [];
+  for (const cell of cells) {
+    if (cell.length < 3) continue;
+    for (let i = 0; i < cell.length; i++) {
+      const a = cell[i], b = cell[(i + 1) % cell.length];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue;
+      if (!pointOnPolygonBoundary({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, space, tolPx)) out.push([a, b]);
+    }
+  }
+  return out;
+};
+
+/** Corridoor "path" methods — reuse the matching partition node's EVALUATOR to produce a network of
+ *  centerlines (no algorithm is reimplemented here): Skeleton → medial-axis branches; BSP / Split →
+ *  the interior partition lines between the resulting cells. The caller thickens these to the corridor
+ *  width and clips to the space, so every "X path" shape shares one backend. Add a method by wiring its
+ *  evaluator here + one option in the FLOW_TOOLS `corridoor` shape list. */
+const corridoorCenterlines = (space: Point[], shape: string, params: Record<string, unknown>, ppm: number): Point[][] => {
+  const count = Math.max(2, Math.min(12, Math.round(num(params.count, 3))));
+  const tolPx = 1.5;
+  if (shape === "skeleton") {
+    // The Skeleton node's raw branches (emit: branches, makePath off) — the shared converter makes the band.
+    return evalSkeleton(space, { type: "straight-skeleton", emit: "branches", pruneEnds: true, longestBranch: false, reduceLevel: 0, makePath: false }, ppm);
+  }
+  if (shape === "bsp") return interiorCellEdges(evalBsp(space, { seeds: count, balance: "equal", layout: "strip", tiltAngle: 0 }, ppm), space, tolPx);
+  if (shape === "split") return interiorCellEdges(evalSplit(space, { type: "normal", mode: "equal", count, angle: 0 }, ppm), space, tolPx);
+  return [];
+};
+
+/** Corridoor (structured): cut a corridor Space through the input space. Shapes:
+ *   • Horizontal / Vertical / Cross — a straight band of `width` metres through the polygon's centroid,
+ *     intersected with the space so the corridor never leaves it.
+ *   • Insetted — a LOOP `offset` metres inside the boundary, `width` wide (inset(offset) minus
+ *     inset(offset + width)); the courtyard comes back as a HOLE on the piece.
+ *   • Skeleton / BSP / Split path — reuse the matching partition node ({@link corridoorCenterlines})
+ *     for a centerline network, thicken it to a `width`-wide band (skeletonPathBands) and clip to the
+ *     space. Modular: each partition algorithm lives ONLY in its own evaluator.
+ *  A concave space can yield several disjoint pieces; each is one entry. */
+export function evalCorridoorPieces(polygon: Point[], params: Record<string, unknown>, ppm: number): CorridoorPiece[] {
+  if (polygon.length < 3) return [];
+  const shape = typeof params.shape === "string" ? params.shape : "horizontal";
+  const widthM = Math.max(0.05, num(params.width, 1.2));
+  const widthPx = widthM * (ppm > 0 ? ppm : 1);
+
+  if (shape === "insetted") {
+    // Loop outer edge = the space inset by `offset`; inner edge = inset by `offset + width`.
+    const offM = Math.max(0, num(params.offset, 0.5));
+    const outer = computeInsetPolygon(polygon, polygon.map(() => offM), ppm, true);
+    if (!outer.valid || outer.pts.length < 3) return []; // the offset ate the whole space
+    const inner = computeInsetPolygon(polygon, polygon.map(() => offM + widthM), ppm, true);
+    if (!inner.valid || inner.pts.length < 3) return [{ points: outer.pts, holes: [] }]; // no courtyard left
+    try {
+      return pcResultToPieces(pc.difference([ptsToPcRing(outer.pts)], [ptsToPcRing(inner.pts)]));
+    } catch {
+      return [{ points: outer.pts, holes: [] }];
+    }
+  }
+
+  if (shape === "skeleton" || shape === "bsp" || shape === "split") {
+    // Reuse the partition node's evaluator for the centerlines, thicken to the corridor width, clip to space.
+    const centerlines = corridoorCenterlines(polygon, shape, params, ppm).filter((l) => l.length >= 2);
+    if (!centerlines.length) return [];
+    const bands = skeletonPathBands(centerlines, widthPx).filter((b) => b.length >= 3);
+    if (!bands.length) return [];
+    try {
+      const subject: PcMultiPolygon = bands.map((b) => [ptsToPcRing(b)]);
+      return pcResultToPieces(pc.intersection(subject, [ptsToPcRing(polygon)]));
+    } catch {
+      return bands.map((b) => ({ points: b, holes: [] })); // clip failed → the raw bands (already inside-ish)
+    }
+  }
+
+  // Straight bands — Horizontal / Vertical / Cross through the centroid, clipped to the space.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of polygon) {
+    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+  }
+  const c = polygonCentroid(polygon);
+  const half = widthPx / 2;
+  const pad = widthPx + 10; // overshoot the bbox so a band always spans the whole space
+  const hBand: PcRing = [[minX - pad, c.y - half], [maxX + pad, c.y - half], [maxX + pad, c.y + half], [minX - pad, c.y + half], [minX - pad, c.y - half]];
+  const vBand: PcRing = [[c.x - half, minY - pad], [c.x + half, minY - pad], [c.x + half, maxY + pad], [c.x - half, maxY + pad], [c.x - half, minY - pad]];
+  try {
+    const clip: PcMultiPolygon =
+      shape === "vertical" ? [[vBand]] : shape === "cross" ? pc.union([[hBand]], [[vBand]]) : [[hBand]];
+    return pcResultToPieces(pc.intersection([ptsToPcRing(polygon)], clip));
+  } catch {
+    return []; // degenerate input (self-intersecting ring, zero-width band) — no corridor, not a crash
+  }
+}
+
+/** Corridoor (flat, for the flow pipeline): every piece's outer ring followed by its hole rings — the
+ *  preview shows both loop boundaries; the commit runner uses {@link evalCorridoorPieces} instead so
+ *  the committed Space carries the courtyard as a real hole. */
+export function evalCorridoor(polygon: Point[], params: Record<string, unknown>, ppm: number): Point[][] {
+  const out: Point[][] = [];
+  for (const piece of evalCorridoorPieces(polygon, params, ppm)) {
+    out.push(piece.points);
+    out.push(...piece.holes);
+  }
+  return out;
+}
+
+/** Core Racking — lay a row of fixed-size rectangular "core" Spaces (each `length` × `breadth`, in metres)
+ *  along a corridor's long sides. The input polygon is a corridor BAND (e.g. the Corridoor node's output):
+ *  its min-area oriented bounding box gives the run axis `u` (major) and the corridor width across `v`
+ *  (minor). Cores are stamped every `pitch = length + gap` along the run, centred on it, and pushed
+ *  perpendicular so each core sits flush against the corridor edge — on `both` sides, the `left` side, or
+ *  the `right` side. `orientation` overrides the auto axis (`horizontal`/`vertical`) for square-ish inputs.
+ *  Extents are measured by projecting the polygon onto the chosen axes, so forcing an orientation stays
+ *  correct. Returns one CCW rectangle (world-pixel coords) per core. */
+export function evalCoreRacking(polygon: Point[], params: Record<string, unknown>, ppm: number): Point[][] {
+  if (polygon.length < 3) return [];
+  const P = ppm > 0 ? ppm : 1;
+  const lenPx = Math.max(0.1, num(params.length, 4)) * P;    // core dimension ALONG the corridor run
+  const brePx = Math.max(0.1, num(params.breadth, 4)) * P;   // core dimension AWAY from the corridor
+  const gapPx = Math.max(0, num(params.gap, 0.5)) * P;       // gap between adjacent cores along the run
+  const marginPx = Math.max(0, num(params.margin, 0)) * P;   // setback from each corridor end
+  const side = params.side === "left" || params.side === "right" ? params.side : "both";
+  const orientation = params.orientation === "horizontal" || params.orientation === "vertical" ? params.orientation : "auto";
+
+  const obb = computePolygonMinAreaOBB(polygon);
+  if (obb.width <= 0 || obb.height <= 0) return [];
+  // Run axis angle: auto = OBB major axis; else force world X (horizontal) / Y (vertical).
+  const axRad = orientation === "horizontal" ? 0 : orientation === "vertical" ? Math.PI / 2 : (obb.majorAngleDeg * Math.PI) / 180;
+  const u = { x: Math.cos(axRad), y: Math.sin(axRad) };      // along the run
+  const v = { x: -Math.sin(axRad), y: Math.cos(axRad) };     // left-hand perpendicular (+v = "left")
+  const c = polygonCentroid(polygon);
+  // Corridor extents = projection span of the band onto u (length) and v (width).
+  let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
+  for (const p of polygon) {
+    const du = (p.x - c.x) * u.x + (p.y - c.y) * u.y;
+    const dv = (p.x - c.x) * v.x + (p.y - c.y) * v.y;
+    if (du < uMin) uMin = du; if (du > uMax) uMax = du;
+    if (dv < vMin) vMin = dv; if (dv > vMax) vMax = dv;
+  }
+  const runLen = uMax - uMin;
+  const corridorHalfW = (vMax - vMin) / 2;
+  const uMid = (uMin + uMax) / 2, vMid = (vMin + vMax) / 2;
+
+  const pitch = lenPx + gapPx;
+  const avail = runLen - 2 * marginPx;
+  const n = Math.floor((avail + gapPx) / pitch + 1e-6);      // how many cores fit along the run
+  if (n < 1) return [];
+  const used = n * lenPx + (n - 1) * gapPx;
+  const first = uMid - used / 2 + lenPx / 2;                 // centre of the first core along u
+
+  const signs = side === "left" ? [1] : side === "right" ? [-1] : [1, -1]; // +v = left, -v = right
+  const hw = lenPx / 2, hd = brePx / 2;
+  const out: Point[][] = [];
+  for (const s of signs) {
+    const perp = vMid + s * (corridorHalfW + hd);            // core centre offset flush to the corridor edge
+    for (let i = 0; i < n; i++) {
+      const along = first + i * pitch;
+      const cxp = c.x + u.x * along + v.x * perp;
+      const cyp = c.y + u.y * along + v.y * perp;
+      const corner = (su: number, sv: number): Point => ({
+        x: cxp + u.x * su * hw + v.x * sv * hd,
+        y: cyp + u.y * su * hw + v.y * sv * hd,
+      });
+      out.push([corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]);
+    }
+  }
+  return out;
+}
 
 /** Door symbol from a wall segment (the door opening). `shape`:
  *   • "polygon"  → fills the opening as a rectangle of `thickness` m (a solid leaf block);
@@ -2456,7 +2675,15 @@ export function evalOptimise(inputPts: Point[], params: Record<string, unknown>,
          : result.unionPolygon && result.unionPolygon.length >= 3 ? result.unionPolygon
          : rasterUnion(result.placed))
       : rasterUnion(result.placed);
-    polys = merged && merged.length >= 3 ? [merged] : result.placed;
+    // The union tracers only return the single largest connected component. Since packed rectangles
+    // never overlap, a connected union's area equals the sum of the placed rectangles' areas — so if
+    // the merged outline is meaningfully smaller, the rectangles are disjoint and the merge dropped
+    // some of them. In that case keep all placed rectangles rather than showing just one.
+    const placedArea = result.placed.reduce((s, p) => s + polygonArea(p), 0);
+    const mergedArea = merged && merged.length >= 3 ? polygonArea(merged) : 0;
+    polys = merged && merged.length >= 3 && mergedArea >= placedArea * 0.98
+      ? [merged]
+      : result.placed;
   } else {
     polys = result.placed;
   }
@@ -2503,6 +2730,9 @@ export function computeOptimalOptimiseTilt(inputPts: Point[], params: Record<str
  *  placed are dropped (the same indices are skipped on commit). */
 export interface PlacedFootprint {
   polygon: Point[];
+  /** Parametric library id (e.g. "sofa.v2") when this entry references a real object — lets the host
+   *  materialise the actual .pobj attachment (Live mode). Absent for hard-coded `kind` entries. */
+  objectId?: string;
   kind: string;
   /** Object height (m) — drives the extruded 3D primitive in the live preview + on commit. */
   heightM: number;
@@ -2541,6 +2771,7 @@ export function evalPlaceObjectDetailed(
   footprints.forEach((f, i) => {
     if (f) out.push({
       polygon: f,
+      objectId: entries[i].objectId,
       kind: entries[i].kind,
       heightM: Math.max(0.05, entries[i].height),
       clearanceM: Math.max(0, entries[i].clearance),

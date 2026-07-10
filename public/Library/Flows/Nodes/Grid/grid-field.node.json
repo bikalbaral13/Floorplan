@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "grid-field",
+  "label": "Grid Field",
+  "category": "Grid",
+  "description": "Generate a synthetic elevation field over an incoming lattice — a directional ramp (High→Low) plus random jitter, optionally incising occupied (river) cells lower. Feed from Graph to Grid; chain into Fill Depressions for the watershed pipeline.",
+  "params": {
+    "direction": "top-bottom",
+    "high": 100,
+    "low": 0,
+    "randomness": 0.2,
+    "seed": 1,
+    "inciseOccupied": false,
+    "inciseDepth": 20,
+    "lowColor": "#1e3a8a",
+    "highColor": "#ef4444",
+    "showCellValues": false
+  }
+}

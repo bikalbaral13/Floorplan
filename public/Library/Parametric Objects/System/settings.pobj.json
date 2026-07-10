@@ -1,0 +1,61 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "canvas-settings",
+    "name": "Canvas Settings",
+    "category": "Layout",
+    "symbol": "settings"
+  },
+  "hostKind": "canvas",
+  "parameters": [
+    {
+      "key": "ortho",
+      "label": "Ortho",
+      "kind": "checkbox",
+      "default": true,
+      "role": "ortho"
+    },
+    {
+      "key": "units",
+      "label": "Units",
+      "kind": "select",
+      "default": "m",
+      "role": "units",
+      "options": [
+        {
+          "value": "m",
+          "label": "Meters"
+        },
+        {
+          "value": "cm",
+          "label": "Centimeters"
+        },
+        {
+          "value": "ft",
+          "label": "Feet-Inches"
+        },
+        {
+          "value": "in",
+          "label": "Inches"
+        }
+      ]
+    },
+    {
+      "key": "nudgeDelta",
+      "label": "Nudge Delta",
+      "kind": "number",
+      "default": 0.5,
+      "min": 0,
+      "step": 0.1,
+      "role": "nudge-delta"
+    },
+    {
+      "key": "subtractSegmentSpace",
+      "label": "Subtract Segment for Space",
+      "kind": "checkbox",
+      "default": true,
+      "role": "subtract-segment-space"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "doorbell.v1",
+    "name": "Door Bell",
+    "category": "MEP/Security",
+    "units": "m",
+    "icon": { "paths": ["M7 4h10v16H7z", "M12 8m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0", "M10 14h4"] }
+  },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 0.06, "min": 0.03, "max": 0.16, "step": 0.005, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 0.13, "min": 0.06, "max": 0.3, "step": 0.005, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.025, "min": 0.01, "max": 0.08, "step": 0.005, "unit": "m" },
+    { "key": "buttonDia", "label": "Button diameter", "kind": "number", "default": 0.022, "min": 0.01, "max": 0.05, "step": 0.002, "unit": "m" },
+    { "key": "camera", "label": "Video doorbell", "kind": "checkbox", "default": true },
+    { "key": "color", "label": "Body color", "kind": "color", "default": "#334155" },
+    { "key": "buttonColor", "label": "Button color", "kind": "color", "default": "#60a5fa" },
+    { "key": "lensColor", "label": "Lens color", "kind": "color", "default": "#0f172a" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -0.3, "max": 0.3, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Mount height", "kind": "number", "default": 1.2, "min": 0, "max": 2, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": { "w2": "width / 2", "d2": "depth / 2", "H": "height" },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Body faceplate", "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": 0, "h1": "H", "color": "color" } },
+          { "comment": "Camera lens (video doorbell)", "when": "camera", "circle": { "cx": 0, "cy": "d2", "r": "width * 0.28", "sides": 14, "h0": "H * 0.72", "h1": "H * 0.72 + 0.006", "color": "lensColor" } },
+          { "comment": "Call button", "circle": { "cx": 0, "cy": "d2", "r": "buttonDia / 2", "sides": 14, "h0": "H * 0.22", "h1": "H * 0.22 + 0.008", "color": "buttonColor" } },
+          { "comment": "Speaker grille", "box": { "x0": "-w2 * 0.6", "x1": "w2 * 0.6", "y0": "d2 - 0.002", "y1": "d2 + 0.004", "h0": "H * 0.42", "h1": "H * 0.56", "color": "lensColor" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [ { "key": "mount", "label": "Mount height", "expr": "clearance", "unit": "m" } ]
+}

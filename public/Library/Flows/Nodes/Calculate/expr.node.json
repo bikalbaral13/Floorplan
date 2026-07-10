@@ -1,0 +1,26 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "expr",
+  "meta": {
+    "label": "Expression",
+    "category": "Calculate",
+    "color": "#ca8a04"
+  },
+  "description": "A named variable = an expression over params / other vars (from a parametric object's geometry.vars).",
+  "instructions": "A named variable = an expression over params / other vars. This node is emitted when 'Load Parametric Object' decompiles a `.pobj`'s `geometry.vars` into a graph — it is DISPLAY / annotation only (the flow evaluator does not recompute it). `name` is the variable, `expr` the formula (e.g. `swing * PI / 180`).\n\nNOTE: to actually compute a value in a live flow, use the Math node instead.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "deps", "label": "inputs" }
+    ],
+    "valueOutputs": [
+      { "key": "result", "label": "Result" }
+    ]
+  },
+  "parameters": [
+    { "key": "name", "label": "Name", "kind": "text", "default": "" },
+    { "key": "expr", "label": "Formula", "kind": "textarea", "default": "", "placeholder": "e.g. swing * PI / 180" }
+  ]
+}

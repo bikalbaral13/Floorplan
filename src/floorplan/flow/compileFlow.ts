@@ -82,7 +82,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   // A floating/unconnected tool node produces no op — so it never previews or runs until it's
   // wired to the Selected Space (or to another tool that is).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "grid-source").map((n) => n.id);
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "pobj-source" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "grid-source").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
@@ -98,6 +98,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     const data = dataOf(node);
     if (data.tool === "source") continue;
     if (data.tool === "space-creator") continue; // generator → emitted as a top-level `create`, not an op
+    if (data.tool === "pobj-source") continue; // parametric-site generator → emitted as a top-level `create`
     if (data.tool === "rectangle" || data.tool === "circle") continue; // 2D primitive generator → preview-only (no recipe runner)
     if (data.tool === "graph-source") continue; // graph generator → preview-only (no recipe runner)
     if (data.tool === "grid-source") continue; // canvas grid reference → preview-only (no recipe runner)
@@ -345,7 +346,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
         const t = dataOf(u).tool;
         if (t === "source") { const sid = String(dataOf(u).params.id ?? "").trim(); return sid || null; }
         // A Space Creator commits as a `create`d room with a stable id — target it by that id.
-        if (t === "space-creator") return `flowcreate_${srcId}`;
+        if (t === "space-creator" || t === "pobj-source") return `flowcreate_${srcId}`;
         if (t === "bua" || t === "math" || t === "densify" || t === "mitered-join" || t === "graph-smooth" || t === "hatching") {
           const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
           return up ? resolveSourceSpace(up.source) : null;
@@ -378,7 +379,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   // Space Creator nodes → top-level `create` entries (polygon in METRES, baked into `_pointsM` by the
   // host preview). Each gets a stable room id `flowcreate_<nodeId>` so downstream ops target it via onSpace.
   const createEntries = nodes
-    .filter((n) => dataOf(n).tool === "space-creator" && reachable.has(n.id))
+    .filter((n) => (dataOf(n).tool === "space-creator" || dataOf(n).tool === "pobj-source") && reachable.has(n.id))
     .map((n) => {
       const ptsM = dataOf(n).params._pointsM;
       if (!Array.isArray(ptsM) || ptsM.length < 3) return null;
@@ -391,7 +392,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   // render live and can be committed as canvas geometry, so a flow built on any root (Space / Space
   // Creator / Graph / Segment / Node / Image / Canvas) with at least one tool connected isn't an error —
   // it just has 0 RECIPE operations. Any reachable non-root tool node counts.
-  const ROOT_TOOLS = new Set(["source", "space-creator", "graph-source", "segment-source", "node-source", "canvas-source", "image", "grid-source"]);
+  const ROOT_TOOLS = new Set(["source", "space-creator", "pobj-source", "graph-source", "segment-source", "node-source", "canvas-source", "image", "grid-source"]);
   const hasPreviewOnly = nodes.some((n) => reachable.has(n.id) && !ROOT_TOOLS.has(dataOf(n).tool));
   if (operations.length === 0 && createEntries.length === 0 && !hasPreviewOnly) {
     return { ...empty, error: "Nothing to run — connect a tool node to a Space / Segment / Graph / Node / Image / Canvas source." };
@@ -406,6 +407,6 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   if (createEntries.length) recipe.create = createEntries;
   // Op nodes + Space Creator nodes are committed by the recipe engine; everything else terminal is
   // committed by the host from the live preview (so Split Segment etc. produce real geometry).
-  const createdNodeIds = nodes.filter((n) => dataOf(n).tool === "space-creator" && reachable.has(n.id)).map((n) => n.id);
+  const createdNodeIds = nodes.filter((n) => (dataOf(n).tool === "space-creator" || dataOf(n).tool === "pobj-source") && reachable.has(n.id)).map((n) => n.id);
   return { json: JSON.stringify(recipe, null, 2), opCount: operations.length, order: opOrder, committedNodeIds: [...opOrder, ...createdNodeIds] };
 }

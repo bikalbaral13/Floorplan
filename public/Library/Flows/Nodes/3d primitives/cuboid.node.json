@@ -1,0 +1,21 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "cuboid",
+  "meta": { "label": "Cuboid", "category": "3d primitives", "color": "#0e7490" },
+  "description": "3D primitive — a Length × Breadth × Height cuboid at Position (X/Y/Z, base on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
+  "instructions": "A 3D primitive source — a Length × Breadth × Height box with its base on the floor plane (Y=0 is the floor, Y is up), positioned / rotated / scaled by the Position, Rotate and Scale params. It has no input; it renders in the 3D view. Wire its output into Display 3D to set colour / opacity / wireframe, into Transform 3D to compose or mirror, or into Boolean for CSG.\n\nNOTE: the primitive carries no colour of its own — style it with a downstream Display 3D node.",
+  "handles": { "input": false, "output": true },
+  "parameters": [
+    { "key": "length", "label": "Length", "kind": "range", "default": 3, "min": 0.1, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "breadth", "label": "Breadth", "kind": "range", "default": 2, "min": 0.1, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "range", "default": 3, "min": 0.1, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "posX", "label": "Position X", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "posY", "label": "Position Y (up)", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "posZ", "label": "Position Z", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "rotX", "label": "Rotate X", "kind": "range", "default": 0, "min": -180, "max": 180, "step": 1, "unit": "°" },
+    { "key": "rotY", "label": "Rotate Y", "kind": "range", "default": 0, "min": -180, "max": 180, "step": 1, "unit": "°" },
+    { "key": "rotZ", "label": "Rotate Z", "kind": "range", "default": 0, "min": -180, "max": 180, "step": 1, "unit": "°" },
+    { "key": "scale", "label": "Scale", "kind": "range", "default": 1, "min": 0.1, "max": 5, "step": 0.05 }
+  ]
+}

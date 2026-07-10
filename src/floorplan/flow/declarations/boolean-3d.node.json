@@ -1,0 +1,29 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "boolean-3d",
+  "meta": { "label": "Boolean", "category": "3d primitives", "color": "#7e22ce" },
+  "description": "Boolean (CSG) of two 3D primitives — Union · Subtract · Difference · Intersection. Wire primitive A into the main input and primitive B into the B input; move B (via Transform 3D) so they overlap.",
+  "instructions": "3D CSG of two primitives: the main input is A, the `gin-b` input is the second primitive B. Union (A ∪ B) · Subtract / Difference (A − B) · Intersection (A ∩ B). Wire primitive A into the main input and B into the B input; position B (via a Transform 3D) so the two overlap meaningfully, else the result is empty or unchanged.\n\nTIP: Subtract to carve openings/voids; Intersection to keep only the common volume. Wire the output into Display 3D to style it.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "geomInputs": [
+      { "key": "b", "label": "B" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "op",
+      "label": "Operation",
+      "kind": "select",
+      "default": "union",
+      "options": [
+        { "value": "union", "label": "Union (A ∪ B)" },
+        { "value": "subtract", "label": "Subtract (A − B)" },
+        { "value": "difference", "label": "Difference (A − B)" },
+        { "value": "intersect", "label": "Intersection (A ∩ B)" }
+      ]
+    }
+  ]
+}

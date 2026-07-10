@@ -1,0 +1,159 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "dispenser.v1",
+    "name": "Water Dispenser",
+    "category": "Fixtures/Kitchen",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M8 9h8v12H8z",
+        "M9.5 4h5v5h-5z",
+        "M10.5 15v2",
+        "M13.5 15v2"
+      ]
+    }
+  },
+  "parameters": [
+    {
+      "key": "width",
+      "label": "Width",
+      "kind": "number",
+      "default": 0.34,
+      "min": 0.25,
+      "max": 0.5,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "depth",
+      "label": "Depth",
+      "kind": "number",
+      "default": 0.34,
+      "min": 0.25,
+      "max": 0.5,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "height",
+      "label": "Cabinet height",
+      "kind": "number",
+      "default": 1,
+      "min": 0.8,
+      "max": 1.3,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "bottle",
+      "label": "Bottle on top",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "wallOffset",
+      "label": "Offset from Wall",
+      "kind": "number",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "deg"
+    },
+    {
+      "key": "color",
+      "label": "Color",
+      "kind": "color",
+      "default": "#e2e8f0"
+    }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Floor-standing water dispenser: cabinet + hot/cold taps + drip tray (front -Y) + optional 20L bottle on top.",
+    "emit": "shapes",
+    "vars": {
+      "w2": "width / 2",
+      "d2": "depth / 2"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "cabinet",
+            "box": {
+              "x0": "-w2",
+              "x1": "w2",
+              "y0": "-d2",
+              "y1": "d2",
+              "h0": 0,
+              "h1": "height"
+            }
+          },
+          {
+            "comment": "hot/cold taps",
+            "repeat": "2",
+            "as": "k",
+            "vars": {
+              "tx": "(k * 2 - 1) * 0.06"
+            },
+            "box": {
+              "x0": "tx - 0.012",
+              "x1": "tx + 0.012",
+              "y0": "-d2 - 0.045",
+              "y1": "-d2",
+              "h0": "height - 0.13",
+              "h1": "height - 0.09"
+            }
+          },
+          {
+            "comment": "drip tray",
+            "box": {
+              "x0": -0.08,
+              "x1": 0.08,
+              "y0": "-d2 - 0.055",
+              "y1": "-d2",
+              "h0": "height - 0.28",
+              "h1": "height - 0.26"
+            }
+          },
+          {
+            "comment": "water bottle",
+            "when": "bottle",
+            "circle": {
+              "cx": 0,
+              "cy": 0,
+              "r": "min(w2, d2) * 0.78",
+              "sides": 18,
+              "h0": "height",
+              "h1": "height + 0.34"
+            }
+          },
+          {
+            "comment": "bottle neck",
+            "when": "bottle",
+            "circle": {
+              "cx": 0,
+              "cy": 0,
+              "r": 0.045,
+              "sides": 12,
+              "h0": "height + 0.34",
+              "h1": "height + 0.38"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

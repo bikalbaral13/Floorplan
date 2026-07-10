@@ -1,0 +1,53 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "dimension",
+  "meta": { "label": "Linear Dimension", "category": "Space", "color": "#1d4ed8" },
+  "description": "Dimension a Space's edges — Outer/inner placement at an Offset. All edges, or Edgewise to tick which edges. Forwards the Space on.",
+  "instructions": "Dimensions the EDGES of each incoming Space — every edge gets its own length dimension, placed Outer (outside the space) or inner, standing off by `offset` (m). The Space is forwarded unchanged downstream.\n\nMODE (`mode`)\n• all — dimension every edge.\n• edgewise — dimension only the ticked edges (a checkbox grid renders on the node).\n\n`style` sets the end markers (ticks / arrowheads / dots); `units` = metric metres or architectural feet-inches; `extension` is the witness-line overrun; `precision` the metric decimals.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "offset", "label": "Offset" }
+    ]
+  },
+  "defaults": { "edges": "" },
+  "parameters": [
+    { "key": "outer", "label": "Outer", "kind": "checkbox", "default": true },
+    { "key": "offset", "label": "Offset", "kind": "range", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "m" },
+    {
+      "key": "style",
+      "label": "Style",
+      "kind": "select",
+      "default": "ticks",
+      "options": [
+        { "value": "ticks", "label": "Ticks (45°)" },
+        { "value": "arrowhead", "label": "Arrowheads" },
+        { "value": "dot", "label": "Dots" }
+      ]
+    },
+    {
+      "key": "mode",
+      "label": "Mode",
+      "kind": "select",
+      "default": "all",
+      "options": [
+        { "value": "all", "label": "All edges" },
+        { "value": "edgewise", "label": "Edgewise (pick edges)" }
+      ]
+    },
+    {
+      "key": "units",
+      "label": "Units",
+      "kind": "select",
+      "default": "metric",
+      "options": [
+        { "value": "metric", "label": "Metric (m)" },
+        { "value": "imperial", "label": "Feet-inches" }
+      ]
+    },
+    { "key": "extension", "label": "Witness overrun", "kind": "range", "default": 0.3, "min": 0, "max": 2, "step": 0.05, "unit": "m" },
+    { "key": "precision", "label": "Decimals", "kind": "range", "default": 2, "min": 0, "max": 4, "step": 1, "showWhen": "units != 'imperial'" }
+  ]
+}

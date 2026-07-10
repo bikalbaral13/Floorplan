@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "param-render",
+  "label": "Parametric Renderer",
+  "category": "Parametric",
+  "description": "Evaluate a parametric definition (from a Parametric Object node) and draw its lines at each input node — the file-driven analogue of Node to Staircase.",
+  "params": {
+    "definition": ""
+  }
+}

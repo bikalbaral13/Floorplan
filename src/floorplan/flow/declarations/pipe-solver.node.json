@@ -1,0 +1,35 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "pipe-solver",
+  "meta": { "label": "Pipe Network Solver", "category": "Graph", "color": "#0e7490" },
+  "description": "Solve a pipe network (Todini global gradient). Wire a Graph node into the main input (unconnected = whole canvas graph) and a Schema node into the Schema input to define node/segment properties; edit them per component in the Properties tab; per-component results appear in the Metrics tab.",
+  "instructions": "Solves a pipe network with the Todini global-gradient method. Wire a Graph node into the MAIN input (unconnected → the whole canvas segment graph). Wire a Schema node into the `gin-schema` input: its Node/Segment sections define the per-component input properties (demand, elevation, diameter…) by role, shown in each component's Properties tab; results (discharge, head, velocity, pressure…) land in each component's Metrics tab.\n\n`formula` = Hazen-Williams or Darcy-Weisbach; `maxIter` / `tolerance` bound the solve. Publishes `val-totalDemand` / `val-maxVelocity` / `val-minPressure` / `val-iterations`.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "geomInputs": [
+      { "key": "schema", "label": "Schema" }
+    ],
+    "valueOutputs": [
+      { "key": "totalDemand", "label": "Total demand (L/s)" },
+      { "key": "maxVelocity", "label": "Max velocity (m/s)" },
+      { "key": "minPressure", "label": "Min pressure (m)" },
+      { "key": "iterations", "label": "Iterations" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "formula",
+      "label": "Formula",
+      "kind": "select",
+      "default": "hazen-williams",
+      "options": [
+        { "value": "hazen-williams", "label": "Hazen-Williams" },
+        { "value": "darcy-weisbach", "label": "Darcy-Weisbach" }
+      ]
+    },
+    { "key": "maxIter", "label": "Max iterations", "kind": "range", "default": 60, "min": 5, "max": 200, "step": 1 },
+    { "key": "tolerance", "label": "Tolerance", "kind": "range", "default": 0.001, "min": 0.0001, "max": 0.05, "step": 0.0001 }
+  ]
+}

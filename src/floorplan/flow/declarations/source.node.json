@@ -1,0 +1,13 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "source",
+  "meta": { "label": "Space", "category": "Space", "color": "#0f172a" },
+  "description": "Pipeline input — a Space on the canvas (by id, or the current selection).",
+  "instructions": "The primary pipeline ROOT — feeds a Space from the canvas into the flow. `id` identifies the source Space; with 'Grab ID from selection' on, the id stays synced to the space currently selected on the canvas (and feeds that space's geometry). Geometry always comes from the canvas, never from the wire.\n\nThe input endpoint accepts a Schema node to attach Space schema properties to the referenced space(s) — the node itself stays a root (incoming geometry is ignored).\n\nTIP: turn grab OFF and type an id to pin a specific Space regardless of selection.",
+  "handles": { "input": true, "output": true },
+  "parameters": [
+    { "key": "grabFromSelection", "label": "Grab ID from selection", "kind": "checkbox", "default": true },
+    { "key": "id", "label": "ID", "kind": "text", "default": "", "placeholder": "space id", "showWhen": "!grabFromSelection" }
+  ]
+}

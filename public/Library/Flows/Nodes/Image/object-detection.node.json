@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "object-detection",
+  "label": "Object Detection",
+  "category": "Image",
+  "description": "Detect objects in the image → one Space (bounding box) per object. Needs a Gemini key; click Detect.",
+  "params": {
+    "api_key": "",
+    "model": "gemini-robotics-er-1.6-preview",
+    "targets": "",
+    "maxItems": 20,
+    "outputMode": "perCell"
+  }
+}

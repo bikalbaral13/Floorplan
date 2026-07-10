@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "create-arc",
+  "label": "Create Arc",
+  "category": "Parametric",
+  "description": "An arc / swept polyline (repeated chords, e.g. a door swing) — a repeated `line` rule.",
+  "params": {
+    "label": "",
+    "spec": "",
+    "note": ""
+  }
+}

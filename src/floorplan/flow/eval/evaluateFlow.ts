@@ -10,7 +10,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type { Point } from "../../types";
 import { FLOW_TOOLS, outputSlots, inputProps, placeObjectRng, randomOptimiseRectParams, schemaNodeToSchemas, schemaNodeToResultDefs, schemaEntries, type FlowNodeData, type FlowToolType } from "../flowTypes";
 import { computePull, type PullParams } from "../../algorithms/geometry/pull";
-import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalSkeletonRegions, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, voronoiSeeds, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow } from "./evalNodes";
+import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalSkeletonRegions, evalCorridoor, evalCoreRacking, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, voronoiSeeds, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow } from "./evalNodes";
 import { toFootingSpec, footingElevationPolys, footingPlanPolys, footingMeshPrisms } from "./footing";
 import { toStaircaseSpec, staircaseElevationPolys, staircaseMeshPrisms, type ElevationView } from "./staircase";
 import { evalParametricGeometry, evalParametricPrisms } from "./parametricObject";
@@ -350,7 +350,7 @@ export interface FlowPreviewItem {
   /** Place Object only: the kind + height/clearance of each placed footprint, index-aligned with
    *  `polygons`, so the host can draw the 2D furniture symbol AND extrude the 3D primitive live
    *  (matching the committed placement) instead of a bare box. */
-  placeObjects?: { kind: string; heightM: number; clearanceM: number; srcIndex: number }[];
+  placeObjects?: { objectId?: string; kind: string; heightM: number; clearanceM: number; srcIndex: number }[];
   /** Place Object only: the input Space boundary polygon (world-pixel coords) these objects were placed
    *  along — used by the host to constrain dragging each object to the perimeter and update its position%. */
   sourcePolygon?: Point[];
@@ -430,6 +430,8 @@ function evalNode(tool: FlowToolType, input: Point[], params: Record<string, unk
     case "bsp": return evalBsp(input, params, ppm);
     case "voronoi": return evalVoronoi(input, params, ppm);
     case "skeleton": return evalSkeleton(input, params, ppm);
+    case "corridoor": return evalCorridoor(input, params, ppm);
+    case "core-racking": return evalCoreRacking(input, params, ppm);
     case "conditional": return evalConditional(input, params, ppm);
     case "bounding-shape": return evalBoundingShape(input, params, ppm);
     case "convex-hull": return evalConvexHull(input, params, ppm);
@@ -875,6 +877,47 @@ export function evaluateFlow(
         const isFinal = succs.get(id)!.length === 0;
         items.push({ nodeId: id, tool: "space-creator", polygons: [poly], color: FLOW_TOOLS["space-creator"].color, isFinal });
       }
+      continue;
+    }
+    // Parametric Site (generator, no geometry input) — evaluate a parametric object's footprint into a
+    // polygon and publish it as this node's output, exactly like a Space source. Each of the object's
+    // parameters is exposed as a val-<key> value output (e.g. offset → val-offset) for downstream wiring.
+    if (data.tool === "pobj-source") {
+      const vin = resolveValueInputs(id);
+      const defText = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
+      const props = inputProps(data.params);
+      const overrides: Record<string, unknown> = {};
+      for (const p of props) overrides[p.id] = p.type === "checkbox" ? p.value === true : p.value;
+      let poly: Point[] = [];
+      try {
+        const geom = evalParametricGeometry(defText, createAnchor, ppm, overrides);
+        // Pick the largest closed fill ring as the site footprint.
+        let bestA = -Infinity;
+        for (const ring of geom.fill) {
+          if (ring.length < 3) continue;
+          const a = Math.abs(polygonArea(ring));
+          if (a > bestA) { bestA = a; poly = ring; }
+        }
+        // evalParametricGeometry returns closed rings (last point == first); drop the duplicate so the
+        // polygon matches the open-ring convention downstream nodes (inset / optimise) expect.
+        if (poly.length >= 2) {
+          const a = poly[0], b = poly[poly.length - 1];
+          if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6) poly = poly.slice(0, -1);
+        }
+      } catch { poly = []; }
+      // Publish each parameter as a value output (numbers as numbers, everything else as a string).
+      const vals: Record<string, number | string> = {};
+      for (const p of props) {
+        const nx = Number(p.value);
+        if ((p.type === "range") && isFinite(nx)) vals[p.id] = nx;
+        else if (typeof p.value === "number" && isFinite(p.value)) vals[p.id] = p.value;
+        else if (typeof p.value === "boolean") vals[p.id] = p.value ? 1 : 0;
+        else vals[p.id] = String(p.value ?? "");
+      }
+      nodeValues.set(id, vals);
+      outputs.set(id, poly.length >= 3 ? [poly] : []);
+      const isFinal = succs.get(id)!.length === 0;
+      items.push({ nodeId: id, tool: "pobj-source", polygons: poly.length >= 3 ? [poly] : [], color: FLOW_TOOLS["pobj-source"].color, isFinal, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
     // Rectangle / Circle (2D primitive generators, no input) — synthesise a polygon centred at (centerX,
@@ -2542,7 +2585,7 @@ export function evaluateFlow(
           polygons,
           color: FLOW_TOOLS["place-object"].color,
           isFinal,
-          placeObjects: placed.map((p) => ({ kind: p.kind, heightM: p.heightM, clearanceM: p.clearanceM, srcIndex: p.srcIndex })),
+          placeObjects: placed.map((p) => ({ objectId: p.objectId, kind: p.kind, heightM: p.heightM, clearanceM: p.clearanceM, srcIndex: p.srcIndex })),
           // Boundary the objects ride — lets the host drag each object along the perimeter (updates position%).
           sourcePolygon: input,
         });

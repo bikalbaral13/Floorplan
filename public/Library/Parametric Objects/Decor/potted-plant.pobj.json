@@ -1,0 +1,99 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "potted-plant.v1",
+    "name": "Indoor Plant",
+    "category": "Decor/Greenery",
+    "units": "m",
+    "icon": { "paths": ["M9 21h6l-1 -6h-4z", "M12 15c0 -5 -3 -7 -6 -7c0 3 2 6 6 7", "M12 15c0 -6 3 -9 6 -9c0 4 -2 8 -6 9"] }
+  },
+  "parameters": [
+    { "key": "potStyle", "label": "Pot shape", "kind": "select", "default": "round", "options": [ { "value": "round", "label": "Round" }, { "value": "square", "label": "Square" } ] },
+    { "key": "potBottom", "label": "Pot base width", "kind": "number", "default": 0.3, "min": 0.12, "max": 1, "step": 0.01, "unit": "m" },
+    { "key": "potTop", "label": "Pot top width", "kind": "number", "default": 0.36, "min": 0.12, "max": 1.2, "step": 0.01, "unit": "m" },
+    { "key": "potHeight", "label": "Pot height", "kind": "number", "default": 0.36, "min": 0.1, "max": 1, "step": 0.01, "unit": "m" },
+    { "key": "potRings", "label": "Pot facets (taper)", "kind": "number", "default": 5, "min": 1, "max": 10, "step": 1 },
+    { "key": "rimHeight", "label": "Rim height", "kind": "number", "default": 0.035, "min": 0, "max": 0.12, "step": 0.005, "unit": "m" },
+    { "key": "plantStyle", "label": "Plant style", "kind": "select", "default": "bushy", "options": [ { "value": "bushy", "label": "Bushy shrub" }, { "value": "tree", "label": "Small tree" }, { "value": "palm", "label": "Palm" } ] },
+    { "key": "trunkDia", "label": "Trunk diameter", "kind": "number", "default": 0.06, "min": 0.02, "max": 0.3, "step": 0.01, "unit": "m" },
+    { "key": "trunkHeight", "label": "Trunk height", "kind": "number", "default": 0.45, "min": 0, "max": 2.5, "step": 0.05, "unit": "m" },
+    { "key": "foliageWidth", "label": "Foliage width", "kind": "number", "default": 0.75, "min": 0.2, "max": 2, "step": 0.05, "unit": "m" },
+    { "key": "foliageHeight", "label": "Foliage height", "kind": "number", "default": 0.7, "min": 0.15, "max": 2.5, "step": 0.05, "unit": "m" },
+    { "key": "foliageLayers", "label": "Foliage layers", "kind": "number", "default": 4, "min": 1, "max": 8, "step": 1 },
+    { "key": "potColor", "label": "Pot color", "kind": "color", "default": "#b45309" },
+    { "key": "trunkColor", "label": "Trunk color", "kind": "color", "default": "#78350f" },
+    { "key": "color", "label": "Foliage color", "kind": "color", "default": "#16a34a" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -1, "max": 1, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 3, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "pbr": "potBottom / 2",
+      "ptr": "potTop / 2",
+      "potBody": "max(0.01, potHeight - rimHeight)",
+      "trunkTop": "potHeight + (plantStyle == 'bushy' ? 0.05 : trunkHeight)",
+      "fr": "foliageWidth / 2",
+      "rings": "max(1, round(potRings))",
+      "layers": "max(1, round(foliageLayers))"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Tapered pot body (round) — stacked facet rings from base to top width",
+            "when": "potStyle == 'round'",
+            "repeat": "rings",
+            "as": "k",
+            "vars": { "rr": "pbr + (ptr - pbr) * (rings <= 1 ? 1 : k / (rings - 1))" },
+            "circle": { "cx": 0, "cy": 0, "r": "rr", "sides": 28, "h0": "k / rings * potBody", "h1": "(k + 1) / rings * potBody", "color": "potColor" }
+          },
+          {
+            "comment": "Tapered pot body (square)",
+            "when": "potStyle == 'square'",
+            "repeat": "rings",
+            "as": "k",
+            "vars": { "rr": "pbr + (ptr - pbr) * (rings <= 1 ? 1 : k / (rings - 1))" },
+            "box": { "x0": "-rr", "x1": "rr", "y0": "-rr", "y1": "rr", "h0": "k / rings * potBody", "h1": "(k + 1) / rings * potBody", "color": "potColor" }
+          },
+          {
+            "comment": "Rim lip",
+            "when": "potStyle == 'round'",
+            "circle": { "cx": 0, "cy": 0, "r": "ptr * 1.05", "sides": 28, "h0": "potBody", "h1": "potHeight", "color": "potColor" }
+          },
+          {
+            "comment": "Rim lip (square)",
+            "when": "potStyle == 'square'",
+            "box": { "x0": "-ptr * 1.05", "x1": "ptr * 1.05", "y0": "-ptr * 1.05", "y1": "ptr * 1.05", "h0": "potBody", "h1": "potHeight", "color": "potColor" }
+          },
+          {
+            "comment": "Soil surface",
+            "circle": { "cx": 0, "cy": 0, "r": "ptr * 0.9", "sides": 24, "h0": "max(0, potHeight - 0.02)", "h1": "potHeight", "color": "'#3f2d1a'" }
+          },
+          {
+            "comment": "Trunk (tree / palm)",
+            "when": "plantStyle != 'bushy'",
+            "circle": { "cx": 0, "cy": 0, "r": "trunkDia / 2", "sides": 12, "h0": "potHeight", "h1": "trunkTop", "color": "trunkColor" }
+          },
+          {
+            "comment": "Foliage crown — stacked rings on an ellipse profile (narrow-wide-narrow)",
+            "repeat": "layers",
+            "as": "k",
+            "vars": {
+              "t": "(k + 0.5) / layers",
+              "prof": "sqrt(max(0.02, 1 - pow(2 * t - 1, 2)))",
+              "spread": "plantStyle == 'palm' ? (0.4 + 0.9 * t) : prof"
+            },
+            "circle": { "cx": 0, "cy": 0, "r": "fr * spread", "sides": 20, "h0": "trunkTop + k / layers * foliageHeight", "h1": "trunkTop + (k + 1) / layers * foliageHeight" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "totalHeight", "label": "Total height", "expr": "trunkTop + foliageHeight", "unit": "m" },
+    { "key": "spread", "label": "Canopy spread", "expr": "foliageWidth", "unit": "m" }
+  ]
+}

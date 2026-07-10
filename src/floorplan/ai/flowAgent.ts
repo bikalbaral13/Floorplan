@@ -10,8 +10,29 @@ import { z } from "zod";
 import type { Node, Edge } from "@xyflow/react";
 import { FLOW_TOOLS } from "../flow/flowTypes";
 import { compileFlow } from "../flow/compileFlow";
-import type { SerializedFlow } from "../types";
+import { saveLibraryFile, listFlowNodeFiles, listLibraryFiles, deleteLibraryFile } from "../libraryFiles";
+import type { SerializedFlow, SerializedFlowNode } from "../types";
 import type { AgentEvent } from "./agentChat";
+
+/** FLOW_TOOLS indexed loosely by an arbitrary tool string (for label / hint / defaultParams lookup). */
+type LooseToolDef = { label?: string; hint?: unknown; defaultParams?: Record<string, unknown> };
+const looseTool = (t: string): LooseToolDef | undefined => (FLOW_TOOLS as Record<string, LooseToolDef>)[t];
+
+/** Parse an optional JSON-object string (the Gemini-friendly way params travel — see replace_flow). */
+const parseParamsJson = (s: string | undefined): Record<string, unknown> | undefined => {
+  if (!s || !s.trim()) return undefined;
+  const v = JSON.parse(s) as unknown;
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("paramsJson must be a JSON object");
+  return v as Record<string, unknown>;
+};
+
+/** Fetch + parse a node-template file (public/Library/Flows/Nodes/<rel>). */
+const fetchNodeFile = async (path: string): Promise<{ tool?: string; params?: Record<string, unknown>; label?: string; category?: string; description?: string }> => {
+  const rel = path.replace(/^\/+/, "").replace(/\\/g, "/");
+  const res = await fetch(encodeURI(`/Library/Flows/Nodes/${rel}`));
+  if (!res.ok) throw new Error(`node file not found: ${rel} (HTTP ${res.status})`);
+  return (await res.json()) as { tool?: string; params?: Record<string, unknown> };
+};
 
 /** The live tool catalog (every node type: handles + params + defaults) — injected into the flow agent's
  *  system prompt so it only ever references real tools/params. Mirrors FlowOverlay's buildToolCatalog. */
@@ -21,6 +42,9 @@ export function buildFlowToolCatalog(): string {
       if (def.type === "source") return `- "source": pipeline input (the selected space). Exactly one, id "source", params {}.`;
       // The per-object editor template hides the ACTUAL param shape (an objects array) — spell it out,
       // including the parametric objectId path (dims auto-measured from the library object).
+      if (def.type === "pobj-source") {
+        return `- "pobj-source" (Parametric Site); 1 geometry output (sourceHandle null) = the object's FOOTPRINT polygon (a Space ROOT — no input needed); value-IN: valin-def (optional; a wired Parametric Object definition overrides the stored one); DYNAMIC value-OUT: one val-<paramKey> per parameter in the loaded object (e.g. a param "offset" → "val-offset"); wire those into downstream valin-* handles to drive the chain (e.g. val-offset → Inset's valin-inset). params: { "definition": pobj JSON string, "props": [ { "id","name","type","value",… } ] } — the user loads these via "Load Parametric Site"; defaults: ${JSON.stringify(def.defaultParams)}`;
+      }
       if (def.type === "place-object") {
         return `- "place-object" (Place Object); 1 geometry output (sourceHandle null); params: { "objects": [ { "objectId"?: parametric library id (PREFERRED — e.g. "sofa.v2"; length/breadth/height are auto-measured from the object, and the commit places the real parametric object), "kind"?: 2D-symbol fallback for custom boxes, "length"?/"breadth"?/"height"?: m (override or custom box), "position": 0..100 along the boundary, "setback": m from the wall, "clearance": m above floor, "locked"?: boolean } ], "seed": number ≥1 } — one entry per object; seed randomises unlocked positions, the solver slides objects to avoid overlaps and corners; defaults: ${JSON.stringify(def.defaultParams)}`;
       }
@@ -42,13 +66,22 @@ export function buildFlowToolCatalog(): string {
         : def.type === "output"
         ? " DYNAMIC value-IN: one valin-<slotId> per entry in params.slots;"
         : "";
-      return `- "${def.type}" (${def.label}); ${outN};${valOut}${valIn}${geomIn}${outLabels}${dynamic} params: ${fieldDesc || "none"}; defaults: ${JSON.stringify(def.defaultParams)}`;
+      const header = `- "${def.type}" (${def.label}); ${outN};${valOut}${valIn}${geomIn}${outLabels}${dynamic} params: ${fieldDesc || "none"}; defaults: ${JSON.stringify(def.defaultParams)}`;
+      // Append the node's own usage guide (from its declaration's `instructions`) so the agent follows
+      // the same param semantics the info panel documents. Indent continuation lines under the header.
+      if (def.instructions) {
+        const guide = def.instructions.trim().split("\n").map((l) => `    ${l}`).join("\n");
+        return `${header}\n${guide}`;
+      }
+      return header;
     })
     .join("\n");
 }
 
 /** Base flow-building instructions (schema + wiring rules). The live tool catalog is appended at runtime. */
-export const FLOW_AGENT_SYSTEM_PROMPT = `You are the Flow Agent for a node-graph "Flow" (an Operations Pipeline) in a 2D architecture floor-plan tool. You BUILD and EDIT the graph with tools: read the current graph with get_flow, design the change, write the WHOLE graph back with replace_flow, then verify it with compile_flow — iterate until it compiles clean. The graph drives the canvas geometry (inset / split / massing / walls / doors / schemas …).
+export const FLOW_AGENT_SYSTEM_PROMPT = `You are the Flow Agent for a node-graph "Flow" (an Operations Pipeline) in a 2D architecture floor-plan tool. You do TWO kinds of work:
+A) BUILD & EDIT the live graph (a WORKFLOW = nodes + connections): read it with get_flow, design the change, write the WHOLE graph back with replace_flow, then verify with compile_flow — iterate until it compiles clean. The graph drives the canvas geometry (inset / split / massing / walls / doors / schemas …).
+B) MANAGE the file-based LIBRARY: reusable NODE templates live as files under public/Library/Flows/Nodes/<folder>/<name>.node.json (the old palette moved to files — the user adds nodes via "Import Nodes"), and WORKFLOWS live under public/Library/Flows (Workflows/). You can list / read / create / edit / delete node templates, drop a saved node onto the canvas (import_node), and save / list / load whole workflows. Match the request: "add/place a node in the flow" → import_node or replace_flow; "create/save a new node type", "edit/rename/tweak a node", "delete a node" → the *_node_file tools; "save/load this workflow" → the *_workflow tools. File tools write to the repo (dev only) — real, persistent changes, so only create/edit/DELETE files the user asked you to.
 
 WORKFLOW (every request):
 1) READ — call get_flow to see the current nodes/edges. Empty or Source-only means start fresh.
@@ -95,10 +128,20 @@ RASTER→SPACES RECIPE (requests like "trace this scanned plan / survey image in
 
 GROUPING (optional, VISUAL ONLY): a group container { "id":"g_<name>", "type":"group", "position":{abs}, "width", "height", "data":{"tool":"group","params":{"label":"Title"}} }; member nodes set "parentId" to it with RELATIVE positions (leave ~40px top for the label). List every group node BEFORE its children. Never group the "source" node.
 
+NODE LIBRARY & WORKFLOW FILES (the file tools):
+- A NODE TEMPLATE file (public/Library/Flows/Nodes/<folder>/<tool>.node.json) is { "version":1, "kind":"flow-node", "tool", "label", "category", "description", "params" }. It only REFERENCES a node type from the catalog + presets its params — the node's behaviour stays in the app code; the file just names a tool and starting params. The folder is its display category (e.g. "Space", "Reshape", "Partition", or a custom folder like "Custom").
+- CREATE / EDIT a node: save_node_file { path:"<Folder>/<name>.node.json", tool, paramsJson? }. To EDIT, read_node_file first, then save_node_file back with your changes (keep fields you aren't changing). paramsJson is a JSON object STRING (e.g. {"width":2.5,"shape":"cross"}); omit it to use the tool's defaults. The tool must be a real catalog id.
+- DELETE a node: delete_node_file { path }. IMPORT a saved node onto the canvas: import_node { path } (or { tool, paramsJson? }) — it appends ONE node to the live graph.
+- WORKFLOWS: save_workflow_file { name } writes the CURRENT graph to Flows/Workflows/<name>.json; list_workflow_files + import_workflow { path } discover and load saved workflows (import_workflow REPLACES the graph). A workflow is the whole nodes+connections graph — that's what you build with replace_flow.
+- These are DEV-ONLY writes (the library bridge). On a production build the save/delete tools return an error; relay that to the user rather than retrying.
+
+COMMIT BEHAVIOUR (what "Run Flow" does with the graph you build):
+- Running the flow commits STEPWISE: each op (inset, optimise-rect, split, bsp, skeleton, massing …) runs against the COMMITTED geometry of its upstream op — not a live preview — and parks its own fresh Spaces + wall segments on their OWN layer ("Step N · <Tool>"). So a chain like source → inset → optimise-rect commits the inset polygon first (its own layer), then fits the rectangle inside that committed inset (a second layer), keeping each step's walls from conflicting. Build linear source→op→op chains and the runner handles the per-step layering automatically — you do NOT emit layers yourself.
+
 TOOL NOTES:
 - replace_flow's argument (graphJson) is the COMPLETE graph as a JSON string. compile_flow re-reads and validates the live graph.
 - If a tool returns { "error" } or compile_flow lists errors, FIX the graph and replace_flow again — do not repeat the same broken graph.
-- LIBRARY FOLDER: a flow kept as a FILE (an export or a bundled sample) ALWAYS belongs in the repo at public/Library/Flows/<name>.json — the Flow panel's Export → "Save .json file" writes it there automatically in dev; tell the user that destination (designs → public/Library/Designs, parametric objects → public/Library/Parametric Objects).`;
+- LIBRARY FOLDER: node templates → public/Library/Flows/Nodes/<Folder>/*.node.json (save_node_file); whole workflows → public/Library/Flows/Workflows/*.json (save_workflow_file, or the Flow panel's Export → "Save .json file"); designs → public/Library/Designs; parametric objects → public/Library/Parametric Objects.`;
 
 /** Compact single-line summary of a tool result for the transcript (the model still gets the full value). */
 const short = (v: unknown): string => {
@@ -245,6 +288,131 @@ export async function runFlowAgent(p: RunFlowAgentParams): Promise<{ text: strin
       description: "Validate + compile the CURRENT live graph. Returns { ok, opCount, order, errors, warnings } — unknown tools, dangling edges, cycles and empty graphs are reported. Use it to confirm the flow is valid before finishing.",
       inputSchema: z.object({}),
       execute: wrap("compile_flow", () => validateFlowGraph(p.api.getFlow())),
+    }),
+
+    // ── NODE-LIBRARY tools — the reusable node templates under public/Library/Flows/Nodes (the palette
+    //    moved to files; the user adds nodes via "Import Nodes"). Dev only (the library bridge). ──
+    list_node_files: tool({
+      description: "List every reusable NODE TEMPLATE under public/Library/Flows/Nodes — folder-relative paths like \"Space/inset.node.json\" (folder = category). Each file is one saved node (a tool + preset params). Call before read/save/delete/import_node.",
+      inputSchema: z.object({}),
+      execute: wrap("list_node_files", async () => ({ files: await listFlowNodeFiles() })),
+    }),
+    read_node_file: tool({
+      description: "Read one node-template file's JSON ({ tool, label, category, description, params }). `path` is folder-relative under Flows/Nodes. Call before editing so you preserve the fields you aren't changing.",
+      inputSchema: z.object({ path: z.string().describe('e.g. "Space/inset.node.json"') }),
+      execute: wrap("read_node_file", (a: { path: string }) => fetchNodeFile(a.path)),
+    }),
+    save_node_file: tool({
+      description: "Create OR overwrite a reusable NODE TEMPLATE at public/Library/Flows/Nodes/<path> (both CREATE a new node and EDIT an existing one — read_node_file first to keep other fields). `tool` MUST be a real node type from the catalog; `paramsJson` presets it (omit → the tool's defaults). `.node.json` is appended if missing; the folder is the category. Dev only — returns { ok, path } or throws with the bridge error.",
+      inputSchema: z.object({
+        path: z.string().describe('folder-relative under Flows/Nodes, e.g. "Custom/wide-corridoor.node.json"'),
+        tool: z.string().describe('a node type id from the catalog (e.g. "rectangle", "inset", "corridoor")'),
+        label: z.string().optional(),
+        category: z.string().optional().describe("display category (defaults to the folder name)"),
+        description: z.string().optional(),
+        paramsJson: z.string().optional().describe('preset params as a JSON object string, e.g. {"width":2,"shape":"cross"} (omit → the tool\'s defaults)'),
+      }),
+      execute: wrap("save_node_file", async (a: { path: string; tool: string; label?: string; category?: string; description?: string; paramsJson?: string }) => {
+        const def = looseTool(a.tool);
+        if (!def) throw new Error(`unknown tool "${a.tool}" — see the catalog`);
+        const params = parseParamsJson(a.paramsJson) ?? def.defaultParams ?? {};
+        let rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/");
+        if (!/\.node\.json$/i.test(rel)) rel = `${rel.replace(/\.json$/i, "")}.node.json`;
+        const folder = rel.includes("/") ? rel.slice(0, rel.indexOf("/")) : "Custom";
+        const body = {
+          version: 1, kind: "flow-node", tool: a.tool,
+          label: a.label ?? def.label ?? a.tool,
+          category: a.category ?? folder,
+          description: a.description ?? (typeof def.hint === "string" ? def.hint : ""),
+          params,
+        };
+        const r = await saveLibraryFile(`Flows/Nodes/${rel}`, `${JSON.stringify(body, null, 2)}\n`);
+        if (!r.ok) throw new Error(r.error ?? "save failed (library bridge is dev-only)");
+        return { ok: true, path: r.path ?? `Flows/Nodes/${rel}` };
+      }),
+    }),
+    delete_node_file: tool({
+      description: "Delete a node-template file at public/Library/Flows/Nodes/<path> (folder-relative). Dev only. Returns { ok, deleted } or throws.",
+      inputSchema: z.object({ path: z.string().describe('e.g. "Custom/old.node.json"') }),
+      execute: wrap("delete_node_file", async (a: { path: string }) => {
+        const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/");
+        const r = await deleteLibraryFile(`Flows/Nodes/${rel}`);
+        if (!r.ok) throw new Error(r.error ?? "delete failed");
+        return r;
+      }),
+    }),
+    import_node: tool({
+      description: "Add ONE node to the CURRENT Flow canvas — from a saved template (`path` under Flows/Nodes) OR directly by `tool` (+ optional `paramsJson`). Appends to the live graph (keeps everything else). Use replace_flow to build a whole pipeline; use this to drop a single library node.",
+      inputSchema: z.object({
+        path: z.string().optional().describe('a node template, e.g. "Space/inset.node.json"'),
+        tool: z.string().optional().describe("a node type id (when no path)"),
+        paramsJson: z.string().optional().describe("param overrides as a JSON object string"),
+        x: z.number().optional(),
+        y: z.number().optional(),
+      }),
+      execute: wrap("import_node", async (a: { path?: string; tool?: string; paramsJson?: string; x?: number; y?: number }) => {
+        let toolId = a.tool;
+        let fileParams: Record<string, unknown> | undefined;
+        if (a.path) {
+          const f = await fetchNodeFile(a.path);
+          toolId = f.tool;
+          fileParams = f.params;
+        }
+        const def = toolId ? looseTool(toolId) : undefined;
+        if (!toolId || !def) throw new Error(`unknown tool "${toolId ?? ""}" — pass a valid path or tool`);
+        const overrides = parseParamsJson(a.paramsJson);
+        const params = { ...(def.defaultParams ?? {}), ...(fileParams ?? {}), ...(overrides ?? {}) };
+        const g = p.api.getFlow();
+        const nodes = (Array.isArray(g.nodes) ? g.nodes.slice() : []) as SerializedFlowNode[];
+        const count = nodes.filter((x) => x?.data?.tool === toolId).length + 1;
+        const id = `${toolId}_${count}`;
+        const position = { x: a.x ?? 120 + (nodes.length % 4) * 240, y: a.y ?? 120 + Math.floor(nodes.length / 4) * 160 };
+        nodes.push({ id, position, data: { tool: toolId, params } });
+        const applied = await p.api.applyFlow({ ...g, nodes });
+        return { ok: true, nodeId: id, tool: toolId, applied };
+      }),
+    }),
+
+    // ── WORKFLOW-FILE tools — full node+connection graphs under public/Library/Flows (Workflows/). ──
+    list_workflow_files: tool({
+      description: "List saved WORKFLOW files (full node+connection graphs) under public/Library/Flows (incl. the Workflows/ subfolder; the Nodes/ node-template subtree is excluded). Use before import_workflow.",
+      inputSchema: z.object({}),
+      execute: wrap("list_workflow_files", async () => {
+        const all = await listLibraryFiles("Flows");
+        return { files: (all ?? []).filter((f) => f.toLowerCase().endsWith(".json") && !/^nodes\//i.test(f)) };
+      }),
+    }),
+    save_workflow_file: tool({
+      description: "Save the CURRENT Flow graph (ALL nodes + connections) as a reusable WORKFLOW file at public/Library/Flows/Workflows/<name>.json. Build + compile_flow the graph first. Dev only. Returns { ok, path, nodes }.",
+      inputSchema: z.object({
+        name: z.string().describe('file name, e.g. "site-massing" (.json appended)'),
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }),
+      execute: wrap("save_workflow_file", async (a: { name: string; title?: string; description?: string }) => {
+        const g = p.api.getFlow();
+        if (!Array.isArray(g.nodes) || g.nodes.length === 0) throw new Error("the flow is empty — build it first (replace_flow)");
+        const name = a.name.replace(/^\/+/, "").replace(/\\/g, "/").replace(/\.json$/i, "");
+        const rel = `Flows/Workflows/${name}.json`;
+        const doc = { version: 1, title: a.title ?? name, ...(a.description ? { description: a.description } : {}), nodes: g.nodes, edges: g.edges ?? [] };
+        const r = await saveLibraryFile(rel, `${JSON.stringify(doc, null, 2)}\n`);
+        if (!r.ok) throw new Error(r.error ?? "save failed (library bridge is dev-only)");
+        return { ok: true, path: r.path ?? rel, nodes: g.nodes.length };
+      }),
+    }),
+    import_workflow: tool({
+      description: "Load a saved WORKFLOW file (from list_workflow_files) and REPLACE the current graph with it. `path` is Flows-relative, e.g. \"Workflows/site-massing.json\" or \"raster-to-spaces.json\".",
+      inputSchema: z.object({ path: z.string() }),
+      execute: wrap("import_workflow", async (a: { path: string }) => {
+        const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/");
+        const res = await fetch(encodeURI(`/Library/Flows/${rel}`));
+        if (!res.ok) throw new Error(`workflow not found: ${rel} (HTTP ${res.status})`);
+        const g = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; version?: number };
+        if (!Array.isArray(g.nodes)) throw new Error("not a workflow file (no nodes[])");
+        const applied = await p.api.applyFlow(g);
+        const check = validateFlowGraph(g as unknown as SerializedFlow);
+        return { applied, ok: check.ok, errors: check.errors };
+      }),
     }),
   };
 

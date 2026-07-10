@@ -1,0 +1,75 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "canal.v1",
+    "name": "Trapezoidal Canal",
+    "category": "Hydraulics/Conveyance",
+    "units": "m",
+    "icon": { "paths": ["M3 6l4 12h10l4 -12", "M6 15h12", "M8 11h8"] }
+  },
+  "parameters": [
+    { "key": "length", "label": "Segment length", "kind": "number", "default": 8, "min": 1, "max": 100, "step": 1, "unit": "m" },
+    { "key": "B", "label": "Bed width", "kind": "number", "default": 2.0, "min": 0.3, "max": 10, "step": 0.1, "unit": "m" },
+    { "key": "y", "label": "Water depth", "kind": "number", "default": 1.5, "min": 0.2, "max": 6, "step": 0.1, "unit": "m" },
+    { "key": "m", "label": "Side slope (1V:mH)", "kind": "number", "default": 1.5, "min": 0, "max": 4, "step": 0.25 },
+    { "key": "freeboard", "label": "Freeboard", "kind": "number", "default": 0.3, "min": 0, "max": 1.5, "step": 0.05, "unit": "m" },
+    { "key": "lining", "label": "Lining thickness", "kind": "number", "default": 0.2, "min": 0.05, "max": 0.6, "step": 0.05, "unit": "m" },
+    { "key": "layers", "label": "Section facets", "kind": "number", "default": 6, "min": 2, "max": 16, "step": 1 },
+    { "key": "Q", "label": "Design discharge Q", "kind": "number", "default": 5.0, "min": 0.1, "max": 100, "step": 0.5, "unit": "m³/s" },
+    { "key": "n", "label": "Manning n", "kind": "number", "default": 0.014, "min": 0.01, "max": 0.05, "step": 0.001 },
+    { "key": "S", "label": "Bed slope", "kind": "number", "default": 0.001, "min": 0.0001, "max": 0.02, "step": 0.0001 },
+    { "key": "color", "label": "Lining color", "kind": "color", "default": "#9ca3af" },
+    { "key": "waterColor", "label": "Water color", "kind": "color", "default": "#38bdf8" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -5, "max": 5, "step": 0.1, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 5, "step": 0.1, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Lined trapezoidal canal running along local X. Water surface width = B + 2·m·y. Manning velocity + capacity surfaced as outputs. Section approximated by stacked width-layers.",
+    "vars": {
+      "L2": "length / 2",
+      "B2": "B / 2",
+      "yTop": "y + freeboard",
+      "lt": "lining",
+      "nW": "max(2, round(layers))",
+      "nB": "max(2, round(layers))"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Bed lining slab", "box": { "x0": "-L2", "x1": "L2", "y0": "-B2 - lt", "y1": "B2 + lt", "h0": "-lt", "h1": 0, "color": "color" } },
+          {
+            "comment": "Water body — stacked layers widening with the side slope",
+            "repeat": "nW",
+            "as": "k",
+            "vars": { "z0": "k / nW * y", "z1": "(k + 1) / nW * y", "hw": "B2 + m * (k + 0.5) / nW * y" },
+            "box": { "x0": "-L2", "x1": "L2", "y0": "-hw", "y1": "hw", "h0": "z0", "h1": "z1", "color": "waterColor" }
+          },
+          {
+            "comment": "Left bank lining (follows the batter up to the freeboard)",
+            "repeat": "nB",
+            "as": "k",
+            "vars": { "z0": "k / nB * yTop", "z1": "(k + 1) / nB * yTop", "hw": "B2 + m * (k + 0.5) / nB * yTop" },
+            "box": { "x0": "-L2", "x1": "L2", "y0": "-hw - lt", "y1": "-hw", "h0": "z0", "h1": "z1", "color": "color" }
+          },
+          {
+            "comment": "Right bank lining",
+            "repeat": "nB",
+            "as": "k",
+            "vars": { "z0": "k / nB * yTop", "z1": "(k + 1) / nB * yTop", "hw": "B2 + m * (k + 0.5) / nB * yTop" },
+            "box": { "x0": "-L2", "x1": "L2", "y0": "hw", "y1": "hw + lt", "h0": "z0", "h1": "z1", "color": "color" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "topWidth", "label": "Top width T", "expr": "B + 2 * m * y", "unit": "m" },
+    { "key": "area", "label": "Flow area A", "expr": "(B + m * y) * y", "unit": "m²" },
+    { "key": "velocity", "label": "Velocity (Manning)", "expr": "(1 / n) * pow(((B + m * y) * y) / (B + 2 * y * sqrt(1 + m * m)), 2 / 3) * sqrt(S)", "unit": "m/s" },
+    { "key": "capacity", "label": "Capacity Q", "expr": "(1 / n) * pow(((B + m * y) * y) / (B + 2 * y * sqrt(1 + m * m)), 2 / 3) * sqrt(S) * ((B + m * y) * y)", "unit": "m³/s" },
+    { "key": "froude", "label": "Froude number", "expr": "((1 / n) * pow(((B + m * y) * y) / (B + 2 * y * sqrt(1 + m * m)), 2 / 3) * sqrt(S)) / sqrt(9.81 * (((B + m * y) * y) / (B + 2 * m * y)))" }
+  ]
+}

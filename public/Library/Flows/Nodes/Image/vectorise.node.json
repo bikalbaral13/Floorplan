@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "vectorise",
+  "label": "Vectorisation",
+  "category": "Image",
+  "description": "Trace the image's lines into a connected node/edge graph — colour filter, despeckle, gap-close, spur pruning, simplify, vertex snap, endpoint bridging (T-junctions), ortho straightening and collinear merging. Feeds the Graph nodes. AUTO-TUNE loops these parameters against the image, scores each combo on closed spaces found (minus noise faces and open ends) and bakes the best values back into the sliders — no manual hit-and-trial.",
+  "params": {
+    "colorMode": "black",
+    "tolerance": 50,
+    "despeckle": 12,
+    "dilate": 3,
+    "spurLength": 10,
+    "simplifyEpsilon": 2,
+    "minLength": 30,
+    "snapTolerance": 8,
+    "connectGap": 12,
+    "mergeAngle": 7,
+    "orthoSnap": 0,
+    "orthoTol": 10,
+    "tuneMinArea": 1,
+    "tuneColour": false
+  }
+}

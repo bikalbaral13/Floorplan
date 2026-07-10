@@ -1,0 +1,107 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "car.v1",
+    "name": "Car",
+    "category": "Parking/Vehicles",
+    "units": "m",
+    "icon": { "paths": ["M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", "M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", "M5 17H3v-6l2 -5h9l4 5h1a2 2 0 0 1 2 2v4h-2", "M9 17h6"] }
+  },
+  "parameters": [
+    { "key": "bodyStyle", "label": "Body style", "kind": "select", "default": "sedan", "options": [ { "value": "sedan", "label": "Sedan" }, { "value": "suv", "label": "SUV" }, { "value": "hatchback", "label": "Hatchback" } ] },
+    { "key": "length", "label": "Length", "kind": "number", "default": 4.4, "min": 2.5, "max": 6, "step": 0.05, "unit": "m" },
+    { "key": "width", "label": "Width", "kind": "number", "default": 1.8, "min": 1.2, "max": 2.4, "step": 0.05, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 1.48, "min": 1, "max": 2.2, "step": 0.05, "unit": "m" },
+    { "key": "groundClear", "label": "Ground clearance", "kind": "number", "default": 0.16, "min": 0.08, "max": 0.4, "step": 0.01, "unit": "m" },
+    { "key": "wheelbase", "label": "Wheelbase", "kind": "number", "default": 2.7, "min": 1.6, "max": 4, "step": 0.05, "unit": "m" },
+    { "key": "wheelDia", "label": "Wheel diameter", "kind": "number", "default": 0.64, "min": 0.4, "max": 1, "step": 0.02, "unit": "m" },
+    { "key": "wheelWidth", "label": "Tyre width", "kind": "number", "default": 0.22, "min": 0.1, "max": 0.4, "step": 0.02, "unit": "m" },
+    { "key": "wheelInset", "label": "Tyre inset", "kind": "number", "default": 0.05, "min": 0, "max": 0.3, "step": 0.01, "unit": "m" },
+    { "key": "noseChamfer", "label": "Nose taper", "kind": "number", "default": 0.5, "min": 0, "max": 1.2, "step": 0.05, "unit": "m" },
+    { "key": "tailChamfer", "label": "Tail taper", "kind": "number", "default": 0.35, "min": 0, "max": 1.2, "step": 0.05, "unit": "m" },
+    { "key": "mirrors", "label": "Wing mirrors", "kind": "checkbox", "default": true },
+    { "key": "bodyColor", "label": "Body color", "kind": "color", "default": "#1d4ed8" },
+    { "key": "roofColor", "label": "Roof color", "kind": "color", "default": "#1e3a8a" },
+    { "key": "glassColor", "label": "Glass color", "kind": "color", "default": "#93c5fd" },
+    { "key": "wheelColor", "label": "Tyre color", "kind": "color", "default": "#111827" },
+    { "key": "lightColor", "label": "Light color", "kind": "color", "default": "#fde68a" },
+    { "key": "color", "label": "Base color", "kind": "color", "default": "#1d4ed8" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -1, "max": 1, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 2, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "L": "length", "W": "width", "gc": "groundClear", "roofH": "height",
+      "nose": "min(noseChamfer, L * 0.35)",
+      "tail": "min(tailChamfer, L * 0.35)",
+      "belt": "gc + (roofH - gc) * (bodyStyle == 'suv' ? 0.6 : bodyStyle == 'hatchback' ? 0.52 : 0.54)",
+      "cShift": "bodyStyle == 'hatchback' ? -L * 0.06 : L * 0.02",
+      "cLen": "L * (bodyStyle == 'suv' ? 0.56 : bodyStyle == 'hatchback' ? 0.5 : 0.46)",
+      "cInset": "W * 0.12",
+      "cx0": "cShift - cLen / 2",
+      "cx1": "cShift + cLen / 2",
+      "cy": "W / 2 - cInset",
+      "trackY": "W / 2 - wheelInset - wheelWidth / 2",
+      "wr": "wheelDia / 2",
+      "glassTop": "belt + (roofH - belt) * 0.9",
+      "lightY": "W / 2 - 0.22"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Lower body — chamfered plan silhouette (front at +x)",
+            "poly": {
+              "pts": [
+                [ "L / 2 - nose", "-W / 2" ], [ "L / 2", "-W / 2 + nose" ], [ "L / 2", "W / 2 - nose" ], [ "L / 2 - nose", "W / 2" ],
+                [ "-L / 2 + tail", "W / 2" ], [ "-L / 2", "W / 2 - tail" ], [ "-L / 2", "-W / 2 + tail" ], [ "-L / 2 + tail", "-W / 2" ]
+              ],
+              "h0": "gc", "h1": "belt", "color": "bodyColor"
+            }
+          },
+          { "comment": "Cabin / greenhouse", "box": { "x0": "cx0", "x1": "cx1", "y0": "-cy", "y1": "cy", "h0": "belt", "h1": "roofH", "color": "roofColor" } },
+          { "comment": "Windscreen (front glass)", "box": { "x0": "cx1 - 0.04", "x1": "cx1", "y0": "-cy", "y1": "cy", "h0": "belt", "h1": "glassTop", "color": "glassColor" } },
+          { "comment": "Rear glass", "box": { "x0": "cx0", "x1": "cx0 + 0.04", "y0": "-cy", "y1": "cy", "h0": "belt", "h1": "glassTop", "color": "glassColor" } },
+          { "comment": "Side glass — right", "box": { "x0": "cx0 + 0.05", "x1": "cx1 - 0.05", "y0": "cy - 0.02", "y1": "cy", "h0": "belt", "h1": "glassTop", "color": "glassColor" } },
+          { "comment": "Side glass — left", "box": { "x0": "cx0 + 0.05", "x1": "cx1 - 0.05", "y0": "-cy", "y1": "-cy + 0.02", "h0": "belt", "h1": "glassTop", "color": "glassColor" } },
+          {
+            "comment": "Four wheels (front axle at +x)",
+            "repeat": 4,
+            "as": "k",
+            "vars": { "wx": "k < 2 ? wheelbase / 2 : -wheelbase / 2", "wy": "(k % 2 == 0 ? 1 : -1) * trackY" },
+            "box": { "x0": "wx - wr", "x1": "wx + wr", "y0": "wy - wheelWidth / 2", "y1": "wy + wheelWidth / 2", "h0": 0, "h1": "wheelDia * 0.92", "color": "wheelColor" }
+          },
+          {
+            "comment": "Headlights (2) at the nose",
+            "repeat": 2,
+            "as": "k",
+            "vars": { "hy": "(k == 0 ? 1 : -1) * lightY" },
+            "box": { "x0": "L / 2 - 0.08", "x1": "L / 2 - 0.01", "y0": "hy - 0.14", "y1": "hy + 0.14", "h0": "gc + 0.1", "h1": "gc + 0.3", "color": "lightColor" }
+          },
+          {
+            "comment": "Tail lights (2)",
+            "repeat": 2,
+            "as": "k",
+            "vars": { "hy": "(k == 0 ? 1 : -1) * lightY" },
+            "box": { "x0": "-L / 2 + 0.01", "x1": "-L / 2 + 0.07", "y0": "hy - 0.14", "y1": "hy + 0.14", "h0": "gc + 0.12", "h1": "gc + 0.32", "color": "'#dc2626'" }
+          },
+          {
+            "comment": "Wing mirrors",
+            "when": "mirrors",
+            "repeat": 2,
+            "as": "k",
+            "vars": { "my": "(k == 0 ? 1 : -1) * (W / 2)" },
+            "box": { "x0": "cx1 - 0.05", "x1": "cx1 + 0.08", "y0": "my - 0.03", "y1": "my + 0.1", "h0": "belt - 0.05", "h1": "belt + 0.06", "color": "roofColor" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "footprint", "label": "Stall footprint", "expr": "length * width", "unit": "m²" },
+    { "key": "turningLen", "label": "Length", "expr": "length", "unit": "m" }
+  ]
+}

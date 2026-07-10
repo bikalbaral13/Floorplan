@@ -1,0 +1,130 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "induction.v1",
+    "name": "Induction Hob",
+    "category": "Fixtures/Kitchen",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 6h16v12H4z",
+        "M9 12m-2.2 0a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0",
+        "M15.5 12m-1.6 0a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0"
+      ]
+    }
+  },
+  "parameters": [
+    {
+      "key": "width",
+      "label": "Width",
+      "kind": "number",
+      "default": 0.6,
+      "min": 0.28,
+      "max": 0.9,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "depth",
+      "label": "Depth",
+      "kind": "number",
+      "default": 0.52,
+      "min": 0.28,
+      "max": 0.65,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "zones",
+      "label": "Cooking zones",
+      "kind": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5,
+      "step": 1
+    },
+    {
+      "key": "thickness",
+      "label": "Panel thickness",
+      "kind": "number",
+      "default": 0.05,
+      "min": 0.03,
+      "max": 0.1,
+      "step": 0.005,
+      "unit": "m"
+    },
+    {
+      "key": "clearance",
+      "label": "Counter height",
+      "kind": "number",
+      "default": 0.9,
+      "min": 0,
+      "max": 2,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "deg"
+    },
+    {
+      "key": "color",
+      "label": "Color",
+      "kind": "color",
+      "default": "#0f172a"
+    }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Induction cooktop: glass panel + N zone discs in a 2-column grid. clearance sets the worktop height.",
+    "emit": "shapes",
+    "vars": {
+      "w2": "width / 2",
+      "d2": "depth / 2"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "glass panel",
+            "box": {
+              "x0": "-w2",
+              "x1": "w2",
+              "y0": "-d2",
+              "y1": "d2",
+              "h0": 0,
+              "h1": "thickness"
+            }
+          },
+          {
+            "comment": "cooking zones (2-column grid; thin discs so they read in plan AND 3D)",
+            "repeat": "zones",
+            "as": "k",
+            "vars": {
+              "rows": "ceil(zones / 2)",
+              "nx": "k % 2",
+              "ny": "floor(k / 2)",
+              "zx": "zones == 1 ? 0 : (nx * 2 - 1) * width * 0.24",
+              "zy": "rows == 1 ? 0 : (ny - (rows - 1) / 2) * depth * 0.36"
+            },
+            "circle": {
+              "cx": "zx",
+              "cy": "zy",
+              "r": "min(width, depth) * 0.16",
+              "sides": 20,
+              "h0": "thickness",
+              "h1": "thickness + 0.003"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

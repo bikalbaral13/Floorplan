@@ -1,0 +1,15 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "canvas-source",
+  "meta": { "label": "Canvas", "category": "Canvas", "color": "#0891b2" },
+  "description": "The whole canvas as five outputs — Spaces, Nodes, Segments, Graph, Images (footprints). Each carries every item of its kind. Independent of selection.",
+  "instructions": "Emits the WHOLE canvas as five typed outputs — Spaces, Nodes, Segments, Graph, Images (footprints) — each carrying EVERY item of its kind, independent of the current selection. Wire any output into the matching pipeline (e.g. Spaces → Inset, Segments → Mitered Join, Nodes → Bloom).\n\nThe input endpoint accepts a Schema node to attach Node / Segment / Graph schema properties to the canvas components; geometry still comes from the canvas (any incoming geometry is ignored).",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "5",
+    "outputLabels": ["Spaces", "Nodes", "Segments", "Graph", "Images"]
+  },
+  "parameters": []
+}

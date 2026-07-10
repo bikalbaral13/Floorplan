@@ -1,0 +1,58 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "low-stool.v1",
+    "name": "Low Stool (Patla)",
+    "category": "Puja/Seating",
+    "units": "m",
+    "icon": { "paths": ["M4 9h16v3H4z", "M6 12v7", "M18 12v7", "M6 16h12"] }
+  },
+  "parameters": [
+    { "key": "shape", "label": "Shape", "kind": "select", "default": "square", "options": [ { "value": "square", "label": "Square" }, { "value": "round", "label": "Round" }, { "value": "rect", "label": "Rectangular" } ] },
+    { "key": "width", "label": "Width / diameter", "kind": "number", "default": 0.4, "min": 0.2, "max": 0.9, "step": 0.02, "unit": "m" },
+    { "key": "depth", "label": "Depth (rect)", "kind": "number", "default": 0.3, "min": 0.2, "max": 0.9, "step": 0.02, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 0.18, "min": 0.08, "max": 0.5, "step": 0.01, "unit": "m" },
+    { "key": "topThickness", "label": "Top thickness", "kind": "number", "default": 0.04, "min": 0.02, "max": 0.1, "step": 0.005, "unit": "m" },
+    { "key": "legStyle", "label": "Legs", "kind": "select", "default": "legs", "options": [ { "value": "legs", "label": "Four legs" }, { "value": "solid", "label": "Solid base" } ] },
+    { "key": "legWidth", "label": "Leg width", "kind": "number", "default": 0.045, "min": 0.02, "max": 0.1, "step": 0.005, "unit": "m" },
+    { "key": "legInset", "label": "Leg inset", "kind": "number", "default": 0.04, "min": 0, "max": 0.2, "step": 0.01, "unit": "m" },
+    { "key": "sides", "label": "Roundness", "kind": "number", "default": 24, "min": 4, "max": 40, "step": 1 },
+    { "key": "color", "label": "Top color", "kind": "color", "default": "#b45309" },
+    { "key": "legColor", "label": "Leg color", "kind": "color", "default": "#78350f" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -0.5, "max": 0.5, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 1, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "w2": "width / 2",
+      "d2": "shape == 'rect' ? depth / 2 : width / 2",
+      "topZ0": "max(0, height - topThickness)",
+      "lx": "w2 - legInset - legWidth / 2",
+      "ly": "(shape == 'rect' ? depth / 2 : width / 2) - legInset - legWidth / 2",
+      "lw2": "legWidth / 2",
+      "nsides": "max(4, round(sides))"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Round top", "when": "shape == 'round'", "circle": { "cx": 0, "cy": 0, "r": "w2", "sides": "nsides", "h0": "topZ0", "h1": "height", "color": "color" } },
+          { "comment": "Rect / square top", "when": "shape != 'round'", "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": "topZ0", "h1": "height", "color": "color" } },
+          {
+            "comment": "Four legs",
+            "when": "legStyle == 'legs'",
+            "repeat": 4,
+            "as": "k",
+            "vars": { "cx": "(k == 0 || k == 3 ? 1 : -1) * lx", "cy": "(k < 2 ? 1 : -1) * ly" },
+            "box": { "x0": "cx - lw2", "x1": "cx + lw2", "y0": "cy - lw2", "y1": "cy + lw2", "h0": 0, "h1": "topZ0", "color": "legColor" }
+          },
+          { "comment": "Solid base — round", "when": "legStyle == 'solid' && shape == 'round'", "circle": { "cx": 0, "cy": 0, "r": "w2 - legInset", "sides": "nsides", "h0": 0, "h1": "topZ0", "color": "legColor" } },
+          { "comment": "Solid base — rect", "when": "legStyle == 'solid' && shape != 'round'", "box": { "x0": "-w2 + legInset", "x1": "w2 - legInset", "y0": "-d2 + legInset", "y1": "d2 - legInset", "h0": 0, "h1": "topZ0", "color": "legColor" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [ { "key": "seat", "label": "Seat area", "expr": "shape == 'round' ? PI * w2 * w2 : width * (shape == 'rect' ? depth : width)", "unit": "m²" } ]
+}

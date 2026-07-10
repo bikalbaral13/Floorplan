@@ -1,0 +1,67 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "ogee-spillway.v1",
+    "name": "Ogee Spillway",
+    "category": "Hydraulics/Spillway",
+    "units": "m",
+    "icon": { "paths": ["M4 4c4 0 4 6 8 9s8 3 8 7", "M4 20h16"] }
+  },
+  "parameters": [
+    { "key": "height_base", "label": "Base height", "kind": "number", "default": 10, "min": 1, "max": 60, "step": 1, "unit": "m" },
+    { "key": "height_effective", "label": "Design head H_d", "kind": "number", "default": 16.7, "min": 1, "max": 60, "step": 0.5, "unit": "m" },
+    { "key": "shapeK", "label": "Shape constant k", "kind": "number", "default": 2, "min": 1.5, "max": 2.5, "step": 0.05 },
+    { "key": "n", "label": "Profile exponent n", "kind": "number", "default": 1.85, "min": 1.6, "max": 2, "step": 0.01 },
+    { "key": "width", "label": "Crest length", "kind": "number", "default": 12, "min": 2, "max": 200, "step": 1, "unit": "m" },
+    { "key": "slope", "label": "Glacis slope (V/H)", "kind": "number", "default": 1.25, "min": 0.5, "max": 3, "step": 0.05 },
+    { "key": "radius", "label": "Bucket radius", "kind": "number", "default": 30, "min": 5, "max": 80, "step": 1, "unit": "m" },
+    { "key": "distance_mid", "label": "Glacis length", "kind": "number", "default": 20, "min": 0, "max": 60, "step": 1, "unit": "m" },
+    { "key": "slices", "label": "Profile slices", "kind": "number", "default": 32, "min": 8, "max": 60, "step": 1 },
+    { "key": "color", "label": "Concrete color", "kind": "color", "default": "#94a3b8" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -20, "max": 20, "step": 0.5, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 20, "step": 0.5, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Ogee spillway profile (Creager-type) extruded across the crest length. Crest curve z=-C·x^n, straight glacis at the given slope, then a circular energy-dissipating bucket — the exact profile the design tool computes — approximated by vertical slices.",
+    "vars": {
+      "coeff": "1 / (shapeK * pow(height_effective, n - 1))",
+      "cex": "pow(slope / (1 / (shapeK * pow(height_effective, n - 1))) / n, 1 / (n - 1))",
+      "cez": "-(1 / (shapeK * pow(height_effective, n - 1))) * pow(pow(slope / (1 / (shapeK * pow(height_effective, n - 1))) / n, 1 / (n - 1)), n)",
+      "ang": "atan2(slope, 1)",
+      "gex": "pow(slope / (1 / (shapeK * pow(height_effective, n - 1))) / n, 1 / (n - 1)) + distance_mid",
+      "gez": "(-(1 / (shapeK * pow(height_effective, n - 1))) * pow(pow(slope / (1 / (shapeK * pow(height_effective, n - 1))) / n, 1 / (n - 1)), n)) - slope * distance_mid",
+      "arc": "radius * sin(atan2(slope, 1))",
+      "bcx": "pow(slope / (1 / (shapeK * pow(height_effective, n - 1))) / n, 1 / (n - 1)) + distance_mid + radius * sin(atan2(slope, 1))",
+      "bcz": "((-(1 / (shapeK * pow(height_effective, n - 1))) * pow(pow(slope / (1 / (shapeK * pow(height_effective, n - 1))) / n, 1 / (n - 1)), n)) - slope * distance_mid) + radius * cos(atan2(slope, 1))",
+      "totLen": "pow(slope / (1 / (shapeK * pow(height_effective, n - 1))) / n, 1 / (n - 1)) + distance_mid + radius * sin(atan2(slope, 1))",
+      "baseZ": "gez - radius * (1 - cos(atan2(slope, 1))) - height_base",
+      "ns": "max(8, round(slices))",
+      "w2": "width / 2"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Ogee body — vertical slices from the base up to the profile surface",
+            "repeat": "ns",
+            "as": "k",
+            "vars": {
+              "xm": "(k + 0.5) / ns * totLen",
+              "zs": "((k + 0.5) / ns * totLen) <= cex ? -coeff * pow((k + 0.5) / ns * totLen, n) : ((k + 0.5) / ns * totLen) <= gex ? cez - slope * (((k + 0.5) / ns * totLen) - cex) : bcz - sqrt(max(0.01, radius * radius - pow(((k + 0.5) / ns * totLen) - bcx, 2)))"
+            },
+            "box": { "x0": "-w2", "x1": "w2", "y0": "(k) / ns * totLen", "y1": "(k + 1) / ns * totLen", "h0": 0, "h1": "zs - baseZ", "color": "color" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "totalHeight", "label": "Structure height", "expr": "height_base + height_effective + radius * (1 - cos(atan2(slope, 1)))", "unit": "m" },
+    { "key": "totalLength", "label": "Profile length", "expr": "totLen", "unit": "m" },
+    { "key": "Qdesign", "label": "Design discharge", "expr": "round(2.18 * width * pow(height_effective, 1.5))", "unit": "m³/s" },
+    { "key": "crestCurve", "label": "Crest curve length", "expr": "cex", "unit": "m" }
+  ]
+}

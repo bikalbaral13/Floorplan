@@ -44,6 +44,10 @@ export interface Wall {
   end: Point;
   /** Layer this wall lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`). */
   layerId?: string;
+  /** Flow node id that OWNS this segment in "Live" mode (materialised from that node's live output).
+   *  All walls carrying an owner are wiped + redrawn on every flow change, so the produced Space tracks
+   *  the node's parameters in real time. Cleared when Live turns off (the geometry bakes into normal walls). */
+  flowOwner?: string;
   /** Optional spine polyline for curved walls (x1, y1, x2, y2, ...). */
   spinePoints?: number[];
   /** Konva Line tension used when rendering spinePoints as a spline. */
@@ -525,6 +529,10 @@ export interface Room {
   /** Per-room values for parameters declared by a custom room type's schema.
    *  Keyed by ParamDef.key. Built-in types ignore this field. */
   customParams?: Record<string, string | number | boolean>;
+  /** Flow node id that OWNS this Space in "Live" mode (materialised from that node's live output). Owned
+   *  Spaces are wiped + redrawn on every flow change so they track the node's parameters in real time, and
+   *  they're kept INERT to auto-room detection / suppression (they never split or hide native Spaces). */
+  flowOwner?: string;
 }
 
 /** Serialized Flow graph (the Flow overlay's export/import shape) persisted on a Room. */

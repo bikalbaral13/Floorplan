@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "place-object",
+  "label": "Place Object",
+  "category": "Build",
+  "description": "Place one or more objects along the input space's boundary — pick a parametric library object (size auto-measured) or a custom box.",
+  "params": {
+    "objects": [
+      {
+        "kind": "bed",
+        "length": 2,
+        "breadth": 1.6,
+        "position": 25,
+        "setback": 0,
+        "height": 0.5,
+        "clearance": 0
+      }
+    ],
+    "seed": 1
+  }
+}

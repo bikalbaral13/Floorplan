@@ -1,0 +1,50 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "transform",
+  "meta": { "label": "Transform", "category": "Space", "color": "#7e22ce" },
+  "description": "Translate / Rotate / Scale / Mirror every input Space. Anchor = pivot for scale/rotate (centroid, a vertex, group, or origin). Mirror across X/Y/a custom line/a chosen edge. Multiple Spaces in → transformed Spaces out.",
+  "instructions": "Affine-transforms every input Space — Scale → Mirror → Rotate about an Anchor, then Translate. Multiple Spaces in → the transformed Spaces out (one bundle). Rotate and Scale are wireable.\n\n`mirror` = none / across X / across Y / a custom line (`mirrorAngle`) / across this space's edge #`mirrorEdge`. `anchor` is the pivot for scale/rotate (and X/Y/custom mirror): each centroid, a chosen `anchorVertex`, the group centroid, or world origin.\n\nTIP: 'Across edge' mirrors a unit across a shared wall; 'Group centroid' rotates a cluster as one.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "rotate", "label": "Rotate" },
+      { "key": "scale", "label": "Scale" }
+    ]
+  },
+  "parameters": [
+    { "key": "translateX", "label": "Move X", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "translateY", "label": "Move Y", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "rotate", "label": "Rotate", "kind": "range", "default": 0, "min": -180, "max": 180, "step": 1, "unit": "°" },
+    { "key": "scale", "label": "Scale", "kind": "range", "default": 1, "min": 0.1, "max": 5, "step": 0.05 },
+    {
+      "key": "mirror",
+      "label": "Mirror",
+      "kind": "select",
+      "default": "none",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "x", "label": "Across X" },
+        { "value": "y", "label": "Across Y" },
+        { "value": "custom", "label": "Custom line" },
+        { "value": "edge", "label": "Across edge" }
+      ]
+    },
+    { "key": "mirrorAngle", "label": "Mirror angle", "kind": "range", "default": 0, "min": 0, "max": 180, "step": 1, "unit": "°", "showWhen": "mirror == 'custom'" },
+    { "key": "mirrorEdge", "label": "Edge #", "kind": "range", "default": 0, "min": 0, "max": 50, "step": 1, "showWhen": "mirror == 'edge'" },
+    {
+      "key": "anchor",
+      "label": "Anchor",
+      "kind": "select",
+      "default": "each-centroid",
+      "options": [
+        { "value": "each-centroid", "label": "Each centroid" },
+        { "value": "vertex", "label": "Vertex" },
+        { "value": "group-centroid", "label": "Group centroid" },
+        { "value": "origin", "label": "Origin (0,0)" }
+      ]
+    },
+    { "key": "anchorVertex", "label": "Vertex #", "kind": "range", "default": 0, "min": 0, "max": 50, "step": 1, "showWhen": "anchor == 'vertex'" }
+  ]
+}

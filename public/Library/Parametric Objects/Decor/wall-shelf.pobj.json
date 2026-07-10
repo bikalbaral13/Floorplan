@@ -1,0 +1,69 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "wall-shelf.v1",
+    "name": "Wall Shelf",
+    "category": "Decor/Wall",
+    "units": "m",
+    "icon": { "paths": ["M4 8h16", "M4 14h16", "M6 8v-2", "M18 8v-2", "M6 14v-2", "M18 14v-2"] }
+  },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "number", "default": 0.9, "min": 0.2, "max": 3, "step": 0.05, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.22, "min": 0.1, "max": 0.6, "step": 0.01, "unit": "m" },
+    { "key": "thickness", "label": "Board thickness", "kind": "number", "default": 0.03, "min": 0.015, "max": 0.08, "step": 0.005, "unit": "m" },
+    { "key": "tiers", "label": "Shelves", "kind": "number", "default": 3, "min": 1, "max": 8, "step": 1 },
+    { "key": "tierGap", "label": "Shelf spacing", "kind": "number", "default": 0.32, "min": 0.12, "max": 0.8, "step": 0.01, "unit": "m" },
+    { "key": "brackets", "label": "Show brackets", "kind": "checkbox", "default": true },
+    { "key": "bracketDrop", "label": "Bracket drop", "kind": "number", "default": 0.14, "min": 0.04, "max": 0.3, "step": 0.01, "unit": "m" },
+    { "key": "color", "label": "Board color", "kind": "color", "default": "#a16207" },
+    { "key": "bracketColor", "label": "Bracket color", "kind": "color", "default": "#1f2937" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -0.5, "max": 0.5, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Lowest shelf height", "kind": "number", "default": 1.2, "min": 0, "max": 2.2, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "w2": "width / 2",
+      "d2": "depth / 2",
+      "nt": "max(1, round(tiers))",
+      "bw": "min(0.04, width * 0.08)",
+      "binset": "min(0.04, width * 0.08) + 0.03",
+      "bdepth": "depth * 0.75"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Shelf boards, stacked at the tier spacing",
+            "repeat": "nt",
+            "as": "k",
+            "vars": { "z0": "k * tierGap" },
+            "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": "z0", "h1": "z0 + thickness", "color": "color" }
+          },
+          {
+            "comment": "Left bracket downstand under each board",
+            "when": "brackets",
+            "repeat": "nt",
+            "as": "k",
+            "vars": { "z0": "k * tierGap" },
+            "box": { "x0": "-w2 + binset - bw", "x1": "-w2 + binset", "y0": "-d2", "y1": "-d2 + bdepth", "h0": "z0 - bracketDrop", "h1": "z0", "color": "bracketColor" }
+          },
+          {
+            "comment": "Right bracket downstand under each board",
+            "when": "brackets",
+            "repeat": "nt",
+            "as": "k",
+            "vars": { "z0": "k * tierGap" },
+            "box": { "x0": "w2 - binset", "x1": "w2 - binset + bw", "y0": "-d2", "y1": "-d2 + bdepth", "h0": "z0 - bracketDrop", "h1": "z0", "color": "bracketColor" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "topHeight", "label": "Top shelf height", "expr": "clearance + (nt - 1) * tierGap + thickness", "unit": "m" },
+    { "key": "linear", "label": "Total shelf length", "expr": "nt * width", "unit": "m" }
+  ]
+}

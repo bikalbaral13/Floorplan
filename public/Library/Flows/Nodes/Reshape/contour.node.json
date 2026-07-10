@@ -1,0 +1,20 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "contour",
+  "meta": {
+    "label": "Contour",
+    "category": "Reshape",
+    "color": "#0e7490"
+  },
+  "description": "Generate nested inward-offset contour rings at a fixed interval.",
+  "instructions": "Generates nested inward-offset rings (topographic-style contours) at a fixed `interval` (m), up to `maxLevels` rings — each ring is an output polygon carried on the single output handle.\n\nTIP: use it for setback studies (each ring = a further setback), terracing / step-backs, or a quick read of how deep a Space is. A small `interval` with high `maxLevels` gives many fine rings; inner rings stop automatically once the offset collapses the shape. Wire a Space into the input handle.",
+  "handles": {
+    "input": true,
+    "output": true
+  },
+  "parameters": [
+    { "key": "interval", "label": "Interval", "kind": "range", "default": 0.5, "min": 0.05, "max": 10, "step": 0.05, "unit": "m" },
+    { "key": "maxLevels", "label": "Max levels", "kind": "range", "default": 12, "min": 1, "max": 30, "step": 1 }
+  ]
+}

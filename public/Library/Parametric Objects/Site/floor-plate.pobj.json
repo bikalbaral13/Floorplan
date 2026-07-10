@@ -1,0 +1,370 @@
+{
+  "kind": "parametric-object",
+  "version": 3,
+  "meta": {
+    "id": "floor_plate.v1",
+    "name": "Floor Plate",
+    "category": "Architecture/Floor Plate",
+    "units": "m"
+  },
+  "description": "FLOORPLATE for the corridor + cores recipe (flat 2D plan — no extrusion, no nested components). Attach to a SPACE: the plate takes the host bounding box automatically (detached fallback 32 × 20 m) and DRAWS THE CORE ROW itself — `coreCount` cores (fixed 3 × 5 m, X shaft marks) spaced `gap` centre-to-centre (e.g. 18 m), centred along `axis` (horizontal / vertical / both — use both under a cross corridor), butted against a centre corridor of width `corrW` on `side` both / left / right of it (left = north for a horizontal axis, west for a vertical one). Pair with `corridoor.v1` on the SAME space and set `corrW` = its `width` and `axis` to match its shape. `name` labels the plate in Properties. Outputs: gross / space area, drawn cores + area, row-span and gap checks.",
+  "parameters": [
+    {
+      "key": "name",
+      "label": "Name",
+      "kind": "text",
+      "default": "Floor Plate"
+    },
+    {
+      "key": "coreCount",
+      "label": "Cores (per row)",
+      "kind": "number",
+      "default": 4,
+      "min": 1,
+      "max": 12,
+      "step": 1
+    },
+    {
+      "key": "gap",
+      "label": "Core Spacing (c/c)",
+      "kind": "number",
+      "default": 18,
+      "min": 2,
+      "max": 60,
+      "step": 0.5,
+      "unit": "m"
+    },
+    {
+      "key": "axis",
+      "label": "Core Row Axis",
+      "kind": "select",
+      "default": "horizontal",
+      "options": [
+        "horizontal",
+        "vertical",
+        "both"
+      ]
+    },
+    {
+      "key": "side",
+      "label": "Core Side",
+      "kind": "select",
+      "default": "both",
+      "options": [
+        "both",
+        "left",
+        "right"
+      ]
+    },
+    {
+      "key": "corrW",
+      "label": "Corridor Width",
+      "kind": "number",
+      "default": 2,
+      "min": 0,
+      "max": 4,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "color",
+      "default": "#94a3b8"
+    }
+  ],
+  "geometry": {
+    "vars": {
+      "_doc": "pw/pd = host bounding box (fallback 32 × 20 without a host); bcx/bcy = bbox centre. Cores are FIXED 3 m along the row × 5 m deep; row offset from the corridor centreline = corrW/2 + 2.5 so the row butts a `corrW`-wide corridor. n core centres spread (n−1)×gap wide, centred on the plate. Rows drawn per axis/side gates; drawnCores counts them all.",
+      "hasHost": "(hostW > 0 && hostH > 0) ? 1 : 0",
+      "pw": "hasHost ? hostW : 32",
+      "pd": "hasHost ? hostH : 20",
+      "bcx": "hasHost ? (hostMinX + hostMaxX) / 2 : 0",
+      "bcy": "hasHost ? (hostMinY + hostMaxY) / 2 : 0",
+      "hpw": "pw / 2",
+      "hpd": "pd / 2",
+      "n": "max(1, round(coreCount))",
+      "span": "(n - 1) * gap",
+      "start": "0 - span / 2",
+      "off": "corrW / 2 + 2.5",
+      "hcw": "1.5",
+      "hcd": "2.5",
+      "arms": "axis == 'both' ? 2 : 1",
+      "sides": "side == 'both' ? 2 : 1",
+      "drawnCores": "n * arms * sides",
+      "coresArea": "drawnCores * 15",
+      "rowSpan": "span + 3",
+      "spanOk": "((axis == 'vertical' || rowSpan <= pw) && (axis == 'horizontal' || rowSpan <= pd)) ? 1 : 0",
+      "gapOk": "(n <= 1 || gap >= 3) ? 1 : 0",
+      "checksOk": "(spanOk && gapOk) ? 1 : 0",
+      "gross_area": "pw * pd"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "box": {
+              "x0": "bcx - hpw",
+              "x1": "bcx + hpw",
+              "y0": "bcy - hpd",
+              "y1": "bcy + hpd",
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'vertical' && side != 'left'",
+            "repeat": "n",
+            "as": "i",
+            "box": {
+              "x0": "bcx + start + i * gap - hcw",
+              "x1": "bcx + start + i * gap + hcw",
+              "y0": "bcy + off - hcd",
+              "y1": "bcy + off + hcd",
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'vertical' && side != 'left'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx + start + i * gap - hcw",
+                  "bcy + off - hcd"
+                ],
+                [
+                  "bcx + start + i * gap + hcw",
+                  "bcy + off + hcd"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'vertical' && side != 'left'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx + start + i * gap - hcw",
+                  "bcy + off + hcd"
+                ],
+                [
+                  "bcx + start + i * gap + hcw",
+                  "bcy + off - hcd"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'vertical' && side != 'right'",
+            "repeat": "n",
+            "as": "i",
+            "box": {
+              "x0": "bcx + start + i * gap - hcw",
+              "x1": "bcx + start + i * gap + hcw",
+              "y0": "bcy - off - hcd",
+              "y1": "bcy - off + hcd",
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'vertical' && side != 'right'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx + start + i * gap - hcw",
+                  "bcy - off - hcd"
+                ],
+                [
+                  "bcx + start + i * gap + hcw",
+                  "bcy - off + hcd"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'vertical' && side != 'right'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx + start + i * gap - hcw",
+                  "bcy - off + hcd"
+                ],
+                [
+                  "bcx + start + i * gap + hcw",
+                  "bcy - off - hcd"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'horizontal' && side != 'left'",
+            "repeat": "n",
+            "as": "i",
+            "box": {
+              "x0": "bcx + off - hcd",
+              "x1": "bcx + off + hcd",
+              "y0": "bcy + start + i * gap - hcw",
+              "y1": "bcy + start + i * gap + hcw",
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'horizontal' && side != 'left'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx + off - hcd",
+                  "bcy + start + i * gap - hcw"
+                ],
+                [
+                  "bcx + off + hcd",
+                  "bcy + start + i * gap + hcw"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'horizontal' && side != 'left'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx + off - hcd",
+                  "bcy + start + i * gap + hcw"
+                ],
+                [
+                  "bcx + off + hcd",
+                  "bcy + start + i * gap - hcw"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'horizontal' && side != 'right'",
+            "repeat": "n",
+            "as": "i",
+            "box": {
+              "x0": "bcx - off - hcd",
+              "x1": "bcx - off + hcd",
+              "y0": "bcy + start + i * gap - hcw",
+              "y1": "bcy + start + i * gap + hcw",
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'horizontal' && side != 'right'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx - off - hcd",
+                  "bcy + start + i * gap - hcw"
+                ],
+                [
+                  "bcx - off + hcd",
+                  "bcy + start + i * gap + hcw"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          },
+          {
+            "when": "axis != 'horizontal' && side != 'right'",
+            "repeat": "n",
+            "as": "i",
+            "line": {
+              "pts": [
+                [
+                  "bcx - off - hcd",
+                  "bcy + start + i * gap + hcw"
+                ],
+                [
+                  "bcx - off + hcd",
+                  "bcy + start + i * gap - hcw"
+                ]
+              ],
+              "h0": 0,
+              "h1": 0
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "key": "gross_area",
+      "label": "Gross Area",
+      "expr": "gross_area",
+      "unit": "m²"
+    },
+    {
+      "key": "spaceArea",
+      "label": "Space Area",
+      "expr": "hostArea",
+      "unit": "m²"
+    },
+    {
+      "key": "drawnCores",
+      "label": "Cores Drawn",
+      "expr": "drawnCores"
+    },
+    {
+      "key": "coresArea",
+      "label": "Cores Area",
+      "expr": "coresArea",
+      "unit": "m²"
+    },
+    {
+      "key": "rowSpan",
+      "label": "Row Span",
+      "expr": "rowSpan",
+      "unit": "m"
+    },
+    {
+      "key": "spanOk",
+      "label": "Row Fits Plate",
+      "expr": "spanOk"
+    },
+    {
+      "key": "gapOk",
+      "label": "Gap ≥ Core Width",
+      "expr": "gapOk"
+    },
+    {
+      "key": "checksOk",
+      "label": "All Checks OK",
+      "expr": "checksOk"
+    }
+  ],
+  "hostKind": "space"
+}

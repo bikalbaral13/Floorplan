@@ -1,0 +1,16 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "schema-to-layers",
+  "meta": { "label": "Schema to Layers", "category": "Space", "color": "#9333ea" },
+  "description": "Bring an attached Schema's segment & node TYPES into the Layers panel as foldable Segment / Node layer blocks.",
+  "instructions": "Reads an attached Schema's segment `type` (role seg-type) and node `type` (role node-type) discriminators — their options — and surfaces them to the host as live LAYER blocks: a foldable 'Segment' block (Wall / Door / Window / Line) and 'Node' block (Junction / Object) in the Layers panel. Live-derived (not saved); removing the node returns the panel to just Layer 0. Wire a Schema into the Schema input. No geometry.",
+  "handles": {
+    "input": true,
+    "output": false,
+    "geomInputs": [
+      { "key": "schema", "label": "Schema" }
+    ]
+  },
+  "parameters": []
+}

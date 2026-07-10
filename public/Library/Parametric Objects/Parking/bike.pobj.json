@@ -1,0 +1,78 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "bike.v1",
+    "name": "Two-Wheeler",
+    "category": "Parking/Vehicles",
+    "units": "m",
+    "icon": { "paths": ["M5 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M13 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M8 18l4 -9h5", "M12 9l-2 -3h4"] }
+  },
+  "parameters": [
+    { "key": "style", "label": "Type", "kind": "select", "default": "motorbike", "options": [ { "value": "motorbike", "label": "Motorbike" }, { "value": "scooter", "label": "Scooter" }, { "value": "bicycle", "label": "Bicycle" } ] },
+    { "key": "wheelbase", "label": "Wheelbase", "kind": "number", "default": 1.35, "min": 0.8, "max": 1.8, "step": 0.05, "unit": "m" },
+    { "key": "overhang", "label": "End overhang", "kind": "number", "default": 0.35, "min": 0.1, "max": 0.8, "step": 0.05, "unit": "m" },
+    { "key": "wheelDia", "label": "Wheel diameter", "kind": "number", "default": 0.6, "min": 0.35, "max": 0.8, "step": 0.02, "unit": "m" },
+    { "key": "wheelWidth", "label": "Tyre width", "kind": "number", "default": 0.13, "min": 0.03, "max": 0.3, "step": 0.01, "unit": "m" },
+    { "key": "handlebar", "label": "Handlebar width", "kind": "number", "default": 0.72, "min": 0.4, "max": 1, "step": 0.02, "unit": "m" },
+    { "key": "handleHeight", "label": "Handlebar height", "kind": "number", "default": 1.05, "min": 0.7, "max": 1.3, "step": 0.02, "unit": "m" },
+    { "key": "seatHeight", "label": "Seat height", "kind": "number", "default": 0.78, "min": 0.5, "max": 1, "step": 0.02, "unit": "m" },
+    { "key": "bodyWidth", "label": "Body width", "kind": "number", "default": 0.26, "min": 0.06, "max": 0.5, "step": 0.02, "unit": "m" },
+    { "key": "mirrors", "label": "Mirrors", "kind": "checkbox", "default": true },
+    { "key": "bodyColor", "label": "Body color", "kind": "color", "default": "#b91c1c" },
+    { "key": "seatColor", "label": "Seat color", "kind": "color", "default": "#1f2937" },
+    { "key": "wheelColor", "label": "Tyre color", "kind": "color", "default": "#111827" },
+    { "key": "metalColor", "label": "Metal color", "kind": "color", "default": "#9ca3af" },
+    { "key": "color", "label": "Base color", "kind": "color", "default": "#b91c1c" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -1, "max": 1, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 2, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "fx": "wheelbase / 2",
+      "rx": "-wheelbase / 2",
+      "ww": "style == 'bicycle' ? min(wheelWidth, 0.06) : wheelWidth",
+      "bw": "style == 'bicycle' ? min(bodyWidth, 0.1) : bodyWidth",
+      "wr": "wheelDia / 2",
+      "seatH": "seatHeight",
+      "handleH": "handleHeight",
+      "hb2": "handlebar / 2",
+      "tankTop": "seatH * 0.95",
+      "boardTop": "wheelDia * 0.55"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "Front + rear wheel (front at +x)",
+            "repeat": 2,
+            "as": "k",
+            "vars": { "wx": "k == 0 ? fx : rx" },
+            "box": { "x0": "wx - wr", "x1": "wx + wr", "y0": "-ww / 2", "y1": "ww / 2", "h0": 0, "h1": "wheelDia * 0.95", "color": "wheelColor" }
+          },
+          { "comment": "Central body / frame spine", "box": { "x0": "rx + 0.1", "x1": "fx - 0.1", "y0": "-bw / 2", "y1": "bw / 2", "h0": "wr * 0.6", "h1": "tankTop", "color": "bodyColor" } },
+          { "comment": "Scooter floorboard (step-through)", "when": "style == 'scooter'", "box": { "x0": "rx * 0.2", "x1": "fx * 0.55", "y0": "-bw / 2 - 0.03", "y1": "bw / 2 + 0.03", "h0": "boardTop", "h1": "boardTop + 0.04", "color": "metalColor" } },
+          { "comment": "Fuel tank (motorbike)", "when": "style == 'motorbike'", "box": { "x0": "-0.05", "x1": "0.35", "y0": "-bw / 2 - 0.04", "y1": "bw / 2 + 0.04", "h0": "tankTop - 0.16", "h1": "tankTop + 0.06", "color": "bodyColor" } },
+          { "comment": "Seat", "box": { "x0": "rx + 0.15", "x1": "0.15", "y0": "-0.14", "y1": "0.14", "h0": "seatH - 0.07", "h1": "seatH", "color": "seatColor" } },
+          { "comment": "Fork / steering stem up to the bars", "box": { "x0": "fx - 0.05", "x1": "fx + 0.03", "y0": "-0.035", "y1": "0.035", "h0": "wr * 0.4", "h1": "handleH", "color": "metalColor" } },
+          { "comment": "Handlebar (wide across the front)", "box": { "x0": "fx - 0.06", "x1": "fx + 0.03", "y0": "-hb2", "y1": "hb2", "h0": "handleH - 0.035", "h1": "handleH", "color": "metalColor" } },
+          { "comment": "Headlight", "box": { "x0": "fx + 0.02", "x1": "fx + 0.12", "y0": "-0.07", "y1": "0.07", "h0": "handleH - 0.2", "h1": "handleH - 0.05", "color": "'#fde68a'" } },
+          {
+            "comment": "Handlebar mirrors",
+            "when": "mirrors && style != 'bicycle'",
+            "repeat": 2,
+            "as": "k",
+            "vars": { "my": "(k == 0 ? 1 : -1) * (hb2 + 0.04)" },
+            "box": { "x0": "fx - 0.05", "x1": "fx + 0.02", "y0": "my - 0.03", "y1": "my + 0.03", "h0": "handleH + 0.03", "h1": "handleH + 0.16", "color": "metalColor" }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "totalLength", "label": "Total length", "expr": "wheelbase + 2 * overhang", "unit": "m" },
+    { "key": "footprint", "label": "Stall footprint", "expr": "(wheelbase + 2 * overhang) * handlebar", "unit": "m²" }
+  ]
+}

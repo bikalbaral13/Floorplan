@@ -1,0 +1,29 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "mass",
+  "meta": { "label": "Mass", "category": "Mass", "color": "#0e7490" },
+  "description": "A primitive 3D Mass — Cube (Length) · Cuboid (Length × Breadth × Height) · Sphere (Radius) · Cone (Radius, Height) · Cylinder (Radius, Height). Rendered in the 3D view as a starting Mass.",
+  "instructions": "A primitive 3D Mass generator (no input) — a Cube / Cuboid / Sphere / Cone / Cylinder of the given dimensions, rendered in the 3D view. A starting Mass to feed downstream Mass ops (Inset 3D / Smoothing 3D).\n\nOnly the dimensions relevant to the chosen shape are shown (Cube → Length; Cuboid → L × B × H; Sphere → Radius; Cone / Cylinder → Radius + Height).\n\nNOTE: unlike the newer Cuboid / Cylinder primitives, Mass carries its own colour and feeds the Mass-op chain.",
+  "handles": { "input": false, "output": true },
+  "parameters": [
+    {
+      "key": "shape",
+      "label": "Shape",
+      "kind": "select",
+      "default": "cube",
+      "options": [
+        { "value": "cube", "label": "Cube" },
+        { "value": "cuboid", "label": "Cuboid" },
+        { "value": "sphere", "label": "Sphere" },
+        { "value": "cone", "label": "Cone" },
+        { "value": "cylinder", "label": "Cylinder" }
+      ]
+    },
+    { "key": "length", "label": "Length", "kind": "range", "default": 3, "min": 0.1, "max": 50, "step": 0.1, "unit": "m", "showWhen": "shape == 'cube' || shape == 'cuboid'" },
+    { "key": "breadth", "label": "Breadth", "kind": "range", "default": 2, "min": 0.1, "max": 50, "step": 0.1, "unit": "m", "showWhen": "shape == 'cuboid'" },
+    { "key": "radius", "label": "Radius", "kind": "range", "default": 1.5, "min": 0.1, "max": 25, "step": 0.1, "unit": "m", "showWhen": "shape == 'sphere' || shape == 'cone' || shape == 'cylinder'" },
+    { "key": "height", "label": "Height", "kind": "range", "default": 3, "min": 0.1, "max": 50, "step": 0.1, "unit": "m", "showWhen": "shape == 'cuboid' || shape == 'cone' || shape == 'cylinder'" },
+    { "key": "color", "label": "Color", "kind": "color", "default": "#94a3b8" }
+  ]
+}

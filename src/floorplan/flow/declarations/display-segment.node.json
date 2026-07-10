@@ -1,0 +1,100 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "display-segment",
+  "meta": { "label": "Display Segment", "category": "Segment", "color": "#b45309" },
+  "description": "Display a segment — Line (restyle stroke + direction arrow) or Buffered (thicken to a Space by Thickness, with a buffer style + optional hatch fill). Buffered output feeds the Space pipeline.",
+  "instructions": "Restyles or thickens an incoming segment. MODES (`mode`)\n• line — restyle the centerline stroke (line style / colour) + optional direction arrow; the geometry threads through unchanged.\n• buffered — thicken the segment into a Space by `thickness` (m, full ribbon width) with a buffer Style (capsule / square / flat) and optional hatch fill; the output is a Space that feeds the Space pipeline.\n\nSCHEMA-DRIVEN: wire a Schema into the Schema input (or attach one) and each segment styles per its own schema values by role (wall-color / wall-linestyle / show-direction / buffer-thickness / wall-justification / hatch…); node params are the fallback. `applyTo` restricts styling to walls / doors / windows so it can coexist with Segment → Door / Window in one flow.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "geomInputs": [
+      { "key": "schema", "label": "Schema" }
+    ],
+    "valueInputs": [
+      { "key": "thickness", "label": "Thickness" }
+    ]
+  },
+  "defaults": { "weight": 2 },
+  "parameters": [
+    {
+      "key": "applyTo",
+      "label": "Apply to",
+      "kind": "select",
+      "default": "any",
+      "options": [
+        { "value": "any", "label": "Any segment" },
+        { "value": "wall", "label": "Walls only" },
+        { "value": "door", "label": "Doors only" },
+        { "value": "window", "label": "Windows only" }
+      ]
+    },
+    {
+      "key": "mode",
+      "label": "Mode",
+      "kind": "select",
+      "default": "line",
+      "options": [
+        { "value": "line", "label": "Line" },
+        { "value": "buffered", "label": "Buffered" }
+      ]
+    },
+    {
+      "key": "lineStyle",
+      "label": "Line Style",
+      "kind": "select",
+      "default": "solid",
+      "role": "wall-linestyle",
+      "options": [
+        { "value": "solid", "label": "Solid" },
+        { "value": "dashed", "label": "Dashed" },
+        { "value": "dotted", "label": "Dotted" }
+      ],
+      "showWhen": "mode != 'buffered'"
+    },
+    { "key": "color", "label": "Color", "kind": "color", "default": "#334155", "role": "wall-color" },
+    { "key": "showDirection", "label": "Show Direction", "kind": "checkbox", "default": false, "role": "show-direction" },
+    { "key": "thickness", "label": "Thickness", "kind": "range", "default": 0.2, "min": 0.02, "max": 10, "step": 0.02, "unit": "m", "role": "buffer-thickness", "showWhen": "mode == 'buffered'" },
+    {
+      "key": "justification",
+      "label": "Justification",
+      "kind": "select",
+      "default": "center",
+      "role": "wall-justification",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "right", "label": "Right" }
+      ],
+      "showWhen": "mode == 'buffered'"
+    },
+    {
+      "key": "bufferStyle",
+      "label": "Buffer Style",
+      "kind": "select",
+      "default": "capsule",
+      "options": [
+        { "value": "capsule", "label": "Capsule (round)" },
+        { "value": "square", "label": "Square (extended)" },
+        { "value": "flat", "label": "Flat (butt)" }
+      ],
+      "showWhen": "mode == 'buffered'"
+    },
+    { "key": "hatch", "label": "Hatch", "kind": "checkbox", "default": false, "role": "hatch", "showWhen": "mode == 'buffered'" },
+    {
+      "key": "hatchStyle",
+      "label": "Hatch Style",
+      "kind": "select",
+      "default": "diagonal",
+      "role": "hatch-style",
+      "options": [
+        { "value": "diagonal", "label": "Diagonal lines" },
+        { "value": "dots", "label": "Random dots" }
+      ],
+      "showWhen": "mode == 'buffered' && hatch"
+    },
+    { "key": "hatchSpacing", "label": "Spacing", "kind": "range", "default": 8, "min": 3, "max": 40, "step": 1, "unit": "px", "role": "hatch-spacing", "showWhen": "mode == 'buffered' && hatch" },
+    { "key": "hatchAngle", "label": "Angle", "kind": "range", "default": 45, "min": 0, "max": 180, "step": 1, "unit": "°", "role": "hatch-angle", "showWhen": "mode == 'buffered' && hatch && hatchStyle == 'diagonal'" },
+    { "key": "hatchWeight", "label": "Weight", "kind": "range", "default": 1, "min": 0.5, "max": 5, "step": 0.5, "unit": "px", "showWhen": "mode == 'buffered' && hatch" }
+  ]
+}

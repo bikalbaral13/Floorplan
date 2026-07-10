@@ -1,0 +1,57 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "pull",
+  "meta": { "label": "Pull", "category": "Space", "color": "#ca8a04" },
+  "description": "Pull two Spaces together/apart — Touch, a Distance gap, or Centroid; Point or Edge-flush contact; move A / B / both. Inputs: Space A (main) + Space B; outputs the two new Spaces.",
+  "instructions": "Pulls two Spaces together (or apart). Main input = Space A; the `gin-b` input = Space B. Returns the two transformed Spaces on out-0 (A) and out-1 (B).\n\nMODE (`mode`)\n• touch — bring them into contact.\n• distance — leave a `distance` (m) gap.\n• centroid — slam centroids together (a pure move; contact / edge-slide don't apply).\n\n`contact` = point (closest points) or edge-flush; `anchor` chooses which of A / B / both moves; `edgeSlide` lets an edge-flush contact slide along the shared edge.\n\nTIP: use edge-flush + move B to snap a room against a shared wall.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "2",
+    "outputLabels": ["A", "B"],
+    "geomInputs": [
+      { "key": "b", "label": "Space B" }
+    ],
+    "valueInputs": [
+      { "key": "distance", "label": "Distance" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "mode",
+      "label": "Mode",
+      "kind": "select",
+      "default": "touch",
+      "options": [
+        { "value": "touch", "label": "Touch" },
+        { "value": "distance", "label": "Distance (gap)" },
+        { "value": "centroid", "label": "Centroid" }
+      ]
+    },
+    {
+      "key": "contact",
+      "label": "Contact",
+      "kind": "select",
+      "default": "point",
+      "options": [
+        { "value": "point", "label": "Point (closest)" },
+        { "value": "edge-flush", "label": "Edge flush" }
+      ],
+      "showWhen": "mode != 'centroid'"
+    },
+    { "key": "distance", "label": "Gap", "kind": "range", "default": 0.5, "min": 0, "max": 10, "step": 0.05, "unit": "m", "showWhen": "mode == 'distance'" },
+    {
+      "key": "anchor",
+      "label": "Move",
+      "kind": "select",
+      "default": "both",
+      "options": [
+        { "value": "both", "label": "Both" },
+        { "value": "A", "label": "A only" },
+        { "value": "B", "label": "B only" }
+      ]
+    },
+    { "key": "edgeSlide", "label": "Edge slide", "kind": "checkbox", "default": true, "showWhen": "mode != 'centroid' && contact == 'edge-flush'" }
+  ]
+}

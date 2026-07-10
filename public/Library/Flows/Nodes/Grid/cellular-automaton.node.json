@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "cellular-automaton",
+  "label": "Cellular Automaton",
+  "category": "Grid",
+  "description": "Cellular automaton — evolve a grid N generations under a Birth/Survive rule (Conway's Game of Life B3/S23, HighLife, Maze, Cave, or custom). Seed from the input mask or a random fill. Moore/von-Neumann neighbours, wrap/dead/mirror edges. Emits the 0/1 state → Morphology / Marching Squares / Graph to Spaces.",
+  "params": {
+    "preset": "conway",
+    "birth": "3",
+    "survive": "23",
+    "neighborhood": "moore",
+    "boundary": "toroidal",
+    "generations": 10,
+    "seedSource": "random",
+    "threshold": 0.5,
+    "density": 0.35,
+    "seed": 1,
+    "colorByAge": false,
+    "aliveColor": "#22c55e",
+    "showDead": false,
+    "deadColor": "#1e293b",
+    "lowColor": "#1e3a8a",
+    "highColor": "#ef4444",
+    "showCellValues": false
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "segment-source",
+  "meta": { "label": "Segment", "category": "Segment", "color": "#0f766e" },
+  "description": "Pipeline input — selected segment(s) by id (Select → Segment scope, or grab from selection). Emits each as a polyline; feeds Mitered Join / Graph Smoothing / Graph Metrics.",
+  "instructions": "Pipeline input — emits the selected segment(s) as polylines (each wall = a 2-point polyline), scoped to individually-selected segments (Select → Segment scope). References segments by display id (e.g. Segment001, comma-separated for several); with 'Grab ID from selection' on, the id stays synced to the current canvas selection. One output handle per segment, or a single bundle (outputMode).\n\nTIP: feeds Mitered Join / Graph Smoothing / Graph Metrics like a graph. Turn grab OFF and type an id to pin a specific segment.",
+  "handles": {
+    "input": false,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(60, round(handleCount)))"
+  },
+  "parameters": [
+    { "key": "grabFromSelection", "label": "Grab ID from selection", "kind": "checkbox", "default": true },
+    { "key": "id", "label": "ID", "kind": "text", "default": "", "placeholder": "segment id (e.g. Segment001)", "showWhen": "!grabFromSelection" },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "single",
+      "options": [
+        { "value": "single", "label": "Single (all)" },
+        { "value": "perCell", "label": "Per segment (one each)" }
+      ]
+    }
+  ]
+}

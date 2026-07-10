@@ -1,0 +1,32 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "bounding-shape",
+  "meta": {
+    "label": "Bounding Shapes",
+    "category": "Reshape",
+    "color": "#059669"
+  },
+  "description": "Fit the minimum enclosing circle / ellipse / regular n-gon around the input space.",
+  "instructions": "Fits the minimum enclosing shape around the input Space → one output Space.\n\nSHAPES (`shape`)\n• circle — smallest circumscribed circle (Welzl). No parameters.\n• ellipse — minimum-area enclosing ellipse (Khachiyan). No parameters.\n• ngon — regular n-gon with `sides` (3–12); set orientation with `angle`, or tick `optimize` to auto-pick the tightest rotation (hides `angle`).\n\nTIP: use the n-gon for a quick regularised footprint; the circle/ellipse for radial massing, reach analysis, or a bounding envelope. Wire a Space in — the whole boundary is enclosed.",
+  "handles": {
+    "input": true,
+    "output": true
+  },
+  "parameters": [
+    {
+      "key": "shape",
+      "label": "Shape",
+      "kind": "select",
+      "default": "ngon",
+      "options": [
+        { "value": "circle", "label": "Circumcircle" },
+        { "value": "ellipse", "label": "Min. ellipse" },
+        { "value": "ngon", "label": "Regular n-gon" }
+      ]
+    },
+    { "key": "sides", "label": "Sides (n)", "kind": "range", "default": 6, "min": 3, "max": 12, "step": 1, "showWhen": "shape == 'ngon'" },
+    { "key": "angle", "label": "Angle", "kind": "range", "default": 0, "min": 0, "max": 360, "step": 0.5, "unit": "°", "showWhen": "shape == 'ngon' && !optimize" },
+    { "key": "optimize", "label": "Optimise orientation", "kind": "checkbox", "default": false, "showWhen": "shape == 'ngon'" }
+  ]
+}

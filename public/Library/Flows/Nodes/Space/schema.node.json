@@ -1,0 +1,17 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "schema",
+  "meta": { "label": "Input Schema", "category": "Space", "color": "#7c3aed" },
+  "description": "Define per-component input properties (Node / Segment / Space / Graph). Wire the output into a Graph or Space node to attach them — they surface in each component's Properties tab. The left params input can take a node's params (e.g. Display Node) to derive a schema from its fields.",
+  "instructions": "A general component-property schema, edited inline on the node via four foldable sections — Node / Segment / Space / Graph — each a list of parameters (label, type, unit, default, min/max/step, options, solver role) like the Input Properties node.\n\nWire its OUTPUT into a Graph node to attach the Node/Segment/Graph properties to that graph's components, or into a Space node to attach the Space properties — they then appear in each component's Properties tab (added to the built-ins, never replacing them). The `pin` params input can take a node's params output (e.g. Display Node) to derive the schema from that node's fields.\n\nNOTE: the four sections are edited by the on-node schema editor; `name` is an optional label.",
+  "handles": {
+    "input": false,
+    "output": true,
+    "acceptsParams": true
+  },
+  "defaults": { "nodeProps": [], "segmentProps": [], "spaceProps": [], "graphProps": [] },
+  "parameters": [
+    { "key": "name", "label": "Name", "kind": "text", "default": "", "placeholder": "Schema name (optional)" }
+  ]
+}

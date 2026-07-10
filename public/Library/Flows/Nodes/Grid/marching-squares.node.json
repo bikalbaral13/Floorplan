@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "marching-squares",
+  "label": "Marching Squares",
+  "category": "Grid",
+  "description": "Extract iso-contours from a grid field — N evenly-spaced levels between min and max. Emits contour lines (a graph) to chain on. Feed from Graph to Grid / Grid Distance / Grid Threshold.",
+  "params": {
+    "levels": 5
+  }
+}

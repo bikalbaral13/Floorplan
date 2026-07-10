@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "output",
+  "label": "Output Metrics",
+  "category": "Output",
+  "description": "Collect values from any node into named metrics (shown in the Metrics tab).",
+  "params": {
+    "slots": [
+      {
+        "id": "s1",
+        "label": ""
+      }
+    ]
+  }
+}

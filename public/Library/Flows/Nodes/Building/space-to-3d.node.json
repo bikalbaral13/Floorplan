@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "space-to-3d",
+  "label": "Space to 3D",
+  "category": "Building",
+  "description": "Extrude each input space into a solid 3D mass of the given Height, Upwards from the floor or Downwards below it. Set its Colour, Opacity (for see-through massing) and Show Edges in the 3D view.",
+  "params": {
+    "height": 3,
+    "direction": "up",
+    "color": "#94a3b8",
+    "opacity": 1,
+    "showEdges": true
+  }
+}

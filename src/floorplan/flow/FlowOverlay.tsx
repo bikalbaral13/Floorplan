@@ -17,7 +17,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles, ChevronDown, ChevronRight, Group as GroupIcon, FilePlus, Eye, EyeOff, Minus, Maximize2, Minimize2, Copy, Boxes } from "lucide-react";
+import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles, ChevronDown, ChevronRight, Group as GroupIcon, FilePlus, Eye, EyeOff, Minus, Maximize2, Minimize2, Copy, Boxes, Radio, Folder, Search } from "lucide-react";
 import { toast } from "sonner";
 import type { Point, SerializedFlow, SerializedFlowNode } from "../types";
 import { FLOW_TOOLS, outputSlots, inputProps, schemaEntries, GENERATE_DEFAULT_MODEL, type FlowNodeData, type FlowToolType, type OutputSlot, type InputProp, type InputPropType } from "./flowTypes";
@@ -34,7 +34,7 @@ import type { GridField } from "./eval/evalNodes";
 import { detectObjects, splitDataUrl } from "../algorithms/vision/geminiObjectDetection";
 import { tuneVectorise } from "./vectorTune";
 import type { VectorizeParams, VectorizeColorMode } from "../algorithms/vector/vectorizeImage";
-import { saveLibraryFile, listLibraryFiles } from "../libraryFiles";
+import { saveLibraryFile, listLibraryFiles, listParametricObjectFiles } from "../libraryFiles";
 import { parseBspConnections, serializeBspConnections } from "../algorithms/partitioning/bspAdvanced";
 import type { PipeGraphInput } from "../algorithms/network/pipeNetworkSolver";
 
@@ -58,7 +58,7 @@ const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Build", tools: ["floor-massing", "place-object", "frame-builder"] },
   { title: "Building", tools: ["wall-builder", "graph-to-room", "segment-to-door", "segment-to-window", "node-to-object", "segment-to-3d", "space-to-3d"] },
   { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d", "mesh-to-3d"] },
-  { title: "Parametric", tools: ["param-object", "param-grab", "param-output-metrics", "param-geometry", "param-render", "param-render-3d", "create-polygon", "create-segment", "create-arc", "create-box"] },
+  { title: "Parametric", tools: ["pobj-source", "param-object", "param-grab", "param-output-metrics", "param-geometry", "param-render", "param-render-3d", "create-polygon", "create-segment", "create-arc", "create-box"] },
   { title: "Calculate", tools: ["math", "random", "expr", "bua", "file-upload", "text"] },
   { title: "Output", tools: ["output", "render", "analyse", "generate"] },
 ];
@@ -290,7 +290,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
   // Output / Input-Properties nodes expose dynamic handles (per slot / per parameter), so their counts
   // must factor into the handle signature that triggers a re-measure.
   const slotCount = d.tool === "output" ? outputSlots(d.params).length : 0;
-  const propCount = d.tool === "input-props" ? inputProps(d.params).length : 0;
+  const propCount = (d.tool === "input-props" || d.tool === "pobj-source") ? inputProps(d.params).length : 0;
   const handleSig = `${outN}|${def.valueInputs?.length ?? 0}|${def.valueOutputs?.length ?? 0}|${slotCount}|${propCount}`;
   useEffect(() => { updateNodeInternals(id); }, [id, handleSig, updateNodeInternals]);
   // Align each side handle to the vertical centre of its row: stash a ref per row, then measure
@@ -409,6 +409,30 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
       </div>
       {!collapsed && (
       <div className="space-y-1.5 px-2 py-1.5">
+        {/* Usage instructions (from the node.json `instructions` field) — a read-only, collapsible
+            textbox so the node's own documentation is available inline. Hidden until toggled. */}
+        {def.instructions && (() => {
+          const open = Boolean(d.params._showInstructions);
+          return (
+            <div className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => d.onParamChange?.(id, "_showInstructions", !open)}
+                className="nodrag flex w-full items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600"
+              >
+                {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} Instructions
+              </button>
+              {open && (
+                <textarea
+                  readOnly
+                  className="w-full resize-y rounded border border-slate-200 bg-slate-50/60 px-1.5 py-1 text-[10px] leading-snug text-slate-600 nodrag"
+                  rows={8}
+                  value={def.instructions}
+                />
+              )}
+            </div>
+          );
+        })()}
         {/* Canvas: one tall row per typed output (Spaces / Nodes / Segments / Graph / Images) with its
             live count, so the five endpoints are clearly separated and each handle aligns to its row. */}
         {d.tool === "canvas-source" && (() => {
@@ -428,7 +452,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             </div>
           );
         })()}
-        {def.fields.length === 0 && d.tool !== "place-object" && d.tool !== "output" && d.tool !== "input-props" && d.tool !== "param-grab" && d.tool !== "param-geometry" && d.tool !== "param-output-metrics" && d.tool !== "canvas-source" && (
+        {def.fields.length === 0 && d.tool !== "place-object" && d.tool !== "output" && d.tool !== "input-props" && d.tool !== "pobj-source" && d.tool !== "param-grab" && d.tool !== "param-geometry" && d.tool !== "param-output-metrics" && d.tool !== "canvas-source" && (
           <div className="text-[9px] italic text-slate-400">{def.hint}</div>
         )}
         {/* Place Object: a multi-object list editor instead of the generic flat-param fields. */}
@@ -454,6 +478,20 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             onRowRef={(pid, el) => { rowRefs.current[`prop:${pid}`] = el; }}
             nodrag
           />
+        )}
+        {/* Parametric Site: values-only controls for the loaded object's parameters. Each row's value is
+            exposed as a `val-<propId>` output handle (anchored via onRowRef), and the object's footprint is
+            emitted on the geometry output. Load a .pobj via the "Load Parametric Site" button. */}
+        {d.tool === "pobj-source" && (
+          inputProps(d.params).length === 0
+            ? <span className="text-[10px] italic text-slate-400">Load a parametric site (.pobj) →</span>
+            : <InputPropsEditor
+                params={d.params}
+                onParamChange={(key, val) => d.onParamChange?.(id, key, val)}
+                onRowRef={(pid, el) => { rowRefs.current[`prop:${pid}`] = el; }}
+                valuesOnly
+                nodrag
+              />
         )}
         {/* Grab Parameters: interactive controls auto-built from the wired Parametric Object's definition
             (values-only — label + slider/options/checkbox/textbox). Editing republishes the definition. */}
@@ -1063,7 +1101,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
       )}
       {/* Input Properties: one dynamic value-output endpoint per parameter (id `val-<propId>`), anchored
           to its row, so each user-defined parameter feeds the pipeline. */}
-      {!collapsed && d.tool === "input-props" && inputProps(d.params).map((p) => {
+      {!collapsed && (d.tool === "input-props" || d.tool === "pobj-source") && inputProps(d.params).map((p) => {
         const top = rowTops[`prop:${p.id}`];
         return (
           <Handle
@@ -1125,6 +1163,11 @@ export interface FlowOverlayProps {
    *  lists the nodes the recipe handles, so the host can commit OTHER terminal nodes' preview geometry
    *  (e.g. Split Segment pieces) as canvas walls without double-committing. */
   onRunCommit: (json: string, committedNodeIds: string[]) => void;
+  /** Live mode (pilot): when on, supported nodes (currently Inset) materialise their output as REAL
+   *  canvas geometry that regenerates on every parameter change — instead of a preview overlay you must
+   *  Run to commit. Owned by the host; the footer toggle flips it. */
+  liveFlow?: boolean;
+  onToggleLiveFlow?: () => void;
   /** Pure live preview: the evaluated output polygons per node, for canvas overlay rendering. */
   onPreview: (items: FlowPreviewItem[]) => void;
   /** The selected space's vertices (pixel coords) — the pipeline input. */
@@ -1272,6 +1315,102 @@ const makeNode = (
     deletable: true,
     data: { tool, params: { ...def.defaultParams }, onParamChange: cb.onParamChange, onRunRender: cb.onRunRender, onRunDetect: cb.onRunDetect, onRunVectorTune: cb.onRunVectorTune, onRunAnalyse: cb.onRunAnalyse, onRunGenerate: cb.onRunGenerate, onRunLayoutGen: cb.onRunLayoutGen, onRunAnneal: cb.onRunAnneal, onAddRoom: cb.onAddRoom } as FlowNodeData,
   };
+};
+
+// ── Import-dropdown file tree ─────────────────────────────────────────────────────────────────────
+/** One node in the Library/Flows browser tree — a folder (`children`, no `path`) or a file leaf (`path`). */
+interface LibNode { name: string; key: string; path?: string; children: LibNode[] }
+/** Build a two-group (Nodes / Workflows) foldable tree from flat Library/Flows paths. Node templates live
+ *  under `Nodes/…`; everything else is a Workflow. The leaf keeps the ORIGINAL path (for fetch/import); the
+ *  group prefix ("Nodes/" / "Workflows/") is stripped from the DISPLAY segments so folders nest cleanly. */
+const buildLibraryTree = (files: string[]): LibNode[] => {
+  const groups: Record<string, LibNode> = {};
+  for (const f of files) {
+    const groupName = /(^|\/)Nodes\//i.test(f) ? "Nodes" : "Workflows";
+    if (!groups[groupName]) groups[groupName] = { name: groupName, key: groupName, children: [] };
+    const parts = f.replace(/^Nodes\//i, "").replace(/^Workflows\//i, "").split("/").filter(Boolean);
+    let cur = groups[groupName];
+    let keyPath = groupName;
+    parts.forEach((part, i) => {
+      keyPath = `${keyPath}/${part}`;
+      const isLeaf = i === parts.length - 1;
+      let child = cur.children.find((c) => c.name === part && (isLeaf ? !!c.path : !c.path));
+      if (!child) { child = { name: part, key: keyPath, children: [], path: isLeaf ? f : undefined }; cur.children.push(child); }
+      cur = child;
+    });
+  }
+  const sortRec = (n: LibNode) => {
+    n.children.sort((a, b) => ((a.path ? 1 : 0) - (b.path ? 1 : 0)) || a.name.localeCompare(b.name)); // folders first
+    n.children.forEach(sortRec);
+  };
+  return ["Nodes", "Workflows"].filter((g) => groups[g]).map((g) => { sortRec(groups[g]); return groups[g]; });
+};
+/** Build a single-root foldable tree from flat paths, nesting by folder. Used for the "Parametric Objects"
+ *  import group where there are no Nodes/Workflows semantics — just the on-disk folder hierarchy. */
+const buildFolderTree = (files: string[], rootName: string): LibNode[] => {
+  if (files.length === 0) return [];
+  const root: LibNode = { name: rootName, key: rootName, children: [] };
+  for (const f of files) {
+    const parts = f.split("/").filter(Boolean);
+    let cur = root;
+    let keyPath = rootName;
+    parts.forEach((part, i) => {
+      keyPath = `${keyPath}/${part}`;
+      const isLeaf = i === parts.length - 1;
+      let child = cur.children.find((c) => c.name === part && (isLeaf ? !!c.path : !c.path));
+      if (!child) { child = { name: part, key: keyPath, children: [], path: isLeaf ? f : undefined }; cur.children.push(child); }
+      cur = child;
+    });
+  }
+  const sortRec = (n: LibNode) => {
+    n.children.sort((a, b) => ((a.path ? 1 : 0) - (b.path ? 1 : 0)) || a.name.localeCompare(b.name));
+    n.children.forEach(sortRec);
+  };
+  sortRec(root);
+  return [root];
+};
+/** Strip the file extension for display (`.node.json` / `.json` / `.pobj.json`). */
+const libLeafLabel = (name: string) => name.replace(/\.pobj\.json$/i, "").replace(/\.node\.json$/i, "").replace(/\.json$/i, "");
+
+/** Recursive row for the Library/Flows import tree: foldable folders + clickable file leaves. */
+const LibTreeNode = ({ node, depth, expanded, onToggle, onPick, basePath = "Flows" }: {
+  node: LibNode; depth: number; expanded: Set<string>;
+  onToggle: (key: string) => void; onPick: (path: string) => void; basePath?: string;
+}) => {
+  if (node.path) {
+    const isNodeFile = /(^|\/)Nodes\//i.test(node.path);
+    return (
+      <button
+        type="button"
+        onClick={() => onPick(node.path!)}
+        title={`public/Library/${basePath}/${node.path}`}
+        className="flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left text-[11px] text-slate-600 hover:bg-slate-100"
+        style={{ paddingLeft: `${depth * 12 + 6}px` }}
+      >
+        {isNodeFile ? <Boxes className="h-3 w-3 shrink-0 text-fuchsia-500" /> : <FilePlus className="h-3 w-3 shrink-0 text-sky-500" />}
+        <span className="truncate">{libLeafLabel(node.name)}</span>
+      </button>
+    );
+  }
+  const open = expanded.has(node.key);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => onToggle(node.key)}
+        className="flex w-full items-center gap-1 rounded py-0.5 pr-1 text-left text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+        style={{ paddingLeft: `${depth * 12 + 2}px` }}
+      >
+        {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+        <Folder className="h-3 w-3 shrink-0 text-slate-400" />
+        <span className="truncate">{node.name}</span>
+        <span className="ml-auto text-[9px] tabular-nums text-slate-300">{node.children.length}</span>
+      </button>
+      {open && node.children.map((c) => (
+        <LibTreeNode key={c.key} node={c} depth={depth + 1} expanded={expanded} onToggle={onToggle} onPick={onPick} basePath={basePath} />
+      ))}
+    </div>
+  );
 };
 
 /** Convert a parametric-object file (with a `geometry.pipeline`) back into a Flow graph for visualisation:
@@ -2291,6 +2430,50 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     reader.readAsText(file);
   }, [importFlowData]);
 
+  // ── Load Parametric Site: upload a .pobj.json and drop a single "Parametric Site" (pobj-source) node
+  // whose geometry output is the object's footprint and whose parameters are exposed as val-<key> outputs.
+  // Unlike Load Parametric Object (which decompiles the whole pipeline), this keeps the object intact so it
+  // can feed downstream Flow nodes (Inset → Optimise Rectangle …). ──
+  const pobjSiteInputRef = useRef<HTMLInputElement | null>(null);
+  // Drop a single `pobj-source` node for an already-parsed parametric object: geometry output = footprint,
+  // each parameter = a `val-<key>` output. Shared by the "Load Parametric Site" upload button and the
+  // Import browser's "Parametric Objects" folder.
+  const dropPobjSourceNode = useCallback((pobj: Record<string, unknown>) => {
+    if (pobj.kind !== "parametric-object") throw new Error("not a parametric-object file");
+    const params = Array.isArray(pobj.parameters) ? (pobj.parameters as Record<string, unknown>[]) : [];
+    // Loose param rows stored under params.props — inputProps() sanitises them on read (coerces the
+    // type + options), so this doesn't need to satisfy the strict InputProp shape.
+    const propType = (kind: unknown): string =>
+      kind === "number" ? "range" : kind === "checkbox" ? "checkbox" : kind === "select" ? "select" : "text";
+    const propList: Record<string, unknown>[] = params.map((p) => ({
+      id: String(p.key),
+      name: String(p.label ?? p.key),
+      type: propType(p.kind),
+      value: p.default ?? (p.kind === "checkbox" ? false : p.kind === "number" ? 0 : ""),
+      min: typeof p.min === "number" ? p.min : 0,
+      max: typeof p.max === "number" ? p.max : 100,
+      step: typeof p.step === "number" ? p.step : 1,
+      options: Array.isArray(p.options) ? (p.options as Record<string, unknown>[]).map((o) => String(o.value)) : [],
+    }));
+    const node = makeNode("pobj-source", { x: 120, y: 220 }, nodeCb);
+    (node.data as FlowNodeData).params = { ...(node.data as FlowNodeData).params, definition: JSON.stringify(pobj), props: propList };
+    setNodes((ns) => [...ns, node]);
+    const name = (pobj.meta as { name?: string } | undefined)?.name ?? "site";
+    toast.success(`Loaded "${name}" as a Parametric Object node`);
+  }, [setNodes, nodeCb]);
+  const loadParametricSite = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        dropPobjSourceNode(JSON.parse(String(reader.result)) as Record<string, unknown>);
+      } catch (err) {
+        toast.error("Invalid parametric-object JSON");
+        console.error("Parametric site load failed:", err);
+      }
+    };
+    reader.readAsText(file);
+  }, [dropPobjSourceNode]);
+
   // ── Import via paste: drop flow JSON straight into a textarea (no file needed). ──
   const [importOpen, setImportOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -2323,7 +2506,30 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     try {
       const res = await fetch(encodeURI(`/Library/Flows/${file}`));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const parsed = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; title?: unknown };
+      const parsed = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; title?: unknown; kind?: unknown; tool?: unknown; label?: unknown; params?: unknown; meta?: { label?: unknown } };
+      // A NODE TEMPLATE file (public/Library/Flows/Nodes/**/*.node.json — a single "flow-node" tool with
+      // no nodes[]) is ADDED as one node to the current graph. Treating it as a whole workflow would throw
+      // "missing nodes array" (→ "Couldn't load"). Everything else is a workflow → replaces the graph.
+      const isNodeFile = !Array.isArray(parsed.nodes) && (parsed.kind === "flow-node" || typeof parsed.tool === "string");
+      if (isNodeFile) {
+        const tool = parsed.tool as FlowToolType;
+        if (!FLOW_TOOLS[tool]) throw new Error(`unknown tool "${String(parsed.tool)}"`);
+        // Node declarations carry a params SCHEMA (no presets); agent-saved templates carry preset `params`.
+        const preset = parsed.params && typeof parsed.params === "object" ? (parsed.params as Record<string, unknown>) : undefined;
+        const label =
+          (typeof parsed.label === "string" && parsed.label) ||
+          (parsed.meta && typeof parsed.meta.label === "string" ? parsed.meta.label : undefined) ||
+          FLOW_TOOLS[tool].label;
+        setNodes((ns) => {
+          const pos = { x: 160 + (ns.length % 5) * 48, y: 120 + (ns.length % 7) * 40 };
+          const node = makeNode(tool, pos, nodeCb);
+          if (preset) node.data = { ...(node.data as FlowNodeData), params: { ...(node.data as FlowNodeData).params, ...preset } };
+          return [...ns, node];
+        });
+        toast.success(`Added ${label} node`);
+        setImportOpen(false);
+        return;
+      }
       const n = importFlowData(parsed);
       toast.success(`Imported ${typeof parsed.title === "string" && parsed.title ? parsed.title : file} — ${n} node${n === 1 ? "" : "s"}`);
       setImportOpen(false);
@@ -2331,7 +2537,62 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       toast.error(`Couldn't load ${file}`);
       console.error("Library flow import failed:", err);
     }
-  }, [importFlowData]);
+  }, [importFlowData, setNodes, nodeCb]);
+
+  // ── Bundled Parametric Objects (public/Library/Parametric Objects) — listed live so the Import browser
+  // can expose them as a foldable "Parametric Objects" group. Picking a leaf drops a single pobj-source node
+  // (geometry footprint output + a val-<key> output per parameter), same as the "Load Parametric Site"
+  // upload button. listParametricObjectFiles() lists LIVE in dev and falls back to the bundled manifest in
+  // production, so the group populates in both. Empty = nothing on disk → the group hides. ──
+  const [libraryPobjs, setLibraryPobjs] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!importOpen) return;
+    let cancelled = false;
+    void listParametricObjectFiles().then((files) => { if (!cancelled) setLibraryPobjs(files); });
+    return () => { cancelled = true; };
+  }, [importOpen]);
+  const importLibraryPobj = useCallback(async (file: string) => {
+    try {
+      const res = await fetch(encodeURI(`/Library/Parametric Objects/${file}`));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      dropPobjSourceNode((await res.json()) as Record<string, unknown>);
+      setImportOpen(false);
+    } catch (err) {
+      toast.error(`Couldn't load ${file}`);
+      console.error("Library parametric object import failed:", err);
+    }
+  }, [dropPobjSourceNode]);
+
+  // Import browser: a foldable Nodes/Workflows tree + a fuzzy search box. `importExpanded` holds the open
+  // folder keys (the two top groups start open); `importSearch` switches the panel to a flat ranked list.
+  const [importSearch, setImportSearch] = useState("");
+  const [importExpanded, setImportExpanded] = useState<Set<string>>(() => new Set(["Nodes", "Workflows"]));
+  const toggleImportFolder = useCallback((key: string) => {
+    setImportExpanded((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  }, []);
+  const importTree = useMemo(() => buildLibraryTree(libraryFlows ?? []), [libraryFlows]);
+  const pobjTree = useMemo(() => buildFolderTree(libraryPobjs ?? [], "Parametric Objects"), [libraryPobjs]);
+  // Fuzzy search → a flat ranked list (basename prefix > basename substring > path substring). Null when the
+  // box is empty (the tree shows instead).
+  const importMatches = useMemo(() => {
+    const q = importSearch.trim().toLowerCase();
+    if (!q) return null;
+    const rank = (f: string): number => {
+      const base = (f.split("/").pop() ?? f).toLowerCase();
+      if (base.startsWith(q)) return 0;
+      if (base.includes(q)) return 1;
+      if (f.toLowerCase().includes(q)) return 2;
+      return 99;
+    };
+    return (libraryFlows ?? [])
+      .map((f) => ({ f, r: rank(f) }))
+      .filter((x) => x.r < 99)
+      .sort((a, b) => a.r - b.r || (a.f.split("/").pop() ?? a.f).localeCompare(b.f.split("/").pop() ?? b.f))
+      .slice(0, 50)
+      .map((x) => x.f);
+  }, [importSearch, libraryFlows]);
+  // Clear the search whenever the dropdown closes so it reopens clean.
+  useEffect(() => { if (!importOpen) setImportSearch(""); }, [importOpen]);
 
   // When a Split node's piece count shrinks, drop edges that referenced a now-gone output handle
   // (e.g. an edge from "out-4" after Pieces dropped to 3) so they don't dangle.
@@ -2590,7 +2851,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     );
     // Space Creator: bake its generated polygon (in METRES) so commit's `create` op can rebuild it.
     const createPtsByNode = new Map(
-      preview.filter((it) => it.tool === "space-creator" && (it.polygons[0]?.length ?? 0) >= 3).map((it) => [it.nodeId, it.polygons[0]]),
+      preview.filter((it) => (it.tool === "space-creator" || it.tool === "pobj-source") && (it.polygons[0]?.length ?? 0) >= 3).map((it) => [it.nodeId, it.polygons[0]]),
     );
     // Conditional nodes: surface the live result on the node (read-only badge fields). Safe like
     // vertexCount — evalConditional reads only metric/op/value, never these baked fields.
@@ -2718,7 +2979,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
           changed = true;
           return { ...n, data: { ...n.data, params: merged } };
         }
-        if (data.tool === "space-creator") {
+        if (data.tool === "space-creator" || data.tool === "pobj-source") {
           const poly = createPtsByNode.get(n.id);
           if (!poly) return n;
           const ptsM = poly.map((p) => ({ x: p.x / ppm, y: p.y / ppm }));
@@ -2919,6 +3180,13 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) loadParametricObject(f); e.target.value = ""; }}
           />
+          <input
+            ref={pobjSiteInputRef}
+            type="file"
+            accept="application/json,.json,.pobj.json"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) loadParametricSite(f); e.target.value = ""; }}
+          />
           {/* Delete / Group the current selection (also works via the Delete key). */}
           <Button
             variant="outline"
@@ -2949,6 +3217,15 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             title="Load Parametric Object — upload a .pobj.json file; its pipeline is shown as Flow nodes + connections"
           >
             <Boxes className="h-3.5 w-3.5" /> Load Parametric Object
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-[11px] text-teal-600 hover:bg-teal-50"
+            onClick={() => pobjSiteInputRef.current?.click()}
+            title="Load Parametric Site — upload a .pobj.json file as a single source node; its footprint feeds the flow and each parameter is a value output"
+          >
+            <Boxes className="h-3.5 w-3.5" /> Load Parametric Site
           </Button>
           <Button
             variant="outline"
@@ -2988,34 +3265,75 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
           {/* Import dropdown — the bundled Library/Flows list (one click), upload a .json file, OR
               paste flow JSON directly. */}
           {importOpen && (
-            <div className="absolute right-0 top-9 z-50 w-80 space-y-2 rounded-md border border-slate-200 bg-white p-2.5 shadow-lg">
+            <div className="absolute right-0 top-9 z-50 w-96 space-y-2 rounded-md border border-slate-200 bg-white p-2.5 shadow-lg">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-slate-700">Import flow</span>
                 <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setImportOpen(false)}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
-              {libraryFlows && libraryFlows.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <div className="h-px flex-1 bg-slate-200" />
-                    <span className="text-[9px] uppercase tracking-wide text-slate-400">Library/Flows</span>
-                    <div className="h-px flex-1 bg-slate-200" />
+              {/* Search box — type to fuzzy-find any node or workflow by name (basename matches rank first). */}
+              <div className="flex items-center gap-1.5 rounded border border-slate-200 px-1.5 focus-within:border-slate-400">
+                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <input
+                  autoFocus
+                  value={importSearch}
+                  onChange={(e) => setImportSearch(e.target.value)}
+                  placeholder="Search nodes & workflows…"
+                  className="h-7 w-full bg-transparent text-[11px] outline-none placeholder:text-slate-400"
+                />
+                {importSearch && (
+                  <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setImportSearch("")} title="Clear">
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* While searching → a flat ranked list; otherwise → the foldable Nodes / Workflows tree. */}
+              {libraryFlows == null ? (
+                <div className="py-3 text-center text-[10px] text-slate-400">Loading library…</div>
+              ) : importMatches ? (
+                importMatches.length === 0 ? (
+                  <div className="py-3 text-center text-[10px] text-slate-400">No matches for “{importSearch.trim()}”.</div>
+                ) : (
+                  <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                    {importMatches.map((f) => {
+                      const isNodeFile = /(^|\/)Nodes\//i.test(f);
+                      const folder = f.includes("/") ? f.replace(/\/[^/]*$/, "") : "";
+                      return (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => void importLibraryFlow(f)}
+                          title={`public/Library/Flows/${f}`}
+                          className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-[11px] text-slate-600 hover:bg-slate-100"
+                        >
+                          {isNodeFile ? <Boxes className="h-3 w-3 shrink-0 text-fuchsia-500" /> : <FilePlus className="h-3 w-3 shrink-0 text-sky-500" />}
+                          <span className="truncate">{libLeafLabel(f.split("/").pop() ?? f)}</span>
+                          {folder && <span className="ml-auto shrink-0 truncate pl-2 text-[9px] text-slate-300">{folder}</span>}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="max-h-44 space-y-1 overflow-y-auto">
-                    {libraryFlows.map((f) => (
-                      <Button key={f} variant="outline" size="sm" className="h-7 w-full justify-start gap-1.5 px-2 text-[11px]" title={`public/Library/Flows/${f}`} onClick={() => void importLibraryFlow(f)}>
-                        <FilePlus className="h-3 w-3 shrink-0" /> {f.replace(/\.json$/i, "")}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-px flex-1 bg-slate-200" />
-                    <span className="text-[9px] uppercase tracking-wide text-slate-400">or upload</span>
-                    <div className="h-px flex-1 bg-slate-200" />
-                  </div>
-                </>
+                )
+              ) : importTree.length > 0 || pobjTree.length > 0 ? (
+                <div className="max-h-64 overflow-y-auto">
+                  {importTree.map((g) => (
+                    <LibTreeNode key={g.key} node={g} depth={0} expanded={importExpanded} onToggle={toggleImportFolder} onPick={(p) => void importLibraryFlow(p)} />
+                  ))}
+                  {pobjTree.map((g) => (
+                    <LibTreeNode key={g.key} node={g} depth={0} expanded={importExpanded} onToggle={toggleImportFolder} onPick={(p) => void importLibraryPobj(p)} basePath="Parametric Objects" />
+                  ))}
+                </div>
+              ) : (
+                <div className="py-3 text-center text-[10px] text-slate-400">No saved flows or nodes yet.</div>
               )}
+
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-[9px] uppercase tracking-wide text-slate-400">or upload</span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
               <Button variant="outline" size="sm" className="h-7 w-full gap-1.5 text-[11px]" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-3.5 w-3.5" /> Upload .json file
               </Button>
@@ -3070,39 +3388,10 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
         </div>
       </div>
 
-      {/* Body — vertical palette (left) + canvas (right) */}
+      {/* Body — canvas only. The left node palette ("Add" rail) was removed; nodes are added via the
+          Import dropdown (searchable Nodes/Workflows tree). The palette helpers (PALETTE_CATEGORIES /
+          addToolNode / toggleCat) are kept dormant so the rail can be restored if needed. */}
       <div className="flex min-h-0 flex-1">
-        {/* Palette — vertical left rail */}
-        <div className="flex w-44 flex-col gap-1 overflow-y-auto border-r border-slate-200 bg-white/70 px-2 py-2">
-          <span className="px-1 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400">Add</span>
-          {PALETTE_CATEGORIES.map((cat) => {
-            const catOpen = !collapsedCats.has(cat.title);
-            return (
-              <div key={cat.title} className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={() => toggleCat(cat.title)}
-                  className="flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                >
-                  {catOpen ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-                  {cat.title}
-                </button>
-                {catOpen && cat.tools.map((t) => (
-                  <Button
-                    key={t}
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-full justify-start gap-1.5 px-2 text-[11px]"
-                    onClick={() => addToolNode(t)}
-                  >
-                    <Plus className="h-3 w-3 shrink-0" /> {FLOW_TOOLS[t].label}
-                  </Button>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-
         {/* Canvas */}
         <div className="relative flex-1">
           {/* Selected-edge highlight — React Flow's default selected stroke is too subtle; make it a
@@ -3154,14 +3443,28 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             </span>
           )}
         </div>
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 px-3 text-[12px]"
-          disabled={!!compiled.error || !sourcesReady}
-          onClick={() => run("commit")}
-        >
-          <Play className="h-3.5 w-3.5" /> Run Flow
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {/* Live: materialise space-producing nodes (Inset, Optimise Rectangle, …) as REAL editable
+              Spaces that track their params, instead of a preview you must Run to commit. */}
+          <Button
+            variant={props.liveFlow ? "default" : "outline"}
+            size="sm"
+            className={`h-8 gap-1.5 px-3 text-[12px] ${props.liveFlow ? "bg-emerald-600 hover:bg-emerald-700" : "text-emerald-700"}`}
+            disabled={!!compiled.error || !sourcesReady}
+            onClick={props.onToggleLiveFlow}
+            title="Live — draw each space-producing node's output (Inset, Optimise Rectangle, …) as a real, editable Space that updates as you change parameters (no Run needed). Toggle off to go back to preview."
+          >
+            <Radio className="h-3.5 w-3.5" /> Live{props.liveFlow ? " · on" : ""}
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 px-3 text-[12px]"
+            disabled={!!compiled.error || !sourcesReady}
+            onClick={() => run("commit")}
+          >
+            <Play className="h-3.5 w-3.5" /> Run Flow
+          </Button>
+        </div>
       </div>
 
       {jsonOpen && !compiled.error && (

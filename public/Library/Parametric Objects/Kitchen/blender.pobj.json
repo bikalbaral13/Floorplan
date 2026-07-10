@@ -1,0 +1,126 @@
+{
+  "kind": "parametric-object",
+  "version": 2,
+  "meta": {
+    "id": "blender.v1",
+    "name": "Blender",
+    "category": "Fixtures/Kitchen",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M9 3h6l-1 9h-4z",
+        "M9 15h6v4H9z",
+        "M10 3h4",
+        "M12 12v3"
+      ]
+    }
+  },
+  "parameters": [
+    {
+      "key": "baseRadius",
+      "label": "Base radius",
+      "kind": "number",
+      "default": 0.095,
+      "min": 0.06,
+      "max": 0.15,
+      "step": 0.005,
+      "unit": "m"
+    },
+    {
+      "key": "height",
+      "label": "Height",
+      "kind": "number",
+      "default": 0.42,
+      "min": 0.25,
+      "max": 0.6,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "clearance",
+      "label": "Counter height",
+      "kind": "number",
+      "default": 0.9,
+      "min": 0,
+      "max": 2,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "number",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "deg"
+    },
+    {
+      "key": "color",
+      "label": "Color",
+      "kind": "color",
+      "default": "#475569"
+    }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Countertop blender: motor base + jar + lid + side handle. clearance sits it on the worktop.",
+    "emit": "shapes",
+    "vars": {
+      "baseH": "height * 0.32",
+      "jarH": "height * 0.58",
+      "jarR": "baseRadius * 0.85"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "comment": "motor base",
+            "circle": {
+              "cx": 0,
+              "cy": 0,
+              "r": "baseRadius",
+              "sides": 18,
+              "h0": 0,
+              "h1": "baseH"
+            }
+          },
+          {
+            "comment": "jar",
+            "circle": {
+              "cx": 0,
+              "cy": 0,
+              "r": "jarR",
+              "sides": 18,
+              "h0": "baseH",
+              "h1": "baseH + jarH"
+            }
+          },
+          {
+            "comment": "lid",
+            "circle": {
+              "cx": 0,
+              "cy": 0,
+              "r": "jarR * 0.5",
+              "sides": 14,
+              "h0": "baseH + jarH",
+              "h1": "height"
+            }
+          },
+          {
+            "comment": "handle",
+            "box": {
+              "x0": "jarR",
+              "x1": "jarR + 0.035",
+              "y0": -0.012,
+              "y1": 0.012,
+              "h0": "baseH + 0.04",
+              "h1": "baseH + jarH - 0.04"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

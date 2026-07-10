@@ -1,0 +1,19 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-smooth",
+  "meta": { "label": "Graph Smoothing", "category": "Graph", "color": "#9d174d" },
+  "description": "Smooth a graph's polylines — through the vertices (NURBS/Catmull-Rom) or away from them (Chaikin).",
+  "instructions": "Smooths each polyline of an incoming graph. `interpolate` (Through vertices) on → an interpolating curve (Catmull-Rom, passes through the nodes); off → an approximating curve (Chaikin, stays away from them). `level` sets the smoothness (more = smoother). Smoothness is wireable.\n\nTIP: use it to round a skeleton spine or a hand-drawn graph before Mitered Join.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "level", "label": "Smoothness" }
+    ]
+  },
+  "parameters": [
+    { "key": "interpolate", "label": "Through vertices", "kind": "checkbox", "default": true },
+    { "key": "level", "label": "Smoothness", "kind": "range", "default": 2, "min": 1, "max": 8, "step": 1 }
+  ]
+}

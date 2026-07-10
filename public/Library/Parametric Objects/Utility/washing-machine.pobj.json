@@ -1,0 +1,44 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "washing-machine.v1",
+    "name": "Washing Machine",
+    "category": "Utility/Laundry",
+    "units": "m",
+    "icon": { "paths": ["M5 3h14v18H5z", "M12 13m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0", "M8 6h2", "M16 6h.01"] }
+  },
+  "parameters": [
+    { "key": "type", "label": "Type", "kind": "select", "default": "front", "options": [ { "value": "front", "label": "Front load" }, { "value": "top", "label": "Top load" } ] },
+    { "key": "width", "label": "Width", "kind": "number", "default": 0.6, "min": 0.4, "max": 0.9, "step": 0.02, "unit": "m" },
+    { "key": "depth", "label": "Depth", "kind": "number", "default": 0.6, "min": 0.4, "max": 0.9, "step": 0.02, "unit": "m" },
+    { "key": "height", "label": "Height", "kind": "number", "default": 0.85, "min": 0.6, "max": 1.2, "step": 0.02, "unit": "m" },
+    { "key": "doorDia", "label": "Door diameter", "kind": "number", "default": 0.36, "min": 0.15, "max": 0.6, "step": 0.02, "unit": "m" },
+    { "key": "sides", "label": "Roundness", "kind": "number", "default": 24, "min": 6, "max": 40, "step": 1 },
+    { "key": "color", "label": "Body color", "kind": "color", "default": "#f1f5f9" },
+    { "key": "doorColor", "label": "Door color", "kind": "color", "default": "#64748b" },
+    { "key": "glassColor", "label": "Glass color", "kind": "color", "default": "#334155" },
+    { "key": "panelColor", "label": "Panel color", "kind": "color", "default": "#cbd5e1" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset from wall", "kind": "number", "default": 0, "min": -0.5, "max": 0.5, "step": 0.01, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 1, "step": 0.05, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": { "w2": "width / 2", "d2": "depth / 2", "H": "height", "nsides": "max(6, round(sides))", "dr": "doorDia / 2" },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Cabinet body", "box": { "x0": "-w2", "x1": "w2", "y0": "-d2", "y1": "d2", "h0": 0, "h1": "H", "color": "color" } },
+          { "comment": "Front-load door ring", "when": "type == 'front'", "circle": { "cx": 0, "cy": "d2", "r": "dr", "sides": "nsides", "h0": "H * 0.42", "h1": "H * 0.42 + 0.02", "color": "doorColor" } },
+          { "comment": "Front-load door glass", "when": "type == 'front'", "circle": { "cx": 0, "cy": "d2", "r": "dr * 0.72", "sides": "nsides", "h0": "H * 0.42 + 0.005", "h1": "H * 0.42 + 0.03", "color": "glassColor" } },
+          { "comment": "Front-load control panel", "when": "type == 'front'", "box": { "x0": "-w2", "x1": "w2", "y0": "d2 - 0.01", "y1": "d2 + 0.015", "h0": "H * 0.82", "h1": "H * 0.96", "color": "panelColor" } },
+          { "comment": "Detergent drawer", "when": "type == 'front'", "box": { "x0": "-w2 + 0.05", "x1": "-w2 + 0.2", "y0": "d2", "y1": "d2 + 0.02", "h0": "H * 0.82", "h1": "H * 0.94", "color": "doorColor" } },
+          { "comment": "Top-load lid", "when": "type == 'top'", "box": { "x0": "-w2 + 0.03", "x1": "w2 - 0.03", "y0": "-d2 + 0.03", "y1": "d2 - 0.03", "h0": "H", "h1": "H + 0.04", "color": "doorColor" } },
+          { "comment": "Top-load control panel (rear)", "when": "type == 'top'", "box": { "x0": "-w2", "x1": "w2", "y0": "d2 - 0.14", "y1": "d2", "h0": "H + 0.04", "h1": "H + 0.16", "color": "panelColor" } }
+        ]
+      }
+    ]
+  },
+  "outputs": [ { "key": "footprint", "label": "Footprint", "expr": "width * depth", "unit": "m²" } ]
+}

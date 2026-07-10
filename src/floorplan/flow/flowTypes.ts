@@ -4,6 +4,97 @@
  *  a visual editor over the existing operations engine. */
 
 import { CONDITION_METRIC_OPTIONS, CONDITION_OP_OPTIONS } from "./conditional";
+// Prototype: this ONE tool's definition is built from a data declaration file (params schema + handles +
+// showWhen + instructions) instead of a hand-written literal — the pattern for a full node-declaration
+// migration. The behaviour (evalOptimise) stays in code, dispatched by `tool` id in evaluateFlow.
+import { buildToolDefFromDeclaration, type NodeDeclaration } from "./nodeDeclaration";
+// The complete node declarations (full param schema + handles + showWhen + instructions) drive these tools'
+// FLOW_TOOLS entries at build time — the whole "Reshape" category is now data-declared. Vite can't import
+// from public/, so the BUNDLED copies live here under src/declarations/; the byte-identical copies under
+// public/Library/Flows/Nodes/Reshape/ are what the Import-Nodes picker + agent fetch at runtime. Keep the
+// two in sync (a full migration would load one copy via import.meta.glob and retire the other).
+import optimiseRectDecl from "./declarations/optimise-rect.node.json";
+import densifyDecl from "./declarations/densify.node.json";
+import insetDecl from "./declarations/inset.node.json";
+import boundingShapeDecl from "./declarations/bounding-shape.node.json";
+import convexHullDecl from "./declarations/convex-hull.node.json";
+import smoothingDecl from "./declarations/smoothing.node.json";
+import contourDecl from "./declarations/contour.node.json";
+// 2d primitives
+import pointDecl from "./declarations/point.node.json";
+import rectangleDecl from "./declarations/rectangle.node.json";
+import circleDecl from "./declarations/circle.node.json";
+// Calculate
+import buaDecl from "./declarations/bua.node.json";
+import mathDecl from "./declarations/math.node.json";
+import randomDecl from "./declarations/random.node.json";
+import exprDecl from "./declarations/expr.node.json";
+import fileUploadDecl from "./declarations/file-upload.node.json";
+import textDecl from "./declarations/text.node.json";
+// 3d primitives
+import cuboidDecl from "./declarations/cuboid.node.json";
+import cylinderDecl from "./declarations/cylinder.node.json";
+import sphereDecl from "./declarations/sphere.node.json";
+import coneDecl from "./declarations/cone.node.json";
+import transform3dDecl from "./declarations/transform-3d.node.json";
+import boolean3dDecl from "./declarations/boolean-3d.node.json";
+import display3dDecl from "./declarations/display-3d.node.json";
+// Segment
+import segmentSourceDecl from "./declarations/segment-source.node.json";
+import segmentSplitDecl from "./declarations/segment-split.node.json";
+import displaySegmentDecl from "./declarations/display-segment.node.json";
+// Node
+import bloomDecl from "./declarations/bloom.node.json";
+import nodeSourceDecl from "./declarations/node-source.node.json";
+import displayNodeDecl from "./declarations/display-node.node.json";
+// Canvas
+import canvasSourceDecl from "./declarations/canvas-source.node.json";
+import separateDecl from "./declarations/separate.node.json";
+// Mass
+import massDecl from "./declarations/mass.node.json";
+import inset3dDecl from "./declarations/inset-3d.node.json";
+import smooth3dDecl from "./declarations/smooth-3d.node.json";
+import meshTo3dDecl from "./declarations/mesh-to-3d.node.json";
+// Graph
+import graphSourceDecl from "./declarations/graph-source.node.json";
+import miteredJoinDecl from "./declarations/mitered-join.node.json";
+import graphSmoothDecl from "./declarations/graph-smooth.node.json";
+import graphMetricsDecl from "./declarations/graph-metrics.node.json";
+import showDirectionDecl from "./declarations/show-direction.node.json";
+import graphToSpacesDecl from "./declarations/graph-to-spaces.node.json";
+import graphReduceDecl from "./declarations/graph-reduce.node.json";
+import voronoiBloomDecl from "./declarations/voronoi-bloom.node.json";
+import springLayoutDecl from "./declarations/spring-layout.node.json";
+import pipeSolverDecl from "./declarations/pipe-solver.node.json";
+// Partition
+import splitDecl from "./declarations/split.node.json";
+import skeletonDecl from "./declarations/skeleton.node.json";
+import bspDecl from "./declarations/bsp.node.json";
+import corridoorDecl from "./declarations/corridoor.node.json";
+import coreRackingDecl from "./declarations/core-racking.node.json";
+import voronoiDecl from "./declarations/voronoi.node.json";
+import convexDecompDecl from "./declarations/convex-decomp.node.json";
+import meshDecl from "./declarations/mesh.node.json";
+import circlePackingDecl from "./declarations/circle-packing.node.json";
+import treemapDecl from "./declarations/treemap.node.json";
+import rectPackDecl from "./declarations/rect-pack.node.json";
+import visibilityDecl from "./declarations/visibility.node.json";
+// Space
+import sourceDecl from "./declarations/source.node.json";
+import spaceCreatorDecl from "./declarations/space-creator.node.json";
+import pullDecl from "./declarations/pull.node.json";
+import transformDecl from "./declarations/transform.node.json";
+import dimensionDecl from "./declarations/dimension.node.json";
+import areaDimensionDecl from "./declarations/area-dimension.node.json";
+import schemaDecl from "./declarations/schema.node.json";
+import outputSchemaDecl from "./declarations/output-schema.node.json";
+import layoutGenDecl from "./declarations/layout-gen.node.json";
+import schemaToDrawingDecl from "./declarations/schema-to-drawing.node.json";
+import schemaToLayersDecl from "./declarations/schema-to-layers.node.json";
+import hatchingDecl from "./declarations/hatching.node.json";
+import spaceGeometryDecl from "./declarations/space-geometry.node.json";
+import mergeDecl from "./declarations/merge.node.json";
+import inputPropsDecl from "./declarations/input-props.node.json";
 
 /** Parse a Split "ratios" entry (string "1, 2, 1" / "1:2:1", or an array) into positive numbers.
  *  In ratio mode the entries also drive the piece count, so the ratios input is the single source
@@ -32,7 +123,7 @@ export const parseDimEdges = (v: unknown): number[] => {
 };
 export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "create-polygon" | "create-segment" | "create-arc" | "create-box" | "rectangle" | "circle" | "cuboid" | "cylinder" | "sphere" | "cone" | "transform-3d" | "boolean-3d" | "display-3d";
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "corridoor" | "core-racking" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "pobj-source" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "create-polygon" | "create-segment" | "create-arc" | "create-box" | "rectangle" | "circle" | "cuboid" | "cylinder" | "sphere" | "cone" | "transform-3d" | "boolean-3d" | "display-3d";
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
@@ -422,6 +513,14 @@ export interface FlowToolDef {
   fields: ParamField[];
   /** One-line description shown in the palette + node. */
   hint: string;
+  /** Optional multi-line usage guide (how to drive the params) — carried from a node-declaration file's
+   *  `instructions`. Available to the agent catalog + the node's info panel. */
+  instructions?: string;
+  /** This node outputs real Space polygon(s) (its `polygons` are room boundaries, not overlays/graphs).
+   *  Flow "Live" mode materialises such nodes as REAL, editable Spaces + boundary segments that track the
+   *  params — see FloorPlanEditor's live-materialise effect. Opt-in per tool (inset, optimise-rect, …).
+   *  Carried from a node-declaration file's `materialisesSpace`. */
+  materialisesSpace?: boolean;
 }
 
 /** Default Metrics-tab result rows for the Frame Builder, used when no Output Schema node overrides
@@ -440,520 +539,23 @@ export const FRAME_DEFAULT_RESULTS: { node: import("../types").GraphResultDef[];
 };
 
 export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
-  source: {
-    type: "source",
-    label: "Space",
-    color: "#0f172a",
-    // Input endpoint accepts a Schema node (attaches Space Schema properties to the referenced
-    // space(s)); the node itself remains a pipeline ROOT — geometry comes from the canvas, never
-    // from the wire, so the eval ignores any incoming geometry.
-    hasInput: true,
-    hasOutput: true,
-    // Pipeline input. `id` identifies the source Space; when `grabFromSelection` is on, the host keeps
-    // `id` synced to the space currently selected on the canvas (and feeds that space's geometry).
-    defaultParams: { id: "", grabFromSelection: true },
-    fields: [
-      { key: "grabFromSelection", label: "Grab ID from selection", kind: "checkbox" },
-      // Editable Space id. Read-only-ish while grabbing (the host overwrites it from the selection);
-      // hide the input in that mode and show the grabbed id as a readout instead.
-      { key: "id", label: "ID", kind: "text", placeholder: "space id", showIf: (p) => !p.grabFromSelection },
-    ],
-    hint: "Pipeline input — a Space on the canvas (by id, or the current selection).",
-  },
-  "space-creator": {
-    type: "space-creator",
-    label: "Space Creator",
-    color: "#0f766e",
-    // Generator (no geometry input): synthesises a parametric polygon — shape + dimensions + rotation +
-    // regular/irregular. Acts as a pipeline root like the Space node, but draws geometry from scratch
-    // (centred near the current selection). Irregular jitter is seeded → stable; "Re-roll" bumps the seed.
-    hasInput: false,
-    hasOutput: true,
-    defaultParams: { shape: "rectangle", n: 5, radius: 3, width: 4, height: 3, rotation: 0, regularity: "regular", irregularity: 0.3, seed: 1, offsetX: 0, offsetY: 0 },
-    fields: [
-      {
-        key: "shape",
-        label: "Shape",
-        kind: "select",
-        options: [
-          { value: "rectangle", label: "Rectangle" },
-          { value: "polygon", label: "Regular polygon" },
-          { value: "circle", label: "Circle" },
-          { value: "lshape", label: "L-shape" },
-        ],
-      },
-      { key: "n", label: "Segments (n)", kind: "range", min: 3, max: 40, step: 1, showIf: (p) => p.shape === "polygon" },
-      { key: "radius", label: "Radius", kind: "range", min: 0.5, max: 50, step: 0.5, unit: "m", showIf: (p) => p.shape === "polygon" || p.shape === "circle" },
-      { key: "width", label: "Width", kind: "range", min: 0.5, max: 100, step: 0.5, unit: "m", showIf: (p) => p.shape === "rectangle" || p.shape === "lshape" },
-      { key: "height", label: "Height", kind: "range", min: 0.5, max: 100, step: 0.5, unit: "m", showIf: (p) => p.shape === "rectangle" || p.shape === "lshape" },
-      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
-      {
-        key: "regularity",
-        label: "Regularity",
-        kind: "select",
-        options: [
-          { value: "regular", label: "Regular" },
-          { value: "irregular", label: "Irregular" },
-        ],
-      },
-      { key: "irregularity", label: "Irregularity", kind: "range", min: 0, max: 1, step: 0.02, showIf: (p) => p.regularity === "irregular" },
-      { key: "seed", label: "Seed", kind: "number", min: 1, step: 1, showIf: (p) => p.regularity === "irregular" },
-      { key: "offsetX", label: "Offset X", kind: "number", step: 0.5, unit: "m" },
-      { key: "offsetY", label: "Offset Y", kind: "number", step: 0.5, unit: "m" },
-    ],
-    hint: "Draw a parametric space — rectangle / regular polygon / circle / L-shape, regular or irregular.",
-  },
-  densify: {
-    type: "densify",
-    label: "Resample",
-    color: "#16a34a",
-    hasInput: true,
-    hasOutput: true,
-    // Multi-space resampler: ADD vertices (Densify by length / per-edge → feeds Voronoi seeds, Skeleton,
-    // Smoothing) or REDUCE them (Remove collinear = inverse of densify; Douglas-Peucker = shape-preserving
-    // low-poly by tolerance; Visvalingam = reduce to a target vertex count; Keep-every-Nth = crude). One
-    // output handle per input space; the host bakes the live count into `inputCount`. The active param is
-    // wireable.
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.inputCount) || 1))),
-    valueInputs: [
-      { key: "maxLength", label: "Max segment length" },
-      { key: "count", label: "Points / edge" },
-      { key: "rdpTol", label: "Tolerance" },
-      { key: "targetVertices", label: "Target vertices" },
-      { key: "stride", label: "Keep every Nth" },
-    ],
-    defaultParams: { mode: "length", maxLength: 5, count: 2, collinearTol: 1, rdpTol: 1, targetVertices: 8, stride: 2, outputMode: "perCell" },
-    fields: [
-      {
-        key: "mode",
-        label: "Mode",
-        kind: "select",
-        options: [
-          { value: "length", label: "Densify · by max length" },
-          { value: "count", label: "Densify · points / edge" },
-          { value: "collinear", label: "Simplify · remove collinear" },
-          { value: "rdp", label: "Simplify · Douglas-Peucker" },
-          { value: "visvalingam", label: "Simplify · target vertices" },
-          { value: "stride", label: "Reduce · keep every Nth" },
-        ],
-      },
-      { key: "maxLength", label: "Max segment length", kind: "range", min: 0.2, max: 50, step: 0.2, unit: "m", showIf: (p) => p.mode === "length" },
-      { key: "count", label: "Points / edge", kind: "range", min: 1, max: 20, step: 1, showIf: (p) => p.mode === "count" },
-      { key: "collinearTol", label: "Angle tolerance", kind: "range", min: 0, max: 30, step: 0.5, unit: "°", showIf: (p) => p.mode === "collinear" },
-      { key: "rdpTol", label: "Tolerance", kind: "range", min: 0.05, max: 20, step: 0.05, unit: "m", showIf: (p) => p.mode === "rdp" },
-      { key: "targetVertices", label: "Target vertices", kind: "range", min: 3, max: 60, step: 1, showIf: (p) => p.mode === "visvalingam" },
-      { key: "stride", label: "Keep every Nth", kind: "range", min: 2, max: 10, step: 1, showIf: (p) => p.mode === "stride" },
-      // One handle per resampled space, or a single bundle handle. Only meaningful with several inputs.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per space (one each)" },
-          { value: "single", label: "Single (all spaces)" },
-        ],
-        showIf: (p) => Math.round(Number(p.inputCount) || 1) > 1,
-      },
-    ],
-    hint: "Resample a space: Densify (add vertices → feeds Voronoi/Skeleton) or Simplify (remove collinear / Douglas-Peucker / target count) to low-poly.",
-  },
-  inset: {
-    type: "inset",
-    label: "Inset",
-    color: "#0369a1",
-    hasInput: true,
-    hasOutput: true,
-    // Multi-space: insets EVERY connected space, emitting one output handle (out-i) per input space.
-    // The live input count isn't knowable from params alone (it depends on how many edges feed this
-    // node), so the host bakes it into `inputCount`; this drives both the handle count and the
-    // compiled `produces` list. 1 input → 1 output (unchanged single-space behaviour).
-    // "Outputs": per-space handles, or a single bundle handle carrying every inset space.
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.inputCount) || 1))),
-    // Second output endpoint: the inset area (m²) — total across every inset space.
-    valueOutputs: [{ key: "area", label: "Area", unit: "m²" }],
-    // Scalar inputs (numbers): a wired value overrides the matching offset param. Each aligns to its
-    // own field row; hidden rows (the mode the field doesn't apply to) fall back to a default position.
-    valueInputs: [
-      { key: "uniformSetback", label: "Offset" },
-      { key: "front", label: "Front offset" },
-      { key: "remaining", label: "Remaining offset" },
-      { key: "frontEdgeIndex", label: "Edge index" },
-    ],
-    // Mirrors the Inset Polygon block's parameters (Equal / Front & Remaining / Per-edge). Deduct
-    // Area is intentionally omitted.
-    defaultParams: {
-      mode: "equal",
-      uniformSetback: 1,
-      inside: true,
-      front: 0,
-      remaining: 0,
-      frontEdgeMode: "longest",
-      frontEdgeIndex: 0,
-      setbacks: "1, 0.5, 0.5",
-      outputMode: "perCell",
-    },
-    fields: [
-      { key: "inside", label: "Inside", kind: "checkbox" },
-      // "Outputs": one handle per inset space, or a single bundle handle carrying all of them. Only
-      // meaningful with several input spaces; a single space is one output either way.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per space (one each)" },
-          { value: "single", label: "Single (all spaces)" },
-        ],
-        showIf: (p) => Math.round(Number(p.inputCount) || 1) > 1,
-      },
-      {
-        key: "mode",
-        label: "Mode",
-        kind: "select",
-        options: [
-          { value: "equal", label: "Equal" },
-          { value: "front-remaining", label: "Front & Remaining" },
-          { value: "variable", label: "Per-edge" },
-        ],
-      },
-      {
-        key: "uniformSetback",
-        label: "Offset",
-        kind: "range",
-        min: 0,
-        max: 5,
-        step: 0.05,
-        unit: "m",
-        showIf: (p) => p.mode === "equal",
-      },
-      {
-        key: "front",
-        label: "Front offset",
-        kind: "range",
-        min: 0,
-        max: 5,
-        step: 0.05,
-        unit: "m",
-        showIf: (p) => p.mode === "front-remaining",
-      },
-      {
-        key: "remaining",
-        label: "Remaining offset",
-        kind: "range",
-        min: 0,
-        max: 5,
-        step: 0.05,
-        unit: "m",
-        showIf: (p) => p.mode === "front-remaining",
-      },
-      // Which edge counts as "front": auto (longest edge ≈ street-facing) or an explicit index.
-      {
-        key: "frontEdgeMode",
-        label: "Front edge",
-        kind: "select",
-        options: [
-          { value: "longest", label: "Longest (auto)" },
-          { value: "index", label: "By edge index" },
-        ],
-        showIf: (p) => p.mode === "front-remaining",
-      },
-      { key: "frontEdgeIndex", label: "Edge index", kind: "range", min: 0, max: 19, step: 1, showIf: (p) => p.mode === "front-remaining" && p.frontEdgeMode === "index" },
-      // Per-edge setbacks (metres), one per polygon edge. Short lists pad with 0 (no inset on the rest).
-      { key: "setbacks", label: "Setbacks (per edge)", kind: "text", placeholder: "1, 0.5, 0.5, 2", showIf: (p) => p.mode === "variable" },
-    ],
-    hint: "Offset the boundary inward → an Inset Area space. Takes multiple spaces (one output per input). Equal / Front&Remaining / Per-edge.",
-  },
-  "optimise-rect": {
-    type: "optimise-rect",
-    label: "Optimise Rectangle",
-    color: "#7c3aed",
-    hasInput: true,
-    hasOutput: true,
-    // Multi-space: packs EVERY connected space, emitting one output handle (out-i) per placed rectangle
-    // (across all input spaces). The live count isn't knowable from params alone, so the host bakes it
-    // into `inputCount`. "Outputs": per-rectangle handles, or a single bundle handle carrying them all.
-    // 1 input space + 1 rectangle → 1 output (unchanged single-space behaviour).
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.inputCount) || 1))),
-    // Second output endpoint: total packed rectangle area (m²) — sum of all placed rects / union.
-    valueOutputs: [{ key: "area", label: "Area", unit: "m²" }],
-    // Scalar inputs: a wired value overrides the matching param. axisAngle / count take the number
-    // directly; optimiseAxisTilt is a boolean, driven as 0 (off) | non-0 (on).
-    valueInputs: [
-      { key: "axisAngle", label: "Axis tilt" },
-      { key: "count", label: "Rectangles (n)" },
-      { key: "optimiseAxisTilt", label: "Optimise axis tilt" },
-    ],
-    // Mirrors the Optimise Rectangle block (recipe-supported params). Per-edge reference and
-    // the layout-variations modal aren't exposed on the node.
-    defaultParams: {
-      shape: "rectangle",
-      reference: "none",
-      referenceEdge: 0,
-      axisAngle: 0,
-      minNotch: 0,
-      minThickness: 0,
-      steps: 3,
-      count: 1,
-      gap: 0,
-      union: false,
-      optimiseAxisTilt: false,
-      shrinkEnabled: false,
-      targetArea: 50,
-      shrinkAngle: 0,
-      shrinkSlide: 0,
-      optimiseShrinkEnabled: false,
-      exactArea: false,
-      outputMode: "perCell",
-      random: false,
-      seed: 1,
-    },
-    fields: [
-      // "Outputs": one handle per placed rectangle, or a single bundle handle carrying them all. Only
-      // meaningful with several input spaces / rectangles; a single result is one output either way.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per rect (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-        showIf: (p) => Math.round(Number(p.inputCount) || 1) > 1,
-      },
-      {
-        key: "shape",
-        label: "Shape",
-        kind: "select",
-        options: [
-          { value: "rectangle", label: "Rectangle" },
-          { value: "square", label: "Square" },
-          { value: "hexagon", label: "Hexagon" },
-          { value: "lshape", label: "L-shape (inscribed)" },
-          { value: "tshape", label: "T-shape (inscribed)" },
-          { value: "zshape", label: "Z-shape (inscribed)" },
-          { value: "ishape", label: "I-shape (inscribed)" },
-          { value: "cshape", label: "C-shape (inscribed)" },
-          { value: "stepped", label: "Stepped (inscribed)" },
-          { value: "cross", label: "Cross (inscribed)" },
-        ],
-      },
-      // Random: per space, auto-pick optimise-tilt on/off, an axis tilt 0–360°, rectangle count 1–3, and
-      // force Union on — a stable seeded draw (re-roll bumps the seed). Hides the controls it drives.
-      { key: "random", label: "Random", kind: "checkbox" },
-      { key: "seed", label: "Seed", kind: "number", min: 1, step: 1, showIf: (p) => Boolean(p.random) },
-      {
-        key: "reference",
-        label: "Reference",
-        kind: "select",
-        options: [
-          { value: "none", label: "None (any-angle)" },
-          { value: "custom", label: "Custom angle" },
-          { value: "by-edge", label: "By edge" },
-        ],
-        showIf: (p) => !p.random && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross",
-      },
-      { key: "referenceEdge", label: "Edge index", kind: "range", min: 0, max: 19, step: 1, showIf: (p) => !p.random && p.reference === "by-edge" && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      // Optimise axis tilt: auto-pick the Custom angle that maximises the packed area (sweeps tilt).
-      { key: "optimiseAxisTilt", label: "Optimise axis tilt", kind: "checkbox", showIf: (p) => !p.random && p.reference === "custom" && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      // Axis tilt: absolute angle for Custom; an offset on the edge angle for By edge; the inscribed
-      // L/T/Z-shape's tilt for those shapes. Hidden for Custom when "Optimise axis tilt" is on.
-      { key: "axisAngle", label: "Axis tilt", kind: "range", min: 0, max: 180, step: 0.5, unit: "°", showIf: (p) => !p.random && (p.shape === "lshape" || p.shape === "tshape" || p.shape === "zshape" || p.shape === "ishape" || p.shape === "cshape" || p.shape === "stepped" || p.shape === "cross" || (p.reference === "custom" && !p.optimiseAxisTilt) || p.reference === "by-edge") },
-      // Stepped only: number of staircase steps cut from a corner (1 = an L-shape).
-      { key: "steps", label: "Steps", kind: "range", min: 1, max: 10, step: 1, showIf: (p) => p.shape === "stepped" },
-      // Inscribed shapes only: the cut-out (notch / mouth / step / corner) must be at least this on
-      // every side, else the shape is treated as too-shallow to be a real one and no result is produced.
-      // For Stepped this is the minimum tread & riser; for Cross it's each corner notch. 0 = no minimum.
-      { key: "minNotch", label: "Min notch length", kind: "range", min: 0, max: 20, step: 0.1, unit: "m", showIf: (p) => p.shape === "lshape" || p.shape === "tshape" || p.shape === "zshape" || p.shape === "ishape" || p.shape === "cshape" || p.shape === "stepped" || p.shape === "cross" },
-      // Inscribed shapes only: minimum thickness of every limb — the L's arms, the T's bar & stem,
-      // the Z's blocks & connector, the I's bars & stem, the C's arms & spine, the Stepped's solid
-      // margins, the Cross's two bars — so a protruding part can't come out too thin. 0 = no minimum.
-      { key: "minThickness", label: "Min part thickness", kind: "range", min: 0, max: 20, step: 0.1, unit: "m", showIf: (p) => p.shape === "lshape" || p.shape === "tshape" || p.shape === "zshape" || p.shape === "ishape" || p.shape === "cshape" || p.shape === "stepped" || p.shape === "cross" },
-      { key: "count", label: "Rectangles (n)", kind: "range", min: 1, max: 20, step: 1, showIf: (p) => !p.random && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      // Minimum spacing between placed rectangles — only meaningful with n ≥ 2. Each placed rect is
-      // inflated by this gap before it blocks the next, so consecutive rects stay at least `gap` apart.
-      { key: "gap", label: "Gap", kind: "range", min: 0, max: 20, step: 0.1, unit: "m", showIf: (p) => !p.random && Number(p.count) > 1 && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      { key: "union", label: "Union", kind: "checkbox", showIf: (p) => !p.random && Number(p.count) > 1 && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      { key: "shrinkEnabled", label: "Shrink to target", kind: "checkbox", showIf: (p) => p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      { key: "targetArea", label: "Target area", kind: "range", min: 0, max: 500, step: 0.5, unit: "m²", showIf: (p) => Boolean(p.shrinkEnabled) && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      { key: "shrinkAngle", label: "Shrink angle", kind: "range", min: 0, max: 360, step: 1, unit: "°", showIf: (p) => Boolean(p.shrinkEnabled) && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      { key: "optimiseShrinkEnabled", label: "Optimise shrink", kind: "checkbox", showIf: (p) => Boolean(p.shrinkEnabled) && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      { key: "shrinkSlide", label: "Shrink slide", kind: "range", min: 0, max: 100, step: 0.1, unit: "%", showIf: (p) => Boolean(p.shrinkEnabled) && !p.optimiseShrinkEnabled && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-      { key: "exactArea", label: "Exact area", kind: "checkbox", showIf: (p) => Boolean(p.shrinkEnabled) && p.shape !== "lshape" && p.shape !== "tshape" && p.shape !== "zshape" && p.shape !== "ishape" && p.shape !== "cshape" && p.shape !== "stepped" && p.shape !== "cross" },
-    ],
-    hint: "Fit the largest rectangle(s) inside the input space.",
-  },
-  split: {
-    type: "split",
-    label: "Split",
-    color: "#0d9488",
-    hasInput: true,
-    hasOutput: true,
-    // Output handles. With ONE input space: one handle per piece (Strip → 3; Ratio → one per ratio entry;
-    // else `count`). With SEVERAL input spaces: one handle per input space, each bundling that space's
-    // pieces — the host bakes the live handle count into `handleCount`. "single" mode → one bundle handle.
-    outputCount: (p) => {
-      if (p.outputMode === "single") return 1;
-      const baked = Number(p.handleCount);
-      if (Number.isFinite(baked) && baked >= 1) return Math.min(40, Math.round(baked));
-      if (p.type === "strip") return 3;
-      if (p.type === "normal" && p.mode === "ratio") {
-        const n = parseSplitRatios(p.ratios).length;
-        if (n >= 1) return Math.max(1, Math.min(12, n));
-      }
-      return Math.max(1, Math.min(12, Math.round(Number(p.count) || 2)));
-    },
-    // Scalar inputs: `angle` takes the wired number directly; `target` (first piece area, m²) drives the
-    // target-sizing split; `ratios` is a text list, so a wired number is coerced to its string form (and
-    // not echoed back to the text box). The `target` endpoint only appears in Target-area sizing mode
-    // (its field's showIf gates the handle too).
-    valueInputs: [
-      { key: "ratios", label: "Ratios" },
-      { key: "angle", label: "Angle" },
-      { key: "target", label: "First piece area" },
-    ],
-    // Mirrors the Splitting Actions block: Equal / Target area / Ratio sizing. (Grid + per-piece
-    // Length arrays aren't exposed.) Principal Axes slices across the long (major) axis.
-    defaultParams: {
-      type: "normal",
-      mode: "equal",
-      count: 2,
-      angle: 0,
-      target: 20,
-      ratios: "1, 2, 1",
-      splitAlongMinorPrincipalAxis: false,
-      stripLength: 1,
-      stripPosition: 50,
-      principalMethod: "pca",
-      outputMode: "perCell",
-    },
-    fields: [
-      {
-        key: "type",
-        label: "Type",
-        kind: "select",
-        options: [
-          { value: "normal", label: "Normal" },
-          { value: "strip", label: "Strip" },
-          { value: "principal", label: "Principal Axes" },
-        ],
-      },
-      // Output style: separate per-piece handles, or a single bundle handle carrying every piece.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per piece (one each)" },
-          { value: "single", label: "Single (all pieces)" },
-        ],
-      },
-      { key: "count", label: "Pieces", kind: "range", min: 2, max: 12, step: 1, showIf: (p) => (p.type === "normal" && p.mode !== "ratio") || p.type === "principal" },
-      {
-        key: "principalMethod",
-        label: "Method",
-        kind: "select",
-        options: [
-          { value: "pca", label: "PCA (moments)" },
-          { value: "obb", label: "Min-area OBB" },
-          { value: "skeleton", label: "Straight Skeleton" },
-        ],
-        showIf: (p) => p.type === "principal",
-      },
-      {
-        key: "mode",
-        label: "Sizing",
-        kind: "select",
-        options: [
-          { value: "equal", label: "Equal (area)" },
-          { value: "target", label: "Target area" },
-          { value: "ratio", label: "Ratio" },
-        ],
-        showIf: (p) => p.type === "normal",
-      },
-      { key: "target", label: "First piece area", kind: "range", min: 1, max: 200, step: 1, unit: "m²", showIf: (p) => p.type === "normal" && p.mode === "target" },
-      // Ratio sizing: relative weights, one per piece. The entry count = number of pieces.
-      { key: "ratios", label: "Ratios", kind: "text", placeholder: "1, 2, 1", showIf: (p) => p.type === "normal" && p.mode === "ratio" },
-      {
-        key: "splitAlongMinorPrincipalAxis",
-        label: "Along minor axis",
-        kind: "checkbox",
-        showIf: (p) => p.type === "normal",
-      },
-      { key: "angle", label: "Angle", kind: "range", min: 0, max: 360, step: 1, unit: "°", showIf: (p) => p.type !== "principal" && !p.splitAlongMinorPrincipalAxis },
-      { key: "stripLength", label: "Strip length", kind: "range", min: 0.1, max: 20, step: 0.05, unit: "m", showIf: (p) => p.type === "strip" },
-      { key: "stripPosition", label: "Strip position", kind: "range", min: 0, max: 100, step: 1, unit: "%", showIf: (p) => p.type === "strip" },
-    ],
-    hint: "Cut the input space into N partitions on the Partitions layer.",
-  },
-  skeleton: {
-    type: "skeleton",
-    label: "Skeleton",
-    color: "#0891b2",
-    hasInput: true,
-    hasOutput: true,
-    // Multi-space: computes the medial axis of EVERY input space. Output handles are GROUPED like BSP —
-    // one input → one handle per skeleton segment; several inputs → one handle per INPUT SPACE (each
-    // bundling that space's segments); "single" output mode → one bundle handle for everything. The host
-    // bakes the live handle count into `handleCount`.
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.handleCount) || 1))),
-    // Mirrors the Skeleton block (recipe-supported params; `simplify` isn't replayed by the engine).
-    defaultParams: {
-      type: "straight-skeleton",
-      samples: 8,
-      level: 1,
-      reduceLevel: 0,
-      pruneEnds: true,
-      joinToBoundary: false,
-      longestBranch: false,
-      makePath: false,
-      pathWidth: 1,
-      emit: "regions",
-      outputMode: "perCell",
-    },
-    fields: [
-      {
-        key: "type",
-        label: "Type",
-        kind: "select",
-        options: [
-          { value: "sampled-voronoi", label: "Sampled Voronoi" },
-          { value: "segment-sweepline", label: "Sweepline (segments)" },
-          { value: "straight-skeleton", label: "Straight Skeleton" },
-        ],
-      },
-      // What to emit: the closed face polygons (spaces, default — insettable) or the raw medial-axis lines.
-      {
-        key: "emit",
-        label: "Emit",
-        kind: "select",
-        options: [
-          { value: "regions", label: "Regions (spaces)" },
-          { value: "branches", label: "Branches (lines)" },
-        ],
-      },
-      // Output style: per-region / per-input-space handles, or a single bundle handle.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per cell (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-      { key: "samples", label: "Samples", kind: "range", min: 2, max: 20, step: 1, showIf: (p) => p.type !== "straight-skeleton" },
-      { key: "level", label: "Level", kind: "range", min: 1, max: 4, step: 1, showIf: (p) => p.type === "straight-skeleton" },
-      // Midpoint segment reduction: 0 = off; each level halves interior detail (anchored at junctions/tips).
-      { key: "reduceLevel", label: "Reduce segments", kind: "range", min: 0, max: 5, step: 1, showIf: (p) => p.type === "straight-skeleton" },
-      { key: "pruneEnds", label: "Prune ends", kind: "checkbox", showIf: (p) => p.type === "straight-skeleton" },
-      // Continue each pruned branch tip out to the polygon boundary (red completion segments).
-      { key: "joinToBoundary", label: "Join to boundary", kind: "checkbox", showIf: (p) => p.type === "straight-skeleton" && Boolean(p.pruneEnds) },
-      { key: "longestBranch", label: "Longest branch", kind: "checkbox", showIf: (p) => p.type === "straight-skeleton" && Boolean(p.pruneEnds) },
-      { key: "makePath", label: "Make path", kind: "checkbox", showIf: (p) => p.type === "straight-skeleton" },
-      { key: "pathWidth", label: "Path width", kind: "range", min: 0, max: 50, step: 0.1, unit: "m", showIf: (p) => p.type === "straight-skeleton" && Boolean(p.makePath) },
-    ],
-    hint: "Medial axis of the space → closed Regions (spaces, default) or Branches (lines). Prune+Join reduces the region count. Longest branch keeps only the main run; Make path turns the branches into ONE seamless constant-width band (closed polygons) of Path width.",
-  },
+  // Data-declared (see ./declarations/source.node.json) — behaviour stays in code.
+  source: buildToolDefFromDeclaration(sourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/space-creator.node.json) — behaviour stays in code.
+  "space-creator": buildToolDefFromDeclaration(spaceCreatorDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/densify.node.json) — behaviour stays in code (evalDensify).
+  densify: buildToolDefFromDeclaration(densifyDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/inset.node.json) — behaviour stays in code (evalInset).
+  inset: buildToolDefFromDeclaration(insetDecl as unknown as NodeDeclaration),
+  // PROTOTYPE — built from ./declarations/optimise-rect.node.json (params schema + handles + showWhen +
+  // instructions), NOT a hand-written literal. Behaviour stays in code: evaluateFlow dispatches this
+  // `tool` to evalOptimise. This is the pattern a full node-declaration migration would follow.
+  "optimise-rect": buildToolDefFromDeclaration(optimiseRectDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/split.node.json) — behaviour stays in code. NOTE: outputCount matches
+  // the baked-handleCount path exactly; the pre-bake ratio-mode estimate is approximated (parseSplitRatios).
+  split: buildToolDefFromDeclaration(splitDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/skeleton.node.json) — behaviour stays in code.
+  skeleton: buildToolDefFromDeclaration(skeletonDecl as unknown as NodeDeclaration),
   "place-object": {
     type: "place-object",
     label: "Place Object",
@@ -977,128 +579,15 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Place one or more objects along the input space's boundary — pick a parametric library object (size auto-measured) or a custom box.",
   },
-  bsp: {
-    type: "bsp",
-    label: "BSP",
-    color: "#c026d3",
-    hasInput: true,
-    hasOutput: true,
-    // One output handle per seed/cell. Seeds are auto-distributed along the longer axis (matches
-    // the engine), so increasing Seeds adds cells; each cell has its own output (like Split).
-    // Output handles. ONE input space → one handle per cell (Seeds). SEVERAL input spaces → one handle
-    // per input space, each bundling that space's cells (host bakes the count into `handleCount`).
-    // "single" mode → one bundle handle carrying every cell.
-    outputCount: (p) => {
-      if (p.outputMode === "single") return 1;
-      const baked = Number(p.handleCount);
-      if (Number.isFinite(baked) && baked >= 1) return Math.min(40, Math.round(baked));
-      return Math.max(1, Math.min(30, Math.round(Number(p.seeds) || 2)));
-    },
-    valueInputs: [
-      { key: "tiltAngle", label: "Tilt" },
-      { key: "maxRatio", label: "Max aspect" },
-    ],
-    defaultParams: { seeds: 3, tiltAngle: 0, balance: "equal", weights: "", layout: "strip", maxRatio: 0, useConnection: false, connections: "", outputMode: "perCell", showOuterOpenings: false, outerOpeningWidth: 1.0, showInnerOpenings: false, innerOpeningWidth: 0.9 },
-    fields: [
-      { key: "seeds", label: "Cells", kind: "range", min: 1, max: 30, step: 1 },
-      { key: "tiltAngle", label: "Tilt", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
-      // Area balance: cuts are solved on the CLIPPED area (the part inside the boundary), so equal
-      // really means equal m² — even on L/T/concave spaces. Weighted uses the ratio list below.
-      {
-        key: "balance",
-        label: "Balance",
-        kind: "select",
-        options: [
-          { value: "equal", label: "Equal area" },
-          { value: "weighted", label: "Weighted (ratios)" },
-        ],
-      },
-      // Relative area weights, one per cell (comma ratio list). Short/missing entries → 1.
-      { key: "weights", label: "Weights", kind: "text", placeholder: "1, 2, 1", showIf: (p) => p.balance === "weighted" },
-      // Layout strategy: "Slicing" = classic recursive BSP halving; "Squarified" = treemap rows
-      // that keep every cell's aspect ratio as close to 1 as the weights allow.
-      {
-        key: "layout",
-        label: "Layout",
-        kind: "select",
-        options: [
-          { value: "strip", label: "Slicing (BSP)" },
-          { value: "squarify", label: "Squarified (treemap)" },
-        ],
-      },
-      // Soft aspect target for slicing mode: each split picks the cut axis predicted to keep cells
-      // under this long/short ratio. 0 = off (always cut the longer side). Squarify ignores it.
-      { key: "maxRatio", label: "Max aspect", kind: "range", min: 0, max: 6, step: 0.1, showIf: (p) => p.layout !== "squarify" },
-      // Adjacency: tick pairs in the matrix (rendered on the node) to require those cells to share
-      // a wall. The slicing tree bipartitions to keep ticked pairs together (min-cut), then a
-      // relabelling pass + deterministic multi-start maximise satisfied pairs.
-      { key: "useConnection", label: "Use adjacency", kind: "checkbox" },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per cell (one each)" },
-          { value: "single", label: "Single (all cells)" },
-        ],
-      },
-      // Preview-only openings: draw the partition with a "no line" gap so rooms read as connected.
-      // OUTER = one opening per cell on its longest boundary (perimeter) edge — an exterior door per
-      // room. INNER = an opening on each shared edge between two cells. Display geometry only — the
-      // threaded cells are unchanged.
-      { key: "showOuterOpenings", label: "Show outer openings", kind: "checkbox" },
-      { key: "outerOpeningWidth", label: "Outer opening width", kind: "range", min: 0.3, max: 3, step: 0.05, unit: "m", showIf: (p) => Boolean(p.showOuterOpenings) },
-      { key: "showInnerOpenings", label: "Show inner openings", kind: "checkbox" },
-      { key: "innerOpeningWidth", label: "Inner opening width", kind: "range", min: 0.3, max: 3, step: 0.05, unit: "m", showIf: (p) => Boolean(p.showInnerOpenings) },
-    ],
-    hint: "Binary-space-partition the input space into one cell per seed. Equal/weighted shares are measured on the clipped area (inside the boundary). Squarified layout keeps cells near-square; the adjacency matrix forces ticked pairs to share a wall.",
-  },
-  voronoi: {
-    type: "voronoi",
-    label: "Voronoi",
-    color: "#2563eb",
-    hasInput: true,
-    hasOutput: true,
-    // Seeds ARE the input space's vertices → exactly one cell per vertex. Two output styles:
-    //  • "perCell" (default) — one output handle per cell (out-0, out-1, … like Split / BSP). The vertex
-    //    count isn't known from params alone, so the host bakes it into `vertexCount`.
-    //  • "single" — ONE handle carrying ALL cells as a bundle, so a single connection feeds a multi-space
-    //    node (e.g. Inset) which then processes every cell.
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(2, Math.min(40, Math.round(Number(p.vertexCount) || 2))),
-    // Scalar input: a wired number overrides the random-seed count (only used when 'Use vertices' is off).
-    valueInputs: [{ key: "seeds", label: "Seeds" }],
-    defaultParams: { metric: "euclidean", relax: false, outputMode: "perCell", useVertices: true, seeds: 8, rectilinear: false },
-    fields: [
-      {
-        key: "metric",
-        label: "Type",
-        kind: "select",
-        options: [
-          { value: "euclidean", label: "Euclidean" },
-          { value: "manhattan", label: "Manhattan" },
-          { value: "chebyshev", label: "Chebyshev" },
-        ],
-      },
-      // Seed source: the polygon's vertices (one cell per vertex), or `seeds` random interior points.
-      { key: "useVertices", label: "Use vertices as seeds", kind: "checkbox" },
-      { key: "seeds", label: "Seeds", kind: "range", min: 2, max: 40, step: 1, showIf: (p) => p.useVertices === false },
-      // Output style: separate per-cell handles, or a single bundle handle carrying every cell.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per cell (one each)" },
-          { value: "single", label: "Single (all cells)" },
-        ],
-      },
-      { key: "relax", label: "Relax seeds", kind: "checkbox" },
-      // Rectilinear: BSP-like axis-aligned (staircase) cells via grid CVT, oriented to the principal axis;
-      // handles concave shapes. Manhattan/Chebyshev metric → blockier cells.
-      { key: "rectilinear", label: "Rectilinear (grid)", kind: "checkbox" },
-    ],
-    hint: "Voronoi-partition the space — one cell per vertex, or per random seed (uncheck 'Use vertices'). Rectilinear = BSP-like axis-aligned cells (concave-safe). Relax = Lloyd/CVT.",
-  },
+  // Data-declared (see ./declarations/bsp.node.json) — behaviour stays in code (adjacency matrix editor).
+  bsp: buildToolDefFromDeclaration(bspDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/corridoor.node.json) — behaviour stays in code (evalCorridoor +
+  // the applyRecipeJson "corridoor" commit runner). Re-registered after the FLOW_TOOLS literals were lost.
+  corridoor: buildToolDefFromDeclaration(corridoorDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/core-racking.node.json) — behaviour stays in code (evalCoreRacking).
+  "core-racking": buildToolDefFromDeclaration(coreRackingDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/voronoi.node.json) — behaviour stays in code.
+  voronoi: buildToolDefFromDeclaration(voronoiDecl as unknown as NodeDeclaration),
   conditional: {
     type: "conditional",
     label: "Conditional",
@@ -1152,383 +641,32 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Feedback controller — drives a node's value-input, sweeping it from Start to End by Delta (Increment / Decrement) until a wired Conditional's test is met. Wire Value → a node's param, and a Conditional's Met → Signal.",
   },
-  "bounding-shape": {
-    type: "bounding-shape",
-    label: "Bounding Shapes",
-    color: "#059669",
-    hasInput: true,
-    hasOutput: true,
-    // Mirrors the Bounding Shapes block: minimum-enclosing Circle (Welzl), Ellipse (Khachiyan), or
-    // regular n-gon (sides / angle / optimise orientation). Circle & ellipse take no parameters.
-    defaultParams: { shape: "ngon", sides: 6, angle: 0, optimize: false },
-    fields: [
-      {
-        key: "shape",
-        label: "Shape",
-        kind: "select",
-        options: [
-          { value: "circle", label: "Circumcircle" },
-          { value: "ellipse", label: "Min. ellipse" },
-          { value: "ngon", label: "Regular n-gon" },
-        ],
-      },
-      { key: "sides", label: "Sides (n)", kind: "range", min: 3, max: 12, step: 1, showIf: (p) => p.shape === "ngon" },
-      // Orientation is meaningful only for the n-gon, and only when not auto-optimising.
-      { key: "angle", label: "Angle", kind: "range", min: 0, max: 360, step: 0.5, unit: "°", showIf: (p) => p.shape === "ngon" && !p.optimize },
-      { key: "optimize", label: "Optimise orientation", kind: "checkbox", showIf: (p) => p.shape === "ngon" },
-    ],
-    hint: "Fit the minimum enclosing circle / ellipse / regular n-gon around the input space.",
-  },
-  "convex-hull": {
-    type: "convex-hull",
-    label: "Convex Hull",
-    color: "#0369a1",
-    hasInput: true,
-    hasOutput: true,
-    // Mirrors the Convex Hull block — the smallest convex polygon containing every vertex. No params.
-    defaultParams: {},
-    fields: [],
-    hint: "Wrap the input space in its convex hull (smallest enclosing convex polygon).",
-  },
-  "convex-decomp": {
-    type: "convex-decomp",
-    label: "Convex Decomposition",
-    color: "#6d28d9",
-    hasInput: true,
-    hasOutput: true,
-    // Mirrors the Convex Decomposition block — split a concave space into convex pieces by one of
-    // four methods. Tolerance only applies to ACD. One output handle PER convex piece (like Split /
-    // BSP): the piece count isn't known from params (it depends on the polygon), so the host bakes the
-    // live count into `pieceCount`, which drives both the handle count and the compiled produces list.
-    // "Outputs": per-piece handles, or a single bundle handle carrying every piece.
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.pieceCount) || 1))),
-    defaultParams: { type: "hertel-mehlhorn", tolerance: 10, neckRatio: 3, pieceCount: 1, outputMode: "perCell" },
-    fields: [
-      {
-        key: "type",
-        label: "Type",
-        kind: "select",
-        options: [
-          { value: "hertel-mehlhorn", label: "Hertel–Mehlhorn" },
-          { value: "bayazit", label: "Bayazit" },
-          { value: "acd", label: "ACD (approximate)" },
-          { value: "steiner", label: "Steiner (edge extension)" },
-          { value: "neck-cut", label: "Neck-cut (big blocks)" },
-        ],
-      },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per piece (one each)" },
-          { value: "single", label: "Single (all pieces)" },
-        ],
-      },
-      { key: "tolerance", label: "Tolerance", kind: "range", min: 0, max: 40, step: 0.5, unit: "°", showIf: (p) => p.type === "acd" },
-      // Neck-cut: minimum boundary-arc / chord ratio to treat a pinch as a neck. Higher → fewer, larger
-      // blocks (only the deepest waists cut).
-      { key: "neckRatio", label: "Neck sensitivity", kind: "range", min: 1.5, max: 8, step: 0.1, showIf: (p) => p.type === "neck-cut" },
-    ],
-    hint: "Decompose a concave space — exact convex (Hertel–Mehlhorn / Bayazit / ACD / Steiner) or Neck-cut into a few large blocks at narrow waists.",
-  },
-  mesh: {
-    type: "mesh",
-    label: "Meshing",
-    color: "#0f766e",
-    // Triangulate / quad-mesh the space into cells — one output Space per triangle/quad. Mirrors the
-    // Meshing block's Type. One handle per cell (host bakes the live count into `handleCount`); "single"
-    // → one bundle handle for all cells.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(200, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: { type: "ear-clipping", outputMode: "perCell" },
-    fields: [
-      {
-        key: "type",
-        label: "Type",
-        kind: "select",
-        options: [
-          { value: "ear-clipping", label: "Ear clipping (triangles)" },
-          { value: "cdt", label: "Delaunay (CDT)" },
-          { value: "blossom-quad", label: "Blossom quad" },
-        ],
-      },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per cell (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-    ],
-    hint: "Mesh a space into cells (triangles / Delaunay / blossom quads) — one Space per cell.",
-  },
-  "circle-packing": {
-    type: "circle-packing",
-    label: "Circle Packing",
-    color: "#0ea5e9",
-    // Greedily inscribe N largest non-overlapping circles / regular n-gons inside the space → one Space
-    // per shape. Mirrors the InCircles block (count, min radius, sides, rotation, optimise rotation).
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(50, Math.round(Number(p.handleCount) || 1))),
-    valueInputs: [{ key: "count", label: "Count" }, { key: "minRadius", label: "Min radius" }],
-    defaultParams: { count: 8, minRadius: 0.5, sides: 30, rotation: 0, optimizeRotation: true, outputMode: "perCell" },
-    fields: [
-      { key: "count", label: "Count", kind: "range", min: 1, max: 50, step: 1 },
-      { key: "minRadius", label: "Min radius", kind: "range", min: 0, max: 20, step: 0.1, unit: "m" },
-      // Sides per shape: 30 → true circles; 3–29 → inscribed regular n-gons.
-      { key: "sides", label: "Sides", kind: "range", min: 3, max: 30, step: 1 },
-      { key: "optimizeRotation", label: "Optimise rotation", kind: "checkbox", showIf: (p) => Number(p.sides) < 30 },
-      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°", showIf: (p) => Number(p.sides) < 30 && !p.optimizeRotation },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per circle (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-    ],
-    hint: "Pack the largest inscribed circles / n-gons into a space — one Space per shape (InCircles).",
-  },
-  treemap: {
-    type: "treemap",
-    label: "Squarified Treemap",
-    color: "#0891b2",
-    // Partition the space into `count` weighted rectangles with aspect ratios kept near 1 (squarified),
-    // clipped to the outline (concave-safe), aligned to the principal axis (or a manual tilt). One Space
-    // per cell.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
-    valueInputs: [{ key: "count", label: "Cells" }],
-    defaultParams: { count: 6, tiltAngle: 0, weights: "", outputMode: "perCell", showOuterOpenings: false, outerOpeningWidth: 1.0, showInnerOpenings: false, innerOpeningWidth: 0.9 },
-    fields: [
-      { key: "count", label: "Cells", kind: "range", min: 1, max: 30, step: 1 },
-      { key: "tiltAngle", label: "Tilt", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
-      // Relative area weights, one per cell (comma list). Short/empty → equal shares.
-      { key: "weights", label: "Weights", kind: "text", placeholder: "1, 2, 1 (blank = equal)" },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per cell (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-      { key: "showOuterOpenings", label: "Show outer openings", kind: "checkbox" },
-      { key: "outerOpeningWidth", label: "Outer opening width", kind: "range", min: 0.3, max: 3, step: 0.05, unit: "m", showIf: (p) => Boolean(p.showOuterOpenings) },
-      { key: "showInnerOpenings", label: "Show inner openings", kind: "checkbox" },
-      { key: "innerOpeningWidth", label: "Inner opening width", kind: "range", min: 0.3, max: 3, step: 0.05, unit: "m", showIf: (p) => Boolean(p.showInnerOpenings) },
-    ],
-    hint: "Squarified treemap — pack N weighted, aspect-balanced rectangles into the space (concave-safe). One Space per cell.",
-  },
-  "rect-pack": {
-    type: "rect-pack",
-    label: "Rectangle Packing",
-    color: "#ea580c",
-    // Pack FIXED-size rectangles (one unit type) into the space — `count` items or fill (0). Grid-packed in
-    // the principal-axis frame and clipped to the outline (concave-safe). One Space per placed rectangle.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(200, Math.round(Number(p.handleCount) || 1))),
-    valueInputs: [{ key: "count", label: "Count" }],
-    valueOutputs: [{ key: "placed", label: "Placed" }, { key: "utilization", label: "Utilization", unit: "%" }],
-    defaultParams: { width: 6, height: 9, count: 0, gap: 0, placement: "grid", seed: 1, allowRotate: true, optimiseOrientation: false, alignToAxis: true, tilt: 0, outputMode: "perCell" },
-    fields: [
-      { key: "width", label: "Width", kind: "range", min: 0.5, max: 50, step: 0.1, unit: "m" },
-      { key: "height", label: "Height", kind: "range", min: 0.5, max: 50, step: 0.1, unit: "m" },
-      { key: "count", label: "Count (0 = fill)", kind: "range", min: 0, max: 200, step: 1 },
-      { key: "gap", label: "Gap", kind: "range", min: 0, max: 10, step: 0.05, unit: "m" },
-      // Placement: a regular grid, or "random" — scatter rectangles at random positions/angles, packing
-      // hard (rejecting overlaps) until full.
-      {
-        key: "placement",
-        label: "Placement",
-        kind: "select",
-        options: [
-          { value: "grid", label: "Grid" },
-          { value: "random", label: "Random" },
-        ],
-      },
-      { key: "seed", label: "Seed", kind: "number", min: 1, step: 1, showIf: (p) => p.placement === "random" },
-      { key: "allowRotate", label: "Allow rotation", kind: "checkbox" },
-      // Grid only: sweep the packing angle (0–90°) and keep whichever orientation fits the most.
-      { key: "optimiseOrientation", label: "Optimise orientation", kind: "checkbox", showIf: (p) => p.placement !== "random" },
-      // Orient the grid (or the random base angle when rotation is off) to the principal axis, or a manual tilt.
-      { key: "alignToAxis", label: "Align to axis", kind: "checkbox", showIf: (p) => p.placement === "random" || !p.optimiseOrientation },
-      { key: "tilt", label: "Tilt", kind: "range", min: 0, max: 180, step: 1, unit: "°", showIf: (p) => (p.placement === "random" || !p.optimiseOrientation) && p.alignToAxis === false },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per rect (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-    ],
-    hint: "Pack fixed-size rectangles (units) into the space — Grid (aligned/optimised) or Random (scattered, any angle). Count or fill, with gap. Outputs placed count + utilization %.",
-  },
-  point: {
-    type: "point",
-    label: "Point",
-    color: "#ca8a04",
-    // Value source: an (x, y) point in metres. Publishes val-x / val-y for wiring (e.g. a Visibility
-    // Polygon viewer offset). No geometry of its own.
-    hasInput: false,
-    hasOutput: false,
-    // Wireable value inputs (amber, left) — a wired number overrides the typed X / Y (each endpoint sits on
-    // its field row). Publishes the resolved X / Y on val-x / val-y.
-    valueInputs: [{ key: "x", label: "X" }, { key: "y", label: "Y" }],
-    valueOutputs: [{ key: "x", label: "X", unit: "m" }, { key: "y", label: "Y", unit: "m" }],
-    defaultParams: { x: 0, y: 0 },
-    fields: [
-      { key: "x", label: "X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "y", label: "Y", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-    ],
-    hint: "An (x, y) point in metres — feeds val-x / val-y (e.g. a Visibility viewer offset).",
-  },
-  rectangle: {
-    type: "rectangle",
-    label: "Rectangle",
-    color: "#0891b2",
-    // 2D primitive generator (no geometry input): a Length × Breadth rectangle centred at (Center X,
-    // Center Y) in metres, optionally rotated. Emits a polygon Space — feed it into the Space pipeline
-    // exactly like a Space source. Also publishes val-length / val-breadth for wiring downstream.
-    hasInput: false,
-    hasOutput: true,
-    // Wireable value inputs (amber, left) — a wired number overrides the matching param; each endpoint sits
-    // on its own field row (Length / Breadth / Center X / Center Y / Rotation).
-    valueInputs: [{ key: "length", label: "Length" }, { key: "breadth", label: "Breadth" }, { key: "centerX", label: "Center X" }, { key: "centerY", label: "Center Y" }, { key: "rotation", label: "Rotation" }],
-    valueOutputs: [{ key: "length", label: "Length", unit: "m" }, { key: "breadth", label: "Breadth", unit: "m" }],
-    defaultParams: { length: 4, breadth: 3, centerX: 0, centerY: 0, rotation: 0 },
-    fields: [
-      { key: "length", label: "Length", kind: "range", min: 0.5, max: 100, step: 0.5, unit: "m" },
-      { key: "breadth", label: "Breadth", kind: "range", min: 0.5, max: 100, step: 0.5, unit: "m" },
-      { key: "centerX", label: "Center X", kind: "number", step: 0.5, unit: "m" },
-      { key: "centerY", label: "Center Y", kind: "number", step: 0.5, unit: "m" },
-      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
-    ],
-    hint: "2D primitive — a Length × Breadth rectangle centred at (X, Y) in metres. Emits a Space polygon.",
-  },
-  circle: {
-    type: "circle",
-    label: "Circle",
-    color: "#0891b2",
-    // 2D primitive generator (no geometry input): a circle of `radius` (48-gon) centred at (Center X,
-    // Center Y) in metres. Emits a polygon Space — feed it into the Space pipeline like a source. Also
-    // publishes val-radius for wiring downstream.
-    hasInput: false,
-    hasOutput: true,
-    valueOutputs: [{ key: "radius", label: "Radius", unit: "m" }],
-    defaultParams: { radius: 3, centerX: 0, centerY: 0 },
-    fields: [
-      { key: "radius", label: "Radius", kind: "range", min: 0.5, max: 50, step: 0.5, unit: "m" },
-      { key: "centerX", label: "Center X", kind: "number", step: 0.5, unit: "m" },
-      { key: "centerY", label: "Center Y", kind: "number", step: 0.5, unit: "m" },
-    ],
-    hint: "2D primitive — a circle of the given radius centred at (X, Y) in metres. Emits a Space polygon.",
-  },
-  visibility: {
-    type: "visibility",
-    label: "Visibility Polygon",
-    color: "#65a30d",
-    // Visibility region of the space from a viewer (point mode: centroid + (x,y) metre offset — wireable
-    // from a Point node) or sampled along an edge (segment mode → a region per sample). Mirrors the block.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => (p.mode !== "segment" || p.outputMode === "single") ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.handleCount) || 1))),
-    valueInputs: [{ key: "x", label: "Viewer X" }, { key: "y", label: "Viewer Y" }],
-    defaultParams: { mode: "point", x: 0, y: 0, edgeIndex: 0, outputMode: "single" },
-    fields: [
-      {
-        key: "mode",
-        label: "Type",
-        kind: "select",
-        options: [
-          { value: "point", label: "Point (viewer)" },
-          { value: "segment", label: "Segment (edge)" },
-        ],
-      },
-      // Viewer offset from the space centroid, in metres (0,0 = centroid). Wire a Point node here.
-      { key: "x", label: "Viewer X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m", showIf: (p) => p.mode !== "segment" },
-      { key: "y", label: "Viewer Y", kind: "range", min: -50, max: 50, step: 0.1, unit: "m", showIf: (p) => p.mode !== "segment" },
-      { key: "edgeIndex", label: "Edge", kind: "range", min: 0, max: 19, step: 1, showIf: (p) => p.mode === "segment" },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "single", label: "Single (all)" },
-          { value: "perCell", label: "Per sample (one each)" },
-        ],
-        showIf: (p) => p.mode === "segment",
-      },
-    ],
-    hint: "Visibility polygon from a viewer point (offset from centroid) or sampled along an edge.",
-  },
-  smoothing: {
-    type: "smoothing",
-    label: "Smoothing",
-    color: "#9f1239",
-    hasInput: true,
-    hasOutput: true,
-    // Multi-space: smooths EVERY connected space, emitting one output handle (out-i) per input space.
-    // The host bakes the live input count into `inputCount`. "Outputs": per-space handles, or a single
-    // bundle handle. 1 input → 1 output (unchanged single-space behaviour).
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.inputCount) || 1))),
-    // Mirrors the Smoothing block: Chaikin corner-cutting or Bézier corner fillets, a smoothing
-    // level, restrict-inside reflex handling, and a post curve-shortening pass.
-    defaultParams: { type: "chaikin", level: 0.4, restrictInside: false, curveShortening: 0, outputMode: "perCell" },
-    fields: [
-      {
-        key: "type",
-        label: "Type",
-        kind: "select",
-        options: [
-          { value: "chaikin", label: "Chaikin corner" },
-          { value: "bezier", label: "Bézier fillet" },
-        ],
-      },
-      { key: "level", label: "Smoothing level", kind: "range", min: 0, max: 1, step: 0.02 },
-      { key: "restrictInside", label: "Restrict inside polygon", kind: "checkbox" },
-      { key: "curveShortening", label: "Curved shortening", kind: "range", min: 0, max: 100, step: 1, unit: "%" },
-      // One handle per smoothed space, or a single bundle handle. Only meaningful with several inputs.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per space (one each)" },
-          { value: "single", label: "Single (all spaces)" },
-        ],
-        showIf: (p) => Math.round(Number(p.inputCount) || 1) > 1,
-      },
-    ],
-    hint: "Smooth the space boundary (Chaikin / Bézier), optionally kept inside + curve-shortened.",
-  },
-  contour: {
-    type: "contour",
-    label: "Contour",
-    color: "#0e7490",
-    hasInput: true,
-    hasOutput: true,
-    // Mirrors the Contour block — nested inward-offset rings (topographic contours) at a fixed
-    // interval, up to a max number of levels. Each ring is one output polygon.
-    defaultParams: { interval: 0.5, maxLevels: 12 },
-    fields: [
-      { key: "interval", label: "Interval", kind: "range", min: 0.05, max: 10, step: 0.05, unit: "m" },
-      { key: "maxLevels", label: "Max levels", kind: "range", min: 1, max: 30, step: 1 },
-    ],
-    hint: "Generate nested inward-offset contour rings at a fixed interval.",
-  },
+  // Data-declared (see ./declarations/bounding-shape.node.json) — behaviour stays in code.
+  "bounding-shape": buildToolDefFromDeclaration(boundingShapeDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/convex-hull.node.json) — behaviour stays in code.
+  "convex-hull": buildToolDefFromDeclaration(convexHullDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/convex-decomp.node.json) — behaviour stays in code.
+  "convex-decomp": buildToolDefFromDeclaration(convexDecompDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/mesh.node.json) — behaviour stays in code.
+  mesh: buildToolDefFromDeclaration(meshDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/circle-packing.node.json) — behaviour stays in code.
+  "circle-packing": buildToolDefFromDeclaration(circlePackingDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/treemap.node.json) — behaviour stays in code.
+  treemap: buildToolDefFromDeclaration(treemapDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/rect-pack.node.json) — behaviour stays in code.
+  "rect-pack": buildToolDefFromDeclaration(rectPackDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/point.node.json) — behaviour stays in code.
+  point: buildToolDefFromDeclaration(pointDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/rectangle.node.json) — behaviour stays in code.
+  rectangle: buildToolDefFromDeclaration(rectangleDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/circle.node.json) — behaviour stays in code.
+  circle: buildToolDefFromDeclaration(circleDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/visibility.node.json) — behaviour stays in code.
+  visibility: buildToolDefFromDeclaration(visibilityDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/smoothing.node.json) — behaviour stays in code (evalSmoothing).
+  smoothing: buildToolDefFromDeclaration(smoothingDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/contour.node.json) — behaviour stays in code.
+  contour: buildToolDefFromDeclaration(contourDecl as unknown as NodeDeclaration),
   "floor-massing": {
     type: "floor-massing",
     label: "Massing",
@@ -1590,186 +728,20 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Set the space as Footprint (up) / Basement (down) Area with n floors.",
   },
-  "graph-source": {
-    type: "graph-source",
-    label: "Graph",
-    color: "#1e3a8a",
-    // Generator: emits one or more graphs (connected segment networks) as polylines to feed the
-    // Graph nodes. References graphs by display id (GraphNNN); with grab on, the host keeps `id` synced to
-    // the graph currently selected (Select tool → "Graph" scope). Outputs one handle per referenced graph
-    // ("single" → one bundle), so it can output multiple graphs at once. The input endpoint accepts a
-    // Schema node (attaches Node/Segment/Graph Schema properties to the graph's components); geometry
-    // still comes from the canvas — incoming geometry is ignored.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(40, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: { id: "", grabFromSelection: true, outputMode: "perCell" },
-    fields: [
-      { key: "grabFromSelection", label: "Grab ID from selection", kind: "checkbox" },
-      // Editable Graph id(s), comma-separated. Hidden while grabbing (the host overwrites it from the
-      // selected graph) and shown as a readout instead.
-      { key: "id", label: "ID", kind: "text", placeholder: "graph id (e.g. Graph001)", showIf: (p) => !p.grabFromSelection },
-      // Output style: one handle per referenced graph, or a single bundle handle carrying every graph.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per graph (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-    ],
-    hint: "Pipeline input — selected graph(s) by id (Select → Graph scope, or grab from selection). Outputs one handle per graph. Feeds Mitered Join / Graph Smoothing / Graph Metrics.",
-  },
-  "segment-source": {
-    type: "segment-source",
-    label: "Segment",
-    color: "#0f766e",
-    // Generator (no input): emits the selected segment(s) as polylines (each wall = a 2-point polyline),
-    // mirroring Graph but scoped to individually-selected segments (Select → Segment scope) rather than a
-    // connected component. References segments by display id (SegmentNNN, comma-separated for several);
-    // with grab on, the host keeps `id` synced to the current segment selection. Outputs one handle per
-    // segment ("single" → one bundle). Feeds Mitered Join / Graph Smoothing / Graph Metrics like a graph.
-    hasInput: false,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: { id: "", grabFromSelection: true, outputMode: "single" },
-    fields: [
-      { key: "grabFromSelection", label: "Grab ID from selection", kind: "checkbox" },
-      { key: "id", label: "ID", kind: "text", placeholder: "segment id (e.g. Segment001)", showIf: (p) => !p.grabFromSelection },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "single", label: "Single (all)" },
-          { value: "perCell", label: "Per segment (one each)" },
-        ],
-      },
-    ],
-    hint: "Pipeline input — selected segment(s) by id (Select → Segment scope, or grab from selection). Emits each as a polyline; feeds Mitered Join / Graph Smoothing / Graph Metrics.",
-  },
-  "node-source": {
-    type: "node-source",
-    label: "Node",
-    color: "#4f46e5",
-    // Generator (no input): emits the selected canvas node(s) — junction points — as single points,
-    // mirroring Segment but for points (Select → Node scope). References nodes by display id (NodeNNN,
-    // comma-separated for several); with grab on, the host keeps `id` synced to the node selection.
-    // Outputs one handle per node ("single" → one bundle). Feeds Buffer (point → disk Space).
-    // STAMP input: wire a Footing → Footing to 2D Plan / Elevation / 3D Mesh (or any origin-relative
-    // drawing/mesh) here and the node STAMPS a copy at each of its point(s) — placement by location.
-    hasInput: false,
-    hasOutput: true,
-    geomInputs: [{ key: "stamp", label: "Stamp" }],
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: { id: "", grabFromSelection: true, outputMode: "single" },
-    fields: [
-      { key: "grabFromSelection", label: "Grab ID from selection", kind: "checkbox" },
-      { key: "id", label: "ID", kind: "text", placeholder: "node id (e.g. Node001)", showIf: (p) => !p.grabFromSelection },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "single", label: "Single (all)" },
-          { value: "perCell", label: "Per node (one each)" },
-        ],
-      },
-    ],
-    hint: "Pipeline input — selected node(s)/point(s) by id (Select → Node scope, or grab from selection). Emits each as a point; feed into Buffer to get a disk Space.",
-  },
-  "canvas-source": {
-    type: "canvas-source",
-    label: "Canvas",
-    color: "#0891b2",
-    // Generator: the whole canvas, exposed as five typed output endpoints. Each endpoint carries EVERY
-    // item of its kind (multiple), so downstream nodes can consume all spaces / nodes / segments / graphs
-    // / image footprints at once. Independent of the current selection. The input endpoint accepts a
-    // Schema node (attaches Node/Segment/Graph Schema properties to the canvas components); geometry still
-    // comes from the canvas — any incoming geometry is ignored.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: () => 5,
-    outputLabels: ["Spaces", "Nodes", "Segments", "Graph", "Images"],
-    defaultParams: {},
-    fields: [],
-    hint: "The whole canvas as five outputs — Spaces, Nodes, Segments, Graph, Images (footprints). Each carries every item of its kind. Independent of selection.",
-  },
-  separate: {
-    type: "separate",
-    label: "Separate",
-    color: "#0e7490",
-    // Fan-out: takes ONE input bundle (multiple items — spaces / segments / graphs / points) and exposes
-    // each item on its own output endpoint (out-0, out-1, …). The live item count is baked into
-    // `handleCount` so the number of output handles tracks the input.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => Math.max(1, Math.min(80, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: {},
-    fields: [],
-    hint: "Fan a multi-item input out to one output endpoint per item (e.g. Canvas → Spaces → one handle per space). Feeds each item downstream individually.",
-  },
-  "segment-split": {
-    type: "segment-split",
-    label: "Split Segment",
-    color: "#0d9488",
-    // Segment node: cuts each incoming segment (open polyline) into pieces — mirrors the Segment tools'
-    // Splitting. Modes: "length" (equal pieces of Piece length m, remainder kept), "ratio" (a comma
-    // ratio list → one piece per entry), "strip" (a centred strip of Strip length at Position% → up to
-    // 3 pieces: before / strip / after). One output handle per piece, or a single bundle.
-    hasInput: true,
-    hasOutput: true,
-    // Piece count depends on geometry (length / strip modes), so the host bakes the live count into
-    // `handleCount`; ratio mode is known from the list. "single" → one bundle handle.
-    outputCount: (p) => {
-      if (p.outputMode === "single") return 1;
-      const baked = Number(p.handleCount);
-      if (Number.isFinite(baked) && baked >= 1) return Math.min(60, Math.round(baked));
-      if (p.mode === "ratio") { const n = parseSplitRatios(p.ratios).length; if (n >= 1) return Math.max(1, Math.min(40, n)); }
-      if (p.mode === "strip") return 3;
-      return 2;
-    },
-    // Scalar inputs: Piece length / Strip length (m) and Position (%) are wireable; Ratios is a text
-    // list, so a wired number is coerced to its string form (and not echoed back to the box).
-    valueInputs: [
-      { key: "pieceLength", label: "Piece length" },
-      { key: "ratios", label: "Ratios" },
-      { key: "stripLength", label: "Strip length" },
-      { key: "stripPosition", label: "Position" },
-    ],
-    defaultParams: { mode: "length", pieceLength: 1, ratios: "1, 2, 1", stripLength: 1, stripPosition: 50, outputMode: "perCell" },
-    fields: [
-      {
-        key: "mode",
-        label: "Mode",
-        kind: "select",
-        options: [
-          { value: "length", label: "Based on Length" },
-          { value: "ratio", label: "Based on Ratio" },
-          { value: "strip", label: "Based on Strip Length" },
-        ],
-      },
-      // Length mode: each piece is this long (metres); the final shorter remainder is kept.
-      { key: "pieceLength", label: "Piece length", kind: "range", min: 0.05, max: 50, step: 0.05, unit: "m", showIf: (p) => p.mode !== "ratio" && p.mode !== "strip" },
-      // Ratio mode: comma list → one piece per entry, sized proportionally along the segment.
-      { key: "ratios", label: "Ratios", kind: "text", placeholder: "1, 2, 1", showIf: (p) => p.mode === "ratio" },
-      // Strip mode: a centred strip of this length (metres) at the position below; outer remainders kept.
-      { key: "stripLength", label: "Strip length", kind: "range", min: 0.05, max: 50, step: 0.05, unit: "m", showIf: (p) => p.mode === "strip" },
-      { key: "stripPosition", label: "Position", kind: "range", min: 0, max: 100, step: 1, unit: "%", showIf: (p) => p.mode === "strip" },
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per piece (one each)" },
-          { value: "single", label: "Single (all pieces)" },
-        ],
-      },
-    ],
-    hint: "Split each incoming segment into pieces — Based on Length (equal pieces, remainder kept), Based on Ratio (proportional list), or Based on Strip Length (a centred strip + outer remainders). One handle per piece, or a single bundle.",
-  },
+  // Data-declared (see ./declarations/graph-source.node.json) — behaviour stays in code.
+  "graph-source": buildToolDefFromDeclaration(graphSourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/segment-source.node.json) — behaviour stays in code.
+  "segment-source": buildToolDefFromDeclaration(segmentSourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/node-source.node.json) — behaviour stays in code.
+  "node-source": buildToolDefFromDeclaration(nodeSourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/canvas-source.node.json) — behaviour stays in code.
+  "canvas-source": buildToolDefFromDeclaration(canvasSourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/separate.node.json) — behaviour stays in code.
+  separate: buildToolDefFromDeclaration(separateDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/segment-split.node.json) — behaviour stays in code. NOTE: the
+  // declaration's outputCount matches the baked-handleCount path exactly; the pre-bake ratio-mode estimate
+  // is approximated (falls to 2) since it needs parseSplitRatios — the live count bakes on evaluation.
+  "segment-split": buildToolDefFromDeclaration(segmentSplitDecl as unknown as NodeDeclaration),
   buffer: {
     type: "buffer",
     label: "Buffer",
@@ -1798,331 +770,22 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Buffer a segment/graph by a radius → a Space. Style: Capsule (round caps), Square (extended flat caps), or Flat (butt caps). Feeds the Space pipeline.",
   },
-  bloom: {
-    type: "bloom",
-    label: "Bloom",
-    color: "#7c3aed",
-    // Node node: grows each incoming point (a node) into an n-gon Space of `sides` sides at `radius`.
-    // Regular → a uniform polygon; Irregular → vertices jittered by `jitter` (deterministic per `seed`).
-    // When sides = 4 the polygon is a rectangle sized by `width` × `height` (radius is ignored).
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "radius", label: "Radius" }, { key: "sides", label: "Sides" }],
-    defaultParams: { form: "polygon", radius: 1, sides: 6, regularity: "regular", width: 2, height: 2, rotation: 0, jitter: 0.3, seed: 1 },
-    fields: [
-      // Output form: an n-gon Polygon, a Circle (radius), or an Ellipse (width × height axes).
-      {
-        key: "form",
-        label: "Form",
-        kind: "select",
-        options: [
-          { value: "polygon", label: "Polygon" },
-          { value: "circle", label: "Circle" },
-          { value: "ellipse", label: "Ellipse" },
-        ],
-      },
-      { key: "sides", label: "Sides", kind: "range", min: 3, max: 16, step: 1, showIf: (p) => (p.form ?? "polygon") === "polygon" },
-      // Radius = circumradius for a Polygon (non-4-gon) and the Circle's radius.
-      { key: "radius", label: "Radius", kind: "range", min: 0.05, max: 10, step: 0.05, unit: "m", showIf: (p) => { const f = p.form ?? "polygon"; return f === "circle" || (f === "polygon" && Number(p.sides) !== 4); } },
-      // Width/Height = rectangle for a 4-gon Polygon, and the two axes (diameters) for an Ellipse.
-      { key: "width", label: "Width", kind: "range", min: 0.05, max: 20, step: 0.05, unit: "m", showIf: (p) => { const f = p.form ?? "polygon"; return f === "ellipse" || (f === "polygon" && Number(p.sides) === 4); } },
-      { key: "height", label: "Height", kind: "range", min: 0.05, max: 20, step: 0.05, unit: "m", showIf: (p) => { const f = p.form ?? "polygon"; return f === "ellipse" || (f === "polygon" && Number(p.sides) === 4); } },
-      { key: "rotation", label: "Rotation", kind: "range", min: 0, max: 360, step: 1, unit: "°" },
-      // Regular vs jittered — Polygon only (a circle/ellipse is always smooth).
-      {
-        key: "regularity",
-        label: "Shape",
-        kind: "select",
-        showIf: (p) => (p.form ?? "polygon") === "polygon",
-        options: [
-          { value: "regular", label: "Regular" },
-          { value: "irregular", label: "Irregular" },
-        ],
-      },
-      // Irregular only: how far vertices are perturbed (0 = none) and a seed for the deterministic jitter.
-      { key: "jitter", label: "Jitter", kind: "range", min: 0, max: 1, step: 0.05, showIf: (p) => (p.form ?? "polygon") === "polygon" && p.regularity === "irregular" },
-      { key: "seed", label: "Seed", kind: "range", min: 1, max: 999, step: 1, showIf: (p) => (p.form ?? "polygon") === "polygon" && p.regularity === "irregular" },
-    ],
-    hint: "Grow each input node/point into a Space — Polygon (n-gon; 4 sides → width × height rectangle; regular or irregular), Circle (radius), or Ellipse (width × height). Feeds the Space pipeline.",
-  },
-  pull: {
-    type: "pull",
-    label: "Pull",
-    color: "#ca8a04",
-    // Space node: pull two Spaces together (or apart). Main input = Space A; second input (gin-b) = Space B.
-    // Returns the two transformed Spaces on out-0 (A) and out-1 (B). Mirrors the Connection-segment Pull.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: () => 2,
-    outputLabels: ["A", "B"],
-    geomInputs: [{ key: "b", label: "Space B" }],
-    valueInputs: [{ key: "distance", label: "Distance" }],
-    defaultParams: { mode: "touch", contact: "point", anchor: "both", distance: 0.5, edgeSlide: true },
-    fields: [
-      {
-        key: "mode", label: "Mode", kind: "select",
-        options: [
-          { value: "touch", label: "Touch" },
-          { value: "distance", label: "Distance (gap)" },
-          { value: "centroid", label: "Centroid" },
-        ],
-      },
-      // Contact + Edge slide only matter when the move isn't a pure centroid slam.
-      {
-        key: "contact", label: "Contact", kind: "select", showIf: (p) => p.mode !== "centroid",
-        options: [
-          { value: "point", label: "Point (closest)" },
-          { value: "edge-flush", label: "Edge flush" },
-        ],
-      },
-      { key: "distance", label: "Gap", kind: "range", min: 0, max: 10, step: 0.05, unit: "m", showIf: (p) => p.mode === "distance" },
-      {
-        key: "anchor", label: "Move", kind: "select",
-        options: [
-          { value: "both", label: "Both" },
-          { value: "A", label: "A only" },
-          { value: "B", label: "B only" },
-        ],
-      },
-      { key: "edgeSlide", label: "Edge slide", kind: "checkbox", showIf: (p) => p.mode !== "centroid" && p.contact === "edge-flush" },
-    ],
-    hint: "Pull two Spaces together/apart — Touch, a Distance gap, or Centroid; Point or Edge-flush contact; move A / B / both. Inputs: Space A (main) + Space B; outputs the two new Spaces.",
-  },
-  transform: {
-    type: "transform",
-    label: "Transform",
-    color: "#7e22ce",
-    // Space node: affine-transform every input Space — Scale → Mirror → Rotate about an Anchor, then
-    // Translate. Multiple Spaces in → the transformed Spaces out (one bundle).
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "rotate", label: "Rotate" }, { key: "scale", label: "Scale" }],
-    defaultParams: { translateX: 0, translateY: 0, rotate: 0, scale: 1, mirror: "none", mirrorAngle: 0, mirrorEdge: 0, anchor: "each-centroid", anchorVertex: 0 },
-    fields: [
-      { key: "translateX", label: "Move X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "translateY", label: "Move Y", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "rotate", label: "Rotate", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
-      {
-        key: "mirror", label: "Mirror", kind: "select",
-        options: [
-          { value: "none", label: "None" },
-          { value: "x", label: "Across X" },
-          { value: "y", label: "Across Y" },
-          { value: "custom", label: "Custom line" },
-          { value: "edge", label: "Across edge" },
-        ],
-      },
-      { key: "mirrorAngle", label: "Mirror angle", kind: "range", min: 0, max: 180, step: 1, unit: "°", showIf: (p) => p.mirror === "custom" },
-      // "Across edge": reflect across this space's edge #N (wraps; 0 = first edge). Great for mirroring a
-      // unit across a shared wall.
-      { key: "mirrorEdge", label: "Edge #", kind: "range", min: 0, max: 50, step: 1, showIf: (p) => p.mirror === "edge" },
-      // Pivot for scale/rotate (and the x/y/custom mirror): each space's centre, a chosen vertex, the
-      // group's centre, or world origin.
-      {
-        key: "anchor", label: "Anchor", kind: "select",
-        options: [
-          { value: "each-centroid", label: "Each centroid" },
-          { value: "vertex", label: "Vertex" },
-          { value: "group-centroid", label: "Group centroid" },
-          { value: "origin", label: "Origin (0,0)" },
-        ],
-      },
-      { key: "anchorVertex", label: "Vertex #", kind: "range", min: 0, max: 50, step: 1, showIf: (p) => p.anchor === "vertex" },
-    ],
-    hint: "Translate / Rotate / Scale / Mirror every input Space. Anchor = pivot for scale/rotate (centroid, a vertex, group, or origin). Mirror across X/Y/a custom line/a chosen edge. Multiple Spaces in → transformed Spaces out.",
-  },
-  "mitered-join": {
-    type: "mitered-join",
-    label: "Mitered Join",
-    color: "#b45309",
-    // Graph node: strokes an incoming GRAPH (polylines — e.g. Skeleton in Branches mode) into a closed
-    // ribbon of `width` metres, mitred at shared endpoints (junctions). Output = the ribbon polygons.
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "width", label: "Width" }],
-    // Output handles: "single" → one endpoint carrying every ribbon Space; "perCell" → one endpoint per
-    // ribbon Space (baked live into `handleCount`). Union collapses to a single Space → one handle either way.
-    outputCount: (p) => (p.getOuterBoundary || p.union || p.outputMode === "single") ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
-    // Optional second geometry input: the Space to clip the ribbon to (id `gin-boundary`). Unwired →
-    // falls back to auto-detecting the upstream Skeleton's source space.
-    geomInputs: [{ key: "boundary", label: "Clip space" }],
-    defaultParams: { width: 2, useSameWidth: true, join: "sharp", clipToBoundary: true, union: false, getOuterBoundary: false, outputMode: "perCell" },
-    fields: [
-      // Use same width for all: checked → the Width slider drives every segment; unchecked → each segment
-      // is stroked at its own canvas thickness (segment properties), and the slider is hidden.
-      { key: "useSameWidth", label: "Use same width for all", kind: "checkbox" },
-      { key: "width", label: "Width", kind: "range", min: 0.1, max: 20, step: 0.1, unit: "m", showIf: (p) => p.useSameWidth !== false },
-      // Output style: separate per-Space handles, or a single bundle handle carrying every ribbon Space.
-      // Hidden when Union is on (the result is already a single Space).
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        showIf: (p) => !p.union && !p.getOuterBoundary,
-        options: [
-          { value: "perCell", label: "Per cell (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-      // Joint type at junctions/corners: Sharp = mitred corners; Curved = rounded (Chaikin) corners;
-      // Rectangular = plain segment rectangles + a square box at each junction (no mitre).
-      {
-        key: "join",
-        label: "Joint type",
-        kind: "select",
-        options: [
-          { value: "sharp", label: "Sharp (mitred)" },
-          { value: "curved", label: "Curved (rounded)" },
-          { value: "rectangular", label: "Rectangular (boxed joints)" },
-        ],
-      },
-      // Trim the ribbon to the source space so leaf-branch end-caps don't poke past the boundary.
-      { key: "clipToBoundary", label: "Clip to boundary", kind: "checkbox", showIf: (p) => !p.getOuterBoundary },
-      // Union: fuse the per-segment ribbon polygons into ONE Space (single outline) instead of emitting
-      // each segment separately.
-      { key: "union", label: "Union", kind: "checkbox", showIf: (p) => !p.getOuterBoundary },
-      // Get Outer Boundary: instead of the ribbon, output the single closed Space bounded by the OUTER
-      // edge of the joined segments (one space on the endpoint). Works for Sharp and Rectangular joints.
-      { key: "getOuterBoundary", label: "Get Outer Boundary", kind: "checkbox" },
-    ],
-    hint: "Stroke a graph (polylines / Skeleton branches) into a ribbon of a set width — sharp, curved, or rectangular (boxed) joints. Clip to boundary trims ends to the source space; Union merges the segments into a single Space; Get Outer Boundary returns the single space bounded by the joined ribbon's outer edge.",
-  },
-  "graph-smooth": {
-    type: "graph-smooth",
-    label: "Graph Smoothing",
-    color: "#9d174d",
-    // Graph node: smooths each polyline of an incoming graph. "Through vertices" = interpolating
-    // (Catmull-Rom, the curve passes through the nodes); off = approximating (Chaikin, stays away).
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "level", label: "Smoothness" }],
-    defaultParams: { interpolate: true, level: 2 },
-    fields: [
-      { key: "interpolate", label: "Through vertices", kind: "checkbox" },
-      { key: "level", label: "Smoothness", kind: "range", min: 1, max: 8, step: 1 },
-    ],
-    hint: "Smooth a graph's polylines — through the vertices (NURBS/Catmull-Rom) or away from them (Chaikin).",
-  },
-  "graph-metrics": {
-    type: "graph-metrics",
-    label: "Graph Metrics",
-    color: "#0e7490",
-    // Calculator: reads an incoming GRAPH (polylines — e.g. Skeleton branches / Selected Graph) and
-    // measures its topology. Forwards the graph unchanged on the main output so it can continue
-    // downstream; every metric is also published as a value-OUT for wiring into other nodes / Output.
-    hasInput: true,
-    hasOutput: true,
-    valueOutputs: [
-      { key: "nodes", label: "Nodes" },          // unique vertices (endpoints / junctions)
-      { key: "edges", label: "Edges" },          // unique segments between nodes
-      { key: "faces", label: "Faces" },          // bounded regions = cyclomatic number E−V+C (planar)
-      { key: "components", label: "Components" }, // disconnected sub-graphs
-      { key: "leaves", label: "Leaves" },        // degree-1 nodes (branch tips)
-      { key: "junctions", label: "Junctions" },  // degree-≥3 nodes (where branches meet)
-      { key: "length", label: "Total length", unit: "m" },
-    ],
-    defaultParams: {},
-    fields: [],
-    hint: "Measure an incoming graph: nodes, edges, faces, components, leaves, junctions, total length. Forwards the graph on.",
-  },
-  "show-direction": {
-    type: "show-direction",
-    label: "Show Direction",
-    color: "#0369a1",
-    // Graph node: orient the incoming graph as a flow — Diverging (out of a root source) or Converging
-    // (into a root sink) — and draw arrowheads along each edge. Arrow direction = flow direction; arrow
-    // size = flow level (downstream accumulation, or BFS depth). Forwards the graph unchanged.
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "arrowSize", label: "Arrow size" }],
-    defaultParams: { mode: "diverging", root: "auto", levelMetric: "accumulation", arrowSize: 0.6, scaleByLevel: true },
-    fields: [
-      {
-        key: "mode", label: "Flow", kind: "select",
-        options: [
-          { value: "diverging", label: "Diverging (out)" },
-          { value: "converging", label: "Converging (in)" },
-        ],
-      },
-      // Which node is the source (diverging) / sink (converging).
-      {
-        key: "root", label: "Source / Sink", kind: "select",
-        options: [
-          { value: "auto", label: "Auto (a leaf)" },
-          { value: "top", label: "Topmost" },
-          { value: "bottom", label: "Bottommost" },
-          { value: "left", label: "Leftmost" },
-          { value: "right", label: "Rightmost" },
-          { value: "center", label: "Centremost" },
-        ],
-      },
-      {
-        key: "levelMetric", label: "Level", kind: "select",
-        options: [
-          { value: "accumulation", label: "Accumulation (downstream)" },
-          { value: "depth", label: "Depth (from root)" },
-        ],
-      },
-      { key: "arrowSize", label: "Arrow size", kind: "range", min: 0.1, max: 3, step: 0.05, unit: "m" },
-      { key: "scaleByLevel", label: "Scale by level", kind: "checkbox" },
-    ],
-    hint: "Show flow direction on a graph — Diverging out of / Converging into a root, with arrows whose size tracks the flow level (downstream accumulation or depth). Forwards the graph on.",
-  },
-  dimension: {
-    type: "dimension",
-    label: "Linear Dimension",
-    color: "#1d4ed8",
-    // Space node: dimension the EDGES of the incoming Space — each edge gets its own length dimension,
-    // placed Outer (outside the space) or inner, standing off by Offset. Mode "All edges" dimensions every
-    // edge; "Edgewise" dimensions only the ticked edges. The Space is forwarded unchanged downstream.
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "offset", label: "Offset" }],
-    defaultParams: { outer: true, offset: 1, mode: "all", edges: "", style: "ticks", units: "metric", extension: 0.3, precision: 2 },
-    fields: [
-      // Outer = place the dimension OUTSIDE the space's edge; unchecked = inside.
-      { key: "outer", label: "Outer", kind: "checkbox" },
-      // Standoff from the edge to the dimension line (m).
-      { key: "offset", label: "Offset", kind: "range", min: 0, max: 10, step: 0.1, unit: "m" },
-      // End-marker style at each dimension-line end.
-      {
-        key: "style",
-        label: "Style",
-        kind: "select",
-        options: [
-          { value: "ticks", label: "Ticks (45°)" },
-          { value: "arrowhead", label: "Arrowheads" },
-          { value: "dot", label: "Dots" },
-        ],
-      },
-      // All edges → dimension every edge; Edgewise → only the ticked edges (checkbox grid, rendered on the node).
-      {
-        key: "mode",
-        label: "Mode",
-        kind: "select",
-        options: [
-          { value: "all", label: "All edges" },
-          { value: "edgewise", label: "Edgewise (pick edges)" },
-        ],
-      },
-      // Dimension text format: metric metres or architectural feet-inches (to nearest 1/8").
-      {
-        key: "units",
-        label: "Units",
-        kind: "select",
-        options: [
-          { value: "metric", label: "Metric (m)" },
-          { value: "imperial", label: "Feet-inches" },
-        ],
-      },
-      // How far the witness lines overrun the dimension line (m).
-      { key: "extension", label: "Witness overrun", kind: "range", min: 0, max: 2, step: 0.05, unit: "m" },
-      // Decimal places on metric dimension text.
-      { key: "precision", label: "Decimals", kind: "range", min: 0, max: 4, step: 1, showIf: (p) => p.units !== "imperial" },
-    ],
-    hint: "Dimension a Space's edges — Outer/inner placement at an Offset. All edges, or Edgewise to tick which edges. Forwards the Space on.",
-  },
+  // Data-declared (see ./declarations/bloom.node.json) — behaviour stays in code.
+  bloom: buildToolDefFromDeclaration(bloomDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/pull.node.json) — behaviour stays in code.
+  pull: buildToolDefFromDeclaration(pullDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/transform.node.json) — behaviour stays in code.
+  transform: buildToolDefFromDeclaration(transformDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/mitered-join.node.json) — behaviour stays in code.
+  "mitered-join": buildToolDefFromDeclaration(miteredJoinDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/graph-smooth.node.json) — behaviour stays in code.
+  "graph-smooth": buildToolDefFromDeclaration(graphSmoothDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/graph-metrics.node.json) — behaviour stays in code.
+  "graph-metrics": buildToolDefFromDeclaration(graphMetricsDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/show-direction.node.json) — behaviour stays in code.
+  "show-direction": buildToolDefFromDeclaration(showDirectionDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/dimension.node.json) — behaviour stays in code.
+  dimension: buildToolDefFromDeclaration(dimensionDecl as unknown as NodeDeclaration),
   "graph-to-grid": {
     type: "graph-to-grid",
     label: "Graph to Grid",
@@ -2547,65 +1210,10 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Extract iso-contours from a grid field — N evenly-spaced levels between min and max. Emits contour lines (a graph) to chain on. Feed from Graph to Grid / Grid Distance / Grid Threshold.",
   },
-  "area-dimension": {
-    type: "area-dimension",
-    label: "Area Dimension",
-    color: "#0e7490",
-    // Space node: writes a centred annotation block in each incoming Space — Label, Area and the
-    // bounding L×B dimension — in the chosen unit. The Space is forwarded unchanged downstream.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { unit: "m", label: "", showLabel: true, showArea: true, showDimension: true },
-    fields: [
-      {
-        key: "unit",
-        label: "Unit",
-        kind: "select",
-        options: [
-          { value: "m", label: "Metres (m)" },
-          { value: "cm", label: "Centimetres (cm)" },
-          { value: "ft", label: "Feet (ft)" },
-        ],
-      },
-      // Optional label text shown on the first line (when Show label is on).
-      { key: "label", label: "Label", kind: "text", placeholder: "e.g. Living", showIf: (p) => p.showLabel !== false },
-      { key: "showLabel", label: "Show label", kind: "checkbox" },
-      { key: "showArea", label: "Show area", kind: "checkbox" },
-      { key: "showDimension", label: "Show dimension (L×B)", kind: "checkbox" },
-    ],
-    hint: "Annotate each Space at its centroid with Label · Area · L×B dimension, in m / cm / ft. Forwards the Space on.",
-  },
-  "graph-to-spaces": {
-    type: "graph-to-spaces",
-    label: "Graph to Spaces",
-    color: "#047857",
-    // Converter: extracts the bounded FACES of an incoming graph (polylines) as closed Space polygons —
-    // it fetches the spaces itself from the graph's topology. "single" → all spaces on one endpoint (the
-    // default); "perCell" → one endpoint per space.
-    hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(60, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: { outputMode: "single", minArea: 0 },
-    // Live face metrics — what a downstream Output node reads (spaces found + their total area).
-    valueOutputs: [
-      { key: "spaces", label: "Spaces" },
-      { key: "totalArea", label: "Total area", unit: "m²" },
-    ],
-    fields: [
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "single", label: "Single (all)" },
-          { value: "perCell", label: "Per space (one each)" },
-        ],
-      },
-      // Drop noise faces (text boxes, hatching, dimension loops) below this area.
-      { key: "minArea", label: "Min area", kind: "range", min: 0, max: 50, step: 0.5, unit: "m²" },
-    ],
-    hint: "Convert a graph into Spaces — the bounded faces of the network. Min area drops noise faces (text boxes, hatching). Single → all spaces on one endpoint; per space → one endpoint each.",
-  },
+  // Data-declared (see ./declarations/area-dimension.node.json) — behaviour stays in code.
+  "area-dimension": buildToolDefFromDeclaration(areaDimensionDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/graph-to-spaces.node.json) — behaviour stays in code.
+  "graph-to-spaces": buildToolDefFromDeclaration(graphToSpacesDecl as unknown as NodeDeclaration),
   "longest-branch": {
     type: "longest-branch",
     label: "Longest Branch",
@@ -2618,193 +1226,18 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     fields: [],
     hint: "Return the longest branch of the incoming graph (the path between its two farthest tips) as a single polyline.",
   },
-  "graph-reduce": {
-    type: "graph-reduce",
-    label: "Graph Reduce",
-    color: "#0e7490",
-    // Graph node: clean / reduce an incoming graph (polylines) by one of several algorithms, chosen by
-    // `mode`. All output a single graph (polylines). Reuses the same snapped weighted adjacency as Graph
-    // Metrics / Longest Branch.
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "minLength", label: "Min length" }],
-    defaultParams: { mode: "longest-branch", minLength: 1, iterate: true, mergeTol: 0.5 },
-    fields: [
-      {
-        key: "mode",
-        label: "Mode",
-        kind: "select",
-        options: [
-          { value: "longest-branch", label: "Longest Branch" },
-          { value: "prune", label: "Prune Spurs" },
-          { value: "dissolve", label: "Dissolve (merge chains)" },
-          { value: "mst", label: "Min Spanning Tree" },
-          { value: "largest", label: "Largest Component" },
-          { value: "loops", label: "Keep Loops" },
-          { value: "bridges", label: "Keep Bridges" },
-          { value: "outer", label: "Keep Outer Boundary" },
-          { value: "inner", label: "Keep Inner Segments" },
-        ],
-      },
-      // Prune: remove leaf branches (leaf → nearest junction) shorter than this. Wireable.
-      { key: "minLength", label: "Min branch length", kind: "range", min: 0, max: 50, step: 0.1, unit: "m", showIf: (p) => p.mode === "prune" },
-      { key: "iterate", label: "Prune to stable", kind: "checkbox", showIf: (p) => p.mode === "prune" },
-      // Dissolve: snap junctions within this distance before merging degree-2 chains (0 = no snap).
-      { key: "mergeTol", label: "Junction merge", kind: "range", min: 0, max: 5, step: 0.05, unit: "m", showIf: (p) => p.mode === "dissolve" },
-    ],
-    hint: "Reduce / clean a graph: Longest Branch · Prune Spurs · Dissolve · Min Spanning Tree · Largest Component · Keep Loops / Bridges · Keep Outer Boundary / Inner Segments.",
-  },
-  "voronoi-bloom": {
-    type: "voronoi-bloom",
-    label: "Voronoi Bloom",
-    color: "#1d4ed8",
-    // Graph node: grows a circle of `radius` metres from each NODE of an incoming graph, clipped to that
-    // node's Voronoi cell — so dragging the radius animates the Voronoi tessellation assembling itself
-    // (small r → separate disks; large r → disks fill their cells = the full Voronoi diagram). Seeds are
-    // the graph's unique vertices (snapped so shared junctions collapse to one seed). Emits one Space per
-    // grown cell. Radius is wireable so it can be driven/animated by another node.
-    hasInput: true,
-    hasOutput: true,
-    // One output handle per grown cell (host bakes the live count into `handleCount`); "single" → one
-    // bundle handle carrying every cell.
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(80, Math.round(Number(p.handleCount) || 1))),
-    valueInputs: [{ key: "radius", label: "Radius" }],
-    // Optional clip Space (id `gin-boundary`): the boundary the cells grow inside. Unwired → falls back to
-    // the upstream Skeleton's source space, else the nodes' bounding box (expanded by the radius).
-    geomInputs: [{ key: "boundary", label: "Clip space" }],
-    defaultParams: { mode: "vertices", radius: 1, sides: 24, intersect: true, outputMode: "perCell" },
-    fields: [
-      // What blooms: a circle from each graph NODE (clipped to its Voronoi cell), or an equal-radius
-      // capsule buffer from each graph SEGMENT (the whole edge thickens uniformly).
-      {
-        key: "mode",
-        label: "Bloom from",
-        kind: "select",
-        options: [
-          { value: "vertices", label: "Voronoi Vertices" },
-          { value: "edges", label: "Voronoi Edges" },
-        ],
-      },
-      // Edges only: let the growing capsules meet along the segment-Voronoi bisectors → one Space per
-      // segment (a tessellation). Off → raw overlapping capsules.
-      { key: "intersect", label: "Intersect to spaces", kind: "checkbox", showIf: (p) => p.mode === "edges" },
-      { key: "radius", label: "Radius", kind: "range", min: 0, max: 30, step: 0.05, unit: "m" },
-      // Circle / cap resolution: points per grown disk (vertices) or per capsule end-cap (edges). Higher → rounder.
-      { key: "sides", label: "Circle sides", kind: "range", min: 3, max: 64, step: 1 },
-      // Output style: separate per-cell handles, or a single bundle handle carrying every cell.
-      {
-        key: "outputMode",
-        label: "Outputs",
-        kind: "select",
-        options: [
-          { value: "perCell", label: "Per cell (one each)" },
-          { value: "single", label: "Single (all)" },
-        ],
-      },
-    ],
-    hint: "Bloom an equal radius from a graph — Voronoi Vertices (a circle per node, clipped to its Voronoi cell) or Voronoi Edges (a capsule per segment; with Intersect on, the capsules expand and meet along the segment-Voronoi bisectors → one Space per segment). Drag Radius to watch the tessellation form.",
-  },
-  "spring-layout": {
-    type: "spring-layout",
-    label: "Spring Layout",
-    color: "#6366f1",
-    // Graph node: a Fruchterman–Reingold spring layout that runs on EVERY vertex (no degree-2
-    // contraction). No node is merged and no segment is dropped — each particle is one input vertex,
-    // and each input polyline is re-emitted with its vertices moved to their relaxed positions. So the
-    // output has the SAME number of segments and the SAME number of edges as the input, just new
-    // coordinates. Deterministic (init from the input positions), so the live preview is stable.
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [
-      { key: "iterations", label: "Iterations" },
-      { key: "edgeLength", label: "Edge length" },
-      { key: "repulsion", label: "Repulsion" },
-    ],
-    defaultParams: { iterations: 100, edgeLength: 5, repulsion: 1, step: 1 },
-    fields: [
-      { key: "iterations", label: "Iterations", kind: "range", min: 1, max: 500, step: 1 },
-      // Spring rest length — the edge length the layout relaxes toward.
-      { key: "edgeLength", label: "Edge length", kind: "range", min: 0.2, max: 50, step: 0.2, unit: "m" },
-      // Repulsion strength: scales the all-pairs push-apart force (higher → more spread out).
-      { key: "repulsion", label: "Repulsion", kind: "range", min: 0, max: 5, step: 0.05 },
-      // Energy / initial temperature: how far nodes may move per iteration (cools to 0). Higher → looser.
-      { key: "step", label: "Energy", kind: "range", min: 0.1, max: 3, step: 0.1 },
-    ],
-    hint: "Spring (force-directed) layout that PRESERVES every segment and edge — every vertex is relaxed (no degree-2 contraction), each input polyline re-emitted with new coordinates. Same segment & edge count, new positions.",
-  },
-  schema: {
-    type: "schema",
-    label: "Input Schema",
-    color: "#7c3aed",
-    // Generator (no input): a general component-property schema, edited inline on the node via four
-    // foldable sections — Node / Segment / Space / Graph Schema — each a list of parameters (label,
-    // type, unit, default, min/max/step, options, solver role) like the Input Properties node.
-    // Wire its OUTPUT into a Graph node to attach the Node/Segment/Graph properties to that graph's
-    // components, or into a Space node to attach the Space properties to that space — the properties
-    // then appear in each component's Properties tab (added to the built-ins, never replacing them).
-    hasInput: false,
-    hasOutput: true,
-    // PILOT: a params INPUT endpoint (violet `pin`, left side near the Node Schema section). Wire a
-    // node's params OUTPUT (e.g. Display Node) into it to derive the schema from that node's fields.
-    acceptsParams: true,
-    defaultParams: { name: "", nodeProps: [], segmentProps: [], spaceProps: [], graphProps: [] },
-    fields: [
-      { key: "name", label: "Name", kind: "text", placeholder: "Schema name (optional)" },
-    ],
-    hint: "Define per-component input properties (Node / Segment / Space / Graph). Wire the output into a Graph or Space node to attach them — they surface in each component's Properties tab. The left params input can take a node's params (e.g. Display Node) to derive a schema from its fields.",
-  },
-  "output-schema": {
-    type: "output-schema",
-    label: "Output Schema",
-    color: "#9333ea",
-    // Terminal (input only): defines which RESULT rows a solver publishes into each component's
-    // Metrics tab — same four foldable sections as the Input Schema (Node / Segment / Space / Graph),
-    // edited the same way. Wire a solver's output (e.g. Pipe Network Solver) into it: each row's key
-    // must match a result the solver writes (e.g. node "head"/"pressure"; segment "discharge"/
-    // "velocity"/"headloss"/"unitHeadloss"); label/unit set the display, step sets the decimals.
-    hasInput: true,
-    hasOutput: false,
-    defaultParams: { name: "", nodeProps: [], segmentProps: [], spaceProps: [], graphProps: [] },
-    fields: [
-      { key: "name", label: "Name", kind: "text", placeholder: "Schema name (optional)" },
-    ],
-    hint: "Define which solver results show per component (Node / Segment / Space / Graph). Wire a solver's output into this node — row keys match the solver's result keys; label/unit/step style the Metrics rows.",
-  },
-  "pipe-solver": {
-    type: "pipe-solver",
-    label: "Pipe Network Solver",
-    color: "#0e7490",
-    // Two inputs: the MAIN (geometry) input takes a Graph node — the solver then solves only that
-    // graph's segments; unconnected, it solves the whole canvas segment graph. The "Schema" input
-    // (gin-schema) takes a Schema node whose Node/Segment sections define the per-component input
-    // properties (demand, elevation, diameter…) shown in each component's Properties tab; results
-    // (discharge, head…) land in each component's Metrics tab. The algorithm (Todini global
-    // gradient) is fixed; the schema decides which property keys feed it (via each row's `role`).
-    hasInput: true,
-    hasOutput: true,
-    geomInputs: [{ key: "schema", label: "Schema" }],
-    valueOutputs: [
-      { key: "totalDemand", label: "Total demand (L/s)" },
-      { key: "maxVelocity", label: "Max velocity (m/s)" },
-      { key: "minPressure", label: "Min pressure (m)" },
-      { key: "iterations", label: "Iterations" },
-    ],
-    defaultParams: { formula: "hazen-williams", maxIter: 60, tolerance: 0.001 },
-    fields: [
-      {
-        key: "formula",
-        label: "Formula",
-        kind: "select",
-        options: [
-          { value: "hazen-williams", label: "Hazen-Williams" },
-          { value: "darcy-weisbach", label: "Darcy-Weisbach" },
-        ],
-      },
-      { key: "maxIter", label: "Max iterations", kind: "range", min: 5, max: 200, step: 1 },
-      { key: "tolerance", label: "Tolerance", kind: "range", min: 0.0001, max: 0.05, step: 0.0001 },
-    ],
-    hint: "Solve a pipe network (Todini global gradient). Wire a Graph node into the main input (unconnected = whole canvas graph) and a Schema node into the Schema input to define node/segment properties; edit them per component in the Properties tab; per-component results appear in the Metrics tab.",
-  },
+  // Data-declared (see ./declarations/graph-reduce.node.json) — behaviour stays in code.
+  "graph-reduce": buildToolDefFromDeclaration(graphReduceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/voronoi-bloom.node.json) — behaviour stays in code.
+  "voronoi-bloom": buildToolDefFromDeclaration(voronoiBloomDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/spring-layout.node.json) — behaviour stays in code.
+  "spring-layout": buildToolDefFromDeclaration(springLayoutDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/schema.node.json) — behaviour stays in code (custom on-node editor).
+  schema: buildToolDefFromDeclaration(schemaDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/output-schema.node.json) — behaviour stays in code (custom editor).
+  "output-schema": buildToolDefFromDeclaration(outputSchemaDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/pipe-solver.node.json) — behaviour stays in code (schema-driven solver).
+  "pipe-solver": buildToolDefFromDeclaration(pipeSolverDecl as unknown as NodeDeclaration),
   "frame-builder": {
     type: "frame-builder",
     label: "Frame Builder",
@@ -3048,45 +1481,25 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Place a furniture symbol (bed / sofa / …) on each input node — Width × Depth, Rotation, Anchor and Kind.",
   },
-  "layout-gen": {
-    type: "layout-gen",
-    label: "Layout Generation",
-    color: "#9333ea",
-    // Independent of the BSP node: a front-end to the existing interactive floorplan generator. Wire a
-    // Space (boundary) into the input, set the rooms / connections / repulsions / algorithm, then press
-    // "Generate" — the host runs generateFloorPlan and loads it as the canvas's editable layout (draggable
-    // seeds, connection/repulsion lines, Add Room all work on the canvas). "Run Annealing" optimises the
-    // seed positions. Room count / floor area / SA score are published for an Output node.
-    hasInput: true,
+  // Data-declared (see ./declarations/layout-gen.node.json) — behaviour stays in code (run actions + rooms editor).
+  "layout-gen": buildToolDefFromDeclaration(layoutGenDecl as unknown as NodeDeclaration),
+  "pobj-source": {
+    type: "pobj-source",
+    label: "Parametric Site",
+    color: "#0f766e",
+    // GEOMETRY SOURCE from a parametric object: evaluates a self-contained .pobj definition into its
+    // footprint polygon and publishes it as this node's geometry output (a Space ROOT — like Space Creator),
+    // while exposing each of the object's parameters as a `val-<key>` value output (e.g. offset → val-offset)
+    // to drive downstream nodes. Load a .pobj file via the "Load Parametric Site" button; edit values
+    // in-node; a wired `valin-def` overrides the stored definition. Commits its footprint as a real Space.
+    hasInput: false,
     hasOutput: true,
-    valueInputs: [
-      { key: "wallWidth", label: "Wall width" },
-      { key: "saIterations", label: "SA iterations" },
-    ],
-    valueOutputs: [
-      { key: "rooms", label: "Rooms" },
-      { key: "area", label: "Floor area", unit: "m²" },
-      { key: "score", label: "SA score" },
-    ],
-    // `rooms` is a per-room list ({label, minArea, maxArea, maxRatio}); a custom editor renders it on the
-    // node (see LayoutRoomsEditor). The canvas colour-codes each generated room's Area / Ratio against it.
-    defaultParams: { rooms: [
-      { label: "Living", minArea: 18, maxArea: 0, maxRatio: 2.5 },
-      { label: "Kitchen", minArea: 8, maxArea: 0, maxRatio: 2.5 },
-      { label: "Bedroom", minArea: 12, maxArea: 0, maxRatio: 2.5 },
-      { label: "Bathroom", minArea: 4, maxArea: 0, maxRatio: 3 },
-    ], algorithm: "bsp", wallWidth: 0.15, connections: "Living-Kitchen, Living-Bedroom", repulsions: "", saIterations: 600 },
-    fields: [
-      { key: "algorithm", label: "Algorithm", kind: "select", options: [
-        { value: "bsp", label: "BSP (recursive split)" },
-        { value: "rdg", label: "RDG (room graph)" },
-      ] },
-      { key: "wallWidth", label: "Wall Width", kind: "range", min: 0.05, max: 0.4, step: 0.01, unit: "m" },
-      { key: "connections", label: "Connections (A-B, …)", kind: "text", placeholder: "Living-Kitchen, Living-Bedroom" },
-      { key: "repulsions", label: "Repulsions (A-B, …)", kind: "text", placeholder: "Kitchen-Bathroom" },
-      { key: "saIterations", label: "SA Iterations", kind: "range", min: 50, max: 3000, step: 50 },
-    ],
-    hint: "Generate a multi-room layout inside the wired Space — set each room's Min/Max area + max aspect Ratio. Draggable seeds + connection/repulsion lines on the canvas; each room's Area/Ratio is colour-coded green (ok) / red (violated). Run Annealing to optimise.",
+    valueInputs: [{ key: "def", label: "Definition" }],
+    defaultParams: { definition: "", props: [] },
+    fields: [],
+    hint: "Evaluate a parametric object's footprint as a Space source; each parameter (e.g. offset) is a val-<key> output → wire into Inset / Optimise Rectangle.",
+    instructions: "A geometry ROOT built from a parametric object (.pobj). Evaluates the object's footprint polygon and emits it on the geometry output — consume it exactly like a Space source (wire into Inset, then Optimise Rectangle, etc.). Every parameter of the object is also published as a value output `val-<key>` (e.g. a param named `offset` → `val-offset`); wire those into downstream value inputs (e.g. val-offset → Inset's valin-inset) so one object parameter drives the whole chain. Load a definition with the \"Load Parametric Site\" button (or wire a Parametric Object into Definition); edit parameter values directly in the node. Commits its footprint as a real Space.",
+    materialisesSpace: true,
   },
   "param-object": {
     type: "param-object",
@@ -3433,18 +1846,8 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     fields: [{ key: "color", label: "Color (column)", kind: "color" }],
     hint: "Convert an upstream Footing into a 3D mesh (boxes + frustum). Wire into a Node to place it at the structural point(s), or into Mesh to 3D for an unplaced preview.",
   },
-  "mesh-to-3d": {
-    type: "mesh-to-3d",
-    label: "Mesh to 3D",
-    color: "#0891b2",
-    // TERMINAL: renders any incoming Mesh (from a … to 3D Mesh node) into the 3D view. Generic — every
-    // future element that produces a Mesh feeds this one node.
-    hasInput: true,
-    hasOutput: false,
-    defaultParams: {},
-    fields: [],
-    hint: "Render any incoming 3D Mesh in the 3D view. The single terminal for all … to 3D Mesh nodes.",
-  },
+  // Data-declared (see ./declarations/mesh-to-3d.node.json) — behaviour stays in code.
+  "mesh-to-3d": buildToolDefFromDeclaration(meshTo3dDecl as unknown as NodeDeclaration),
   staircase: {
     type: "staircase",
     label: "Staircase",
@@ -3558,35 +1961,10 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     fields: [{ key: "color", label: "Color", kind: "color" }],
     hint: "Convert an upstream Staircase into a 3D mesh (stacked step boxes). Wire into a Node to place it at the structural point(s), or into Mesh to 3D for an unplaced preview.",
   },
-  "schema-to-drawing": {
-    type: "schema-to-drawing",
-    label: "Schema to Drawing Tools",
-    color: "#9333ea",
-    // Reads an attached Schema's segment `type` (role seg-type) and node `type` (role node-type)
-    // discriminators — their options + per-option icons — and surfaces them to the host so they appear as
-    // tools in the Add Segment / Add Node drawing dropdowns (augmenting & overriding the built-ins by value).
-    hasInput: true,
-    hasOutput: false,
-    geomInputs: [{ key: "schema", label: "Schema" }],
-    defaultParams: {},
-    fields: [],
-    hint: "Bring an attached Schema's segment & node TYPES (with icons) into the Add Segment / Add Node drawing dropdowns.",
-  },
-  "schema-to-layers": {
-    type: "schema-to-layers",
-    label: "Schema to Layers",
-    color: "#9333ea",
-    // Reads an attached Schema's segment `type` (role seg-type) and node `type` (role node-type)
-    // discriminators — their options — and surfaces them to the host as live LAYER blocks: a foldable
-    // "Segment" block (Wall / Door / Window / Line) and "Node" block (Junction / Object) in the Layers
-    // panel. Live-derived (not saved); removing the node returns the panel to just Layer 0. No geometry.
-    hasInput: true,
-    hasOutput: false,
-    geomInputs: [{ key: "schema", label: "Schema" }],
-    defaultParams: {},
-    fields: [],
-    hint: "Bring an attached Schema's segment & node TYPES into the Layers panel as foldable Segment / Node layer blocks.",
-  },
+  // Data-declared (see ./declarations/schema-to-drawing.node.json) — behaviour stays in code.
+  "schema-to-drawing": buildToolDefFromDeclaration(schemaToDrawingDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/schema-to-layers.node.json) — behaviour stays in code.
+  "schema-to-layers": buildToolDefFromDeclaration(schemaToLayersDecl as unknown as NodeDeclaration),
   "floorplan-to-front-elevation": {
     type: "floorplan-to-front-elevation",
     label: "Floorplan to Front Elevation",
@@ -3723,242 +2101,26 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Extrude each input space into a solid 3D mass of the given Height, Upwards from the floor or Downwards below it. Set its Colour, Opacity (for see-through massing) and Show Edges in the 3D view.",
   },
-  mass: {
-    type: "mass",
-    label: "Mass",
-    color: "#0e7490",
-    // Primitive 3D Mass generator (no input): a Cube / Cuboid / Sphere / Cone / Cylinder of the given
-    // dimensions, rendered in the 3D view. A starting Mass to feed downstream Mass nodes.
-    hasInput: false,
-    hasOutput: true,
-    defaultParams: { shape: "cube", length: 3, breadth: 2, height: 3, radius: 1.5, color: "#94a3b8" },
-    fields: [
-      {
-        key: "shape",
-        label: "Shape",
-        kind: "select",
-        options: [
-          { value: "cube", label: "Cube" },
-          { value: "cuboid", label: "Cuboid" },
-          { value: "sphere", label: "Sphere" },
-          { value: "cone", label: "Cone" },
-          { value: "cylinder", label: "Cylinder" },
-        ],
-      },
-      { key: "length", label: "Length", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m", showIf: (p) => p.shape === "cube" || p.shape === "cuboid" },
-      { key: "breadth", label: "Breadth", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m", showIf: (p) => p.shape === "cuboid" },
-      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m", showIf: (p) => p.shape === "sphere" || p.shape === "cone" || p.shape === "cylinder" },
-      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m", showIf: (p) => p.shape === "cuboid" || p.shape === "cone" || p.shape === "cylinder" },
-      { key: "color", label: "Color", kind: "color" },
-    ],
-    hint: "A primitive 3D Mass — Cube (Length) · Cuboid (Length × Breadth × Height) · Sphere (Radius) · Cone (Radius, Height) · Cylinder (Radius, Height). Rendered in the 3D view as a starting Mass.",
-  },
-  cuboid: {
-    type: "cuboid",
-    label: "Cuboid",
-    color: "#0e7490",
-    // 3D primitive generator (no input): a Length × Breadth × Height box standing on the floor plane,
-    // rendered in the 3D view (host-driven, like Mass — but fixed to a cuboid). Set its colour.
-    hasInput: false,
-    hasOutput: true,
-    defaultParams: { length: 3, breadth: 2, height: 3, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
-    fields: [
-      { key: "length", label: "Length", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
-      { key: "breadth", label: "Breadth", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
-      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
-      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
-    ],
-    hint: "3D primitive — a Length × Breadth × Height cuboid at Position (X/Y/Z, base on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
-  },
-  cylinder: {
-    type: "cylinder",
-    label: "Cylinder",
-    color: "#0e7490",
-    // 3D primitive generator (no input): a Radius × Height cylinder standing on the floor plane, rendered
-    // in the 3D view (host-driven, like Mass — fixed to a cylinder).
-    hasInput: false,
-    hasOutput: true,
-    defaultParams: { radius: 1.5, height: 3, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
-    fields: [
-      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m" },
-      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
-      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
-    ],
-    hint: "3D primitive — a Cylinder of the given Radius and Height at Position (X/Y/Z, base on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
-  },
-  sphere: {
-    type: "sphere",
-    label: "Sphere",
-    color: "#0e7490",
-    // 3D primitive generator (no input): a Sphere of the given Radius, rendered in the 3D view (host-driven,
-    // like Mass — fixed to a sphere).
-    hasInput: false,
-    hasOutput: true,
-    defaultParams: { radius: 1.5, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
-    fields: [
-      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m" },
-      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
-    ],
-    hint: "3D primitive — a Sphere of the given Radius at Position (X/Y/Z, resting on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
-  },
-  cone: {
-    type: "cone",
-    label: "Cone",
-    color: "#0e7490",
-    // 3D primitive generator (no input): a Radius × Height cone standing on the floor plane, rendered in the
-    // 3D view (host-driven, like Mass — fixed to a cone).
-    hasInput: false,
-    hasOutput: true,
-    defaultParams: { radius: 1.5, height: 3, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scale: 1 },
-    fields: [
-      { key: "radius", label: "Radius", kind: "range", min: 0.1, max: 25, step: 0.1, unit: "m" },
-      { key: "height", label: "Height", kind: "range", min: 0.1, max: 50, step: 0.1, unit: "m" },
-      { key: "posX", label: "Position X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posY", label: "Position Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "posZ", label: "Position Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "rotX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
-    ],
-    hint: "3D primitive — a Cone of the given Radius and Height at Position (X/Y/Z, base on the floor at Y=0), with its own Rotation and Scale. Wire into Display 3D for colour / style; add Transform 3D to compose / mirror.",
-  },
-  "transform-3d": {
-    type: "transform-3d",
-    label: "Transform 3D",
-    color: "#7e22ce",
-    // 3D op: affine-transform an upstream 3D primitive (Cuboid / Cylinder / Sphere / Cone / Mass) —
-    // Translate (X/Y/Z, metres) · Rotate (about X/Y/Z, degrees) · uniform Scale · Mirror across a plane.
-    // Host-applied: the mesh collector walks primitive → Transform 3D → … and bakes the accumulated
-    // transform onto the rendered mesh. Chain several to stack transforms. Y is up; Z is depth.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { translateX: 0, translateY: 0, translateZ: 0, rotateX: 0, rotateY: 0, rotateZ: 0, scale: 1, mirror: "none" },
-    fields: [
-      { key: "translateX", label: "Move X", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "translateY", label: "Move Y (up)", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "translateZ", label: "Move Z", kind: "range", min: -50, max: 50, step: 0.1, unit: "m" },
-      { key: "rotateX", label: "Rotate X", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotateY", label: "Rotate Y", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "rotateZ", label: "Rotate Z", kind: "range", min: -180, max: 180, step: 1, unit: "°" },
-      { key: "scale", label: "Scale", kind: "range", min: 0.1, max: 5, step: 0.05 },
-      {
-        key: "mirror", label: "Mirror", kind: "select",
-        options: [
-          { value: "none", label: "None" },
-          { value: "x", label: "Across YZ (flip X)" },
-          { value: "y", label: "Across XZ (flip Y)" },
-          { value: "z", label: "Across XY (flip Z)" },
-        ],
-      },
-    ],
-    hint: "Transform a 3D primitive — Translate (X/Y/Z) · Rotate (X/Y/Z) · uniform Scale · Mirror across a plane. Wire a Cuboid / Cylinder / Sphere / Cone in; chain several to stack. Y is up.",
-  },
-  "boolean-3d": {
-    type: "boolean-3d",
-    label: "Boolean",
-    color: "#7e22ce",
-    // 3D CSG op: combine two 3D primitives (A = main input, B = second "B" input) via a mesh boolean —
-    // Union (A ∪ B) · Subtract (A − B) · Difference (A − B) · Intersection (A ∩ B). Host-applied: the mesh
-    // collector resolves the two upstream primitives (through any Transform 3D) and the 3D canvas runs the
-    // actual CSG (three-csg-ts). Position B relative to A with a Transform 3D so they overlap meaningfully.
-    hasInput: true,
-    hasOutput: true,
-    geomInputs: [{ key: "b", label: "B" }],
-    defaultParams: { op: "union" },
-    fields: [
-      {
-        key: "op", label: "Operation", kind: "select",
-        options: [
-          { value: "union", label: "Union (A ∪ B)" },
-          { value: "subtract", label: "Subtract (A − B)" },
-          { value: "difference", label: "Difference (A − B)" },
-          { value: "intersect", label: "Intersection (A ∩ B)" },
-        ],
-      },
-    ],
-    hint: "Boolean (CSG) of two 3D primitives — Union · Subtract · Difference · Intersection. Wire primitive A into the main input and primitive B into the B input; move B (via Transform 3D) so they overlap.",
-  },
-  "display-3d": {
-    type: "display-3d",
-    label: "Display 3D",
-    color: "#7e22ce",
-    // 3D styling pass-through: wire a 3D primitive / Transform 3D / Boolean in, and it renders in the 3D
-    // view with this Colour, Opacity, draw Type (Solid / Wireframe) and optional edge lines. Host-applied —
-    // the mesh collector finds the display node downstream of a primitive/boolean and bakes its style. This
-    // is where colour lives now (the primitive nodes no longer carry a colour of their own).
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { color: "#94a3b8", opacity: 1, displayType: "solid", showEdges: false },
-    fields: [
-      { key: "color", label: "Color", kind: "color" },
-      { key: "opacity", label: "Opacity", kind: "range", min: 0, max: 1, step: 0.05 },
-      {
-        key: "displayType", label: "Type", kind: "select",
-        options: [
-          { value: "solid", label: "Solid" },
-          { value: "wireframe", label: "Wireframe" },
-        ],
-      },
-      { key: "showEdges", label: "Show edges", kind: "checkbox" },
-    ],
-    hint: "Style a 3D primitive / Boolean for the 3D view — Colour · Opacity · Solid or Wireframe · Show edges. Wire a Cuboid / Cylinder / Sphere / Cone / Boolean in.",
-  },
-  "inset-3d": {
-    type: "inset-3d",
-    label: "Inset 3D",
-    color: "#0e7490",
-    // Mass op: inset (or outset) each incoming Mass's footprint by Offset — Inside shrinks it, Outside
-    // grows it — producing a new Mass. Feed a Mass from Space to 3D; the host extrudes the inset footprint.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { direction: "inside", offset: 0.2 },
-    fields: [
-      {
-        key: "direction",
-        label: "Direction",
-        kind: "select",
-        options: [
-          { value: "inside", label: "Inside (shrink)" },
-          { value: "outside", label: "Outside (grow)" },
-        ],
-      },
-      { key: "offset", label: "Offset", kind: "range", min: 0, max: 5, step: 0.05, unit: "m" },
-    ],
-    hint: "Inset a 3D Mass — shrink (Inside) or grow (Outside) its footprint by Offset → a new Mass. Feed a Mass from Space to 3D.",
-  },
-  "smooth-3d": {
-    type: "smooth-3d",
-    label: "Smoothing 3D",
-    color: "#0e7490",
-    // Mass op: round each incoming Mass's footprint (Chaikin corner-cutting) so the extruded mass has
-    // smooth vertical faces — producing a new Mass. Feed a Mass from Space to 3D / Inset 3D.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { iterations: 2 },
-    fields: [
-      { key: "iterations", label: "Iterations", kind: "range", min: 1, max: 5, step: 1 },
-    ],
-    hint: "Smooth a 3D Mass — rounds its footprint corners (more Iterations = rounder) so the extruded mass has smooth faces → a new Mass. Feed a Mass from Space to 3D / Inset 3D.",
-  },
+  // Data-declared (see ./declarations/mass.node.json) — behaviour stays in code.
+  mass: buildToolDefFromDeclaration(massDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/cuboid.node.json) — behaviour stays in code.
+  cuboid: buildToolDefFromDeclaration(cuboidDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/cylinder.node.json) — behaviour stays in code.
+  cylinder: buildToolDefFromDeclaration(cylinderDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/sphere.node.json) — behaviour stays in code.
+  sphere: buildToolDefFromDeclaration(sphereDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/cone.node.json) — behaviour stays in code.
+  cone: buildToolDefFromDeclaration(coneDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/transform-3d.node.json) — behaviour stays in code.
+  "transform-3d": buildToolDefFromDeclaration(transform3dDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/boolean-3d.node.json) — behaviour stays in code.
+  "boolean-3d": buildToolDefFromDeclaration(boolean3dDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/display-3d.node.json) — behaviour stays in code.
+  "display-3d": buildToolDefFromDeclaration(display3dDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/inset-3d.node.json) — behaviour stays in code.
+  "inset-3d": buildToolDefFromDeclaration(inset3dDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/smooth-3d.node.json) — behaviour stays in code.
+  "smooth-3d": buildToolDefFromDeclaration(smooth3dDecl as unknown as NodeDeclaration),
   "voronoi-3d": {
     type: "voronoi-3d",
     label: "Voronoi 3D",
@@ -4103,400 +2265,24 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     ],
     hint: "Render the 3D isometric view into a photorealistic image (Google AI).",
   },
-  hatching: {
-    type: "hatching",
-    label: "Display Space",
-    color: "#475569",
-    // Pure styling node: takes a Space, passes its geometry straight through (so the pipeline can
-    // continue), and paints a coloured fill / hatch pattern over it in the live preview. When "Hatch"
-    // is off it's a flat colour fill at the given opacity; when on, a diagonal-line or random-dot
-    // pattern (with spacing / angle / line-weight controls). Mirrors the Display block's hatch styling.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: {
-      color: "#0ea5e9",
-      opacity: 0.5,
-      hatch: true,
-      hatchStyle: "diagonal",
-      spacing: 8,
-      angle: 45,
-      weight: 1,
-    },
-    fields: [
-      { key: "color", label: "Color", kind: "color" },
-      { key: "opacity", label: "Opacity", kind: "range", min: 0, max: 1, step: 0.05 },
-      { key: "hatch", label: "Hatch", kind: "checkbox" },
-      {
-        key: "hatchStyle",
-        label: "Style",
-        kind: "select",
-        options: [
-          { value: "diagonal", label: "Diagonal lines" },
-          { value: "dots", label: "Random dots" },
-        ],
-        showIf: (p) => Boolean(p.hatch),
-      },
-      // Stripe period / dot density (px). Drives both diagonal-line spacing and the dot tile period.
-      { key: "spacing", label: "Spacing", kind: "range", min: 3, max: 40, step: 1, unit: "px", showIf: (p) => Boolean(p.hatch) },
-      // Diagonal only: rotation of the stripes (dots have no orientation).
-      { key: "angle", label: "Angle", kind: "range", min: 0, max: 180, step: 1, unit: "°", showIf: (p) => Boolean(p.hatch) && p.hatchStyle === "diagonal" },
-      // Line thickness (diagonal) / dot radius (dots), in px.
-      { key: "weight", label: "Weight", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "px", showIf: (p) => Boolean(p.hatch) },
-    ],
-    hint: "Paint the input Space with a colour fill or diagonal/dots hatch (passes the space through).",
-  },
-  "display-segment": {
-    type: "display-segment",
-    label: "Display Segment",
-    color: "#b45309",
-    // Two modes (the Buffer node is folded in here):
-    //  • "line"     — restyle the incoming segment's stroke (line style / colour) + optional direction
-    //                 arrow; the centerline is threaded downstream unchanged.
-    //  • "buffered" — thicken the segment into a Space by `thickness` m (full ribbon width), with a buffer
-    //                 Style (capsule / square / flat). Output is a Space → feeds the Space pipeline.
-    // Schema-driven: wire a Schema into "gin-schema" (or attach one) and each segment styles per its own
-    // schema values by role (wall-color / wall-linestyle / show-direction / wall-thickness / wall-
-    // justification / hatch…); node params are the fallback. Styling is per-segment.
-    hasInput: true,
-    hasOutput: true,
-    geomInputs: [{ key: "schema", label: "Schema" }],
-    valueInputs: [{ key: "thickness", label: "Thickness" }],
-    defaultParams: {
-      applyTo: "any",
-      mode: "line",
-      lineStyle: "solid",
-      color: "#334155",
-      weight: 2,
-      showDirection: false,
-      thickness: 0.2,
-      justification: "center",
-      bufferStyle: "capsule",
-      hatch: false,
-      hatchStyle: "diagonal",
-      hatchSpacing: 8,
-      hatchAngle: 45,
-      hatchWeight: 1,
-    },
-    fields: [
-      // Type self-filter (when a schema type discriminator is present): style only matching segments, so
-      // it can coexist with Segment to Door / Window in the same flow without restyling them.
-      {
-        key: "applyTo",
-        label: "Apply to",
-        kind: "select",
-        options: [
-          { value: "any", label: "Any segment" },
-          { value: "wall", label: "Walls only" },
-          { value: "door", label: "Doors only" },
-          { value: "window", label: "Windows only" },
-        ],
-      },
-      {
-        key: "mode",
-        label: "Mode",
-        kind: "select",
-        options: [
-          { value: "line", label: "Line" },
-          { value: "buffered", label: "Buffered" },
-        ],
-      },
-      {
-        key: "lineStyle",
-        label: "Line Style",
-        kind: "select",
-        role: "wall-linestyle",
-        options: [
-          { value: "solid", label: "Solid" },
-          { value: "dashed", label: "Dashed" },
-          { value: "dotted", label: "Dotted" },
-        ],
-        showIf: (p) => p.mode !== "buffered",
-      },
-      { key: "color", label: "Color", kind: "color", role: "wall-color" },
-      // Arrow at the segment midpoint, pointing source → target — shown in both Line and Buffered modes.
-      { key: "showDirection", label: "Show Direction", kind: "checkbox", role: "show-direction" },
-      // Buffered mode — thickness (the full ribbon width, replaces the old Buffer radius) + cap style.
-      { key: "thickness", label: "Thickness", kind: "range", min: 0.02, max: 10, step: 0.02, unit: "m", role: "buffer-thickness", showIf: (p) => p.mode === "buffered" },
-      // Which side of the centerline the ribbon sits on: Center = symmetric; Left / Right = entirely on
-      // that side (inner edge on the centerline).
-      {
-        key: "justification",
-        label: "Justification",
-        kind: "select",
-        role: "wall-justification",
-        options: [
-          { value: "left", label: "Left" },
-          { value: "center", label: "Center" },
-          { value: "right", label: "Right" },
-        ],
-        showIf: (p) => p.mode === "buffered",
-      },
-      {
-        key: "bufferStyle",
-        label: "Buffer Style",
-        kind: "select",
-        options: [
-          { value: "capsule", label: "Capsule (round)" },
-          { value: "square", label: "Square (extended)" },
-          { value: "flat", label: "Flat (butt)" },
-        ],
-        showIf: (p) => p.mode === "buffered",
-      },
-      // Hatch — fill the buffered ribbon with a pattern instead of a solid colour (mirrors the Segment
-      // Display block's hatch in the canvas Properties tab). Buffered mode only (line has no fill area).
-      { key: "hatch", label: "Hatch", kind: "checkbox", role: "hatch", showIf: (p) => p.mode === "buffered" },
-      {
-        key: "hatchStyle",
-        label: "Hatch Style",
-        kind: "select",
-        role: "hatch-style",
-        options: [
-          { value: "diagonal", label: "Diagonal lines" },
-          { value: "dots", label: "Random dots" },
-        ],
-        showIf: (p) => p.mode === "buffered" && Boolean(p.hatch),
-      },
-      { key: "hatchSpacing", label: "Spacing", kind: "range", min: 3, max: 40, step: 1, unit: "px", role: "hatch-spacing", showIf: (p) => p.mode === "buffered" && Boolean(p.hatch) },
-      { key: "hatchAngle", label: "Angle", kind: "range", min: 0, max: 180, step: 1, unit: "°", role: "hatch-angle", showIf: (p) => p.mode === "buffered" && Boolean(p.hatch) && p.hatchStyle === "diagonal" },
-      { key: "hatchWeight", label: "Weight", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "px", showIf: (p) => p.mode === "buffered" && Boolean(p.hatch) },
-    ],
-    hint: "Display a segment — Line (restyle stroke + direction arrow) or Buffered (thicken to a Space by Thickness, with a buffer style + optional hatch fill). Buffered output feeds the Space pipeline.",
-  },
-  "display-node": {
-    type: "display-node",
-    label: "Display Node",
-    color: "#475569",
-    // Styling pass-through for nodes (points): draw the incoming node as a marker — shape, stroke style,
-    // colour, size and an optional diagonal/dots hatch fill — and thread it downstream unchanged. Mirrors
-    // the Node Display block in the canvas Properties tab.
-    // Schema-driven: wire a Schema into "gin-schema" (or attach one) and each node styles per its own
-    // schema values by role (node-shape / node-style / node-color / node-size / node-hatch…); node params
-    // are the fallback. Styling is per-node.
-    hasInput: true,
-    hasOutput: true,
-    geomInputs: [{ key: "schema", label: "Schema" }],
-    // PILOT: a params OUTPUT endpoint (violet `pout`, right side) so this node's fields can be wired into
-    // an Input Schema node's params input to derive a Node schema from them.
-    exposesParams: true,
-    defaultParams: {
-      applyTo: "any",
-      shape: "dot",
-      style: "solid",
-      color: "#475569",
-      size: 1,
-      hatch: false,
-      hatchStyle: "diagonal",
-      spacing: 8,
-      angle: 45,
-      weight: 1,
-    },
-    fields: [
-      // Type self-filter (when a schema type discriminator is present): mark only matching nodes, so it
-      // can coexist with Node to Object without re-marking object nodes.
-      {
-        key: "applyTo",
-        label: "Apply to",
-        kind: "select",
-        options: [
-          { value: "any", label: "Any node" },
-          { value: "node", label: "Nodes only" },
-          { value: "object", label: "Objects only" },
-        ],
-      },
-      {
-        key: "shape",
-        label: "Shape",
-        kind: "select",
-        role: "node-shape",
-        options: [
-          { value: "dot", label: "Dot" },
-          { value: "circle", label: "Circle" },
-          { value: "square", label: "Square" },
-          { value: "triangle", label: "Triangle" },
-        ],
-      },
-      {
-        key: "style",
-        label: "Style",
-        kind: "select",
-        role: "node-style",
-        options: [
-          { value: "solid", label: "Solid" },
-          { value: "dashed", label: "Dashed" },
-          { value: "dotted", label: "Dotted" },
-        ],
-      },
-      { key: "color", label: "Color", kind: "color", role: "node-color" },
-      { key: "size", label: "Size", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "×", role: "node-size" },
-      { key: "hatch", label: "Hatch", kind: "checkbox", role: "node-hatch" },
-      {
-        key: "hatchStyle",
-        label: "Hatch Style",
-        kind: "select",
-        role: "node-hatch-style",
-        options: [
-          { value: "diagonal", label: "Diagonal lines" },
-          { value: "dots", label: "Random dots" },
-        ],
-        showIf: (p) => Boolean(p.hatch),
-      },
-      { key: "spacing", label: "Spacing", kind: "range", min: 3, max: 40, step: 1, unit: "px", role: "node-hatch-spacing", showIf: (p) => Boolean(p.hatch) },
-      { key: "angle", label: "Angle", kind: "range", min: 0, max: 180, step: 1, unit: "°", role: "node-hatch-angle", showIf: (p) => Boolean(p.hatch) && p.hatchStyle === "diagonal" },
-      { key: "weight", label: "Weight", kind: "range", min: 0.5, max: 5, step: 0.5, unit: "px", showIf: (p) => Boolean(p.hatch) },
-    ],
-    hint: "Draw the input node as a marker — shape / style / colour / size / hatch (passes the node through).",
-  },
-  bua: {
-    type: "bua",
-    label: "BUA Calculator",
-    color: "#0d9488",
-    // Calculator: takes a space as input to read its plot area (falls back to the Plot area param when
-    // unconnected). Emits scalar BUA values, and passes its input Space straight through on the main
-    // geometry output (no-op) so the same space can continue down the pipeline.
-    hasInput: true,
-    hasOutput: true,
-    valueOutputs: [
-      { key: "fsiBua", label: "FSI BUA", unit: "m²" },
-      { key: "nonFsiBua", label: "Non-FSI BUA", unit: "m²" },
-    ],
-    // Mirrors the BUA Calculator block's input fields (defaults match the block). Plot area comes from
-    // the wired-in space, so it isn't a field here.
-    defaultParams: {
-      amenityOsRate: 0.1,
-      losRate: 0.15,
-      basicFsiMultiplier: 1.0,
-      premiumFsiMultiplier: 0.5,
-      tdrMultiplier: 0.9,
-      fungibleRate: 0.35,
-      schemeFsiSqm: 11721.6,
-      inSituFsiFactor: 2,
-      carParksRequired: 417,
-      areaPerCarParkSqm: 30,
-      otherNonFsiSqm: 6000,
-      wingsPerFloor: 5,
-      podiumOffsetM: 3.5,
-      // Pass-through layout knobs (each emitted as a value output for wiring into Inset / Split /
-      // Optimise Rectangle).
-      front: 0,
-      remaining: 0,
-      edgeIndex: 0,
-      ratio: "50, 50",
-      splitAngle: 0,
-      axisTilt: 0,
-      rectangles: 1,
-      optimiseAxisTilt: false,
-    },
-    fields: [
-      { key: "amenityOsRate", label: "Amenity OS Rate", kind: "number", min: 0, max: 1, step: 0.01 },
-      { key: "losRate", label: "LOS Rate", kind: "number", min: 0, max: 1, step: 0.01 },
-      { key: "basicFsiMultiplier", label: "Basic FSI", kind: "number", min: 0, step: 0.1 },
-      { key: "premiumFsiMultiplier", label: "Premium FSI", kind: "number", min: 0, step: 0.1 },
-      { key: "tdrMultiplier", label: "TDR FSI", kind: "number", min: 0, step: 0.1 },
-      { key: "fungibleRate", label: "Fungible Rate", kind: "number", min: 0, max: 1, step: 0.05 },
-      { key: "schemeFsiSqm", label: "Scheme FSI (m²)", kind: "number", min: 0, step: 10 },
-      { key: "inSituFsiFactor", label: "In-Situ FSI (×)", kind: "number", min: 0, step: 0.5 },
-      { key: "carParksRequired", label: "Car Parks (nos)", kind: "number", min: 0, step: 1 },
-      { key: "areaPerCarParkSqm", label: "Area/Car Park (m²)", kind: "number", min: 0, step: 1 },
-      { key: "otherNonFsiSqm", label: "Other Non-FSI (m²)", kind: "number", min: 0, step: 100 },
-      { key: "wingsPerFloor", label: "Wings / Cores", kind: "number", min: 1, step: 1 },
-      { key: "podiumOffsetM", label: "Podium Offset (m)", kind: "number", min: 0, step: 0.5, output: true },
-      // Pass-through layout knobs — each has its own value-output endpoint (right) to wire downstream.
-      { key: "front", label: "Front offset", kind: "range", min: 0, max: 6, step: 0.1, unit: "m", output: true },
-      { key: "remaining", label: "Remaining offset", kind: "range", min: 0, max: 6, step: 0.1, unit: "m", output: true },
-      { key: "edgeIndex", label: "Edge index", kind: "range", min: 0, max: 15, step: 1, output: true },
-      // Ratio: a list like "10, 90" passed through verbatim — wire into Split's Ratio input for a 10:90 cut.
-      { key: "ratio", label: "Ratio", kind: "text", placeholder: "10, 90", output: true },
-      { key: "splitAngle", label: "Split Angle", kind: "range", min: 0, max: 360, step: 1, unit: "°", output: true },
-      { key: "axisTilt", label: "Axis tilt", kind: "range", min: 0, max: 360, step: 1, unit: "°", output: true },
-      { key: "rectangles", label: "Rectangles", kind: "range", min: 1, max: 5, step: 1, output: true },
-      { key: "optimiseAxisTilt", label: "Optimise axis tilt", kind: "checkbox", output: true },
-    ],
-    hint: "Connect a space for plot area → FSI BUA (max permissible) + Non-FSI BUA.",
-  },
-  math: {
-    type: "math",
-    label: "Math",
-    color: "#ca8a04",
-    // Generic value calculator: result = A <op> B, optionally rounded. A/B come from wired value
-    // inputs (else the fallback fields). E.g. FSI BUA ÷ footprint area, ceil → number of floors.
-    hasInput: false,
-    hasOutput: false,
-    valueInputs: [
-      { key: "a", label: "A" },
-      { key: "b", label: "B" },
-    ],
-    valueOutputs: [{ key: "result", label: "Result" }],
-    defaultParams: { a: 0, b: 1, op: "divide", round: "ceil" },
-    fields: [
-      { key: "a", label: "A (if no input)", kind: "number", step: 1 },
-      { key: "b", label: "B (if no input)", kind: "number", step: 1 },
-      {
-        key: "op",
-        label: "Operation",
-        kind: "select",
-        options: [
-          { value: "divide", label: "÷ Divide (A ÷ B)" },
-          { value: "multiply", label: "× Multiply" },
-          { value: "add", label: "+ Add" },
-          { value: "subtract", label: "− Subtract (A − B)" },
-        ],
-      },
-      {
-        key: "round",
-        label: "Round",
-        kind: "select",
-        options: [
-          { value: "none", label: "None" },
-          { value: "ceil", label: "Ceil (round up)" },
-          { value: "floor", label: "Floor (round down)" },
-          { value: "round", label: "Nearest" },
-        ],
-      },
-    ],
-    hint: "result = A (op) B, optionally rounded. e.g. BUA ÷ footprint, ceil = floors.",
-  },
-  random: {
-    type: "random",
-    label: "Random",
-    color: "#9333ea",
-    // Value generator: a DETERMINISTIC pseudo-random number in [min, max], rounded to `decimals` places.
-    // The draw is keyed on `seed` so the live preview is stable (and matches commit) — "Re-roll" bumps
-    // the seed for a fresh number. min / max are wireable (valin-min / valin-max).
-    hasInput: false,
-    hasOutput: false,
-    valueInputs: [
-      { key: "min", label: "Min" },
-      { key: "max", label: "Max" },
-    ],
-    valueOutputs: [{ key: "result", label: "Result" }],
-    defaultParams: { min: 0, max: 10, decimals: 0, seed: 1 },
-    fields: [
-      { key: "min", label: "Min (if no input)", kind: "number", step: 1 },
-      { key: "max", label: "Max (if no input)", kind: "number", step: 1 },
-      { key: "decimals", label: "Decimal places", kind: "range", min: 0, max: 6, step: 1 },
-      { key: "seed", label: "Seed", kind: "number", min: 1, step: 1 },
-    ],
-    hint: "Random number in [min, max] with N decimals. Seeded (stable) — press Re-roll for a new draw.",
-  },
+  // Data-declared (see ./declarations/hatching.node.json) — behaviour stays in code.
+  hatching: buildToolDefFromDeclaration(hatchingDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/display-segment.node.json) — behaviour stays in code.
+  "display-segment": buildToolDefFromDeclaration(displaySegmentDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/display-node.node.json) — behaviour stays in code.
+  "display-node": buildToolDefFromDeclaration(displayNodeDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/bua.node.json) — behaviour stays in code.
+  bua: buildToolDefFromDeclaration(buaDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/math.node.json) — behaviour stays in code.
+  math: buildToolDefFromDeclaration(mathDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/random.node.json) — behaviour stays in code.
+  random: buildToolDefFromDeclaration(randomDecl as unknown as NodeDeclaration),
   // ── Parametric-object decomposition (read-only) — nodes emitted by "Load Parametric Object" to visualise
   //    a .pobj.json's vars (Expression) + geometry rules (Create Polygon / Segment / Arc / Box) as a graph.
   //    These are display-only: the flow evaluator ignores them (evalNode default), so they annotate structure
   //    without recomputing geometry. ──
-  expr: {
-    type: "expr",
-    label: "Expression",
-    color: "#ca8a04",
-    hasInput: false,
-    hasOutput: false,
-    valueInputs: [{ key: "deps", label: "inputs" }],
-    valueOutputs: [{ key: "result", label: "Result" }],
-    defaultParams: { name: "", expr: "" },
-    fields: [
-      { key: "name", label: "Name", kind: "text" },
-      { key: "expr", label: "Formula", kind: "textarea", placeholder: "e.g. swing * PI / 180" },
-    ],
-    hint: "A named variable = an expression over params / other vars (from a parametric object's geometry.vars).",
-  },
+  // Data-declared (see ./declarations/expr.node.json) — display-only node (evaluator ignores it).
+  expr: buildToolDefFromDeclaration(exprDecl as unknown as NodeDeclaration),
   "create-polygon": {
     type: "create-polygon",
     label: "Create Polygon",
@@ -4570,86 +2356,16 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     fields: [],
     hint: "Collect values from any node into named metrics (shown in the Metrics tab).",
   },
-  "space-geometry": {
-    type: "space-geometry",
-    label: "Space Geometry",
-    color: "#0891b2",
-    // Measures the input space. Forwards the polygon unchanged on the main output (so it can sit inline)
-    // and exposes three scalar value outputs: area (m²), perimeter (m), and vertex count.
-    hasInput: true,
-    hasOutput: true,
-    valueOutputs: [
-      { key: "area", label: "Area", unit: "m²" },
-      { key: "perimeter", label: "Perimeter", unit: "m" },
-      { key: "vertices", label: "Vertices" },
-    ],
-    defaultParams: {},
-    fields: [],
-    hint: "Measure the input space — outputs Area, Perimeter and vertex count.",
-  },
-  merge: {
-    type: "merge",
-    label: "Merge",
-    color: "#16a34a",
-    // Boolean UNION of every connected space → one combined Space (the outer outline). Fuses adjacent or
-    // overlapping spaces back into a single footprint. Abutting/touching spaces use an EXACT vector union
-    // (dissolve shared walls, straight edges); truly overlapping spaces fall back to a raster union whose
-    // tilted edges are lightly stair-stepped. Disjoint inputs collapse to their largest blob (a single
-    // Space can't carry separate islands).
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: {},
-    fields: [],
-    hint: "Union multiple input spaces into a single Space (their combined outer outline).",
-  },
-  "input-props": {
-    type: "input-props",
-    label: "Input Properties",
-    color: "#9333ea",
-    // Takes a Space (forwarded unchanged on the main output) and exposes user-defined adjustable
-    // parameters — each renders its own control (slider / options / checkbox / textbox) and publishes
-    // its current value as a `val-<propId>` output endpoint on the right. Endpoints are DYNAMIC (driven
-    // by params.props), so the value-output handles are rendered from the prop list, not valueOutputs.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { props: [] },
-    fields: [],
-    hint: "Define adjustable parameters (slider / options / checkbox / text); each exposes its value as an output.",
-  },
-  "file-upload": {
-    type: "file-upload",
-    label: "File Upload",
-    color: "#2563eb",
-    // Input source (no geometry): pick a file from disk via the OS open dialog. Publishes the chosen
-    // file's path (browsers expose only the name, not the absolute path) as a `val-path` text endpoint
-    // so it can be wired into any value input / the Output node. The picker UI is rendered by the host.
-    hasInput: false,
-    hasOutput: false,
-    // `path` → the file name (browsers don't expose the absolute path). `data` → the file's data URL
-    // (data:<mime>;base64,…), kept transient (`_data`) so it isn't written into saved flows but can be
-    // wired into an Analyse node's File input to send the bytes to Gemini.
-    valueOutputs: [{ key: "path", label: "Path" }, { key: "data", label: "Data" }],
-    defaultParams: { path: "", fileName: "" },
-    fields: [],
-    hint: "Pick a file (OS open dialog) → outputs its path (val-path) and data URL (val-data, e.g. for Analyse).",
-  },
-  text: {
-    type: "text",
-    label: "Text",
-    color: "#475569",
-    // Text value node: a string source / pass-through. Type text in the box, or wire a `val-*` string
-    // into the `valin-text` input to override it. Re-publishes the resolved string on `val-text` for
-    // downstream value consumers / the Output node. No geometry.
-    hasInput: false,
-    hasOutput: false,
-    valueInputs: [{ key: "text", label: "Text in" }],
-    valueOutputs: [{ key: "text", label: "Text" }],
-    defaultParams: { text: "" },
-    fields: [
-      { key: "text", label: "Text", kind: "textarea", placeholder: "Type text… (or wire an input)" },
-    ],
-    hint: "A text value — type it, or pass one in (valin-text); outputs it on val-text.",
-  },
+  // Data-declared (see ./declarations/space-geometry.node.json) — behaviour stays in code.
+  "space-geometry": buildToolDefFromDeclaration(spaceGeometryDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/merge.node.json) — behaviour stays in code.
+  merge: buildToolDefFromDeclaration(mergeDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/input-props.node.json) — behaviour stays in code (dynamic prop outputs).
+  "input-props": buildToolDefFromDeclaration(inputPropsDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/file-upload.node.json) — behaviour stays in code.
+  "file-upload": buildToolDefFromDeclaration(fileUploadDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/text.node.json) — behaviour stays in code.
+  text: buildToolDefFromDeclaration(textDecl as unknown as NodeDeclaration),
   analyse: {
     type: "analyse",
     label: "Analyse",

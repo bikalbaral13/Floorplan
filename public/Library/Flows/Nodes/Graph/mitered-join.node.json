@@ -1,0 +1,48 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "mitered-join",
+  "meta": { "label": "Mitered Join", "category": "Graph", "color": "#b45309" },
+  "description": "Stroke a graph (polylines / Skeleton branches) into a ribbon of a set width — sharp, curved, or rectangular (boxed) joints. Clip to boundary trims ends to the source space; Union merges the segments into a single Space; Get Outer Boundary returns the single space bounded by the joined ribbon's outer edge.",
+  "instructions": "Strokes an incoming GRAPH (polylines — e.g. Skeleton in Branches mode) into a closed ribbon of `width` metres, mitred at shared endpoints. `join` = Sharp (mitred) / Curved (rounded) / Rectangular (boxed joints). `useSameWidth` off → each segment strokes at its own canvas thickness (the Width slider hides).\n\n`clipToBoundary` trims ends to the source space; `union` fuses the per-segment ribbons into ONE Space; `getOuterBoundary` instead outputs the single Space bounded by the joined ribbon's OUTER edge. The `gin-boundary` input clips to a given Space (else auto-detects the upstream Skeleton's source). One handle per ribbon Space, or a single bundle. Width is wireable.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "(getOuterBoundary || union || outputMode == 'single') ? 1 : max(1, min(60, round(handleCount)))",
+    "geomInputs": [
+      { "key": "boundary", "label": "Clip space" }
+    ],
+    "valueInputs": [
+      { "key": "width", "label": "Width" }
+    ]
+  },
+  "parameters": [
+    { "key": "useSameWidth", "label": "Use same width for all", "kind": "checkbox", "default": true },
+    { "key": "width", "label": "Width", "kind": "range", "default": 2, "min": 0.1, "max": 20, "step": 0.1, "unit": "m", "showWhen": "useSameWidth" },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per cell (one each)" },
+        { "value": "single", "label": "Single (all)" }
+      ],
+      "showWhen": "!union && !getOuterBoundary"
+    },
+    {
+      "key": "join",
+      "label": "Joint type",
+      "kind": "select",
+      "default": "sharp",
+      "options": [
+        { "value": "sharp", "label": "Sharp (mitred)" },
+        { "value": "curved", "label": "Curved (rounded)" },
+        { "value": "rectangular", "label": "Rectangular (boxed joints)" }
+      ]
+    },
+    { "key": "clipToBoundary", "label": "Clip to boundary", "kind": "checkbox", "default": true, "showWhen": "!getOuterBoundary" },
+    { "key": "union", "label": "Union", "kind": "checkbox", "default": false, "showWhen": "!getOuterBoundary" },
+    { "key": "getOuterBoundary", "label": "Get Outer Boundary", "kind": "checkbox", "default": false }
+  ]
+}

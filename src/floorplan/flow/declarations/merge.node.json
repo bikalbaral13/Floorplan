@@ -1,0 +1,10 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "merge",
+  "meta": { "label": "Merge", "category": "Space", "color": "#16a34a" },
+  "description": "Union multiple input spaces into a single Space (their combined outer outline).",
+  "instructions": "Boolean UNION of every connected Space → one combined Space (the outer outline). Fuses adjacent or overlapping spaces back into a single footprint: abutting/touching spaces use an EXACT vector union (dissolves shared walls, straight edges); truly overlapping spaces fall back to a raster union whose tilted edges are lightly stair-stepped. Disjoint inputs collapse to their largest blob (a single Space can't carry separate islands).\n\nTIP: wire several room Spaces in to get their combined footprint for area / boundary.",
+  "handles": { "input": true, "output": true },
+  "parameters": []
+}

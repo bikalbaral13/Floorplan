@@ -1,0 +1,58 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "rug.v1",
+    "name": "Rug",
+    "category": "Furniture/Living"
+  },
+  "parameters": [
+    {
+      "key": "width",
+      "label": "Width",
+      "kind": "number",
+      "default": 3,
+      "min": 1,
+      "max": 6,
+      "unit": "m"
+    },
+    {
+      "key": "depth",
+      "label": "Depth",
+      "kind": "number",
+      "default": 2,
+      "min": 1,
+      "max": 6,
+      "unit": "m"
+    },
+    {
+      "key": "color",
+      "label": "Color",
+      "kind": "color",
+      "default": "#e5e7eb"
+    }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "vars": {
+      "w2": "width / 2",
+      "d2": "depth / 2"
+    },
+    "cases": [
+      {
+        "rules": [
+          {
+            "box": {
+              "x0": "-w2",
+              "x1": "w2",
+              "y0": "-d2",
+              "y1": "d2",
+              "h0": 0,
+              "h1": 0.01
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

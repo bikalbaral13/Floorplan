@@ -73,6 +73,16 @@ const libraryBridge = (): Plugin => ({
             fs.writeFileSync(abs, body.content, "utf8");
             return sendJson(res, 200, { ok: true, path: path.relative(LIBRARY_ROOT, abs).replace(/\\/g, "/") });
           }
+          // POST /__library/delete-file { path } → remove ONE file inside public/Library (path-locked).
+          // Generic (any *.json under Library) — used by the Flow Agent to delete node / workflow templates.
+          if (req.method === "POST" && url.pathname === "/delete-file") {
+            const body = JSON.parse((await readBody(req)) || "{}") as { path?: unknown };
+            const abs = typeof body.path === "string" && body.path.toLowerCase().endsWith(".json") ? resolveInLibrary(body.path) : null;
+            if (!abs) return sendJson(res, 400, { error: "need path (*.json inside public/Library)" });
+            if (!fs.existsSync(abs)) return sendJson(res, 404, { error: "file not found" });
+            fs.unlinkSync(abs);
+            return sendJson(res, 200, { ok: true, deleted: path.relative(LIBRARY_ROOT, abs).replace(/\\/g, "/") });
+          }
           // POST /__library/delete { ids } → remove the Parametric Objects .pobj files whose meta.id matches.
           if (req.method === "POST" && url.pathname === "/delete") {
             const body = JSON.parse((await readBody(req)) || "{}") as { ids?: unknown };

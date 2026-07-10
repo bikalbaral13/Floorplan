@@ -103,7 +103,7 @@ import type {
 } from "./types";
 import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue, PATH_SPACE_ID_PREFIX } from "./types";
 import { rasterizePdfFirstPage } from "./pdfRaster";
-import { saveLibraryFile, listLibraryFiles, deleteLibraryObjectFiles, POBJ_SUBFOLDER } from "./libraryFiles";
+import { saveLibraryFile, listParametricObjectFiles, deleteLibraryObjectFiles, pobjFolderFor } from "./libraryFiles";
 import { vectorizeImage, type VectorizeColorMode } from "./algorithms/vector/vectorizeImage";
 import { detectObjects, splitDataUrl, DEFAULT_DETECTION_MODEL, type Detection, type DetectionMode } from "./algorithms/vision/geminiObjectDetection";
 import { MapTileLayer } from "./components/MapTileLayer";
@@ -148,6 +148,7 @@ import {
   longestEdgeIndex,
 } from "./algorithms/geometry/polygon";
 import { getRoomHoles, roomNetArea } from "./roomGeometry";
+import { largestInscribedRectangle } from "./algorithms/layout/optimiseRect";
 import {
   pointToSegDistPx,
   segToSegMinDistPx,
@@ -188,6 +189,7 @@ import { runAgentChat, AGENT_SYSTEM_PROMPT, DESIGN_AGENT_SYSTEM_PROMPT, PARAMETR
 import { runFlowAgent, FLOW_AGENT_SYSTEM_PROMPT, buildFlowToolCatalog, validateFlowGraph, type FlowAgentApi } from "./ai/flowAgent";
 import { registerAgentCommand, startAgentBridge, agentBridgeEnabled } from "./agentBridge";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
+import { ImportObjectsDialog } from "./components/dialogs/ImportObjectsDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
 import { ElevationPanels } from "./components/ElevationPanels";
@@ -229,7 +231,7 @@ import { NodeDisplayBlock } from "./components/nodeProperties/NodeDisplayBlock";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "./types";
 import { SchemaPropsBlock, SchemaMetricsBlock } from "./components/GraphSchemaBlocks";
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "./algorithms/network/pipeNetworkSolver";
-import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries } from "./flow/flowTypes";
+import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries, FLOW_TOOLS } from "./flow/flowTypes";
 import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs } from "./flow/eval/parametricObject";
 import { setFlowObjectLibrary, findLibraryObject, measureParametricObject } from "./flow/eval/objectFootprints";
 import type { FlowMesh } from "./flow/eval/meshTypes";
@@ -249,7 +251,7 @@ import { FlowOverlay, FLOORPLAN_SCHEMA_PARAMS } from "./flow/FlowOverlay";
 import { TemplateDialog, type TemplateParams, type TemplateSample } from "./components/dialogs/TemplateDialog";
 import { FlowParamsPanel } from "./flow/FlowParamsPanel";
 import { evaluateFlow, type FlowPreviewItem } from "./flow/eval/evaluateFlow";
-import { evalGraphMetrics, gridDefToField, evalSkeleton } from "./flow/eval/evalNodes";
+import { evalGraphMetrics, gridDefToField, evalSkeleton, evalCorridoorPieces, evalCoreRacking } from "./flow/eval/evalNodes";
 import { evaluateSpaceCondition } from "./flow/conditional";
 import { PlacementSymbol2D, placementFrameFromQuad, isPlacementSymbolKind } from "./placementSymbol2d";
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from "react-resizable-panels";
@@ -992,8 +994,11 @@ const unionBandOutlines = (polyMap: Map<string, Point[]>): { outer: Point[]; hol
     for (const l of sorted.slice(1)) (pointInRing(l[0], outer) ? holes : extras).push(l);
   }
   // Coverage guarantee: every input band must end up inside the result (outer∖holes, or an extra).
-  // If the exact trace dropped one — any junction geometry we didn't foresee — escalate to the raster
-  // union, whose occupancy mask covers every input by construction (holes are lost on that path).
+  // The most-clockwise-turn trace can drop a FREE-END band — the first/last segment of an open path,
+  // whose end-cap spur pokes into a notch/hole while the band's CENTROID stays inside the outline. A
+  // centroid-only test misses that (the segment then renders as a bare band outside the Space), so probe
+  // several INTERIOR points per band. Any band not fully covered → escalate to the raster union, whose
+  // occupancy mask covers every input by construction (holes are lost on that path).
   const centroidOf = (pts: Point[]): Point => {
     let x = 0, y = 0;
     for (const p of pts) { x += p.x; y += p.y; }
@@ -1001,9 +1006,22 @@ const unionBandOutlines = (polyMap: Map<string, Point[]>): { outer: Point[]; hol
   };
   const covered = (pt: Point) =>
     (pointInRing(pt, outer) && !holes.some((h) => pointInRing(pt, h))) || extras.some((e) => pointInRing(pt, e));
-  if (!memberPolys.every((p) => covered(centroidOf(p)))) {
+  const bandCovered = (poly: Point[]): boolean => {
+    const c = centroidOf(poly);
+    if (!covered(c)) return false;
+    // Points 75% of the way from the centroid toward each vertex — strictly interior to the band, so this
+    // reads false only when a real slice of the band (a dropped free-end spur) lies outside the union.
+    // Stays true for a band that merely BORDERS a courtyard hole, so legitimate ring holes aren't nuked.
+    for (const v of poly) if (!covered({ x: c.x + (v.x - c.x) * 0.75, y: c.y + (v.y - c.y) * 0.75 })) return false;
+    return true;
+  };
+  const uncovered = memberPolys.filter((p) => !bandCovered(p));
+  if (uncovered.length) {
     const merged = rasterUnion(memberPolys, 600);
     if (merged && merged.length >= 3) return { outer: merged, holes: [], extras: [] };
+    // Raster union unavailable (degenerate at this scale) — never DROP a band: keep the exact outer/holes
+    // and append each still-uncovered band as its own extra piece so it remains part of the Space.
+    return { outer, holes, extras: [...extras, ...uncovered] };
   }
   return { outer, holes, extras };
 };
@@ -1135,6 +1153,29 @@ const polysBBox = (polys: Point[][]): { minX: number; minY: number; maxX: number
  *  Objects that aren't host-aware (staircase, furniture …) get the generic fit-to-space transform. */
 const pobjIsHostAware = (defText: string): boolean =>
   /hostW|hostH|hostArea|hostMin|hostMax|"host"|"pipeline"/.test(defText);
+
+/** Place a non-host-aware object (given its plan bbox `gb`, world px) INSIDE a Space's largest inscribed
+ *  rectangle `rect` at the rectangle's orientation: centre it on the rect, rotate to the rect angle (picking
+ *  the 0°/90° option that fills more), and uniform-scale to fit. Returns a world-px → world-px point mapper.
+ *  This is what makes an attached staircase fit the usable rectangle of the Space (oriented) rather than the
+ *  axis-aligned room bounding box. */
+const fitObjectToInscribedRect = (
+  rect: { cx: number; cy: number; angleRad: number; wPx: number; hPx: number },
+  gb: { minX: number; minY: number; maxX: number; maxY: number },
+): ((p: Point) => Point) => {
+  const gbW = Math.max(1e-6, gb.maxX - gb.minX), gbH = Math.max(1e-6, gb.maxY - gb.minY);
+  const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
+  const s0 = Math.min(rect.wPx / gbW, rect.hPx / gbH);   // object length along the rect's width axis
+  const s90 = Math.min(rect.hPx / gbW, rect.wPx / gbH);  // object turned 90° (fills a perpendicular rect)
+  const swap = s90 > s0;
+  const s = swap ? s90 : s0;
+  const ang = rect.angleRad + (swap ? Math.PI / 2 : 0);
+  const cs = Math.cos(ang), sn = Math.sin(ang);
+  return (p: Point): Point => {
+    const dx = (p.x - gcx) * s, dy = (p.y - gcy) * s;
+    return { x: rect.cx + dx * cs - dy * sn, y: rect.cy + dx * sn + dy * cs };
+  };
+};
 
 /** Poll a ref-produced value until it is non-null or the deadline passes (agent bridges mount async —
  *  e.g. the Flow overlay's flowApplyApiRef appears one render after setFlowOpen(true)). */
@@ -1693,7 +1734,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (!knownLayerIds.has(id)) return true;
         return visibleLayerIds.has(id);
       };
-      const detectWalls = history.state.walls.filter((w) => isWallLayerVisible(w) && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview && !w.isVectorWall && !w.isVectorPreview);
+      const detectWalls = history.state.walls.filter((w) => isWallLayerVisible(w) && !w.flowOwner && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview && !w.isVectorWall && !w.isVectorPreview);
       // "Graph to Room" node present → inset each room face to the inner (clear) room by half each bounding
       // wall's SCHEMA thickness (graphAttrs role wall-thickness → schema default → 0.23 m). Rooms stay
       // auto-rooms, so they remain selectable Spaces with the schema's Space properties injected.
@@ -1852,7 +1893,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // Only manual rooms on VISIBLE layers may suppress an underlying auto-room. Otherwise a
     // hidden overlay (e.g. the Partitions layer hidden) would keep swallowing the original
     // auto-detected area, leaving nothing selectable where the original sits.
-    const suppressors = manualRooms.filter((m) => isLayerVisible(m.layerId));
+    const suppressors = manualRooms.filter((m) => isLayerVisible(m.layerId) && !m.flowOwner);
     const filteredAutoRooms = autoRooms.filter((autoRoom) => {
       const ac = polygonCentroid(autoRoom.points);
       return !suppressors.some((manualRoom) => {
@@ -2717,6 +2758,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [furnitureDialogOpen, setFurnitureDialogOpen] = useState<boolean>(false);
   /** Create Grid flow (Add Node ▸ Grid): dialog open state. */
   const [gridDialogOpen, setGridDialogOpen] = useState<boolean>(false);
+  /** Import Objects picker (Drawing toolbar ▸ Import Objects): dialog open state. */
+  const [importObjectsDialogOpen, setImportObjectsDialogOpen] = useState<boolean>(false);
   /** Currently selected construction grid (Create Grid) id, or null. */
   const [selectedGridId, setSelectedGridId] = useState<string | null>(null);
   /** Add Wall flow: dialog open + thickness/justification draft inputs. */
@@ -3037,24 +3080,34 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history.state, activeLayerId]);
 
+  /** Compute the layers array with a type layer (id === `slug`) ensured, WITHOUT committing history,
+   *  and make it the active layer. Returns the (possibly extended) layers + the layer id. Agent/bridge
+   *  handlers MUST fold the returned layers into the SAME history.set as the entity they create —
+   *  calling {@link ensureLayerForType} and then history.set in one tick clobbers the layer, because
+   *  both sets are built from the same stale render snapshot of history.state. */
+  const ensureLayerInLayers = useCallback((layers: FloorPlanModel["layers"], slug: string, name?: string): { layers: NonNullable<FloorPlanModel["layers"]>; layerId: string; created: boolean } => {
+    const list = layers ?? [];
+    if (!slug) return { layers: list, layerId: activeLayerId, created: false };
+    setActiveLayerId(slug);
+    if (list.some((l) => l.id === slug)) return { layers: list, layerId: slug, created: false };
+    const order = list.reduce((m, l) => Math.max(m, l.order), 0) + 1;
+    const palette = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899"];
+    const color = palette[list.length % palette.length];
+    const label = name?.trim() || slug.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    return { layers: [...list, { id: slug, name: label, color, visible: true, locked: false, order }], layerId: slug, created: true };
+  }, [activeLayerId]);
+
   /** Ensure a layer named for a drawing type exists (id === `slug`) and make it the active layer, so the
    *  next entity of that type auto-stamps onto it (see the layer-stamp effect above). Called when an Add
    *  Node / Add Segment / Add Space dropdown item is picked, so e.g. choosing "Wall" / "Door" / "Staircase"
-   *  creates the matching layer (if absent) and draws into it. Returns the layer id. */
+   *  creates the matching layer (if absent) and draws into it. Returns the layer id. COMMITS a history
+   *  step when it creates — don't follow it with another history.set in the same tick (see
+   *  {@link ensureLayerInLayers}, which the agent draw/place handlers use instead). */
   const ensureLayerForType = useCallback((slug: string, name?: string) => {
-    if (!slug) return activeLayerId;
-    const layers = history.state.layers ?? [];
-    const existing = layers.find((l) => l.id === slug);
-    if (!existing) {
-      const order = layers.reduce((m, l) => Math.max(m, l.order), 0) + 1;
-      const palette = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899"];
-      const color = palette[layers.length % palette.length];
-      const label = name?.trim() || slug.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-      history.set({ ...history.state, layers: [...layers, { id: slug, name: label, color, visible: true, locked: false, order }] });
-    }
-    setActiveLayerId(slug);
-    return slug;
-  }, [history, activeLayerId]);
+    const r = ensureLayerInLayers(history.state.layers, slug, name);
+    if (r.created) history.set({ ...history.state, layers: r.layers });
+    return r.layerId;
+  }, [ensureLayerInLayers, history]);
 
   useEffect(() => {
     const need = Math.max(1, Math.min(19, Math.round(wallSplitCount) - 1));
@@ -3155,6 +3208,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Ref mirror of the OVERLAY's live preview — the agent's flow_apply reads it (after the eval settles)
    *  to summarise what each node produced without racing React state. */
   const flowPreviewRef = useRef<FlowPreviewItem[]>([]);
+  /** Flow "Live" mode (pilot) — when on, supported nodes (currently Inset) materialise their output as
+   *  REAL wall segments (→ auto-detected Space) that regenerate on every parameter change, instead of a
+   *  preview overlay you must Run to commit. See the live-materialise effect below. */
+  const [liveFlow, setLiveFlow] = useState(false);
+  /** Node ids whose output is currently materialised by Live mode — their preview overlay is suppressed
+   *  (the real geometry stands in for it), read during the canvas overlay render. */
+  const liveOwnedNodeIdsRef = useRef<Set<string>>(new Set());
   /** Display ids (e.g. "Space001") of Space nodes whose eye is toggled off in the Flow editor — those
    *  spaces are hidden on the canvas while the editor drives the view. */
   const [hiddenFlowSpaceIds, setHiddenFlowSpaceIds] = useState<string[]>([]);
@@ -3229,6 +3289,32 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // footprint from the HOST — a floor uses the room polygon, a wall uses the segment band at its canvas
   // thickness — and extrudes by the object's param: a floor by `thickness` below `level`, a wall by `height`
   // above `base`. Footprints are plan-px world coords; yTop/yBottom are metres (same convention as above).
+  // Largest inscribed rectangle per Space that has attached objects. A non-host-aware object (e.g. a
+  // staircase) is placed INSIDE this rectangle at ITS orientation — so attaching a staircase to a Space
+  // fits it to the usable rectangle (like a staircase on a segment fits the segment length), instead of the
+  // axis-aligned room bbox. Keyed by room id; consumed by both the 3D prism render (below) and the 2D
+  // overlay. Recomputed only when the room set/geometry changes (attachment-only rooms).
+  const roomInscribedRects = useMemo(() => {
+    const m = new Map<string, { cx: number; cy: number; angleRad: number; wPx: number; hPx: number }>();
+    const seen = new Set<string>();
+    const consider = (room: Room) => {
+      if (seen.has(room.id) || !(room.attachments?.length) || room.points.length < 3) return;
+      seen.add(room.id);
+      const r = largestInscribedRectangle(room.points);
+      if (!r || r.corners.length < 4) return;
+      const [c0, c1, c2] = r.corners;
+      m.set(room.id, {
+        cx: (c0.x + c2.x) / 2, cy: (c0.y + c2.y) / 2,
+        angleRad: Math.atan2(c1.y - c0.y, c1.x - c0.x),
+        wPx: Math.max(1e-6, Math.hypot(c1.x - c0.x, c1.y - c0.y)),
+        hPx: Math.max(1e-6, Math.hypot(c2.x - c1.x, c2.y - c1.y)),
+      });
+    };
+    for (const room of history.state.rooms) consider(room);
+    for (const room of visibleRooms) consider(room);
+    return m;
+  }, [history.state.rooms, visibleRooms]);
+
   const floorWallMeshes = useMemo<FlowMesh[]>(() => {
     const lib = history.state.objectLibrary ?? {};
     const out: FlowMesh[] = [];
@@ -3247,17 +3333,24 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (!obj?.geometry) continue;
         const defText = JSON.stringify(obj);
         let prisms = evalParametricPrisms(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams);
-        // Generic FIT-TO-SPACE (mirrors the 2D overlay): non-host-aware objects scale uniformly in PLAN
-        // to the Space bbox, centred in it; heights stay true. Host-aware objects extrude as-authored.
+        // Generic FIT-TO-SPACE (mirrors the 2D overlay): a non-host-aware object is fitted INSIDE the Space's
+        // largest inscribed rectangle at that rectangle's orientation (falling back to the room bbox); heights
+        // stay true. Host-aware objects extrude as-authored.
         if (prisms.length && !pobjIsHostAware(defText)) {
           const gb = polysBBox(prisms.flatMap((p) => [p.bottom, p.top]));
-          const rb = polysBBox([room.points]);
-          if (gb && rb) {
-            const s = Math.min((rb.maxX - rb.minX) / Math.max(1e-6, gb.maxX - gb.minX), (rb.maxY - rb.minY) / Math.max(1e-6, gb.maxY - gb.minY));
-            const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
-            const rcx = (rb.minX + rb.maxX) / 2, rcy = (rb.minY + rb.maxY) / 2;
-            const tp = (p: Point): Point => ({ x: rcx + (p.x - gcx) * s, y: rcy + (p.y - gcy) * s });
+          const rect = roomInscribedRects.get(room.id);
+          if (gb && rect) {
+            const tp = fitObjectToInscribedRect(rect, gb);
             prisms = prisms.map((p) => ({ ...p, bottom: p.bottom.map(tp), top: p.top.map(tp) }));
+          } else if (gb) {
+            const rb = polysBBox([room.points]);
+            if (rb) {
+              const s = Math.min((rb.maxX - rb.minX) / Math.max(1e-6, gb.maxX - gb.minX), (rb.maxY - rb.minY) / Math.max(1e-6, gb.maxY - gb.minY));
+              const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
+              const rcx = (rb.minX + rb.maxX) / 2, rcy = (rb.minY + rb.maxY) / 2;
+              const tp = (p: Point): Point => ({ x: rcx + (p.x - gcx) * s, y: rcy + (p.y - gcy) * s });
+              prisms = prisms.map((p) => ({ ...p, bottom: p.bottom.map(tp), top: p.top.map(tp) }));
+            }
           }
         }
         if (prisms.length) out.push({ id: `pobj-space-${room.id}-${att.id}`, prisms });
@@ -3337,7 +3430,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }
     }
     return out;
-  }, [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter]);
+  }, [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects]);
   // Everything the 3D view shows on the generic mesh channel: Flow "Mesh to 3D" output + node-attached
   // parametric-object meshes + Space-floor / Segment-wall meshes.
   const meshPreviewAll = useMemo<FlowMesh[] | undefined>(() => {
@@ -3440,6 +3533,178 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
     return walls;
   }, [flowPreview, pixelsPerMeter]);
+
+  /** Flow "Live" mode: materialise every SPACE-PRODUCING node's output as REAL, editable canvas geometry
+   *  that regenerates on every parameter change — the alternative to preview-then-Run. A node opts in via
+   *  its `FlowToolDef.materialisesSpace` flag (declared in its .node.json), so this is fully GENERAL — no
+   *  hardcoded tool list; enabling a new node = one JSON flag. Each such node's live polygon(s) become a
+   *  tagged Space (Room.flowOwner) plus their boundary as tagged wall segments (Wall.flowOwner), all wiped
+   *  + redrawn each pass so the result tracks the params in real time. Owned geometry is kept INERT to
+   *  auto-room detection + suppression (see the autoRooms / suppressors filters), so materialising it never
+   *  feeds back into the flow's source. Chaining (inset → optimise-rect) rides the flow's own pure
+   *  evaluator — each node's `polygons` is already computed inside its upstream — so no committed-geometry
+   *  round-trip. Written via history.replace (transient — no undo entry per scrub). */
+  const liveFlowSigRef = useRef<string>("");
+  useEffect(() => {
+    const h = historyRef.current;
+    // A materialised object NODE (Place Object) is a degenerate wall (flowOwner) + a nodeMeta entry keyed
+    // "flowliveobj:…"; those keys are how owned node metadata is found for cleanup.
+    const OWNED_META = "flowliveobj:";
+    const stripOwnedMeta = (meta: Record<string, NodeMeta> | undefined): Record<string, NodeMeta> =>
+      Object.fromEntries(Object.entries(meta ?? {}).filter(([k]) => !k.includes(OWNED_META)));
+    const hadOwnedMeta = Object.keys(h.state.nodeMeta ?? {}).some((k) => k.includes(OWNED_META));
+    const hadOwned = h.state.rooms.some((r) => r.flowOwner) || h.state.walls.some((w) => w.flowOwner) || hadOwnedMeta;
+
+    // Live OFF → drop all owned geometry + object nodes (back to the preview overlay) in one replace.
+    if (!liveFlow) {
+      liveOwnedNodeIdsRef.current = new Set();
+      liveFlowSigRef.current = "";
+      if (hadOwned) h.replace({ ...h.state, rooms: h.state.rooms.filter((r) => !r.flowOwner), walls: h.state.walls.filter((w) => !w.flowOwner), nodeMeta: stripOwnedMeta(h.state.nodeMeta) });
+      return;
+    }
+
+    // Ensure a per-node "Live" layer WITHOUT hijacking the active layer (ensureLayerInLayers would call
+    // setActiveLayerId on every scrub tick — not wanted here).
+    const palette = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899"];
+    const ensureLiveLayer = (list: NonNullable<FloorPlanModel["layers"]>, slug: string, name: string): NonNullable<FloorPlanModel["layers"]> => {
+      if (list.some((l) => l.id === slug)) return list;
+      const order = list.reduce((m, l) => Math.max(m, l.order), 0) + 1;
+      return [...list, { id: slug, name, color: palette[list.length % palette.length], visible: true, locked: false, order }];
+    };
+
+    // Materialise every node flagged `materialisesSpace` → owned Space + boundary walls, on a per-node
+    // "Live" layer. `base` (the node id sans any "__piece" suffix) owns the geometry; the geometry ids key
+    // off the FULL item id + piece index so multi-output nodes (split → several pieces) don't collide.
+    const ownedNodeIds = new Set<string>();
+    const ownedRooms: Room[] = [];
+    const ownedWalls: Wall[] = [];
+    const ownedNodeMeta: Record<string, NodeMeta> = {};
+    let layers = h.state.layers ?? [];
+    for (const item of flowPreview) {
+      // Place Object → materialise selectable object NODES (a degenerate wall + a nodeMeta attachment
+      // carrying the real parametric object) at each placement, so the boundary stays a dummy preview while
+      // the furniture becomes live, editable nodes. Mirrors the asObjectNodes commit (~13007) but idempotent
+      // (deterministic ids) + tagged for Live cleanup.
+      if (item.tool === "place-object" && item.placeObjects?.length) {
+        const base = item.nodeId.split("__")[0];
+        const layerId = `flow-live-${base}`;
+        let made = 0;
+        item.placeObjects.forEach((po, i) => {
+          const corners = item.polygons[i];
+          if (!corners || corners.length < 4) return;
+          const cx = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+          const cy = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+          const rotDeg = (Math.atan2(corners[1].y - corners[0].y, corners[1].x - corners[0].x) * 180) / Math.PI;
+          const rotNorm = ((rotDeg % 360) + 360) % 360;
+          const wallId = `${OWNED_META}${base}:${po.srcIndex}`;
+          const stableKey = [`${wallId}:start`, `${wallId}:end`].sort().join("|");
+          const pobj = po.objectId ? findLibraryObject(po.objectId) : undefined;
+          if (pobj) {
+            // Anchor so the object's measured bbox centre lands on the footprint centre (bbox centre can be
+            // offset from the anchor); rotate that offset into edge space — same math as the commit.
+            const rad = (rotDeg * Math.PI) / 180, cosR = Math.cos(rad), sinR = Math.sin(rad);
+            const m = measureParametricObject(pobj.meta.id);
+            const offX = (m?.offsetXM ?? 0) * pixelsPerMeter, offY = (m?.offsetYM ?? 0) * pixelsPerMeter;
+            const ax = cx - (offX * cosR - offY * sinR), ay = cy - (offX * sinR + offY * cosR);
+            const attParams: Record<string, number | string | boolean> = {};
+            for (const pr of pobj.parameters) attParams[pr.key] = pr.default;
+            attParams.rotation = rotNorm;
+            attParams.wallOffset = 0;
+            attParams.clearance = Math.max(0, po.clearanceM);
+            ownedWalls.push({ id: wallId, start: { x: ax, y: ay }, end: { x: ax, y: ay }, thickness: 0.5, color: "#334155", dashed: false, mode: "line", method: "center", segmentType: "wall", layerId, flowOwner: base });
+            ownedNodeMeta[stableKey] = { label: pobj.meta.name, attachments: [{ id: `${wallId}:att`, objectId: pobj.meta.id, params: attParams, t: 0, flip: false }] };
+            made += 1;
+          } else {
+            // Hard-coded furniture kind (no .pobj) → an object-kind node sized from the footprint quad.
+            const wPx = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
+            const hPx = Math.hypot(corners[2].x - corners[1].x, corners[2].y - corners[1].y);
+            ownedWalls.push({ id: wallId, start: { x: cx, y: cy }, end: { x: cx, y: cy }, thickness: 0.5, color: "#334155", dashed: false, mode: "line", method: "center", segmentType: "wall", layerId, flowOwner: base });
+            ownedNodeMeta[stableKey] = { type: "object", objectKind: po.kind === "fridge" ? "refrigerator" : po.kind, objWidth: wPx / pixelsPerMeter, objHeight: hPx / pixelsPerMeter, objOffsetBottom: Math.max(0, po.clearanceM), objRotation: rotNorm, objAnchor: "center" };
+            made += 1;
+          }
+        });
+        if (made > 0) { ownedNodeIds.add(base); layers = ensureLiveLayer(layers, layerId, "Live · Objects"); }
+        continue;
+      }
+      // Only space-producing nodes, and never OPEN polylines (openPath = graph/centerline output) — those
+      // aren't room faces.
+      if (!FLOW_TOOLS[item.tool]?.materialisesSpace || item.openPath || item.polygons.length === 0) continue;
+      const base = item.nodeId.split("__")[0];
+      const layerId = `flow-live-${base}`;
+      const label = FLOW_TOOLS[item.tool]?.label ?? "Space";
+      // Group the node's rings into outer boundaries + holes: a ring whose centroid lies inside a
+      // strictly-larger ring is that ring's HOLE (e.g. Corridoor "insetted" = an outer loop carved by a
+      // courtyard). Most nodes emit only disjoint outers, so this is a no-op for them; skipped past 30 rings
+      // (mesh / fine Voronoi have no holes anyway) to keep the O(n²) containment scan cheap.
+      const rings = item.polygons.filter((p) => p.length >= 3); // drop 2-pt edges (skeleton centerlines, non-Euclidean Voronoi)
+      const areaOf = (r: Point[]) => Math.abs(polygonArea(r));
+      const centroidIn = (r: Point[], poly: Point[]) => {
+        const c = polygonCentroid(r); let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const a = poly[i], b = poly[j];
+          if (((a.y > c.y) !== (b.y > c.y)) && (c.x < (b.x - a.x) * (c.y - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+        }
+        return inside;
+      };
+      const parent = rings.map((r, i) => {
+        if (rings.length > 30) return -1;
+        let best = -1, bestArea = Infinity;
+        rings.forEach((o, j) => { if (j !== i && areaOf(o) > areaOf(r) && areaOf(o) < bestArea && centroidIn(r, o)) { best = j; bestArea = areaOf(o); } });
+        return best;
+      });
+      let produced = 0;
+      rings.forEach((outer, ri) => {
+        if (parent[ri] >= 0) return; // this ring is a hole of another ring → not a standalone Space
+        const holes = rings.filter((_, hi) => parent[hi] === ri);
+        produced += 1;
+        ownedRooms.push({
+          id: `flowlive:${item.nodeId}:${ri}`,
+          points: outer.map((p) => ({ x: p.x, y: p.y })),
+          ...(holes.length ? { holes: holes.map((hr) => hr.map((p) => ({ x: p.x, y: p.y }))) } : {}),
+          layerId, flowOwner: base,
+          fill: "rgba(34,197,94,0.2)", stroke: "#16A34A",
+          roomType: "room", label, showLabel: true,
+        });
+        // Walls for the outer boundary AND each hole boundary (both are corridor edges).
+        [outer, ...holes].forEach((ring, hk) => {
+          for (let i = 0; i < ring.length; i++) {
+            const a = ring[i], b = ring[(i + 1) % ring.length];
+            if (Math.hypot(b.x - a.x, b.y - a.y) < 1) continue;
+            ownedWalls.push({
+              id: `flowlive:${item.nodeId}:${ri}:${hk}:${i}`,
+              start: { x: a.x, y: a.y }, end: { x: b.x, y: b.y },
+              thickness: wallThickness, color: wallColor, method: "center",
+              layerId, flowOwner: base,
+            });
+          }
+        });
+      });
+      // Claim ownership (→ overlay suppression + a Live layer) ONLY when this node actually produced a
+      // closed Space; otherwise its overlay must keep showing (skeleton centerlines, Voronoi edges, …).
+      if (produced > 0) { ownedNodeIds.add(base); layers = ensureLiveLayer(layers, layerId, `Live · ${label}`); }
+    }
+    liveOwnedNodeIdsRef.current = ownedNodeIds;
+
+    // Skip the write when the owned geometry is unchanged (stable params) — avoids needless re-renders.
+    // Cover rooms (points), walls / object-node anchors, and each object node's rotation.
+    const sig = [
+      ...ownedRooms.map((r) => `${r.id}#${r.points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("|")}`),
+      ...ownedWalls.map((w) => `${w.id}@${w.start.x.toFixed(1)},${w.start.y.toFixed(1)}`),
+      ...Object.entries(ownedNodeMeta).map(([k, v]) => `${k}~${v.attachments?.[0]?.params?.rotation ?? v.objRotation ?? 0}`),
+    ].join(";");
+    const nowHasOwned = ownedRooms.length > 0 || ownedWalls.length > 0 || Object.keys(ownedNodeMeta).length > 0;
+    if (sig === liveFlowSigRef.current && hadOwned === nowHasOwned) return;
+    liveFlowSigRef.current = sig;
+    h.replace({
+      ...h.state,
+      layers,
+      rooms: [...h.state.rooms.filter((r) => !r.flowOwner), ...ownedRooms],
+      walls: [...h.state.walls.filter((w) => !w.flowOwner), ...ownedWalls],
+      nodeMeta: { ...stripOwnedMeta(h.state.nodeMeta), ...ownedNodeMeta },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowPreview, liveFlow, wallColor, wallThickness]);
+
   /** Per-piece lengths in metres (used when splitMode === "length"). */
   const [splitLengths, setSplitLengths] = useState<number[]>([2]);
   /** "normal" runs the existing N-piece split; "strip" generates exactly two parallel cuts
@@ -4005,25 +4270,25 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // joined the v7 FURNISH recipe, SELECTION & SPACE EDITING, SELF-REVIEW step, design doctrine, FLOW
   // ENGINE gateway and corridor/cores recipe. The key is versioned on every new default — the mount
   // effect persists even an UNEDITED prompt, so an old key would mask code updates.
-  const [aiAgentSystemPrompt, setAiAgentSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.agentSystemPrompt.v8") || AGENT_SYSTEM_PROMPT; } catch { return AGENT_SYSTEM_PROMPT; } });
+  const [aiAgentSystemPrompt, setAiAgentSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.agentSystemPrompt.v10") || AGENT_SYSTEM_PROMPT; } catch { return AGENT_SYSTEM_PROMPT; } });
   /** Editable system prompt for the FLOW mode (builds the node graph). v2: FURNISH recipe + parametric
    *  place-object entries. */
-  const [aiFlowSystemPrompt, setAiFlowSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.flowSystemPrompt.v2") || FLOW_AGENT_SYSTEM_PROMPT; } catch { return FLOW_AGENT_SYSTEM_PROMPT; } });
+  const [aiFlowSystemPrompt, setAiFlowSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.flowSystemPrompt.v3") || FLOW_AGENT_SYSTEM_PROMPT; } catch { return FLOW_AGENT_SYSTEM_PROMPT; } });
   /** Editable system prompt for the DESIGN mode (canvas-design tools only). */
-  const [aiDesignSystemPrompt, setAiDesignSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.designSystemPrompt.v1") || DESIGN_AGENT_SYSTEM_PROMPT; } catch { return DESIGN_AGENT_SYSTEM_PROMPT; } });
+  const [aiDesignSystemPrompt, setAiDesignSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.designSystemPrompt.v3") || DESIGN_AGENT_SYSTEM_PROMPT; } catch { return DESIGN_AGENT_SYSTEM_PROMPT; } });
   /** Editable system prompt for the PARAMETRIC mode (object-library tools only). */
   const [aiParametricSystemPrompt, setAiParametricSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.parametricSystemPrompt.v1") || PARAMETRIC_AGENT_SYSTEM_PROMPT; } catch { return PARAMETRIC_AGENT_SYSTEM_PROMPT; } });
   useEffect(() => { try { localStorage.setItem("bp.ai.mode", aiMode); } catch { /* ignore */ } }, [aiMode]);
-  useEffect(() => { try { localStorage.setItem("bp.ai.agentSystemPrompt.v8", aiAgentSystemPrompt); } catch { /* ignore */ } }, [aiAgentSystemPrompt]);
-  useEffect(() => { try { localStorage.setItem("bp.ai.flowSystemPrompt.v2", aiFlowSystemPrompt); } catch { /* ignore */ } }, [aiFlowSystemPrompt]);
-  useEffect(() => { try { localStorage.setItem("bp.ai.designSystemPrompt.v1", aiDesignSystemPrompt); } catch { /* ignore */ } }, [aiDesignSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.agentSystemPrompt.v10", aiAgentSystemPrompt); } catch { /* ignore */ } }, [aiAgentSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.flowSystemPrompt.v3", aiFlowSystemPrompt); } catch { /* ignore */ } }, [aiFlowSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.designSystemPrompt.v3", aiDesignSystemPrompt); } catch { /* ignore */ } }, [aiDesignSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.parametricSystemPrompt.v1", aiParametricSystemPrompt); } catch { /* ignore */ } }, [aiParametricSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.apiKey", aiApiKey); } catch { /* ignore */ } }, [aiApiKey]);
   useEffect(() => { try { localStorage.setItem("bp.ai.model", aiModel); } catch { /* ignore */ } }, [aiModel]);
   useEffect(() => { try { localStorage.setItem("bp.units.precision", String(decimalPrecision)); } catch { /* ignore */ } }, [decimalPrecision]);
   /** Live ref to autoImportObjectFolder (declared further down) — the agent's import_objects tool needs it,
    *  but putting the callback itself in handleAiSend's deps would read it before initialization (TDZ). */
-  const autoImportObjectsRef = useRef<null | (() => Promise<void>)>(null);
+  const autoImportObjectsRef = useRef<null | ((categories?: string[]) => Promise<{ imported: number; available: string[] }>)>(null);
   /** Live ref to buildParametricObjectFile (declared further down) — the agent's save_object tool runs the
    *  SAME parse + normalise the manual .pobj import uses (same TDZ guard as autoImportObjectsRef). */
   const buildParametricObjectFileRef = useRef<null | ((parsed: Record<string, unknown>, fileName: string, hostKind?: "node" | "segment" | "space" | "canvas") => ParametricObjectFile)>(null);
@@ -4067,543 +4332,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       if (aiMode !== "flow") {
         // ── Agent-family modes (Orchestrator / Design / Parametric): tools over the live canvas + object
         //    library; the mode picks the tool subset + default system prompt (see agentChat.ts). ──
-        const bridge = () => { const b = bridgeApiRef.current; if (!b) throw new Error("canvas api not ready"); return b; };
-        const applyModelJson = (json: string): unknown => {
-          const before = historyRef.current.state;
-          const merged = applyAiReply(before, json);
-          const next: FloorPlanModel = {
-            ...merged,
-            walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, bridgePpmRef.current),
-            nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
-          };
-          historyRef.current.set(next);
-          return summarizeChange(before, next);
-        };
-        // Space-label → visible room (shared by attach_space_object / merge_spaces): "SpaceNNN"
-        // resolves by index into the visible list, anything else by case-insensitive label match.
-        const roomByLabel = (label: string): Room | undefined => {
-          const rooms = visibleRoomsRef.current;
-          const im = /^\s*space\s*0*(\d+)\s*$/i.exec(label);
-          return im
-            ? rooms[parseInt(im[1], 10) - 1]
-            : rooms.find((r) => (r.label ?? "").trim().toLowerCase() === label.trim().toLowerCase());
-        };
-        const api: AgentToolApi = {
-          getState: () => {
-            const s = historyRef.current.state;
-            const u = s.imageUnderlay;
-            return {
-              walls: s.walls.length, manualRooms: s.rooms.length, spaces: visibleRoomsRef.current.length,
-              objectsLoaded: Object.keys(s.objectLibrary ?? {}).length, pixelsPerMeter: bridgePpmRef.current,
-              objectIds: Object.keys(s.objectLibrary ?? {}),
-              // Placed underlay rect (world px) — the image→world mapping anchor for tracing.
-              underlay: u ? { xPx: Math.round(u.x), yPx: Math.round(u.y), widthPx: Math.round(u.width * u.scale), heightPx: Math.round(u.height * u.scale) } : null,
-            };
-          },
-          getPlanJson: () => serializeForAI(historyRef.current.state),
-          listSpaces: () => {
-            const lib = historyRef.current.state.objectLibrary ?? {};
-            const ppm = bridgePpmRef.current;
-            return visibleRoomsRef.current.map((r, i) => ({
-              label: r.label || `Space${String(i + 1).padStart(3, "0")}`,
-              roomType: r.roomType ?? "room",
-              areaM2: +(Math.abs(polygonArea(r.points)) / (ppm * ppm)).toFixed(2),
-              // Polygon in PIXEL coords — auto-detected rooms aren't in get_plan, so this is how the agent
-              // gets the loop corners it needs to emit a labelled rooms[] entry for an existing space.
-              pointsPx: r.points.map((pt) => ({ x: Math.round(pt.x), y: Math.round(pt.y) })),
-              attachedObjects: (r.attachments ?? []).map((a) => lib[a.objectId]?.meta.name ?? a.objectId),
-            }));
-          },
-          getSelection: () => {
-            // The user's LIVE canvas selection (shift-click multi-selects segments + spaces; the Node
-            // select scope adds a wall junction) — how the agent grounds "this / these / the selected …"
-            // instructions. Spaces report the SAME labels list_spaces would, so the two interoperate.
-            const s = historyRef.current.state;
-            const ppm = bridgePpmRef.current;
-            const lib = s.objectLibrary ?? {};
-            const objName = (objectId: string): string => lib[objectId]?.meta.name ?? objectId;
-            const rooms = visibleRoomsRef.current;
-            const mFix = (v: number): number => +(v / ppm).toFixed(2);
-            const items: Record<string, unknown>[] = [];
-            for (const id of selectionRef.current.selectedIds) {
-              const w = s.walls.find((wl) => wl.id === id);
-              if (w) {
-                items.push({
-                  kind: "segment", id, segmentType: w.segmentType ?? "wall",
-                  startM: { x: mFix(w.start.x), y: mFix(w.start.y) },
-                  endM: { x: mFix(w.end.x), y: mFix(w.end.y) },
-                  lengthM: +(Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) / ppm).toFixed(2),
-                  attachedObjects: (w.attachments ?? []).map((at) => objName(at.objectId)),
-                });
-                continue;
-              }
-              const ri = rooms.findIndex((r) => r.id === id);
-              if (ri >= 0) {
-                const r = rooms[ri];
-                items.push({
-                  kind: "space",
-                  label: r.label || `Space${String(ri + 1).padStart(3, "0")}`,
-                  roomType: r.roomType ?? "room",
-                  areaM2: +(Math.abs(polygonArea(r.points)) / (ppm * ppm)).toFixed(2),
-                  pointsPx: r.points.map((pt) => ({ x: Math.round(pt.x), y: Math.round(pt.y) })),
-                  attachedObjects: (r.attachments ?? []).map((at) => objName(at.objectId)),
-                });
-                continue;
-              }
-              const o = s.objects.find((ob) => ob.id === id);
-              if (o) { items.push({ kind: "object", id, objectKind: o.kind }); continue; }
-              const f = s.furniture.find((fu) => fu.id === id);
-              if (f) { items.push({ kind: "furniture", id, type: f.type, xM: mFix(f.x), yM: mFix(f.y), rotation: f.rotation }); continue; }
-              items.push({ kind: "unknown", id });
-            }
-            const nodeKey = selectedNodeKeyRef.current;
-            if (nodeKey) {
-              const meta = (s.nodeMeta ?? {})[nodeKey];
-              items.push({ kind: "node", nodeKey, attachedObjects: (meta?.attachments ?? []).map((at) => objName(at.objectId)) });
-            }
-            return {
-              count: items.length, items,
-              ...(items.length ? {} : { hint: "nothing is selected on the canvas — ask the user to select (shift-click multi-selects), or resolve targets by label via list_spaces" }),
-            };
-          },
-          mergeSpaces: (a) => {
-            const labels = Array.isArray(a.spaces) ? (a.spaces as unknown[]).map((v) => String(v)) : [];
-            let sources: Room[];
-            if (labels.length > 0) {
-              sources = labels.map((label) => {
-                const room = roomByLabel(label);
-                if (!room) throw new Error(`space not found: "${label}" — call list_spaces for the available labels`);
-                return room;
-              });
-            } else {
-              // No labels ⇒ operate on the user's live selection (the "merge these" case).
-              const sel = new Set(selectionRef.current.selectedIds);
-              sources = visibleRoomsRef.current.filter((r) => sel.has(r.id));
-            }
-            const uniq = [...new Map(sources.map((r) => [r.id, r])).values()];
-            if (uniq.length < 2) {
-              throw new Error(labels.length
-                ? "pass at least 2 DISTINCT space labels to merge"
-                : "fewer than 2 spaces are selected on the canvas — pass their labels in `spaces` (see list_spaces / get_selection)");
-            }
-            const res = mergeRoomsCore(uniq, historyRef.current.state.walls);
-            if ("error" in res) throw new Error(res.error);
-            const label = typeof a.label === "string" && a.label.trim() ? a.label.trim() : undefined;
-            const mergedRoom = label ? { ...res.mergedRoom, label } : res.mergedRoom;
-            // Only manual rooms live in history.state.rooms — auto-detected sources stay derived from
-            // walls and are hidden post-merge because their centroid falls inside the new manual polygon.
-            const sourceIdSet = new Set(uniq.map((r) => r.id));
-            const h = historyRef.current;
-            h.set({ ...h.state, walls: res.walls, rooms: [...h.state.rooms.filter((r) => !sourceIdSet.has(r.id)), mergedRoom] });
-            const ppm = bridgePpmRef.current;
-            return {
-              merged: uniq.length, label: mergedRoom.label,
-              areaM2: +(Math.abs(polygonArea(mergedRoom.points)) / (ppm * ppm)).toFixed(2),
-              dividerWallsRemoved: res.wallsRemoved,
-            };
-          },
-          listDrawTools: () => bridge().listDrawTools(),
-          drawSegment: (a) => bridge().drawSegment(a),
-          placeOpening: (a) => bridge().placeOpening(a),
-          placeObject: (a) => bridge().placeObject(a),
-          attachSpaceObject: (a) => {
-            const lib = historyRef.current.state.objectLibrary ?? {};
-            const idOrName = String(a.object ?? "");
-            const obj = lib[idOrName] ?? Object.values(lib).find((o) => o.meta.name === idOrName || o.meta.symbol === idOrName);
-            if (!obj) throw new Error(`object not found: "${idOrName}" — call import_objects / list_draw_tools first`);
-            if (obj.hostKind !== "space") throw new Error(`${obj.meta.id} is not a space object (hostKind=${obj.hostKind ?? "node"})`);
-            const label = String(a.space ?? "");
-            const room = roomByLabel(label);
-            if (!room) throw new Error(`space not found: "${label}" — call list_spaces for the available labels`);
-            const params: Record<string, number | string | boolean> = {};
-            for (const pr of obj.parameters) params[pr.key] = pr.default;
-            const over = (a.params && typeof a.params === "object" && !Array.isArray(a.params)) ? (a.params as Record<string, unknown>) : {};
-            for (const [k, v] of Object.entries(over)) if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") params[k] = v;
-            const att: SegmentAttachment = { id: createId(), objectId: obj.meta.id, params, t: 0, flip: false };
-            const h = historyRef.current;
-            // Auto-detected rooms aren't in history.state.rooms — promote to a manual room so the attachment persists.
-            if (room.id.startsWith(ROOM_AUTO_ID_PREFIX)) {
-              h.set({ ...h.state, rooms: [...h.state.rooms, { ...room, id: createId(), attachments: [...(room.attachments ?? []), att] }] });
-            } else {
-              h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === room.id ? { ...r, attachments: [...(r.attachments ?? []), att] } : r)) });
-            }
-            return { space: label, objectId: obj.meta.id, params };
-          },
-          setImageUnderlay: async (a) => {
-            // The attached message file (closure) becomes the canvas underlay — placed at (xM,yM), scaled so
-            // its full width spans worldWidthM metres. Mirrors the manual Image-import staging (natural size
-            // + scale multiplier, locked, Image layer) so the popover controls keep working on it.
-            if (!filePart) throw new Error("no image attached to this message — attach the drawing and resend");
-            if (!filePart.mimeType.startsWith("image/")) throw new Error(`attached file is ${filePart.mimeType}, not an image — attach a PNG/JPEG (PDFs: use the manual Image import, which rasterizes)`);
-            const worldWidthM = Number(a.worldWidthM);
-            if (!Number.isFinite(worldWidthM) || worldWidthM <= 0.5 || worldWidthM > 10000) throw new Error("worldWidthM must be a positive real-world width in metres");
-            const src = `data:${filePart.mimeType};base64,${filePart.data}`;
-            const img = await new Promise<HTMLImageElement>((res, rej) => {
-              const im = new window.Image();
-              im.onload = () => res(im);
-              im.onerror = () => rej(new Error("could not decode the attached image"));
-              im.src = src;
-            });
-            const ppm = bridgePpmRef.current;
-            const widthPx = worldWidthM * ppm;
-            const scale = widthPx / Math.max(1, img.width);
-            const xPx = (Number(a.xM) || 0) * ppm;
-            const yPx = (Number(a.yM) || 0) * ppm;
-            const opacity = typeof a.opacity === "number" && a.opacity > 0 && a.opacity <= 1 ? a.opacity : 0.5;
-            const h = historyRef.current;
-            h.set({ ...h.state, imageUnderlay: { src, x: xPx, y: yPx, width: img.width, height: img.height, opacity, scale, locked: true, layerId: DEFAULT_IMAGE_LAYER_ID } });
-            return { xPx: Math.round(xPx), yPx: Math.round(yPx), widthPx: Math.round(widthPx), heightPx: Math.round(img.height * scale), naturalWidth: img.width, naturalHeight: img.height };
-          },
-          alignUnderlay: (a) => {
-            // Two-point fit of the EXISTING underlay onto the drawn plan — the programmatic "Set Scale +
-            // drag": image point A (grid 0–1000 per axis) lands exactly on world point A; when B is given
-            // too, the underlay is uniformly rescaled so both correspondences hold (the drawn geometry is
-            // never touched — the plan from written dimensions is the truth, the image fits to it).
-            const h = historyRef.current;
-            const u = h.state.imageUnderlay;
-            if (!u) throw new Error("no image underlay on the canvas — call set_image_underlay first");
-            const ppm = bridgePpmRef.current;
-            const num = (v: unknown, name: string): number => { const n = Number(v); if (!Number.isFinite(n)) throw new Error(`${name} must be a number`); return n; };
-            // Grid coord → the point's offset within the image in NATURAL pixels.
-            const natA = { x: (num(a.aImageX, "aImageX") / 1000) * u.width, y: (num(a.aImageY, "aImageY") / 1000) * u.height };
-            const worldA = { x: num(a.aWorldXM, "aWorldXM") * ppm, y: num(a.aWorldYM, "aWorldYM") * ppm };
-            const bGiven = [a.bImageX, a.bImageY, a.bWorldXM, a.bWorldYM].filter((v) => v != null).length;
-            if (bGiven > 0 && bGiven < 4) throw new Error("pass ALL four b* fields for a two-point fit, or none to translate only");
-            let scale = u.scale;
-            let bResidualM: number | undefined;
-            if (bGiven === 4) {
-              const natB = { x: (num(a.bImageX, "bImageX") / 1000) * u.width, y: (num(a.bImageY, "bImageY") / 1000) * u.height };
-              const worldB = { x: num(a.bWorldXM, "bWorldXM") * ppm, y: num(a.bWorldYM, "bWorldYM") * ppm };
-              const dNat = Math.hypot(natB.x - natA.x, natB.y - natA.y);
-              const dWorld = Math.hypot(worldB.x - worldA.x, worldB.y - worldA.y);
-              if (dNat < 1e-6 || dWorld < 1e-6) throw new Error("reference points A and B must be distinct");
-              scale = dWorld / dNat;
-              // Fit quality: a single uniform scale puts A exactly on target; B misses by however much the
-              // image's outline aspect disagrees with the plan envelope (photo skew / corner mis-estimates).
-              // Report it in METRES so the agent can judge and retry with better corners.
-              const landB = { x: (worldA.x - natA.x * scale) + natB.x * scale, y: (worldA.y - natA.y * scale) + natB.y * scale };
-              bResidualM = +(Math.hypot(landB.x - worldB.x, landB.y - worldB.y) / ppm).toFixed(3);
-            }
-            const x = worldA.x - natA.x * scale;
-            const y = worldA.y - natA.y * scale;
-            h.set({ ...h.state, imageUnderlay: { ...u, x, y, scale } });
-            return {
-              xPx: Math.round(x), yPx: Math.round(y), widthPx: Math.round(u.width * scale), heightPx: Math.round(u.height * scale),
-              rescaledBy: +(scale / u.scale).toFixed(4),
-              ...(bResidualM != null ? { bResidualM, fit: bResidualM <= 0.15 ? "good" : "check corners — image may be skewed (photo) or the grid estimates are off" } : {}),
-            };
-          },
-          analyzeUnderlay: async (a) => {
-            // Vectorise the underlay (same raster→vector tracer as Image Tools ▸ Vectorize) and reduce the
-            // traced line-work to its CONVEX HULL. The hull's extreme corners are MEASURED reference points
-            // for align_underlay — far more accurate than the vision model's guessed grid coords. Grid
-            // values are fractions of the image (calibration-independent); world metres use the CURRENT
-            // underlay placement, so they shift once align_underlay runs (the grid values don't).
-            const u = historyRef.current.state.imageUnderlay;
-            if (!u) throw new Error("no image underlay — call set_image_underlay first");
-            const img = await new Promise<HTMLImageElement>((res, rej) => {
-              const im = new window.Image();
-              im.onload = () => res(im);
-              im.onerror = () => rej(new Error("could not decode the underlay image"));
-              im.src = u.src;
-            });
-            const w = img.naturalWidth || img.width, hPx = img.naturalHeight || img.height;
-            const canvas = document.createElement("canvas");
-            canvas.width = w; canvas.height = hPx;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) throw new Error("canvas 2d unavailable — cannot read image pixels");
-            ctx.drawImage(img, 0, 0, w, hPx);
-            const imgData = ctx.getImageData(0, 0, w, hPx);
-            const cm = (typeof a.colorMode === "string" && ["red", "black", "blue", "green", "all"].includes(a.colorMode) ? a.colorMode : "black") as VectorizeColorMode;
-            const numOr = (v: unknown, d: number): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d; };
-            const result = vectorizeImage(imgData.data, w, hPx, {
-              colorMode: cm, tolerance: numOr(a.tolerance, 50), dilate: 3,
-              minLength: numOr(a.minLength, 30), simplifyEpsilon: 1.5, snapTolerance: 6,
-            });
-            const pts: Point[] = [];
-            for (const pl of result.polylines) for (const pp of pl) pts.push({ x: pp[0], y: pp[1] });
-            if (pts.length < 3) throw new Error(`vectorisation found ${result.polylines.length} line(s) — retry with colorMode "all" or a higher tolerance`);
-            const hull = computeConvexHull(pts);
-            if (hull.length < 3) throw new Error("traced lines are degenerate (collinear) — retry with different vectorise settings");
-            const ppm = bridgePpmRef.current;
-            const asGrid = (pt: Point) => ({ gridX: +(pt.x / w * 1000).toFixed(1), gridY: +(pt.y / hPx * 1000).toFixed(1) });
-            const asWorld = (pt: Point) => ({ worldXM: +((u.x + pt.x * u.scale) / ppm).toFixed(3), worldYM: +((u.y + pt.y * u.scale) / ppm).toFixed(3) });
-            // Extreme corners by the standard diagonal scores (min/max of x±y over the hull).
-            const pick = (score: (pt: Point) => number) => hull.reduce((best, pt) => (score(pt) < score(best) ? pt : best), hull[0]);
-            const tl = pick((pt) => pt.x + pt.y), br = pick((pt) => -(pt.x + pt.y));
-            const tr = pick((pt) => pt.y - pt.x), bl = pick((pt) => pt.x - pt.y);
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            for (const pt of hull) { minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y); maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y); }
-            return {
-              lines: result.polylines.length, graphNodes: result.nodeCount, hullPoints: hull.length,
-              naturalWidth: w, naturalHeight: hPx,
-              corners: {
-                topLeft: { ...asGrid(tl), ...asWorld(tl) },
-                topRight: { ...asGrid(tr), ...asWorld(tr) },
-                bottomRight: { ...asGrid(br), ...asWorld(br) },
-                bottomLeft: { ...asGrid(bl), ...asWorld(bl) },
-              },
-              bbox: {
-                ...asGrid({ x: minX, y: minY }),
-                widthGrid: +((maxX - minX) / w * 1000).toFixed(1), heightGrid: +((maxY - minY) / hPx * 1000).toFixed(1),
-                widthM: +((maxX - minX) * u.scale / ppm).toFixed(3), heightM: +((maxY - minY) * u.scale / ppm).toFixed(3),
-              },
-              hullGrid: hull.slice(0, 48).map(asGrid),
-            };
-          },
-          fitPlanToRect: (a) => {
-            // Per-axis hull-to-hull fit: scale + translate EVERY plan coordinate so the plan's bounding box
-            // exactly fills the target world rect (usually the image outline's hull from analyze_underlay).
-            // X and Y scale independently — axis-aligned walls stay axis-aligned, but drawn dimensions
-            // change; the agent is told to reserve this for dimensionless drawings / small residuals.
-            const ppm = bridgePpmRef.current;
-            const num = (v: unknown, name: string): number => { const n = Number(v); if (!Number.isFinite(n)) throw new Error(`${name} must be a number`); return n; };
-            const tx = num(a.xM, "xM") * ppm, ty = num(a.yM, "yM") * ppm;
-            const tw = num(a.widthM, "widthM") * ppm, th = num(a.heightM, "heightM") * ppm;
-            if (tw < 1 || th < 1) throw new Error("target rect is degenerate — width/height must be positive metres");
-            const h = historyRef.current;
-            const s = h.state;
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            const eat = (pt: Point) => { minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y); maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y); };
-            for (const wl of s.walls) { eat(wl.start); eat(wl.end); }
-            for (const r of s.rooms) for (const pt of r.points) eat(pt);
-            if (!Number.isFinite(minX) || maxX - minX < 1 || maxY - minY < 1) throw new Error("no plan geometry to fit — draw the plan first (apply_model)");
-            const sx = tw / (maxX - minX), sy = th / (maxY - minY);
-            const mapX = (x: number): number => tx + (x - minX) * sx;
-            const mapY = (y: number): number => ty + (y - minY) * sy;
-            const mapPt = (pt: Point): Point => ({ x: mapX(pt.x), y: mapY(pt.y) });
-            // Best-effort transform of annotation objects — x/y anchors, rect extents, Point[] and flat
-            // [x1,y1,…] point lists all follow the same per-axis map (agent-traced plans usually have none).
-            const mapObj = <T extends Record<string, unknown>>(o: T): T => {
-              const out: Record<string, unknown> = { ...o };
-              if (typeof o.x === "number" && typeof o.y === "number") { out.x = mapX(o.x); out.y = mapY(o.y); }
-              if (typeof o.width === "number") out.width = (o.width as number) * sx;
-              if (typeof o.height === "number") out.height = (o.height as number) * sy;
-              if (typeof o.radius === "number") out.radius = (o.radius as number) * ((sx + sy) / 2);
-              if (Array.isArray(o.points) && o.points.length) {
-                out.points = typeof o.points[0] === "number"
-                  ? (o.points as number[]).map((v, i) => (i % 2 === 0 ? mapX(v) : mapY(v)))
-                  : (o.points as Point[]).map(mapPt);
-              }
-              return out as T;
-            };
-            h.set({
-              ...s,
-              walls: s.walls.map((wl) => ({ ...wl, start: mapPt(wl.start), end: mapPt(wl.end) })),
-              rooms: s.rooms.map((r) => ({ ...r, points: r.points.map(mapPt) })),
-              objects: s.objects.map((o) => mapObj(o)),
-              furniture: s.furniture.map((f) => ({ ...f, x: mapX(f.x), y: mapY(f.y) })),
-            });
-            return {
-              scaledX: +sx.toFixed(4), scaledY: +sy.toFixed(4),
-              before: { widthM: +((maxX - minX) / ppm).toFixed(3), heightM: +((maxY - minY) / ppm).toFixed(3) },
-              after: { widthM: +(tw / ppm).toFixed(3), heightM: +(th / ppm).toFixed(3) },
-            };
-          },
-          applyModelJson,
-          clearCanvas: () => {
-            const h = historyRef.current;
-            h.set({ ...h.state, walls: [], rooms: [], objects: [], furniture: [], nodeMeta: {} });
-            return "cleared";
-          },
-          importObjects: async () => {
-            await autoImportObjectsRef.current?.();
-            const lib = historyRef.current.state.objectLibrary ?? {};
-            // Return the detailed catalog so the model gains full param knowledge mid-run (the system-prompt
-            // copy was empty when the run started with an unloaded library).
-            return { objectsLoaded: Object.keys(lib).length, catalog: buildDetailedObjectCatalog(lib) };
-          },
-          // ── Parametric library management (the Parametric agent's core; the Orchestrator has it too):
-          //    list / read / create-or-overwrite / delete `.pobj` definitions in the project library. ──
-          listObjects: () => {
-            const lib = historyRef.current.state.objectLibrary ?? {};
-            return {
-              count: Object.keys(lib).length,
-              objects: Object.values(lib).map((o) => ({
-                id: o.meta.id, name: o.meta.name, hostKind: o.hostKind ?? "node", symbol: o.meta.symbol,
-                category: o.meta.category, params: o.parameters.length, hasGeometry: !!o.geometry,
-              })),
-            };
-          },
-          getObjectDefinition: (id: string) => {
-            const obj = (historyRef.current.state.objectLibrary ?? {})[id];
-            if (!obj) throw new Error(`object not found: "${id}" — call list_objects for the available ids`);
-            return obj;
-          },
-          saveObject: async (a) => {
-            const build = buildParametricObjectFileRef.current;
-            if (!build) throw new Error("editor not ready — retry");
-            let parsed: Record<string, unknown>;
-            try {
-              const v = JSON.parse(a.definitionJson) as unknown;
-              if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
-              parsed = v as Record<string, unknown>;
-            } catch {
-              throw new Error(`definitionJson is not a valid JSON object: ${a.definitionJson.slice(0, 80)}`);
-            }
-            const lib = historyRef.current.state.objectLibrary ?? {};
-            const declaredId = typeof (parsed.meta as Record<string, unknown> | undefined)?.id === "string" ? String((parsed.meta as Record<string, unknown>).id) : "";
-            const hostOk = (v: unknown): v is "node" | "segment" | "space" | "canvas" => v === "node" || v === "segment" || v === "space" || v === "canvas";
-            // Host resolution: explicit arg > the file's own hostKind > keep an existing object's > derive
-            // from the symbol (same fallback the folder import uses) so the object lands in the right menu.
-            const sym = (parsed.meta as { symbol?: string } | undefined)?.symbol;
-            const hostKind = hostOk(a.hostKind) ? a.hostKind
-              : hostOk(parsed.hostKind) ? parsed.hostKind
-              : (declaredId ? lib[declaredId]?.hostKind : undefined)
-                ?? (sym === "titleblock" ? "canvas" : sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node");
-            const obj = build(parsed, declaredId || "object", hostKind);
-            const isUpdate = !!lib[obj.meta.id];
-            const h = historyRef.current;
-            h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [obj.meta.id]: obj } });
-            // Render self-check: evaluate the SAVED definition with its default params so the agent learns
-            // whether instances will actually draw (2D plan shapes) and extrude (3D prisms) — a definition
-            // can be well-formed JSON yet render nothing (rules outside cases[], expression typos, every
-            // h0 == h1, a `when` gate that never fires). Space objects get a dummy 10×10 m host so
-            // host/pipeline rules evaluate; `ref` rules resolve against the live library.
-            const defText = JSON.stringify(obj);
-            const dummyHost = obj.hostKind === "space" ? [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] : undefined;
-            const resolveLib = (rid: string): string | null => { const o = (historyRef.current.state.objectLibrary ?? {})[rid]; return o ? JSON.stringify(o) : null; };
-            let render = { plan2dShapes: 0, planLines: 0, prisms3d: 0 };
-            try {
-              const g = evalParametricGeometry(defText, { x: 0, y: 0 }, 100, undefined, dummyHost, resolveLib);
-              render = { plan2dShapes: g.fill.length, planLines: g.lines.length, prisms3d: evalParametricPrisms(defText, { x: 0, y: 0 }, 100, undefined, dummyHost, resolveLib).length };
-            } catch { /* keep zeros — reported through renderWarning below */ }
-            // Settings carriers legitimately have no geometry; canvas (sheet) objects are legitimately flat.
-            const wantsGeometry = obj.meta.symbol !== "settings";
-            const wants3d = wantsGeometry && (obj.hostKind ?? "node") !== "canvas";
-            const renderWarning = !wantsGeometry ? undefined
-              : !obj.geometry ? "no geometry block — placed instances draw only the placeholder meta.symbol, not real 2D/3D geometry"
-              : render.plan2dShapes + render.planLines === 0 ? "geometry evaluated to ZERO 2D shapes with default params — rules must sit inside geometry.cases[].rules (or a pipeline) and expressions/when gates must produce visible shapes; fix and save again"
-              : wants3d && render.prisms3d === 0 ? "renders in 2D but has NO 3D volume — every closed rule has h0 == h1; give the object's real elements a height span (h1 > h0)"
-              : undefined;
-            // Persist the definition to disk too — public/Library/Parametric Objects/<Sub>/<id>.pobj.json
-            // via the dev-server Library bridge (the browser alone can't write repo files). Fails soft
-            // with fileError on production/static hosting, where only the in-app library is updated.
-            const fileRes = await saveLibraryFile(
-              `Parametric Objects/${POBJ_SUBFOLDER[obj.hostKind ?? "node"]}/${obj.meta.id}.pobj.json`,
-              JSON.stringify(obj, null, 2),
-            );
-            return {
-              action: isUpdate ? "updated" : "created", id: obj.meta.id, name: obj.meta.name, hostKind: obj.hostKind ?? "node", params: obj.parameters.length, hasGeometry: !!obj.geometry,
-              render, ...(renderWarning ? { renderWarning } : {}),
-              ...(fileRes.ok
-                ? { file: `public/Library/${fileRes.path}` }
-                : { fileError: `not written to disk (${fileRes.error ?? "Library bridge unavailable"}) — the object exists in the in-app library only` }),
-            };
-          },
-          deleteObjects: async (a) => {
-            const ids = (a.ids ?? []).map(String);
-            if (!ids.length) throw new Error("pass at least one object id (see list_objects)");
-            const h = historyRef.current;
-            const s = h.state;
-            const lib = s.objectLibrary ?? {};
-            const missing = ids.filter((id) => !lib[id]);
-            if (missing.length) throw new Error(`object(s) not found: ${missing.join(", ")} — call list_objects for the available ids`);
-            // Usage census — placed instances referencing the id would fall back to a placeholder symbol.
-            const usage = (id: string): number => {
-              let n = 0;
-              for (const w of s.walls) n += (w.attachments ?? []).filter((at) => at.objectId === id).length;
-              for (const r of s.rooms) n += (r.attachments ?? []).filter((at) => at.objectId === id).length;
-              for (const meta of Object.values(s.nodeMeta ?? {})) n += (meta?.attachments ?? []).filter((at) => at.objectId === id).length;
-              for (const co of Object.values(s.canvasObjects ?? {})) if (co?.objectId === id) n++;
-              return n;
-            };
-            const inUse = ids.map((id) => ({ id, instances: usage(id) })).filter((u) => u.instances > 0);
-            if (inUse.length && !a.force) {
-              throw new Error(`in use on the canvas: ${inUse.map((u) => `${u.id} (${u.instances})`).join(", ")} — remove the placed instances first, or pass force: true to delete the definition anyway`);
-            }
-            const nextLib = { ...lib };
-            for (const id of ids) delete nextLib[id];
-            h.set({ ...s, objectLibrary: nextLib });
-            // Mirror the delete to disk: remove the matching .pobj files from public/Library/Parametric
-            // Objects (dev bridge; no-op on production hosting) so a later Import Objects doesn't resurrect them.
-            const fileRes = await deleteLibraryObjectFiles(ids);
-            return {
-              deleted: ids, remaining: Object.keys(nextLib).length,
-              ...(fileRes ? { filesDeleted: fileRes.deleted } : {}),
-              ...(inUse.length ? { warning: `placed instances now render as placeholder symbols: ${inUse.map((u) => u.id).join(", ")}` } : {}),
-            };
-          },
-          // ── Flow gateway: the node-graph ALGORITHM ENGINE exposed to the canvas agent (skeletonise,
-          //    inset, voronoi, unions, generative layouts …). flow_apply loads + live-evaluates a graph in
-          //    the Flow overlay; flow_commit runs the SAME commit path as the panel's Run button. ──
-          flowNodeCatalog: () => buildFlowToolCatalog(),
-          flowApply: async (graphJson: string) => {
-            let parsed: SerializedFlow;
-            try {
-              const v = JSON.parse(graphJson) as unknown;
-              if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
-              parsed = v as SerializedFlow;
-            } catch {
-              throw new Error(`graphJson is not a valid JSON object: ${graphJson.slice(0, 80)}`);
-            }
-            if (!Array.isArray(parsed.nodes)) throw new Error('graphJson must have a "nodes" array');
-            // Mount the Flow overlay (no-ops when already open) so the bridge + live evaluation exist and
-            // the user watches the agent's graph arrive.
-            setFlowMinimized(false); setFlowOpen(true);
-            const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
-            let applied: number;
-            if (bridge) applied = bridge.applyGraph(parsed);
-            else { setLiveFlowGraph(parsed); flowGraphRef.current = parsed; applied = parsed.nodes?.length ?? 0; }
-            const check = validateFlowGraph(parsed);
-            // Let the overlay's live evaluation settle (evaluate + ~80 ms preview debounce), then summarise
-            // what each node produced so the model can verify BEFORE committing.
-            await new Promise((r) => setTimeout(r, 800));
-            const preview = flowPreviewRef.current.map((it) => ({
-              nodeId: it.nodeId, tool: it.tool, polygons: it.polygons.length,
-              ...(it.openPath ? { openPaths: true } : {}),
-              ...(it.massing ? { floors: it.massing.floors } : {}),
-              ...(it.condition ? { condition: it.condition } : {}),
-              ...(it.isFinal ? { final: true } : {}),
-            }));
-            return { applied, ok: check.ok, opCount: check.opCount, errors: check.errors, warnings: check.warnings, preview };
-          },
-          flowCommit: async () => {
-            const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
-            if (!bridge) return { error: "Flow overlay is not available — call flow_apply first" };
-            const r = bridge.runCommit();
-            if (!r.ok) return { error: r.error ?? "commit failed" };
-            // Give the recipe engine a beat to write history, then report the canvas effect.
-            await new Promise((res) => setTimeout(res, 400));
-            const s = historyRef.current.state;
-            return { ok: true, committedNodes: r.committedNodeIds?.length ?? 0, walls: s.walls.length, manualRooms: s.rooms.length };
-          },
-          // ── Self-review: render the drawn plan to a PNG the (multimodal) model can SEE. The crop is the
-          //    CONTENT bbox in stage coords (Konva redraws all layers into the export canvas, so geometry
-          //    outside the visible viewport is captured too); the longer edge is capped ≈1280 px. ──
-          snapshotCanvas: () => {
-            const stage = stageRef.current;
-            if (!stage) return { error: "canvas stage not ready" };
-            const s = historyRef.current.state;
-            const pts: Point[] = [
-              ...s.walls.flatMap((w) => [w.start, w.end]),
-              ...s.rooms.flatMap((r) => r.points),
-              ...visibleRoomsRef.current.flatMap((r) => r.points),
-            ];
-            if (!pts.length) return { error: "canvas is empty — nothing to snapshot" };
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            for (const p of pts) {
-              if (p.x < minX) minX = p.x;
-              if (p.y < minY) minY = p.y;
-              if (p.x > maxX) maxX = p.x;
-              if (p.y > maxY) maxY = p.y;
-            }
-            const pad = 60; // world-px margin so dimension labels / door swings stay in frame
-            minX -= pad; minY -= pad; maxX += pad; maxY += pad;
-            // World → stage (screen) coords: the stage carries the pan/zoom transform.
-            const sc = stage.scaleX() || 1;
-            const x = minX * sc + stage.x(), y = minY * sc + stage.y();
-            const w = (maxX - minX) * sc, h = (maxY - minY) * sc;
-            if (!(w > 4 && h > 4)) return { error: "plan extent is degenerate" };
-            const pixelRatio = Math.max(0.05, Math.min(2, 1280 / Math.max(w, h)));
-            const dataUrl = stage.toDataURL({ x, y, width: w, height: h, pixelRatio, mimeType: "image/png" });
-            return {
-              widthM: +((maxX - minX) / pixelsPerMeter).toFixed(2),
-              heightM: +((maxY - minY) / pixelsPerMeter).toFixed(2),
-              dataUrl,
-            };
-          },
-        };
+        chatFilePartRef.current = filePart ? { mimeType: filePart.mimeType, data: filePart.data } : null;
+        const api = agentApiRef.current;
+        if (!api) throw new Error("canvas api not ready — the editor is still mounting");
         const res = await runAgentChat({
           apiKey: aiApiKey, model: aiModel, prompt: effectivePrompt, pixelsPerMeter, api,
           // "agent" = the Orchestrator (all tools); "design" / "parametric" run the same loop on a subset.
@@ -5252,12 +4983,20 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       geometry = { ...geometry, cases: [{ rules: geometry.rules }] };
       delete geometry.rules;
     }
+    // hostKind: explicit arg (legacy hostKind-folder imports / saveObject's own resolution) > the FILE's
+    // own field > derived from the symbol. The Library's category folders (Kitchen / Electrical / …)
+    // don't encode the host anymore — every bundled .pobj carries hostKind itself.
+    const hostOk = (v: unknown): v is "node" | "segment" | "space" | "canvas" => v === "node" || v === "segment" || v === "space" || v === "canvas";
+    const sym = meta.symbol;
+    const resolvedHost = hostKind
+      ?? (hostOk(parsed.hostKind) ? parsed.hostKind : undefined)
+      ?? (sym === "titleblock" ? "canvas" : sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node");
     return {
       kind: "parametric-object",
       version: Number(parsed.version) || 1,
       meta: { id, name: (typeof meta.name === "string" && meta.name) || id, category: typeof meta.category === "string" ? meta.category : undefined, units: typeof meta.units === "string" ? meta.units : undefined, symbol: meta.symbol === "window" ? "window" : meta.symbol === "door" ? "door" : meta.symbol === "staircase" ? "staircase" : meta.symbol === "floor" ? "floor" : meta.symbol === "wall" ? "wall" : meta.symbol === "massing" ? "massing" : meta.symbol === "titleblock" ? "titleblock" : meta.symbol === "settings" ? "settings" : undefined, ...(icon ? { icon } : {}) },
       parameters: params,
-      ...(hostKind ? { hostKind } : {}),
+      hostKind: resolvedHost,
       ...(geometry ? { geometry } : {}),
     };
   }, []);
@@ -5358,26 +5097,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const importObjectFolder = useCallback(async (files: File[]) => {
     const additions: Record<string, ParametricObjectFile> = {};
     let failed = 0;
-    let bySymbol = 0;
     for (const file of files) {
       if (!file.name.toLowerCase().endsWith(".json")) continue;
-      // Primary: tag by the subfolder this file lives in. Split the relative path on either separator and
-      // match a folder segment EXACTLY (singular or plural) — robust whether the picked root is the parent
-      // ("Parametric Objects/Nodes/bed.pobj.json" under public/Library) or the subfolder itself ("Nodes/bed.pobj.json").
+      // LEGACY folder tagging only: a picked folder still using Nodes/Segments/Spaces/Canvas subfolders
+      // forces the hostKind. Category folders (Kitchen / Electrical / …) match nothing → undefined, and
+      // buildParametricObjectFile resolves from the file's own hostKind field (then the symbol).
       const parts = ((file as { webkitRelativePath?: string }).webkitRelativePath || file.name).toLowerCase().split(/[\\/]+/);
       const has = (...names: string[]) => names.some((nm) => parts.includes(nm));
-      let hostKind: "node" | "segment" | "space" | "canvas" | undefined =
+      const hostKind: "node" | "segment" | "space" | "canvas" | undefined =
         has("nodes", "node") ? "node" : has("segments", "segment") ? "segment" : has("spaces", "space") ? "space" : has("canvas", "canvases") ? "canvas" : undefined;
       try {
         const parsed = JSON.parse(await file.text()) as Record<string, unknown>;
-        if (!hostKind) {
-          // Fallback when the browser didn't expose the folder structure: derive from the object's own
-          // symbol so the set still lands in the right menu — door/window/wall → segment, floor → space,
-          // titleblock → canvas, everything else (furniture, staircase, footing, …) → node.
-          const sym = (parsed.meta as { symbol?: string } | undefined)?.symbol;
-          hostKind = sym === "titleblock" ? "canvas" : sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node";
-          bySymbol++;
-        }
         const obj = buildParametricObjectFile(parsed, file.name, hostKind);
         additions[obj.meta.id] = obj;
       } catch { failed++; }
@@ -5401,69 +5131,29 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const nodeSettingsObj = Object.values(additions).find((o) => o.hostKind === "node" && o.meta.symbol === "settings");
     if (nodeSettingsObj) applyNodeDefaults(nodeSettingsObj);
     const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
-    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${bySymbol ? ` (${bySymbol} by symbol)` : ""}${failed ? `, ${failed} failed` : ""}`);
+    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${failed ? `, ${failed} failed` : ""}`);
   }, [buildParametricObjectFile, applyCanvasSettings, applySegmentDefaults, applyNodeDefaults, INFO_SHEET_ID]);
 
-  /** Import the object library straight from `public/Library/Parametric Objects` (no folder picker).
-   *  In dev the folder is listed LIVE through the Library bridge (vite.config.ts), so agent-saved
-   *  objects (save_object writes `<id>.pobj.json` there) import alongside the bundled set; production
-   *  static hosting can't list directories, so a bundled fallback manifest is used. Each `.pobj.json`
-   *  is fetched by its relative URL, parsed, tagged with its subfolder's hostKind (Spaces → space,
-   *  Segments → segment, Nodes → node), and merged into the library in one history step.
-   *  NEW bundled objects belong in that folder (Library/Flows and Library/Designs hold flow/design JSON). */
-  const autoImportObjectFolder = useCallback(async () => {
+  /** Fetch + import SPECIFIC library `.pobj` files (category-relative paths under public/Library/
+   *  Parametric Objects) — all merged into the library in ONE history step (a per-file loop would race
+   *  on `historyRef.current` and keep only the last). Shared by {@link autoImportObjectFolder} and the
+   *  Import Objects dialog's explicit selection. `sourceNote` suffixes the success toast. */
+  const importLibraryRelFiles = useCallback(async (relFiles: string[], sourceNote = "") => {
     const base = "/Library/Parametric Objects";
-    const fallback: { sub: "Spaces" | "Segments" | "Nodes" | "Canvas"; file: string }[] = [
-      { sub: "Canvas", file: "titleblock-a1.pobj.json" },
-      { sub: "Canvas", file: "settings.pobj.json" },
-      { sub: "Spaces", file: "floor.pobj.json" },
-      { sub: "Spaces", file: "massing.pobj.json" },
-      { sub: "Spaces", file: "footprint-massing.pobj.json" },
-      { sub: "Spaces", file: "site.pobj.json" },
-      { sub: "Spaces", file: "core.pobj.json" },
-      { sub: "Spaces", file: "Corridoor.pobj.json" },
-      { sub: "Spaces", file: "floor-plate.pobj.json" },
-      { sub: "Segments", file: "segment_settings.pobj.json" },
-      { sub: "Segments", file: "wall.pobj.json" },
-      { sub: "Segments", file: "door.pobj.json" },
-      { sub: "Segments", file: "window.pobj.json" },
-      { sub: "Nodes", file: "node_settings.pobj.json" },
-      { sub: "Nodes", file: "chair.pobj.json" }, { sub: "Nodes", file: "table.pobj.json" },
-      { sub: "Nodes", file: "desk.pobj.json" }, { sub: "Nodes", file: "sink.pobj.json" },
-      { sub: "Nodes", file: "bathtub.pobj.json" }, { sub: "Nodes", file: "bookshelf.pobj.json" },
-      { sub: "Nodes", file: "fridge.pobj.json" }, { sub: "Nodes", file: "stove.pobj.json" },
-      { sub: "Nodes", file: "tv-unit.pobj.json" }, { sub: "Nodes", file: "bench.pobj.json" },
-      { sub: "Nodes", file: "nightstand.pobj.json" }, { sub: "Nodes", file: "bed.pobj.json" },
-      { sub: "Nodes", file: "wardrobe.pobj.json" }, { sub: "Nodes", file: "sofa.pobj.json" },
-      { sub: "Nodes", file: "footing.pobj.json" }, { sub: "Nodes", file: "staircase.pobj.json" },
-      { sub: "Nodes", file: "floorplan.pobj.json" }, { sub: "Nodes", file: "toilet.pobj.json" },
-      { sub: "Nodes", file: "room.pobj.json" },
-    ];
-    // Live listing first (dev bridge): "Nodes/fan.v1.pobj.json" → { sub: "Nodes", file: "fan.v1.pobj.json" }.
-    const subOk = (v: string): v is "Spaces" | "Segments" | "Nodes" | "Canvas" => v === "Spaces" || v === "Segments" || v === "Nodes" || v === "Canvas";
-    const listed = await listLibraryFiles("Parametric Objects");
-    const files = listed?.length
-      ? listed
-          .map((rel) => {
-            const i = rel.indexOf("/");
-            return i > 0 ? { sub: rel.slice(0, i), file: rel.slice(i + 1) } : null;
-          })
-          .filter((f): f is { sub: "Spaces" | "Segments" | "Nodes" | "Canvas"; file: string } => !!f && subOk(f.sub) && !!f.file)
-      : fallback;
-    const hostKindOf = (sub: string): "node" | "segment" | "space" | "canvas" => (sub === "Spaces" ? "space" : sub === "Segments" ? "segment" : sub === "Canvas" ? "canvas" : "node");
     const additions: Record<string, ParametricObjectFile> = {};
     let failed = 0;
-    await Promise.all(files.map(async ({ sub, file }) => {
+    await Promise.all(relFiles.map(async (rel) => {
       try {
-        const res = await fetch(encodeURI(`${base}/${sub}/${file}`));
+        const res = await fetch(encodeURI(`${base}/${rel}`));
         if (!res.ok) { failed++; return; }
         const parsed = (await res.json()) as Record<string, unknown>;
-        const obj = buildParametricObjectFile(parsed, file, hostKindOf(sub));
+        // hostKind comes from the FILE itself (buildParametricObjectFile falls back to the symbol).
+        const obj = buildParametricObjectFile(parsed, rel.split("/").pop() ?? rel);
         additions[obj.meta.id] = obj;
       } catch { failed++; }
     }));
     const n = Object.keys(additions).length;
-    if (n === 0) { toast.error("No objects found at public/Library/Parametric Objects"); return; }
+    if (n === 0) { toast.error("No objects found at public/Library/Parametric Objects"); return { imported: 0 }; }
     const h = historyRef.current;
     // Seed the canvas sheet from the title-block object; apply the settings object (see importObjectFolder).
     const titleblockObj = Object.values(additions).find((o) => o.hostKind === "canvas" && o.meta.symbol === "titleblock");
@@ -5479,8 +5169,32 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const nodeSettingsObj = Object.values(additions).find((o) => o.hostKind === "node" && o.meta.symbol === "settings");
     if (nodeSettingsObj) applyNodeDefaults(nodeSettingsObj);
     const byKind = (k: string) => Object.values(additions).filter((o) => o.hostKind === k).length;
-    toast.success(`Imported ${n} objects — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${failed ? `, ${failed} failed` : ""}`);
+    toast.success(`Imported ${n} objects${sourceNote} — ${byKind("node")} node · ${byKind("segment")} segment · ${byKind("space")} space${byKind("canvas") ? ` · ${byKind("canvas")} canvas` : ""}${failed ? `, ${failed} failed` : ""}`);
+    return { imported: n };
   }, [buildParametricObjectFile, applyCanvasSettings, applySegmentDefaults, applyNodeDefaults, INFO_SHEET_ID]);
+
+  /** Import the object library straight from `public/Library/Parametric Objects` (no folder picker).
+   *  The folder is organised by CATEGORY (Kitchen / Furniture / Bathroom / Electrical / Structural /
+   *  Architectural / Site / System) — each file carries its own `hostKind`, so the folder no longer
+   *  encodes it. In dev the folder is listed LIVE through the Library bridge (vite.config.ts), so
+   *  agent-saved objects import alongside the bundled set; production static hosting can't list
+   *  directories, so the BUNDLED_POBJ_FILES manifest (libraryFiles.ts) is used. Drives the agent's
+   *  import_objects tool; the toolbar button opens the Import Objects picker dialog instead. */
+  const autoImportObjectFolder = useCallback(async (categories?: string[]) => {
+    // Live listing first (dev bridge): category-relative paths like "Kitchen/oven.pobj.json".
+    const all = await listParametricObjectFiles();
+    const available = [...new Set(all.filter((rel) => rel.includes("/")).map((rel) => rel.split("/")[0]))].sort();
+    // Optional CATEGORY filter — match the top-level folder name case-insensitively, so the agent can
+    // fetch one discipline at a time ("import the architectural objects" → only Architectural/).
+    const wanted = (categories ?? []).map((c) => c.trim().toLowerCase()).filter(Boolean);
+    const files = wanted.length ? all.filter((rel) => wanted.includes((rel.split("/")[0] ?? "").toLowerCase())) : all;
+    if (wanted.length && files.length === 0) {
+      toast.error(`No objects in ${categories!.join(", ")} — available folders: ${available.join(", ")}`);
+      return { imported: 0, available };
+    }
+    const { imported } = await importLibraryRelFiles(files, wanted.length ? ` from ${categories!.join(", ")}` : "");
+    return { imported, available };
+  }, [importLibraryRelFiles]);
   // Keep the Chat-AI agent's import_objects tool pointed at the live callback (declared above handleAiSend).
   autoImportObjectsRef.current = autoImportObjectFolder;
 
@@ -5545,7 +5259,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const isWall = type === "wall";
         const thPx = a.thicknessM != null ? Math.max(1, numOf(a.thicknessM) * ppm) : wallThickness;
         const segId = createId();
-        ensureLayerForType(type, typeof a.label === "string" ? a.label : undefined);
+        // Layer folded into the entity's own history.set (a separate ensureLayerForType set would be
+        // clobbered by it) + stamped explicitly, so agent-drawn typed segments land on their type layer.
+        const { layers: layersWithType, layerId } = ensureLayerInLayers(history.state.layers, type, typeof a.label === "string" ? a.label : undefined);
         const params = (a.params && typeof a.params === "object") ? (a.params as Record<string, import("./types").GraphAttrValue>) : {};
         const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
         const segEntry = { ...(type !== "line" ? { "seg-type": type } : {}), ...(isWall ? { "wall-thickness": thPx / ppm } : {}), ...params };
@@ -5562,9 +5278,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           : WALL_BAND_MODES.includes(wallDrawMode) ? wallDrawMode : "mitered";
         const wall: Wall = {
           id: segId, start, end, thickness: thPx, color: wallColor, dashed: lineTypeDashed,
-          mode: isWall ? wallMode : "line", method: isWall ? wallDrawMethod : "center", segmentType: type,
+          mode: isWall ? wallMode : "line", method: isWall ? wallDrawMethod : "center", segmentType: type, layerId,
         };
-        history.set({ ...history.state, walls: splitWallsAtIntersections([...history.state.walls, wall]), graphAttrs: taggedGA });
+        history.set({ ...history.state, layers: layersWithType, walls: splitWallsAtIntersections([...history.state.walls, wall]), graphAttrs: taggedGA });
         return { segmentId: segId, type };
       },
       // Place a Door / Window parametric object INTO the nearest wall at a METRE point — splits the host into
@@ -5599,8 +5315,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const post: Wall = { ...host, id: createId(), start: de, end: host.end, isObjectOpening: undefined, attachments: postAtts.length ? postAtts : undefined };
         const rest = history.state.walls.filter((w) => w.id !== host.id);
         const fresh = [pre, opening, post].filter((w) => Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) > 0.1);
-        ensureLayerForType(sym, sym === "door" ? "Door" : "Window");
-        history.set({ ...history.state, walls: splitWallsAtIntersections([...rest, ...fresh]) });
+        // Door/Window layer folded into the same set (a separate ensureLayerForType set would be
+        // clobbered). The split pieces keep the HOST's layer — same as the manual armed-object split.
+        const { layers: layersWithType } = ensureLayerInLayers(history.state.layers, sym, sym === "door" ? "Door" : "Window");
+        history.set({ ...history.state, layers: layersWithType, walls: splitWallsAtIntersections([...rest, ...fresh]) });
         return { openingId: opening.id, hostId: host.id, objectId: obj.id, widthM };
       },
       // Drop a parametric object as an object NODE at a METRE point (bed / sofa / column / staircase / …):
@@ -5616,11 +5334,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         params.rotation = numOf(a.rotation, 0);
         const prevMeta = history.state.nodeMeta ?? {};
         const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
-        ensureLayerForType(layerSlug(obj.def.meta.name || obj.id), obj.def.meta.name || obj.id);
-        const wall: Wall = { id: nodeWallId, start: place, end: place, thickness: 0.5, color: wallColor, dashed: false, mode: "line", method: "center", segmentType: "wall" };
+        // Object-named layer (e.g. "Column") folded into the same set (a separate ensureLayerForType
+        // set would be clobbered) AND stamped explicitly on the marker wall — the stamp effect would
+        // otherwise route the zero-length wall by its segmentType ("wall") onto the Wall layer.
+        const { layers: layersWithType, layerId } = ensureLayerInLayers(history.state.layers, layerSlug(obj.def.meta.name || obj.id), obj.def.meta.name || obj.id);
+        const wall: Wall = { id: nodeWallId, start: place, end: place, thickness: 0.5, color: wallColor, dashed: false, mode: "line", method: "center", segmentType: "wall", layerId };
         const cur = prevMeta[stableKey] ?? {};
         history.set({
           ...history.state,
+          layers: layersWithType,
           walls: [...history.state.walls, wall],
           graphAttrs: { ...ga0, nodes: { ...(ga0.nodes ?? {}), [stableKey]: { ...(ga0.nodes?.[stableKey] ?? {}), "node-type": "object" } } },
           nodeMeta: { ...prevMeta, [stableKey]: { ...cur, attachments: [...(cur.attachments ?? []), { id: createId(), objectId: obj.id, params, t: 0, flip: false }] } },
@@ -5628,6 +5350,565 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         return { nodeKey: stableKey, objectId: obj.id };
       },
     };
+  })();
+  // Full agent tool API (shared) — the SAME AgentToolApi the in-app Orchestrator / Design / Parametric
+  // agents use, lifted to render scope so the MCP bridge exposes every capability too. Reassigned each
+  // render (like bridgeApiRef) so once-registered bridge handlers always run against the latest closure.
+  const agentApiRef = useRef<AgentToolApi | null>(null);
+  const chatFilePartRef = useRef<{ mimeType: string; data: string } | null>(null);
+  agentApiRef.current = ((): AgentToolApi => {
+        const bridge = () => { const b = bridgeApiRef.current; if (!b) throw new Error("canvas api not ready"); return b; };
+        const applyModelJson = (json: string): unknown => {
+          const before = historyRef.current.state;
+          const merged = applyAiReply(before, json);
+          const next: FloorPlanModel = {
+            ...merged,
+            walls: cutOpeningsForAttachments(merged.walls, merged.objectLibrary, bridgePpmRef.current),
+            nodeMeta: normalizeNodeMetaKeys(merged.nodeMeta),
+          };
+          historyRef.current.set(next);
+          return summarizeChange(before, next);
+        };
+        // Space-label → visible room (shared by attach_space_object / merge_spaces): "SpaceNNN"
+        // resolves by index into the visible list, anything else by case-insensitive label match.
+        const roomByLabel = (label: string): Room | undefined => {
+          const rooms = visibleRoomsRef.current;
+          const im = /^\s*space\s*0*(\d+)\s*$/i.exec(label);
+          return im
+            ? rooms[parseInt(im[1], 10) - 1]
+            : rooms.find((r) => (r.label ?? "").trim().toLowerCase() === label.trim().toLowerCase());
+        };
+        const api: AgentToolApi = {
+          getState: () => {
+            const s = historyRef.current.state;
+            const u = s.imageUnderlay;
+            return {
+              walls: s.walls.length, manualRooms: s.rooms.length, spaces: visibleRoomsRef.current.length,
+              objectsLoaded: Object.keys(s.objectLibrary ?? {}).length, pixelsPerMeter: bridgePpmRef.current,
+              objectIds: Object.keys(s.objectLibrary ?? {}),
+              // Placed underlay rect (world px) — the image→world mapping anchor for tracing.
+              underlay: u ? { xPx: Math.round(u.x), yPx: Math.round(u.y), widthPx: Math.round(u.width * u.scale), heightPx: Math.round(u.height * u.scale) } : null,
+            };
+          },
+          getPlanJson: () => serializeForAI(historyRef.current.state),
+          listSpaces: () => {
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            const ppm = bridgePpmRef.current;
+            return visibleRoomsRef.current.map((r, i) => ({
+              label: r.label || `Space${String(i + 1).padStart(3, "0")}`,
+              roomType: r.roomType ?? "room",
+              areaM2: +(Math.abs(polygonArea(r.points)) / (ppm * ppm)).toFixed(2),
+              // Polygon in PIXEL coords — auto-detected rooms aren't in get_plan, so this is how the agent
+              // gets the loop corners it needs to emit a labelled rooms[] entry for an existing space.
+              pointsPx: r.points.map((pt) => ({ x: Math.round(pt.x), y: Math.round(pt.y) })),
+              attachedObjects: (r.attachments ?? []).map((a) => lib[a.objectId]?.meta.name ?? a.objectId),
+            }));
+          },
+          getSelection: () => {
+            // The user's LIVE canvas selection (shift-click multi-selects segments + spaces; the Node
+            // select scope adds a wall junction) — how the agent grounds "this / these / the selected …"
+            // instructions. Spaces report the SAME labels list_spaces would, so the two interoperate.
+            const s = historyRef.current.state;
+            const ppm = bridgePpmRef.current;
+            const lib = s.objectLibrary ?? {};
+            const objName = (objectId: string): string => lib[objectId]?.meta.name ?? objectId;
+            const rooms = visibleRoomsRef.current;
+            const mFix = (v: number): number => +(v / ppm).toFixed(2);
+            const items: Record<string, unknown>[] = [];
+            for (const id of selectionRef.current.selectedIds) {
+              const w = s.walls.find((wl) => wl.id === id);
+              if (w) {
+                items.push({
+                  kind: "segment", id, segmentType: w.segmentType ?? "wall",
+                  startM: { x: mFix(w.start.x), y: mFix(w.start.y) },
+                  endM: { x: mFix(w.end.x), y: mFix(w.end.y) },
+                  lengthM: +(Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) / ppm).toFixed(2),
+                  attachedObjects: (w.attachments ?? []).map((at) => objName(at.objectId)),
+                });
+                continue;
+              }
+              const ri = rooms.findIndex((r) => r.id === id);
+              if (ri >= 0) {
+                const r = rooms[ri];
+                items.push({
+                  kind: "space",
+                  label: r.label || `Space${String(ri + 1).padStart(3, "0")}`,
+                  roomType: r.roomType ?? "room",
+                  areaM2: +(Math.abs(polygonArea(r.points)) / (ppm * ppm)).toFixed(2),
+                  pointsPx: r.points.map((pt) => ({ x: Math.round(pt.x), y: Math.round(pt.y) })),
+                  attachedObjects: (r.attachments ?? []).map((at) => objName(at.objectId)),
+                });
+                continue;
+              }
+              const o = s.objects.find((ob) => ob.id === id);
+              if (o) { items.push({ kind: "object", id, objectKind: o.kind }); continue; }
+              const f = s.furniture.find((fu) => fu.id === id);
+              if (f) { items.push({ kind: "furniture", id, type: f.type, xM: mFix(f.x), yM: mFix(f.y), rotation: f.rotation }); continue; }
+              items.push({ kind: "unknown", id });
+            }
+            const nodeKey = selectedNodeKeyRef.current;
+            if (nodeKey) {
+              const meta = (s.nodeMeta ?? {})[nodeKey];
+              items.push({ kind: "node", nodeKey, attachedObjects: (meta?.attachments ?? []).map((at) => objName(at.objectId)) });
+            }
+            return {
+              count: items.length, items,
+              ...(items.length ? {} : { hint: "nothing is selected on the canvas — ask the user to select (shift-click multi-selects), or resolve targets by label via list_spaces" }),
+            };
+          },
+          mergeSpaces: (a) => {
+            const labels = Array.isArray(a.spaces) ? (a.spaces as unknown[]).map((v) => String(v)) : [];
+            let sources: Room[];
+            if (labels.length > 0) {
+              sources = labels.map((label) => {
+                const room = roomByLabel(label);
+                if (!room) throw new Error(`space not found: "${label}" — call list_spaces for the available labels`);
+                return room;
+              });
+            } else {
+              // No labels ⇒ operate on the user's live selection (the "merge these" case).
+              const sel = new Set(selectionRef.current.selectedIds);
+              sources = visibleRoomsRef.current.filter((r) => sel.has(r.id));
+            }
+            const uniq = [...new Map(sources.map((r) => [r.id, r])).values()];
+            if (uniq.length < 2) {
+              throw new Error(labels.length
+                ? "pass at least 2 DISTINCT space labels to merge"
+                : "fewer than 2 spaces are selected on the canvas — pass their labels in `spaces` (see list_spaces / get_selection)");
+            }
+            const res = mergeRoomsCore(uniq, historyRef.current.state.walls);
+            if ("error" in res) throw new Error(res.error);
+            const label = typeof a.label === "string" && a.label.trim() ? a.label.trim() : undefined;
+            const mergedRoom = label ? { ...res.mergedRoom, label } : res.mergedRoom;
+            // Only manual rooms live in history.state.rooms — auto-detected sources stay derived from
+            // walls and are hidden post-merge because their centroid falls inside the new manual polygon.
+            const sourceIdSet = new Set(uniq.map((r) => r.id));
+            const h = historyRef.current;
+            h.set({ ...h.state, walls: res.walls, rooms: [...h.state.rooms.filter((r) => !sourceIdSet.has(r.id)), mergedRoom] });
+            const ppm = bridgePpmRef.current;
+            return {
+              merged: uniq.length, label: mergedRoom.label,
+              areaM2: +(Math.abs(polygonArea(mergedRoom.points)) / (ppm * ppm)).toFixed(2),
+              dividerWallsRemoved: res.wallsRemoved,
+            };
+          },
+          listDrawTools: () => bridge().listDrawTools(),
+          drawSegment: (a) => bridge().drawSegment(a),
+          placeOpening: (a) => bridge().placeOpening(a),
+          placeObject: (a) => bridge().placeObject(a),
+          attachSpaceObject: (a) => {
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            const idOrName = String(a.object ?? "");
+            const obj = lib[idOrName] ?? Object.values(lib).find((o) => o.meta.name === idOrName || o.meta.symbol === idOrName);
+            if (!obj) throw new Error(`object not found: "${idOrName}" — call import_objects / list_draw_tools first`);
+            if (obj.hostKind !== "space") throw new Error(`${obj.meta.id} is not a space object (hostKind=${obj.hostKind ?? "node"})`);
+            const label = String(a.space ?? "");
+            const room = roomByLabel(label);
+            if (!room) throw new Error(`space not found: "${label}" — call list_spaces for the available labels`);
+            const params: Record<string, number | string | boolean> = {};
+            for (const pr of obj.parameters) params[pr.key] = pr.default;
+            const over = (a.params && typeof a.params === "object" && !Array.isArray(a.params)) ? (a.params as Record<string, unknown>) : {};
+            for (const [k, v] of Object.entries(over)) if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") params[k] = v;
+            const att: SegmentAttachment = { id: createId(), objectId: obj.meta.id, params, t: 0, flip: false };
+            const h = historyRef.current;
+            // Auto-detected rooms aren't in history.state.rooms — promote to a manual room so the attachment persists.
+            if (room.id.startsWith(ROOM_AUTO_ID_PREFIX)) {
+              h.set({ ...h.state, rooms: [...h.state.rooms, { ...room, id: createId(), attachments: [...(room.attachments ?? []), att] }] });
+            } else {
+              h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === room.id ? { ...r, attachments: [...(r.attachments ?? []), att] } : r)) });
+            }
+            return { space: label, objectId: obj.meta.id, params };
+          },
+          setImageUnderlay: async (a) => {
+            // The image becomes the canvas underlay — placed at (xM,yM), scaled so its full width spans
+            // worldWidthM metres. Mirrors the manual Image-import staging (natural size + scale multiplier,
+            // locked, Image layer). The image comes from the chat message attachment (in-app agents) OR,
+            // when the bridge/MCP client has no attachment channel, from a `dataUrl` / `imageBase64`(+`mimeType`) arg.
+            const argUrl = typeof a.dataUrl === "string" && a.dataUrl.startsWith("data:") ? a.dataUrl : undefined;
+            const argB64 = typeof a.imageBase64 === "string" && a.imageBase64.length > 0
+              ? `data:${typeof a.mimeType === "string" && a.mimeType ? a.mimeType : "image/png"};base64,${a.imageBase64}` : undefined;
+            const fp = chatFilePartRef.current;
+            if (!argUrl && !argB64 && !fp) throw new Error("no image to place — attach a drawing to the chat message, or pass dataUrl / imageBase64 (+ mimeType) to this tool");
+            if (fp && !argUrl && !argB64 && !fp.mimeType.startsWith("image/")) throw new Error(`attached file is ${fp.mimeType}, not an image — attach a PNG/JPEG (PDFs: use the manual Image import, which rasterizes)`);
+            const worldWidthM = Number(a.worldWidthM);
+            if (!Number.isFinite(worldWidthM) || worldWidthM <= 0.5 || worldWidthM > 10000) throw new Error("worldWidthM must be a positive real-world width in metres");
+            const src = argUrl ?? argB64 ?? `data:${fp!.mimeType};base64,${fp!.data}`;
+            const img = await new Promise<HTMLImageElement>((res, rej) => {
+              const im = new window.Image();
+              im.onload = () => res(im);
+              im.onerror = () => rej(new Error("could not decode the attached image"));
+              im.src = src;
+            });
+            const ppm = bridgePpmRef.current;
+            const widthPx = worldWidthM * ppm;
+            const scale = widthPx / Math.max(1, img.width);
+            const xPx = (Number(a.xM) || 0) * ppm;
+            const yPx = (Number(a.yM) || 0) * ppm;
+            const opacity = typeof a.opacity === "number" && a.opacity > 0 && a.opacity <= 1 ? a.opacity : 0.5;
+            const h = historyRef.current;
+            h.set({ ...h.state, imageUnderlay: { src, x: xPx, y: yPx, width: img.width, height: img.height, opacity, scale, locked: true, layerId: DEFAULT_IMAGE_LAYER_ID } });
+            return { xPx: Math.round(xPx), yPx: Math.round(yPx), widthPx: Math.round(widthPx), heightPx: Math.round(img.height * scale), naturalWidth: img.width, naturalHeight: img.height };
+          },
+          alignUnderlay: (a) => {
+            // Two-point fit of the EXISTING underlay onto the drawn plan — the programmatic "Set Scale +
+            // drag": image point A (grid 0–1000 per axis) lands exactly on world point A; when B is given
+            // too, the underlay is uniformly rescaled so both correspondences hold (the drawn geometry is
+            // never touched — the plan from written dimensions is the truth, the image fits to it).
+            const h = historyRef.current;
+            const u = h.state.imageUnderlay;
+            if (!u) throw new Error("no image underlay on the canvas — call set_image_underlay first");
+            const ppm = bridgePpmRef.current;
+            const num = (v: unknown, name: string): number => { const n = Number(v); if (!Number.isFinite(n)) throw new Error(`${name} must be a number`); return n; };
+            // Grid coord → the point's offset within the image in NATURAL pixels.
+            const natA = { x: (num(a.aImageX, "aImageX") / 1000) * u.width, y: (num(a.aImageY, "aImageY") / 1000) * u.height };
+            const worldA = { x: num(a.aWorldXM, "aWorldXM") * ppm, y: num(a.aWorldYM, "aWorldYM") * ppm };
+            const bGiven = [a.bImageX, a.bImageY, a.bWorldXM, a.bWorldYM].filter((v) => v != null).length;
+            if (bGiven > 0 && bGiven < 4) throw new Error("pass ALL four b* fields for a two-point fit, or none to translate only");
+            let scale = u.scale;
+            let bResidualM: number | undefined;
+            if (bGiven === 4) {
+              const natB = { x: (num(a.bImageX, "bImageX") / 1000) * u.width, y: (num(a.bImageY, "bImageY") / 1000) * u.height };
+              const worldB = { x: num(a.bWorldXM, "bWorldXM") * ppm, y: num(a.bWorldYM, "bWorldYM") * ppm };
+              const dNat = Math.hypot(natB.x - natA.x, natB.y - natA.y);
+              const dWorld = Math.hypot(worldB.x - worldA.x, worldB.y - worldA.y);
+              if (dNat < 1e-6 || dWorld < 1e-6) throw new Error("reference points A and B must be distinct");
+              scale = dWorld / dNat;
+              // Fit quality: a single uniform scale puts A exactly on target; B misses by however much the
+              // image's outline aspect disagrees with the plan envelope (photo skew / corner mis-estimates).
+              // Report it in METRES so the agent can judge and retry with better corners.
+              const landB = { x: (worldA.x - natA.x * scale) + natB.x * scale, y: (worldA.y - natA.y * scale) + natB.y * scale };
+              bResidualM = +(Math.hypot(landB.x - worldB.x, landB.y - worldB.y) / ppm).toFixed(3);
+            }
+            const x = worldA.x - natA.x * scale;
+            const y = worldA.y - natA.y * scale;
+            h.set({ ...h.state, imageUnderlay: { ...u, x, y, scale } });
+            return {
+              xPx: Math.round(x), yPx: Math.round(y), widthPx: Math.round(u.width * scale), heightPx: Math.round(u.height * scale),
+              rescaledBy: +(scale / u.scale).toFixed(4),
+              ...(bResidualM != null ? { bResidualM, fit: bResidualM <= 0.15 ? "good" : "check corners — image may be skewed (photo) or the grid estimates are off" } : {}),
+            };
+          },
+          analyzeUnderlay: async (a) => {
+            // Vectorise the underlay (same raster→vector tracer as Image Tools ▸ Vectorize) and reduce the
+            // traced line-work to its CONVEX HULL. The hull's extreme corners are MEASURED reference points
+            // for align_underlay — far more accurate than the vision model's guessed grid coords. Grid
+            // values are fractions of the image (calibration-independent); world metres use the CURRENT
+            // underlay placement, so they shift once align_underlay runs (the grid values don't).
+            const u = historyRef.current.state.imageUnderlay;
+            if (!u) throw new Error("no image underlay — call set_image_underlay first");
+            const img = await new Promise<HTMLImageElement>((res, rej) => {
+              const im = new window.Image();
+              im.onload = () => res(im);
+              im.onerror = () => rej(new Error("could not decode the underlay image"));
+              im.src = u.src;
+            });
+            const w = img.naturalWidth || img.width, hPx = img.naturalHeight || img.height;
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = hPx;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("canvas 2d unavailable — cannot read image pixels");
+            ctx.drawImage(img, 0, 0, w, hPx);
+            const imgData = ctx.getImageData(0, 0, w, hPx);
+            const cm = (typeof a.colorMode === "string" && ["red", "black", "blue", "green", "all"].includes(a.colorMode) ? a.colorMode : "black") as VectorizeColorMode;
+            const numOr = (v: unknown, d: number): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d; };
+            const result = vectorizeImage(imgData.data, w, hPx, {
+              colorMode: cm, tolerance: numOr(a.tolerance, 50), dilate: 3,
+              minLength: numOr(a.minLength, 30), simplifyEpsilon: 1.5, snapTolerance: 6,
+            });
+            const pts: Point[] = [];
+            for (const pl of result.polylines) for (const pp of pl) pts.push({ x: pp[0], y: pp[1] });
+            if (pts.length < 3) throw new Error(`vectorisation found ${result.polylines.length} line(s) — retry with colorMode "all" or a higher tolerance`);
+            const hull = computeConvexHull(pts);
+            if (hull.length < 3) throw new Error("traced lines are degenerate (collinear) — retry with different vectorise settings");
+            const ppm = bridgePpmRef.current;
+            const asGrid = (pt: Point) => ({ gridX: +(pt.x / w * 1000).toFixed(1), gridY: +(pt.y / hPx * 1000).toFixed(1) });
+            const asWorld = (pt: Point) => ({ worldXM: +((u.x + pt.x * u.scale) / ppm).toFixed(3), worldYM: +((u.y + pt.y * u.scale) / ppm).toFixed(3) });
+            // Extreme corners by the standard diagonal scores (min/max of x±y over the hull).
+            const pick = (score: (pt: Point) => number) => hull.reduce((best, pt) => (score(pt) < score(best) ? pt : best), hull[0]);
+            const tl = pick((pt) => pt.x + pt.y), br = pick((pt) => -(pt.x + pt.y));
+            const tr = pick((pt) => pt.y - pt.x), bl = pick((pt) => pt.x - pt.y);
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const pt of hull) { minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y); maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y); }
+            return {
+              lines: result.polylines.length, graphNodes: result.nodeCount, hullPoints: hull.length,
+              naturalWidth: w, naturalHeight: hPx,
+              corners: {
+                topLeft: { ...asGrid(tl), ...asWorld(tl) },
+                topRight: { ...asGrid(tr), ...asWorld(tr) },
+                bottomRight: { ...asGrid(br), ...asWorld(br) },
+                bottomLeft: { ...asGrid(bl), ...asWorld(bl) },
+              },
+              bbox: {
+                ...asGrid({ x: minX, y: minY }),
+                widthGrid: +((maxX - minX) / w * 1000).toFixed(1), heightGrid: +((maxY - minY) / hPx * 1000).toFixed(1),
+                widthM: +((maxX - minX) * u.scale / ppm).toFixed(3), heightM: +((maxY - minY) * u.scale / ppm).toFixed(3),
+              },
+              hullGrid: hull.slice(0, 48).map(asGrid),
+            };
+          },
+          fitPlanToRect: (a) => {
+            // Per-axis hull-to-hull fit: scale + translate EVERY plan coordinate so the plan's bounding box
+            // exactly fills the target world rect (usually the image outline's hull from analyze_underlay).
+            // X and Y scale independently — axis-aligned walls stay axis-aligned, but drawn dimensions
+            // change; the agent is told to reserve this for dimensionless drawings / small residuals.
+            const ppm = bridgePpmRef.current;
+            const num = (v: unknown, name: string): number => { const n = Number(v); if (!Number.isFinite(n)) throw new Error(`${name} must be a number`); return n; };
+            const tx = num(a.xM, "xM") * ppm, ty = num(a.yM, "yM") * ppm;
+            const tw = num(a.widthM, "widthM") * ppm, th = num(a.heightM, "heightM") * ppm;
+            if (tw < 1 || th < 1) throw new Error("target rect is degenerate — width/height must be positive metres");
+            const h = historyRef.current;
+            const s = h.state;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const eat = (pt: Point) => { minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y); maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y); };
+            for (const wl of s.walls) { eat(wl.start); eat(wl.end); }
+            for (const r of s.rooms) for (const pt of r.points) eat(pt);
+            if (!Number.isFinite(minX) || maxX - minX < 1 || maxY - minY < 1) throw new Error("no plan geometry to fit — draw the plan first (apply_model)");
+            const sx = tw / (maxX - minX), sy = th / (maxY - minY);
+            const mapX = (x: number): number => tx + (x - minX) * sx;
+            const mapY = (y: number): number => ty + (y - minY) * sy;
+            const mapPt = (pt: Point): Point => ({ x: mapX(pt.x), y: mapY(pt.y) });
+            // Best-effort transform of annotation objects — x/y anchors, rect extents, Point[] and flat
+            // [x1,y1,…] point lists all follow the same per-axis map (agent-traced plans usually have none).
+            const mapObj = <T extends Record<string, unknown>>(o: T): T => {
+              const out: Record<string, unknown> = { ...o };
+              if (typeof o.x === "number" && typeof o.y === "number") { out.x = mapX(o.x); out.y = mapY(o.y); }
+              if (typeof o.width === "number") out.width = (o.width as number) * sx;
+              if (typeof o.height === "number") out.height = (o.height as number) * sy;
+              if (typeof o.radius === "number") out.radius = (o.radius as number) * ((sx + sy) / 2);
+              if (Array.isArray(o.points) && o.points.length) {
+                out.points = typeof o.points[0] === "number"
+                  ? (o.points as number[]).map((v, i) => (i % 2 === 0 ? mapX(v) : mapY(v)))
+                  : (o.points as Point[]).map(mapPt);
+              }
+              return out as T;
+            };
+            h.set({
+              ...s,
+              walls: s.walls.map((wl) => ({ ...wl, start: mapPt(wl.start), end: mapPt(wl.end) })),
+              rooms: s.rooms.map((r) => ({ ...r, points: r.points.map(mapPt) })),
+              objects: s.objects.map((o) => mapObj(o)),
+              furniture: s.furniture.map((f) => ({ ...f, x: mapX(f.x), y: mapY(f.y) })),
+            });
+            return {
+              scaledX: +sx.toFixed(4), scaledY: +sy.toFixed(4),
+              before: { widthM: +((maxX - minX) / ppm).toFixed(3), heightM: +((maxY - minY) / ppm).toFixed(3) },
+              after: { widthM: +(tw / ppm).toFixed(3), heightM: +(th / ppm).toFixed(3) },
+            };
+          },
+          applyModelJson,
+          clearCanvas: () => {
+            const h = historyRef.current;
+            h.set({ ...h.state, walls: [], rooms: [], objects: [], furniture: [], nodeMeta: {} });
+            return "cleared";
+          },
+          importObjects: async (a?: { categories?: string[] }) => {
+            const res = await autoImportObjectsRef.current?.(a?.categories);
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            // Return the detailed catalog so the model gains full param knowledge mid-run (the system-prompt
+            // copy was empty when the run started with an unloaded library). availableCategories lets the
+            // agent discover the Library's folder structure (Kitchen / Electrical / …) for scoped imports.
+            return {
+              objectsLoaded: Object.keys(lib).length,
+              ...(res ? { imported: res.imported, availableCategories: res.available } : {}),
+              catalog: buildDetailedObjectCatalog(lib),
+            };
+          },
+          // ── Parametric library management (the Parametric agent's core; the Orchestrator has it too):
+          //    list / read / create-or-overwrite / delete `.pobj` definitions in the project library. ──
+          listObjects: () => {
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            return {
+              count: Object.keys(lib).length,
+              objects: Object.values(lib).map((o) => ({
+                id: o.meta.id, name: o.meta.name, hostKind: o.hostKind ?? "node", symbol: o.meta.symbol,
+                category: o.meta.category, params: o.parameters.length, hasGeometry: !!o.geometry,
+              })),
+            };
+          },
+          getObjectDefinition: (id: string) => {
+            const obj = (historyRef.current.state.objectLibrary ?? {})[id];
+            if (!obj) throw new Error(`object not found: "${id}" — call list_objects for the available ids`);
+            return obj;
+          },
+          saveObject: async (a) => {
+            const build = buildParametricObjectFileRef.current;
+            if (!build) throw new Error("editor not ready — retry");
+            let parsed: Record<string, unknown>;
+            try {
+              const v = JSON.parse(a.definitionJson) as unknown;
+              if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
+              parsed = v as Record<string, unknown>;
+            } catch {
+              throw new Error(`definitionJson is not a valid JSON object: ${a.definitionJson.slice(0, 80)}`);
+            }
+            const lib = historyRef.current.state.objectLibrary ?? {};
+            const declaredId = typeof (parsed.meta as Record<string, unknown> | undefined)?.id === "string" ? String((parsed.meta as Record<string, unknown>).id) : "";
+            const hostOk = (v: unknown): v is "node" | "segment" | "space" | "canvas" => v === "node" || v === "segment" || v === "space" || v === "canvas";
+            // Host resolution: explicit arg > the file's own hostKind > keep an existing object's > derive
+            // from the symbol (same fallback the folder import uses) so the object lands in the right menu.
+            const sym = (parsed.meta as { symbol?: string } | undefined)?.symbol;
+            const hostKind = hostOk(a.hostKind) ? a.hostKind
+              : hostOk(parsed.hostKind) ? parsed.hostKind
+              : (declaredId ? lib[declaredId]?.hostKind : undefined)
+                ?? (sym === "titleblock" ? "canvas" : sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node");
+            const obj = build(parsed, declaredId || "object", hostKind);
+            const isUpdate = !!lib[obj.meta.id];
+            const h = historyRef.current;
+            h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [obj.meta.id]: obj } });
+            // Render self-check: evaluate the SAVED definition with its default params so the agent learns
+            // whether instances will actually draw (2D plan shapes) and extrude (3D prisms) — a definition
+            // can be well-formed JSON yet render nothing (rules outside cases[], expression typos, every
+            // h0 == h1, a `when` gate that never fires). Space objects get a dummy 10×10 m host so
+            // host/pipeline rules evaluate; `ref` rules resolve against the live library.
+            const defText = JSON.stringify(obj);
+            const dummyHost = obj.hostKind === "space" ? [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] : undefined;
+            const resolveLib = (rid: string): string | null => { const o = (historyRef.current.state.objectLibrary ?? {})[rid]; return o ? JSON.stringify(o) : null; };
+            let render = { plan2dShapes: 0, planLines: 0, prisms3d: 0 };
+            try {
+              const g = evalParametricGeometry(defText, { x: 0, y: 0 }, 100, undefined, dummyHost, resolveLib);
+              render = { plan2dShapes: g.fill.length, planLines: g.lines.length, prisms3d: evalParametricPrisms(defText, { x: 0, y: 0 }, 100, undefined, dummyHost, resolveLib).length };
+            } catch { /* keep zeros — reported through renderWarning below */ }
+            // Settings carriers legitimately have no geometry; canvas (sheet) objects are legitimately flat.
+            const wantsGeometry = obj.meta.symbol !== "settings";
+            const wants3d = wantsGeometry && (obj.hostKind ?? "node") !== "canvas";
+            const renderWarning = !wantsGeometry ? undefined
+              : !obj.geometry ? "no geometry block — placed instances draw only the placeholder meta.symbol, not real 2D/3D geometry"
+              : render.plan2dShapes + render.planLines === 0 ? "geometry evaluated to ZERO 2D shapes with default params — rules must sit inside geometry.cases[].rules (or a pipeline) and expressions/when gates must produce visible shapes; fix and save again"
+              : wants3d && render.prisms3d === 0 ? "renders in 2D but has NO 3D volume — every closed rule has h0 == h1; give the object's real elements a height span (h1 > h0)"
+              : undefined;
+            // Persist the definition to disk too — public/Library/Parametric Objects/<Category>/<id>.pobj.json
+            // (folder derived from meta.category — Kitchen / Electrical / …; hostKind lives in the file)
+            // via the dev-server Library bridge (the browser alone can't write repo files). Fails soft
+            // with fileError on production/static hosting, where only the in-app library is updated.
+            // Remove any existing file(s) with this meta.id first — a category edit moves the object to a
+            // different folder, and a stale copy in the old folder would fight it on the next import.
+            if (isUpdate) await deleteLibraryObjectFiles([obj.meta.id]);
+            const fileRes = await saveLibraryFile(
+              `Parametric Objects/${pobjFolderFor(obj.meta.category, obj.hostKind)}/${obj.meta.id}.pobj.json`,
+              JSON.stringify(obj, null, 2),
+            );
+            return {
+              action: isUpdate ? "updated" : "created", id: obj.meta.id, name: obj.meta.name, hostKind: obj.hostKind ?? "node", params: obj.parameters.length, hasGeometry: !!obj.geometry,
+              render, ...(renderWarning ? { renderWarning } : {}),
+              ...(fileRes.ok
+                ? { file: `public/Library/${fileRes.path}` }
+                : { fileError: `not written to disk (${fileRes.error ?? "Library bridge unavailable"}) — the object exists in the in-app library only` }),
+            };
+          },
+          deleteObjects: async (a) => {
+            const ids = (a.ids ?? []).map(String);
+            if (!ids.length) throw new Error("pass at least one object id (see list_objects)");
+            const h = historyRef.current;
+            const s = h.state;
+            const lib = s.objectLibrary ?? {};
+            const missing = ids.filter((id) => !lib[id]);
+            if (missing.length) throw new Error(`object(s) not found: ${missing.join(", ")} — call list_objects for the available ids`);
+            // Usage census — placed instances referencing the id would fall back to a placeholder symbol.
+            const usage = (id: string): number => {
+              let n = 0;
+              for (const w of s.walls) n += (w.attachments ?? []).filter((at) => at.objectId === id).length;
+              for (const r of s.rooms) n += (r.attachments ?? []).filter((at) => at.objectId === id).length;
+              for (const meta of Object.values(s.nodeMeta ?? {})) n += (meta?.attachments ?? []).filter((at) => at.objectId === id).length;
+              for (const co of Object.values(s.canvasObjects ?? {})) if (co?.objectId === id) n++;
+              return n;
+            };
+            const inUse = ids.map((id) => ({ id, instances: usage(id) })).filter((u) => u.instances > 0);
+            if (inUse.length && !a.force) {
+              throw new Error(`in use on the canvas: ${inUse.map((u) => `${u.id} (${u.instances})`).join(", ")} — remove the placed instances first, or pass force: true to delete the definition anyway`);
+            }
+            const nextLib = { ...lib };
+            for (const id of ids) delete nextLib[id];
+            h.set({ ...s, objectLibrary: nextLib });
+            // Mirror the delete to disk: remove the matching .pobj files from public/Library/Parametric
+            // Objects (dev bridge; no-op on production hosting) so a later Import Objects doesn't resurrect them.
+            const fileRes = await deleteLibraryObjectFiles(ids);
+            return {
+              deleted: ids, remaining: Object.keys(nextLib).length,
+              ...(fileRes ? { filesDeleted: fileRes.deleted } : {}),
+              ...(inUse.length ? { warning: `placed instances now render as placeholder symbols: ${inUse.map((u) => u.id).join(", ")}` } : {}),
+            };
+          },
+          // ── Flow gateway: the node-graph ALGORITHM ENGINE exposed to the canvas agent (skeletonise,
+          //    inset, voronoi, unions, generative layouts …). flow_apply loads + live-evaluates a graph in
+          //    the Flow overlay; flow_commit runs the SAME commit path as the panel's Run button. ──
+          flowNodeCatalog: () => buildFlowToolCatalog(),
+          flowApply: async (graphJson: string) => {
+            let parsed: SerializedFlow;
+            try {
+              const v = JSON.parse(graphJson) as unknown;
+              if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
+              parsed = v as SerializedFlow;
+            } catch {
+              throw new Error(`graphJson is not a valid JSON object: ${graphJson.slice(0, 80)}`);
+            }
+            if (!Array.isArray(parsed.nodes)) throw new Error('graphJson must have a "nodes" array');
+            // Mount the Flow overlay (no-ops when already open) so the bridge + live evaluation exist and
+            // the user watches the agent's graph arrive.
+            setFlowMinimized(false); setFlowOpen(true);
+            const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
+            let applied: number;
+            if (bridge) applied = bridge.applyGraph(parsed);
+            else { setLiveFlowGraph(parsed); flowGraphRef.current = parsed; applied = parsed.nodes?.length ?? 0; }
+            const check = validateFlowGraph(parsed);
+            // Let the overlay's live evaluation settle (evaluate + ~80 ms preview debounce), then summarise
+            // what each node produced so the model can verify BEFORE committing.
+            await new Promise((r) => setTimeout(r, 800));
+            const preview = flowPreviewRef.current.map((it) => ({
+              nodeId: it.nodeId, tool: it.tool, polygons: it.polygons.length,
+              ...(it.openPath ? { openPaths: true } : {}),
+              ...(it.massing ? { floors: it.massing.floors } : {}),
+              ...(it.condition ? { condition: it.condition } : {}),
+              ...(it.isFinal ? { final: true } : {}),
+            }));
+            return { applied, ok: check.ok, opCount: check.opCount, errors: check.errors, warnings: check.warnings, preview };
+          },
+          flowCommit: async () => {
+            const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
+            if (!bridge) return { error: "Flow overlay is not available — call flow_apply first" };
+            const r = bridge.runCommit();
+            if (!r.ok) return { error: r.error ?? "commit failed" };
+            // Give the recipe engine a beat to write history, then report the canvas effect.
+            await new Promise((res) => setTimeout(res, 400));
+            const s = historyRef.current.state;
+            return { ok: true, committedNodes: r.committedNodeIds?.length ?? 0, walls: s.walls.length, manualRooms: s.rooms.length };
+          },
+          // ── Self-review: render the drawn plan to a PNG the (multimodal) model can SEE. The crop is the
+          //    CONTENT bbox in stage coords (Konva redraws all layers into the export canvas, so geometry
+          //    outside the visible viewport is captured too); the longer edge is capped ≈1280 px. ──
+          snapshotCanvas: () => {
+            const stage = stageRef.current;
+            if (!stage) return { error: "canvas stage not ready" };
+            const s = historyRef.current.state;
+            const pts: Point[] = [
+              ...s.walls.flatMap((w) => [w.start, w.end]),
+              ...s.rooms.flatMap((r) => r.points),
+              ...visibleRoomsRef.current.flatMap((r) => r.points),
+            ];
+            if (!pts.length) return { error: "canvas is empty — nothing to snapshot" };
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const p of pts) {
+              if (p.x < minX) minX = p.x;
+              if (p.y < minY) minY = p.y;
+              if (p.x > maxX) maxX = p.x;
+              if (p.y > maxY) maxY = p.y;
+            }
+            const pad = 60; // world-px margin so dimension labels / door swings stay in frame
+            minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+            // World → stage (screen) coords: the stage carries the pan/zoom transform.
+            const sc = stage.scaleX() || 1;
+            const x = minX * sc + stage.x(), y = minY * sc + stage.y();
+            const w = (maxX - minX) * sc, h = (maxY - minY) * sc;
+            if (!(w > 4 && h > 4)) return { error: "plan extent is degenerate" };
+            const pixelRatio = Math.max(0.05, Math.min(2, 1280 / Math.max(w, h)));
+            const dataUrl = stage.toDataURL({ x, y, width: w, height: h, pixelRatio, mimeType: "image/png" });
+            return {
+              widthM: +((maxX - minX) / pixelsPerMeter).toFixed(2),
+              heightM: +((maxY - minY) / pixelsPerMeter).toFixed(2),
+              dataUrl,
+            };
+          },
+        };
+    return api;
   })();
   useEffect(() => {
     if (!agentBridgeEnabled()) return;
@@ -5672,6 +5953,38 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     registerAgentCommand("draw_segment", (a) => bridgeApiRef.current?.drawSegment(a));
     registerAgentCommand("place_opening", (a) => bridgeApiRef.current?.placeOpening(a));
     registerAgentCommand("place_object", (a) => bridgeApiRef.current?.placeObject(a));
+    // ── Full agent parity (everything the in-app Orchestrator / Design / Parametric agents can do, minus
+    //    the disk-writing library tools save_object / delete_object): all route through the SHARED
+    //    agentApiRef so a bridge call is identical to an in-app agent call. ──
+    const agentApi = () => { const a = agentApiRef.current; if (!a) throw new Error("agent api not ready — the editor is still mounting"); return a; };
+    registerAgentCommand("get_plan", () => agentApi().getPlanJson());
+    registerAgentCommand("list_spaces", () => agentApi().listSpaces());
+    registerAgentCommand("get_selection", () => agentApi().getSelection());
+    registerAgentCommand("merge_spaces", (a) => agentApi().mergeSpaces(a));
+    registerAgentCommand("attach_space_object", (a) => agentApi().attachSpaceObject(a));
+    registerAgentCommand("list_objects", () => agentApi().listObjects());
+    registerAgentCommand("get_object", (a) => agentApi().getObjectDefinition(String(a.id ?? "")));
+    registerAgentCommand("snapshot_canvas", () => agentApi().snapshotCanvas());
+    registerAgentCommand("set_image_underlay", (a) => agentApi().setImageUnderlay(a));
+    registerAgentCommand("align_underlay", (a) => agentApi().alignUnderlay(a));
+    registerAgentCommand("analyze_underlay", (a) => agentApi().analyzeUnderlay(a));
+    registerAgentCommand("fit_plan_to_rect", (a) => agentApi().fitPlanToRect(a));
+    // ── Flow (node-graph algorithm engine): read / catalog / build+evaluate / validate / commit. ──
+    registerAgentCommand("flow_node_catalog", () => agentApi().flowNodeCatalog());
+    registerAgentCommand("flow_apply", (a) => agentApi().flowApply(String(a.graphJson ?? "")));
+    registerAgentCommand("flow_commit", () => agentApi().flowCommit());
+    registerAgentCommand("get_flow", () => flowApplyApiRef.current?.getGraph() ?? flowGraphRef.current ?? liveFlowGraphRef.current ?? { version: 1, nodes: [], edges: [] });
+    registerAgentCommand("compile_flow", (a) => {
+      const raw = a.graphJson;
+      let graph: SerializedFlow;
+      if (typeof raw === "string" && raw.trim()) {
+        try { graph = JSON.parse(raw) as SerializedFlow; } catch { throw new Error("graphJson is not valid JSON"); }
+      } else {
+        graph = flowApplyApiRef.current?.getGraph() ?? flowGraphRef.current ?? liveFlowGraphRef.current ?? { version: 1, nodes: [], edges: [] };
+      }
+      const check = validateFlowGraph(graph);
+      return { ok: check.ok, opCount: check.opCount, errors: check.errors, warnings: check.warnings };
+    });
     const stop = startAgentBridge();
     return () => stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6975,8 +7288,30 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
 
     // Recipe-wide context (declared early so resolveTargets can look up `produces` names).
     type RecipeOpResult = { tool?: string; ok: boolean; reason?: string; producedRoomIds?: string[]; roomId?: string };
-    type RecipeCtx = { producedMap: Map<string, string[]>; trace: RecipeOpResult[] };
-    const recipeCtx: RecipeCtx = { producedMap: new Map(), trace: [] };
+    type RecipeCtx = { producedMap: Map<string, string[]>; trace: RecipeOpResult[]; stepIndex: number };
+    const recipeCtx: RecipeCtx = { producedMap: new Map(), trace: [], stepIndex: 0 };
+
+    // Stepwise commit → separate layer per op. Each committed op moves its freshly-created Spaces AND
+    // wall segments onto their OWN layer ("Step N · <Tool>") so successive steps (Inset → Optimise Rect →
+    // …) don't dump overlapping walls into one soup where they'd conflict / cross-contaminate auto-room
+    // detection. Only runs on real commits (not previews). `beforeRoomIds` / `beforeWallIds` are snapshotted
+    // by the caller just before the op dispatch.
+    const assignStepLayer = (tool: string, beforeRoomIds: Set<string>, beforeWallIds: Set<string>) => {
+      const h = historyRef.current;
+      const newRoomIds = h.state.rooms.filter((r) => !beforeRoomIds.has(r.id)).map((r) => r.id);
+      const newWallIds = h.state.walls.filter((w) => !beforeWallIds.has(w.id)).map((w) => w.id);
+      if (newRoomIds.length === 0 && newWallIds.length === 0) return;
+      const step = ++recipeCtx.stepIndex;
+      const label = tool.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+      const { layers, layerId } = ensureLayerInLayers(h.state.layers, `flow-step-${step}`, `Step ${step} · ${label}`);
+      const roomSet = new Set(newRoomIds), wallSet = new Set(newWallIds);
+      h.set({
+        ...h.state,
+        layers,
+        rooms: h.state.rooms.map((r) => (roomSet.has(r.id) ? { ...r, layerId } : r)),
+        walls: h.state.walls.map((w) => (wallSet.has(w.id) ? { ...w, layerId } : w)),
+      });
+    };
 
     // Resolve target rooms from a v2 room-entry (handles id / label / match selectors + displayId "RoomNNN").
     const resolveTargets = (entry: Record<string, unknown>, allRooms: Room[]): Room[] => {
@@ -7365,6 +7700,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
 
       // Snapshot pre-op room ids so we can detect what this op produced (for `produces`).
       const beforeIds = new Set(visibleRoomsRef.current.map((rr) => rr.id));
+      // Snapshot the document rooms + walls too (visibleRoomsRef excludes hidden/typed rooms), so the
+      // stepwise-commit layer split (assignStepLayer, below) can find EVERY entity this op created.
+      const beforeDocRoomIds = new Set(historyRef.current.state.rooms.map((rr) => rr.id));
+      const beforeWallIds = new Set(historyRef.current.state.walls.map((w) => w.id));
 
       try {
         // Apply-JSON UX parity: select the operated room and arm the matching block's Live flag so
@@ -7749,6 +8088,51 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
                 roomType: "room",
                 region: "Corridor",
                 label: loops.length > 1 ? `Skeleton Path ${i + 1}` : "Skeleton Path",
+                showLabel: true,
+              }));
+              h.set({ ...h.state, rooms: [...h.state.rooms, ...newRooms] });
+            }
+          }
+        } else if (tool === "corridoor") {
+          // Corridoor node: a straight band of `width` m through the space centroid (Horizontal /
+          // Vertical / Cross) or the Insetted boundary LOOP (offset + width). Commit the SAME pure eval
+          // the live preview draws, as Corridor-region Space(s) — the loop's courtyard lands on the
+          // Space as a real hole. Silent runs skip: the flow's own preview already shows it.
+          if (!opSilent) {
+            const pieces = evalCorridoorPieces(currentRoom.points, p, pixelsPerMeter).filter((piece) => piece.points.length >= 3);
+            if (pieces.length) {
+              const h = historyRef.current;
+              const newRooms: Room[] = pieces.map((piece, i) => ({
+                id: createId(),
+                points: piece.points,
+                ...(piece.holes.length ? { holes: piece.holes } : {}),
+                fill: "rgba(2, 132, 199, 0.3)",
+                stroke: "#0369a1",
+                roomType: "room",
+                region: "Corridor",
+                label: pieces.length > 1 ? `Corridoor ${i + 1}` : "Corridoor",
+                showLabel: true,
+              }));
+              h.set({ ...h.state, rooms: [...h.state.rooms, ...newRooms] });
+            }
+          }
+        } else if (tool === "core-racking") {
+          // Core Racking node: stamp fixed-size rectangular core Spaces (Length × Breadth) along the
+          // corridor's long side(s) at a Gap pitch. Runs on the CORRIDOR Space (wired downstream of the
+          // Corridoor node via `on`) — its OBB gives the run axis + half-width; cores are placed flush to
+          // the corridor edge on Both sides / Left / Right. Silent runs skip: the flow's preview shows them.
+          if (!opSilent) {
+            const rects = evalCoreRacking(currentRoom.points, p, pixelsPerMeter).filter((poly) => poly.length >= 3);
+            if (rects.length) {
+              const h = historyRef.current;
+              const newRooms: Room[] = rects.map((points, i) => ({
+                id: createId(),
+                points,
+                fill: "rgba(234, 88, 12, 0.28)",
+                stroke: "#c2410c",
+                roomType: "room",
+                region: "Core",
+                label: `Core ${i + 1}`,
                 showLabel: true,
               }));
               h.set({ ...h.state, rooms: [...h.state.rooms, ...newRooms] });
@@ -8236,6 +8620,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             }
           }
         }
+        // Stepwise commit: park this op's fresh Spaces + walls on their own layer (see assignStepLayer).
+        if (!opSilent && tool) assignStepLayer(tool, beforeDocRoomIds, beforeWallIds);
         recipeCtx.trace.push({ tool, ok: true, roomId, producedRoomIds: newIds });
       } catch (err) {
         errors += 1;
@@ -11026,7 +11412,10 @@ User request: ${aiPrompt.trim()}`;
     const u = unionBandOutlines(polyMap);
     if (!u) { toast.error("Could not union the buffered bands"); return; }
     const { outer, holes, extras } = u;
-    const layer = ensureLayerForType("corridor", "Corridor");
+    const h = historyRef.current;
+    // Corridor layer folded into the same set as the rooms below — a separate ensureLayerForType set
+    // would be clobbered by it (both sets are built from the same stale state snapshot).
+    const { layers: layersWithCorridor, layerId: layer } = ensureLayerInLayers(h.state.layers, "corridor", "Corridor");
     const mkRoom = (points: Point[], i: number, hs?: Point[][]): Room => ({
       id: createId(),
       points,
@@ -11040,11 +11429,10 @@ User request: ${aiPrompt.trim()}`;
       showLabel: true,
     });
     const newRooms: Room[] = [mkRoom(outer, 0, holes), ...extras.map((pts, i) => mkRoom(pts, i + 1))];
-    const h = historyRef.current;
-    h.set({ ...h.state, rooms: [...h.state.rooms, ...newRooms] });
+    h.set({ ...h.state, layers: layersWithCorridor, rooms: [...h.state.rooms, ...newRooms] });
     selection.selectOne(newRooms[0].id);
     toast.success(`Created ${newRooms.length} Corridor space${newRooms.length > 1 ? "s" : ""} from ${members.length} buffered segment${members.length > 1 ? "s" : ""} — attach objects in Space Properties`);
-  }, [miteredPolygons, ensureLayerForType, selection]);
+  }, [miteredPolygons, ensureLayerInLayers, selection]);
 
   /** Merge ≥2 currently-selected manual rooms into a single room (thin UI wrapper over
    *  `mergeRoomsCore` — shared with the agent's merge_spaces tool). Reads from visibleRoomsRef so the
@@ -24571,7 +24959,7 @@ User request: ${aiPrompt.trim()}`;
                 }}
                 onCreateGrid={() => setGridDialogOpen(true)}
                 onImportObjects={(files) => { void importObjectFolder(files); }}
-                onImportObjectsAuto={() => { void autoImportObjectFolder(); }}
+                onImportObjectsClick={() => setImportObjectsDialogOpen(true)}
                 onSelectedGenElementChange={setSelectedGenElement}
                 shapesPopoverOpen={shapesPopoverOpen}
                 onShapesPopoverOpenChange={setShapesPopoverOpen}
@@ -26263,7 +26651,11 @@ User request: ${aiPrompt.trim()}`;
                       const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy) || 1;
                       const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
-                      const symbol = obj?.meta.symbol ?? "door";
+                      // The "door" default is ONLY the placeholder for symbol-less objects WITHOUT geometry —
+                      // an object carrying its own geometry must reach the generic branch below (symbol-less
+                      // segment objects like battery / wire / inline switch drew as door swings when the
+                      // default was applied first). The 3D path (genericAtts) already classifies by raw symbol.
+                      const symbol = obj?.meta.symbol ?? (obj?.geometry ? "" : "door");
                       const isOpening = !!w.isObjectOpening;
                       const sw = Math.max(0.75, 1.25 / scale);
                       const widthM = (typeof att.params.width === "number" ? att.params.width : Number(att.params.width)) || Number(obj?.parameters.find((p) => p.key === "width")?.default) || 0.9;
@@ -26447,12 +26839,20 @@ User request: ${aiPrompt.trim()}`;
                       let mapPoly = (poly: Point[]) => poly.flatMap((p) => [p.x, p.y]);
                       if (!pobjIsHostAware(defText)) {
                         const gb = polysBBox([...g.fill, ...g.lines]);
-                        const rb = polysBBox([room.points]);
-                        if (gb && rb) {
-                          const s = Math.min((rb.maxX - rb.minX) / Math.max(1e-6, gb.maxX - gb.minX), (rb.maxY - rb.minY) / Math.max(1e-6, gb.maxY - gb.minY));
-                          const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
-                          const rcx = (rb.minX + rb.maxX) / 2, rcy = (rb.minY + rb.maxY) / 2;
-                          mapPoly = (poly) => poly.flatMap((p) => [rcx + (p.x - gcx) * s, rcy + (p.y - gcy) * s]);
+                        const rect = roomInscribedRects.get(room.id);
+                        if (gb && rect) {
+                          // Fit INSIDE the Space's largest inscribed rectangle, at that rectangle's orientation.
+                          const tp = fitObjectToInscribedRect(rect, gb);
+                          mapPoly = (poly) => poly.flatMap((p) => { const q = tp(p); return [q.x, q.y]; });
+                        } else if (gb) {
+                          // Fallback (no inscribed rect): uniform-scale + centre on the room bbox (legacy).
+                          const rb = polysBBox([room.points]);
+                          if (rb) {
+                            const s = Math.min((rb.maxX - rb.minX) / Math.max(1e-6, gb.maxX - gb.minX), (rb.maxY - rb.minY) / Math.max(1e-6, gb.maxY - gb.minY));
+                            const gcx = (gb.minX + gb.maxX) / 2, gcy = (gb.minY + gb.maxY) / 2;
+                            const rcx = (rb.minX + rb.maxX) / 2, rcy = (rb.minY + rb.maxY) / 2;
+                            mapPoly = (poly) => poly.flatMap((p) => [rcx + (p.x - gcx) * s, rcy + (p.y - gcy) * s]);
+                          }
                         }
                       }
                       // Selected NESTED component (Components editor) → overdraw its polylines in accent.
@@ -31864,6 +32264,9 @@ User request: ${aiPrompt.trim()}`;
               <Layer listening={false}>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
                   {flowPreview.flatMap((item) => {
+                    // Live mode: this node's output is materialised as REAL canvas geometry, so drop its
+                    // preview overlay (the real Space/segments stand in for it — no double-draw).
+                    if (liveOwnedNodeIdsRef.current.has(item.nodeId.split("__")[0])) return [];
                     // Schema-layer visibility: hide this node's symbols when its Segment/Node layer is
                     // hidden (e.g. Door layer eye closed → Segment-to-Door symbols vanish; segment stays).
                     if (isFlowSymbolHidden(item.tool)) return [];
@@ -32736,6 +33139,8 @@ User request: ${aiPrompt.trim()}`;
             <FlowOverlay
               open={flowOpen}
               minimized={flowMinimized}
+              liveFlow={liveFlow}
+              onToggleLiveFlow={() => setLiveFlow((v) => !v)}
               onMinimize={() => flowPanelRef.current?.collapse()}
               onMaximize={() => { flowPanelRef.current?.expand(); flowPanelRef.current?.resize(80); }}
               onRestore={() => { flowPanelRef.current?.expand(); flowPanelRef.current?.resize(35); }}
@@ -36349,6 +36754,15 @@ User request: ${aiPrompt.trim()}`;
         open={gridDialogOpen}
         onOpenChange={setGridDialogOpen}
         onConfirm={(draft) => { addGridFromDraft(draft); setGridDialogOpen(false); }}
+      />
+
+      {/* Import Objects picker — tick objects and/or whole category folders from the library (live dev
+          listing / bundled manifest), or browse .pobj.json files / a folder from this device. */}
+      <ImportObjectsDialog
+        open={importObjectsDialogOpen}
+        onOpenChange={setImportObjectsDialogOpen}
+        onImportSelected={(relPaths) => { void importLibraryRelFiles(relPaths); }}
+        onImportFiles={(files) => { void importObjectFolder(files); }}
       />
 
       {/* Template — load a schema/semantics template (Node / Segment / Space types + properties + icons)

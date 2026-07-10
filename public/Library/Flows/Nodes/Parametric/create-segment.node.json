@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "create-segment",
+  "label": "Create Segment",
+  "category": "Parametric",
+  "description": "An open polyline (2D stroke) — a parametric object's `line` rule.",
+  "params": {
+    "label": "",
+    "spec": "",
+    "note": ""
+  }
+}

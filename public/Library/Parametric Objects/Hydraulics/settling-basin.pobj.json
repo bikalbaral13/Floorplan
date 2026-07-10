@@ -1,0 +1,84 @@
+{
+  "kind": "parametric-object",
+  "version": 1,
+  "meta": {
+    "id": "settling-basin.v1",
+    "name": "Settling Basin",
+    "category": "Hydraulics/Sediment",
+    "units": "m",
+    "icon": { "paths": ["M3 7l4 -2h10l4 2v3l-2 8H5l-2 -8z", "M3 10h18", "M8 5v-2h8v2"] }
+  },
+  "parameters": [
+    { "key": "Q", "label": "Design discharge Q", "kind": "number", "default": 5.0, "min": 0.1, "max": 100, "step": 0.5, "unit": "m³/s" },
+    { "key": "d_mm", "label": "Trap particle size d", "kind": "number", "default": 0.2, "min": 0.05, "max": 1, "step": 0.01, "unit": "mm" },
+    { "key": "rho_s", "label": "Sediment density", "kind": "number", "default": 2650, "min": 1500, "max": 3200, "step": 50, "unit": "kg/m³" },
+    { "key": "rho_w", "label": "Water density", "kind": "number", "default": 1000, "min": 950, "max": 1100, "step": 10, "unit": "kg/m³" },
+    { "key": "nu", "label": "Kinematic viscosity ×1e6", "kind": "number", "default": 1.0, "min": 0.3, "max": 2, "step": 0.05, "unit": "e-6 m²/s" },
+    { "key": "vh", "label": "Horizontal velocity", "kind": "number", "default": 0.3, "min": 0.1, "max": 1, "step": 0.02, "unit": "m/s" },
+    { "key": "alpha", "label": "Turbulence factor α", "kind": "number", "default": 1.4, "min": 1, "max": 2, "step": 0.05 },
+    { "key": "BoverY", "label": "Width / depth ratio", "kind": "number", "default": 2.5, "min": 1, "max": 8, "step": 0.5 },
+    { "key": "k", "label": "Length safety factor", "kind": "number", "default": 1.2, "min": 1, "max": 2, "step": 0.05 },
+    { "key": "freeboard", "label": "Freeboard", "kind": "number", "default": 0.3, "min": 0, "max": 1, "step": 0.05, "unit": "m" },
+    { "key": "storageDepth", "label": "Sediment storage depth", "kind": "number", "default": 0.5, "min": 0, "max": 2, "step": 0.05, "unit": "m" },
+    { "key": "inletLength", "label": "Inlet transition length", "kind": "number", "default": 4, "min": 0, "max": 20, "step": 0.5, "unit": "m" },
+    { "key": "inletWidth", "label": "Inlet width", "kind": "number", "default": 1.5, "min": 0.3, "max": 8, "step": 0.1, "unit": "m" },
+    { "key": "wallThickness", "label": "Wall thickness", "kind": "number", "default": 0.3, "min": 0.1, "max": 1, "step": 0.05, "unit": "m" },
+    { "key": "color", "label": "Concrete color", "kind": "color", "default": "#9ca3af" },
+    { "key": "waterColor", "label": "Water color", "kind": "color", "default": "#38bdf8" },
+    { "key": "siltColor", "label": "Sediment color", "kind": "color", "default": "#92400e" },
+    { "key": "rotation", "label": "Rotation", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 5, "unit": "°" },
+    { "key": "wallOffset", "label": "Offset", "kind": "number", "default": 0, "min": -5, "max": 5, "step": 0.1, "unit": "m" },
+    { "key": "clearance", "label": "Clearance", "kind": "number", "default": 0, "min": 0, "max": 5, "step": 0.1, "unit": "m" }
+  ],
+  "hostKind": "node",
+  "geometry": {
+    "description": "Rectangular settling basin with an inlet transition. w = Zanke velocity, w_eff = w/α (Camp), A=Q/vh, B=sqrt(BoverY·A), y=A/B, L = k·vh·(y/w_eff). Hazen efficiency surfaced as an output.",
+    "vars": {
+      "g": "9.81",
+      "d": "d_mm / 1000",
+      "s": "rho_s / rho_w",
+      "nuv": "nu * 0.000001",
+      "term": "1 + 0.01 * (s - 1) * g * pow(d, 3) / pow(nuv, 2)",
+      "w": "(10 * nuv / d) * (sqrt(term) - 1)",
+      "weff": "((10 * nuv / d) * (sqrt(term) - 1)) / alpha",
+      "A": "Q / vh",
+      "B": "sqrt(BoverY * (Q / vh))",
+      "y": "(Q / vh) / sqrt(BoverY * (Q / vh))",
+      "L": "k * vh * (((Q / vh) / sqrt(BoverY * (Q / vh))) / (((10 * nuv / d) * (sqrt(term) - 1)) / alpha))",
+      "yTotal": "(Q / vh) / sqrt(BoverY * (Q / vh)) + storageDepth + freeboard",
+      "wt": "wallThickness",
+      "B2": "sqrt(BoverY * (Q / vh)) / 2",
+      "L2": "k * vh * (((Q / vh) / sqrt(BoverY * (Q / vh))) / (((10 * nuv / d) * (sqrt(term) - 1)) / alpha)) / 2",
+      "iw2": "inletWidth / 2"
+    },
+    "cases": [
+      {
+        "rules": [
+          { "comment": "Base slab", "box": { "x0": "-L2 - wt", "x1": "L2 + wt", "y0": "-B2 - wt", "y1": "B2 + wt", "h0": "-wt", "h1": 0, "color": "color" } },
+          { "comment": "Left side wall", "box": { "x0": "-L2 - wt", "x1": "L2 + wt", "y0": "-B2 - wt", "y1": "-B2", "h0": 0, "h1": "yTotal", "color": "color" } },
+          { "comment": "Right side wall", "box": { "x0": "-L2 - wt", "x1": "L2 + wt", "y0": "B2", "y1": "B2 + wt", "h0": 0, "h1": "yTotal", "color": "color" } },
+          { "comment": "Outlet end wall (weir)", "box": { "x0": "L2", "x1": "L2 + wt", "y0": "-B2", "y1": "B2", "h0": 0, "h1": "yTotal * 0.7", "color": "color" } },
+          { "comment": "Sediment storage zone", "when": "storageDepth > 0", "box": { "x0": "-L2", "x1": "L2", "y0": "-B2", "y1": "B2", "h0": 0, "h1": "storageDepth", "color": "siltColor" } },
+          { "comment": "Water body", "box": { "x0": "-L2", "x1": "L2", "y0": "-B2", "y1": "B2", "h0": "storageDepth", "h1": "storageDepth + y", "color": "waterColor" } },
+          {
+            "comment": "Inlet transition — trapezoidal widening from inlet to chamber",
+            "when": "inletLength > 0",
+            "poly": { "h0": 0, "h1": "yTotal", "color": "color", "pts": [ [ "-L2 - inletLength", "-iw2 - wt" ], [ "-L2", "-B2 - wt" ], [ "-L2", "-B2" ], [ "-L2 - inletLength", "-iw2" ] ] }
+          },
+          {
+            "comment": "Inlet transition — far side",
+            "when": "inletLength > 0",
+            "poly": { "h0": 0, "h1": "yTotal", "color": "color", "pts": [ [ "-L2 - inletLength", "iw2" ], [ "-L2", "B2" ], [ "-L2", "B2 + wt" ], [ "-L2 - inletLength", "iw2 + wt" ] ] }
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": [
+    { "key": "B", "label": "Basin width B", "expr": "sqrt(BoverY * (Q / vh))", "unit": "m" },
+    { "key": "y", "label": "Water depth y", "expr": "(Q / vh) / sqrt(BoverY * (Q / vh))", "unit": "m" },
+    { "key": "L", "label": "Settling length L", "expr": "k * vh * (((Q / vh) / sqrt(BoverY * (Q / vh))) / (((10 * nuv / d) * (sqrt(term) - 1)) / alpha))", "unit": "m" },
+    { "key": "weff", "label": "Effective settling velocity", "expr": "weff * 1000", "unit": "mm/s" },
+    { "key": "efficiency", "label": "Trap efficiency (Hazen)", "expr": "round(100 * (1 - pow(2.718281828, -(weff * (k * vh * (((Q / vh) / sqrt(BoverY * (Q / vh))) / weff)) * sqrt(BoverY * (Q / vh))) / Q)))", "unit": "%" }
+  ]
+}

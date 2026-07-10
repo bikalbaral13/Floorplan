@@ -1,0 +1,37 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "mesh",
+  "materialisesSpace": true,
+  "meta": { "label": "Meshing", "category": "Partition", "color": "#0f766e" },
+  "description": "Mesh a space into cells (triangles / Delaunay / blossom quads) — one Space per cell.",
+  "instructions": "Triangulates / quad-meshes the Space into cells — one output Space per cell. TYPE (`type`) = Ear clipping (triangles) / Delaunay CDT / Blossom quad.\n\nOne output handle per cell, or a single bundle (`outputMode`). NOTE: the cell count depends on the polygon and bakes live on evaluation.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(200, round(handleCount)))"
+  },
+  "parameters": [
+    {
+      "key": "type",
+      "label": "Type",
+      "kind": "select",
+      "default": "ear-clipping",
+      "options": [
+        { "value": "ear-clipping", "label": "Ear clipping (triangles)" },
+        { "value": "cdt", "label": "Delaunay (CDT)" },
+        { "value": "blossom-quad", "label": "Blossom quad" }
+      ]
+    },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per cell (one each)" },
+        { "value": "single", "label": "Single (all)" }
+      ]
+    }
+  ]
+}

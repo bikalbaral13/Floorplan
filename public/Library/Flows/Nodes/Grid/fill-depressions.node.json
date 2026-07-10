@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "fill-depressions",
+  "label": "Fill Depressions",
+  "category": "Grid",
+  "description": "Fill sinks/pits in a DEM grid-field (Priority-Flood) so every cell drains to the border. Set Min slope (ε) > 0 to also resolve flats (Priority-Flood+ε). Feed from Grid / Graph to Grid; chain into Flow Direction.",
+  "params": {
+    "epsilon": 0,
+    "edgesAreOutlets": true,
+    "highlightFilled": false,
+    "fillColor": "#0ea5e9",
+    "lowColor": "#1e3a8a",
+    "highColor": "#ef4444",
+    "showCellValues": false
+  }
+}

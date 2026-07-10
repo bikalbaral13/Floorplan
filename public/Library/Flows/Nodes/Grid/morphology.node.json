@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "morphology",
+  "label": "Morphology",
+  "category": "Grid",
+  "description": "Morphological erosion / dilation and compositions (open, close, gradient, top-hat, black-hat, boundary) over a grid field — binary (threshold the input) or grayscale (min/max). Feed from Grid Threshold / Watershed / Flow Accumulation; chain into Marching Squares.",
+  "params": {
+    "operation": "erode",
+    "shape": "cross",
+    "radius": 1,
+    "iterations": 1,
+    "grayscale": false,
+    "threshold": 0.5,
+    "clampEdges": true,
+    "showBackground": false,
+    "fgColor": "#22c55e",
+    "bgColor": "#475569",
+    "lowColor": "#1e3a8a",
+    "highColor": "#ef4444",
+    "showCellValues": false
+  }
+}

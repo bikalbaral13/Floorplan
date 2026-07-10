@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "node-to-object",
+  "label": "Node to Object",
+  "category": "Building",
+  "description": "Place a furniture symbol (bed / sofa / …) on each input node — Width × Depth, Rotation, Anchor and Kind.",
+  "params": {
+    "kind": "bed",
+    "width": 1.5,
+    "height": 2,
+    "rotation": 0,
+    "anchor": "center"
+  }
+}

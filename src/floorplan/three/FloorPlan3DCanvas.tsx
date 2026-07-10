@@ -1,4 +1,4 @@
-﻿import { forwardRef, Suspense, useImperativeHandle, useMemo, type ComponentProps, type CSSProperties, type ReactNode, type MutableRefObject } from "react";
+﻿import { forwardRef, Suspense, useEffect, useImperativeHandle, useMemo, type ComponentProps, type CSSProperties, type ReactNode, type MutableRefObject } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, Html, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
@@ -19,17 +19,31 @@ function EdgedMesh(props: ComponentProps<"mesh">) {
   );
 }
 
-/** Origin axis indicator — coloured arrows for the scene's X (red, →), Y-up (green, ↑) and Z (blue, depth)
- *  axes with letter labels, so the 3D view reads like the 2D canvas. Matches the primitives' Position X/Y/Z
- *  (Y is up). Labels are DOM overlays (drei Html) so they need no font asset and always face the camera. */
+/** Keeps the camera Z-up. The scene's up is +Z, but `onCreated` fires AFTER drei's OrbitControls
+ *  (makeDefault) has already initialised its orbit pole on the default Y-up, so the view tilts after the
+ *  first orbit. Re-assert +Z on the live camera + controls after mount to lock the pole to Z. */
+function ZUpController() {
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as { update?: () => void } | null;
+  useEffect(() => {
+    camera.up.set(0, 0, 1);
+    controls?.update?.();
+  }, [camera, controls]);
+  return null;
+}
+
+/** Origin axis indicator — coloured arrows for X (red, →, east) / Y (green, SOUTH) / Z (blue, ↑ UP), so the
+ *  3D view reads like the 2D canvas (X right, Y south/down, Z up). Drawn at the ORIGIN, OUTSIDE the scene's
+ *  Z-up rotation group. World +Y is north here (world = plan (x,-y)), so the "Y" arrow is drawn toward
+ *  world −Y so it points SOUTH, matching the 2D Y axis. Labels are DOM overlays (drei Html). */
 function SceneAxes({ length = 5 }: { length?: number }) {
   const arrows = useMemo(() => {
     const mk = (dir: [number, number, number], color: number) =>
       new THREE.ArrowHelper(new THREE.Vector3(...dir), new THREE.Vector3(0, 0, 0), length, color, length * 0.1, length * 0.06);
     return [
-      mk([1, 0, 0], 0xef4444), // X — red
-      mk([0, 1, 0], 0x22c55e), // Y — green (up)
-      mk([0, 0, 1], 0x3b82f6), // Z — blue (depth)
+      mk([1, 0, 0], 0xef4444),  // X — red (east / right)
+      mk([0, -1, 0], 0x22c55e), // Y — green (SOUTH — world −Y, matching the 2D +Y-down axis)
+      mk([0, 0, 1], 0x3b82f6),  // Z — blue (up)
     ];
   }, [length]);
   const lbl = (color: string): CSSProperties => ({ color, fontWeight: 700, fontSize: 13, userSelect: "none", pointerEvents: "none", textShadow: "0 0 3px #fff, 0 0 3px #fff" });
@@ -38,7 +52,7 @@ function SceneAxes({ length = 5 }: { length?: number }) {
     <group>
       {arrows.map((a, i) => <primitive key={i} object={a} />)}
       <Html position={[off, 0, 0]} center style={{ pointerEvents: "none" }}><span style={lbl("#ef4444")}>X</span></Html>
-      <Html position={[0, off, 0]} center style={{ pointerEvents: "none" }}><span style={lbl("#16a34a")}>Y</span></Html>
+      <Html position={[0, -off, 0]} center style={{ pointerEvents: "none" }}><span style={lbl("#16a34a")}>Y</span></Html>
       <Html position={[0, 0, off]} center style={{ pointerEvents: "none" }}><span style={lbl("#2563eb")}>Z</span></Html>
     </group>
   );
@@ -132,14 +146,18 @@ function buildPrismGeometry(pr: FlowMeshPrism, toScene: (x: number, y: number) =
   return geom;
 }
 
-/** Flow "Mesh to 3D" output — render each incoming mesh's lofted prisms (e.g. a column footing). */
-function FlowMeshes({ meshes, cx, cy, ppm }: { meshes: FlowMesh[]; cx: number; cy: number; ppm: number }) {
+/** Flow "Mesh to 3D" output — render each incoming mesh's lofted prisms (e.g. a column footing, and every
+ *  parametric-object attachment on a segment/node/space). MUST use the SAME plan-px → world mapping as the
+ *  main scene (see the `toScene` note below near the Z-up group): origin-aligned, NOT recentred — the world
+ *  origin coincides with the 2D origin, and the enclosing +90° X rotation group applies the Y→−Y flip. A
+ *  recentred mapping here would shift every mesh-channel object by (cx, cy) off the native slabs/walls. */
+function FlowMeshes({ meshes, ppm }: { meshes: FlowMesh[]; ppm: number }) {
   const built = useMemo(() => {
-    const toScene = (x: number, y: number): [number, number] => [(x - cx) / ppm, (y - cy) / ppm];
+    const toScene = (x: number, y: number): [number, number] => [x / ppm, y / ppm];
     return meshes
       .flatMap((m) => m.prisms.map((pr, pi) => ({ key: `${m.id}-${pi}`, geom: buildPrismGeometry(pr, toScene), color: pr.color })))
       .filter((x): x is { key: string; geom: THREE.BufferGeometry; color: string } => !!x.geom);
-  }, [meshes, cx, cy, ppm]);
+  }, [meshes, ppm]);
   return (
     <group>
       {built.map((x) => (
@@ -314,26 +332,32 @@ const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }
  *  via useThree. Exposes a captureAll() that renders the scene from six canonical
  *  viewpoints to the offscreen-capable WebGL buffer (preserveDrawingBuffer on),
  *  then restores the original camera. */
-const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number; floorHeightM: number }>(
-  ({ widthM, depthM, floorHeightM }, ref) => {
+const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number; floorHeightM: number; centerX: number; centerY: number }>(
+  ({ widthM, depthM, floorHeightM, centerX, centerY }, ref) => {
     const { gl, scene, camera, size } = useThree();
     useImperativeHandle(ref, () => ({
       captureAll: async () => {
         const aspect = Math.max(1e-6, size.width / size.height);
         const dist = Math.max(widthM, depthM) * 1.1 + 6;
-        const eyeY = floorHeightM * 0.6;
-        const center = new THREE.Vector3(0, eyeY, 0);
-        const views: { view: SnapshotView; pos: [number, number, number] }[] = [
-          { view: "front",     pos: [0, eyeY, dist] },
-          { view: "back",      pos: [0, eyeY, -dist] },
-          { view: "left",      pos: [-dist, eyeY, 0] },
-          { view: "right",     pos: [dist, eyeY, 0] },
-          { view: "top",       pos: [0, dist * 1.4, 0.001] },
-          { view: "isometric", pos: [dist, dist * 0.8, dist] },
+        // Z-UP scene (matches the interactive view — the model content is rotated so the floor is the XY
+        // plane and height rises along +Z): eye height is along +Z; elevations look horizontally with
+        // up = +Z; the top view looks straight down −Z.
+        const eyeZ = floorHeightM * 0.6;
+        // Framed on the building centre (world metres) — the model no longer sits at the origin (see toScene).
+        const center = new THREE.Vector3(centerX, centerY, eyeZ);
+        const UP_Z: [number, number, number] = [0, 0, 1];
+        const views: { view: SnapshotView; pos: [number, number, number]; up: [number, number, number] }[] = [
+          { view: "front",     pos: [centerX, centerY - dist, eyeZ], up: UP_Z },
+          { view: "back",      pos: [centerX, centerY + dist, eyeZ], up: UP_Z },
+          { view: "left",      pos: [centerX - dist, centerY, eyeZ], up: UP_Z },
+          { view: "right",     pos: [centerX + dist, centerY, eyeZ], up: UP_Z },
+          { view: "top",       pos: [centerX, centerY, dist * 1.4], up: [0, 1, 0] },
+          { view: "isometric", pos: [centerX + dist, centerY - dist, dist * 0.8], up: UP_Z },
         ];
         const results: SnapshotResult[] = [];
         for (const v of views) {
           const cam = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
+          cam.up.set(v.up[0], v.up[1], v.up[2]);
           cam.position.set(v.pos[0], v.pos[1], v.pos[2]);
           cam.lookAt(center);
           cam.updateMatrixWorld();
@@ -761,9 +785,15 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
   const depthM = Math.max(4, (bounds.maxY - bounds.minY) / ppm);
   const floorPad = 2;
 
+  // Plan px → world metres, NOT recentred, so the 3D world origin coincides with the 2D origin (0,0 —
+  // the wall junction). NO axis flip: the wall/door/window orientation code (rotY = -atan2(dy,dx)) assumes
+  // toScene preserves the plan's handedness, so flipping Y here would mis-rotate those. The Z-up rotation
+  // group below then maps a plan point (x, y) → world (x, -y, height); the origin gizmo's Y arrow is drawn
+  // toward world -Y so it reads "south" like the 2D canvas. The building sits away from the origin — the
+  // camera frames it via bcX/bcY.
   const toScene = (planX: number, planY: number): [number, number] => [
-    (planX - cx) / ppm,
-    (planY - cy) / ppm,
+    planX / ppm,
+    planY / ppm,
   ];
 
   // Map-underlay ground: a georeferenced quad at y≈0 matching the 2D underlay box exactly. Corners map
@@ -792,12 +822,22 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     massingExtrudeUpwards ? fi * h : -(fi + 1) * h;
 
   const camDist = Math.max(widthM, depthM) * 1.1 + 6;
+  // Building centre in WORLD metres (world = plan (x, -y) — see toScene + the Z-up group). The plan origin
+  // is world (0,0), so the building sits away from it (in +X / −Y) — the camera + OrbitControls frame the
+  // building centre, not the origin gizmo.
+  const bcX = cx / ppm;
+  const bcY = -cy / ppm;
 
   return (
     <Canvas
-      camera={{ position: [camDist, camDist * 0.8, camDist], fov: 45, near: 0.1, far: 1000 }}
+      // Z-UP scene (see the rotation group below): 3/4 view from the +X / −Y side, above. `up:[0,0,1]` is set
+      // in the CAMERA PROP (applied at camera creation, BEFORE OrbitControls initialises — onCreated alone
+      // fires too late, leaving the orbit pole on Y). The ZUpController re-asserts it after mount. So the XY
+      // plane reads as the floor and height rises vertically. Framed on the building centre (bcX, bcY).
+      camera={{ position: [bcX + camDist, bcY - camDist, camDist * 0.8], up: [0, 0, 1], fov: 45, near: 0.1, far: 1000 }}
       style={{ width: "100%", height: "100%", background: "#eef2f7" }}
       gl={{ preserveDrawingBuffer: true }}
+      onCreated={({ camera }) => camera.up.set(0, 0, 1)}
       onPointerMissed={() => onSelectWall?.(null, false)}
     >
       {snapshotApiRef && (
@@ -806,15 +846,28 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           widthM={widthM}
           depthM={depthM}
           floorHeightM={FLOOR_H}
+          centerX={bcX}
+          centerY={bcY}
         />
       )}
       <ambientLight intensity={1.1} />
       <directionalLight position={[20, 30, 15]} intensity={0.5} />
       <directionalLight position={[-15, 20, -10]} intensity={0.35} />
-      <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[0, 1, 0]} />
+      <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[bcX, bcY, 1]} />
+      <ZUpController />
 
-      {/* Origin axis indicator — X (red) / Y-up (green) / Z (blue) coloured arrows + labels, like the 2D canvas. */}
+      {/* Origin axis indicator at WORLD (0,0,0) — which is now the 2D origin (the wall junction), since
+          toScene no longer recentres. X (red, east/right) / Y (green, south) / Z (blue, UP), matching the
+          2D canvas. Kept in WORLD space (OUTSIDE the rotation group below) so it reads the true Z-up frame. */}
       <SceneAxes length={5} />
+
+      {/* ── Z-UP CONVENTION ─────────────────────────────────────────────────────────────────────────
+          Rotate ALL model content +90° about X so the 2D floor plane (plan X, Y) becomes the 3D XY
+          ground plane and building height rises along +Z — keeping the 2D and 3D canvases axis-synced
+          from the origin. Geometry is still authored Y-up internally; this ONE group flips the whole
+          scene, so nothing below had to change. Picking (onClick raycasts) and drei Html labels project
+          through the rotation correctly. The SnapshotBridge captures use the matching Z-up view frame. */}
+      <group rotation={[Math.PI / 2, 0, 0]}>
 
       {/* Georeferenced map underlay as a ground plane (Approach A) — the building/massing sits on the map. */}
       {mapUnderlay && mapGroundGeom && (
@@ -938,7 +991,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
 
       {/* Flow "Mesh to 3D" — generic meshes (column footings, …) built from lofted prisms. */}
       {meshPreview && meshPreview.length > 0 && (
-        <FlowMeshes meshes={meshPreview} cx={cx} cy={cy} ppm={ppm} />
+        <FlowMeshes meshes={meshPreview} ppm={ppm} />
       )}
 
       {/* Room slabs â€” extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
@@ -2741,6 +2794,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         );
       })}
 
+      </group>
     </Canvas>
   );
 }

@@ -1,0 +1,68 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "inset",
+  "meta": {
+    "label": "Inset",
+    "category": "Reshape",
+    "color": "#0369a1"
+  },
+  "description": "Offset the boundary inward → an Inset Area space. Takes multiple spaces (one output per input). Equal / Front&Remaining / Per-edge.",
+  "materialisesSpace": true,
+  "instructions": "Offsets the boundary inward (or outward) into an Inset-Area Space; emits one output per input Space plus a `val-area` value output (total m²). Wire a Space — or an upstream result — into the input handle.\n\nMODES (`mode`)\n• equal — one uniform `uniformSetback` (m) on every edge.\n• front-remaining — a larger `front` offset on the street edge and `remaining` on the rest; choose the front edge with `frontEdgeMode` (longest = auto, or an explicit `frontEdgeIndex`).\n• variable — per-edge offsets from the `setbacks` list (m, comma-separated; a short list pads with 0 = no inset on the rest).\n\n`inside` insets inward (turn off for an outward buffer). TIP: use front-remaining for plot setbacks (deeper front yard); chain Inset → Optimise Rectangle to carve a room from a setback area. `outputMode=single` bundles every inset Space onto one handle.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(inputCount)))",
+    "valueInputs": [
+      { "key": "uniformSetback", "label": "Offset" },
+      { "key": "front", "label": "Front offset" },
+      { "key": "remaining", "label": "Remaining offset" },
+      { "key": "frontEdgeIndex", "label": "Edge index" }
+    ],
+    "valueOutputs": [
+      { "key": "area", "label": "Area", "unit": "m²" }
+    ]
+  },
+  "parameters": [
+    { "key": "inside", "label": "Inside", "kind": "checkbox", "default": true },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per space (one each)" },
+        { "value": "single", "label": "Single (all spaces)" }
+      ],
+      "showWhen": "inputCount > 1"
+    },
+    {
+      "key": "mode",
+      "label": "Mode",
+      "kind": "select",
+      "default": "equal",
+      "options": [
+        { "value": "equal", "label": "Equal" },
+        { "value": "front-remaining", "label": "Front & Remaining" },
+        { "value": "variable", "label": "Per-edge" }
+      ]
+    },
+    { "key": "uniformSetback", "label": "Offset", "kind": "range", "default": 1, "min": 0, "max": 5, "step": 0.05, "unit": "m", "showWhen": "mode == 'equal'" },
+    { "key": "front", "label": "Front offset", "kind": "range", "default": 0, "min": 0, "max": 5, "step": 0.05, "unit": "m", "showWhen": "mode == 'front-remaining'" },
+    { "key": "remaining", "label": "Remaining offset", "kind": "range", "default": 0, "min": 0, "max": 5, "step": 0.05, "unit": "m", "showWhen": "mode == 'front-remaining'" },
+    {
+      "key": "frontEdgeMode",
+      "label": "Front edge",
+      "kind": "select",
+      "default": "longest",
+      "options": [
+        { "value": "longest", "label": "Longest (auto)" },
+        { "value": "index", "label": "By edge index" }
+      ],
+      "showWhen": "mode == 'front-remaining'"
+    },
+    { "key": "frontEdgeIndex", "label": "Edge index", "kind": "range", "default": 0, "min": 0, "max": 19, "step": 1, "showWhen": "mode == 'front-remaining' && frontEdgeMode == 'index'" },
+    { "key": "setbacks", "label": "Setbacks (per edge)", "kind": "text", "default": "1, 0.5, 0.5", "placeholder": "1, 0.5, 0.5, 2", "showWhen": "mode == 'variable'" }
+  ]
+}

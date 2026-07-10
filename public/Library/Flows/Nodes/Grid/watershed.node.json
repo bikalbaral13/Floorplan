@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "watershed",
+  "label": "Watershed",
+  "category": "Grid",
+  "description": "Delineate the watershed draining to an outlet cell — floods upstream over the Flow Direction dir channel. Outlet = the lowest-value cell, or an explicit (col, row) address. Emits a basin mask + outline. Feed from Flow Direction.",
+  "params": {
+    "useLowestCell": true,
+    "col": 0,
+    "row": 0,
+    "fillColor": "#0ea5e9",
+    "showBoundary": true,
+    "showCellValues": false
+  }
+}

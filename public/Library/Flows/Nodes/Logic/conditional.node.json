@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "conditional",
+  "label": "Conditional",
+  "category": "Logic",
+  "description": "Compare two values: A <op> B → True / False. Wire numbers into A and B; outputs the boolean.",
+  "params": {
+    "op": "gt",
+    "value": 30,
+    "a": 0
+  }
+}
