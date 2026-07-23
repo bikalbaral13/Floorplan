@@ -4,7 +4,8 @@ import { Edges, Html, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { CSG } from "three-csg-ts";
 import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
-import { computeMiteredUnion, computeMiteredWallPolygons } from "../wallGeometry";
+import { computeMiteredUnion, computeMiteredWallPolygons, getWallCorners } from "../wallGeometry";
+import { subtractPolygon } from "../algorithms/geometry/columnClip";
 import type { Point } from "../types";
 import type { FlowMesh, FlowMeshPrism } from "../flow/eval/meshTypes";
 
@@ -58,6 +59,26 @@ function SceneAxes({ length = 5 }: { length?: number }) {
   );
 }
 
+/** A rectangular frustum (tapered box): bottom L×B at y=-h/2 → top TL×TB at y=+h/2. Non-indexed flat-shaded
+ *  faces (each face has its own vertices, so computeVertexNormals gives crisp box normals). Top dims may be 0
+ *  (a rectangular pyramid) — the top face degenerates harmlessly. */
+function taperedBoxGeometry(L: number, B: number, TL: number, TB: number, H: number): THREE.BufferGeometry {
+  const hb = { x: L / 2, z: B / 2 }, ht = { x: TL / 2, z: TB / 2 }, y0 = -H / 2, y1 = H / 2;
+  // 8 corners: bottom b0..b3, top t0..t3 (counter-clockwise seen from above: +x+z, -x+z, -x-z, +x-z).
+  const b = [[hb.x, y0, hb.z], [-hb.x, y0, hb.z], [-hb.x, y0, -hb.z], [hb.x, y0, -hb.z]];
+  const t = [[ht.x, y1, ht.z], [-ht.x, y1, ht.z], [-ht.x, y1, -ht.z], [ht.x, y1, -ht.z]];
+  const tris: number[][] = [];
+  const quad = (a: number[], bb: number[], c: number[], dd: number[]) => { tris.push(a, bb, c, a, c, dd); };
+  quad(b[0], b[1], b[2], b[3]);              // bottom (faces -y)
+  quad(t[3], t[2], t[1], t[0]);              // top (faces +y)
+  for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; quad(b[j], b[i], t[i], t[j]); } // 4 sides
+  const pos = new Float32Array(tris.flat());
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geom.computeVertexNormals();
+  return geom;
+}
+
 /** Build a positioned THREE.Mesh for one 3D primitive descriptor — geometry per shape, then place/orient it
  *  by its baked transform (translate m, rotate rad, mirror ±1 scale), resting on the floor plane. Used as a
  *  CSG operand (positions are in local group space, NOT the +X auto-layout — so A and B can overlap). */
@@ -68,6 +89,16 @@ function buildPrimitiveMesh(d: PrimMass3D): THREE.Mesh {
   else if (d.shape === "sphere") { y = d.radius; geom = new THREE.SphereGeometry(d.radius, 32, 24); }
   else if (d.shape === "cone") { y = d.height / 2; geom = new THREE.ConeGeometry(d.radius, d.height, 40); }
   else if (d.shape === "cylinder") { y = d.height / 2; geom = new THREE.CylinderGeometry(d.radius, d.radius, d.height, 40); }
+  // Batch-A shapes. `radius` carries the primary radius (frustum BOTTOM, torus RING — see PrimMass3D).
+  else if (d.shape === "frustum") { y = d.height / 2; geom = new THREE.CylinderGeometry(Math.max(0, d.radiusTop ?? 0), d.radius, d.height, 40); }
+  else if (d.shape === "tapered-box") { y = d.height / 2; geom = taperedBoxGeometry(d.length, d.breadth, Math.max(0, d.topLength ?? 0), Math.max(0, d.topBreadth ?? 0), d.height); }
+  else if (d.shape === "torus") {
+    const tube = Math.max(0.001, d.tubeRadius ?? 0.3);
+    y = tube; // ring lying FLAT rests on the floor at tube height
+    geom = new THREE.TorusGeometry(d.radius, tube, 16, 48, (Math.max(5, Math.min(360, d.arcDeg ?? 360)) * Math.PI) / 180);
+    geom.rotateX(Math.PI / 2); // THREE's torus stands in XY — lay it flat in plan (XZ)
+  }
+  else if (d.shape === "capsule") { const mid = Math.max(0, d.length); y = mid / 2 + d.radius; geom = new THREE.CapsuleGeometry(d.radius, mid, 8, 16); }
   else { y = d.length / 2; geom = new THREE.BoxGeometry(d.length, d.length, d.length); }
   const mesh = new THREE.Mesh(geom);
   const tf = d.transform;
@@ -127,6 +158,20 @@ function BooleanMass({ group }: { group: BoolMass3D }) {
 function buildPrismGeometry(pr: FlowMeshPrism, toScene: (x: number, y: number) => [number, number]): THREE.BufferGeometry | null {
   const N = Math.min(pr.bottom.length, pr.top.length);
   if (N < 3) return null;
+  // Holed / concave STRAIGHT prism (wall band carved by a column): extrude the footprint as a proper
+  // Shape-with-holes — fan-triangulated caps below would break on concave or holed outlines. Built in
+  // the same (x, -z) plane convention as the wall extrusions, rotated onto XZ and lifted to yBottom.
+  if (pr.holes?.length) {
+    const h = pr.yTop - pr.yBottom;
+    if (h <= 0) return null;
+    const v2 = (p: Point): THREE.Vector2 => { const [sx, sz] = toScene(p.x, p.y); return new THREE.Vector2(sx, -sz); };
+    const shape = new THREE.Shape(pr.bottom.slice(0, N).map(v2));
+    for (const hole of pr.holes) if (hole.length >= 3) shape.holes.push(new THREE.Path(hole.map(v2)));
+    const geom = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, steps: 1 });
+    geom.rotateX(-Math.PI / 2);
+    geom.translate(0, pr.yBottom, 0);
+    return geom;
+  }
   const b = pr.bottom.slice(0, N).map((p) => toScene(p.x, p.y));
   const t = pr.top.slice(0, N).map((p) => toScene(p.x, p.y));
   const vB = (i: number): number[] => [b[i][0], pr.yBottom, b[i][1]];
@@ -222,6 +267,9 @@ interface Props {
   /** Floor-to-floor height in metres. Drives the per-floor stack offset and the wall-plane
    *  height so the 3D view matches the Massing block's regulatory floor-height parameter. */
   floorHeightM?: number;
+  /** Wall-carve footprints (plan px) from `cutsWall` objects (columns, shafts). Subtracted from every
+   *  built-in wall extrusion in plan space — the 3D boolean matching the 2D clipped band. */
+  wallCarvePolys?: Point[][];
   /** Massing "Show Blocks" mode: render each floor as a discrete prism with a visible gap
    *  between adjacent floors so the stack reads as stacked blocks rather than one tall mass. */
   massingShowBlocks?: boolean;
@@ -590,7 +638,7 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -795,6 +843,34 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     planX / ppm,
     planY / ppm,
   ];
+
+  // Wall carve (columns / cutsWall objects): footprints + bboxes, precomputed once. `carveWallFoot`
+  // subtracts every intersecting carve from a wall's plan footprint — the 3D boolean is done in PLAN
+  // space and the clipped region extruded with holes, so it matches the 2D clipped band exactly.
+  // Returns null when nothing intersects (callers keep their untouched fast path).
+  const wallCarves = useMemo(() => {
+    return (wallCarvePolys ?? []).filter((p) => p.length >= 3).map((poly) => {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const q of poly) { if (q.x < minX) minX = q.x; if (q.x > maxX) maxX = q.x; if (q.y < minY) minY = q.y; if (q.y > maxY) maxY = q.y; }
+      return { poly, minX, minY, maxX, maxY };
+    });
+  }, [wallCarvePolys]);
+  const carveWallFoot = (foot: Point[], extraClips?: Point[][]): { outer: Point[]; holes: Point[][] }[] | null => {
+    if (wallCarves.length === 0 || foot.length < 3) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const q of foot) { if (q.x < minX) minX = q.x; if (q.x > maxX) maxX = q.x; if (q.y < minY) minY = q.y; if (q.y > maxY) maxY = q.y; }
+    const hits = wallCarves.filter((c) => c.minX <= maxX && c.maxX >= minX && c.minY <= maxY && c.maxY >= minY).map((c) => c.poly);
+    if (hits.length === 0) return null; // no carve touches this wall → caller keeps its untouched fast path
+    // Fold any pre-existing interior holes (union-loop courtyards) in as clips so both void kinds survive.
+    return subtractPolygon(foot, [...hits, ...(extraClips ?? []).filter((p) => p.length >= 3)]).filter((p) => p.outer.length >= 3);
+  };
+  /** THREE.Shape for a carved footprint piece, in the shared (x, -z) shape plane (extrude → rotate −π/2 → XZ). */
+  const carveShape = (piece: { outer: Point[]; holes: Point[][] }): THREE.Shape => {
+    const v2 = (p: Point): THREE.Vector2 => { const [sx, sz] = toScene(p.x, p.y); return new THREE.Vector2(sx, -sz); };
+    const s = new THREE.Shape(piece.outer.map(v2));
+    for (const h of piece.holes) if (h.length >= 3) s.holes.push(new THREE.Path(h.map(v2)));
+    return s;
+  };
 
   // Map-underlay ground: a georeferenced quad at y≈0 matching the 2D underlay box exactly. Corners map
   // plan px → world (x, z) via toScene; UVs (0,0)→top-left so the texture aligns with the 2D placement.
@@ -1366,7 +1442,18 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
             if (host) host.holes.push(loop);
           }
         }
-        return outers.map(({ loop, holes }, li) => {
+        return outers.flatMap(({ loop, holes }, li) => {
+          // Wall boolean: carve overlapping column footprints out of the union mass (loop holes fold
+          // in as clips so courtyard voids AND column holes both survive). No carve → original path.
+          const carvedPieces = carveWallFoot(loop, holes);
+          if (carvedPieces) {
+            return carvedPieces.map((piece, pi) => (
+              <EdgedMesh key={`union-${li}-carved-${pi}`} rotation={[-Math.PI / 2, 0, 0]}>
+                <extrudeGeometry args={[carveShape(piece), { depth: prismH, bevelEnabled: false, steps: 1 }]} />
+                <meshStandardMaterial color={GREY} />
+              </EdgedMesh>
+            ));
+          }
           const shape = new THREE.Shape(
             loop.map((p) => {
               const [sx, sz] = toScene(p.x, p.y);
@@ -1379,12 +1466,12 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               return new THREE.Vector2(sx, -sz);
             })));
           }
-          return (
+          return [(
             <EdgedMesh key={`union-${li}`} rotation={[-Math.PI / 2, 0, 0]}>
               <extrudeGeometry args={[shape, { depth: prismH, bevelEnabled: false, steps: 1 }]} />
               <meshStandardMaterial color={GREY} />
             </EdgedMesh>
-          );
+          )];
         });
       })()}
           </group>
@@ -1569,6 +1656,17 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         // because adjacent walls share the same vertex coordinates at junctions. Only available
         // for plain walls (door/window walls still use the band approach below to keep openings).
         if (isSharp && segType === "wall" && polyPlan && polyPlan.length >= 3) {
+          // Wall boolean: carve overlapping column footprints out of the footprint BEFORE extruding —
+          // the pieces extrude with real holes/notches, matching the 2D clipped band.
+          const carvedPieces = carveWallFoot(polyPlan);
+          if (carvedPieces) {
+            return carvedPieces.map((piece, pi) => (
+              <EdgedMesh key={`${w.id}:sharp-carved:${pi}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, wallBaseY, 0]} onClick={handleWallClick(w.id)}>
+                <extrudeGeometry args={[carveShape(piece), { depth: wallTopH, bevelEnabled: false, steps: 1 }]} />
+                <meshStandardMaterial color={wallColor(w.id)} />
+              </EdgedMesh>
+            ));
+          }
           const shape = new THREE.Shape(
             polyPlan.map((p) => {
               const [sx, sz] = toScene(p.x, p.y);
@@ -1670,16 +1768,27 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const midY = (w.start.y + w.end.y) / 2;
         const [sx, sz] = toScene(midX, midY);
         const rotY = -Math.atan2(dy, dx);
-        return wallBands(w, wallTopH).map((band, i) => {
+        // Wall boolean: when a column footprint overlaps this wall's plan rectangle, extrude the CARVED
+        // rectangle (world coords, per band) instead of the local box, so the column punches through.
+        const boxCarved = segType === "wall" ? carveWallFoot(getWallCorners(w)) : null;
+        return wallBands(w, wallTopH).flatMap((band, i) => {
           const h = band.yMax - band.yMin;
-          if (h <= 0) return null;
+          if (h <= 0) return [];
+          if (boxCarved) {
+            return boxCarved.map((piece, pi) => (
+              <EdgedMesh key={`${w.id}:${i}:carved:${pi}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, band.yMin + wallBaseY, 0]} onClick={handleWallClick(w.id)}>
+                <extrudeGeometry args={[carveShape(piece), { depth: h, bevelEnabled: false, steps: 1 }]} />
+                <meshStandardMaterial color={wallColor(w.id)} />
+              </EdgedMesh>
+            ));
+          }
           const yCenter = (band.yMin + band.yMax) / 2 + wallBaseY;
-          return (
+          return [(
             <EdgedMesh key={`${w.id}:${i}`} position={[sx, yCenter, sz]} rotation={[0, rotY, 0]} onClick={handleWallClick(w.id)}>
               <boxGeometry args={[lenM, h, thicknessM]} />
               <meshStandardMaterial color={wallColor(w.id)} />
             </EdgedMesh>
-          );
+          )];
         });
       })}
           </group>

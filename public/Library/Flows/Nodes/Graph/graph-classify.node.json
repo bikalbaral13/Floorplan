@@ -1,0 +1,44 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-classify",
+  "meta": {
+    "label": "Graph Classify",
+    "category": "Graph",
+    "color": "#0d9488"
+  },
+  "description": "A pure CALCULATION node — classify a graph's branches into a road hierarchy and split them onto three outputs: Longest, Secondary, Tertiary. Draws nothing on canvas.",
+  "instructions": "A value-only node: one graph in as JSON, THREE graphs out as JSON (one per tier). No geometry input or output; draws nothing on the canvas.\n\nWHAT IT DOES: hierarchical branch ordering of a tree-like graph (a skeleton / medial axis), like a Strahler / stream order for a road network. Working per connected component, it peels the single longest route through the component (its weighted diameter) — that trunk is the LONGEST tier. Removing it lets the branches that hung off the trunk fall out as their own pieces; the longest route of each is a SECONDARY branch. Everything left (branches off the secondaries, and deeper) is TERTIARY.\n\nINPUT: graph takes { \"nodes\": [{ \"id\", \"x\", \"y\" }, ...], \"edges\": [{ \"from_node_id\", \"to_node_id\" }, ...] } — coordinates in metres, local to the anchor. Wire Skeleton's val-branches (best after a Sampled Voronoi skeleton, which stays connected) or Graph Geometry's val-graph into valin-graph. For a single main spine rather than one-per-fragment, feed a CONNECTED graph (e.g. Graph Reduce -> Largest Component first).\n\nOUTPUTS: val-longest, val-secondary and val-tertiary each publish that tier's edges as a graph in the same shape. Typical use — wire each output into its own Set Thickness (wide trunk, medium secondary, thin tertiary), then Merge Graph -> Mitered Join to stroke a hierarchical road network in one pass.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "graph",
+        "label": "Graph"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "longest",
+        "label": "Longest"
+      },
+      {
+        "key": "secondary",
+        "label": "Secondary"
+      },
+      {
+        "key": "tertiary",
+        "label": "Tertiary"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "graph",
+      "label": "Graph (JSON)",
+      "kind": "text",
+      "default": ""
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "kind": "agent",
+  "schemaVersion": 1,
+  "id": "interior-furnishing.v1",
+  "name": "Interior Furnishing Agent",
+  "version": "1.0.0",
+  "runner": "canvas",
+  "label": "Furnishing",
+  "icon": "sofa",
+  "color": "#b45309",
+  "description": "Furnishes existing rooms — places furniture, decor and appliances. Does not alter walls.",
+  "instructions": "You are the Interior Furnishing Agent. You furnish rooms that already exist — never draw or move walls, and never restructure the plan. Read the spaces (list_spaces) and place node objects (bed, sofa, table, wardrobe, appliances, decor) at sensible positions with clearances, respecting the room's orientation. Attach space-hosted objects (e.g. rugs, floor slabs) where appropriate. Group objects by function (seating around a table, appliances along a counter). Call snapshot_canvas to self-review spacing and overlaps before finishing.",
+  "accessibleTools": [
+    "get_state", "get_plan", "get_selection", "list_spaces", "list_draw_tools",
+    "import_objects", "list_objects", "get_object",
+    "place_object", "attach_space_object", "snapshot_canvas"
+  ],
+  "accessibleParametricObjects": {
+    "mode": "allow",
+    "categories": ["Furniture", "Decor", "Kitchen", "Bathroom", "Utility", "Puja", "Outdoor"],
+    "ids": []
+  },
+  "accessibleFlows": {
+    "mode": "none",
+    "workflows": [],
+    "nodeCategories": []
+  },
+  "accessibleDesigns": {
+    "mode": "all",
+    "paths": []
+  },
+  "examples": [
+    "furnish this bedroom with a queen bed, wardrobe and two side tables",
+    "add kitchen appliances along the counter run",
+    "place a rug, sofa and floor lamp in the living room"
+  ]
+}

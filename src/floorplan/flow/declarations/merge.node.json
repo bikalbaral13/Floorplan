@@ -2,9 +2,35 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "merge",
-  "meta": { "label": "Merge", "category": "Space", "color": "#16a34a" },
-  "description": "Union multiple input spaces into a single Space (their combined outer outline).",
-  "instructions": "Boolean UNION of every connected Space → one combined Space (the outer outline). Fuses adjacent or overlapping spaces back into a single footprint: abutting/touching spaces use an EXACT vector union (dissolves shared walls, straight edges); truly overlapping spaces fall back to a raster union whose tilted edges are lightly stair-stepped. Disjoint inputs collapse to their largest blob (a single Space can't carry separate islands).\n\nTIP: wire several room Spaces in to get their combined footprint for area / boundary.",
-  "handles": { "input": true, "output": true },
-  "parameters": []
+  "meta": {
+    "label": "Merge",
+    "category": "Space",
+    "color": "#16a34a"
+  },
+  "description": "A pure CALCULATION node — union several polygons into one outline: coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: `polygon` takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry's val-points into valin-polygon.\n\nMERGE takes the WHOLE set: feed it a nested [[[x,y],...],...] list (from Split / Voronoi / BSP ...) and every piece is unioned. A single flat outline is accepted as a one-element set.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    }
+  ]
 }

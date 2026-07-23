@@ -1,6 +1,7 @@
 {
   "kind": "parametric-object",
   "version": 2,
+  "decompile": "primitives",
   "meta": {
     "id": "chair.v1",
     "name": "Chair",

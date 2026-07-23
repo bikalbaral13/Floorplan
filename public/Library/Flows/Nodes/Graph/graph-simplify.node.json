@@ -1,0 +1,27 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-simplify",
+  "meta": {
+    "label": "Simplify",
+    "category": "Graph",
+    "color": "#0e7490"
+  },
+  "description": "A pure CALCULATION node — Douglas–Peucker simplify a graph: collapse dense / wobbly polylines into a few straight segments. Graph in, graph out; draws nothing.",
+  "instructions": "A value-only node: graph as JSON in, simplified graph as JSON out. It has no geometry input or output and draws nothing on the canvas.\n\nUse it to turn a hand-drawn or vectorised stroke (one vertex per pointer sample — hundreds of tiny edges) into a road-like network of a few straight runs. Runs Ramer–Douglas–Peucker on every polyline: interior vertices within Tolerance of the straightened line are dropped, endpoints and real corners are kept.\n\nTolerance is in METRES — bigger = fewer, straighter segments. A good starting point for freehand roads is ~0.3 m.\n\nINPUT: wire Freehand Geometry / Graph Geometry val-graph into valin-graph. OUTPUT: val-graph — chain into Graph Reduce (Dissolve) to fuse junctions, or into a Network node to draw. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "graph", "label": "Graph" },
+      { "key": "tolerance", "label": "Tolerance" }
+    ],
+    "valueOutputs": [
+      { "key": "graph", "label": "Graph (JSON)" }
+    ]
+  },
+  "parameters": [
+    { "key": "graph", "label": "Graph (JSON)", "kind": "text", "default": "" },
+    { "key": "tolerance", "label": "Tolerance", "kind": "range", "default": 0.3, "min": 0, "max": 5, "step": 0.05, "unit": "m" }
+  ]
+}

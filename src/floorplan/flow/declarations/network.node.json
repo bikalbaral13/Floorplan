@@ -1,0 +1,61 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "network",
+  "meta": {
+    "label": "Network",
+    "category": "2d primitives",
+    "color": "#0891b2"
+  },
+  "description": "2D primitive — draws a graph JSON on the canvas as segments. Nodes place the points, each edge becomes a 2-point stroke.",
+  "instructions": "A 2D primitive source that DRAWS a graph. Feed `graph` (or wire `valin-graph`) with the JSON that Graph Geometry and Skeleton's `val-branches` publish:\n\n{ \"nodes\": [{ \"id\": \"n1\", \"x\": 0, \"y\": 0 }, …],\n  \"edges\": [{ \"from_node_id\": \"n1\", \"to_node_id\": \"n2\" }, …] }\n\nEvery edge is drawn as an open 2-point segment between its endpoint nodes, and flows on downstream as a polyline — feed it into Mitered Join to stroke the network into walls.\n\nCoordinates are METRES local to the anchor, the same convention every other 2D primitive uses. Nodes given as bare id strings carry no position, so edges referencing them are skipped — publish nodes as {id,x,y} objects. `val-nodeCount` / `val-edgeCount` report what was actually placed and drawn.",
+  "handles": {
+    "input": false,
+    "output": true,
+    "valueInputs": [
+      {
+        "key": "graph",
+        "label": "Graph (JSON)"
+      },
+      {
+        "key": "color",
+        "label": "Colour"
+      },
+      {
+        "key": "show",
+        "label": "Show"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      },
+      {
+        "key": "edgeCount",
+        "label": "Edges"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "graph",
+      "label": "Graph (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "color",
+      "default": ""
+    },
+    {
+      "key": "show",
+      "label": "Show",
+      "kind": "checkbox",
+      "default": true
+    }
+  ],
+  "materialisesSegments": true
+}

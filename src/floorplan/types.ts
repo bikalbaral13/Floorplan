@@ -690,6 +690,10 @@ export interface ParametricObjectParam {
   step?: number;
   unit?: string;
   options?: { value: string; label: string }[];
+  /** Optional visibility gate: an expression over the object's OWN parameter values (e.g. `"have_spine"` or
+   *  `"mode == 'stepped'"`). When it evaluates falsy the field is hidden from the Properties / creation UI —
+   *  the value still exists and drives geometry. Absent ⇒ always shown. Evaluated by the shared expr engine. */
+  showWhen?: string;
 }
 
 /** A self-contained parametric object loaded from a `.pobj.json` file — its identity + Input Properties
@@ -701,6 +705,20 @@ export interface ParametricObjectParam {
  *  - `{ paths }` — inline SVG stroke-path `d` strings, rendered into a fixed 24×24 `<svg>` that inherits
  *    `currentColor` (themeable, safe — no arbitrary markup/scripts). Prefer this for monochrome toolbar icons. */
 export type ParametricObjectIcon = string | { paths: string[] };
+
+/** One node in a pobj's explicit `flow` decompilation (see {@link ParametricObjectFile.flow}). `tool` is the
+ *  Flow tool id (e.g. "inset", "circle-packing", "cylinder"). `id` names the node (default `tool_<i>`).
+ *  `from` is the geometry-source node id: omit → chain from the previous geometry node (or the Space source);
+ *  `null` → no geometry input (a source primitive like a 3D Cylinder). `params` are literal node params.
+ *  `bind` maps a node param key → an object parameter key: it BAKES that param's live value onto the node AND,
+ *  when the node exposes `valin-<nodeKey>`, wires an edge `Object.val-<objKey>` → `node.valin-<nodeKey>`. */
+export interface PobjFlowNode {
+  tool: string;
+  id?: string;
+  from?: string | null;
+  params?: Record<string, number | string | boolean>;
+  bind?: Record<string, string>;
+}
 
 export interface ParametricObjectFile {
   kind: "parametric-object";
@@ -719,6 +737,20 @@ export interface ParametricObjectFile {
   /** Declarative geometry generator (vars + cases + box rules with expression strings). Passed verbatim to
    *  `evalParametricGeometry` (plan) / `evalParametricPrisms` (3D mesh). Kept loose — the evaluator validates. */
   geometry?: Record<string, unknown>;
+  /** Optional explicit Flow decompilation: an ordered semantic node list that the "Edit in Flow" / import-to-
+   *  flow path materialises into a wired graph (Object Node → these nodes). Positions + edges are DERIVED
+   *  (never stored) so it survives node-schema changes. See {@link PobjFlowNode}. */
+  flow?: { nodes?: PobjFlowNode[] };
+  /** Opt-in auto-decompile mode. `"primitives"` → on import, the object's `geometry` rules are decomposed into
+   *  separate 2D-primitive Flow nodes (a `box` rule → a Rectangle node, a `circle` rule → a Circle node, with
+   *  evaluated dimensions baked in). A pilot for turning a rules object into an editable primitive graph. */
+  decompile?: "primitives";
+  /** Structural carve flag: placed instances of this object SUBTRACT their plan footprint from the wall
+   *  band — 2D wall fills are clipped around the object and 3D wall volumes get the footprint punched
+   *  through (plan-space boolean, full wall height). For columns / shafts / pilasters: the wall must not
+   *  draw through them. General: any object can opt in; the carve shape is the object's own evaluated
+   *  2D fill (rectangular, circular, rotated — whatever the geometry rules produce). */
+  cutsWall?: boolean;
 }
 
 /** An instance of a parametric object bound to a host segment: which library object, its per-instance
@@ -735,6 +767,10 @@ export interface SegmentAttachment {
   t: number;
   /** Mirror the object to the other side of the segment. */
   flip?: boolean;
+  /** The graph id of the `pobj-source` flow node this attachment is mirrored to (set when attaching a Node
+   *  object, which auto-injects `pobj-source → Node`). Binds the two param stores so editing either side
+   *  keeps them in sync. Absent for attachments with no flow node. */
+  flowNodeId?: string;
 }
 
 /** An instance of a parametric object bound to the project canvas (not a node / segment / space) — e.g.

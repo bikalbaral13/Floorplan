@@ -88,6 +88,7 @@
     }
   ],
   "hostKind": "node",
+  "cutsWall": true,
   "geometry": {
     "cases": [
       {

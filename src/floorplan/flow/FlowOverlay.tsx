@@ -19,22 +19,27 @@ import "@xyflow/react/dist/style.css";
 import { Button } from "@/components/ui/button";
 import { X, Play, Plus, Trash2, Download, Loader2, Wand2, Upload, Sparkles, ChevronDown, ChevronRight, Group as GroupIcon, FilePlus, Eye, EyeOff, Minus, Maximize2, Minimize2, Copy, Boxes, Radio, Folder, Search } from "lucide-react";
 import { toast } from "sonner";
-import type { Point, SerializedFlow, SerializedFlowNode } from "../types";
+import type { Point, SerializedFlow, SerializedFlowNode, ParametricObjectFile } from "../types";
+import { pobjToAttachedFlow } from "./pobjToFlow";
 import { FLOW_TOOLS, outputSlots, inputProps, schemaEntries, GENERATE_DEFAULT_MODEL, type FlowNodeData, type FlowToolType, type OutputSlot, type InputProp, type InputPropType } from "./flowTypes";
 import { compileFlow } from "./compileFlow";
-import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, type AutoPlaceEntry, type OpeningKind } from "./autoFlow";
+import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, mergeAttachedObjectIntoFlow, pobjPropList, type AutoPlaceEntry, type OpeningKind } from "./autoFlow";
 import { PlaceObjectEditor } from "./PlaceObjectEditor";
 import { DimensionEdgesEditor } from "./DimensionEdgesEditor";
 import { InputPropsEditor } from "./InputPropsEditor";
 import { LayoutRoomsEditor } from "./LayoutRoomsEditor";
 import { SchemaNodeEditor } from "./SchemaNodeEditor";
 import { evaluateFlow, type FlowPreviewItem } from "./eval/evaluateFlow";
+import { bakeFlowToIR, runFlowIR, irToPreviewItems } from "./flowIR";
 import { inspectParametricGeometry, evalParametricOutputs, type GeomInspection, type ParamOutputs } from "./eval/parametricObject";
+import { exprInputs, exprOutputs } from "./eval/expr";
 import type { GridField } from "./eval/evalNodes";
 import { detectObjects, splitDataUrl } from "../algorithms/vision/geminiObjectDetection";
 import { tuneVectorise } from "./vectorTune";
+import { runAgentSuggest, runAgentCritique, suggestInputHash, type SuggestTarget, type SuggestParamSpec, type SuggestContext, type SuggestedValue } from "../ai/agentSuggest";
 import type { VectorizeParams, VectorizeColorMode } from "../algorithms/vector/vectorizeImage";
-import { saveLibraryFile, listLibraryFiles, listParametricObjectFiles } from "../libraryFiles";
+import { saveLibraryFile, listLibraryFiles, listParametricObjectFiles, pobjFolderFor } from "../libraryFiles";
+import { flowToPobj } from "./flowToPobj";
 import { parseBspConnections, serializeBspConnections } from "../algorithms/partitioning/bspAdvanced";
 import type { PipeGraphInput } from "../algorithms/network/pipeNetworkSolver";
 
@@ -44,24 +49,51 @@ const nextId = (tool: string) => `${tool}_${nodeSeq++}`;
 /** Palette grouping — the left "Add" rail is split into foldable category blocks (in this order). */
 const PALETTE_CATEGORIES: { title: string; tools: FlowToolType[] }[] = [
   { title: "Canvas", tools: ["canvas-source", "separate"] },
-  { title: "2D Primitives", tools: ["point", "rectangle", "circle"] },
-  { title: "3D Primitives", tools: ["cuboid", "cylinder", "sphere", "cone", "transform-3d", "boolean-3d", "display-3d"] },
-  { title: "Space", tools: ["source", "space-creator", "space-geometry", "pull", "transform", "hatching", "dimension", "area-dimension", "input-props", "schema", "output-schema", "schema-to-drawing", "schema-to-layers", "merge", "layout-gen"] },
+  { title: "Freehand", tools: ["freehand-source", "freehand-geometry"] },
+  { title: "2D Primitives", tools: ["point", "vertices", "network", "rectangle", "circle"] },
+  { title: "3D Primitives", tools: ["cuboid", "cylinder", "sphere", "cone", "loop-3d", "transform-3d", "boolean-3d", "display-3d"] },
+  { title: "Space", tools: ["source", "space-creator", "space-geometry", "pull", "transform", "hatching", "dimension", "area-dimension", "input-props", "schema", "output-schema", "schema-to-drawing", "schema-to-layers", "boolean-2d", "layout-gen"] },
   { title: "Reshape", tools: ["inset", "optimise-rect", "smoothing", "densify", "bounding-shape", "convex-hull", "contour"] },
-  { title: "Partition", tools: ["split", "bsp", "voronoi", "treemap", "rect-pack", "convex-decomp", "mesh", "circle-packing", "skeleton", "visibility"] },
+  { title: "Partition", tools: ["split", "loop", "bsp", "voronoi", "treemap", "rect-pack", "convex-decomp", "mesh", "circle-packing", "skeleton", "visibility"] },
   { title: "Segment", tools: ["segment-source", "segment-split", "display-segment"] },
   { title: "Node", tools: ["node-source", "bloom", "display-node"] },
-  { title: "Graph", tools: ["graph-source", "mitered-join", "graph-smooth", "graph-metrics", "show-direction", "graph-to-spaces", "graph-reduce", "voronoi-bloom", "spring-layout", "pipe-solver"] },
-  { title: "Grid", tools: ["grid-source", "graph-to-grid", "grid-field", "cellular-automaton", "laplace-solver", "fill-depressions", "flow-direction", "flow-accumulation", "watershed", "morphology", "grid-distance", "grid-threshold", "marching-squares"] },
+  { title: "Graph", tools: ["graph-source", "mitered-join", "graph-smooth", "graph-metrics", "graph-geometry", "show-direction", "graph-to-spaces", "graph-reduce", "graph-simplify", "graph-clip", "graph-fit-lines", "graph-classify", "set-thickness", "merge-graph", "graph-to-openings", "voronoi-bloom", "spring-layout", "pipe-solver"] },
+  { title: "Grid", tools: ["grid-source", "graph-to-grid", "grid-field", "cellular-automaton", "laplace-solver", "fill-depressions", "flow-direction", "flow-accumulation", "watershed", "morphology", "grid-distance", "grid-threshold", "marching-squares", "grid-geometry", "render-grid", "matrix-transpose", "matrix-inverse"] },
   { title: "Image", tools: ["image", "vectorise", "object-detection"] },
   { title: "Logic", tools: ["conditional", "param-manip"] },
   { title: "Build", tools: ["floor-massing", "place-object", "frame-builder"] },
   { title: "Building", tools: ["wall-builder", "graph-to-room", "segment-to-door", "segment-to-window", "node-to-object", "segment-to-3d", "space-to-3d"] },
   { title: "Mass", tools: ["mass", "inset-3d", "smooth-3d", "mesh-to-3d"] },
-  { title: "Parametric", tools: ["pobj-source", "param-object", "param-grab", "param-output-metrics", "param-geometry", "param-render", "param-render-3d", "create-polygon", "create-segment", "create-arc", "create-box"] },
-  { title: "Calculate", tools: ["math", "random", "expr", "bua", "file-upload", "text"] },
+  { title: "Parametric", tools: ["pobj-source", "grab-object", "param-object", "param-grab", "param-output-metrics", "param-geometry"] },
+  { title: "Calculate", tools: ["math", "match", "random", "expr", "bua", "file-upload", "text"] },
   { title: "Output", tools: ["output", "render", "analyse", "generate"] },
 ];
+
+/** "Arrange" — the foldable blocks (in creation order) the tidy-up groups nodes into. */
+const ARRANGE_BLOCKS: { key: string; label: string }[] = [
+  { key: "canvas", label: "Canvas Import" },
+  { key: "math", label: "Math Engine" },
+  { key: "3d", label: "3D Primitives" },
+  { key: "2d", label: "2D Primitives" },
+];
+/** Which block each tool belongs to. Tools NOT listed (Space / Graph / Partition / Output / Agent /
+ *  Input Properties …) stay at the top level, ungrouped. */
+const ARRANGE_CLASS: Partial<Record<FlowToolType, string>> = {
+  // 2D Primitives — the 2D shape/generator nodes.
+  rectangle: "2d", circle: "2d", arc: "2d", polygon: "2d", polyline: "2d", line: "2d", ngon: "2d",
+  ellipse: "2d", "rounded-rect": "2d", sector: "2d", vertices: "2d", network: "2d", point: "2d",
+  // 3D Primitives — the 3D solids + their transform / boolean / display nodes.
+  cuboid: "3d", cylinder: "3d", sphere: "3d", cone: "3d", frustum: "3d", "tapered-box": "3d",
+  torus: "3d", capsule: "3d", "transform-3d": "3d", "boolean-3d": "3d", "display-3d": "3d", "loop-3d": "3d",
+  // Math Engine — calculation nodes + the geometric-operation ("reshape") nodes.
+  expr: "math", math: "math", random: "math", match: "math", bua: "math", text: "math", inset: "math",
+  "optimise-rect": "math", smoothing: "math", densify: "math", contour: "math", "bounding-shape": "math",
+  "convex-hull": "math", "boolean-2d": "math",
+  // Canvas Import — the nodes that read entities off the canvas.
+  "canvas-source": "canvas", source: "canvas", "space-geometry": "canvas", "node-source": "canvas",
+  "node-geometry": "canvas", "segment-source": "canvas", "segment-geometry": "canvas", image: "canvas",
+  "grab-object": "canvas", separate: "canvas",
+};
 
 // Inline monochrome SVG → data URL, for default per-option type icons in the schema. encodeURIComponent
 // keeps it valid in an <img src> (handles #, quotes, etc.).
@@ -290,8 +322,12 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
   // Output / Input-Properties nodes expose dynamic handles (per slot / per parameter), so their counts
   // must factor into the handle signature that triggers a re-measure.
   const slotCount = d.tool === "output" ? outputSlots(d.params).length : 0;
-  const propCount = (d.tool === "input-props" || d.tool === "pobj-source") ? inputProps(d.params).length : 0;
-  const handleSig = `${outN}|${def.valueInputs?.length ?? 0}|${def.valueOutputs?.length ?? 0}|${slotCount}|${propCount}`;
+  const propCount = (d.tool === "input-props" || d.tool === "pobj-source" || d.tool === "grab-object" || d.tool === "agent") ? inputProps(d.params).length : 0;
+  // Expression node: one dynamic value-INPUT endpoint per input variable, one dynamic value-OUTPUT endpoint
+  // per defined name (a multi-output `name = expr` block, or a single `result`).
+  const exprInCount = d.tool === "expr" ? exprInputs(d.params.expr).length : 0;
+  const exprOutCount = d.tool === "expr" ? exprOutputs(d.params.expr).length : 0;
+  const handleSig = `${outN}|${def.valueInputs?.length ?? 0}|${def.valueOutputs?.length ?? 0}|${slotCount}|${propCount}|${exprInCount}|${exprOutCount}`;
   useEffect(() => { updateNodeInternals(id); }, [id, handleSig, updateNodeInternals]);
   // Align each side handle to the vertical centre of its row: stash a ref per row, then measure
   // offsetTop after layout. Keys are `field:<key>` (parameter rows) and `vout:<key>` (computed value-
@@ -301,10 +337,10 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
   const [rowTops, setRowTops] = useState<Record<string, number>>({});
   // File Upload node: a hidden <input type=file> driven by the "Choose File" button (OS open dialog).
   const fileRef = useRef<HTMLInputElement | null>(null);
-  // Fold the node down to its title bar. Stored as a transient `_collapsed` param so the toolbar's
-  // "Fold" toggle can drive every node while the per-node chevron stays in sync. `_`-prefixed params
-  // are stripped on export and ignored by eval, so this never affects geometry. When collapsed, only
-  // the main in/out handles show (centred on the title bar).
+  // Fold the node down to its title bar. Stored as a `_collapsed` param so the toolbar's "Fold" toggle
+  // can drive every node while the per-node chevron stays in sync. Ignored by eval, so it never affects
+  // geometry — but unlike the other `_` params it DOES survive export (see PERSISTED_VIEW_PARAMS), so a
+  // library flow can ship folded. When collapsed, only the main in/out handles show (on the title bar).
   const collapsed = Boolean(d.params._collapsed);
   // Per-node output visibility — when `_hidden`, this node's preview/output is omitted from the canvas
   // (downstream nodes still receive its geometry; only the on-screen rendering is suppressed).
@@ -325,22 +361,30 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
   // Fields flagged `output` expose their own value as a `val-<key>` endpoint on the right (pass-through).
   const outputFields = def.fields.filter((f) => f.output && (!f.showIf || f.showIf(d.params)));
   return (
-    <div className={`relative rounded-md border bg-white shadow-md transition-shadow ${selected ? "border-blue-500 ring-2 ring-blue-400/70 shadow-lg" : "border-slate-300"} ${d.tool === "render" ? "min-w-[230px]" : "min-w-[180px]"}`}>
-      {/* Main geometry input (Space / polygon): top-left below the title; centred when collapsed. */}
-      {def.hasInput && <Handle type="target" position={Position.Left} style={{ top: collapsed ? "50%" : 30 }} className="!h-2.5 !w-2.5 !bg-slate-400" />}
-      {/* Extra geometry inputs (emerald, left) — id `gin-<key>`, e.g. Mitered Join's clip Space. Stacked
-          just below the main input handle; hidden when collapsed. */}
-      {!collapsed && def.geomInputs?.map((gi, i) => (
-        <Handle
-          key={gi.key}
-          id={`gin-${gi.key}`}
-          type="target"
-          position={Position.Left}
-          style={{ top: 30 + (i + 1) * 16 }}
-          className="!h-2.5 !w-2.5 !bg-emerald-500"
-          title={gi.label}
-        />
-      ))}
+    <div className={`relative rounded-md border bg-white shadow-md transition-shadow ${selected ? "border-blue-500 ring-2 ring-blue-400/70 shadow-lg" : "border-slate-300"} ${d.tool === "render" || d.tool === "agent" ? "min-w-[230px]" : "min-w-[180px]"}`}>
+      {/* Main geometry input (Space / polygon): top-left below the title; centred when collapsed.
+          `_foldIn` (stamped by the fold-edge view transform) additionally anchors a folded node that has
+          incoming edges but declares no geometry input — a Cuboid is fed only through `valin-*` handles,
+          which don't exist while folded, so without this its edges would have nowhere to land. */}
+      {(def.hasInput || (collapsed && d.params._foldIn)) && <Handle type="target" position={Position.Left} style={{ top: collapsed ? "50%" : 30 }} className="!h-2.5 !w-2.5 !bg-slate-400" />}
+      {/* Extra geometry inputs (emerald, left) — id `gin-<key>`, e.g. Mitered Join / Graph to Path's clip
+          Space. Stacked just below the main input handle, each tagged with a short emerald label (like the
+          violet "prm" endpoint) so the secondary input is discoverable; hidden when collapsed. */}
+      {!collapsed && def.geomInputs?.flatMap((gi, i) => {
+        const top = 30 + (i + 1) * 16;
+        return [
+          <span key={`${gi.key}-lbl`} style={{ position: "absolute", left: 12, top, transform: "translateY(-50%)" }} className="pointer-events-none font-mono text-[8px] text-emerald-500">{gi.label.split(/\s+/)[0].slice(0, 4).toLowerCase()}</span>,
+          <Handle
+            key={gi.key}
+            id={`gin-${gi.key}`}
+            type="target"
+            position={Position.Left}
+            style={{ top }}
+            className="!h-2.5 !w-2.5 !bg-emerald-500"
+            title={gi.label}
+          />,
+        ];
+      })}
       {/* Scalar value INPUT endpoints (amber, left) — id `valin-<key>`. A wired value overrides the param.
           Each sits at its parameter row (measured into `valinTops`); the row's own label identifies it.
           Hidden while collapsed (no rows to anchor to). */}
@@ -385,18 +429,77 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
           />
         );
       })}
-      <div className={`flex items-center justify-between gap-1 px-2 py-1 text-[11px] font-semibold text-white ${collapsed ? "rounded-md" : "rounded-t-md"}`} style={{ background: def.color }}>
-        <span className="truncate">{def.label}</span>
+      {/* Expression node: one dynamic value-INPUT endpoint per input variable (id `valin-<var>`), anchored
+          to its row. The static `deps` endpoint (declaration) stays — it merges a whole params node's values
+          into the scope in one wire. */}
+      {!collapsed && d.tool === "expr" && exprInputs(d.params.expr).map((v) => {
+        const top = rowTops[`evar:${v}`];
+        return (
+          <Handle
+            key={`in-${v}`}
+            id={`valin-${v}`}
+            type="target"
+            position={Position.Left}
+            style={top != null ? { top } : undefined}
+            className="!h-2.5 !w-2.5 !bg-amber-500"
+          />
+        );
+      })}
+      {/* Expression node: one dynamic value-OUTPUT endpoint per defined name (id `val-<name>`), anchored to
+          its output row — so a single node can publish several results (a `name = expr` block). */}
+      {!collapsed && d.tool === "expr" && exprOutputs(d.params.expr).map((nm) => {
+        const top = rowTops[`eout:${nm}`];
+        return (
+          <Handle
+            key={`out-${nm}`}
+            id={`val-${nm}`}
+            type="source"
+            position={Position.Right}
+            style={top != null ? { top } : undefined}
+            className="!h-2.5 !w-2.5 !bg-amber-500"
+          />
+        );
+      })}
+      <div className={`flex items-center justify-between gap-1 px-2 py-1 text-[11px] font-semibold text-white ${collapsed ? "rounded-md" : "rounded-t-md"}`} style={{ background: d.tool === "pobj-source" ? "#dc2626" : def.color }}>
+        {/* `nodeLabel` (typed into the Name field, or the OBJECT's name on parametric-object import) titles
+            the node; the tool label stays beside it as a muted suffix so "Leg 1" still reads as a Cuboid.
+            With no name set, the tool label alone is the title (no duplicate). */}
+        {(() => {
+          const custom = typeof d.params.nodeLabel === "string" ? d.params.nodeLabel.trim() : "";
+          return (
+            <span className="flex min-w-0 items-baseline gap-1">
+              <span className="truncate">{custom || def.label}</span>
+              {custom && <span className="shrink-0 text-[9px] font-medium text-white/70">{def.label}</span>}
+            </span>
+          );
+        })()}
         <div className="flex shrink-0 items-center gap-0.5">
-          {/* Eye: toggle whether this node's output/preview shows on the canvas (transient `_hidden`). */}
-          <button
-            type="button"
-            onClick={() => d.onParamChange?.(id, "_hidden", !hidden)}
-            title={hidden ? "Show output on canvas" : "Hide output on canvas"}
-            className={`nodrag flex h-4 w-4 items-center justify-center rounded hover:bg-white/20 ${hidden ? "opacity-60" : ""}`}
-          >
-            {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-          </button>
+          {/* Decompile toggle (Parametric Object + Input Properties): hide/show every node + edge coming out
+              of this one — collapse the driven expr/primitives back to the brief node, or expand them again. */}
+          {(d.tool === "pobj-source" || d.tool === "input-props") && (
+            <button
+              type="button"
+              onClick={() => d.onToggleDecompile?.(id)}
+              title={d.params._decompileHidden ? "Show decompiled nodes & connections" : "Hide decompiled nodes & connections"}
+              className={`nodrag flex h-4 w-4 items-center justify-center rounded hover:bg-white/20 ${d.params._decompileHidden ? "opacity-60" : ""}`}
+            >
+              <Boxes className="h-3 w-3" />
+            </button>
+          )}
+          {/* Eye: toggle whether this node's output/preview shows on the canvas (transient `_hidden`).
+              Omitted for pure VALUE nodes (no geometry input and no geometry output — Expression, Math,
+              Point, Vertices, Convex Decomposition …): they draw nothing, so there is nothing to hide and
+              the control would only mislead. */}
+          {(def.hasInput || def.hasOutput) && (
+            <button
+              type="button"
+              onClick={() => d.onParamChange?.(id, "_hidden", !hidden)}
+              title={hidden ? "Show output on canvas" : "Hide output on canvas"}
+              className={`nodrag flex h-4 w-4 items-center justify-center rounded hover:bg-white/20 ${hidden ? "opacity-60" : ""}`}
+            >
+              {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => d.onParamChange?.(id, "_collapsed", !collapsed)}
@@ -409,6 +512,18 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
       </div>
       {!collapsed && (
       <div className="space-y-1.5 px-2 py-1.5">
+        {/* Optional per-node name ("Leg 1", "Mattress") — surfaces in the header beside the tool label and
+            in the Properties tab. Purely presentational: not a `def.fields` param, never read by
+            compile/eval. Skipped for tools that already declare their own `name` field (e.g. expr). */}
+        {!def.fields.some((f) => f.key === "name") && (
+          <input
+            type="text"
+            value={typeof d.params.nodeLabel === "string" ? d.params.nodeLabel : ""}
+            onChange={(e) => d.onParamChange?.(id, "nodeLabel", e.target.value)}
+            placeholder="Name"
+            className="nodrag w-full rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700 placeholder:text-slate-300"
+          />
+        )}
         {/* Usage instructions (from the node.json `instructions` field) — a read-only, collapsible
             textbox so the node's own documentation is available inline. Hidden until toggled. */}
         {def.instructions && (() => {
@@ -479,19 +594,39 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
             nodrag
           />
         )}
-        {/* Parametric Site: values-only controls for the loaded object's parameters. Each row's value is
-            exposed as a `val-<propId>` output handle (anchored via onRowRef), and the object's footprint is
-            emitted on the geometry output. Load a .pobj via the "Load Parametric Site" button. */}
+        {/* Parametric Object: its parameters, each exposing a `val-<propId>` output handle (anchored via
+            onRowRef). A params-ONLY object (no `geometry` block — its geometry is built downstream by the
+            flow, e.g. the staircase) IS an Input Properties node: render the FULL editor so its parameters
+            are fully editable — name / type / range AND value, plus add / remove — exactly like input-props.
+            A geometry-BEARING object keeps values-only, since its parameters are defined by the .pobj file. */}
         {d.tool === "pobj-source" && (
           inputProps(d.params).length === 0
-            ? <span className="text-[10px] italic text-slate-400">Load a parametric site (.pobj) →</span>
+            ? <span className="text-[10px] italic text-slate-400">Load a parametric object (.pobj) →</span>
             : <InputPropsEditor
                 params={d.params}
                 onParamChange={(key, val) => d.onParamChange?.(id, key, val)}
                 onRowRef={(pid, el) => { rowRefs.current[`prop:${pid}`] = el; }}
-                valuesOnly
+                valuesOnly={(() => { try { return !!(JSON.parse(String(d.params.definition ?? "{}")) as { geometry?: unknown }).geometry; } catch { return true; } })()}
                 nodrag
               />
+        )}
+        {/* Grab Object: READ-ONLY readout of the parameters of the object attached to the referenced canvas
+            Space / Node / Segment (baked into `props` by the host). Each row is anchored (onRowRef) so its
+            `val-<propId>` output handle aligns — edit the values on the host element, not here. */}
+        {/* Grab Object: READ-ONLY readout of the parameters of the object attached to the Space wired into its
+            input (or its referenced element). Each row is anchored (onRowRef) so its `val-<propId>` output handle
+            aligns — edit the values on the host element, not here. */}
+        {d.tool === "grab-object" && (
+          inputProps(d.params).length === 0
+            ? <span className="text-[10px] italic text-slate-400">Wire a Space into the input to read its attached object →</span>
+            : <div className="space-y-1">
+                {inputProps(d.params).map((p, i) => (
+                  <div key={p.id} ref={(el) => { rowRefs.current[`prop:${p.id}`] = el; }} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-1.5 py-0.5 text-[10px]">
+                    <span className="truncate text-slate-500">{p.name || `Param ${i + 1}`}</span>
+                    <span className="shrink-0 font-mono text-slate-700">{p.type === "checkbox" ? (p.value ? "on" : "off") : String(p.value)}</span>
+                  </div>
+                ))}
+              </div>
         )}
         {/* Grab Parameters: interactive controls auto-built from the wired Parametric Object's definition
             (values-only — label + slider/options/checkbox/textbox). Editing republishes the definition. */}
@@ -679,10 +814,16 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
                   <span className="text-[10px] text-slate-500">{f.label}</span>
                   {f.kind === "textarea" ? (
                     <textarea
-                      className="w-full resize-y rounded border border-slate-200 px-1.5 py-1 text-[10px] nodrag"
-                      rows={3}
+                      className="w-full resize-y rounded border border-slate-200 px-1.5 py-1 text-[10px] nodrag nowheel"
+                      rows={f.rows ?? 3}
                       placeholder={f.placeholder}
                       value={str}
+                      spellCheck={false}
+                      // `nowheel` matters once rows is large: without it, scrolling INSIDE the box zooms the
+                      // React Flow canvas instead. The key/pointer guards are belt-and-braces — React Flow
+                      // already ignores its own shortcuts when the event target is an input.
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onChange={(e) => d.onParamChange?.(id, f.key, e.target.value)}
                     />
                   ) : (
@@ -748,6 +889,99 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
               </div>
             );
           })}
+        {/* Expression: anchored INPUT rows (each `valin-<var>` endpoint aligns to its row — wire from any
+            val-* output, or wire a whole params node into the static `deps` endpoint to bring every parameter
+            into scope by name), then anchored OUTPUT rows (each `val-<name>` endpoint — a `name = expr` block
+            publishes one per name). Placed AFTER the formula so it reads top-to-bottom: formula → in → out. */}
+        {d.tool === "expr" && (() => {
+          const ins = exprInputs(d.params.expr);
+          const outs = exprOutputs(d.params.expr);
+          if (!ins.length && outs.length <= 1) return null;
+          return (
+            <div className="space-y-1 pt-1">
+              {ins.map((v) => (
+                <div
+                  key={`in-${v}`}
+                  ref={(el) => { rowRefs.current[`evar:${v}`] = el; }}
+                  className="flex items-center justify-between rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-800"
+                >
+                  <span className="text-amber-400">value →</span>
+                  <span className="font-mono">{v}</span>
+                </div>
+              ))}
+              {outs.length > 1 && outs.map((nm) => (
+                <div
+                  key={`out-${nm}`}
+                  ref={(el) => { rowRefs.current[`eout:${nm}`] = el; }}
+                  className="flex items-center justify-between rounded bg-emerald-50 px-2 py-1 text-[10px] text-emerald-800"
+                >
+                  <span className="font-mono">{nm}</span>
+                  <span className="text-emerald-400">→ out</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+        {/* Agent: Run analyses the wired Space against this node's own Instructions + Prompt (the two
+            fields rendered just above) and writes the suggestion into the CONNECTED nodes. Deliberately
+            placed AFTER the generic fields so the node reads top-to-bottom in the order you use it:
+            edit Instructions → type a Prompt → Run → read what it set. The rows are a READ-ONLY record
+            (each anchored via rowRefs so its `val-<key>` output handle aligns) — the live values now sit
+            on the target nodes, edit them there. `_stale` = the space / text / chain moved since the run. */}
+        {d.tool === "agent" && (
+          <div className="space-y-1 pt-0.5">
+            <Button
+              size="sm"
+              className="h-7 w-full gap-1.5 px-2 text-[11px] nodrag"
+              disabled={Boolean(d.params._busy)}
+              onClick={() => d.onRunAgent?.(id, d.params)}
+            >
+              {d.params._busy
+                ? <><Loader2 className="h-3 w-3 animate-spin" /> Analysing…</>
+                : <><Sparkles className="h-3 w-3" /> Run</>}
+            </Button>
+            {typeof d.params._status === "string" && d.params._status && (
+              <p className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] leading-tight text-violet-700 nodrag">
+                {String(d.params._status)}
+              </p>
+            )}
+            {Boolean(d.params._stale) && !d.params._busy && (
+              <p className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] leading-tight text-amber-700 nodrag">
+                ⚠ Stale — the space, instructions, prompt or chain changed since this ran. Press Run to refresh.
+              </p>
+            )}
+            {inputProps(d.params).length > 0 && (
+              <div className="space-y-0.5">
+                {inputProps(d.params).map((p, i) => (
+                  <div key={p.id} ref={(el) => { rowRefs.current[`prop:${p.id}`] = el; }} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-1.5 py-0.5 text-[10px]">
+                    <span className="truncate text-slate-500">{p.name || `Param ${i + 1}`}</span>
+                    <span className="shrink-0 font-mono text-slate-700">{p.type === "checkbox" ? (p.value ? "on" : "off") : String(p.value)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {typeof d.params.rationale === "string" && d.params.rationale && (
+              <p className="rounded bg-slate-50 px-1.5 py-0.5 text-[9px] italic leading-tight text-slate-600 nodrag">
+                {String(d.params.rationale)}
+              </p>
+            )}
+            {/* Feedback loop, last round: the reviewer's verdict on the drawing, and the drawing it saw.
+                Showing the snapshot matters — if the agent is judging a blank or stale frame, that's only
+                visible here. Both are `_`-prefixed, so neither is exported. */}
+            {typeof d.params._critique === "string" && d.params._critique && (
+              <p className="rounded bg-sky-50 px-1.5 py-0.5 text-[9px] leading-tight text-sky-800 nodrag">
+                {String(d.params._critique)}
+              </p>
+            )}
+            {typeof d.params._snapshot === "string" && d.params._snapshot && (
+              <img
+                src={String(d.params._snapshot)}
+                alt="what the reviewer saw"
+                className="w-full rounded border border-slate-200 bg-white nodrag"
+              />
+            )}
+          </div>
+        )}
         {/* BSP adjacency matrix: lower-triangle checkbox grid (cells 1..n). A ticked pair must share
             a wall — stored in params.connections as a "1-2,2-3" list (1-based, comma separated). */}
         {d.tool === "bsp" && Boolean(d.params.useConnection) && (() => {
@@ -1028,11 +1262,25 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
         {def.valueOutputs?.some((vo) => !vo.alignField) && d.tool !== "file-upload" && d.tool !== "text" && d.tool !== "analyse" && d.tool !== "param-object" && d.tool !== "param-grab" && d.tool !== "param-geometry" && d.tool !== "param-output-metrics" ? (
           <div className="flex flex-col gap-0.5 pt-0.5">
             {def.valueOutputs.filter((vo) => !vo.alignField).map((vo) => {
-              const v = (d.params._values as Record<string, number> | undefined)?.[vo.key];
+              const v = (d.params._values as Record<string, number | string> | undefined)?.[vo.key];
+              // A value output is USUALLY a number, but not always — `points` publishes a vertex LIST as a
+              // JSON string. Numbers get 2dp + unit; a list reports its length rather than dumping the whole
+              // array into the node body; any other string is truncated.
+              const shown = (() => {
+                if (typeof v === "number") return `${v.toFixed(2)}${vo.unit ? ` ${vo.unit}` : ""}`;
+                if (typeof v === "string" && v.length) {
+                  try {
+                    const arr = JSON.parse(v) as unknown;
+                    if (Array.isArray(arr)) return `${arr.length} pts`;
+                  } catch { /* not a list — fall through to the raw string */ }
+                  return v.length > 18 ? `${v.slice(0, 18)}…` : v;
+                }
+                return "—";
+              })();
               return (
                 <div key={vo.key} ref={(el) => { rowRefs.current[`vout:${vo.key}`] = el; }} className="flex items-center justify-between rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
                   <span>{vo.label}</span>
-                  <span className="font-mono">{v != null ? `${v.toFixed(2)}${vo.unit ? ` ${vo.unit}` : ""}` : "—"}</span>
+                  <span className="font-mono">{shown}</span>
                 </div>
               );
             })}
@@ -1042,7 +1290,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
       )}
       {/* Main geometry output: top-right below the title; centred (single handle) when collapsed. */}
       {collapsed
-        ? def.hasOutput && <Handle type="source" position={Position.Right} style={{ top: "50%" }} className="!h-2.5 !w-2.5 !bg-slate-400" />
+        ? (def.hasOutput || d.params._foldOut) && <Handle type="source" position={Position.Right} style={{ top: "50%" }} className="!h-2.5 !w-2.5 !bg-slate-400" />
         : outN <= 1
         ? def.hasOutput && <Handle type="source" position={Position.Right} style={{ top: 30 }} className="!h-2.5 !w-2.5 !bg-slate-400" />
         : Array.from({ length: outN }).map((_, i) => {
@@ -1075,7 +1323,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
       {/* Scalar value OUTPUT endpoints (amber, right) — id `val-<key>`. Direct children of the node so
           React Flow registers them as connectable, like the geometry output handles. Computed outputs
           align to their readout rows; falls back to a stacked % when not yet measured. Hidden while collapsed. */}
-      {!collapsed && def.valueOutputs?.map((vo, i) => {
+      {!collapsed && d.tool !== "expr" && def.valueOutputs?.map((vo, i) => {
         const n = def.valueOutputs!.length;
         // alignField → anchor the endpoint to that field's row (e.g. Massing "floors" on the "n" slider);
         // otherwise anchor to the output's own readout row, falling back to a stacked % until measured.
@@ -1101,7 +1349,7 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
       )}
       {/* Input Properties: one dynamic value-output endpoint per parameter (id `val-<propId>`), anchored
           to its row, so each user-defined parameter feeds the pipeline. */}
-      {!collapsed && (d.tool === "input-props" || d.tool === "pobj-source") && inputProps(d.params).map((p) => {
+      {!collapsed && (d.tool === "input-props" || d.tool === "pobj-source" || d.tool === "grab-object" || d.tool === "agent") && inputProps(d.params).map((p) => {
         const top = rowTops[`prop:${p.id}`];
         return (
           <Handle
@@ -1132,17 +1380,68 @@ const OpNode = ({ id, data, selected }: NodeProps) => {
   );
 };
 
+/** The one `_`-prefixed param family that survives serialization (see buildGraph): node fold state is an
+ *  authoring choice, not runtime scratch, so a flow saved folded reopens folded. */
+const PERSISTED_VIEW_PARAMS = new Set(["_collapsed"]);
+
+/** Group box padding around its children, and the height of its title bar (also the box's total height
+ *  once collapsed). Shared by group creation, the auto-fit effect and the collapse toggle. */
+const GROUP_PAD = 28;
+const GROUP_HEADER = 26;
+
 /** A labelled container box drawn BEHIND its child nodes. Created by the "Group" button; its children
  *  carry `parentId` so dragging the box moves them together. Not a pipeline op — it has no handles and
  *  is stripped from the compiled recipe / serialized graph (a pure editor-organisation convenience). */
-const GroupNode = ({ data, selected }: NodeProps) => {
-  const d = data as { label?: string; params?: { label?: string } };
+const GroupNode = ({ id, data, selected }: NodeProps) => {
+  const d = data as {
+    label?: string;
+    params?: { label?: string; collapsed?: boolean; _childCount?: number };
+    onParamChange?: (nodeId: string, key: string, value: unknown) => void;
+    onToggleGroup?: (nodeId: string) => void;
+  };
   const label = d.label ?? d.params?.label ?? "Group";
+  const collapsed = Boolean(d.params?.collapsed);
+  const count = d.params?._childCount ?? 0;
+  const [editing, setEditing] = useState(false);
   return (
-    <div className={`h-full w-full rounded-lg border-2 border-dashed ${selected ? "border-violet-500 bg-violet-500/10" : "border-violet-300 bg-violet-500/5"}`}>
-      <span className="absolute left-2 top-1 select-none rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
-        {label}
-      </span>
+    <div
+      className={`h-full w-full rounded-lg border-2 ${collapsed ? "border-solid" : "border-dashed"} ${
+        selected ? "border-violet-500 bg-violet-500/10" : "border-violet-300 bg-violet-500/5"
+      }`}
+    >
+      <div className="absolute left-2 top-1 flex items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
+        {/* Chevron: fold the group down to this header bar (children + their edges get React Flow's
+            `hidden`); the expanded box height is stashed on the node so expanding restores it. */}
+        <button
+          type="button"
+          onClick={() => d.onToggleGroup?.(id)}
+          title={collapsed ? "Expand group" : "Collapse group"}
+          className="nodrag flex h-3.5 w-3.5 items-center justify-center rounded hover:bg-violet-200"
+        >
+          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+        {editing ? (
+          <input
+            autoFocus
+            defaultValue={label}
+            onBlur={(e) => { d.onParamChange?.(id, "label", e.target.value.trim() || "Group"); setEditing(false); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            className="nodrag w-28 rounded border border-violet-300 bg-white px-1 text-[10px] font-semibold text-violet-700"
+          />
+        ) : (
+          <span
+            onDoubleClick={() => setEditing(true)}
+            title="Double-click to rename"
+            className="cursor-text select-none"
+          >
+            {label}
+          </span>
+        )}
+        {collapsed && count > 0 && <span className="font-normal text-violet-500">({count})</span>}
+      </div>
     </div>
   );
 };
@@ -1167,6 +1466,9 @@ export interface FlowOverlayProps {
    *  canvas geometry that regenerates on every parameter change — instead of a preview overlay you must
    *  Run to commit. Owned by the host; the footer toggle flips it. */
   liveFlow?: boolean;
+  /** True when a host-aware pipeline object (Site/Floor/Massing) is attached to a Space — lets the Live
+   *  toggle be enabled even with an empty/incomplete flow, so the attachment alone can be live-committed. */
+  hasLiveAttachments?: boolean;
   onToggleLiveFlow?: () => void;
   /** Pure live preview: the evaluated output polygons per node, for canvas overlay rendering. */
   onPreview: (items: FlowPreviewItem[]) => void;
@@ -1174,6 +1476,10 @@ export interface FlowOverlayProps {
   sourcePolygon: Point[];
   /** Pixels-per-metre, for the geometry algorithms. */
   pixelsPerMeter: number;
+  /** Google AI key + model from the Chat AI preferences — the Agent node uses these rather than carrying
+   *  its own key field, so one setting drives every model call in the app. */
+  aiApiKey?: string;
+  aiModel?: string;
   /** Label of the currently-selected space (pipeline input), or null. */
   selectedRoomLabel: string | null;
   /** Display id of the currently-selected space (e.g. "Space001") — synced into a Space node's `id`
@@ -1185,9 +1491,21 @@ export interface FlowOverlayProps {
   /** Resolve a Space node's entered id (display id "Space001", room id, or label) to that space's
    *  polygon (pixel coords), independent of the current canvas selection. Returns null if unmatched. */
   resolveSpacePolygon?: (id: string) => Point[] | null;
+  /** The parametric object attached to the currently-selected canvas element (Space / Node / Segment), for
+   *  the "Grab Object" node: its host kind, display id, and parameters as input-props rows. Null when the
+   *  selection has no attached object. A grabbing Grab Object node of the matching hostKind bakes these. */
+  grabObjectSelection?: { hostKind: "space" | "node" | "segment"; id: string; props: Record<string, unknown>[] } | null;
+  /** Per-Space attachment parameters, keyed by every id form that resolves to the space (display id
+   *  "Space001", room id, label). A Space (source) node with a matching id reflects its attached object's
+   *  parameters as read-only val-<key> outputs — so the Space node itself doubles as a Grab Object. Empty /
+   *  absent when a space has no attachment (the node then shows no parameters). */
+  spaceAttachmentProps?: Record<string, Record<string, unknown>[]>;
   /** Anchor (pixel coords) where a Space Creator centres its generated geometry — typically the selected
    *  space's centroid, else the centre of existing content. */
   createAnchor?: Point;
+  /** Every freehand stroke drawn on the canvas — its polyline (absolute px) + stroke colour. A Freehand
+   *  node emits the strokes matching its `color` param (blank = all) as one polyline network. */
+  freehandStrokes?: { points: Point[]; color: string }[];
   /** The canvas's currently-selected segment network (each a 2-point polyline) — what a Graph node
    *  emits while grabbing. */
   selectedGraphSegments?: Point[][];
@@ -1240,6 +1558,9 @@ export interface FlowOverlayProps {
   pipeGraph?: PipeGraphInput;
   /** Capture the 3D view's isometric snapshot as a PNG data URL (for the Render node). */
   onCaptureIsometric?: () => Promise<string | null>;
+  /** Capture the 2D PLAN as a content-cropped PNG data URL — the Agent node's feedback loop looks at this
+   *  to review the geometry its parameters actually drew. Same snapshot the canvas agents self-review with. */
+  onCaptureCanvas?: () => { dataUrl: string; widthM: number; heightM: number } | null;
   /** Stored Flow graph to seed the editor with on open (null/empty → fresh Source-only graph). */
   initialGraph?: SerializedFlow | null;
   /** Emitted whenever the graph changes, so the host can persist it onto the selected Space. */
@@ -1250,6 +1571,13 @@ export interface FlowOverlayProps {
   /** Display ids (e.g. "Space001") of every Space node whose eye is toggled off — the host hides those
    *  spaces on the canvas. Emitted whenever the hidden set changes; empty array = nothing hidden. */
   onHiddenSpaceIdsChange?: (ids: string[]) => void;
+  /** Colour filters of every Freehand-source node whose eye is toggled off — the host hides the matching
+   *  canvas freehand strokes. Lowercased hex, or "*" for a blank filter (hide every stroke). Empty array =
+   *  nothing hidden. Mirrors onHiddenSpaceIdsChange. */
+  onHiddenFreehandColorsChange?: (colors: string[]) => void;
+  /** Display ids (e.g. "Grid001") of every Grid-source node whose eye is toggled off — the host hides those
+   *  construction grids on the canvas. Empty array = nothing hidden. Mirrors onHiddenSpaceIdsChange. */
+  onHiddenGridIdsChange?: (ids: string[]) => void;
   /** Host-held bridge to set a node param from outside (e.g. the Properties tab) while the overlay is
    *  open, so both stay in sync. Assigned while mounted, cleared on unmount. */
   paramApiRef?: MutableRefObject<((nodeId: string, key: string, value: unknown) => void) | null>;
@@ -1263,6 +1591,20 @@ export interface FlowOverlayProps {
   injectWallGraphRef?: MutableRefObject<(() => void) | null>;
   /** Bridge to mirror a freshly-placed furniture node as a Node → Node to Object chain. */
   injectNodeObjectRef?: MutableRefObject<((nodeId: string) => void) | null>;
+  /** Bridge to mirror an object ATTACHED to a canvas node (Properties → Parametric Object) as a
+   *  Node → Parametric Object chain, so attaching and wiring it up in the flow are the same act. */
+  injectAttachedObjectRef?: MutableRefObject<((nodeDisplayId: string, pobj: Record<string, unknown>) => void) | null>;
+  /** Called with the graph ids of flow node(s) the user just DELETED (Delete button or key). Lets the host
+   *  drop a canvas attachment linked to a removed `pobj-source`. Fires only on real deletion — a graph
+   *  import/clear replaces nodes without emitting these — so it can't wipe attachments on a flow swap. */
+  onFlowNodesDeleted?: (nodeIds: string[]) => void;
+  /** Called when the user wires a `pobj-source` OUTPUT into a Node source, so the host mirrors it as a
+   *  canvas attachment on that node — the reverse of attaching from the Properties tab, giving the same
+   *  linked, bidirectional pair. */
+  onFlowObjectAttachedToNode?: (args: { flowNodeId: string; nodeDisplayId: string; objectId: string; definition: string; params: Record<string, number | string | boolean> }) => void;
+  /** Called when a parametric object is imported in the flow (Import browser), so the host also registers it
+   *  in the canvas object library — making it attachable on the canvas, exactly like importing via Properties. */
+  onImportObjectToLibrary?: (pobj: Record<string, unknown>) => void;
   /** Host-held bridge for the Chat AI Flow agent: READ the live graph + APPLY a generated one (through the
    *  overlay's importFlowData, which normalises + re-attaches node callbacks). Assigned while mounted,
    *  cleared on unmount; when closed the host falls back to liveFlowGraph. */
@@ -1289,12 +1631,277 @@ interface NodeCallbacks {
   onRunRender: (nodeId: string, params: Record<string, unknown>) => void;
   onRunDetect: (nodeId: string, params: Record<string, unknown>) => void;
   onRunVectorTune: (nodeId: string, params: Record<string, unknown>) => void;
+  onRunAgent: (nodeId: string, params: Record<string, unknown>) => void;
   onRunAnalyse: (nodeId: string, params: Record<string, unknown>) => void;
   onRunGenerate: (nodeId: string, params: Record<string, unknown>) => void;
   onRunLayoutGen: (nodeId: string, params: Record<string, unknown>) => void;
   onRunAnneal: (nodeId: string, params: Record<string, unknown>) => void;
   onAddRoom: (nodeId: string, params: Record<string, unknown>) => void;
+  onToggleDecompile: (nodeId: string) => void;
+  onToggleGroup: (nodeId: string) => void;
 }
+
+/** Plan metrics of a polygon (world-pixel coords) in metres — what an Agent node sends the model as its
+ *  description of the Space wired in. Shared by the Run action and the staleness check so both fingerprint
+ *  the same numbers. */
+export const agentContextOf = (poly: Point[], ppm: number): SuggestContext => {
+  // A Node (a single point) or a Segment (an open 2-point line) has NO area — the agent still runs, tuning its
+  // targets from the prompt + each target's schema, just without a Space's area/perimeter context. Compute
+  // whatever the geometry supports: bbox width/height + path length once there are ≥2 points, and area only for
+  // a closed ring of ≥3. An empty/1-point poly returns a zero context (the object-only brief case).
+  if (poly.length < 2) return { areaM2: 0, widthM: 0, heightM: 0, perimeterM: 0, aspect: 1, vertexCount: poly.length };
+  const xs = poly.map((p) => p.x);
+  const ys = poly.map((p) => p.y);
+  const wM = (Math.max(...xs) - Math.min(...xs)) / ppm;
+  const hM = (Math.max(...ys) - Math.min(...ys)) / ppm;
+  const closed = poly.length >= 3;
+  let perimPx = 0;
+  let area2 = 0; // shoelace ×2
+  const segs = closed ? poly.length : poly.length - 1; // open path: don't wrap the last→first edge
+  for (let i = 0; i < segs; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    perimPx += Math.hypot(b.x - a.x, b.y - a.y);
+    if (closed) area2 += a.x * b.y - b.x * a.y;
+  }
+  return {
+    areaM2: Math.abs(area2 / 2) / (ppm * ppm),
+    widthM: wM,
+    heightM: hM,
+    perimeterM: perimPx / ppm,
+    aspect: hM > 0 ? wM / hM : 1,
+    vertexCount: poly.length,
+  };
+};
+
+/** The footprint an Agent reasons about, taken from ANY node it is directly wired to, in EITHER direction —
+ *  so an Agent can simply hang off a Space (or an op) instead of being spliced into the geometry chain:
+ *   • Agent → Space: a Space is a canvas-fed root, skipped by the evaluator, so it publishes no preview
+ *     item — its footprint comes from the resolved source map instead.
+ *   • Agent ↔ any op (Inset, BSP, Optimise …): read that node's evaluated output off the preview.
+ *  (Space → Agent needs none of this: the geometry passes through onto the agent's OWN preview item, which
+ *  the caller checks first.)
+ *
+ *  Only a closed ring of 3+ points qualifies, because that's what the agent's context describes (area /
+ *  perimeter / aspect). A Node source emits bare points and a Segment source open polylines — neither has
+ *  an area, so neither can serve as the brief here. */
+export const agentGeometryPolyOf = (
+  nodeId: string,
+  edges: Edge[],
+  preview: FlowPreviewItem[],
+  sourcePolys: Map<string, Point[][]>,
+): Point[] | undefined => {
+  const usable = (polys: Point[][] | undefined): Point[] | undefined => polys?.find((p) => p.length >= 3);
+  const geomOf = (otherId: string): Point[] | undefined =>
+    usable(sourcePolys.get(otherId)) ?? usable(preview.find((it) => it.nodeId === otherId)?.polygons);
+  // Prefer the INPUT endpoint — the geometry wired INTO the agent is the context it reasons about:
+  // (Space | Segment | Node) → Agent → Input Properties reads the SPACE, not the object the brief then
+  // generates on the output side. Only plain geometry inputs count (valin-/gin- carry values / stamps).
+  for (const e of edges) {
+    if (e.target !== nodeId || e.targetHandle?.startsWith("valin-") || e.targetHandle?.startsWith("gin-")) continue;
+    const poly = geomOf(e.source);
+    if (poly) return poly;
+  }
+  // Fallback — the OUTPUT endpoint: the older hang-off shape (Agent → Space) puts the geometry on the node
+  // the agent points at, so read that when nothing feeds the input. Skip the agent's own val-* republish wires.
+  for (const e of edges) {
+    if (e.source !== nodeId || e.sourceHandle?.startsWith("val-")) continue;
+    if (e.targetHandle?.startsWith("valin-") || e.targetHandle?.startsWith("gin-")) continue;
+    const poly = geomOf(e.target);
+    if (poly) return poly;
+  }
+  return undefined;
+};
+
+/** The nodes an Agent may tune, with their tunable parameter schema. Resolution order:
+ *  (0) DIRECT NEIGHBOURS, ALWAYS — everything the agent is wired to AND everything wired into it, on any
+ *      handle. This is what lets the agent sit ANYWHERE in the flow rather than only at the front hanging
+ *      off a source: drop it between two ops and it tunes both.
+ *  (1) EXPLICIT — the node(s) wired off the agent's geometry OUTPUT ((Space|Segment|Node) → Agent → Input
+ *      Properties → primitives): the agent tunes exactly what it points at, no graph-walking, and that
+ *      node's val-* wires drive the rest of the object for free.
+ *  (2) FALLBACK (only when nothing explicit is wired) — infer from the graph: ops reachable downstream AND
+ *      upstream, PLUS the parameter sources feeding any node in the agent's connected component.
+ *  (3) Plus anything wired directly off one of the agent's own `val-<key>` outputs, in either topology.
+ *
+ *  (0) and (2)'s backward walk are what make placement free. Both are additive — `consider` still refuses
+ *      other Agents and the geometry WIRING sources, so a broader reach never turns "which Space am I
+ *      pointing at" into a design parameter.
+ *
+ *  Only range/number/select/checkbox fields are offered — free text and secrets are never model-set. And
+ *  `showIf` is deliberately NOT applied: a field hidden by the CURRENT params may become relevant once the
+ *  agent changes the param that gates it (e.g. Corridoor's `offset` once `shape` becomes "insetted"), so
+ *  the model sees the whole schema and can set both together. */
+export const agentTargetsOf = (nodeId: string, nodes: Node[], edges: Edge[]): SuggestTarget[] => {
+  const TUNABLE = new Set(["range", "number", "select", "checkbox"]);
+  // Geometry SOURCES the agent merely hangs off (Space / Node / Segment / Canvas / Graph / Grid): their
+  // params are WIRING (which element, grab-from-selection, output mode), never design — never tune them, and
+  // never let one count as an explicit output target. pobj-source / input-props / grab-object are NOT here:
+  // those carry the real design brief in their `props` array, and remain tunable.
+  const WIRING_SOURCES = new Set(["source", "node-source", "segment-source", "canvas-source", "graph-source", "grid-source"]);
+  const found = new Map<string, SuggestTarget>();
+  // A param fed by a `valin-<key>` wire is driven by its SOURCE node: evaluateFlow's resolveValueInputs
+  // OVERRIDES the node's own param with the wired value. Setting it here would be silently masked on the
+  // next eval, so it isn't offered — the agent tunes the source (e.g. a Parametric Site's brief) instead.
+  const wired = new Set<string>();
+  for (const e of edges) {
+    if (e.targetHandle?.startsWith("valin-")) wired.add(`${e.target}::${e.targetHandle.slice(6)}`);
+  }
+  // ── (0) DIRECT NEIGHBOURS — always, in BOTH directions ────────────────────────────────────────────
+  // The agent may sit ANYWHERE in the flow: whatever it is wired TO (forward) and whatever is wired
+  // FROM into it (backward) is a tuning target, whichever handle the edge uses. Declared after
+  // `consider` below and run first, so an agent dropped mid-chain sees its immediate neighbours without
+  // any special topology — no need to hang it off a source or point it at an Input Properties node.
+  //
+  // This is additive and can't broaden the classic topologies: `consider` already refuses other Agents
+  // and the geometry WIRING sources, so "which Space am I pointing at" still never becomes a design
+  // parameter, and a brief node wired off the output was already offered by (1).
+  const consider = (id: string) => {
+    if (id === nodeId || found.has(id)) return;
+    const nd = nodes.find((n) => n.id === id)?.data as FlowNodeData | undefined;
+    const def = nd && FLOW_TOOLS[nd.tool];
+    // Never tune another Agent node's readout, nor a geometry SOURCE the agent just hangs off: a wire to a
+    // Space / Node / Segment source puts it in this walk, but its params (id / grab-from-selection / output
+    // mode) are WIRING, not design — the model could repoint or unpin the very element it just measured.
+    if (!nd || !def || nd.tool === "agent" || WIRING_SOURCES.has(nd.tool)) return;
+    // PROPS-DRIVEN nodes (Parametric Site / Input Properties / Grab Object) keep their parameters in a
+    // `props` ARRAY, not in def.fields (which is empty for them) — and that array is usually the real
+    // design brief, feeding the ops downstream through val-* wires. Offer those; they're the values that
+    // actually move the geometry. Their own def.fields (e.g. Grab Object's host picker) are wiring, not
+    // design, so they're deliberately left alone.
+    const props = inputProps(nd.params);
+    const params: SuggestParamSpec[] = props.length
+      ? props
+          .filter((p) => TUNABLE.has(p.type))
+          .map((p) => {
+            const s: SuggestParamSpec = { key: p.id, label: p.name || p.id, kind: p.type, current: p.value };
+            if (p.type === "range") { s.min = p.min; s.max = p.max; s.step = p.step; }
+            if (p.options.length) s.options = p.options;
+            return s;
+          })
+      : def.fields
+          .filter((f) => TUNABLE.has(f.kind) && !f.secret && !wired.has(`${id}::${f.key}`))
+          .map((f) => {
+            const s: SuggestParamSpec = {
+              key: f.key,
+              label: f.label,
+              kind: f.kind,
+              current: (nd.params[f.key] ?? "") as string | number | boolean,
+            };
+            if (f.min != null) s.min = f.min;
+            if (f.max != null) s.max = f.max;
+            if (f.step != null) s.step = f.step;
+            if (f.unit != null) s.unit = f.unit;
+            if (f.options?.length) s.options = f.options.map((o) => o.value);
+            return s;
+          });
+    if (params.length) found.set(id, { nodeId: id, tool: nd.tool, label: def.label, instructions: def.instructions, params });
+  };
+  // Defined here (after `consider`) and called immediately, so declaration order is never in doubt.
+  const considerNeighbours = () => {
+    for (const e of edges) {
+      if (e.source === nodeId) consider(e.target);
+      else if (e.target === nodeId) consider(e.source);
+    }
+  };
+  considerNeighbours();
+
+  // ── (1) EXPLICIT output target — the preferred, unambiguous wiring ────────────────────────────────
+  //   (Space | Segment | Node) → Agent → Input Properties → 2D/3D primitives + Expressions.
+  // When the agent points its geometry OUTPUT at a design-BRIEF node (pobj-source / input-props / grab-object),
+  // THAT node is the thing to tune: its `props` are the brief, and its own val-* wires drive the rest of the
+  // object for free. The agent reads geometry on its INPUT (agentGeometryPolyOf) and writes that one node's
+  // params — no graph-walking, no guessing. Only a plain geometry-output edge counts (val-* republish wires
+  // are handled in (3); valin-/gin- are value/stamp inputs, not tuning targets). Pointing at an OP instead,
+  // or hanging off a Space/Node source, is NOT an explicit brief → drop to the inference in (2), which still
+  // offers that op via the downstream chain. So this is purely ADDITIVE: it makes the agent more precise for
+  // the brief-node topology and can't change how any existing hang-off / inline-op flow resolves.
+  const BRIEF_TOOLS = new Set(["pobj-source", "input-props", "grab-object"]);
+  let explicit = false;
+  for (const e of edges) {
+    if (e.source !== nodeId || e.sourceHandle?.startsWith("val-")) continue;
+    if (e.targetHandle?.startsWith("valin-") || e.targetHandle?.startsWith("gin-")) continue;
+    const tgt = nodes.find((n) => n.id === e.target)?.data as FlowNodeData | undefined;
+    if (tgt && BRIEF_TOOLS.has(tgt.tool)) { consider(e.target); explicit = true; }
+  }
+
+  // ── (2) FALLBACK: infer the tunable set from the graph (only when nothing explicit was wired) ──────
+  // Geometry chain downstream (value wires aren't the chain): on a hand-built flow the ops on this chain ARE
+  // the design, so offer their params directly. PLUS the parameter sources feeding any node in the whole
+  // connected component — a decompiled Staircase keeps its brief in a pobj-source that reaches the terminal
+  // Node only through val-* wires + a gin-stamp (invisible to a directed walk), so treat edges as UNDIRECTED
+  // to find every node the object is built from; a disjoint object shares no edge, so it stays unreached.
+  if (!explicit) {
+    const adj = new Map<string, string[]>();
+    for (const e of edges) {
+      if (e.targetHandle?.startsWith("valin-")) continue;
+      const l = adj.get(e.source);
+      if (l) l.push(e.target); else adj.set(e.source, [e.target]);
+    }
+    const seen = new Set<string>([nodeId]);
+    const queue = [nodeId];
+    while (queue.length) {
+      for (const nxt of adj.get(queue.shift()!) ?? []) {
+        if (seen.has(nxt)) continue;
+        seen.add(nxt);
+        queue.push(nxt);
+        consider(nxt);
+      }
+    }
+    // …and the same walk BACKWARD. An agent placed at the END of a chain (or anywhere mid-chain) must
+    // still see the ops that BUILT its input — downstream-only would leave everything upstream untunable,
+    // which is why the agent used to be pinned to the front of a flow.
+    const radj = new Map<string, string[]>();
+    for (const e of edges) {
+      if (e.targetHandle?.startsWith("valin-")) continue;
+      const l = radj.get(e.target);
+      if (l) l.push(e.source); else radj.set(e.target, [e.source]);
+    }
+    const upSeen = new Set<string>([nodeId]);
+    const upQueue = [nodeId];
+    while (upQueue.length) {
+      for (const nxt of radj.get(upQueue.shift()!) ?? []) {
+        if (upSeen.has(nxt)) continue;
+        upSeen.add(nxt);
+        upQueue.push(nxt);
+        consider(nxt);
+      }
+    }
+    const undirected = new Map<string, string[]>();
+    const link = (a: string, b: string) => { const l = undirected.get(a); if (l) l.push(b); else undirected.set(a, [b]); };
+    for (const e of edges) { link(e.source, e.target); link(e.target, e.source); }
+    const reached = new Set<string>([nodeId]);
+    const rq = [nodeId];
+    while (rq.length) {
+      for (const nxt of undirected.get(rq.shift()!) ?? []) {
+        if (reached.has(nxt)) continue;
+        reached.add(nxt);
+        rq.push(nxt);
+      }
+    }
+    for (const e of edges) {
+      if (!e.targetHandle?.startsWith("valin-")) continue;
+      if (reached.has(e.target)) consider(e.source);
+    }
+  }
+
+  // ── (3) The agent's own val-<key> output consumers — explicit links in either topology ────────────
+  for (const e of edges) if (e.source === nodeId && e.sourceHandle?.startsWith("val-")) consider(e.target);
+  return [...found.values()];
+};
+
+/** Let a param write flow all the way to PIXELS before the Agent photographs the canvas. The chain is
+ *  long: onParamChange → React commit → the `preview` memo re-evaluating the graph → onPreview lifting the
+ *  result to the host → the host's own commit → Konva's redraw. Snapshot too early and you photograph the
+ *  PREVIOUS round's geometry, so the reviewer critiques a stale image and the loop can never converge —
+ *  the worst kind of bug, because it still looks like it's working. Several frames is a heuristic, not a
+ *  guarantee; there's no single event that means "the canvas now reflects this write". */
+const settleCanvas = (frames = 8): Promise<void> =>
+  new Promise((resolve) => {
+    let n = 0;
+    const tick = () => (++n >= frames ? resolve() : requestAnimationFrame(tick));
+    requestAnimationFrame(tick);
+  });
 
 const makeNode = (
   tool: FlowToolType,
@@ -1313,7 +1920,7 @@ const makeNode = (
     position: pos,
     // Every node (Space included) is deletable, so the canvas can be emptied completely.
     deletable: true,
-    data: { tool, params: { ...def.defaultParams }, onParamChange: cb.onParamChange, onRunRender: cb.onRunRender, onRunDetect: cb.onRunDetect, onRunVectorTune: cb.onRunVectorTune, onRunAnalyse: cb.onRunAnalyse, onRunGenerate: cb.onRunGenerate, onRunLayoutGen: cb.onRunLayoutGen, onRunAnneal: cb.onRunAnneal, onAddRoom: cb.onAddRoom } as FlowNodeData,
+    data: { tool, params: { ...def.defaultParams }, onParamChange: cb.onParamChange, onRunRender: cb.onRunRender, onRunDetect: cb.onRunDetect, onRunVectorTune: cb.onRunVectorTune, onRunAnalyse: cb.onRunAnalyse, onRunGenerate: cb.onRunGenerate, onRunAgent: cb.onRunAgent, onRunLayoutGen: cb.onRunLayoutGen, onRunAnneal: cb.onRunAnneal, onAddRoom: cb.onAddRoom, onToggleDecompile: cb.onToggleDecompile } as FlowNodeData,
   };
 };
 
@@ -1413,163 +2020,34 @@ const LibTreeNode = ({ node, depth, expanded, onToggle, onPick, basePath = "Flow
   );
 };
 
-/** Convert a parametric-object file (with a `geometry.pipeline`) back into a Flow graph for visualisation:
- *  `host` → the Source node, `parameters` → an Input Props node, each pipeline op → its tool node. Wires the
- *  main chain (Source → Input Props → op₁ → op₂ → …) plus a value edge from Input Props to every op param that
- *  REFERENCES a parameter (and is a real value-input of that tool — e.g. inset `uniformSetback`, optimise-rect
- *  `count`, massing `n`). Param-referenced op params are baked to the parameter's default as the node's literal
- *  value. Objects without a pipeline yield just Source + Input Props (nothing to chain). */
-// ── pobj → flow decompilation helpers (read-only visualisation) ──────────────────────────────────────
-/** Built-in functions / constants in the parametric expression language — excluded when detecting which
- *  params / vars an expression depends on. */
-const POBJ_EXPR_FUNCS = new Set(["cos", "sin", "tan", "atan2", "pow", "sqrt", "min", "max", "floor", "ceil", "round", "abs", "PI", "hostArea"]);
-/** Identifiers in `expr` that name a known param / var (so an edge can be wired to that source). */
-const identsInExpr = (expr: string, known: Set<string>): string[] => {
-  const out = new Set<string>();
-  for (const m of String(expr).matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
-    const id = m[0];
-    if (!POBJ_EXPR_FUNCS.has(id) && known.has(id)) out.add(id);
-  }
-  return [...out];
-};
-/** Match a simple `A op B` expression (op ∈ + − × ÷, operands = identifier or number) → a Math node spec. */
-const simpleBinaryExpr = (expr: string): { a: string; b: string; op: string } | null => {
-  const m = String(expr).trim().match(/^(-?\d*\.?\d+|[A-Za-z_][A-Za-z0-9_]*)\s*([-+*/])\s*(-?\d*\.?\d+|[A-Za-z_][A-Za-z0-9_]*)$/);
-  if (!m) return null;
-  const op = ({ "+": "add", "-": "subtract", "*": "multiply", "/": "divide" } as Record<string, string>)[m[2]];
-  return op ? { a: m[1], b: m[3], op } : null;
-};
-/** Readable spec text for a geometry rule (poly / line / box), showing its coordinate expressions. */
-const ruleSpecText = (rule: Record<string, unknown>): { tool: string; spec: string } | null => {
-  const ptsText = (pts: unknown): string =>
-    Array.isArray(pts) ? pts.map((p) => (Array.isArray(p) ? `(${p[0]}, ${p[1]})` : "")).filter(Boolean).join("\n") : "";
-  const extrude = (o: Record<string, unknown>): string => (o.h0 != null || o.h1 != null ? `\nextrude ${o.h0 ?? 0} → ${o.h1 ?? 0}` : "");
-  const poly = rule.poly as Record<string, unknown> | undefined;
-  if (poly) return { tool: "create-polygon", spec: ptsText(poly.pts) + extrude(poly) };
-  const box = rule.box as Record<string, unknown> | undefined;
-  if (box) return { tool: "create-box", spec: `x: ${box.x0} … ${box.x1}\ny: ${box.y0} … ${box.y1}${extrude(box)}` };
-  const line = rule.line as Record<string, unknown> | undefined;
-  if (line) return { tool: rule.repeat != null ? "create-arc" : "create-segment", spec: ptsText(line.pts) };
-  return null;
-};
-
-const pobjToFlowGraph = (pobj: Record<string, unknown>): { version: number; nodes: unknown[]; edges: unknown[] } => {
-  const params = Array.isArray(pobj.parameters) ? (pobj.parameters as Record<string, unknown>[]) : [];
-  const paramKeys = new Set(params.map((p) => String(p.key)));
-  const defaultOf = (key: string): unknown => params.find((p) => String(p.key) === key)?.default;
-  const propType = (kind: unknown): InputPropType =>
-    kind === "number" ? "range" : kind === "color" ? "color" : kind === "checkbox" ? "checkbox" : kind === "select" ? "select" : "text";
-  const props: InputProp[] = params.map((p) => ({
-    id: String(p.key),
-    name: String(p.label ?? p.key),
-    type: propType(p.kind),
-    value: (p.default ?? (p.kind === "checkbox" ? false : p.kind === "number" ? 0 : "")) as InputProp["value"],
-    min: typeof p.min === "number" ? p.min : 0,
-    max: typeof p.max === "number" ? p.max : 100,
-    step: typeof p.step === "number" ? p.step : 1,
-    options: Array.isArray(p.options) ? (p.options as Record<string, unknown>[]).map((o) => ({ value: String(o.value), label: String(o.label ?? o.value) })) : [],
-  }));
-
-  const nodes: unknown[] = [
-    { id: "source", position: { x: 80, y: 200 }, data: { tool: "source", params: { grabFromSelection: true } } },
-    { id: "input-props", position: { x: 340, y: 200 }, data: { tool: "input-props", params: { props } } },
-  ];
-  const edges: unknown[] = [
-    { id: "e-source-input-props", source: "source", target: "input-props", sourceHandle: null, targetHandle: null },
-  ];
-
-  const geom = pobj.geometry && typeof pobj.geometry === "object" ? (pobj.geometry as Record<string, unknown>) : {};
-  const pipeline = Array.isArray(geom.pipeline) ? (geom.pipeline as Record<string, unknown>[]) : [];
-  let prevId = "input-props";
-  let x = 600;
-  let step = 0;
-  for (const opRaw of pipeline) {
-    const opName = typeof opRaw.op === "string" ? opRaw.op : "";
-    if (!opName || opName === "host") continue; // `host` is represented by the Source node
-    step += 1;
-    const nodeId = `${opName}_${step}`;
-    const viKeys = new Set((FLOW_TOOLS[opName as FlowToolType]?.valueInputs ?? []).map((v) => v.key));
-    const opParams = opRaw.params && typeof opRaw.params === "object" ? (opRaw.params as Record<string, unknown>) : {};
-    const nodeParams: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(opParams)) {
-      if (typeof v === "string" && paramKeys.has(v)) {
-        nodeParams[k] = defaultOf(v); // bake the referenced parameter's default as the literal value
-        if (viKeys.has(k)) edges.push({ id: `v-${v}-${nodeId}`, source: "input-props", target: nodeId, sourceHandle: `val-${v}`, targetHandle: `valin-${k}` });
-      } else {
-        nodeParams[k] = v;
-      }
-    }
-    nodes.push({ id: nodeId, position: { x, y: 200 }, data: { tool: opName, params: nodeParams } });
-    edges.push({ id: `e-${prevId}-${nodeId}`, source: prevId, target: nodeId, sourceHandle: null, targetHandle: null });
-    prevId = nodeId;
-    x += 260;
-  }
-
-  // ── Vars (calculation chain) → a column of Math (simple A op B) / Expression nodes. Each var's referenced
-  //    params / earlier vars are wired into it (val-* → valin-*), so the calculation graph is visible. ──
-  const known = new Set<string>(paramKeys);
-  const varSourceOf: Record<string, { source: string; handle: string }> = {};
-  for (const k of paramKeys) varSourceOf[k] = { source: "input-props", handle: `val-${k}` };
-  const wireDep = (dep: string, targetId: string, targetHandle: string, idPrefix: string) => {
-    const src = varSourceOf[dep];
-    if (src) edges.push({ id: `${idPrefix}-${dep}-${targetId}`, source: src.source, target: targetId, sourceHandle: src.handle, targetHandle });
-  };
-  const vars = geom.vars && typeof geom.vars === "object" ? (geom.vars as Record<string, unknown>) : {};
-  let vy = 60;
-  for (const [name, exprRaw] of Object.entries(vars)) {
-    if (name.startsWith("_")) continue;
-    const expr = String(exprRaw);
-    const nid = `var_${name}`;
-    const deps = identsInExpr(expr, known);
-    const sb = simpleBinaryExpr(expr);
-    if (sb) {
-      const operand = (t: string): number => (paramKeys.has(t) ? Number(defaultOf(t)) || 0 : /^-?\d/.test(t) ? Number(t) : 0);
-      nodes.push({ id: nid, position: { x: 640, y: vy }, data: { tool: "math", params: { a: operand(sb.a), b: operand(sb.b), op: sb.op, round: "none", _label: name } } });
-      if (known.has(sb.a) || paramKeys.has(sb.a)) wireDep(sb.a, nid, "valin-a", "va");
-      if (known.has(sb.b) || paramKeys.has(sb.b)) wireDep(sb.b, nid, "valin-b", "vb");
-    } else {
-      nodes.push({ id: nid, position: { x: 640, y: vy }, data: { tool: "expr", params: { name, expr } } });
-      for (const dep of deps) wireDep(dep, nid, "valin-deps", "vd");
-    }
-    varSourceOf[name] = { source: nid, handle: sb ? "val-result" : "val-result" };
-    known.add(name);
-    vy += 130;
-  }
-
-  // ── Geometry rules (from geometry.cases) → Create Polygon / Segment / Arc / Box nodes. Each rule's
-  //    coordinate expressions are shown; the params / vars it references are wired in. Case + rule `when`
-  //    and `repeat` are noted on the node. ──
-  const cases = Array.isArray(geom.cases) ? (geom.cases as Record<string, unknown>[]) : [];
-  let gy = 60;
-  let gi = 0;
-  for (const c of cases) {
-    const caseWhen = typeof c.when === "string" ? c.when : "";
-    const localNames = c.vars && typeof c.vars === "object" ? Object.keys(c.vars as object).filter((k) => !k.startsWith("_")) : [];
-    const known2 = new Set<string>([...known, ...localNames]);
-    const rules = Array.isArray(c.rules) ? (c.rules as Record<string, unknown>[]) : [];
-    for (const rule of rules) {
-      const built = ruleSpecText(rule);
-      if (!built) continue;
-      gi += 1;
-      const nid = `geom_${gi}`;
-      const noteBits: string[] = [];
-      if (caseWhen) noteBits.push(`case: ${caseWhen}`);
-      if (typeof rule.when === "string") noteBits.push(`when: ${rule.when}`);
-      if (rule.repeat != null) noteBits.push(`repeat: ${rule.repeat}`);
-      const label = typeof rule.comment === "string" ? rule.comment : "";
-      nodes.push({ id: nid, position: { x: 980, y: gy }, data: { tool: built.tool, params: { label, spec: built.spec, note: noteBits.join(" · ") } } });
-      const depText = `${built.spec} ${String(rule.when ?? "")} ${String(rule.repeat ?? "")}`;
-      for (const dep of identsInExpr(depText, known2)) if (varSourceOf[dep]) wireDep(dep, nid, "valin-deps", "gd");
-      gy += 150;
-    }
-  }
-
-  return { version: 1, nodes, edges };
-};
-
 export const FlowOverlay = (props: FlowOverlayProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  // Wrap React Flow's node-change handler so a DELETE (Delete/Backspace key) also tells the host, which drops
+  // any canvas attachment linked to the removed node. Programmatic replaces (import/clear) go through setNodes
+  // directly and emit no 'remove' change, so this fires only on genuine user deletion.
+  const onFlowNodesDeleted = props.onFlowNodesDeleted;
+  const handleNodesChange = useCallback((changes: Parameters<typeof onNodesChange>[0]) => {
+    if (onFlowNodesDeleted) {
+      const removed = changes.filter((c) => c.type === "remove").map((c) => (c as { id: string }).id);
+      if (removed.length) onFlowNodesDeleted(removed);
+    }
+    onNodesChange(changes);
+  }, [onNodesChange, onFlowNodesDeleted]);
+  // Always-current mirrors so injected node callbacks (captured at node creation) can read live graph state
+  // without going stale — used by the Object Node's decompile toggle to walk the downstream subgraph.
+  const nodesRef = useRef(nodes); nodesRef.current = nodes;
+  const edgesRef = useRef(edges); edgesRef.current = edges;
+  // Ref to importFlowData (defined lower down) so the Object Node's decompile button can EXPLODE a lone
+  // pobj-source into its primitive graph on demand — for ANY imported object, not just flagged ones.
+  const importFlowDataRef = useRef<((g: { nodes?: unknown[]; edges?: unknown[] }) => number) | null>(null);
+  // Mirror of the latest evaluated preview (the `preview` memo is defined lower down) so the Agent node's
+  // Run action can read the polygon arriving on its input — same forward-ref trick as importFlowDataRef.
+  const previewRef = useRef<FlowPreviewItem[]>([]);
+  // Mirror of the resolved Space-source footprints (the `sourcePolys` map is built lower down) so the Agent
+  // node's Run action can read the Space it is wired INTO (Agent → Space) — that direction leaves nothing on
+  // the agent's own input, because a Space ignores incoming geometry. Same forward-ref trick as previewRef.
+  const sourcePolysRef = useRef<Map<string, Point[][]>>(new Map());
   const [jsonOpen, setJsonOpen] = useState(false);
   const [initialised, setInitialised] = useState(false);
   // Toolbar "Fold" toggle: when on, collapse every node to its title bar; when off, expand all. Drives
@@ -1607,6 +2085,179 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       }),
     );
   }, [setNodes]);
+
+  // Object Node "decompile" toggle: hide (or re-show) every node + edge DOWNSTREAM of `nodeId` — the
+  // materialised Inset / Circle Packing / Cylinder … chain — collapsing the graph back to the lone Object
+  // Node. Walks the outgoing-edge graph from the current edges (via refs so it never reads stale state), sets
+  // React Flow's `hidden` on the reachable nodes + their edges, and records the state as `_decompileHidden`
+  // on the Object Node so its button icon reflects it.
+  const onToggleDecompile = useCallback((nodeId: string) => {
+    // UNDIRECTED reachability: the decomposed primitives point INTO the Merge / Display-3D sinks, so a
+    // downstream-only walk misses constant parts (e.g. chair legs, which only have an outgoing edge to a
+    // sink). Walk undirected from the Object Node and hide everything reachable EXCEPT the Object Node itself
+    // and any source node — so the whole decompile collapses back to the Object Node + its host source.
+    const adj = new Map<string, string[]>();
+    const add = (a: string, b: string) => { const l = adj.get(a); if (l) l.push(b); else adj.set(a, [b]); };
+    for (const e of edgesRef.current) { add(e.source, e.target); add(e.target, e.source); }
+    const SOURCE_TOOLS = new Set(["source", "node-source", "segment-source", "canvas-source", "graph-source", "grid-source", "image"]);
+    const toolOf = (id: string) => (nodesRef.current.find((n) => n.id === id)?.data as FlowNodeData | undefined)?.tool ?? "";
+    const hideSet = new Set<string>();
+    const seen = new Set<string>([nodeId]);
+    const queue = [nodeId];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const nxt of adj.get(cur) ?? []) {
+        if (seen.has(nxt)) continue;
+        seen.add(nxt);
+        queue.push(nxt);
+        if (!SOURCE_TOOLS.has(toolOf(nxt))) hideSet.add(nxt); // keep sources visible; hide the rest
+      }
+    }
+    const start = nodesRef.current.find((n) => n.id === nodeId);
+    // Not yet decomposed (nothing reachable but sources) → EXPLODE this Object Node into its primitive graph
+    // ON DEMAND, from its stored `definition` — so ANY imported object decompiles on click, not just flagged
+    // ones. (Replaces the current flow with the decompiled graph — do it on a freshly-imported object.)
+    if (hideSet.size === 0) {
+      const defText = (start?.data as FlowNodeData | undefined)?.params?.definition;
+      if (typeof defText === "string" && defText) {
+        try {
+          const pobj = JSON.parse(defText) as ParametricObjectFile;
+          // A PIPELINE / FLOW object explodes into its OPERATION nodes (inset / split / optimise-rect …); a
+          // rule-based object (box / circle) explodes into 2D + 3D PRIMITIVE nodes. Pick the mode by content so
+          // pipeline-only objects (no box/circle rules) decompile into their operations instead of failing the
+          // primitives path.
+          const pl = (pobj.geometry as { pipeline?: unknown } | undefined)?.pipeline;
+          const hasPipeline = Array.isArray(pl) && pl.length > 0;
+          const hasFlow = Array.isArray(pobj.flow?.nodes) && (pobj.flow?.nodes?.length ?? 0) > 0;
+          const graph = hasPipeline || hasFlow ? pobjToAttachedFlow(pobj, {}) : pobjToAttachedFlow({ ...pobj, decompile: "primitives" }, {});
+          if ((graph.nodes?.length ?? 0) > 2) { importFlowDataRef.current?.(graph); toast.success(`Decompiled "${pobj.meta?.name ?? "object"}"`); }
+          else toast.error("Nothing to decompile in this object");
+        } catch { toast.error("Couldn't decompile this object"); }
+      }
+      return;
+    }
+    const willHide = !((start?.data as FlowNodeData | undefined)?.params._decompileHidden);
+    setNodes((ns) => ns.map((n) =>
+      n.id === nodeId ? { ...n, data: { ...n.data, params: { ...(n.data as FlowNodeData).params, _decompileHidden: willHide } } }
+        : hideSet.has(n.id) ? { ...n, hidden: willHide } : n));
+    setEdges((es) => es.map((e) => (hideSet.has(e.source) || hideSet.has(e.target) ? { ...e, hidden: willHide } : e)));
+  }, [setNodes, setEdges]);
+
+  // Group box chevron: fold the box down to its title bar. Children — and any edge touching one — get React
+  // Flow's `hidden`, exactly as the decompile toggle above does; the expanded height is stashed on the box so
+  // expanding restores it. `hidden` never reaches the serialized graph (buildGraph rebuilds each node from
+  // scratch), but `collapsed` is a real param, so a flow saved folded reopens folded.
+  const onToggleGroup = useCallback((groupId: string) => {
+    const kids = new Set(nodesRef.current.filter((n) => n.parentId === groupId).map((n) => n.id));
+    const gParams = (nodesRef.current.find((n) => n.id === groupId)?.data as FlowNodeData | undefined)?.params ?? {};
+    const willCollapse = !gParams.collapsed;
+    setNodes((ns) => ns.map((n) => {
+      if (n.id === groupId) {
+        const style = (n.style ?? {}) as { width?: number; height?: number };
+        const curH = typeof style.height === "number" ? style.height : n.measured?.height ?? 160;
+        const params: Record<string, unknown> = { ...(n.data as FlowNodeData).params, collapsed: willCollapse };
+        if (willCollapse) params.expandedHeight = curH;
+        const h = willCollapse
+          ? GROUP_HEADER
+          : (typeof gParams.expandedHeight === "number" ? gParams.expandedHeight : curH);
+        return { ...n, data: { ...n.data, params } as FlowNodeData, style: { ...style, height: h } };
+      }
+      return kids.has(n.id) ? { ...n, hidden: willCollapse } : n;
+    }));
+    setEdges((es) => es.map((e) => (kids.has(e.source) || kids.has(e.target) ? { ...e, hidden: willCollapse } : e)));
+  }, [setNodes, setEdges]);
+
+  // Keep every EXPANDED group box fitted to its children ("docked"). React Flow only knows real node sizes
+  // after it has measured them, so a box authored in JSON — or one whose children were collapsed/expanded,
+  // changing their heights — is re-fitted here from the measured bounds. Children are parent-relative with
+  // `extent: "parent"`, so their offsets never go below the pad and the box only has to cover the far edge.
+  // Also stamps `_childCount` for the collapsed title bar. Guarded on a >1px delta so it cannot loop
+  // against its own setNodes.
+  useEffect(() => {
+    const groups = nodes.filter((n) => n.type === "group");
+    if (!groups.length) return;
+    const upd = new Map<string, { w?: number; h?: number; count: number }>();
+    for (const g of groups) {
+      const kids = nodes.filter((n) => n.parentId === g.id);
+      const params = (g.data as FlowNodeData).params ?? {};
+      const cur = (g.style ?? {}) as { width?: number; height?: number };
+      let w: number | undefined; let h: number | undefined;
+      if (!params.collapsed && kids.length) {
+        let maxX = 0; let maxY = 0;
+        for (const k of kids) {
+          maxX = Math.max(maxX, k.position.x + (k.measured?.width ?? 200));
+          maxY = Math.max(maxY, k.position.y + (k.measured?.height ?? 120));
+        }
+        const wantW = maxX + GROUP_PAD; const wantH = maxY + GROUP_PAD;
+        if (Math.abs((cur.width ?? 0) - wantW) > 1) w = wantW;
+        if (Math.abs((cur.height ?? 0) - wantH) > 1) h = wantH;
+      }
+      if (w != null || h != null || params._childCount !== kids.length) upd.set(g.id, { w, h, count: kids.length });
+    }
+    if (!upd.size) return;
+    setNodes((ns) => ns.map((n) => {
+      const u = upd.get(n.id);
+      if (!u) return n;
+      const style = { ...(n.style ?? {}) } as { width?: number; height?: number };
+      if (u.w != null) style.width = u.w;
+      if (u.h != null) style.height = u.h;
+      const d = n.data as FlowNodeData;
+      return { ...n, style, data: { ...d, params: { ...d.params, _childCount: u.count } } as FlowNodeData };
+    }));
+  }, [nodes, setNodes]);
+
+  // ---- Folded-node edge view -------------------------------------------------------------------------
+  // A folded node hides its per-param `valin-*`/`val-*` handles, so every edge anchored to one would
+  // vanish with it and the node would look disconnected. Instead, all edges between the same ordered pair
+  // collapse into ONE representative edge on the nodes' main handles, tagged with how many it stands for
+  // (props→Frame's Length/Breadth/Height becomes a single "×3"). Unfolding restores the real per-param
+  // edges. This is strictly a VIEW transform feeding <ReactFlow> — `nodes`/`edges` state is untouched, so
+  // compileFlow, the evaluator and buildGraph always see the true graph.
+  const foldedIds = useMemo(
+    () => new Set(nodes.filter((n) => n.type !== "group" && (n.data as FlowNodeData).params?._collapsed).map((n) => n.id)),
+    [nodes],
+  );
+
+  // Folded nodes that need a main handle purely to anchor merged edges (see `_foldIn`/`_foldOut` in OpNode).
+  const viewNodes = useMemo(() => {
+    if (!foldedIds.size) return nodes;
+    const inc = new Set<string>(); const outg = new Set<string>();
+    for (const e of edges) {
+      if (e.hidden) continue;
+      if (foldedIds.has(e.target)) inc.add(e.target);
+      if (foldedIds.has(e.source)) outg.add(e.source);
+    }
+    return nodes.map((n) => {
+      if (!foldedIds.has(n.id)) return n;
+      const needIn = inc.has(n.id); const needOut = outg.has(n.id);
+      if (!needIn && !needOut) return n;
+      const d = n.data as FlowNodeData;
+      return { ...n, data: { ...d, params: { ...d.params, _foldIn: needIn, _foldOut: needOut } } as FlowNodeData };
+    });
+  }, [nodes, edges, foldedIds]);
+
+  const viewEdges = useMemo(() => {
+    if (!foldedIds.size) return edges;
+    const out: Edge[] = [];
+    const merged = new Map<string, { e: Edge; n: number }>();
+    for (const e of edges) {
+      const sc = foldedIds.has(e.source); const tc = foldedIds.has(e.target);
+      if (!sc && !tc) { out.push(e); continue; }
+      // Already hidden by a collapsed GROUP box — stays hidden; don't resurrect it as a merged edge.
+      if (e.hidden) continue;
+      const key = `${e.source}->${e.target}`;
+      const m = merged.get(key);
+      if (m) { m.n += 1; continue; }
+      merged.set(key, {
+        // Merged edges are synthetic (their ids don't exist in `edges`), so make them inert to
+        // selection/delete — acting on one couldn't map back to the real edges it stands for.
+        e: { ...e, id: `fold:${e.source}->${e.target}`, sourceHandle: sc ? null : e.sourceHandle, targetHandle: tc ? null : e.targetHandle, selectable: false, deletable: false },
+        n: 1,
+      });
+    }
+    for (const { e, n } of merged.values()) out.push(n > 1 ? { ...e, label: `×${n}`, style: { ...(e.style ?? {}), strokeWidth: 2 } } : e);
+    return out;
+  }, [edges, foldedIds]);
 
   // Render node "Generate": capture the 3D isometric snapshot, send it + the prompt to the Google AI
   // image model, and bake the result (or busy/error state) back onto the node. Stable identity (reads
@@ -1814,6 +2465,150 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     }
   }, [onParamChange]);
 
+  // Agent action: analyse the Space wired into the node and bake parameter suggestions into the nodes
+  // connected to it, optionally refining over several rounds by LOOKING at what it drew (see the loop).
+  // Model calls happen only here — evaluateFlow stays pure and synchronous, so once the values are baked
+  // the graph re-runs identically forever and the agent node can be deleted without losing them.
+  // Targets come off the live graph via refs, so this callback depends only on onParamChange + ppm/key and
+  // can't churn `nodeCb` (which would rewrite every node's data on each graph edit).
+  const captureCanvasRef = useRef(props.onCaptureCanvas);
+  captureCanvasRef.current = props.onCaptureCanvas;
+  const onRunAgent = useCallback(async (nodeId: string, params: Record<string, unknown>) => {
+    // Key + model come from the Chat AI preferences, not from the node — one setting for every model call.
+    const apiKey = (props.aiApiKey ?? "").trim();
+    if (!apiKey) { toast.error("Add a Google AI Studio API key in the Chat AI settings"); return; }
+    const model = (props.aiModel ?? "").trim() || "gemini-3-flash-preview";
+    // The geometry this agent reasons about: whatever arrived on its own input (Space → Agent passes it
+    // through), else the footprint of any node it's wired to in either direction (see agentGeometryPolyOf).
+    // A Space wired in gives an area brief; a Node or Segment has none — that's fine, the agent tunes its
+    // targets from the prompt + their schemas (an empty context). So a missing poly is NOT an error here.
+    const poly = previewRef.current.find((it) => it.nodeId === nodeId)?.polygons.find((p) => p.length >= 3)
+      ?? agentGeometryPolyOf(nodeId, edgesRef.current, previewRef.current, sourcePolysRef.current);
+    const targets = agentTargetsOf(nodeId, nodesRef.current, edgesRef.current);
+    if (!targets.length) { toast.error("Wire the Agent to a node with parameters — e.g. (Node/Segment/Space) → Agent → Input Properties, or Corridoor → Core Racking"); return; }
+
+    const context = agentContextOf(poly ?? [], props.pixelsPerMeter);
+    const instructions = String(params.instructions ?? "");
+    const prompt = String(params.prompt ?? "");
+    const rounds = Math.max(1, Math.min(5, Math.round(Number(params.rounds) || 1)));
+
+    // Write one round's values into their target nodes. Grouped BY NODE because a props-driven node's
+    // array must be rewritten in ONE call — a per-value rewrite would re-read `props` from state React
+    // hasn't flushed yet and keep only the last value.
+    const bake = (values: SuggestedValue[]) => {
+      const byNode = new Map<string, SuggestedValue[]>();
+      for (const v of values) {
+        const l = byNode.get(v.nodeId);
+        if (l) l.push(v); else byNode.set(v.nodeId, [v]);
+      }
+      for (const [nid, vals] of byNode) {
+        const nd = nodesRef.current.find((n) => n.id === nid)?.data as FlowNodeData | undefined;
+        const nProps = nd ? inputProps(nd.params) : [];
+        const propIds = new Set(nProps.map((p) => p.id));
+        const propVals = new Map(vals.filter((v) => propIds.has(v.key)).map((v) => [v.key, v.value]));
+        if (propVals.size) {
+          onParamChange(nid, "props", nProps.map((p) => (propVals.has(p.id) ? { ...p, value: propVals.get(p.id)! } : p)));
+        }
+        for (const v of vals) if (!propIds.has(v.key)) onParamChange(nid, v.key, v.value);
+      }
+    };
+
+    onParamChange(nodeId, "_busy", true);
+    onParamChange(nodeId, "_critique", undefined);
+    onParamChange(nodeId, "_snapshot", undefined);
+    try {
+      // FEEDBACK LOOP: propose → bake → let it draw → photograph the plan → review the DRAWING → feed the
+      // critique into the next proposal. Metrics alone can't catch geometry that is individually plausible
+      // but plainly wrong (cores overhanging the corridor, a band that misses half the plate) — only the
+      // picture can. Bounded by `rounds`, and it stops early the moment the reviewer is satisfied.
+      let critique = "";
+      let applied: SuggestedValue[] = [];
+      let rationale = "";
+      let liveTargets = targets;
+      let stoppedBecause = "";
+      for (let round = 1; round <= rounds; round++) {
+        const label = rounds > 1 ? `round ${round}/${rounds} · ` : "";
+        onParamChange(nodeId, "_status", `${label}analysing ${context.areaM2 > 0 ? `${context.areaM2.toFixed(0)} m² · ` : ""}${liveTargets.length} connected node${liveTargets.length === 1 ? "" : "s"}…`);
+        const res = await runAgentSuggest({ apiKey, model, instructions, prompt, context, targets: liveTargets, critique, round, rounds });
+        if (!res.values.length) {
+          if (round === 1) {
+            onParamChange(nodeId, "_status", "✖ no confident suggestions");
+            toast.warning("The agent returned no values it was confident about — try a more specific prompt.");
+            return;
+          }
+          stoppedBecause = "nothing left to change"; // converged: the critique produced no further edits
+          break;
+        }
+        bake(res.values);
+        applied = res.values;
+        rationale = res.rationale;
+        if (round === rounds) { stoppedBecause = rounds > 1 ? "round limit reached" : ""; break; }
+
+        // Look at what it actually drew. Without the settle we'd photograph the PREVIOUS round.
+        onParamChange(nodeId, "_status", `${label}drawing…`);
+        await settleCanvas();
+        const snap = captureCanvasRef.current?.() ?? null;
+        if (!snap?.dataUrl) { stoppedBecause = "couldn't capture the canvas"; break; }
+        onParamChange(nodeId, "_snapshot", snap.dataUrl);
+        onParamChange(nodeId, "_status", `${label}reviewing the drawing…`);
+        let verdict;
+        try {
+          verdict = await runAgentCritique({ apiKey, model, instructions, prompt, imageDataUrl: snap.dataUrl, applied: res.values, context });
+        } catch (e) {
+          // A failed review shouldn't throw away a good round — keep what's baked and stop refining.
+          stoppedBecause = "review failed";
+          console.error("Agent critique failed:", e);
+          break;
+        }
+        onParamChange(nodeId, "_critique", `${verdict.ok ? "✔" : "✎"} ${verdict.score.toFixed(0)}/10 · ${verdict.critique}`);
+        if (verdict.ok) { stoppedBecause = `reviewer satisfied (${verdict.score.toFixed(0)}/10)`; break; }
+        critique = verdict.critique;
+        // The next round must see where it actually IS, not where it started — re-read the targets so the
+        // `current=` values it reasons from are the ones it just set.
+        await settleCanvas(2);
+        liveTargets = agentTargetsOf(nodeId, nodesRef.current, edgesRef.current);
+      }
+
+      // Record what was set on the agent node itself — read-only rows + one `val-<key>` output each.
+      const specOf = new Map(liveTargets.flatMap((t) => t.params.map((s) => [`${t.nodeId}::${s.key}`, s] as const)));
+      const used = new Set<string>();
+      const propsOut = applied.map((v) => {
+        const spec = specOf.get(`${v.nodeId}::${v.key}`);
+        // val-<id> handle ids must be unique on the node; suffix a key set on more than one target node.
+        let id = v.key;
+        while (used.has(id)) id = `${v.key}-${used.size + 1}`;
+        used.add(id);
+        return {
+          id,
+          name: spec?.label ?? v.key,
+          type: typeof v.value === "boolean" ? "checkbox" : typeof v.value === "number" ? "range" : "text",
+          value: v.value,
+          min: spec?.min ?? 0,
+          max: spec?.max ?? 10,
+          step: spec?.step ?? 1,
+          options: spec?.options ?? [],
+        };
+      });
+      // `props` / `rationale` / `inputHash` are NOT `_`-prefixed on purpose: those are stripped on export,
+      // and a suggestion must survive a save with the provenance needed to re-check it. Staleness matters
+      // most on reopening a flow whose Space has since moved.
+      onParamChange(nodeId, "props", propsOut);
+      onParamChange(nodeId, "rationale", rationale);
+      onParamChange(nodeId, "inputHash", suggestInputHash(instructions, prompt, context, liveTargets));
+      onParamChange(nodeId, "_stale", false);
+      const nodeCount = new Set(applied.map((v) => v.nodeId)).size;
+      const tail = stoppedBecause ? ` · ${stoppedBecause}` : "";
+      onParamChange(nodeId, "_status", `✔ set ${applied.length} parameter${applied.length === 1 ? "" : "s"} on ${nodeCount} node${nodeCount === 1 ? "" : "s"}${tail}`);
+      toast.success(`Agent set ${applied.length} parameter${applied.length === 1 ? "" : "s"}`);
+    } catch (e) {
+      onParamChange(nodeId, "_status", "✖ analysis failed");
+      toast.error(`Agent failed: ${(e as Error)?.message ?? "unknown"}`);
+      console.error("Agent node run failed:", e);
+    } finally {
+      onParamChange(nodeId, "_busy", false);
+    }
+  }, [onParamChange, props.pixelsPerMeter, props.aiApiKey, props.aiModel]);
+
   // Generate action: text-to-media via the Google AI / Gemini API. Branches on the "Kind" dropdown:
   //  • image → models/<model>:generateContent with responseModalities IMAGE → inline image (data URL).
   //  • video → Veo models/<model>:predictLongRunning → poll the operation → download the result file.
@@ -1938,11 +2733,12 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   const annealCb = props.onRunAnneal;
   const addRoomCb = props.onAddRoom;
   const nodeCb = useMemo<NodeCallbacks>(() => ({
-    onParamChange, onRunRender, onRunDetect, onRunVectorTune, onRunAnalyse, onRunGenerate,
+    onParamChange, onRunRender, onRunDetect, onRunVectorTune, onRunAnalyse, onRunGenerate, onRunAgent,
     onRunLayoutGen: (nodeId, params) => layoutGenCb?.(nodeId, params),
     onRunAnneal: (nodeId, params) => annealCb?.(nodeId, params),
     onAddRoom: (nodeId, params) => addRoomCb?.(nodeId, params),
-  }), [onParamChange, onRunRender, onRunDetect, onRunVectorTune, onRunAnalyse, onRunGenerate, layoutGenCb, annealCb, addRoomCb]);
+    onToggleDecompile, onToggleGroup,
+  }), [onParamChange, onRunRender, onRunDetect, onRunVectorTune, onRunAnalyse, onRunGenerate, onRunAgent, layoutGenCb, annealCb, addRoomCb, onToggleDecompile, onToggleGroup]);
 
   // Keep every Space (source) node with "Grab ID from selection" on synced to ALL currently-selected
   // spaces' ids (comma-separated), so one Space node can output several spaces at once. Falls back to the
@@ -1968,6 +2764,12 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     });
   }, [selectedRoomIdList, grabSig, setNodes]);
 
+  // Per-Space attachment parameters (id → props), supplied by the host. The Space (source) node itself stays a
+  // plain geometry source — these feed the Grab Object nodes downstream (Space → Grab Object → op), which read
+  // the attachment of the Space wired into their input. See the pipeline-grab effect below.
+  const spaceAttProps = props.spaceAttachmentProps ?? {};
+  const spaceAttSig = JSON.stringify(spaceAttProps);
+
   // Same grab-sync for Graph (graph-source) nodes → keep a grabbing node's id on the selected graph.
   const selectedGraphIdStr = props.selectedGraphId ?? "";
   const graphGrabSig = nodes.filter((n) => (n.data as FlowNodeData).tool === "graph-source" && (n.data as FlowNodeData).params.grabFromSelection).map((n) => n.id).join(",");
@@ -1985,6 +2787,72 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       return changed ? next : ns;
     });
   }, [selectedGraphIdStr, graphGrabSig, setNodes]);
+
+  // For each Grab Object, the Space id feeding its geometry INPUT (a Source node wired in) — lets it reflect
+  // THAT space's attached object (Space → Grab Object → Inset) instead of the canvas selection. Empty when
+  // nothing is wired in (it then falls back to the selection / its own id).
+  const grabInputSourceId = new Map<string, string>();
+  for (const gn of nodes) {
+    if ((gn.data as FlowNodeData).tool !== "grab-object") continue;
+    const inEdge = edges.find((e) => e.target === gn.id && !(e.targetHandle && (e.targetHandle.startsWith("valin-") || e.targetHandle.startsWith("gin-"))));
+    if (!inEdge) continue;
+    const up = nodes.find((m) => m.id === inEdge.source);
+    if (up && (up.data as FlowNodeData).tool === "source") grabInputSourceId.set(gn.id, String((up.data as FlowNodeData).params.id ?? "").trim());
+  }
+
+  // Grab-sync for "Grab Object" nodes → bake the selected element's attached-object params (+ its id) into a
+  // grabbing node whose hostKind matches the selection. Mismatched-kind (or no attached object) nodes keep
+  // their last grabbed props, so selecting something else doesn't wipe them. Read-only readout on the node.
+  // Input-fed nodes are skipped — the pipeline effect below owns their props (Space → Grab Object → op).
+  const grabObjSel = props.grabObjectSelection ?? null;
+  const grabObjSig = grabObjSel ? `${grabObjSel.hostKind}:${grabObjSel.id}:${JSON.stringify(grabObjSel.props)}` : "";
+  const grabObjNodesSig = nodes.filter((n) => (n.data as FlowNodeData).tool === "grab-object" && (n.data as FlowNodeData).params.grabFromSelection).map((n) => n.id).join(",");
+  useEffect(() => {
+    if (!grabObjSel) return;
+    setNodes((ns) => {
+      let changed = false;
+      const next = ns.map((n) => {
+        const data = n.data as FlowNodeData;
+        if (data.tool !== "grab-object" || !data.params.grabFromSelection) return n;
+        if (grabInputSourceId.has(n.id)) return n; // input-fed → owned by the pipeline effect below
+        if (data.params.hostKind !== grabObjSel.hostKind) return n;
+        if (data.params.id === grabObjSel.id && JSON.stringify(data.params.props) === JSON.stringify(grabObjSel.props)) return n;
+        changed = true;
+        return { ...n, data: { ...n.data, params: { ...data.params, id: grabObjSel.id, props: grabObjSel.props } } };
+      });
+      return changed ? next : ns;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grabObjSig, grabObjNodesSig, setNodes]);
+
+  // Pipeline grab (Space → Grab Object → op): reflect the attached object of the Space wired into each Grab
+  // Object's INPUT, resolved BY ID from the host — so the incoming Space's parameters drive the chain and the
+  // Space node itself needs none. Also stamps `_hasInput` so the node hides its id/selection fields. A Grab
+  // Object with nothing wired in clears `_hasInput` and falls back to the selection effect above.
+  const grabInputSig = [...grabInputSourceId.entries()].map(([k, v]) => `${k}:${v}`).join(",");
+  const grabAllIdsSig = nodes.filter((n) => (n.data as FlowNodeData).tool === "grab-object").map((n) => n.id).join(",");
+  useEffect(() => {
+    setNodes((ns) => {
+      let changed = false;
+      const next = ns.map((n) => {
+        const data = n.data as FlowNodeData;
+        if (data.tool !== "grab-object") return n;
+        const srcId = grabInputSourceId.get(n.id);
+        if (srcId !== undefined) {
+          const wanted = (srcId && !srcId.includes(",") ? spaceAttProps[srcId] : undefined) ?? [];
+          if (data.params._hasInput === true && JSON.stringify(data.params.props ?? []) === JSON.stringify(wanted)) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, params: { ...data.params, _hasInput: true, props: wanted } } };
+        }
+        if (!data.params._hasInput) return n; // no input and flag already clear → nothing to do
+        changed = true;
+        const { _hasInput: _drop, ...rest } = data.params;
+        return { ...n, data: { ...n.data, params: rest } };
+      });
+      return changed ? next : ns;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grabInputSig, grabAllIdsSig, spaceAttSig, setNodes]);
 
   // Same grab-sync for Grid (grid-source) nodes → keep a grabbing node's id on the selected grid.
   const selectedGridIdStr = props.selectedGridId ?? "";
@@ -2044,11 +2912,42 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     setNodes((ns) => {
       const x = 320 + (ns.length % 3) * 240;
       const y = 120 + Math.floor(ns.length / 3) * 180;
-      return [...ns, makeNode(tool, { x, y }, nodeCb)];
+      const node = makeNode(tool, { x, y }, nodeCb);
+      // Auto-name each new Polygon's render layer "Polygon1", "Polygon2", … (past the highest existing one,
+      // so deletions don't cause a silent shared layer) — it then lands on its own canvas layer with Live on.
+      if (tool === "polygon") {
+        let max = 0;
+        for (const m of ns) {
+          if ((m.data as FlowNodeData).tool !== "polygon") continue;
+          const lm = String((m.data as FlowNodeData).params.layer ?? "").match(/^Polygon(\d+)$/);
+          if (lm) max = Math.max(max, parseInt(lm[1], 10));
+        }
+        (node.data as FlowNodeData).params.layer = `Polygon${max + 1}`;
+      }
+      return [...ns, node];
     });
   }, [setNodes, nodeCb]);
 
-  const onConnect = useCallback((c: Connection) => setEdges((es) => addEdge({ ...c, animated: true }, es)), [setEdges]);
+  const onFlowObjectAttachedToNode = props.onFlowObjectAttachedToNode;
+  const onConnect = useCallback((c: Connection) => {
+    setEdges((es) => addEdge({ ...c, animated: true }, es));
+    // A Parametric Object's OUTPUT wired into a Node source is the reverse of attaching from the Properties
+    // tab — tell the host so it mirrors the object as a linked canvas attachment (render + two-way sync).
+    if (!onFlowObjectAttachedToNode) return;
+    const src = nodesRef.current.find((n) => n.id === c.source);
+    const tgt = nodesRef.current.find((n) => n.id === c.target);
+    const sd = src?.data as FlowNodeData | undefined;
+    const td = tgt?.data as FlowNodeData | undefined;
+    if (sd?.tool !== "pobj-source" || td?.tool !== "node-source") return;
+    // A Node source may pin several ids ("Node002, Node004"); attach to the first (one object → one node).
+    const nodeDisplayId = String(td.params.id ?? "").split(",")[0]?.trim() ?? "";
+    const objectId = String(sd.params.objectId ?? "");
+    const definition = String(sd.params.definition ?? "");
+    if (!nodeDisplayId || !objectId || !definition) return;
+    const params: Record<string, number | string | boolean> = {};
+    for (const p of inputProps(sd.params)) params[p.id] = p.value;
+    onFlowObjectAttachedToNode({ flowNodeId: src!.id, nodeDisplayId, objectId, definition, params });
+  }, [setEdges, onFlowObjectAttachedToNode]);
 
   // Params introspection: for any `acceptsParams` node (the Loop), read the parameter list of whatever
   // node is wired into its params input (`pin`) and bake it into `_paramOptions`, so the node's parameter
@@ -2179,7 +3078,10 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       nodes: nodes.map((n) => {
         const d = n.data as FlowNodeData;
         const params: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(d.params ?? {})) if (!k.startsWith("_")) params[k] = v;
+        // `_`-prefixed params are transient runtime state (busy flags, live counts, previews) and are
+        // dropped — EXCEPT the fold flag, which is a deliberate authoring choice: a flow saved with its
+        // nodes folded should reopen folded, the same way a group box's `collapsed` round-trips.
+        for (const [k, v] of Object.entries(d.params ?? {})) if (!k.startsWith("_") || PERSISTED_VIEW_PARAMS.has(k)) params[k] = v;
         const out: SerializedFlowNode = { id: n.id, position: n.position, data: { tool: d.tool, params } };
         if (n.parentId) out.parentId = n.parentId;
         if (n.type === "group") {
@@ -2227,6 +3129,34 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     );
   }, [exportText]);
 
+  // Bake this flow into a parametric object (.pobj) — input-props → parameters, the expr node → geometry.vars,
+  // each 2D/3D primitive → a box/circle/poly/line rule, the Node/Segment/Space anchor → hostKind. See flowToPobj.
+  const saveAsPobj = useCallback(() => {
+    const name = window.prompt("Save this flow as a parametric object.\nName:", "My Object")?.trim();
+    if (!name) return;
+    let result;
+    try {
+      result = flowToPobj(buildGraph(), { name });
+    } catch (e) {
+      toast.error(`Couldn't bake this flow: ${(e as Error)?.message ?? "unknown error"}`);
+      return;
+    }
+    if (!result.pobj) {
+      toast.error("Nothing to bake — add primitive nodes (Rectangle / Cuboid / Arc …) that draw the object.");
+      return;
+    }
+    const meta = result.pobj.meta as { id: string };
+    const hostKind = result.pobj.hostKind as string | undefined;
+    const folder = pobjFolderFor(String((result.pobj.meta as { category?: string }).category), hostKind);
+    const rel = `Parametric Objects/${folder}/${meta.id}.pobj.json`;
+    if (result.warnings.length) console.warn("Save as Parametric Object — notes:", result.warnings);
+    void saveLibraryFile(rel, JSON.stringify(result.pobj, null, 2)).then((r) =>
+      r.ok
+        ? toast.success(`Saved “${name}” to public/Library/${r.path}${result.warnings.length ? ` · ${result.warnings.length} note${result.warnings.length > 1 ? "s" : ""} in console` : ""}`)
+        : toast.error(`Couldn't save the object: ${r.error ?? "the library bridge is dev-only"}`),
+    );
+  }, [buildGraph]);
+
   // Build live nodes/edges from a parsed flow object and load them into the graph. Throws on a bad
   // shape so callers can surface an error. Shared by file import and AI "Generate JSON".
   const importFlowData = useCallback((parsed: { nodes?: unknown[]; edges?: unknown[] }) => {
@@ -2242,8 +3172,8 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
         // Every node is deletable (including the Space node) so the canvas can be cleared completely.
         deletable: true,
         data: isGroup
-          ? ({ tool: "group", params: { ...(n.data?.params ?? {}) } } as unknown as FlowNodeData)
-          : ({ tool, params: { ...(n.data?.params ?? {}) }, onParamChange: nodeCb.onParamChange, onRunRender: nodeCb.onRunRender, onRunDetect: nodeCb.onRunDetect, onRunVectorTune: nodeCb.onRunVectorTune, onRunAnalyse: nodeCb.onRunAnalyse, onRunGenerate: nodeCb.onRunGenerate, onRunLayoutGen: nodeCb.onRunLayoutGen, onRunAnneal: nodeCb.onRunAnneal, onAddRoom: nodeCb.onAddRoom } as FlowNodeData),
+          ? ({ tool: "group", params: { ...(n.data?.params ?? {}) }, onParamChange: nodeCb.onParamChange, onToggleGroup: nodeCb.onToggleGroup } as unknown as FlowNodeData)
+          : ({ tool, params: { ...(n.data?.params ?? {}) }, onParamChange: nodeCb.onParamChange, onRunRender: nodeCb.onRunRender, onRunDetect: nodeCb.onRunDetect, onRunVectorTune: nodeCb.onRunVectorTune, onRunAnalyse: nodeCb.onRunAnalyse, onRunGenerate: nodeCb.onRunGenerate, onRunAgent: nodeCb.onRunAgent, onRunLayoutGen: nodeCb.onRunLayoutGen, onRunAnneal: nodeCb.onRunAnneal, onAddRoom: nodeCb.onAddRoom, onToggleDecompile: nodeCb.onToggleDecompile } as FlowNodeData),
       };
       // Grouped child → reattach to its parent (position stays parent-relative, constrained to the box).
       if (typeof n.parentId === "string") { node.parentId = n.parentId; node.extent = "parent"; }
@@ -2281,13 +3211,25 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       const key = data.tool === "voronoi" ? "vertexCount" : data.tool === "convex-decomp" ? "pieceCount" : (data.tool === "inset" || data.tool === "optimise-rect" || data.tool === "floor-massing" || data.tool === "smoothing" || data.tool === "densify") ? "inputCount" : (data.tool === "split" || data.tool === "bsp" || data.tool === "skeleton" || data.tool === "mitered-join" || data.tool === "graph-source" || data.tool === "segment-source" || data.tool === "node-source" || data.tool === "separate" || data.tool === "segment-split" || data.tool === "graph-to-spaces" || data.tool === "voronoi-bloom" || data.tool === "object-detection" || data.tool === "mesh" || data.tool === "circle-packing" || data.tool === "visibility" || data.tool === "treemap" || data.tool === "rect-pack") ? "handleCount" : null;
       if (key) data.params[key] = Math.max(Number(data.params[key]) || 0, need + 1);
     }
+    // A group saved COLLAPSED reopens collapsed: re-apply `hidden` to its children and their edges (the flag
+    // itself isn't serialized — only the box's `collapsed` param is). The auto-fit effect leaves collapsed
+    // boxes at their stored title-bar height.
+    const collapsedGroups = new Set(importedNodes.filter((n) => n.type === "group" && (n.data as FlowNodeData).params?.collapsed).map((n) => n.id));
+    if (collapsedGroups.size) {
+      const hidden = new Set<string>();
+      for (const n of importedNodes) if (n.parentId && collapsedGroups.has(n.parentId)) { n.hidden = true; hidden.add(n.id); }
+      for (const e of importedEdges) if (hidden.has(e.source) || hidden.has(e.target)) e.hidden = true;
+    }
     // Advance the id counter past any imported "<tool>_<n>" ids so new nodes don't collide.
     for (const n of importedNodes) {
       const m = /_(\d+)$/.exec(n.id);
       if (m) nodeSeq = Math.max(nodeSeq, parseInt(m[1], 10) + 1);
     }
-    // Guarantee a primary Source node exists (pipeline input).
-    if (!importedNodes.some((n) => (n.data as FlowNodeData).tool === "source")) {
+    // Guarantee a primary source node exists (pipeline input) — but ANY source-family node counts (a Node /
+    // Segment / Canvas object decompiles from its own source), so we don't force a stray Space `source` onto
+    // a graph that already has, say, a `node-source`.
+    const SOURCE_TOOLS = new Set<FlowToolType>(["source", "node-source", "segment-source", "canvas-source", "graph-source", "grid-source", "image"]);
+    if (!importedNodes.some((n) => SOURCE_TOOLS.has((n.data as FlowNodeData).tool))) {
       importedNodes.unshift(makeNode("source", { x: 80, y: 200 }, nodeCb, { singleton: true }));
     }
     setNodes(importedNodes);
@@ -2295,6 +3237,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     setInitialised(true);
     return importedNodes.length;
   }, [nodeCb, setNodes, setEdges]);
+  importFlowDataRef.current = importFlowData;
 
   // Seed the graph when the overlay opens: from the Space's stored flow if present, else a lone Source.
   useEffect(() => {
@@ -2389,6 +3332,15 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     return () => { injectNodeObjectRef.current = null; };
   }, [injectNodeObjectRef, buildGraph, importFlowData]);
 
+  // Bridge for an object attached to a canvas node: mirror it as a Node → Parametric Object chain, so the
+  // flow holds the parameter values and the Properties panel renders that node's props.
+  const injectAttachedObjectRef = props.injectAttachedObjectRef;
+  useEffect(() => {
+    if (!injectAttachedObjectRef) return;
+    injectAttachedObjectRef.current = (nodeDisplayId, pobj) => importFlowData(mergeAttachedObjectIntoFlow(buildGraph(), nodeDisplayId, pobj));
+    return () => { injectAttachedObjectRef.current = null; };
+  }, [injectAttachedObjectRef, buildGraph, importFlowData]);
+
   // Bridge for the Chat AI Flow agent: read the live graph (buildGraph) + apply a generated one
   // (importFlowData normalises + re-attaches node callbacks). Assigned while mounted; the host reads
   // liveFlowGraph when the overlay is closed.
@@ -2410,69 +3362,44 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     reader.readAsText(file);
   }, [importFlowData]);
 
-  // ── Load Parametric Object: upload a .pobj.json and reconstruct its pipeline as a Flow graph (nodes +
-  // connections) so the recipe can be inspected / edited visually. ──
-  const pobjInputRef = useRef<HTMLInputElement | null>(null);
-  const loadParametricObject = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const pobj = JSON.parse(String(reader.result)) as Record<string, unknown>;
-        if (pobj.kind !== "parametric-object") throw new Error("not a parametric-object file");
-        const n = importFlowData(pobjToFlowGraph(pobj));
-        const name = (pobj.meta as { name?: string } | undefined)?.name ?? "object";
-        toast.success(`Loaded "${name}" — ${n} node${n === 1 ? "" : "s"}`);
-      } catch (err) {
-        toast.error("Invalid parametric-object JSON");
-        console.error("Parametric object load failed:", err);
-      }
-    };
-    reader.readAsText(file);
-  }, [importFlowData]);
-
-  // ── Load Parametric Site: upload a .pobj.json and drop a single "Parametric Site" (pobj-source) node
-  // whose geometry output is the object's footprint and whose parameters are exposed as val-<key> outputs.
-  // Unlike Load Parametric Object (which decompiles the whole pipeline), this keeps the object intact so it
-  // can feed downstream Flow nodes (Inset → Optimise Rectangle …). ──
-  const pobjSiteInputRef = useRef<HTMLInputElement | null>(null);
   // Drop a single `pobj-source` node for an already-parsed parametric object: geometry output = footprint,
-  // each parameter = a `val-<key>` output. Shared by the "Load Parametric Site" upload button and the
-  // Import browser's "Parametric Objects" folder.
+  // each parameter = a `val-<key>` output. Used by the Import browser's "Parametric Objects" folder.
   const dropPobjSourceNode = useCallback((pobj: Record<string, unknown>) => {
     if (pobj.kind !== "parametric-object") throw new Error("not a parametric-object file");
-    const params = Array.isArray(pobj.parameters) ? (pobj.parameters as Record<string, unknown>[]) : [];
-    // Loose param rows stored under params.props — inputProps() sanitises them on read (coerces the
-    // type + options), so this doesn't need to satisfy the strict InputProp shape.
-    const propType = (kind: unknown): string =>
-      kind === "number" ? "range" : kind === "checkbox" ? "checkbox" : kind === "select" ? "select" : "text";
-    const propList: Record<string, unknown>[] = params.map((p) => ({
-      id: String(p.key),
-      name: String(p.label ?? p.key),
-      type: propType(p.kind),
-      value: p.default ?? (p.kind === "checkbox" ? false : p.kind === "number" ? 0 : ""),
-      min: typeof p.min === "number" ? p.min : 0,
-      max: typeof p.max === "number" ? p.max : 100,
-      step: typeof p.step === "number" ? p.step : 1,
-      options: Array.isArray(p.options) ? (p.options as Record<string, unknown>[]).map((o) => String(o.value)) : [],
-    }));
-    const node = makeNode("pobj-source", { x: 120, y: 220 }, nodeCb);
-    (node.data as FlowNodeData).params = { ...(node.data as FlowNodeData).params, definition: JSON.stringify(pobj), props: propList };
-    setNodes((ns) => [...ns, node]);
+    // Also register it in the CANVAS object library (idempotent host-side), so importing an object in the
+    // flow makes it available on the canvas too — attachable from the Properties "Attach object" dropdown,
+    // and resolvable by any attachment that references it. Mirrors importing via the Properties tab.
+    props.onImportObjectToLibrary?.(pobj);
+    // An object that declares an explicit `flow` decompilation (a wired Inset / Circle Packing / Cylinder …
+    // chain) OR opts into `decompile: "primitives"` (its geometry rules exploded into Rectangle / Circle
+    // primitive nodes) materialises the WHOLE graph instead of dropping a lone node. Same derive-on-load path
+    // as the Space "Edit in Flow" button (shared pobjToFlow).
+    const flow = pobj.flow as { nodes?: unknown[] } | undefined;
+    const wantsGraph = (flow && Array.isArray(flow.nodes) && flow.nodes.length) || pobj.decompile === "primitives";
+    if (wantsGraph) {
+      // Positions are LOCAL — the decompile is anchored to the host node DYNAMICALLY at render time (2D via
+      // createAnchor, 3D via the `_nodeFollow` offset), so it follows when the node is dragged.
+      const n = importFlowData(pobjToAttachedFlow(pobj as unknown as ParametricObjectFile, {}));
+      const nm = (pobj.meta as { name?: string } | undefined)?.name ?? "object";
+      toast.success(`Loaded "${nm}" as a Flow — ${n} node${n === 1 ? "" : "s"}`);
+      return;
+    }
     const name = (pobj.meta as { name?: string } | undefined)?.name ?? "site";
-    toast.success(`Loaded "${name}" as a Parametric Object node`);
-  }, [setNodes, nodeCb]);
-  const loadParametricSite = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        dropPobjSourceNode(JSON.parse(String(reader.result)) as Record<string, unknown>);
-      } catch (err) {
-        toast.error("Invalid parametric-object JSON");
-        console.error("Parametric site load failed:", err);
-      }
+    const node = makeNode("pobj-source", { x: 120, y: 220 }, nodeCb);
+    // `nodeLabel` titles the node with the OBJECT's name ("Site", "Chair") rather than the generic tool
+    // label, so several imported objects stay tellable apart. Deliberately not `_`-prefixed: those keys are
+    // stripped on export (buildGraph), and the name has to survive a save/reload. `objectId` identifies WHICH
+    // library object this is, so the attach-from-Properties bridge can stay idempotent per (node, object).
+    (node.data as FlowNodeData).params = {
+      ...(node.data as FlowNodeData).params,
+      definition: JSON.stringify(pobj),
+      objectId: String((pobj.meta as { id?: string } | undefined)?.id ?? ""),
+      props: pobjPropList(pobj),
+      nodeLabel: name,
     };
-    reader.readAsText(file);
-  }, [dropPobjSourceNode]);
+    setNodes((ns) => [...ns, node]);
+    toast.success(`Loaded "${name}" as a Parametric Object node`);
+  }, [setNodes, nodeCb, importFlowData]);
 
   // ── Import via paste: drop flow JSON straight into a textarea (no file needed). ──
   const [importOpen, setImportOpen] = useState(false);
@@ -2619,7 +3546,15 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     // coords), only the box is removed. Other selected nodes (and their edges) are deleted as usual.
     const groupIds = new Set(nodes.filter((n) => n.selected && n.type === "group").map((n) => n.id));
     const removedOps = new Set(nodes.filter((n) => n.selected && n.type !== "group" && n.deletable !== false).map((n) => n.id));
-    setEdges((es) => es.filter((e) => !e.selected && !removedOps.has(e.source) && !removedOps.has(e.target)));
+    // Tell the host so a canvas attachment linked to a deleted node is dropped too (this path sets state
+    // directly, bypassing onNodesChange, so it must notify explicitly).
+    if (removedOps.size) props.onFlowNodesDeleted?.([...removedOps]);
+    // Children of a dissolved group must lose the `hidden` the collapse toggle put on them (and their
+    // edges) — otherwise deleting a COLLAPSED box leaves its nodes alive but invisible.
+    const orphaned = new Set(nodes.filter((n) => n.parentId && groupIds.has(n.parentId)).map((n) => n.id));
+    setEdges((es) => es
+      .filter((e) => !e.selected && !removedOps.has(e.source) && !removedOps.has(e.target))
+      .map((e) => (e.hidden && (orphaned.has(e.source) || orphaned.has(e.target)) ? { ...e, hidden: false } : e)));
     if (groupIds.size || removedOps.size) {
       setNodes((ns) => {
         const gpos = new Map(ns.filter((n) => groupIds.has(n.id)).map((n) => [n.id, n.position]));
@@ -2630,7 +3565,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
               const gp = gpos.get(n.parentId)!;
               const { parentId: _p, extent: _e, ...rest } = n;
               void _p; void _e;
-              return { ...rest, position: { x: n.position.x + gp.x, y: n.position.y + gp.y } } as Node;
+              return { ...rest, hidden: false, position: { x: n.position.x + gp.x, y: n.position.y + gp.y } } as Node;
             }
             return n;
           });
@@ -2652,14 +3587,14 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
         minX = Math.min(minX, n.position.x); minY = Math.min(minY, n.position.y);
         maxX = Math.max(maxX, n.position.x + w); maxY = Math.max(maxY, n.position.y + h);
       }
-      const PAD = 28, HEADER = 26;
-      const gx = minX - PAD, gy = minY - PAD - HEADER;
+      const gx = minX - GROUP_PAD, gy = minY - GROUP_PAD - GROUP_HEADER;
       const groupNode: Node = {
         id: nextId("group"),
         type: "group",
         position: { x: gx, y: gy },
-        data: { tool: "group", params: { label: "Group" } } as unknown as FlowNodeData,
-        style: { width: (maxX - minX) + PAD * 2, height: (maxY - minY) + PAD * 2 + HEADER },
+        // Chevron/rename callbacks ride on the box's data exactly as they do for op nodes.
+        data: { tool: "group", params: { label: "Group" }, onParamChange: nodeCb.onParamChange, onToggleGroup: nodeCb.onToggleGroup } as unknown as FlowNodeData,
+        style: { width: (maxX - minX) + GROUP_PAD * 2, height: (maxY - minY) + GROUP_PAD * 2 + GROUP_HEADER },
         selectable: true,
         draggable: true,
         deletable: true,
@@ -2671,7 +3606,74 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
         : n));
       return [groupNode, ...rest];
     });
-  }, [setNodes]);
+  }, [setNodes, nodeCb]);
+
+  // "Arrange" — tidy the whole flow into foldable blocks. Flattens any existing groups first (so it's
+  // idempotent), ensures an Agent + Input Properties node exist, then buckets every classified node into its
+  // block (Canvas Import / Math Engine / 3D Primitives / 2D Primitives), reparents each into a group box with
+  // its children COLLAPSED and stacked, and lays the boxes out in a row. Uncategorised nodes (Space / Graph /
+  // Output / Agent / Input Properties …) keep their positions. Mirrors the hand-arranged bed-flow.
+  const arrangeFlow = useCallback(() => {
+    const cur = nodesRef.current;
+    const findTool = (t: string) => cur.find((n) => n.type !== "group" && (n.data as FlowNodeData).tool === t);
+    // Decide additions UP FRONT (outside setNodes) so their ids are known for wiring.
+    const newProps = findTool("input-props") ? null : makeNode("input-props", { x: -40, y: 40 }, nodeCb);
+    const newAgent = findTool("agent") ? null : makeNode("agent", { x: -360, y: 40 }, nodeCb);
+    const propsId = findTool("input-props")?.id ?? newProps?.id ?? null;
+
+    setNodes((ns) => {
+      // 1. Flatten existing groups → children back to ABSOLUTE coords; drop the group boxes.
+      const gpos = new Map(ns.filter((n) => n.type === "group").map((n) => [n.id, n.position] as const));
+      const flat: Node[] = ns.filter((n) => n.type !== "group").map((n) => {
+        if (n.parentId && gpos.has(n.parentId)) {
+          const gp = gpos.get(n.parentId)!;
+          const { parentId: _p, extent: _e, ...rest } = n; void _p; void _e;
+          return { ...rest, hidden: false, position: { x: n.position.x + gp.x, y: n.position.y + gp.y } } as Node;
+        }
+        return n.hidden ? { ...n, hidden: false } : n;
+      });
+      if (newProps) flat.push(newProps);
+      if (newAgent) flat.push(newAgent);
+      // 2. Bucket every classified node; the rest stay ungrouped (positions untouched).
+      const byBlock = new Map<string, Node[]>();
+      const ungrouped: Node[] = [];
+      for (const n of flat) {
+        const b = ARRANGE_CLASS[(n.data as FlowNodeData).tool];
+        if (b) (byBlock.get(b) ?? byBlock.set(b, []).get(b)!).push(n);
+        else ungrouped.push(n);
+      }
+      // 3. One group box per non-empty block; reparent + collapse + stack its members.
+      const groups: Node[] = [];
+      const children: Node[] = [];
+      let gx = 40;
+      for (const { key, label } of ARRANGE_BLOCKS) {
+        const members = byBlock.get(key);
+        if (!members?.length) continue;
+        const gid = nextId("group");
+        groups.push({
+          id: gid, type: "group", position: { x: gx, y: 300 },
+          data: { tool: "group", params: { label }, onParamChange: nodeCb.onParamChange, onToggleGroup: nodeCb.onToggleGroup } as unknown as FlowNodeData,
+          style: { width: 256, height: GROUP_HEADER + GROUP_PAD + members.length * 44 + GROUP_PAD },
+          selectable: true, draggable: true, deletable: true,
+        });
+        members.forEach((m, i) => children.push({
+          ...m, parentId: gid, extent: "parent" as const, selected: false, hidden: false,
+          position: { x: GROUP_PAD, y: GROUP_HEADER + GROUP_PAD + i * 44 },
+          data: { ...m.data, params: { ...(m.data as FlowNodeData).params, _collapsed: true } } as FlowNodeData,
+        }));
+        gx += 340;
+      }
+      // Parent boxes MUST precede their children (React Flow); ungrouped nodes can sit anywhere between.
+      return [...groups, ...ungrouped, ...children];
+    });
+    // Wire a freshly-added Agent into Input Properties (the bed-flow control chain).
+    if (newAgent && propsId) {
+      const aId = newAgent.id, pId = propsId;
+      setEdges((es) => es.some((e) => e.source === aId && e.target === pId)
+        ? es
+        : [...es, { id: `e_${aId}_${pId}`, source: aId, target: pId, sourceHandle: null, targetHandle: null, animated: true }]);
+    }
+  }, [setNodes, setEdges, nodeCb]);
 
   // Commit compilation (Run Flow) — uses `on` so each step targets the previous step's
   // committed output rooms. Also drives the status line + JSON view.
@@ -2686,8 +3688,11 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   // room id / label). A Space node may reference several spaces (comma/newline separated), so it outputs
   // them all as a bundle on its single endpoint. Independent of the current canvas selection.
   const resolveSpacePolygon = props.resolveSpacePolygon;
+  // A "source" Space node, or a "Grab Object" node set to Host = Space, both feed a Space's footprint into the
+  // pipeline (Grab Object additionally publishes the attached object's params as val-<key>). Both resolve
+  // their id via the host, so both are treated as Space sources here → geometry + run-readiness.
   const sourceEntries = nodes
-    .filter((n) => (n.data as FlowNodeData).tool === "source")
+    .filter((n) => { const d = n.data as FlowNodeData; return d.tool === "source" || (d.tool === "grab-object" && d.params.hostKind === "space"); })
     .map((n) => {
       const idStr = String((n.data as FlowNodeData).params.id ?? "").trim();
       const ids = idStr.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean);
@@ -2697,6 +3702,7 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     });
   // Per-source polygon LISTS keyed by source NODE id — evaluateFlow reads each source's own space(s).
   const sourcePolys = new Map(sourceEntries.map((e) => [e.nodeId, e.polys]));
+  sourcePolysRef.current = sourcePolys;
   // A Space node is GENUINELY broken only if it has a typed id that matches no space — that blocks the
   // run. An EMPTY-id Space node (grab on, nothing selected) is just unconfigured and must NOT block other
   // roots (Selected Graph / Space Creator). Drives the footer.
@@ -2738,8 +3744,18 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       }
       return { nodeId: n.id, graphs };
     });
-  const graphsBySourceNode = new Map(graphEntries.map((e) => [e.nodeId, e.graphs]));
-  const hasGraphRoot = graphEntries.some((e) => e.graphs.length > 0);
+  // Freehand nodes: emit every canvas freehand stroke matching the node's `color` param (blank = all) as ONE
+  // polyline network. Freehand is already vector, so it plugs straight into the graph-source machinery.
+  const freehandStrokes = props.freehandStrokes ?? [];
+  const freehandEntries = nodes
+    .filter((n) => (n.data as FlowNodeData).tool === "freehand-source")
+    .map((n) => {
+      const col = String((n.data as FlowNodeData).params.color ?? "").trim().toLowerCase();
+      const matched = freehandStrokes.filter((s) => !col || (s.color ?? "").trim().toLowerCase() === col).map((s) => s.points).filter((p) => p.length >= 2);
+      return { nodeId: n.id, graphs: (matched.length ? [matched] : []) as Point[][][] };
+    });
+  const graphsBySourceNode = new Map([...graphEntries, ...freehandEntries].map((e) => [e.nodeId, e.graphs]));
+  const hasGraphRoot = graphEntries.some((e) => e.graphs.length > 0) || freehandEntries.some((e) => e.graphs.length > 0);
   // Grid (grid-source) nodes also publish a typed grid-field (grabbed selection, or resolved by id) so the
   // grid pipeline (Grid Threshold, …) can read per-cell values.
   const selectedGridField = props.selectedGridField ?? null;
@@ -2785,9 +3801,13 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasCountsSig, canvasNodeIdsSig, setNodes]);
-  // Ready once ≥1 root is actually usable (a resolved Space, a Creator, a Selected Graph, an Image, or the
-  // Canvas) and no Space node has a typed-but-unmatched id.
-  const sourcesReady = (anySpaceReady || hasCreator || hasGraphRoot || hasImageRoot || hasCanvasRoot) && !badSource;
+  // 2D primitive GENERATORS (Rectangle / Circle / Polygon / Polyline) are self-sufficient roots exactly like
+  // a Space Creator — they synthesise geometry from params with no canvas input — so a flow built purely from
+  // Rectangle → Loop → … (the general-node staircase) is ready without a Space/Graph/Canvas root.
+  const hasPrimRoot = nodes.some((n) => { const t = (n.data as FlowNodeData).tool; return t === "rectangle" || t === "circle" || t === "polygon" || t === "polyline" || t === "network" || t === "line" || t === "ngon" || t === "ellipse" || t === "rounded-rect" || t === "sector" || t === "arc"; });
+  // Ready once ≥1 root is actually usable (a resolved Space, a Creator, a Selected Graph, an Image, the
+  // Canvas, or a primitive generator) and no Space node has a typed-but-unmatched id.
+  const sourcesReady = (anySpaceReady || hasCreator || hasGraphRoot || hasImageRoot || hasCanvasRoot || hasPrimRoot) && !badSource;
   // Bridge for the Chat-AI agents (the Flow agent + the canvas agent's flow_* gateway): read the live
   // graph, apply a generated one, compile-check it, and RUN-COMMIT the evaluated pipeline into the
   // canvas — the exact same compiled JSON + committedNodeIds path as the panel's Run button.
@@ -2800,13 +3820,14 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       compile: () => ({ ok: !compiled.error, error: compiled.error || undefined, opCount: compiled.opCount, committedNodeIds: compiled.committedNodeIds ?? [] }),
       runCommit: () => {
         if (compiled.error) return { ok: false, error: `flow does not compile: ${compiled.error}` };
-        if (!sourcesReady) return { ok: false, error: 'a source node has no input — set its id param (e.g. "Space001") or turn on grabFromSelection with a space selected' };
+        // No source gate — a coordinate-list flow runs without any canvas root (matches the Run button).
+        if (badSource?.idStr) return { ok: false, error: `no space matches "${badSource.idStr}" — set a valid id on the source node` };
         onRunCommitProp(compiled.json, compiled.committedNodeIds);
         return { ok: true, committedNodeIds: compiled.committedNodeIds };
       },
     };
     return () => { flowApiRef.current = null; };
-  }, [flowApiRef, buildGraph, importFlowData, compiled, sourcesReady, onRunCommitProp]);
+  }, [flowApiRef, buildGraph, importFlowData, compiled, badSource, onRunCommitProp]);
   const createAnchor = props.createAnchor ?? { x: 0, y: 0 };
   // Key over all per-source polygons so the heavy eval only re-runs when some space's geometry changes.
   const sourcesKey = sourceEntries.map((e) => `${e.nodeId}:${e.polys.map((poly) => poly.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(";")).join("&")}`).join("|");
@@ -2815,7 +3836,12 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   const graphKey = graphSegments.length + ":" + graphSegments.flat().reduce((s, p) => s + p.x + p.y, 0).toFixed(1)
     + "|s:" + segmentSegments.length + ":" + segmentSegments.flat().reduce((s, p) => s + p.x + p.y, 0).toFixed(1)
     + "|n:" + nodeSegments.length + ":" + nodeSegments.flat().reduce((s, p) => s + p.x + p.y, 0).toFixed(1)
-    + "|" + graphEntries.map((e) => `${e.nodeId}=${e.graphs.map((g) => g.length).join(",")}`).join(";")
+    // Resolved graph COORDINATES matter, not just counts: a chain anchored at a Node source (chainAnchorByNode)
+    // must re-evaluate when that canvas node MOVES, or the anchored drawing stays behind.
+    + "|" + graphEntries.map((e) => `${e.nodeId}=${e.graphs.map((g) => g.length).join(",")}:${e.graphs.flat(2).reduce((s, p) => s + p.x + p.y, 0).toFixed(1)}`).join(";")
+    // Freehand strokes live on the canvas, not in the node graph, so fold their fingerprint in too — else
+    // redrawing / moving / recolouring a stroke wouldn't re-run the eval.
+    + "|fh:" + freehandEntries.map((e) => { const pts = e.graphs.flat(2); return `${e.nodeId}=${pts.length}:${pts.reduce((s, p) => s + p.x + p.y, 0).toFixed(1)}`; }).join(";")
     + "|p:" + pathEdges.map((e) => `${e.a.x.toFixed(0)},${e.a.y.toFixed(0)},${e.b.x.toFixed(0)},${e.b.y.toFixed(0)},${e.halfPx.toFixed(1)}`).join(";");
   const imageKey = imageData ? `${imageData.key}:${imageData.w}x${imageData.h}:${imageData.box.x.toFixed(1)},${imageData.box.y.toFixed(1)},${imageData.box.scale.toFixed(3)}` : "";
   const canvasKey = canvasContent
@@ -2834,12 +3860,134 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
   // must be keyed explicitly or Grid Threshold would never re-evaluate).
   const gridFieldKey = [...gridFieldsBySourceNode.entries()]
     .map(([nid, f]) => `${nid}:${f.cols}x${f.rows}:${f.values.map((v) => v.toFixed(2)).join(",")}`).join("|");
+
+  // ── IR fast path ─────────────────────────────────────────────────────────────────────────────────
+  // A pure "params → primitive-array" object (Rectangle/Cuboid → Loop/Loop 3D, driven by an expr/math value
+  // plane) is BAKED once into a flat IR — topological order + every input binding resolved — then RE-RUN
+  // cheaply on each parameter change, instead of re-interpreting the whole graph (topo-sort + edge scanning)
+  // every time. Gated to graphs the IR fully models; ANY other graph (a Space source, Inset, canvas-source…)
+  // takes the untouched evaluateFlow path. The bake is memoised on TOPOLOGY only (`irStructureKey`), so
+  // dragging a slider re-runs the IR but does NOT re-bake.
+  // `agent` is whitelisted even though it is never baked: it is a pure authoring-time param tuner that emits
+  // no geometry of its own (bakeFlowToIR ignores it, exactly as evaluateFlow treats it as a see-through), so
+  // its presence must NOT knock a params-driven object off the fast path — otherwise adding an Agent node
+  // silently drops the graph to the full evaluateFlow preview, which draws every intermediate node's boxes.
+  // `point` is whitelisted as an anchor: it carries no geometry (bakeFlowToIR ignores it) but the 2D anchor
+  // and the 3D primitiveMasses read its (x, y) to PLACE the object at an explicit coordinate with no Node.
+  const IR_SAFE_TOOLS = "pobj-source input-props expr math match conditional rectangle circle cuboid loop loop-3d transform node-source output grab-object agent point node-geometry segment-source segment-geometry";
+  const irStructureKey = nodes.map((n) => `${n.id}:${(n.data as FlowNodeData).tool}`).join(",")
+    + "|" + edges.map((e) => `${e.source}>${e.target}:${e.sourceHandle ?? ""}>${e.targetHandle ?? ""}`).join(",")
+    // Point x/y are const-baked into the IR (a Point → expr placement wire), so a drag must re-bake to move.
+    + "|" + nodes.filter((n) => (n.data as FlowNodeData).tool === "point").map((n) => { const p = (n.data as FlowNodeData).params; return `${n.id}=${p.x},${p.y}`; }).join(";");
+  // IR fast path DISABLED for now (kept passive): force EVERY flow through evaluateFlow so there is a single
+  // evaluator. The IR bake / run / preview code below stays in place but never activates — flip USE_IR back to
+  // true to re-enable the fast path. Primitive-object flows (Rectangle/Loop/…) still evaluate because they
+  // satisfy the `sourcesReady` gate via `hasPrimRoot`. (Typed `boolean`, not the literal `false`, so the IR
+  // branch stays type-checked live code rather than being narrowed to dead code.)
+  const USE_IR: boolean = false;
+  const irOk = USE_IR && nodes.length > 0 && nodes.every((n) => IR_SAFE_TOOLS.includes((n.data as FlowNodeData).tool));
+  const bakedIR = useMemo(
+    () => (irOk ? bakeFlowToIR({ version: 1, nodes: nodes.map((n) => ({ id: n.id, data: { tool: (n.data as FlowNodeData).tool, params: (n.data as FlowNodeData).params } })), edges: edges.map((e) => ({ source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle })) }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [irStructureKey, irOk],
+  );
+
   const preview = useMemo(
-    () => ((sourcesReady || hasPipeRoot) ? evaluateFlow(nodes, edges, sourcePolys, ppm, createAnchor, graphSegments, graphsBySourceNode, pathEdges, imageData, canvasContent, pipeGraph, gridFieldsBySourceNode) : []),
+    () => {
+      if (bakedIR) {
+        // Live parameter values (the params source's props) override the baked defaults.
+        const src = nodes.find((n) => n.id === bakedIR.srcId);
+        const overrides: Record<string, number | string> = {};
+        if (src) for (const p of inputProps((src.data as FlowNodeData).params)) overrides[p.id] = p.value as number | string;
+        // Anchor at the wired Node's point when the chain feeds a Node source (matching evaluateFlow's
+        // chainAnchorByNode), else the flow anchor. Keeps the fast-path 2D placement identical.
+        let anchor = createAnchor;
+        const nodeSrc = nodes.find((n) => (n.data as FlowNodeData).tool === "node-source");
+        const npt = nodeSrc ? (graphsBySourceNode.get(nodeSrc.id) ?? []).flat().find((pl) => pl.length >= 1)?.[0] : undefined;
+        if (npt) anchor = npt;
+        // A Point drives ABSOLUTE placement — its coordinate (metres from the world origin) IS where the
+        // object goes, because the expr offsets every position by it. So anchor at the origin; otherwise that
+        // offset would stack on top of createAnchor OR a node-source's own point and DOUBLE-place the object
+        // (the bug: bed landing at ~2× the node's position instead of on it).
+        if (nodes.some((n) => (n.data as FlowNodeData).tool === "point")) anchor = { x: 0, y: 0 };
+        return irToPreviewItems(bakedIR, runFlowIR(bakedIR, overrides), ppm, anchor);
+      }
+      // A Point drives ABSOLUTE placement (positions are metres from the world origin), so anchor primitives
+      // at the origin — the evaluateFlow twin of the IR-path anchor guard (else they'd stack on createAnchor).
+      const evalAnchor = nodes.some((n) => (n.data as FlowNodeData).tool === "point") ? { x: 0, y: 0 } : createAnchor;
+      return (sourcesReady || hasPipeRoot) ? evaluateFlow(nodes, edges, sourcePolys, ppm, evalAnchor, graphSegments, graphsBySourceNode, pathEdges, imageData, canvasContent, pipeGraph, gridFieldsBySourceNode) : [];
+    },
     // sourcesKey captures per-source polygon changes without depending on array identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, edges, sourcesKey, ppm, sourcesReady, hasPipeRoot, anchorKey, graphKey, imageKey, canvasKey, pipeKey, gridFieldKey],
+    [nodes, edges, sourcesKey, ppm, sourcesReady, hasPipeRoot, anchorKey, graphKey, imageKey, canvasKey, pipeKey, gridFieldKey, bakedIR],
   );
+  previewRef.current = preview;
+
+  // Node Geometry → Point "grab": a Point whose X / Y is wired from a Node Geometry adopts the wired Node's
+  // canvas position (metres), resolved straight from the node-source's point. We sync it into the Point's
+  // params — which the placement const-bakes into the IR and re-bakes on change — so the object tracks the
+  // node while staying on the clean fast path. `nodePosSig` re-runs it when a canvas node moves; the write is
+  // guarded to only fire on change, so it can't loop.
+  const nodePosSig = [...graphsBySourceNode].map(([k, gs]) => { const pl = gs.flat().find((p) => p.length >= 1); return pl ? `${k}:${pl[0].x.toFixed(1)},${pl[0].y.toFixed(1)},${pl[pl.length - 1].x.toFixed(1)},${pl[pl.length - 1].y.toFixed(1)}` : k; }).join("|");
+  useEffect(() => {
+    const nodeGeomCoord = (ngId: string): { x: number; y: number } | null => {
+      const ge = edges.find((e) => e.target === ngId && !(e.targetHandle?.startsWith("valin-") || e.targetHandle?.startsWith("gin-")));
+      const pl = ge ? (graphsBySourceNode.get(ge.source) ?? []).flat().find((p) => p.length >= 1) : undefined;
+      if (!pl || !ppm) return null;
+      // A Segment (≥2 points) → its MIDPOINT; a Node (1 point) → the point itself.
+      const q = pl.length >= 2 ? { x: (pl[0].x + pl[pl.length - 1].x) / 2, y: (pl[0].y + pl[pl.length - 1].y) / 2 } : pl[0];
+      return { x: q.x / ppm, y: q.y / ppm };
+    };
+    setNodes((ns) => {
+      let changed = false;
+      const next = ns.map((n) => {
+        if ((n.data as FlowNodeData).tool !== "point") return n;
+        const grab = (axis: "x" | "y"): number | null => {
+          const e = edges.find((ed) => ed.target === n.id && ed.targetHandle === `valin-${axis}`);
+          const src = e && ns.find((m) => m.id === e.source);
+          if (!src || ((src.data as FlowNodeData).tool !== "node-geometry" && (src.data as FlowNodeData).tool !== "segment-geometry")) return null;
+          const c = nodeGeomCoord(src.id);
+          return c ? c[axis] : null;
+        };
+        const gx = grab("x"), gy = grab("y");
+        const p = (n.data as FlowNodeData).params;
+        const setX = gx != null && Math.abs(Number(p.x) - gx) > 1e-6;
+        const setY = gy != null && Math.abs(Number(p.y) - gy) > 1e-6;
+        if (!setX && !setY) return n;
+        changed = true;
+        return { ...n, data: { ...n.data, params: { ...p, ...(setX ? { x: gx } : {}), ...(setY ? { y: gy } : {}) } } };
+      });
+      return changed ? next : ns;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges, nodePosSig, ppm, setNodes]);
+
+  // Agent staleness: a baked suggestion is derived from the space metrics, instructions, prompt and the
+  // connected nodes at Run time (fingerprinted into `inputHash`). Re-check it whenever any of those move,
+  // so an out-of-date suggestion is flagged in the node instead of silently standing as if still valid.
+  useEffect(() => {
+    setNodes((ns) => {
+      let changed = false;
+      const next = ns.map((n) => {
+        const d = n.data as FlowNodeData;
+        if (d.tool !== "agent" || !d.params.inputHash) return n;
+        // No Space poly (a Node/Segment brief) is NOT automatically stale — fingerprint the same empty context
+        // the Run baked, so the hash still matches until the instructions / prompt / targets actually change.
+        const poly = preview.find((it) => it.nodeId === n.id)?.polygons.find((p) => p.length >= 3);
+        const stale = suggestInputHash(
+          String(d.params.instructions ?? ""),
+          String(d.params.prompt ?? ""),
+          agentContextOf(poly ?? [], ppm),
+          agentTargetsOf(n.id, ns, edges),
+        ) !== d.params.inputHash;
+        if (stale === Boolean(d.params._stale)) return n;
+        changed = true;
+        return { ...n, data: { ...d, params: { ...d.params, _stale: stale } } };
+      });
+      return changed ? next : ns;
+    });
+  }, [preview, edges, ppm, setNodes]);
+
   // Voronoi seeds = the input polygon's vertices, so each Voronoi node emits one cell (and one
   // output handle) per vertex of whatever polygon feeds it. The vertex count isn't knowable from
   // params alone, so bake each Voronoi node's live cell count into `vertexCount` — read by
@@ -2940,10 +4088,31 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
           return { ...n, data: { ...n.data, params: merged } };
         }
         if (data.tool === "convex-decomp") {
-          const pc = cellCountByNode.get(n.id);
-          if (pc == null || data.params.pieceCount === pc) return n;
+          // Value-only node now: no output handles, so `pieceCount` is vestigial. This block previously
+          // baked only that and RETURNED EARLY, so a wired `polygon` never reached the param box and the
+          // live wire looked dead — the exact trap the Inset block below warns about.
+          const vin = vinByNode.get(n.id);
+          if (!vin) return n;
+          const merged: Record<string, unknown> = { ...data.params };
+          let ch = false;
+          for (const [k, val] of Object.entries(vin)) { if (merged[k] !== val) { merged[k] = val; ch = true; } }
+          if (!ch) return n;
           changed = true;
-          return { ...n, data: { ...n.data, params: { ...data.params, pieceCount: pc } } };
+          return { ...n, data: { ...n.data, params: merged } };
+        }
+        if (data.tool === "fill-depressions" || data.tool === "flow-direction" || data.tool === "flow-accumulation" || data.tool === "watershed" || data.tool === "grid-threshold") {
+          // Value node: surface the resolved INPUT matrix onto the Matrix textbox (mirrors convex-decomp /
+          // inset baking vin) so the wired matrix is visible, and bake the OUTPUT matrix under _values for the
+          // val-matrix output readout.
+          const vin = vinByNode.get(n.id);
+          const v = valuesByNode.get(n.id);
+          const merged: Record<string, unknown> = { ...data.params };
+          let ch = false;
+          if (vin) for (const [k, val] of Object.entries(vin)) { if (merged[k] !== val) { merged[k] = val; ch = true; } }
+          if (v && JSON.stringify(merged._values) !== JSON.stringify(v)) { merged._values = v; ch = true; }
+          if (!ch) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, params: merged } };
         }
         if (data.tool === "inset") {
           // Inset bakes three things at once (handled here so none are dropped by an early return):
@@ -3072,8 +4241,12 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             let diff = false;
             const merged: Record<string, unknown> = { ...data.params };
             for (const [k, val] of Object.entries(vin)) {
-              // Split's `ratios` is a text list, so store the driven number as its string form.
-              const v: unknown = data.tool === "split" && k === "ratios" ? String(val) : val;
+              // Split's `ratios` is a text list, so store the driven number as its string form. A wired
+              // checkbox param bakes as a real BOOLEAN so the committed params match a hand-toggled node.
+              const kind = FLOW_TOOLS[data.tool].fields.find((f) => f.key === k)?.kind;
+              const v: unknown = data.tool === "split" && k === "ratios" ? String(val)
+                : kind === "checkbox" ? (typeof val === "string" ? val === "true" || val === "1" : Number(val) !== 0)
+                : val;
               if (merged[k] !== v) { merged[k] = v; diff = true; }
             }
             if (diff) { changed = true; return { ...n, data: { ...n.data, params: merged } }; }
@@ -3118,9 +4291,36 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
     onHiddenSpaceIdsRef.current?.(hiddenSpaceIdsSig ? hiddenSpaceIdsSig.split(",") : []);
   }, [hiddenSpaceIdsSig]);
 
+  // Same mechanism for Freehand-source nodes: a `_hidden` (eye toggled off) freehand node tells the host to
+  // hide the matching canvas freehand strokes. A blank colour filter → "*" (hide every stroke) so an empty
+  // string never collapses the signal to falsy. Colours lowercased to match the host's case-insensitive test.
+  const onHiddenFreehandRef = useRef(props.onHiddenFreehandColorsChange);
+  onHiddenFreehandRef.current = props.onHiddenFreehandColorsChange;
+  const hiddenFreehandSig = nodes
+    .filter((n) => { const d = n.data as FlowNodeData; return d.tool === "freehand-source" && Boolean(d.params._hidden); })
+    .map((n) => String((n.data as FlowNodeData).params.color ?? "").trim().toLowerCase() || "*")
+    .sort().join("|");
+  useEffect(() => {
+    onHiddenFreehandRef.current?.(hiddenFreehandSig ? hiddenFreehandSig.split("|") : []);
+  }, [hiddenFreehandSig]);
+
+  // Same mechanism for Grid (grid-source) nodes: a `_hidden` grid node tells the host to hide the matching
+  // canvas construction grid (by display id, e.g. "Grid001"), so its eye hides the numbered lattice.
+  const onHiddenGridRef = useRef(props.onHiddenGridIdsChange);
+  onHiddenGridRef.current = props.onHiddenGridIdsChange;
+  const hiddenGridIdsSig = nodes
+    .filter((n) => { const d = n.data as FlowNodeData; return d.tool === "grid-source" && Boolean(d.params._hidden); })
+    .flatMap((n) => String((n.data as FlowNodeData).params.id ?? "").split(",").map((s) => s.trim()).filter(Boolean))
+    .sort().join(",");
+  useEffect(() => {
+    onHiddenGridRef.current?.(hiddenGridIdsSig ? hiddenGridIdsSig.split(",") : []);
+  }, [hiddenGridIdsSig]);
+
   const run = (mode: "commit") => {
-    if (compiled.error || mode !== "commit") return;
-    if (!sourcesReady) { toast.error("The source node needs an id — select a Space/Segment/Graph or type one (e.g. Space001) to run."); return; }
+    if (mode !== "commit") return;
+    // No source gate: a coordinate-list flow (Polygon / Network / Vertices …) has no canvas root and is
+    // still perfectly runnable. Only a typed-but-unmatched Space id is a real mistake worth blocking on.
+    if (badSource?.idStr) { toast.error(`No space matches "${badSource.idStr}" — enter a valid id (e.g. Space001).`); return; }
     props.onRunCommit(compiled.json, compiled.committedNodeIds);
   };
 
@@ -3173,20 +4373,26 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importFlow(f); e.target.value = ""; }}
           />
-          <input
-            ref={pobjInputRef}
-            type="file"
-            accept="application/json,.json,.pobj.json"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) loadParametricObject(f); e.target.value = ""; }}
-          />
-          <input
-            ref={pobjSiteInputRef}
-            type="file"
-            accept="application/json,.json,.pobj.json"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) loadParametricSite(f); e.target.value = ""; }}
-          />
+          {/* Auto-arrange the whole flow into foldable blocks (2D / 3D Primitives, Math Engine, Canvas Import). */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-[11px] text-teal-600 hover:bg-teal-50"
+            onClick={arrangeFlow}
+            title="Arrange — tidy the flow into foldable blocks (2D Primitives, 3D Primitives, Math Engine, Canvas Import); adds an Agent + Input Properties node if missing"
+          >
+            <Wand2 className="h-3.5 w-3.5" /> Arrange
+          </Button>
+          {/* Bake the whole flow into a reusable parametric object (.pobj) saved to the Library. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-[11px] text-indigo-600 hover:bg-indigo-50"
+            onClick={saveAsPobj}
+            title="Save as Parametric Object — bake this flow into a reusable .pobj object in the Library"
+          >
+            <Boxes className="h-3.5 w-3.5" /> Save as Object
+          </Button>
           {/* Delete / Group the current selection (also works via the Delete key). */}
           <Button
             variant="outline"
@@ -3209,24 +4415,6 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             <GroupIcon className="h-3.5 w-3.5" /> Group
           </Button>
           <div className="mx-0.5 h-5 w-px bg-slate-200" />
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 px-2 text-[11px] text-teal-600 hover:bg-teal-50"
-            onClick={() => pobjInputRef.current?.click()}
-            title="Load Parametric Object — upload a .pobj.json file; its pipeline is shown as Flow nodes + connections"
-          >
-            <Boxes className="h-3.5 w-3.5" /> Load Parametric Object
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 px-2 text-[11px] text-teal-600 hover:bg-teal-50"
-            onClick={() => pobjSiteInputRef.current?.click()}
-            title="Load Parametric Site — upload a .pobj.json file as a single source node; its footprint feeds the flow and each parameter is a value output"
-          >
-            <Boxes className="h-3.5 w-3.5" /> Load Parametric Site
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -3403,9 +4591,9 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             .react-flow__edge.selected .react-flow__edge-path { filter: drop-shadow(0 0 2px rgba(59,130,246,0.6)); }
           `}</style>
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
+            nodes={viewNodes}
+            edges={viewEdges}
+            onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             nodeTypes={nodeTypes}
@@ -3424,13 +4612,14 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
       {/* Footer — compile status + run */}
       <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white/90 px-3 py-2">
         <div className="min-w-0 flex-1 text-[11px]">
+          {/* No "needs a source" warning any more — a flow can run entirely from a coordinate list. Only a
+              genuinely bad id (typed but matching no space) is still worth surfacing, since that IS a
+              mistake rather than a missing root. */}
           {compiled.error ? (
             <span className="text-red-600">{compiled.error}</span>
-          ) : !sourcesReady ? (
+          ) : badSource?.idStr ? (
             <span className="text-amber-600">
-              {badSource?.idStr
-                ? `One or more ids in "${badSource.idStr}" match no space — enter valid ids (e.g. Space001, Space002).`
-                : "Space node needs an id — type one (e.g. Space001) or grab it from a selection to preview & run."}
+              {`One or more ids in "${badSource.idStr}" match no space — enter valid ids (e.g. Space001, Space002).`}
             </span>
           ) : (
             <span className="text-slate-500">
@@ -3450,16 +4639,16 @@ export const FlowOverlay = (props: FlowOverlayProps) => {
             variant={props.liveFlow ? "default" : "outline"}
             size="sm"
             className={`h-8 gap-1.5 px-3 text-[12px] ${props.liveFlow ? "bg-emerald-600 hover:bg-emerald-700" : "text-emerald-700"}`}
-            disabled={!!compiled.error || !sourcesReady}
             onClick={props.onToggleLiveFlow}
             title="Live — draw each space-producing node's output (Inset, Optimise Rectangle, …) as a real, editable Space that updates as you change parameters (no Run needed). Toggle off to go back to preview."
           >
             <Radio className="h-3.5 w-3.5" /> Live{props.liveFlow ? " · on" : ""}
           </Button>
+          {/* Live + Run Flow are ALWAYS enabled: a flow no longer needs a canvas Space / Segment / Graph
+              root — a coordinate list (Polygon / Network / Vertices …) is a complete flow on its own. */}
           <Button
             size="sm"
             className="h-8 gap-1.5 px-3 text-[12px]"
-            disabled={!!compiled.error || !sourcesReady}
             onClick={() => run("commit")}
           >
             <Play className="h-3.5 w-3.5" /> Run Flow

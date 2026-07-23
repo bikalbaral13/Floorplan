@@ -2,25 +2,118 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "core-racking",
-  "materialisesSpace": true,
-  "meta": { "label": "Core Racking", "category": "Partition", "color": "#7c3aed" },
-  "description": "Rack a row of fixed-size rectangular core Spaces (length × breadth m) along a corridor band's long sides. Feed it a Corridoor output; cores stamp every length + gap along the run, flush to the corridor edge.",
-  "instructions": "Lines a corridor band with fixed-size rectangular \"core\" Spaces. Wire a corridor BAND (typically the Corridoor node's output) into the input: its oriented bounding box gives the run axis and width.\n\n• length — core size ALONG the corridor run (m); breadth — size AWAY from the corridor (m).\n• gap — spacing between adjacent cores along the run; margin — setback from each corridor end.\n• side — stamp cores on both sides, or only the left / right of the run.\n• orientation — auto uses the band's long axis; force horizontal / vertical for square-ish inputs.\n\nEmits one rectangle Space per placed core. Typical chain: Space → Corridoor → Core Racking.",
-  "handles": { "input": true, "output": true },
+  "meta": {
+    "label": "Core Racking",
+    "category": "Partition",
+    "color": "#7c3aed"
+  },
+  "description": "A pure CALCULATION node — rack fixed-size cores along a corridor: coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: `polygon` takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry's val-points into valin-polygon. A nested [[[x,y],...],...] list is accepted too — the LARGEST piece is used, since this node works on one polygon.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      },
+      {
+        "key": "length",
+        "label": "Core length"
+      },
+      {
+        "key": "breadth",
+        "label": "Core breadth"
+      },
+      {
+        "key": "gap",
+        "label": "Gap"
+      },
+      {
+        "key": "margin",
+        "label": "End margin"
+      },
+      {
+        "key": "side",
+        "label": "Side"
+      },
+      {
+        "key": "orientation",
+        "label": "Orientation"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
+    ]
+  },
   "parameters": [
-    { "key": "length", "label": "Core length", "kind": "range", "default": 4, "min": 0.5, "max": 20, "step": 0.1, "unit": "m" },
-    { "key": "breadth", "label": "Core breadth", "kind": "range", "default": 4, "min": 0.5, "max": 20, "step": 0.1, "unit": "m" },
-    { "key": "gap", "label": "Gap", "kind": "range", "default": 0.5, "min": 0, "max": 10, "step": 0.1, "unit": "m" },
-    { "key": "margin", "label": "End margin", "kind": "range", "default": 0, "min": 0, "max": 10, "step": 0.1, "unit": "m" },
+    {
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "length",
+      "label": "Core length",
+      "kind": "range",
+      "default": 4,
+      "min": 0.5,
+      "max": 20,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "breadth",
+      "label": "Core breadth",
+      "kind": "range",
+      "default": 4,
+      "min": 0.5,
+      "max": 20,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "gap",
+      "label": "Gap",
+      "kind": "range",
+      "default": 0.5,
+      "min": 0,
+      "max": 10,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "margin",
+      "label": "End margin",
+      "kind": "range",
+      "default": 0,
+      "min": 0,
+      "max": 10,
+      "step": 0.1,
+      "unit": "m"
+    },
     {
       "key": "side",
       "label": "Side",
       "kind": "select",
       "default": "both",
       "options": [
-        { "value": "both", "label": "Both sides" },
-        { "value": "left", "label": "Left only" },
-        { "value": "right", "label": "Right only" }
+        {
+          "value": "both",
+          "label": "Both sides"
+        },
+        {
+          "value": "left",
+          "label": "Left only"
+        },
+        {
+          "value": "right",
+          "label": "Right only"
+        }
       ]
     },
     {
@@ -29,9 +122,18 @@
       "kind": "select",
       "default": "auto",
       "options": [
-        { "value": "auto", "label": "Auto (run axis)" },
-        { "value": "horizontal", "label": "Horizontal" },
-        { "value": "vertical", "label": "Vertical" }
+        {
+          "value": "auto",
+          "label": "Auto (run axis)"
+        },
+        {
+          "value": "horizontal",
+          "label": "Horizontal"
+        },
+        {
+          "value": "vertical",
+          "label": "Vertical"
+        }
       ]
     }
   ]

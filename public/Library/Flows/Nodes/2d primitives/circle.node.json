@@ -12,13 +12,79 @@
   "handles": {
     "input": false,
     "output": true,
+    "valueInputs": [
+      {
+        "key": "radius",
+        "label": "Radius"
+      },
+      {
+        "key": "centerX",
+        "label": "Center X"
+      },
+      {
+        "key": "centerY",
+        "label": "Center Y"
+      },
+      {
+        "key": "color",
+        "label": "Colour"
+      },
+      {
+        "key": "show",
+        "label": "Show"
+      }
+    ],
     "valueOutputs": [
-      { "key": "radius", "label": "Radius", "unit": "m" }
+      {
+        "key": "radius",
+        "label": "Radius",
+        "unit": "m"
+      },
+      {
+        "key": "points",
+        "label": "Points (JSON)"
+      }
     ]
   },
   "parameters": [
-    { "key": "radius", "label": "Radius", "kind": "range", "default": 3, "min": 0.5, "max": 50, "step": 0.5, "unit": "m" },
-    { "key": "centerX", "label": "Center X", "kind": "number", "default": 0, "step": 0.5, "unit": "m" },
-    { "key": "centerY", "label": "Center Y", "kind": "number", "default": 0, "step": 0.5, "unit": "m" }
-  ]
+    {
+      "key": "radius",
+      "label": "Radius",
+      "kind": "range",
+      "default": 3,
+      "min": 0.5,
+      "max": 50,
+      "step": 0.5,
+      "unit": "m"
+    },
+    {
+      "key": "centerX",
+      "label": "Center X",
+      "kind": "number",
+      "default": 0,
+      "step": 0.5,
+      "unit": "m"
+    },
+    {
+      "key": "centerY",
+      "label": "Center Y",
+      "kind": "number",
+      "default": 0,
+      "step": 0.5,
+      "unit": "m"
+    },
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "color",
+      "default": ""
+    },
+    {
+      "key": "show",
+      "label": "Show",
+      "kind": "checkbox",
+      "default": true
+    }
+  ],
+  "materialisesSpace": true
 }

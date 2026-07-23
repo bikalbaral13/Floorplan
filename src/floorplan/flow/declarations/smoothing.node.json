@@ -7,37 +7,71 @@
     "category": "Reshape",
     "color": "#9f1239"
   },
-  "description": "Smooth the space boundary (Chaikin / Bézier), optionally kept inside + curve-shortened.",
-  "instructions": "Smooths the Space boundary → one output per input Space.\n\nTYPES (`type`)\n• chaikin — corner-cutting; rounds every corner (classic, fast).\n• bezier — Bézier corner fillets.\n\n`level` (0–1) sets the smoothing strength. `restrictInside` keeps the smoothed curve within the original polygon (no bulging outward — keep ON for habitable rooms so walls never cross the boundary). `curveShortening` (%) adds a post curvature-shortening pass to relax kinks.\n\nTIP: run Resample (densify) BEFORE Smoothing for cleaner curves. `outputMode=single` bundles every smoothed Space onto one handle.",
+  "description": "A pure CALCULATION node — round the boundary (Chaikin / Bezier): coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: polygon takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry val-points into valin-polygon. A nested [[[x,y],...],...] list (from Split / Voronoi / BSP …) is accepted too — the LARGEST piece is used, since this node works on one polygon.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true,
-    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(inputCount)))"
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
+    ]
   },
   "parameters": [
+    {
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    },
     {
       "key": "type",
       "label": "Type",
       "kind": "select",
       "default": "chaikin",
       "options": [
-        { "value": "chaikin", "label": "Chaikin corner" },
-        { "value": "bezier", "label": "Bézier fillet" }
+        {
+          "value": "chaikin",
+          "label": "Chaikin corner"
+        },
+        {
+          "value": "bezier",
+          "label": "Bézier fillet"
+        }
       ]
     },
-    { "key": "level", "label": "Smoothing level", "kind": "range", "default": 0.4, "min": 0, "max": 1, "step": 0.02 },
-    { "key": "restrictInside", "label": "Restrict inside polygon", "kind": "checkbox", "default": false },
-    { "key": "curveShortening", "label": "Curved shortening", "kind": "range", "default": 0, "min": 0, "max": 100, "step": 1, "unit": "%" },
     {
-      "key": "outputMode",
-      "label": "Outputs",
-      "kind": "select",
-      "default": "perCell",
-      "options": [
-        { "value": "perCell", "label": "Per space (one each)" },
-        { "value": "single", "label": "Single (all spaces)" }
-      ],
-      "showWhen": "inputCount > 1"
+      "key": "level",
+      "label": "Smoothing level",
+      "kind": "range",
+      "default": 0.4,
+      "min": 0,
+      "max": 1,
+      "step": 0.02
+    },
+    {
+      "key": "restrictInside",
+      "label": "Restrict inside polygon",
+      "kind": "checkbox",
+      "default": false
+    },
+    {
+      "key": "curveShortening",
+      "label": "Curved shortening",
+      "kind": "range",
+      "default": 0,
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "%"
     }
   ]
 }

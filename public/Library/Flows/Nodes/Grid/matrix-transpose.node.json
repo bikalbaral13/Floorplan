@@ -1,0 +1,23 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-transpose",
+  "meta": { "label": "Transpose", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — transpose a matrix (Aᵀ): swap rows ↔ columns. Matrix in, matrix out; draws nothing.",
+  "instructions": "A value-only node: a matrix as JSON in, its transpose as JSON out. It has no geometry input or output and draws nothing on the canvas.\n\nINPUT: wire a matrix into valin-matrix — Grid Geometry's `val-matrix` (a bare rows×cols 2D array `[[…],…]`), or another Matrix node's output. A val-grid `{ \"values\": [[…]] }` is accepted too.\n\nOUTPUT: `val-matrix` — the transpose; plus `val-rows` / `val-cols` (the result dimensions). Chain into Matrix Multiply / Inverse to build e.g. AᵀA or the least-squares normal equations x = (AᵀA)⁻¹Aᵀb. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "matrix", "label": "Matrix" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Matrix (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" }
+    ]
+  },
+  "parameters": [
+    { "key": "matrix", "label": "Matrix (JSON)", "kind": "text", "default": "" }
+  ]
+}

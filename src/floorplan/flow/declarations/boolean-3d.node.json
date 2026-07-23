@@ -10,6 +10,12 @@
     "output": true,
     "geomInputs": [
       { "key": "b", "label": "B" }
+    ],
+    "valueInputs": [
+      {
+        "key": "show",
+        "label": "Show"
+      }
     ]
   },
   "parameters": [
@@ -24,6 +30,12 @@
         { "value": "difference", "label": "Difference (A − B)" },
         { "value": "intersect", "label": "Intersection (A ∩ B)" }
       ]
+    },
+    {
+      "key": "show",
+      "label": "Show",
+      "kind": "checkbox",
+      "default": true
     }
   ]
 }

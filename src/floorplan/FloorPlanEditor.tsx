@@ -183,10 +183,13 @@ import { AddOpeningDialog } from "./components/dialogs/AddOpeningDialog";
 import { AddFurnitureDialog, type FurnitureDraft } from "./components/dialogs/AddFurnitureDialog";
 import { SegmentTypeParamsDialog, fieldsForSegType } from "./components/dialogs/SegmentTypeParamsDialog";
 import { ObjectParamsDialog } from "./components/dialogs/ObjectParamsDialog";
-import { ChatAIPanel, type ChatMessage } from "./components/ChatAIPanel";
+import { ChatAIPanel, type ChatMessage, type ChatAgentTab, type AgentAccessView } from "./components/ChatAIPanel";
 import { serializeForAI, applyAiReply, summarizeChange, cutOpeningsForAttachments, normalizeNodeMetaKeys } from "./ai/aiChat";
 import { runAgentChat, AGENT_SYSTEM_PROMPT, DESIGN_AGENT_SYSTEM_PROMPT, PARAMETRIC_AGENT_SYSTEM_PROMPT, buildDetailedObjectCatalog, type AgentToolApi, type AgentEvent } from "./ai/agentChat";
 import { runFlowAgent, FLOW_AGENT_SYSTEM_PROMPT, buildFlowToolCatalog, validateFlowGraph, type FlowAgentApi } from "./ai/flowAgent";
+import { grantItems, type AgentDefinition } from "./ai/agentDefs";
+import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
+import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
 import { registerAgentCommand, startAgentBridge, agentBridgeEnabled } from "./agentBridge";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
 import { ImportObjectsDialog } from "./components/dialogs/ImportObjectsDialog";
@@ -231,12 +234,13 @@ import { NodeDisplayBlock } from "./components/nodeProperties/NodeDisplayBlock";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "./types";
 import { SchemaPropsBlock, SchemaMetricsBlock } from "./components/GraphSchemaBlocks";
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "./algorithms/network/pipeNetworkSolver";
-import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries, FLOW_TOOLS } from "./flow/flowTypes";
-import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs } from "./flow/eval/parametricObject";
+import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries, FLOW_TOOLS, inputProps, coerceSelectWire } from "./flow/flowTypes";
+import { pobjToAttachedFlow } from "./flow/pobjToFlow";
+import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs, evalParametricPipelineSteps } from "./flow/eval/parametricObject";
 import { setFlowObjectLibrary, findLibraryObject, measureParametricObject } from "./flow/eval/objectFootprints";
 import type { FlowMesh } from "./flow/eval/meshTypes";
 import { layoutRooms } from "./flow/LayoutRoomsEditor";
-import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, type AutoPlaceEntry, type OpeningKind } from "./flow/autoFlow";
+import { mergeObjectIntoFlow, mergeOpeningIntoFlow, mergeWallGraphIntoFlow, mergeNodeObjectIntoFlow, mergeAttachedObjectIntoFlow, attachedObjectFlowNodeId, type AutoPlaceEntry, type OpeningKind } from "./flow/autoFlow";
 import { computeInflationRect } from "./algorithms/layout/inflationRect";
 import { OptimiseShapeBlock, type OptimiseShapeKind } from "./components/roomProperties/OptimiseShapeBlock";
 import { computeOptimiseLShape } from "./algorithms/layout/optimiseLShape";
@@ -247,11 +251,12 @@ import { BoundingShapesBlock } from "./components/roomProperties/BoundingShapesB
 import { MassingBlock } from "./components/roomProperties/MassingBlock";
 import { PathSetterBlock } from "./components/roomProperties/PathSetterBlock";
 import { SplittingActionsBlock } from "./components/roomProperties/SplittingActionsBlock";
-import { FlowOverlay, FLOORPLAN_SCHEMA_PARAMS } from "./flow/FlowOverlay";
+import { FlowOverlay, FLOORPLAN_SCHEMA_PARAMS, agentContextOf, agentGeometryPolyOf, agentTargetsOf } from "./flow/FlowOverlay";
+import { runAgentSuggest, runAgentCritique, suggestInputHash, type SuggestedValue } from "./ai/agentSuggest";
 import { TemplateDialog, type TemplateParams, type TemplateSample } from "./components/dialogs/TemplateDialog";
-import { FlowParamsPanel } from "./flow/FlowParamsPanel";
+import { FlowParamsPanel, FlowAgentPanel } from "./flow/FlowParamsPanel";
 import { evaluateFlow, type FlowPreviewItem } from "./flow/eval/evaluateFlow";
-import { evalGraphMetrics, gridDefToField, evalSkeleton, evalCorridoorPieces, evalCoreRacking } from "./flow/eval/evalNodes";
+import { evalGraphMetrics, gridDefToField, evalSkeleton, evalCorridoorPieces, evalCoreRacking, evalGraphFitLines } from "./flow/eval/evalNodes";
 import { evaluateSpaceCondition } from "./flow/conditional";
 import { PlacementSymbol2D, placementFrameFromQuad, isPlacementSymbolKind } from "./placementSymbol2d";
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from "react-resizable-panels";
@@ -1154,6 +1159,9 @@ const polysBBox = (polys: Point[][]): { minX: number; minY: number; maxX: number
 const pobjIsHostAware = (defText: string): boolean =>
   /hostW|hostH|hostArea|hostMin|hostMax|"host"|"pipeline"/.test(defText);
 
+// `pobjToAttachedFlow` (pobj → editable Flow graph, incl. the explicit `flow` decompilation and the pipeline
+// fallback) is shared with the Flow Import browser — see ./flow/pobjToFlow.
+
 /** Place a non-host-aware object (given its plan bbox `gb`, world px) INSIDE a Space's largest inscribed
  *  rectangle `rect` at the rectangle's orientation: centre it on the rect, rotate to the rect angle (picking
  *  the 0°/90° option that fills more), and uniform-scale to fit. Returns a world-px → world-px point mapper.
@@ -1620,6 +1628,10 @@ export type Display3DStyle = { color: string; opacity: number; wireframe: boolea
  *  `display` is set when a Display 3D node is wired downstream (colour now lives there, not on the primitive). */
 export type PrimMass3D = {
   id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string;
+  /** Batch-A shape extras (0 when not applicable): frustum top radius, tapered-box top dims, torus tube
+   *  radius + arc sweep (degrees, unscaled). `radius` doubles as: cylinder/capsule radius, frustum BOTTOM
+   *  radius, torus RING radius. */
+  radiusTop?: number; topLength?: number; topBreadth?: number; tubeRadius?: number; arcDeg?: number;
   transform: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number };
   display?: Display3DStyle;
 };
@@ -1690,6 +1702,35 @@ const computeFluteGeom = (s: { D: number; t: number; L: number[]; Dh: number[] }
   const cum: number[] = []; let acc = 0; for (const gseg of segs) { acc += gseg; cum.push(acc); }
   const holes = s.Dh.map((dh, i) => ({ y: cum[i + 1] ?? (Ltot * (i + 1)) / 9, rad: Math.max(0.003, (dh / 2) * sc) }));
   return { R, r, Ltot, holes };
+};
+
+/** Read-only "Flow Output" block for a component's Metrics tab: the named metrics collected by the flow's
+ *  Output Metrics node(s) — each slot's label + its live wired value. This is the Metrics-tab counterpart of
+ *  the FlowParamsPanel Input Properties block on the Properties tab, so a Space/Node/Segment surfaces the
+ *  flow's outputs the same way it surfaces its inputs. Global (like the Space block it mirrors): an Output
+ *  node isn't rooted on one element, so every component shows the pipeline's outputs. Renders nothing when no
+ *  Output node has a labelled/valued slot. */
+const FlowOutputMetricsBlock = ({ flowPreview }: { flowPreview: FlowPreviewItem[] }) => {
+  const metrics = flowPreview
+    .filter((it) => it.tool === "output" && Array.isArray(it.metrics))
+    .flatMap((it) => it.metrics!)
+    .filter((m) => m.label.trim() !== "" || m.value != null);
+  if (metrics.length === 0) return null;
+  const fmt = (v: number | string | null) =>
+    v == null ? "—" : typeof v === "number" ? (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(2)) : String(v);
+  return (
+    <div className="mb-2 rounded-md border border-teal-200 bg-teal-50/50 p-2">
+      <span className="mb-1 block text-[10px] font-semibold text-teal-700">Flow Output</span>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        {metrics.map((m, i) => (
+          <div key={i}>
+            <span className="text-[9px] text-slate-400">{m.label.trim() || `Output ${i + 1}`}</span>
+            <p className="font-mono text-slate-700">{fmt(m.value)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
@@ -2619,6 +2660,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // The segment type the single-segment ("Add Segment") tool commits — plain line, a door / window
   // opening, or any schema-defined seg-type (rendered via its flow symbol). Drawn directly as a segment.
   const [singleSegType, setSingleSegType] = useState<string>("line");
+  /** Freehand "Sketch as" — the segment type a freehand stroke commits as ("" = plain ink, today's
+   *  behaviour). When set, the stroke is drawn as raw ink while dragging and, on mouse-up, fitted to
+   *  straight segments (evalGraphFitLines — the Fit Lines algorithm, used directly rather than through a
+   *  flow) and committed as real typed segments. Add Segment and Freehand then differ only in the gesture. */
+  const [freehandSegType, setFreehandSegType] = useState<string>("");
   // Clear the door/window click-to-place hover span when leaving that mode.
   useEffect(() => {
     if (!(tool === "single-segment" && (singleSegType === "door" || singleSegType === "window"))) setOpeningPlacePreview(null);
@@ -2740,12 +2786,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   }, [nodeObjectBBox, armedNodeParams]);
   // "Set params once per tool selection" — the open segment-type parameter dialog, and the confirmed
   // per-element defaults reused for every segment of the active type until another tool is picked.
-  const [segParamsDialog, setSegParamsDialog] = useState<{ segType: string; label: string } | null>(null);
+  /** `via: "freehand"` routes the confirm to the Freehand sketch-as tool instead of the click-click one, so
+   *  both gestures share this one parameter dialog. */
+  const [segParamsDialog, setSegParamsDialog] = useState<{ segType: string; label: string; via?: "freehand" } | null>(null);
   const activeSegDefaultsRef = useRef<{ type: string; vals: Record<string, import("./types").GraphAttrValue> } | null>(null);
   // Add-Segment / Add-Node imported-object parameters popup: the picked object id + host, shown before the
   // draw/place starts so the user can set the object's Input Properties (e.g. Wall height / base / colour)
   // — like the schema dialog. `host` routes the confirm to the segment-draw vs node-place arming.
-  const [objParamsDialog, setObjParamsDialog] = useState<{ objectId: string; label: string; host: "segment" | "node" } | null>(null);
+  /** `via: "freehand"` makes the confirm arm the Freehand sketch-as gesture instead of the click-click
+   *  chain, so an imported object (e.g. Wall) gets the SAME parameter dialog from either tool. */
+  const [objParamsDialog, setObjParamsDialog] = useState<{ objectId: string; label: string; host: "segment" | "node"; via?: "freehand" } | null>(null);
   /** Active path-draw config — when set, polyline-path walls use these values for
    *  thickness (px) and label instead of the segment-type default. Cleared when the
    *  user exits path mode. */
@@ -2811,17 +2861,33 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     placement2dSymbol: false,
     placementRenderedSymbol: false,
   });
-  /** Architectural view: the wall band (non-opening walls) physically clipped by column footprints,
-   *  so no wall material is drawn inside a column. Empty unless Architectural view is on AND there is
-   *  at least one column overlapping the walls — when empty, walls render normally (unchanged). */
+  /** GENERAL wall-carve footprints (world px): every placed object that declares `cutsWall` subtracts its
+   *  plan footprint from the wall band — parametric node attachments (e.g. column.v1: the carve shape is the
+   *  object's own evaluated 2D fill, so rectangular / circular / rotated all work) PLUS the legacy
+   *  `type:"column"` nodes. One shared source feeding the 2D clipped band, the 3D wall boolean (built-in
+   *  extrusions + parametric wall prisms) and the DXF export — so every representation agrees. */
+  const wallCarveFootprints = useMemo<Point[][]>(() => {
+    const polys: Point[][] = columnFootprintPolygons(wallNodes, history.state.nodeMeta ?? {}, pixelsPerMeter);
+    const lib = history.state.objectLibrary ?? {};
+    const meta = history.state.nodeMeta ?? {};
+    for (const node of wallNodes) {
+      for (const att of meta[node.stableKey]?.attachments ?? []) {
+        const obj = lib[att.objectId];
+        if (!obj?.cutsWall || !obj.geometry) continue;
+        try {
+          const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef, att.childParams);
+          for (const poly of g.fill) if (poly.length >= 3) polys.push(poly);
+        } catch { /* a broken definition must never take the walls down with it */ }
+      }
+    }
+    return polys;
+  }, [wallNodes, history.state.nodeMeta, history.state.objectLibrary, pixelsPerMeter, resolveObjectDef]);
+  /** The wall band (non-opening walls) physically clipped by the carve footprints, so no wall material is
+   *  drawn inside a column. ALWAYS active while any carve object overlaps the walls (placing a column
+   *  clips the band immediately — no view toggle needed); with no carve objects it stays empty and walls
+   *  render exactly as before. */
   const architecturalWallBand = useMemo<ClipPoly[]>(() => {
-    if (!layerVisibility.viewArchitectural) return [];
-    const columnPolys = columnFootprintPolygons(
-      wallNodes,
-      history.state.nodeMeta ?? {},
-      pixelsPerMeter
-    );
-    if (columnPolys.length === 0) return [];
+    if (wallCarveFootprints.length === 0) return [];
     const wallPolys: Point[][] = [];
     for (const w of history.state.walls) {
       if (
@@ -2835,14 +2901,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       if (poly && poly.length >= 3) wallPolys.push(poly);
     }
     if (wallPolys.length === 0) return [];
-    return clipWallBandByColumns(wallPolys, columnPolys);
+    return clipWallBandByColumns(wallPolys, wallCarveFootprints);
   }, [
-    layerVisibility.viewArchitectural,
-    wallNodes,
-    history.state.nodeMeta,
+    wallCarveFootprints,
     history.state.walls,
     miteredPolygons,
-    pixelsPerMeter,
   ]);
   /** True when the clipped band is active and should replace the normal per-wall fills. */
   const architecturalClipActive = architecturalWallBand.length > 0;
@@ -2894,6 +2957,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** True for the whole pan gesture (mousedown→mouseup); updated synchronously so drag/pan never races React state. */
   const viewportPanPointerActiveRef = useRef(false);
   const panLastScreen = useRef({ x: 0, y: 0 });
+  /** Every pointer currently down, keyed by pointerId. Pointer events unify mouse / stylus / touch, so this
+   *  one map is what lets the stage tell a two-finger viewport gesture from a one-contact draw, and what
+   *  lets extra contacts (a palm landing mid-stroke) be ignored rather than hijacking the gesture. */
+  const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
+  /** Live two-finger gesture — the pinch distance + centroid recorded on the previous move. */
+  const pinchRef = useRef<{ dist: number; cx: number; cy: number } | null>(null);
+  /** Preference: let a FINGER draw. Off (default) means touch only pans/zooms, which doubles as palm
+   *  rejection — a resting palm reports pointerType "touch" and so can never start a stroke. Stylus ("pen")
+   *  and mouse always draw. Turn on for a touchscreen with no stylus. */
+  const [touchDraws, setTouchDraws] = useState<boolean>(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const toolRef = useRef<Tool>(tool);
   const spaceHeldRef = useRef(false);
@@ -3208,6 +3281,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Ref mirror of the OVERLAY's live preview — the agent's flow_apply reads it (after the eval settles)
    *  to summarise what each node produced without racing React state. */
   const flowPreviewRef = useRef<FlowPreviewItem[]>([]);
+  // Keep the ref in step with the state on EVERY render (the overlay's onPreview also sets it synchronously;
+  // this additionally covers the closed-overlay headless path, which only calls setFlowPreview) so a
+  // Properties-tab Agent run reads the current preview without racing React state.
+  flowPreviewRef.current = flowPreview;
   /** Flow "Live" mode (pilot) — when on, supported nodes (currently Inset) materialise their output as
    *  REAL wall segments (→ auto-detected Space) that regenerate on every parameter change, instead of a
    *  preview overlay you must Run to commit. See the live-materialise effect below. */
@@ -3215,6 +3292,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Node ids whose output is currently materialised by Live mode — their preview overlay is suppressed
    *  (the real geometry stands in for it), read during the canvas overlay render. */
   const liveOwnedNodeIdsRef = useRef<Set<string>>(new Set());
+  /** Attachment ids of host-aware pipeline objects (Site/Floor/Massing) whose pipeline steps are currently
+   *  materialised as real Spaces by Live mode — their display-only overlay is suppressed (the committed
+   *  per-op Spaces stand in for it), read during the canvas attachment overlay render. */
+  const liveOwnedAttIdsRef = useRef<Set<string>>(new Set());
   /** Display ids (e.g. "Space001") of Space nodes whose eye is toggled off in the Flow editor — those
    *  spaces are hidden on the canvas while the editor drives the view. */
   const [hiddenFlowSpaceIds, setHiddenFlowSpaceIds] = useState<string[]>([]);
@@ -3231,6 +3312,29 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
     return s;
   }, [flowOpen, hiddenFlowSpaceIds, visibleRooms]);
+  /** Colour filters ("*" = every stroke) from Freehand-source nodes whose eye is toggled off in the Flow
+   *  editor — the matching canvas freehand strokes are hidden while the editor drives the view. */
+  const [hiddenFreehandColors, setHiddenFreehandColors] = useState<string[]>([]);
+  /** True when a committed freehand stroke (its kind/stroke colour) is hidden by a Freehand-source eye toggle.
+   *  Case-insensitive colour match; "*" hides every stroke. Only active while the Flow editor is open. */
+  const isFreehandHiddenByFlow = useCallback((kind: string, stroke: string | undefined): boolean => {
+    if (kind !== "freehand" || !flowOpen || hiddenFreehandColors.length === 0) return false;
+    return hiddenFreehandColors.includes("*") || hiddenFreehandColors.includes((stroke ?? "").trim().toLowerCase());
+  }, [flowOpen, hiddenFreehandColors]);
+  /** Display ids ("GridNNN") of Grid-source nodes whose eye is toggled off in the Flow editor. */
+  const [hiddenFlowGridIds, setHiddenFlowGridIds] = useState<string[]>([]);
+  /** Actual grid ids to hide on the canvas, resolved from the Flow editor's hidden Grid display ids
+   *  (GridNNN = grids[NNN-1], or a direct id match). Only active while the Flow editor is open. */
+  const hiddenFlowGridIdSet = useMemo(() => {
+    const s = new Set<string>();
+    if (!flowOpen || hiddenFlowGridIds.length === 0) return s;
+    for (const disp of hiddenFlowGridIds) {
+      const m = /^Grid(\d+)$/.exec(disp.trim());
+      const g = m ? (history.state.grids ?? [])[parseInt(m[1], 10) - 1] : (history.state.grids ?? []).find((x) => x.id === disp.trim());
+      if (g) s.add(g.id);
+    }
+    return s;
+  }, [flowOpen, hiddenFlowGridIds, history.state.grids]);
   /** The imported underlay image as an RGBA buffer + its world box, for the Flow Image / Vectorisation
    *  nodes. Extracted only while the Flow editor is open (getImageData is heavy); re-extracts when the
    *  image or its placement changes. */
@@ -3387,14 +3491,23 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       if (wallAtt) {
         const wtop = wbase + Math.max(0.05, pnum(wallAtt, "height", 2.7));
         const wcol = pcol(wallAtt, "#94a3b8");
+        // Wall boolean: subtract the carve footprints (columns, …) that overlap this wall's band, so the
+        // parametric wall prism has the column punched through (Shape-with-holes extrusion). Cheap bbox
+        // pre-check; no carve → the plain single-piece band, exactly as before.
+        const fb = polysBBox([foot]);
+        const hits = fb ? wallCarveFootprints.filter((cp) => { const cb = polysBBox([cp]); return !!cb && cb.minX <= fb.maxX && cb.maxX >= fb.minX && cb.minY <= fb.maxY && cb.maxY >= fb.minY; }) : [];
+        const pieces = hits.length ? subtractPolygon(foot, hits) : [{ outer: foot, holes: [] as Point[][] }];
+        const bandPrisms = (y0: number, y1: number) => pieces
+          .filter((p) => p.outer.length >= 3)
+          .map((p) => ({ bottom: p.outer, top: p.outer, yBottom: y0, yTop: y1, color: wcol, ...(p.holes.length ? { holes: p.holes } : {}) }));
         if (openAtt) {
           const isWin = lib[openAtt.objectId]?.meta.symbol === "window";
           const lintel = wbase + (isWin ? pnum(openAtt, "lintelHeight", 2.1) : pnum(openAtt, "height", 2.1));
           const sillTop = wbase + (isWin ? pnum(openAtt, "sillHeight", 0.9) : 0);
-          if (sillTop > wbase + 0.01) out.push({ id: `wall-${w.id}-sill`, prisms: [{ bottom: foot, top: foot, yBottom: wbase, yTop: Math.min(sillTop, wtop), color: wcol }] });
-          if (lintel < wtop - 0.01) out.push({ id: `wall-${w.id}-head`, prisms: [{ bottom: foot, top: foot, yBottom: Math.max(lintel, wbase), yTop: wtop, color: wcol }] });
+          if (sillTop > wbase + 0.01) out.push({ id: `wall-${w.id}-sill`, prisms: bandPrisms(wbase, Math.min(sillTop, wtop)) });
+          if (lintel < wtop - 0.01) out.push({ id: `wall-${w.id}-head`, prisms: bandPrisms(Math.max(lintel, wbase), wtop) });
         } else {
-          out.push({ id: `wall-${w.id}-${wallAtt.id}`, prisms: [{ bottom: foot, top: foot, yBottom: wbase, yTop: wtop, color: wcol }] });
+          out.push({ id: `wall-${w.id}-${wallAtt.id}`, prisms: bandPrisms(wbase, wtop) });
         }
       }
       // Door / Window → its OWN parametric 3D geometry (the .pobj.json geometry block), oriented along the
@@ -3430,7 +3543,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }
     }
     return out;
-  }, [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects]);
+  }, [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects, wallCarveFootprints]);
   // Everything the 3D view shows on the generic mesh channel: Flow "Mesh to 3D" output + node-attached
   // parametric-object meshes + Space-floor / Segment-wall meshes.
   const meshPreviewAll = useMemo<FlowMesh[] | undefined>(() => {
@@ -3545,6 +3658,25 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  evaluator — each node's `polygons` is already computed inside its upstream — so no committed-geometry
    *  round-trip. Written via history.replace (transient — no undo entry per scrub). */
   const liveFlowSigRef = useRef<string>("");
+  /** Signature of every host-aware pipeline object attached to a (non-owned) Space — its host id + host
+   *  polygon + objectId + params. Changes when a Site/Floor is attached, its params edited, or its host
+   *  Space moved/resized, so the Live-materialise effect below re-runs and rebuilds the committed per-op
+   *  Spaces. Excludes flowOwner rooms (the effect's own output) so it never self-triggers. */
+  const liveAttachmentsSig = useMemo(() =>
+    history.state.rooms
+      .filter((r) => !r.flowOwner && (r.attachments?.length ?? 0) > 0 && r.points.length >= 3)
+      .map((r) => `${r.id}#${r.points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("|")}#${(r.attachments ?? []).map((a) => `${a.id}:${a.objectId}:${JSON.stringify(a.params)}`).join(",")}`)
+      .join(";"),
+    [history.state.rooms]);
+  /** Any host-aware pipeline object attached to a Space? Lets the Flow "Live" toggle be enabled even with an
+   *  empty flow, so an attached Site can be live-committed to per-op Space layers on its own. */
+  const hasLivePipelineAttachment = useMemo(() => {
+    const lib = history.state.objectLibrary ?? {};
+    return history.state.rooms.some((r) => !r.flowOwner && (r.attachments ?? []).some((a) => {
+      const obj = lib[a.objectId];
+      return !!obj?.geometry && pobjIsHostAware(JSON.stringify(obj));
+    }));
+  }, [history.state.rooms, history.state.objectLibrary]);
   useEffect(() => {
     const h = historyRef.current;
     // A materialised object NODE (Place Object) is a degenerate wall (flowOwner) + a nodeMeta entry keyed
@@ -3558,6 +3690,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // Live OFF → drop all owned geometry + object nodes (back to the preview overlay) in one replace.
     if (!liveFlow) {
       liveOwnedNodeIdsRef.current = new Set();
+      liveOwnedAttIdsRef.current = new Set();
       liveFlowSigRef.current = "";
       if (hadOwned) h.replace({ ...h.state, rooms: h.state.rooms.filter((r) => !r.flowOwner), walls: h.state.walls.filter((w) => !w.flowOwner), nodeMeta: stripOwnedMeta(h.state.nodeMeta) });
       return;
@@ -3626,11 +3759,47 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (made > 0) { ownedNodeIds.add(base); layers = ensureLiveLayer(layers, layerId, "Live · Objects"); }
         continue;
       }
+      // SEGMENT-producing nodes (Network, Line, Polyline, Arc) → one owned wall per consecutive point
+      // pair. Canvas nodes ARE wall endpoints in this model, so junctions materialise automatically where
+      // segments share a point — a graph comes through as nodes AND segments without creating either
+      // explicitly. Runs before the Space branch because these outputs are open strokes, not room faces.
+      if (FLOW_TOOLS[item.tool]?.materialisesSegments && item.polygons.length > 0) {
+        const base = item.nodeId.split("__")[0];
+        const layerId = `flow-live-${base}`;
+        const label = FLOW_TOOLS[item.tool]?.label ?? "Segments";
+        let made = 0;
+        item.polygons.forEach((pl, pi) => {
+          // A CLOSED ring (Polygon fed into a segment-producer) wraps back to its first point; an open
+          // stroke stops at the last pair.
+          const closed = !item.openPath && pl.length >= 3;
+          const last = closed ? pl.length : pl.length - 1;
+          for (let i = 0; i < last; i++) {
+            const a = pl[i], b = pl[(i + 1) % pl.length];
+            if (Math.hypot(b.x - a.x, b.y - a.y) < 1) continue; // skip degenerate/duplicate points
+            ownedWalls.push({
+              id: `flowlive:${item.nodeId}:seg:${pi}:${i}`,
+              start: { x: a.x, y: a.y }, end: { x: b.x, y: b.y },
+              // Real wall styling (not the node's preview tint) — these are canvas segments now; the
+              // "Live · <node>" layer is what identifies their origin. Matches the Space branch below.
+              thickness: wallThickness, color: wallColor, method: "center",
+              layerId, flowOwner: base,
+            });
+            made += 1;
+          }
+        });
+        // Claim ownership (→ overlay suppression + a Live layer) only when segments were actually made,
+        // so an empty node keeps showing its preview overlay.
+        if (made > 0) { ownedNodeIds.add(base); layers = ensureLiveLayer(layers, layerId, `Live · ${label}`); }
+        continue;
+      }
       // Only space-producing nodes, and never OPEN polylines (openPath = graph/centerline output) — those
       // aren't room faces.
       if (!FLOW_TOOLS[item.tool]?.materialisesSpace || item.openPath || item.polygons.length === 0) continue;
       const base = item.nodeId.split("__")[0];
-      const layerId = `flow-live-${base}`;
+      // A `layer` on the item (the Polygon node's Layer param) names the canvas layer explicitly — several
+      // polygons sharing a name land on ONE layer; blank falls back to the node's own per-node Live layer.
+      const customLayer = typeof item.layer === "string" && item.layer.trim() ? item.layer.trim() : null;
+      const layerId = customLayer ?? `flow-live-${base}`;
       const label = FLOW_TOOLS[item.tool]?.label ?? "Space";
       // Group the node's rings into outer boundaries + holes: a ring whose centroid lies inside a
       // strictly-larger ring is that ring's HOLE (e.g. Corridoor "insetted" = an outer loop carved by a
@@ -3681,9 +3850,60 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       });
       // Claim ownership (→ overlay suppression + a Live layer) ONLY when this node actually produced a
       // closed Space; otherwise its overlay must keep showing (skeleton centerlines, Voronoi edges, …).
-      if (produced > 0) { ownedNodeIds.add(base); layers = ensureLiveLayer(layers, layerId, `Live · ${label}`); }
+      if (produced > 0) { ownedNodeIds.add(base); layers = ensureLiveLayer(layers, layerId, customLayer ?? `Live · ${label}`); }
     }
     liveOwnedNodeIdsRef.current = ownedNodeIds;
+
+    // ── Attached host-aware pipeline objects (Site/Floor/Massing) → materialise each pipeline OP's footprint
+    //    as owned Spaces on its OWN layer ("<Object> · Inset / Split / Optimise"), so an attached Site's
+    //    inset → split → optimise steps become real, per-layer Spaces that track the object's params live —
+    //    the attach-object analogue of a flow's stepwise commit. Non-host-aware objects (staircase, furniture)
+    //    and objects without a pipeline keep their display-only overlay. ──
+    const ownedAttIds = new Set<string>();
+    const objLib = h.state.objectLibrary ?? {};
+    for (const room of h.state.rooms) {
+      if (room.flowOwner || room.points.length < 3 || (room.attachments?.length ?? 0) === 0) continue;
+      const c = polygonCentroid(room.points);
+      const hostLocal = room.points.map((p) => ({ x: (p.x - c.x) / pixelsPerMeter, y: (p.y - c.y) / pixelsPerMeter }));
+      for (const att of room.attachments ?? []) {
+        const obj = objLib[att.objectId];
+        if (!obj?.geometry) continue;
+        const defText = JSON.stringify(obj);
+        if (!pobjIsHostAware(defText)) continue; // non-host-aware → keep the fit-to-rect overlay
+        let steps: { op: string; polygons: Point[][] }[] = [];
+        try { steps = evalParametricPipelineSteps(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams); } catch { steps = []; }
+        if (steps.length === 0) continue;
+        const ownerBase = `pobjlive:${room.id}:${att.id}`;
+        const objName = obj.meta?.name ?? "Object";
+        const opSeen = new Map<string, number>(); // per-op-name counter → stable layer id if an op repeats
+        let produced = 0;
+        for (const step of steps) {
+          const rings = step.polygons.filter((p) => p.length >= 3);
+          if (rings.length === 0) continue;
+          const seen = opSeen.get(step.op) ?? 0; opSeen.set(step.op, seen + 1);
+          const opLabel = step.op.split(/[-_\s]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+          const layerId = `pobjlive-${room.id}-${att.id}-${step.op}${seen ? `-${seen}` : ""}`;
+          rings.forEach((ring, ri) => {
+            ownedRooms.push({
+              id: `${ownerBase}:${step.op}:${seen}:${ri}`,
+              points: ring.map((p) => ({ x: p.x, y: p.y })),
+              layerId, flowOwner: ownerBase,
+              fill: "rgba(34,197,94,0.2)", stroke: "#16A34A",
+              roomType: "room", label: `${objName} · ${opLabel}`, showLabel: true,
+            });
+            for (let i = 0; i < ring.length; i++) {
+              const a = ring[i], b = ring[(i + 1) % ring.length];
+              if (Math.hypot(b.x - a.x, b.y - a.y) < 1) continue;
+              ownedWalls.push({ id: `${ownerBase}:${step.op}:${seen}:${ri}:${i}`, start: { x: a.x, y: a.y }, end: { x: b.x, y: b.y }, thickness: wallThickness, color: wallColor, method: "center", layerId, flowOwner: ownerBase });
+            }
+          });
+          layers = ensureLiveLayer(layers, layerId, `${objName} · ${opLabel}`);
+          produced += 1;
+        }
+        if (produced > 0) ownedAttIds.add(att.id);
+      }
+    }
+    liveOwnedAttIdsRef.current = ownedAttIds;
 
     // Skip the write when the owned geometry is unchanged (stable params) — avoids needless re-renders.
     // Cover rooms (points), walls / object-node anchors, and each object node's rotation.
@@ -3703,7 +3923,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       nodeMeta: { ...stripOwnedMeta(h.state.nodeMeta), ...ownedNodeMeta },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flowPreview, liveFlow, wallColor, wallThickness]);
+  }, [flowPreview, liveFlow, wallColor, wallThickness, liveAttachmentsSig]);
 
   /** Per-piece lengths in metres (used when splitMode === "length"). */
   const [splitLengths, setSplitLengths] = useState<number[]>([2]);
@@ -4270,7 +4490,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // joined the v7 FURNISH recipe, SELECTION & SPACE EDITING, SELF-REVIEW step, design doctrine, FLOW
   // ENGINE gateway and corridor/cores recipe. The key is versioned on every new default — the mount
   // effect persists even an UNEDITED prompt, so an old key would mask code updates.
-  const [aiAgentSystemPrompt, setAiAgentSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.agentSystemPrompt.v10") || AGENT_SYSTEM_PROMPT; } catch { return AGENT_SYSTEM_PROMPT; } });
+  const [aiAgentSystemPrompt, setAiAgentSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.agentSystemPrompt.v11") || AGENT_SYSTEM_PROMPT; } catch { return AGENT_SYSTEM_PROMPT; } });
   /** Editable system prompt for the FLOW mode (builds the node graph). v2: FURNISH recipe + parametric
    *  place-object entries. */
   const [aiFlowSystemPrompt, setAiFlowSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.flowSystemPrompt.v3") || FLOW_AGENT_SYSTEM_PROMPT; } catch { return FLOW_AGENT_SYSTEM_PROMPT; } });
@@ -4279,16 +4499,35 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   /** Editable system prompt for the PARAMETRIC mode (object-library tools only). */
   const [aiParametricSystemPrompt, setAiParametricSystemPrompt] = useState<string>(() => { try { return localStorage.getItem("bp.ai.parametricSystemPrompt.v1") || PARAMETRIC_AGENT_SYSTEM_PROMPT; } catch { return PARAMETRIC_AGENT_SYSTEM_PROMPT; } });
   useEffect(() => { try { localStorage.setItem("bp.ai.mode", aiMode); } catch { /* ignore */ } }, [aiMode]);
-  useEffect(() => { try { localStorage.setItem("bp.ai.agentSystemPrompt.v10", aiAgentSystemPrompt); } catch { /* ignore */ } }, [aiAgentSystemPrompt]);
+  useEffect(() => { try { localStorage.setItem("bp.ai.agentSystemPrompt.v11", aiAgentSystemPrompt); } catch { /* ignore */ } }, [aiAgentSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.flowSystemPrompt.v3", aiFlowSystemPrompt); } catch { /* ignore */ } }, [aiFlowSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.designSystemPrompt.v3", aiDesignSystemPrompt); } catch { /* ignore */ } }, [aiDesignSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.parametricSystemPrompt.v1", aiParametricSystemPrompt); } catch { /* ignore */ } }, [aiParametricSystemPrompt]);
   useEffect(() => { try { localStorage.setItem("bp.ai.apiKey", aiApiKey); } catch { /* ignore */ } }, [aiApiKey]);
   useEffect(() => { try { localStorage.setItem("bp.ai.model", aiModel); } catch { /* ignore */ } }, [aiModel]);
+  // Agents imported from public/Library/Agents. The built-in Orchestrator ("orchestrator") is always
+  // present; imported agents append to the selector. Each imported agent carries its own instructions,
+  // tool allow-list and resource grants (see ai/agentDefs.ts).
+  const [aiAgents, setAiAgents] = useState<AgentDefinition[]>([]);
+  const [aiSelectedAgentId, setAiSelectedAgentId] = useState<string>("orchestrator");
+  const [aiAgentImportOpen, setAiAgentImportOpen] = useState(false);
+  /** Merge dialog-imported agents into the selector (by id — a re-import of the same id updates it). */
+  const handleAgentsImported = useCallback((defs: AgentDefinition[]) => {
+    if (!defs.length) { toast.error("No valid agents in the selected files"); return; }
+    setAiAgents((prev) => {
+      const byId = new Map(prev.map((a) => [a.id, a]));
+      for (const a of defs) byId.set(a.id, a);
+      return [...byId.values()].sort((x, y) => x.name.localeCompare(y.name));
+    });
+    toast.success(`Imported ${defs.length} agent${defs.length === 1 ? "" : "s"}`);
+  }, []);
+  /** The selected agent definition — null means the built-in Orchestrator. */
+  const aiSelectedAgent: AgentDefinition | null = aiSelectedAgentId === "orchestrator" ? null : (aiAgents.find((a) => a.id === aiSelectedAgentId) ?? null);
+  const aiEffectiveRunner: "canvas" | "flow" = aiSelectedAgent?.runner === "flow" ? "flow" : "canvas";
   useEffect(() => { try { localStorage.setItem("bp.units.precision", String(decimalPrecision)); } catch { /* ignore */ } }, [decimalPrecision]);
   /** Live ref to autoImportObjectFolder (declared further down) — the agent's import_objects tool needs it,
    *  but putting the callback itself in handleAiSend's deps would read it before initialization (TDZ). */
-  const autoImportObjectsRef = useRef<null | ((categories?: string[]) => Promise<{ imported: number; available: string[] }>)>(null);
+  const autoImportObjectsRef = useRef<null | ((categories?: string[], ids?: string[]) => Promise<{ imported: number; available: string[] }>)>(null);
   /** Live ref to buildParametricObjectFile (declared further down) — the agent's save_object tool runs the
    *  SAME parse + normalise the manual .pobj import uses (same TDZ guard as autoImportObjectsRef). */
   const buildParametricObjectFileRef = useRef<null | ((parsed: Record<string, unknown>, fileName: string, hostKind?: "node" | "segment" | "space" | "canvas") => ParametricObjectFile)>(null);
@@ -4329,17 +4568,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           ? `▸ ${e.tool} ${JSON.stringify(e.input ?? {}).slice(0, 180)}`
           : `${e.ok ? "✓" : "✗"} ${e.tool} — ${e.summary.slice(0, 240)}`;
 
-      if (aiMode !== "flow") {
-        // ── Agent-family modes (Orchestrator / Design / Parametric): tools over the live canvas + object
-        //    library; the mode picks the tool subset + default system prompt (see agentChat.ts). ──
+      if (aiEffectiveRunner !== "flow") {
+        // ── Canvas runner: tools over the live canvas + object library. The built-in Orchestrator gets all
+        //    tools; an imported canvas agent is scoped to its own accessibleTools + instructions. ──
         chatFilePartRef.current = filePart ? { mimeType: filePart.mimeType, data: filePart.data } : null;
         const api = agentApiRef.current;
         if (!api) throw new Error("canvas api not ready — the editor is still mounting");
         const res = await runAgentChat({
           apiKey: aiApiKey, model: aiModel, prompt: effectivePrompt, pixelsPerMeter, api,
-          // "agent" = the Orchestrator (all tools); "design" / "parametric" run the same loop on a subset.
-          toolset: aiMode === "agent" ? "orchestrator" : aiMode,
-          systemPrompt: aiMode === "agent" ? aiAgentSystemPrompt : aiMode === "design" ? aiDesignSystemPrompt : aiParametricSystemPrompt,
+          toolset: "orchestrator",
+          // Imported agent → its explicit tool allow-list + file instructions; built-in → all tools + the editable prompt.
+          toolNames: aiSelectedAgent?.accessibleTools,
+          systemPrompt: aiSelectedAgent ? aiSelectedAgent.instructions : aiAgentSystemPrompt,
           file: filePart, detections,
           // Live param knowledge of every placeable object, appended to the system prompt.
           objectCatalog: buildDetailedObjectCatalog(historyRef.current.state.objectLibrary),
@@ -4366,7 +4606,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         };
         const res = await runFlowAgent({
           apiKey: aiApiKey, model: aiModel, prompt: effectivePrompt, api: flowApi,
-          systemPrompt: aiFlowSystemPrompt,
+          systemPrompt: aiSelectedAgent ? aiSelectedAgent.instructions : aiFlowSystemPrompt,
           // Object ids the flow may reference (place-object / node-to-object).
           objectCatalog: buildDetailedObjectCatalog(historyRef.current.state.objectLibrary),
           onEvent: (e) => setAiMessages((m) => [...m, { role: "tool", text: fmtEvent(e) }]),
@@ -4378,7 +4618,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     } finally {
       setAiSendBusy(false);
     }
-  }, [aiApiKey, aiModel, pixelsPerMeter, aiMode, aiAgentSystemPrompt, aiFlowSystemPrompt, aiDesignSystemPrompt, aiParametricSystemPrompt]);
+  }, [aiApiKey, aiModel, pixelsPerMeter, aiSelectedAgentId, aiAgents, aiAgentSystemPrompt, aiFlowSystemPrompt]);
   const logOp = useCallback((entry: Omit<LoggedOp, "id" | "timestamp">) => {
     setActionLog((prev) => {
       const next = [...prev, { ...entry, id: createId(), timestamp: Date.now() }];
@@ -4793,6 +5033,19 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return [[w.start, w.end]];
   }, [history.state.walls]);
 
+  // Every freehand stroke on the canvas → its absolute polyline (px) + stroke colour, for a Flow Freehand
+  // node (freehand-source). Points are stored relative to the object origin (x/y, which is 0 for freehand).
+  const freehandStrokesForFlow = useMemo(() => {
+    const out: { points: Point[]; color: string }[] = [];
+    for (const o of history.state.objects ?? []) {
+      if (o.kind !== "freehand") continue;
+      const pts: Point[] = [];
+      for (let i = 0; i + 1 < o.points.length; i += 2) pts.push({ x: o.points[i] + o.x, y: o.points[i + 1] + o.y });
+      if (pts.length >= 2) out.push({ points: pts, color: o.stroke });
+    }
+    return out;
+  }, [history.state.objects]);
+
   // The segment(s) currently selected (each wall = one [start,end] polyline) + their display ids — what a
   // Flow Segment node grabs. Mirrors selectedGraph but for individually-selected segments.
   const selectedSegmentInfo = useMemo(() => {
@@ -4832,6 +5085,89 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const n = wallNodes[idx];
     return { polylines: [[{ x: n.x, y: n.y }]] as Point[][], id: `Node${String(idx + 1).padStart(3, "0")}` };
   }, [selectedNodeKey, wallNodes]);
+
+  /** The parametric object attached to the currently-selected canvas element (Space / Node / Segment), for
+   *  the Flow "Grab Object" node — its host kind, display id, and parameters as input-props rows (values from
+   *  the attachment, falling back to the object's defaults). Null when nothing suitable is selected. The
+   *  overlay bakes this into a grabbing Grab Object node of the matching hostKind. */
+  const grabObjectSelection = useMemo<{ hostKind: "space" | "node" | "segment"; id: string; props: Record<string, unknown>[] } | null>(() => {
+    const lib = history.state.objectLibrary ?? {};
+    const propType = (kind: string): string => kind === "number" ? "range" : kind === "color" ? "color" : kind === "checkbox" ? "checkbox" : kind === "select" ? "select" : "text";
+    const buildProps = (objId: string, attParams: Record<string, number | string | boolean>): Record<string, unknown>[] | null => {
+      const obj = lib[objId];
+      if (!obj) return null;
+      return (obj.parameters ?? []).map((p) => ({
+        id: p.key, name: p.label ?? p.key, type: propType(p.kind),
+        value: attParams[p.key] ?? p.default,
+        min: typeof p.min === "number" ? p.min : 0,
+        max: typeof p.max === "number" ? p.max : 100,
+        step: typeof p.step === "number" ? p.step : 1,
+        options: Array.isArray(p.options) ? p.options.map((o) => String(o.value)) : [],
+      }));
+    };
+    if (selectedRoom && (selectedRoom.attachments?.length ?? 0) > 0) {
+      const att = selectedRoom.attachments![0];
+      const props = buildProps(att.objectId, att.params);
+      if (props && props.length) {
+        const idx = visibleRooms.indexOf(selectedRoom);
+        return { hostKind: "space", id: idx >= 0 ? `Space${String(idx + 1).padStart(3, "0")}` : selectedRoom.id, props };
+      }
+    }
+    for (const wid of selection.selectedIds) {
+      const idx = history.state.walls.findIndex((w) => w.id === wid);
+      if (idx < 0) continue;
+      const w = history.state.walls[idx];
+      if (w.segmentType === "door" || w.segmentType === "window") continue;
+      const att = (w.attachments ?? [])[0];
+      if (!att) continue;
+      const props = buildProps(att.objectId, att.params);
+      if (props && props.length) return { hostKind: "segment", id: `Segment${String(idx + 1).padStart(3, "0")}`, props };
+    }
+    if (selectedNodeKey) {
+      const idx = wallNodes.findIndex((n) => n.key === selectedNodeKey || n.stableKey === selectedNodeKey);
+      if (idx >= 0) {
+        const att = ((history.state.nodeMeta ?? {})[wallNodes[idx].stableKey]?.attachments ?? [])[0];
+        if (att) {
+          const props = buildProps(att.objectId, att.params);
+          if (props && props.length) return { hostKind: "node", id: `Node${String(idx + 1).padStart(3, "0")}`, props };
+        }
+      }
+    }
+    return null;
+  }, [selectedRoom, visibleRooms, selection.selectedIds, history.state.walls, selectedNodeKey, wallNodes, history.state.nodeMeta, history.state.objectLibrary]);
+
+  /** Attachment parameters for EVERY space that has an attached object, keyed by each id form that resolves to
+   *  it (display id "Space001", room id, label). Lets a Space (source) node in the Flow reflect its attached
+   *  object's parameters as read-only val-<key> outputs — the Space node itself acts as a Grab Object, resolved
+   *  by id (independent of the current selection). No attachment → no entry → the node stays parameter-less. */
+  const spaceAttachmentProps = useMemo<Record<string, Record<string, unknown>[]>>(() => {
+    const lib = history.state.objectLibrary ?? {};
+    const propType = (kind: string): string => kind === "number" ? "range" : kind === "color" ? "color" : kind === "checkbox" ? "checkbox" : kind === "select" ? "select" : "text";
+    const buildProps = (objId: string, attParams: Record<string, number | string | boolean>): Record<string, unknown>[] | null => {
+      const obj = lib[objId];
+      if (!obj) return null;
+      return (obj.parameters ?? []).map((p) => ({
+        id: p.key, name: p.label ?? p.key, type: propType(p.kind),
+        value: attParams[p.key] ?? p.default,
+        min: typeof p.min === "number" ? p.min : 0,
+        max: typeof p.max === "number" ? p.max : 100,
+        step: typeof p.step === "number" ? p.step : 1,
+        options: Array.isArray(p.options) ? p.options.map((o) => String(o.value)) : [],
+      }));
+    };
+    const out: Record<string, Record<string, unknown>[]> = {};
+    visibleRooms.forEach((room, idx) => {
+      const att = room.attachments?.[0];
+      if (!att) return;
+      const props = buildProps(att.objectId, att.params);
+      if (props && props.length) {
+        out[`Space${String(idx + 1).padStart(3, "0")}`] = props;
+        out[room.id] = props;
+        if (room.label) out[room.label] = props;
+      }
+    });
+    return out;
+  }, [visibleRooms, history.state.objectLibrary]);
 
   // The whole canvas for the Flow "Canvas" node — all spaces / nodes / segments / graphs / image
   // footprints (px world coords), exposed as five typed output endpoints.
@@ -4960,6 +5296,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         max: typeof q.max === "number" ? q.max : undefined,
         step: typeof q.step === "number" ? q.step : undefined,
         unit: typeof q.unit === "string" ? q.unit : undefined,
+        // Conditional visibility — carry it through so the Properties tab hides a param whose `showWhen`
+        // expression is falsy (e.g. inset fields when Apply Setback is off). Dropped here = always shown.
+        showWhen: typeof q.showWhen === "string" && q.showWhen ? q.showWhen : undefined,
         options: Array.isArray(q.options)
           ? (q.options as unknown[]).map((o) => (typeof o === "string" ? { value: o, label: o } : { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }))
           : undefined,
@@ -4991,6 +5330,20 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const resolvedHost = hostKind
       ?? (hostOk(parsed.hostKind) ? parsed.hostKind : undefined)
       ?? (sym === "titleblock" ? "canvas" : sym === "wall" || sym === "door" || sym === "window" ? "segment" : sym === "floor" || sym === "massing" ? "space" : "node");
+    // Carry an optional explicit `flow` decompilation through — an ordered semantic node list the import-to-
+    // flow / "Edit in Flow" path materialises into a wired graph (see PobjFlowNode). Keep only well-formed
+    // entries (a string `tool`); everything else is derived at materialise time, so the stored shape stays minimal.
+    const asObj = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
+    const rawFlow = asObj(parsed.flow);
+    const flowNodes = rawFlow && Array.isArray(rawFlow.nodes)
+      ? (rawFlow.nodes as unknown[]).map(asObj).filter((n): n is Record<string, unknown> => !!n && typeof n.tool === "string").map((n) => ({
+          tool: String(n.tool),
+          ...(typeof n.id === "string" ? { id: n.id } : {}),
+          ...(n.from === null || typeof n.from === "string" ? { from: n.from as string | null } : {}),
+          ...(asObj(n.params) ? { params: asObj(n.params) as Record<string, number | string | boolean> } : {}),
+          ...(asObj(n.bind) ? { bind: asObj(n.bind) as Record<string, string> } : {}),
+        }))
+      : undefined;
     return {
       kind: "parametric-object",
       version: Number(parsed.version) || 1,
@@ -4998,6 +5351,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       parameters: params,
       hostKind: resolvedHost,
       ...(geometry ? { geometry } : {}),
+      ...(flowNodes && flowNodes.length ? { flow: { nodes: flowNodes } } : {}),
+      ...(parsed.decompile === "primitives" ? { decompile: "primitives" as const } : {}),
     };
   }, []);
   // Keep the Chat-AI agent's save_object tool pointed at the live parser (declared above handleAiSend).
@@ -5010,6 +5365,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const h = historyRef.current;
       h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [obj.meta.id]: obj } });
       toast.success(`Imported object: ${obj.meta.name}`);
+      // An object that declares an explicit Flow decompilation (`flow`) or opts into `decompile: "primitives"`
+      // also OPENS in the Flow on import — the Object Node plus the materialised nodes (Inset / Circle Packing
+      // / Cylinder …, or Rectangle / Circle primitives) — the same materialise + apply-bridge path as "Edit in
+      // Flow". Uses parameter defaults (no attachment yet).
+      if (obj.flow?.nodes?.length || obj.decompile === "primitives") {
+        const graph = pobjToAttachedFlow(obj, {});
+        setFlowMinimized(false); setFlowOpen(true);
+        const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
+        if (bridge) bridge.applyGraph(graph);
+        else { setLiveFlowGraph(graph as unknown as SerializedFlow); flowGraphRef.current = graph as unknown as SerializedFlow; }
+        toast.success(`Opened "${obj.meta.name}" in Flow`);
+      }
     } catch (e) {
       toast.error(`Import failed: ${e instanceof Error ? e.message : "invalid file"}`);
     }
@@ -5138,7 +5505,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  Parametric Objects) — all merged into the library in ONE history step (a per-file loop would race
    *  on `historyRef.current` and keep only the last). Shared by {@link autoImportObjectFolder} and the
    *  Import Objects dialog's explicit selection. `sourceNote` suffixes the success toast. */
-  const importLibraryRelFiles = useCallback(async (relFiles: string[], sourceNote = "") => {
+  const importLibraryRelFiles = useCallback(async (relFiles: string[], sourceNote = "", idFilter?: Set<string>) => {
     const base = "/Library/Parametric Objects";
     const additions: Record<string, ParametricObjectFile> = {};
     let failed = 0;
@@ -5149,6 +5516,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const parsed = (await res.json()) as Record<string, unknown>;
         // hostKind comes from the FILE itself (buildParametricObjectFile falls back to the symbol).
         const obj = buildParametricObjectFile(parsed, rel.split("/").pop() ?? rel);
+        // Single-object import: keep only files whose parsed meta.id is in the requested set.
+        if (idFilter && !idFilter.has(obj.meta.id)) return;
         additions[obj.meta.id] = obj;
       } catch { failed++; }
     }));
@@ -5180,7 +5549,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  agent-saved objects import alongside the bundled set; production static hosting can't list
    *  directories, so the BUNDLED_POBJ_FILES manifest (libraryFiles.ts) is used. Drives the agent's
    *  import_objects tool; the toolbar button opens the Import Objects picker dialog instead. */
-  const autoImportObjectFolder = useCallback(async (categories?: string[]) => {
+  const autoImportObjectFolder = useCallback(async (categories?: string[], ids?: string[]) => {
     // Live listing first (dev bridge): category-relative paths like "Kitchen/oven.pobj.json".
     const all = await listParametricObjectFiles();
     const available = [...new Set(all.filter((rel) => rel.includes("/")).map((rel) => rel.split("/")[0]))].sort();
@@ -5188,11 +5557,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // fetch one discipline at a time ("import the architectural objects" → only Architectural/).
     const wanted = (categories ?? []).map((c) => c.trim().toLowerCase()).filter(Boolean);
     const files = wanted.length ? all.filter((rel) => wanted.includes((rel.split("/")[0] ?? "").toLowerCase())) : all;
+    // Optional ID filter — import ONLY the objects whose meta.id is listed (a single file / a few objects).
+    // Applied at parse time (filenames don't always equal ids), so pair it with `categories` to avoid
+    // parsing the whole library for one object, e.g. { categories: ["Site"], ids: ["site"] }.
+    const idFilter = (ids ?? []).map((s) => s.trim()).filter(Boolean);
     if (wanted.length && files.length === 0) {
       toast.error(`No objects in ${categories!.join(", ")} — available folders: ${available.join(", ")}`);
       return { imported: 0, available };
     }
-    const { imported } = await importLibraryRelFiles(files, wanted.length ? ` from ${categories!.join(", ")}` : "");
+    const note = idFilter.length ? ` (${idFilter.join(", ")})` : wanted.length ? ` from ${categories!.join(", ")}` : "";
+    const { imported } = await importLibraryRelFiles(files, note, idFilter.length ? new Set(idFilter) : undefined);
+    if (idFilter.length && imported === 0) toast.error(`No object with id ${idFilter.join(", ")} found${wanted.length ? ` in ${categories!.join(", ")}` : ""}`);
     return { imported, available };
   }, [importLibraryRelFiles]);
   // Keep the Chat-AI agent's import_objects tool pointed at the live callback (declared above handleAiSend).
@@ -5214,6 +5589,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const bridgeApiRef = useRef<{
     listDrawTools: () => unknown;
     drawSegment: (a: Record<string, unknown>) => unknown;
+    drawFreehand: (a: Record<string, unknown>) => unknown;
     placeOpening: (a: Record<string, unknown>) => unknown;
     placeObject: (a: Record<string, unknown>) => unknown;
   } | null>(null);
@@ -5282,6 +5658,24 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         };
         history.set({ ...history.state, layers: layersWithType, walls: splitWallsAtIntersections([...history.state.walls, wall]), graphAttrs: taggedGA });
         return { segmentId: segId, type };
+      },
+      // Draw a FREEHAND stroke from a list of METRE points → a canvas freehand object (kind "freehand"),
+      // exactly like the Freehand draw tool. Accepts [[x,y],…] or a flat [x1,y1,x2,y2,…] METRE array; optional
+      // `color` hex (default the Freehand orange). The Flow Freehand source reads these strokes.
+      drawFreehand: (a) => {
+        const raw = a.points;
+        const px: number[] = [];
+        if (Array.isArray(raw) && Array.isArray(raw[0])) {
+          for (const pr of raw as unknown[]) if (Array.isArray(pr)) px.push(numOf(pr[0]) * ppm, numOf(pr[1]) * ppm);
+        } else if (Array.isArray(raw)) {
+          const flat = raw as unknown[];
+          for (let i = 0; i + 1 < flat.length; i += 2) px.push(numOf(flat[i]) * ppm, numOf(flat[i + 1]) * ppm);
+        }
+        if (px.length < 4) throw new Error("freehand needs ≥2 points — pass points as [[x,y],…] or [x1,y1,x2,y2,…] in metres");
+        const stroke = typeof a.color === "string" && a.color.trim() ? a.color.trim() : "#EA580C";
+        const id = createId();
+        history.set({ ...history.state, objects: [...history.state.objects, { id, kind: "freehand", x: 0, y: 0, rotation: 0, points: px, stroke, fill: "transparent" }] });
+        return { ok: true, id, points: px.length / 2, stroke };
       },
       // Place a Door / Window parametric object INTO the nearest wall at a METRE point — splits the host into
       // wall · opening · wall and drops the object into the opening (renders the leaf/swing / glazing). The
@@ -5494,6 +5888,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           },
           listDrawTools: () => bridge().listDrawTools(),
           drawSegment: (a) => bridge().drawSegment(a),
+          drawFreehand: (a) => bridge().drawFreehand(a),
           placeOpening: (a) => bridge().placeOpening(a),
           placeObject: (a) => bridge().placeObject(a),
           attachSpaceObject: (a) => {
@@ -5518,6 +5913,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
               h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === room.id ? { ...r, attachments: [...(r.attachments ?? []), att] } : r)) });
             }
             return { space: label, objectId: obj.meta.id, params };
+          },
+          setFlowLive: (a) => {
+            // Flow LIVE toggle: with Live ON, an attached host-aware pipeline object (Site / Massing)
+            // materialises each op (inset / split / optimise) as real Spaces on their own layers.
+            const on = a?.on === undefined ? true : !!a.on;
+            setLiveFlow(on);
+            return { ok: true, live: on };
           },
           setImageUnderlay: async (a) => {
             // The image becomes the canvas underlay — placed at (xM,yM), scaled so its full width spans
@@ -5701,8 +6103,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             h.set({ ...h.state, walls: [], rooms: [], objects: [], furniture: [], nodeMeta: {} });
             return "cleared";
           },
-          importObjects: async (a?: { categories?: string[] }) => {
-            const res = await autoImportObjectsRef.current?.(a?.categories);
+          importObjects: async (a?: { categories?: string[]; ids?: string[] }) => {
+            const res = await autoImportObjectsRef.current?.(a?.categories, a?.ids);
             const lib = historyRef.current.state.objectLibrary ?? {};
             // Return the detailed catalog so the model gains full param knowledge mid-run (the system-prompt
             // copy was empty when the run started with an unloaded library). availableCategories lets the
@@ -5916,7 +6318,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const s = historyRef.current.state;
       return { walls: s.walls.length, manualRooms: s.rooms.length, objectsLoaded: Object.keys(s.objectLibrary ?? {}).length, ppm: bridgePpmRef.current, objectIds: Object.keys(s.objectLibrary ?? {}) };
     });
-    registerAgentCommand("import_objects", async () => { await autoImportObjectFolder(); return { objectsLoaded: Object.keys(historyRef.current.state.objectLibrary ?? {}).length }; });
+    registerAgentCommand("import_objects", async (a) => { await autoImportObjectFolder(Array.isArray(a?.categories) ? a.categories.map(String) : undefined, Array.isArray(a?.ids) ? a.ids.map(String) : undefined); return { objectsLoaded: Object.keys(historyRef.current.state.objectLibrary ?? {}).length }; });
     registerAgentCommand("clear_canvas", () => {
       const h = historyRef.current;
       h.set({ ...h.state, walls: [], rooms: [], objects: [], furniture: [], nodeMeta: {} });
@@ -5951,6 +6353,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     //    door/window objects into walls, and place object nodes — all via the same pipeline the UI uses. ──
     registerAgentCommand("list_draw_tools", () => bridgeApiRef.current?.listDrawTools());
     registerAgentCommand("draw_segment", (a) => bridgeApiRef.current?.drawSegment(a));
+    registerAgentCommand("draw_freehand", (a) => bridgeApiRef.current?.drawFreehand(a));
     registerAgentCommand("place_opening", (a) => bridgeApiRef.current?.placeOpening(a));
     registerAgentCommand("place_object", (a) => bridgeApiRef.current?.placeObject(a));
     // ── Full agent parity (everything the in-app Orchestrator / Design / Parametric agents can do, minus
@@ -5962,6 +6365,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     registerAgentCommand("get_selection", () => agentApi().getSelection());
     registerAgentCommand("merge_spaces", (a) => agentApi().mergeSpaces(a));
     registerAgentCommand("attach_space_object", (a) => agentApi().attachSpaceObject(a));
+    registerAgentCommand("set_flow_live", (a) => agentApi().setFlowLive(a));
     registerAgentCommand("list_objects", () => agentApi().listObjects());
     registerAgentCommand("get_object", (a) => agentApi().getObjectDefinition(String(a.id ?? "")));
     registerAgentCommand("snapshot_canvas", () => agentApi().snapshotCanvas());
@@ -6071,25 +6475,205 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     h.set({ ...h.state, nodeMeta: { ...prev, [stableKey]: { ...cur, attachments: fn(cur.attachments ?? []) } } });
   }, []);
 
-  const attachObjectToNode = useCallback((stableKey: string, objectId: string) => {
+  /** Bridge to the open overlay for {@link mergeAttachedObjectIntoFlow} — assigned by FlowOverlay while
+   *  mounted; when closed the merge is applied to `liveFlowGraph` directly (same pattern as the other
+   *  inject bridges). */
+  const flowInjectAttachedObjectRef = useRef<((nodeDisplayId: string, pobj: Record<string, unknown>) => void) | null>(null);
+
+  /** Attach a library object to a canvas node AND mirror it into the shared flow as a Node → Parametric
+   *  Object chain, so attaching here and wiring it up in the flow editor are the same act. The FLOW node
+   *  holds the parameter values (the Properties panel renders that node's props via FlowParamsPanel); the
+   *  attachment record stays as the canvas-side anchor. `nodeDisplayId` ("Node002") is the id the flow's
+   *  Node source pins — the caller passes it because only the Properties site knows the node's index. */
+  const attachObjectToNode = useCallback((stableKey: string, objectId: string, nodeDisplayId?: string) => {
     const obj = (historyRef.current.state.objectLibrary ?? {})[objectId];
     if (!obj) return;
     const params: Record<string, number | string | boolean> = {};
     for (const pr of obj.parameters) params[pr.key] = pr.default;
-    patchNodeAttachments(stableKey, (list) => [...list, { id: createId(), objectId, params, t: 0, flip: false }]);
+    // Stamp the flow node id (only when this attach also injects one) so the two param stores stay linked.
+    const flowNodeId = nodeDisplayId ? attachedObjectFlowNodeId(nodeDisplayId, objectId) : undefined;
+    patchNodeAttachments(stableKey, (list) => [...list, { id: createId(), objectId, params, t: 0, flip: false, flowNodeId }]);
+    if (!nodeDisplayId) return;
+    const pobj = obj as unknown as Record<string, unknown>;
+    if (flowOpenRef.current && flowInjectAttachedObjectRef.current) flowInjectAttachedObjectRef.current(nodeDisplayId, pobj);
+    else setLiveFlowGraph((prev) => mergeAttachedObjectIntoFlow(prev, nodeDisplayId, pobj));
   }, [patchNodeAttachments]);
+
+  /** Remove a linked `pobj-source` node (and its edges) from the flow — the deletion counterpart of the
+   *  attach injection. Also drops the auto `node-source` that fed only this object, so detaching leaves no
+   *  orphan root. No-op if the node isn't in the graph. */
+  const removeLinkedFlowNode = useCallback((flowNodeId: string) => {
+    const prune = (g: SerializedFlow | null): SerializedFlow | null => {
+      if (!g?.nodes || !g.nodes.some((n) => n.id === flowNodeId)) return g;
+      const fedRoots = (g.edges ?? []).filter((e) => e.source === flowNodeId).map((e) => e.target);
+      const nodes = g.nodes.filter((n) => n.id !== flowNodeId);
+      const edges = (g.edges ?? []).filter((e) => e.source !== flowNodeId && e.target !== flowNodeId);
+      // Drop an auto node-source left with no remaining connections (it existed only to host this object).
+      const keptNodes = nodes.filter((n) => {
+        if (!fedRoots.includes(n.id)) return true;
+        if (n.data.tool !== "node-source" || !n.id.startsWith("auto-nodesrc-")) return true;
+        return edges.some((e) => e.source === n.id || e.target === n.id);
+      });
+      return { ...g, nodes: keptNodes, edges };
+    };
+    if (flowOpenRef.current && flowApplyApiRef.current) {
+      const next = prune(flowApplyApiRef.current.getGraph());
+      if (next) flowApplyApiRef.current.applyGraph(next as unknown as { nodes?: unknown[]; edges?: unknown[] });
+    } else {
+      setLiveFlowGraph((prev) => prune(prev) ?? prev);
+    }
+  }, []);
 
   const detachNodeObject = useCallback((stableKey: string, attId: string) => {
-    patchNodeAttachments(stableKey, (list) => list.filter((a) => a.id !== attId));
-  }, [patchNodeAttachments]);
+    let flowNodeId: string | undefined;
+    patchNodeAttachments(stableKey, (list) => list.filter((a) => {
+      if (a.id === attId) { flowNodeId = a.flowNodeId; return false; }
+      return true;
+    }));
+    if (flowNodeId) removeLinkedFlowNode(flowNodeId);
+  }, [patchNodeAttachments, removeLinkedFlowNode]);
+
+  /** Register a parametric object (already parsed) into the canvas object library, so importing it in the
+   *  flow also makes it available on the canvas (Attach-object dropdown, attachment resolution). Normalises
+   *  the same way `importParametricObject` does and is idempotent — re-importing the same object is a no-op,
+   *  so it never clobbers a version the user has already tuned. */
+  const importObjectToLibrary = useCallback((pobj: Record<string, unknown>) => {
+    let obj;
+    try { obj = buildParametricObjectFile(pobj, `${(pobj.meta as { id?: string } | undefined)?.id ?? "object"}.pobj.json`); }
+    catch { return; }
+    const h = historyRef.current;
+    if ((h.state.objectLibrary ?? {})[obj.meta.id]) return; // already in the library — leave it as-is
+    h.set({ ...h.state, objectLibrary: { ...(h.state.objectLibrary ?? {}), [obj.meta.id]: obj } });
+  }, []);
+
+  /** Reverse of attach-from-Properties: FlowOverlay calls this when the user wires a `pobj-source` OUTPUT
+   *  into a Node source in the flow, so the same canvas attachment is created and the two stores end up
+   *  linked (`flowNodeId`) exactly as if attached from the Properties tab — giving bidirectional param +
+   *  deletion sync for free. Resolves the Node source's display id ("Node002") back to its canvas node the
+   *  same way `selectedNodeInfo` derives it (wallNodes index), so the two always agree. Ensures the object
+   *  is in the library (the render reads it there) from the flow node's own `definition`. Idempotent per
+   *  (node, flow node). */
+  const attachFlowObjectToNode = useCallback((args: { flowNodeId: string; nodeDisplayId: string; objectId: string; definition: string; params: Record<string, number | string | boolean> }) => {
+    const { flowNodeId, nodeDisplayId, objectId, definition, params } = args;
+    const m = /^Node0*(\d+)$/.exec(nodeDisplayId);
+    const idx = m ? parseInt(m[1], 10) - 1 : -1;
+    const wn = idx >= 0 ? wallNodes[idx] : undefined;
+    if (!wn || !objectId) return;
+    const h = historyRef.current;
+    const curLib = h.state.objectLibrary ?? {};
+    let lib = curLib;
+    if (!curLib[objectId]) {
+      try { lib = { ...curLib, [objectId]: buildParametricObjectFile(JSON.parse(definition) as Record<string, unknown>, `${objectId}.pobj.json`) }; }
+      catch { return; } // unparseable definition → nothing to render
+    }
+    const nm = h.state.nodeMeta ?? {};
+    const meta = nm[wn.stableKey] ?? {};
+    if ((meta.attachments ?? []).some((a) => a.flowNodeId === flowNodeId)) {
+      if (lib !== curLib) h.set({ ...h.state, objectLibrary: lib }); // still land the library entry
+      return;
+    }
+    const att: SegmentAttachment = { id: createId(), objectId, params: { ...params }, t: 0, flip: false, flowNodeId };
+    h.set({ ...h.state, objectLibrary: lib, nodeMeta: { ...nm, [wn.stableKey]: { ...meta, attachments: [...(meta.attachments ?? []), att] } } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallNodes]);
+
+  /** Deletion counterpart in the other direction: FlowOverlay calls this when the user deletes flow node(s)
+   *  (Delete button or key), so an attachment linked to a removed `pobj-source` is dropped from the canvas
+   *  too. Only fires on real user deletion — graph import/clear replaces nodes without emitting these ids —
+   *  so it can't wipe attachments on a flow swap. One `set` for all affected nodes. */
+  const removeAttachmentsForFlowNodes = useCallback((deletedIds: string[]) => {
+    if (!deletedIds.length) return;
+    const del = new Set(deletedIds);
+    const h = historyRef.current;
+    const nm = h.state.nodeMeta ?? {};
+    let anyChange = false;
+    const nextNm: typeof nm = {};
+    for (const [stableKey, meta] of Object.entries(nm)) {
+      const atts = meta.attachments ?? [];
+      const kept = atts.filter((a) => !(a.flowNodeId && del.has(a.flowNodeId)));
+      if (kept.length !== atts.length) { anyChange = true; nextNm[stableKey] = { ...meta, attachments: kept }; }
+      else nextNm[stableKey] = meta;
+    }
+    if (anyChange) h.set({ ...h.state, nodeMeta: nextNm });
+  }, []);
+
+  /** Mirror an attachment param edit into the linked flow `pobj-source` node's `props` (direction:
+   *  attachment → flow), keeping the two stores in sync. The prop `id` equals the attachment param `key`
+   *  (both are the pobj param key), so it's a straight write of that one prop's value. No-op when the
+   *  attachment has no flow link. */
+  const syncAttachmentParamToFlow = useCallback((flowNodeId: string | undefined, key: string, value: number | string | boolean) => {
+    if (!flowNodeId) return;
+    // Read the node's current props (from the open overlay when mounted, else the mirrored graph), replace
+    // the one prop, and write the whole `props` array back through the same channel the Properties tab uses.
+    const graph = flowOpenRef.current && flowApplyApiRef.current ? flowApplyApiRef.current.getGraph() : liveFlowGraphRef.current;
+    const node = graph?.nodes?.find((n) => n.id === flowNodeId);
+    if (!node) return;
+    const props = Array.isArray(node.data.params.props) ? (node.data.params.props as Record<string, unknown>[]) : [];
+    if (!props.some((p) => String(p.id) === key)) return;
+    const nextProps = props.map((p) => (String(p.id) === key ? { ...p, value } : p));
+    if (flowOpenRef.current && flowParamApiRef.current) flowParamApiRef.current(flowNodeId, "props", nextProps);
+    else updateFlowParam(flowNodeId, "props", nextProps);
+    // `updateFlowParam` is declared below (stable useCallback) — listing it here would read it in its TDZ at
+    // render. It's captured lazily in the closure, so empty deps are correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateNodeAttachmentParam = useCallback((stableKey: string, attId: string, key: string, value: number | string | boolean) => {
-    patchNodeAttachments(stableKey, (list) => list.map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a)));
-  }, [patchNodeAttachments]);
+    let flowNodeId: string | undefined;
+    patchNodeAttachments(stableKey, (list) => list.map((a) => {
+      if (a.id !== attId) return a;
+      flowNodeId = a.flowNodeId;
+      return { ...a, params: { ...a.params, [key]: value } };
+    }));
+    syncAttachmentParamToFlow(flowNodeId, key, value);
+  }, [patchNodeAttachments, syncAttachmentParamToFlow]);
 
   const updateNodeAttachmentChildParam = useCallback((stableKey: string, attId: string, path: string, key: string, value: number | string | boolean) => {
     patchNodeAttachments(stableKey, (list) => list.map((a) => (a.id === attId ? setAttChildParam(a, path, key, value) : a)));
   }, [patchNodeAttachments]);
+
+  // Sync direction FLOW → ATTACHMENT: when a linked `pobj-source` node's props change (edited on the flow
+  // canvas), mirror the values into the attachment that carries its `flowNodeId`, so the canvas render (which
+  // reads the attachment) tracks flow edits. Diff-checked, so it only writes on a real change — no loop with
+  // the attachment→flow direction (which already wrote both sides) and no history spam. One `set` for all
+  // affected nodes so a single flow edit is a single undo step.
+  useEffect(() => {
+    const g = liveFlowGraph;
+    if (!g?.nodes) return;
+    const propsByNode = new Map<string, Map<string, number | string | boolean>>();
+    for (const n of g.nodes) {
+      if (n.data?.tool !== "pobj-source") continue;
+      const raw = Array.isArray(n.data.params.props) ? (n.data.params.props as Record<string, unknown>[]) : [];
+      const m = new Map<string, number | string | boolean>();
+      for (const p of raw) { const v = p.value; if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") m.set(String(p.id), v); }
+      propsByNode.set(n.id, m);
+    }
+    if (!propsByNode.size) return;
+    const h = historyRef.current;
+    const nm = h.state.nodeMeta ?? {};
+    let anyChange = false;
+    const nextNm: typeof nm = {};
+    for (const [stableKey, meta] of Object.entries(nm)) {
+      const atts = meta.attachments ?? [];
+      let metaChanged = false;
+      const nextAtts = atts.map((a) => {
+        const m = a.flowNodeId ? propsByNode.get(a.flowNodeId) : undefined;
+        if (!m) return a;
+        let params = a.params;
+        let changed = false;
+        for (const [k, v] of m) {
+          if (params[k] !== v) { if (!changed) { params = { ...params }; changed = true; } params[k] = v; }
+        }
+        if (!changed) return a;
+        metaChanged = true;
+        return { ...a, params };
+      });
+      nextNm[stableKey] = metaChanged ? { ...meta, attachments: nextAtts } : meta;
+      if (metaChanged) anyChange = true;
+    }
+    if (anyChange) h.set({ ...h.state, nodeMeta: nextNm });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveFlowGraph]);
 
   // ── Parametric objects attached to a SPACE (stored in room.attachments — e.g. a Floor slab) ──
   // Auto-detected rooms have no entry in history.state.rooms, so attaching promotes them to a manual room
@@ -6126,6 +6710,23 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const h = historyRef.current;
     h.set({ ...h.state, rooms: h.state.rooms.map((r) => (r.id === roomId ? { ...r, attachments: (r.attachments ?? []).filter((a) => a.id !== attId) } : r)) });
   }, [patchPathSpaceAttachments]);
+
+  /** "Edit in Flow": explode a Space's attached host-aware pipeline object into an editable Flow snapshot
+   *  (Space source → Parametric Site params node + per-op nodes, wired — see pobjToAttachedFlow). Keeps the
+   *  attachment (independent snapshot); opens the Flow panel and loads the graph via the apply bridge, the
+   *  same path the AI flow-agent uses. NOTE: with Live on, both the attachment's per-op layers and the
+   *  flow's would materialise — that duplication is the user's to manage (they chose "keep both"). */
+  const explodeAttachmentToFlow = useCallback(async (att: SegmentAttachment) => {
+    const obj = (historyRef.current.state.objectLibrary ?? {})[att.objectId];
+    if (!obj?.geometry) { toast.error("This object has no geometry to explode into a flow."); return; }
+    if (!pobjIsHostAware(JSON.stringify(obj))) { toast.error("Only host-aware pipeline objects (Site / Floor / Massing) can be exploded into a flow."); return; }
+    const graph = pobjToAttachedFlow(obj, att.params);
+    setFlowMinimized(false); setFlowOpen(true);
+    const bridge = await waitForRefValue(() => flowApplyApiRef.current, 3000);
+    if (bridge) bridge.applyGraph(graph);
+    else { setLiveFlowGraph(graph as unknown as SerializedFlow); flowGraphRef.current = graph as unknown as SerializedFlow; }
+    toast.success(`Exploded "${obj.meta?.name ?? "object"}" into the flow`);
+  }, []);
 
   const updateSpaceAttachmentParam = useCallback((roomId: string, attId: string, key: string, value: number | string | boolean) => {
     if (roomId.startsWith(PATH_SPACE_ID_PREFIX)) { patchPathSpaceAttachments(roomId, (list) => list.map((a) => (a.id === attId ? { ...a, params: { ...a.params, [key]: value } } : a))); return; }
@@ -6573,9 +7174,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const { primitiveMasses, booleanMasses } = useMemo<{ primitiveMasses: PrimMass3D[]; booleanMasses: BoolMass3D[] }>(() => {
     // The generic Mass node reads its shape from params; the dedicated 3D-primitive nodes (3D Primitives
     // block) fix the shape by their tool name — the tool string IS the shape ("cuboid" / "cylinder" / …).
-    const PRIM_TOOLS = new Set(["mass", "cuboid", "cylinder", "sphere", "cone"]);
+    const PRIM_TOOLS = new Set(["mass", "cuboid", "cylinder", "sphere", "cone", "frustum", "tapered-box", "torus", "capsule"]);
     const g = liveFlowGraph;
     if (!g?.nodes) return { primitiveMasses: [], booleanMasses: [] };
+    // A Point node drives ABSOLUTE placement (its coordinate is baked into each primitive's position), so
+    // nodeFollow (which tracks the SELECTION) must NOT also apply — else selecting the host node double-offsets.
+    const hasPointPlacement = g.nodes.some((n) => n.data?.tool === "point");
+    // A decompile's 3D primitives carry `nodeFollow` (non-`_` so buildGraph keeps it): offset them by the node
+    // (world px → scene metres, X→X, planY→Z) so they track the node live — the 3D analogue of the 2D
+    // createAnchor. Only flagged primitives move, so manually-placed 3D primitives in other flows are safe.
+    const _fnp = selectedNodeInfo.polylines[0]?.[0];
+    const flowNodeAnchorM = _fnp && pixelsPerMeter ? { x: _fnp.x / pixelsPerMeter, y: _fnp.y / pixelsPerMeter } : null;
     const byId = new Map(g.nodes.map((n) => [n.id, n]));
     const edges = g.edges ?? [];
     const nn = (v: unknown, d: number) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
@@ -6584,6 +7193,51 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const outMain = (nid: string) => edges.filter((e) => e.source === nid && !isValGin(e.targetHandle));
     const inEdge = (nid: string, handle: string | null) =>
       edges.find((e) => e.target === nid && (handle ? e.targetHandle === handle : !isValGin(e.targetHandle)));
+    // Wired value-inputs for 3D nodes. evaluateFlow never reaches the 3D primitives (they're not downstream
+    // of a 2D source, so its reachability gate skips them) — resolve their `valin-<key>` wires HERE, from the
+    // latest preview's published values (pobj-source / Input Properties / Math / Match items carry `values`).
+    // Only keys a tool declares in `valueInputs` resolve, mirroring evaluateFlow's resolveValueInputs. This is
+    // what lets a params file drive a Cuboid's dims/position and a Loop 3D's count — a parametric staircase.
+    const valuesByNode = new Map<string, Record<string, number | string>>();
+    for (const it of flowPreview) if (it.values) valuesByNode.set(it.nodeId, it.values);
+    const resolveVin = (nodeId: string, tool: string, params: Record<string, unknown>): Record<string, unknown> => {
+      const def = (FLOW_TOOLS as unknown as Record<string, { valueInputs?: { key: string }[]; fields?: Array<{ key: string; kind?: string; options?: unknown }> }>)[tool];
+      const vis = def?.valueInputs;
+      if (!vis?.length) return params;
+      let out = params;
+      for (const vi of vis) {
+        const e = edges.find((ed) => ed.target === nodeId && ed.targetHandle === `valin-${vi.key}`);
+        if (!e) continue;
+        const vals = valuesByNode.get(e.source);
+        if (!vals) continue;
+        const srcKey = e.sourceHandle && e.sourceHandle.startsWith("val-") ? e.sourceHandle.slice(4) : undefined;
+        const v = srcKey ? vals[srcKey] : Object.values(vals)[0];
+        if (!((typeof v === "number" && isFinite(v)) || (typeof v === "string" && v.length))) continue;
+        let resolved: number | string = v;
+        // A SELECT target resolves its option across the wire by value / label / index (see coerceSelectWire),
+        // so e.g. Display 3D's Type connects to any options prop without the strings matching exactly.
+        const field = def.fields?.find((f) => f.key === vi.key);
+        if (field?.kind === "select" && Array.isArray(field.options)) {
+          const sn = byId.get(e.source);
+          const so = sn ? selectSrcOpts(sn.data.tool as string, sn.data.params as Record<string, unknown>, srcKey) : undefined;
+          const c = coerceSelectWire(v, field.options as Array<{ value: string; label?: string }>, so);
+          if (c === undefined) continue; // no matching option → keep the node's own value
+          resolved = c;
+        }
+        if (out === params) out = { ...params };
+        out[vi.key] = resolved;
+      }
+      return out;
+    };
+    // Options a source node publishes on `key` (an input-props select prop, or a declared select field) — lets
+    // a wired select map onto the target's options BY INDEX when the option strings don't match.
+    const selectSrcOpts = (tool: string, params: Record<string, unknown>, key?: string): string[] | undefined => {
+      if (!key) return undefined;
+      const prop = inputProps(params).find((p) => p.id === key);
+      if (prop) return prop.type === "select" ? prop.options : undefined;
+      const f = (FLOW_TOOLS as unknown as Record<string, { fields?: Array<{ key: string; kind?: string; options?: unknown }> }>)[tool]?.fields?.find((ff) => ff.key === key);
+      return f?.kind === "select" && Array.isArray(f.options) ? (f.options as Array<{ value: string }>).map((o) => o.value) : undefined;
+    };
     // Follow the main-output chain forward (through any Transform 3D) and return the first Display 3D node's
     // style, if one is wired downstream. This is where a primitive's/boolean's colour + draw style come from.
     const displayStyleFrom = (startId: string): Display3DStyle | undefined => {
@@ -6594,12 +7248,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const next = outMain(cur).map((e) => byId.get(e.target)).find((m) => m?.data?.tool === "transform-3d" || m?.data?.tool === "display-3d");
         if (!next) return undefined;
         if (next.data.tool === "display-3d") {
-          const dp = next.data.params as Record<string, unknown>;
+          // Resolve wired value-inputs (colour ← a param, opacity ← a value, Type / Show edges ← a source) so
+          // Display 3D can be driven by wiring, mirroring the primitive nodes' resolveVin. A checkbox source
+          // publishes 1/0, so read Show edges truthily.
+          const dp = resolveVin(next.id, "display-3d", next.data.params as Record<string, unknown>);
           return {
-            color: typeof dp.color === "string" ? dp.color : "#94a3b8",
+            color: typeof dp.color === "string" && dp.color ? dp.color : "#94a3b8",
             opacity: Math.max(0, Math.min(1, nn(dp.opacity, 1))),
             wireframe: dp.displayType === "wireframe",
-            showEdges: dp.showEdges === true,
+            showEdges: dp.showEdges === true || nn(dp.showEdges, 0) === 1,
           };
         }
         cur = next.id; // Transform 3D — keep walking toward a possible Display 3D
@@ -6621,7 +7278,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const next = outMain(cur).map((e) => byId.get(e.target)).find((m) => m?.data?.tool === "transform-3d");
         if (!next || seen.has(next.id)) break;
         seen.add(next.id);
-        const p = next.data.params as Record<string, unknown>;
+        // Resolve wired value-inputs (e.g. rotateY ← a Segment's angle) so a Transform 3D can rotate a
+        // primitive by a RUNTIME value — the door aligning its cuboids to the wall, mirroring the 2D.
+        const p = resolveVin(next.id, "transform-3d", next.data.params as Record<string, unknown>);
         tf.tx += nn(p.translateX, 0); tf.ty += nn(p.translateY, 0); tf.tz += nn(p.translateZ, 0);
         tf.rx += nn(p.rotateX, 0); tf.ry += nn(p.rotateY, 0); tf.rz += nn(p.rotateZ, 0);
         tf.scale *= nn(p.scale, 1) || 1;
@@ -6664,13 +7323,46 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }
       return p0;
     };
+    // A 3D chain wired into a Node source (its Stamp endpoint) anchors at that node — the 3D mirror of the
+    // evaluator's chainAnchorByNode, so the staircase cuboids follow their canvas node when it moves. Walk
+    // this primitive's downstream chain (Loop 3D / Transform 3D / Boolean) to a node-source: a pinned id
+    // resolves via resolveNodeSegments; a grabbing one uses the selected node. Returns plan METRES.
+    const anchorOfPrim = (primId: string): { x: number; y: number } | null => {
+      if (!pixelsPerMeter) return null;
+      const seen = new Set<string>();
+      const stack = [primId];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        if (seen.has(cur)) continue;
+        seen.add(cur);
+        for (const e of edges) {
+          if (e.source !== cur) continue;
+          if (e.targetHandle && e.targetHandle.startsWith("valin-")) continue;
+          const t = byId.get(e.target)?.data?.tool as string | undefined;
+          if (t === "node-source") {
+            const p0 = byId.get(e.target)!.data.params as Record<string, unknown>;
+            if (p0.grabFromSelection !== false) return flowNodeAnchorM;
+            const firstId = String(p0.id ?? "").split(",")[0]?.trim();
+            const pt = firstId ? resolveNodeSegments(firstId)?.[0]?.[0] : undefined;
+            return pt ? { x: pt.x / pixelsPerMeter, y: pt.y / pixelsPerMeter } : null;
+          }
+          if (t === "loop-3d" || t === "transform-3d" || t === "boolean-3d") stack.push(e.target);
+        }
+      }
+      return null;
+    };
     // Build a descriptor (shape + scaled dims + baked transform) for every primitive, keyed by node id.
     const descById = new Map<string, PrimMass3D>();
     const primNodes = g.nodes.filter((n) => PRIM_TOOLS.has(n.data?.tool as string));
     for (const n of primNodes) {
       const tool = n.data.tool as string;
-      const p = applyFluteRole(n.data.params as Record<string, unknown>, tool);
+      const p = applyFluteRole(resolveVin(n.id, tool, n.data.params as Record<string, unknown>), tool);
       const tf = accumulate(n.id, p);
+      // Wired node anchor beats nodeFollow (which tracks the SELECTION) — never both, or it double-offsets.
+      // A Point placement disables nodeFollow entirely (the Point already positions every primitive).
+      const anch = anchorOfPrim(n.id);
+      if (anch) { tf.tx += anch.x; tf.tz += anch.y; }
+      else if (!hasPointPlacement && p.nodeFollow && flowNodeAnchorM) { tf.tx += flowNodeAnchorM.x; tf.tz += flowNodeAnchorM.y; } // track the host node
       const s = tf.scale; // uniform scale baked into the dimensions so the mesh still rests on the floor
       descById.set(n.id, {
         id: n.id,
@@ -6678,7 +7370,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         length: nn(p.length, 3) * s,
         breadth: nn(p.breadth, 2) * s,
         height: nn(p.height, 3) * s,
-        radius: nn(p.radius, 1.5) * s,
+        // `radius` is the shape's PRIMARY radius: cylinder/sphere/cone/capsule `radius`, a frustum's
+        // `radiusBottom`, a torus's `ringRadius` (each declaration has exactly one of the three keys).
+        radius: nn(p.radius, nn(p.radiusBottom, nn(p.ringRadius, 1.5))) * s,
+        radiusTop: nn(p.radiusTop, 0) * s,
+        topLength: nn(p.topLength, 0) * s,
+        topBreadth: nn(p.topBreadth, 0) * s,
+        tubeRadius: nn(p.tubeRadius, 0) * s,
+        arcDeg: nn(p.arcDeg, 360),
         color: typeof p.color === "string" ? p.color : "#94a3b8",
         transform: {
           tx: tf.tx, ty: tf.ty, tz: tf.tz,
@@ -6687,6 +7386,48 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         },
         display: displayStyleFrom(n.id),
       });
+    }
+    // Loop 3D — array an upstream primitive: copy i shifts by (i·stepX, i·stepY) plan-metres; its height
+    // GROWS by i·stepRise with the base staying on the floor (solid staircase columns, exactly the Staircase
+    // node's 3D model), or the whole copy LIFTS by i·stepRise when `liftBase` is on (floating treads).
+    // Count 0 → the branch vanishes (how a Match gate turns a configuration off). The source primitive
+    // renders only through its copies.
+    const loopConsumed = new Set<string>();
+    const loopedPrims: PrimMass3D[] = [];
+    for (const ln of g.nodes.filter((n) => n.data?.tool === "loop-3d")) {
+      // Walk back through Transform 3D to the primitive this loop arrays.
+      let curL = inEdge(ln.id, null)?.source;
+      const seenL = new Set<string>();
+      let base: PrimMass3D | undefined;
+      while (curL && !seenL.has(curL)) {
+        seenL.add(curL);
+        const node = byId.get(curL);
+        const t = node?.data?.tool as string | undefined;
+        if (t && PRIM_TOOLS.has(t)) { base = descById.get(curL); break; }
+        if (t === "transform-3d") { curL = inEdge(curL, null)?.source; continue; }
+        break;
+      }
+      if (!base) continue;
+      loopConsumed.add(base.id);
+      const lp = resolveVin(ln.id, "loop-3d", ln.data.params as Record<string, unknown>);
+      const count = Math.max(0, Math.min(1000, Math.round(nn(lp.count, 1))));
+      const stepX = nn(lp.stepX, 0), stepY = nn(lp.stepY, 0), stepRise = nn(lp.stepRise, 0);
+      const lift = lp.liftBase === true || lp.liftBase === 1 || lp.liftBase === "true";
+      const style = base.display ?? displayStyleFrom(ln.id);
+      for (let i = 0; i < count; i++) {
+        loopedPrims.push({
+          ...base,
+          id: `${ln.id}-${i}`,
+          height: lift ? base.height : base.height + i * stepRise,
+          display: style,
+          transform: {
+            ...base.transform,
+            tx: base.transform.tx + i * stepX,
+            tz: base.transform.tz + i * stepY,
+            ty: base.transform.ty + (lift ? i * stepRise : 0),
+          },
+        });
+      }
     }
     // Boolean nodes: resolve each input (A = main, B = gin-b) to an OPERAND — a primitive descriptor or a
     // nested Boolean subtree (so Booleans CHAIN: (((main − bore) − hole1) − hole2)…). Walks back through any
@@ -6737,9 +7478,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       if (!tree) continue;
       groups.push({ id: bn.id, op: tree.op, a: tree.a, b: tree.b, display: displayStyleFrom(bn.id) });
     }
-    const prims = primNodes.map((n) => descById.get(n.id)!).filter((d) => !consumedPrims.has(d.id));
-    return { primitiveMasses: prims, booleanMasses: groups };
-  }, [liveFlowGraph]);
+    const prims = primNodes.map((n) => descById.get(n.id)!).filter((d) => !consumedPrims.has(d.id) && !loopConsumed.has(d.id));
+    return { primitiveMasses: [...prims, ...loopedPrims], booleanMasses: groups };
+    // resolveNodeSegments is keyed on wallNodes, so moving a canvas node re-runs the walk → anchored 3D follows.
+  }, [liveFlowGraph, selectedNodeInfo, pixelsPerMeter, flowPreview, resolveNodeSegments]);
 
   // Resolve the active component schemas from the live flow. Two sources, schema NODE first:
   //  • A Schema node wired into a Graph node activates its Node/Segment/Graph sections; wired into a
@@ -6927,8 +7669,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     setLiveFlowGraph(g);
   }, []);
 
-  // Patch one param of one node in the live flow (from the Properties-tab controls, overlay closed).
+  // Patch one param of one node in the live flow (from the Properties-tab controls, or an Agent Run there).
   const updateFlowParam = useCallback((nodeId: string, key: string, value: unknown) => {
+    // While the overlay is OPEN it owns the node state and drives the canvas preview, so route the write there
+    // (it mirrors back into liveFlowGraph). Writing only liveFlowGraph would leave the overlay's nodes stale,
+    // so the 2D canvas never re-renders — the bug where an Agent Run from the Properties tab changed the
+    // params but the object didn't move. When closed we own the graph directly.
+    if (flowOpenRef.current && flowParamApiRef.current) { flowParamApiRef.current(nodeId, key, value); return; }
     setLiveFlowGraph((f) => {
       if (!f) return f;
       return {
@@ -6937,6 +7684,111 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       };
     });
   }, []);
+
+  // Run an Agent flow node FROM THE PROPERTIES TAB, headlessly (the overlay need not be open). Mirrors the
+  // flow overlay's onRunAgent but sources geometry/targets from the live graph + the headless preview and
+  // bakes via updateFlowParam — so the Agent block's Run button sets the connected nodes' params exactly like
+  // the node's own Run button. Reads plain objects off refs (liveFlowGraphRef / flowPreviewRef), so there is
+  // no React-flush race even though the overlay never re-syncs from the host. See [[project_agent_node_flow]].
+  const runFlowAgentFromProps = useCallback(async (nodeId: string, params: Record<string, unknown>) => {
+    const apiKey = (aiApiKey ?? "").trim();
+    if (!apiKey) { toast.error("Add a Google AI Studio API key in the Chat AI settings"); return; }
+    const model = (aiModel ?? "").trim() || "gemini-3-flash-preview";
+    const graph = liveFlowGraphRef.current;
+    if (!graph?.nodes?.length) { toast.error("No flow is attached to this element"); return; }
+    const edges = graph.edges ?? [];
+    const preview = flowPreviewRef.current;
+    // Geometry the agent reasons about: its own pass-through polygon, else any node it's wired to, else the
+    // selected Space's own outline (the Properties-tab fallback — a Node/Segment has no area).
+    // A Space (selected, or wired in) gives an area brief; a Node or Segment has none — that's fine, the agent
+    // tunes its targets (e.g. the object's Input Properties) from the prompt + their schemas. So a missing poly
+    // is NOT an error: only having nothing to tune is.
+    const poly = preview.find((it) => it.nodeId === nodeId)?.polygons.find((p) => p.length >= 3)
+      ?? agentGeometryPolyOf(nodeId, edges as never, preview, new Map())
+      ?? (selectedRoom && selectedRoom.points.length >= 3 ? selectedRoom.points : undefined);
+    const targets = agentTargetsOf(nodeId, graph.nodes as never, edges as never);
+    if (!targets.length) { toast.error("Wire the Agent to a node with parameters — e.g. (Node/Segment/Space) → Agent → Input Properties, or Corridoor → Core Racking"); return; }
+    const context = agentContextOf(poly ?? [], pixelsPerMeter);
+    const instructions = String(params.instructions ?? "");
+    const prompt = String(params.prompt ?? "");
+    const rounds = Math.max(1, Math.min(5, Math.round(Number(params.rounds) || 1)));
+    const settle = (frames = 8) => new Promise<void>((resolve) => { let n = 0; const tick = () => (++n >= frames ? resolve() : requestAnimationFrame(tick)); requestAnimationFrame(tick); });
+
+    // One round's values → their target nodes. Grouped by node so a props-driven array is rewritten in ONE
+    // call (a per-value rewrite would re-read the un-flushed state and keep only the last value).
+    const bake = (values: SuggestedValue[]) => {
+      const byNode = new Map<string, SuggestedValue[]>();
+      for (const v of values) { const l = byNode.get(v.nodeId); if (l) l.push(v); else byNode.set(v.nodeId, [v]); }
+      for (const [nid, vals] of byNode) {
+        const nd = liveFlowGraphRef.current?.nodes.find((n) => n.id === nid)?.data;
+        const nProps = nd ? inputProps(nd.params) : [];
+        const propIds = new Set(nProps.map((p) => p.id));
+        const propVals = new Map(vals.filter((v) => propIds.has(v.key)).map((v) => [v.key, v.value]));
+        if (propVals.size) updateFlowParam(nid, "props", nProps.map((p) => (propVals.has(p.id) ? { ...p, value: propVals.get(p.id)! } : p)));
+        for (const v of vals) if (!propIds.has(v.key)) updateFlowParam(nid, v.key, v.value);
+      }
+    };
+
+    updateFlowParam(nodeId, "_busy", true);
+    updateFlowParam(nodeId, "_critique", undefined);
+    updateFlowParam(nodeId, "_snapshot", undefined);
+    try {
+      let critique = "";
+      let applied: SuggestedValue[] = [];
+      let rationale = "";
+      let liveTargets = targets;
+      let stoppedBecause = "";
+      for (let round = 1; round <= rounds; round++) {
+        const label = rounds > 1 ? `round ${round}/${rounds} · ` : "";
+        updateFlowParam(nodeId, "_status", `${label}analysing ${context.areaM2 > 0 ? `${context.areaM2.toFixed(0)} m² · ` : ""}${liveTargets.length} connected node${liveTargets.length === 1 ? "" : "s"}…`);
+        const res = await runAgentSuggest({ apiKey, model, instructions, prompt, context, targets: liveTargets, critique, round, rounds });
+        if (!res.values.length) {
+          if (round === 1) { updateFlowParam(nodeId, "_status", "✖ no confident suggestions"); toast.warning("The agent returned no values it was confident about — try a more specific prompt."); return; }
+          stoppedBecause = "nothing left to change"; break;
+        }
+        bake(res.values); applied = res.values; rationale = res.rationale;
+        if (round === rounds) { stoppedBecause = rounds > 1 ? "round limit reached" : ""; break; }
+        // Let the baked params redraw the preview on the canvas, then photograph it for the reviewer.
+        updateFlowParam(nodeId, "_status", `${label}drawing…`);
+        await settle();
+        const snap = agentApiRef.current?.snapshotCanvas() as { dataUrl?: string } | { error: string } | undefined;
+        const dataUrl = snap && "dataUrl" in snap ? snap.dataUrl : undefined;
+        if (!dataUrl) { stoppedBecause = "couldn't capture the canvas"; break; }
+        updateFlowParam(nodeId, "_snapshot", dataUrl);
+        updateFlowParam(nodeId, "_status", `${label}reviewing the drawing…`);
+        let verdict;
+        try { verdict = await runAgentCritique({ apiKey, model, instructions, prompt, imageDataUrl: dataUrl, applied: res.values, context }); }
+        catch (e) { stoppedBecause = "review failed"; console.error("Agent critique failed:", e); break; }
+        updateFlowParam(nodeId, "_critique", `${verdict.ok ? "✔" : "✎"} ${verdict.score.toFixed(0)}/10 · ${verdict.critique}`);
+        if (verdict.ok) { stoppedBecause = `reviewer satisfied (${verdict.score.toFixed(0)}/10)`; break; }
+        critique = verdict.critique;
+        await settle(2);
+        liveTargets = agentTargetsOf(nodeId, (liveFlowGraphRef.current?.nodes ?? []) as never, (liveFlowGraphRef.current?.edges ?? []) as never);
+      }
+      // Record what was set on the agent node itself — read-only rows + provenance (survives export/save).
+      const specOf = new Map(liveTargets.flatMap((t) => t.params.map((s) => [`${t.nodeId}::${s.key}`, s] as const)));
+      const used = new Set<string>();
+      const propsOut = applied.map((v) => {
+        const spec = specOf.get(`${v.nodeId}::${v.key}`);
+        let id = v.key; while (used.has(id)) id = `${v.key}-${used.size + 1}`; used.add(id);
+        return { id, name: spec?.label ?? v.key, type: typeof v.value === "boolean" ? "checkbox" : typeof v.value === "number" ? "range" : "text", value: v.value, min: spec?.min ?? 0, max: spec?.max ?? 10, step: spec?.step ?? 1, options: spec?.options ?? [] };
+      });
+      updateFlowParam(nodeId, "props", propsOut);
+      updateFlowParam(nodeId, "rationale", rationale);
+      updateFlowParam(nodeId, "inputHash", suggestInputHash(instructions, prompt, context, liveTargets));
+      updateFlowParam(nodeId, "_stale", false);
+      const nodeCount = new Set(applied.map((v) => v.nodeId)).size;
+      const tail = stoppedBecause ? ` · ${stoppedBecause}` : "";
+      updateFlowParam(nodeId, "_status", `✔ set ${applied.length} parameter${applied.length === 1 ? "" : "s"} on ${nodeCount} node${nodeCount === 1 ? "" : "s"}${tail}`);
+      toast.success(`Agent set ${applied.length} parameter${applied.length === 1 ? "" : "s"}`);
+    } catch (e) {
+      updateFlowParam(nodeId, "_status", "✖ analysis failed");
+      toast.error(`Agent failed: ${(e as Error)?.message ?? "unknown"}`);
+      console.error("Agent node run (properties) failed:", e);
+    } finally {
+      updateFlowParam(nodeId, "_busy", false);
+    }
+  }, [aiApiKey, aiModel, pixelsPerMeter, selectedRoom, updateFlowParam]);
 
   /** While a Place Object preview object is dragged on the canvas, which node + object index to surface
    *  in the Properties tab (scrolled into view + highlighted). Null when not dragging. */
@@ -22512,6 +23364,52 @@ User request: ${aiPrompt.trim()}`;
       return;
     }
     if (tool === "freehand" && freehandDraft.length > 3) {
+      // "Sketch as <type>" — straighten the rough stroke and commit it as REAL typed segments instead of
+      // storing the ink. This is the Fit Lines algorithm called DIRECTLY (no flow graph): the scribble is
+      // transient scaffolding, so nothing needs to carry a type downstream. The result is an ordinary user
+      // segment — no `flowOwner` — so splitWallsAtIntersections welds it to existing geometry and room
+      // detection picks it up, which flow-materialised walls deliberately can't do.
+      if (freehandSegType) {
+        const pts: Point[] = [];
+        for (let i = 0; i + 1 < freehandDraft.length; i += 2) pts.push({ x: freehandDraft[i], y: freehandDraft[i + 1] });
+        // Ortho follows the PREFERENCES toggle — the same lock that constrains a click-drawn Wall/Segment to
+        // horizontal or vertical — so a sketched wall obeys it too and lands exactly like a drawn one. With
+        // it off the fit follows what was actually drawn, so a diagonal stays diagonal. trimEnds 0 → a single
+        // stroke has nothing of its own to overshoot, and pruning could eat a deliberately short stub.
+        const fitted = evalGraphFitLines([pts], { snapTol: 0, tolerance: 0.15, ortho: orthoMode, angleSnap: 0, trimEnds: 0, degree: 1 }, pixelsPerMeter);
+        const ga0 = history.state.graphAttrs ?? { nodes: {}, segments: {} };
+        const segsGA = { ...(ga0.segments ?? {}) };
+        // Reuse the values pinned by the shared params dialog, exactly like the click-click commit.
+        const segDefaults = activeSegDefaultsRef.current?.type === freehandSegType ? activeSegDefaultsRef.current.vals : {};
+        const drawn: Wall[] = [];
+        for (const s of fitted) {
+          const start = s[0], end = s[s.length - 1];
+          if (Math.hypot(end.x - start.x, end.y - start.y) < 2) continue; // a flick or a dot — not a segment
+          const segId = createId();
+          segsGA[segId] = { ...(segsGA[segId] ?? {}), ...(freehandSegType !== "line" ? { "seg-type": freehandSegType } : {}), ...segDefaults };
+          // Per-segment attachment (fresh id each) so an imported object — a Wall picked from the dropdown —
+          // rides on every fitted piece, exactly as it does on every segment of a click-click chain.
+          const segAtt = buildPendingSegAttachment();
+          drawn.push({
+            id: segId, start, end,
+            thickness: layerVisibility.viewGraph ? 0.01 : wallThickness,
+            color: wallColor, dashed: lineTypeDashed, mode: "line", method: "center",
+            segmentType: freehandSegType,
+            ...(segAtt ? { attachments: [segAtt] } : {}),
+            ...(freehandSegType === "door" ? { doorHinge: "left" as const, doorPlacement: "left" as const } : {}),
+            ...(freehandSegType === "line" ? lineSegConfigProps() : {}),
+          });
+        }
+        setFreehandDraft([]);
+        if (drawn.length) {
+          history.set({
+            ...history.state,
+            walls: splitWallsAtIntersections([...history.state.walls, ...drawn]),
+            graphAttrs: { ...ga0, segments: segsGA },
+          });
+        }
+        return;
+      }
       history.set({
         ...history.state,
         objects: [
@@ -22531,6 +23429,112 @@ User request: ${aiPrompt.trim()}`;
       setFreehandDraft([]);
     }
   };
+
+  // ── Pointer input: mouse · stylus · touch ───────────────────────────────────────────────────────────
+  // The stage binds POINTER events, not mouse events, because pointer events are the one API that carries
+  // mouse, pen and touch together along with `pointerType` and `pressure`. These four wrappers are the only
+  // place input is classified; mouse and stylus fall straight through to the existing handlers untouched
+  // (KonvaEventObject<PointerEvent> is assignable to KonvaEventObject<MouseEvent>, since PointerEvent
+  // extends MouseEvent — so none of the drawing logic below had to change).
+
+  /** Stage-local coordinates for a client point — the frame `stage.getPointerPosition()` returns, which the
+   *  wheel-zoom maths is written in. */
+  const stageLocalPoint = (clientX: number, clientY: number): { x: number; y: number } | null => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+    const r = stage.container().getBoundingClientRect();
+    return { x: clientX - r.left, y: clientY - r.top };
+  };
+
+  /** Two-finger gesture → zoom about the pinch centroid AND pan by the centroid's travel, in one update.
+   *  Deliberately the same anchor maths as onStageWheel, so pinching and scrolling agree about where the
+   *  world sits under the cursor. */
+  const applyPinchGesture = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    const prev = pinchRef.current;
+    pinchRef.current = { dist, cx, cy };
+    if (!prev || prev.dist < 1 || dist < 1) return; // first move of the gesture — just seed the baseline
+    const local = stageLocalPoint(cx, cy);
+    if (!local) return;
+    const oldScale = scale;
+    const newScale = Math.min(16, Math.max(0.05, oldScale * (dist / prev.dist)));
+    const worldX = (local.x - position.x) / oldScale;
+    const worldY = (local.y - position.y) / oldScale;
+    setScale(Number(newScale.toFixed(3)));
+    setPosition({
+      x: local.x - worldX * newScale + (cx - prev.cx),
+      y: local.y - worldY * newScale + (cy - prev.cy),
+    });
+  };
+
+  const onStagePointerDown = (event: Konva.KonvaEventObject<PointerEvent>) => {
+    const e = event.evt;
+    const pts = activePointersRef.current;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      // A second contact turns the gesture into a viewport one. Abandon anything the first contact began so
+      // a pinch can never leave a half-drawn stroke behind.
+      const [a, b] = [...pts.values()];
+      pinchRef.current = { dist: Math.hypot(b.x - a.x, b.y - a.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+      viewportPanPointerActiveRef.current = false;
+      setIsPanning(false);
+      setFreehandDraft([]);
+      return;
+    }
+    if (pts.size > 2) return; // third contact — ignore entirely
+    if (e.pointerType === "touch" && !touchDraws) {
+      // Finger input pans instead of drawing (see `touchDraws`). This is also the palm rejection.
+      e.preventDefault();
+      startViewportPan(e.clientX, e.clientY);
+      return;
+    }
+    onStageMouseDown(event);
+  };
+
+  const onStagePointerMove = (event: Konva.KonvaEventObject<PointerEvent>) => {
+    const e = event.evt;
+    const pts = activePointersRef.current;
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size >= 2) {
+      const [a, b] = [...pts.values()];
+      applyPinchGesture(a, b);
+      return;
+    }
+    onStageMouseMove(event);
+  };
+
+  const onStagePointerUp = (event: Konva.KonvaEventObject<PointerEvent>) => {
+    const pts = activePointersRef.current;
+    pts.delete(event.evt.pointerId);
+    if (pts.size < 2) pinchRef.current = null;
+    if (pts.size > 0) {
+      // Contacts remain (lifting one finger of a pinch) — end the viewport gesture but don't run the
+      // stroke/drag commit, which belongs to the LAST pointer up.
+      viewportPanPointerActiveRef.current = false;
+      return;
+    }
+    onStageMouseUp();
+  };
+
+  /** The OS or browser stealing the gesture (system swipe, palm-cancel) must not leave a pinch latched. */
+  const onStagePointerCancel = (event: Konva.KonvaEventObject<PointerEvent>) => {
+    activePointersRef.current.delete(event.evt.pointerId);
+    if (activePointersRef.current.size < 2) pinchRef.current = null;
+    if (activePointersRef.current.size === 0) {
+      viewportPanPointerActiveRef.current = false;
+      setIsPanning(false);
+    }
+  };
+
+  /** The browser must not claim touch gestures on the canvas for scrolling / its own pinch-zoom, or a
+   *  stylus stroke turns into a page scroll. Set on the Konva-created container div. */
+  useEffect(() => {
+    const c = stageRef.current?.container();
+    if (!c) return;
+    c.style.touchAction = "none";
+    c.style.overscrollBehavior = "contain";
+  }, []);
 
   const onObjectSelect = (id: string, shift: boolean) => {
     // "All" scope: a priority node/segment pick was just made in onStageMouseDown — swallow this trailing
@@ -23324,6 +24328,8 @@ User request: ${aiPrompt.trim()}`;
       pixelsPerMeter,
       // Filling Mode = Fill → hatch the wall polygons in the DXF.
       fill: layerVisibility.fillingFill,
+      // Same carve source as the canvas: parametric cutsWall objects clip the DXF wall band too.
+      extraCarvePolys: wallCarveFootprints,
     });
     const dxf = architecturalDrawingToDxf(drawing);
     const blob = new Blob([dxf], { type: "application/dxf" });
@@ -23955,6 +24961,18 @@ User request: ${aiPrompt.trim()}`;
                   className="h-4 w-4 shrink-0"
                   checked={orthoMode}
                   onChange={(e) => setOrthoMode(e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-medium text-slate-700">Draw with finger</span>
+                  <p className="text-[9px] text-slate-400">Off: a finger pans / pinch-zooms and only a stylus or mouse draws — which also rejects your palm. On: draw by touch (for screens with no stylus).</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0"
+                  checked={touchDraws}
+                  onChange={(e) => setTouchDraws(e.target.checked)}
                 />
               </label>
               <label className="flex items-center justify-between gap-2">
@@ -24670,9 +25688,16 @@ User request: ${aiPrompt.trim()}`;
   // "New" (File ▸ New) — wipe the document to a blank canvas after confirming. Lives in the top-right
   // Files dropdown; also wired as the toolbar's onClearCanvas.
   const handleNewDocument = () => {
-    if (!window.confirm("Start a new drawing? This removes all walls, rooms, furniture, objects, and adjacency segments. (Undo will restore.)")) return;
+    if (!window.confirm("Start a new drawing? This removes all walls, rooms, furniture, objects, freehand sketches, and the image underlay. (Undo will restore.)")) return;
     const h = historyRef.current;
-    h.set({ ...h.state, walls: [], rooms: [], furniture: [], objects: [] });
+    // `objects: []` already drops committed freehand sketches; also drop the overlaid image underlay so a
+    // "new drawing" is a truly blank canvas, not one still showing the traced image.
+    h.set({ ...h.state, walls: [], rooms: [], furniture: [], objects: [], imageUnderlay: null });
+    // Clear any in-progress freehand stroke and reset the image-underlay UI flags (nothing left to select /
+    // calibrate now that the underlay is gone).
+    setFreehandDraft([]);
+    setImageSelected(false);
+    setUnderlayCalibrationMode(false);
     selection.clearSelection();
     setSelectedGenElement(null);
     setGeneratedLayout(null);
@@ -25046,6 +26071,59 @@ User request: ${aiPrompt.trim()}`;
                   }
                   setSegParamsDialog({ segType, label });
                 }}
+                freehandSegType={freehandSegType}
+                onFreehandPlain={() => {
+                  // Main Freehand click — plain ink, so disarm the sketch-as type AND any pinned object,
+                  // otherwise a Wall armed earlier would still ride on the next typed sketch.
+                  setFreehandSegType("");
+                  pendingSegObjectIdRef.current = null;
+                  pendingSegObjectParamsRef.current = null;
+                  setTool("freehand");
+                }}
+                onFreehandType={(segType, label) => {
+                  // Same arming sequence as onAddSegmentType, but the draw is the freehand gesture: the
+                  // stroke is fitted and committed as this type on mouse-up. Layer first (so the segments
+                  // auto-stamp onto e.g. "Wall"), then the shared params dialog when the type has fields.
+                  pendingSegObjectIdRef.current = null;
+                  pendingSegObjectParamsRef.current = null;
+                  pendingNodeTypeRef.current = null;
+                  setFurnitureNodeMode(false);
+                  // An IMPORTED OBJECT (e.g. Wall) — the same branch Add Segment takes. Its parameter dialog
+                  // must appear here too, so route through objParamsDialog with via:"freehand"; the confirm
+                  // arms the sketch gesture with the object pinned. Door / Window objects are placed INTO an
+                  // existing wall (hover + click splits it), which isn't a sketch gesture — they keep the
+                  // normal opening tool.
+                  if (segType.startsWith("obj:")) {
+                    const objId = segType.slice(4);
+                    const objDef = (history.state.objectLibrary ?? {})[objId];
+                    ensureLayerForType(layerSlug(objDef?.meta.name || label), objDef?.meta.name || label);
+                    if (objDef && objDef.parameters.length > 0) {
+                      setObjParamsDialog({ objectId: objId, label: objDef.meta.name || label, host: "segment", via: "freehand" });
+                      return;
+                    }
+                    const sym = objDef?.meta.symbol;
+                    if (sym === "door" || sym === "window") {
+                      const dw = Number(objDef?.parameters.find((p) => p.key === "width")?.default);
+                      startSegOpeningPlace(objId, sym, isFinite(dw) ? { width: dw } : {});
+                      return;
+                    }
+                    startSegObjectDraw(objId);
+                    setFreehandSegType("line");
+                    setTool("freehand");
+                    toast.info(`Sketch a ${(objDef?.meta.name || label).toLowerCase()} — it straightens when you release`);
+                    return;
+                  }
+                  ensureLayerForType(segType, label);
+                  const fields = fieldsForSegType(activeSchemaSegmentDefs, segType);
+                  if (fields.length === 0) {
+                    activeSegDefaultsRef.current = { type: segType, vals: {} };
+                    setFreehandSegType(segType);
+                    setTool("freehand");
+                    toast.info(`Sketch a ${label.toLowerCase()} — it straightens when you release`);
+                    return;
+                  }
+                  setSegParamsDialog({ segType, label, via: "freehand" });
+                }}
                 // Schema-driven drawing tools (from a "Schema to Drawing Tools" node), augmenting/overriding
                 // the built-in Add Segment / Add Node types by value, with their icons.
                 schemaSegmentTools={mergedDrawTools.segments.length ? mergedDrawTools.segments : undefined}
@@ -25283,9 +26361,9 @@ User request: ${aiPrompt.trim()}`;
 
         <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
         <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
-        {/* Chat AI — foldable bar pinned to the top of the canvas. Four agent modes, each with its own
-            editable system prompt: Orchestrator (full tool-loop: canvas + Flow + parametric library),
-            Flow (builds the node graph), Design (canvas tools only), Parametric (object library only). */}
+        {/* Chat AI — foldable bar pinned to the top of the canvas. The built-in Orchestrator is always
+            present (full tool-loop: canvas + Flow + parametric library); Import loads agent files from
+            public/Library/Agents, each with its own instructions, tool allow-list and resource grants. */}
         <ChatAIPanel
           messages={aiMessages}
           busy={aiSendBusy}
@@ -25293,12 +26371,27 @@ User request: ${aiPrompt.trim()}`;
           onToggleCollapsed={() => setAiCollapsed((c) => !c)}
           onSend={handleAiSend}
           configured={!!aiApiKey.trim() && !!aiModel.trim()}
-          mode={aiMode}
-          onModeChange={setAiMode}
-          systemPrompt={aiMode === "agent" ? aiAgentSystemPrompt : aiMode === "flow" ? aiFlowSystemPrompt : aiMode === "design" ? aiDesignSystemPrompt : aiParametricSystemPrompt}
-          onSystemPromptChange={aiMode === "agent" ? setAiAgentSystemPrompt : aiMode === "flow" ? setAiFlowSystemPrompt : aiMode === "design" ? setAiDesignSystemPrompt : setAiParametricSystemPrompt}
-          defaultSystemPrompt={aiMode === "agent" ? AGENT_SYSTEM_PROMPT : aiMode === "flow" ? FLOW_AGENT_SYSTEM_PROMPT : aiMode === "design" ? DESIGN_AGENT_SYSTEM_PROMPT : PARAMETRIC_AGENT_SYSTEM_PROMPT}
+          agents={[
+            { id: "orchestrator", label: "⚡ Orchestrator", title: "Orchestrator Agent — the full toolbox: canvas design + Flow building + parametric-library management." },
+            ...aiAgents.map((a): ChatAgentTab => ({ id: a.id, label: a.label ?? a.name, title: a.description ?? a.name })),
+          ]}
+          selectedAgentId={aiSelectedAgentId}
+          onSelectAgent={setAiSelectedAgentId}
+          onImportAgents={() => setAiAgentImportOpen(true)}
+          runner={aiEffectiveRunner}
+          systemPrompt={aiSelectedAgent ? aiSelectedAgent.instructions : aiAgentSystemPrompt}
+          onSystemPromptChange={aiSelectedAgent ? (() => {}) : setAiAgentSystemPrompt}
+          defaultSystemPrompt={AGENT_SYSTEM_PROMPT}
+          promptReadOnly={!!aiSelectedAgent}
+          tools={aiSelectedAgent ? describeTools(aiSelectedAgent.accessibleTools) : toolCatalogForMode("agent")}
+          access={{
+            objects: { mode: aiSelectedAgent?.accessibleParametricObjects?.mode ?? "all", items: grantItems(aiSelectedAgent?.accessibleParametricObjects, "objects") },
+            flows: { mode: aiSelectedAgent?.accessibleFlows?.mode ?? "all", items: grantItems(aiSelectedAgent?.accessibleFlows, "flows") },
+            designs: { mode: aiSelectedAgent?.accessibleDesigns?.mode ?? "all", items: grantItems(aiSelectedAgent?.accessibleDesigns, "designs") },
+          } as AgentAccessView}
+          examples={aiSelectedAgent?.examples}
         />
+        <AgentImportDialog open={aiAgentImportOpen} onOpenChange={setAiAgentImportOpen} onImport={handleAgentsImported} />
         <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
           {/* Flow editor — node-graph pipeline that composes the stepwise tools (Inset,
               Optimise Rect, Split, …) and runs them via the existing recipe engine.
@@ -25397,6 +26490,7 @@ User request: ${aiPrompt.trim()}`;
                     const pb = visibleRooms.find((r) => r.roomType === "plot-boundary");
                     return pb?.floorToFloorM ?? 3.0;
                   })()}
+                  wallCarvePolys={wallCarveFootprints}
                   massingShowBlocks={massingShowBlocks}
                   massingExtrudeUpwards={massingExtrudeUpwards}
                   massingPreview={flowMassingPreview}
@@ -25427,11 +26521,14 @@ User request: ${aiPrompt.trim()}`;
             width={size.width}
             height={size.height}
             onWheel={onStageWheel}
-            onMouseDown={onStageMouseDown}
-            onMouseMove={onStageMouseMove}
-            onMouseUp={onStageMouseUp}
+            onPointerDown={onStagePointerDown}
+            onPointerMove={onStagePointerMove}
+            onPointerUp={onStagePointerUp}
+            onPointerCancel={onStagePointerCancel}
             onDblClick={onStageDblClick}
             onMouseLeave={() => {
+              activePointersRef.current.clear();
+              pinchRef.current = null;
               viewportPanPointerActiveRef.current = false;
               setIsPanning(false);
               setGuideLines([]);
@@ -25545,7 +26642,7 @@ User request: ${aiPrompt.trim()}`;
               <WorldViewport x={position.x} y={position.y} scale={scale}>
                 {/* Construction grids (Create Grid tool) — light lattice lines; selectable in Select mode
                     (Grid scope, or All), showing a dashed highlight + Properties when picked. */}
-                {(history.state.grids ?? []).map((g) => {
+                {(history.state.grids ?? []).filter((g) => !hiddenFlowGridIdSet.has(g.id)).map((g) => {
                   const w = g.cols * g.cellW, h = g.rows * g.cellH;
                   const sw = Math.max(0.4, 1 / scale);
                   const isSel = selectedGridId === g.id;
@@ -26828,6 +27925,10 @@ User request: ${aiPrompt.trim()}`;
                     const hostLocal = room.points.map((p) => ({ x: (p.x - c.x) / pixelsPerMeter, y: (p.y - c.y) / pixelsPerMeter }));
                     const sw = Math.max(0.75, 1.25 / scale);
                     return (room.attachments ?? []).map((att) => {
+                      // Live mode: this attachment's pipeline steps are materialised as REAL per-op Spaces
+                      // (see the live-materialise effect) — suppress the display-only overlay so it isn't
+                      // double-drawn on top of the committed Spaces.
+                      if (liveFlow && liveOwnedAttIdsRef.current.has(att.id)) return null;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!obj?.geometry) return null;
                       const defText = JSON.stringify(obj);
@@ -30550,7 +31651,7 @@ User request: ${aiPrompt.trim()}`;
             {layerVisibility.objects ? (
               <Layer>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
-                  {history.state.objects.filter((o) => isLayerVisible(o.layerId)).slice().sort(compareByLayer).map((objectItem) => {
+                  {history.state.objects.filter((o) => isLayerVisible(o.layerId) && !isFreehandHiddenByFlow(o.kind, o.stroke)).slice().sort(compareByLayer).map((objectItem) => {
                     if (objectItem.kind === "rect") {
                       return (
                         <Rect
@@ -32426,7 +33527,7 @@ User request: ${aiPrompt.trim()}`;
                     // Segment to Door / Window + Node to Staircase / Footing: filled symbol polygons + open
                     // symbol lines (door swing + leaves / window frame + glass / stair flights + treads + arrow /
                     // footing layers).
-                    if ((item.tool === "segment-to-door" || item.tool === "segment-to-window" || item.tool === "node-to-staircase" || item.tool === "node-to-footing" || item.tool === "footing-to-elevation" || item.tool === "footing-to-plan" || item.tool === "node-source" || item.tool === "param-render") && (item.doorFill || item.doorLines)) {
+                    if ((item.tool === "segment-to-door" || item.tool === "segment-to-window" || item.tool === "node-to-staircase" || item.tool === "node-to-footing" || item.tool === "footing-to-elevation" || item.tool === "footing-to-plan" || item.tool === "node-source") && (item.doorFill || item.doorLines)) {
                       const sw = (item.isFinal ? 2 : 1.5) / scale;
                       const els: React.ReactNode[] = [];
                       (item.doorFill ?? []).forEach((poly, fi) => els.push(
@@ -32584,6 +33685,39 @@ User request: ${aiPrompt.trim()}`;
                         ];
                       });
                     }
+                    // Polygon node: render ALL rings as ONE even-odd shape, so a Mitered-Join union (outer
+                    // boundary + room-interior holes) draws as a seamless wall poché — the rooms carve through
+                    // and there are no internal junction seams (only the outer/inner wall faces are stroked).
+                    // Separate non-nested rings still fill individually; nested rings become holes.
+                    if (item.tool === "polygon" && item.polygons.length > 1) {
+                      const rings = item.polygons.filter((p) => p.length >= 3);
+                      if (rings.length === 0) return null;
+                      const sw = (item.isFinal ? 2 : 1.5) / scale;
+                      const dash = item.isFinal ? null : [6 / scale, 4 / scale];
+                      const fill = item.isFinal ? `${item.color}22` : null;
+                      return (
+                        <Shape
+                          key={`flow-${item.nodeId}-poche`}
+                          listening={false}
+                          sceneFunc={(ctx, shape) => {
+                            const path = new Path2D();
+                            for (const ring of rings) {
+                              path.moveTo(ring[0].x, ring[0].y);
+                              for (let i = 1; i < ring.length; i++) path.lineTo(ring[i].x, ring[i].y);
+                              path.closePath();
+                            }
+                            const raw = (ctx as unknown as { _context: CanvasRenderingContext2D })._context;
+                            if (fill) { raw.fillStyle = fill; raw.fill(path, "evenodd"); }
+                            raw.strokeStyle = item.color;
+                            raw.lineWidth = sw;
+                            raw.setLineDash(dash ?? []);
+                            raw.stroke(path);
+                            raw.setLineDash([]);
+                            ctx.fillStrokeShape(shape);
+                          }}
+                        />
+                      );
+                    }
                     return item.polygons.map((poly, pi) => {
                       // Place Object preview: draw the furniture symbol (2D-Symbol layer) or footprint box,
                       // PLUS a node-point marker at the footprint centre. Place Object drops a selectable
@@ -32652,7 +33786,7 @@ User request: ${aiPrompt.trim()}`;
                           stroke={item.color}
                           strokeWidth={(item.isFinal ? 2.5 : 1.5) / scale}
                           dash={item.isFinal ? undefined : [6 / scale, 4 / scale]}
-                          fill={item.openPath ? undefined : item.tool === "mitered-join" ? `${item.color}80` : item.isFinal ? `${item.color}22` : undefined}
+                          fill={item.openPath ? undefined : item.isFinal ? `${item.color}22` : undefined}
                           listening={false}
                         />
                       );
@@ -33139,7 +34273,10 @@ User request: ${aiPrompt.trim()}`;
             <FlowOverlay
               open={flowOpen}
               minimized={flowMinimized}
+              aiApiKey={aiApiKey}
+              aiModel={aiModel}
               liveFlow={liveFlow}
+              hasLiveAttachments={hasLivePipelineAttachment}
               onToggleLiveFlow={() => setLiveFlow((v) => !v)}
               onMinimize={() => flowPanelRef.current?.collapse()}
               onMaximize={() => { flowPanelRef.current?.expand(); flowPanelRef.current?.resize(80); }}
@@ -33153,11 +34290,17 @@ User request: ${aiPrompt.trim()}`;
               onGraphChange={mirrorFlow}
               onDrawingToolsChange={setFlowDrawTools}
               onHiddenSpaceIdsChange={setHiddenFlowSpaceIds}
+              onHiddenFreehandColorsChange={setHiddenFreehandColors}
+              onHiddenGridIdsChange={setHiddenFlowGridIds}
               paramApiRef={flowParamApiRef}
               injectObjectRef={flowInjectObjectRef}
               injectOpeningRef={flowInjectOpeningRef}
               injectWallGraphRef={flowInjectWallGraphRef}
               injectNodeObjectRef={flowInjectNodeObjectRef}
+              injectAttachedObjectRef={flowInjectAttachedObjectRef}
+              onFlowNodesDeleted={removeAttachmentsForFlowNodes}
+              onFlowObjectAttachedToNode={attachFlowObjectToNode}
+              onImportObjectToLibrary={importObjectToLibrary}
               flowApiRef={flowApplyApiRef}
               onRunLayoutGen={onRunLayoutGenStable}
               onRunAnneal={onRunAnnealStable}
@@ -33186,16 +34329,42 @@ User request: ${aiPrompt.trim()}`;
                   h.set({ ...h.state, walls: splitWallsAtIntersections([...h.state.walls, ...newPathWalls]) });
                   toast.success(`Created ${newPathWalls.length} path segment${newPathWalls.length === 1 ? "" : "s"}`);
                 }
+                // Graph to Path → commit each band as a real Corridor-region Space (the decoupled
+                // Make-path; mirrors the Skeleton make-path commit). The generic terminal block below
+                // skips these items (noCommitTools) so the band outline doesn't double-commit as walls.
+                const newPathRooms: Room[] = [];
+                for (const item of flowPreview) {
+                  if (item.tool !== "graph-to-path") continue;
+                  const loops = (item.polygons ?? []).filter((l) => l.length >= 3);
+                  loops.forEach((points, i) => {
+                    newPathRooms.push({
+                      id: createId(),
+                      points: points.map((p) => ({ ...p })),
+                      fill: "rgba(14, 165, 233, 0.35)",
+                      stroke: "#0369a1",
+                      roomType: "room",
+                      region: "Corridor",
+                      label: loops.length > 1 ? `Path ${i + 1}` : "Path",
+                      showLabel: true,
+                    });
+                  });
+                }
+                if (newPathRooms.length) {
+                  const h = historyRef.current;
+                  h.set({ ...h.state, rooms: [...h.state.rooms, ...newPathRooms] });
+                  toast.success(`Committed ${newPathRooms.length} path Space${newPathRooms.length === 1 ? "" : "s"}`);
+                }
                 // Commit terminal PREVIEW-ONLY geometry (Split Segment pieces, graph lines, buffer/bloom
                 // shapes, …) that the recipe engine doesn't handle, as real wall segments — so non-space
                 // flows (rooted at Segment / Graph / Node / Image / Canvas) produce canvas geometry on Run.
                 const committed = new Set(committedNodeIds);
                 // Overlay / value / already-handled tools whose preview polygons must NOT become walls.
-                // mitered-join is NOT excluded: its ribbon case is already handled above (those items carry
-                // miteredPath and are skipped by the `item.miteredPath` guard below), while its Get Outer
-                // Boundary case has no miteredPath and SHOULD commit here as a closed Space (wall loop).
+                // mitered-join is a pure VALUE node now (publishes val-polygons, draws/commits nothing) — it's
+                // excluded so its stroked ribbon never becomes walls on commit; wire val-polygons into a
+                // Polygon node when you want the walls drawn.
                 const noCommitTools = new Set([
                   "place-object", "space-creator", "show-direction", "dimension", "area-dimension",
+                  "graph-to-path", "mitered-join",
                   "graph-metrics", "conditional", "param-manip", "pipe-solver", "render", "analyse",
                   "generate", "schema", "output-schema", "bua", "math", "random",
                   "footing", "footing-to-plan", "footing-to-elevation", "footing-to-3d-mesh", "mesh-to-3d",
@@ -33276,6 +34445,7 @@ User request: ${aiPrompt.trim()}`;
               selectedGridId={selectedGridDisplayId}
               selectedSegmentSegments={selectedSegmentInfo.polylines}
               resolveSegmentSegments={resolveSegmentSegments}
+              freehandStrokes={freehandStrokesForFlow}
               selectedSegmentId={selectFilter === "segment" ? selectedSegmentInfo.id : null}
               selectedNodeSegments={selectedNodeInfo.polylines}
               resolveNodeSegments={resolveNodeSegments}
@@ -33288,8 +34458,18 @@ User request: ${aiPrompt.trim()}`;
               pipeGraph={pipeGraph}
               createAnchor={(() => {
                 const avg = (pts: { x: number; y: number }[]) => pts.length ? { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length } : null;
-                if (selectedRoom?.points?.length) return avg(selectedRoom.points)!;
-                const cs = visibleRooms.map((r) => avg(r.points)).filter((c): c is { x: number; y: number } => c !== null);
+                // A selected NODE anchors the flow's 2D primitives to it (world px), so a Node-object decompile
+                // follows the node live as it's dragged. Falls back to the space centroid / origin otherwise.
+                const np = selectFilter === "node" ? selectedNodeInfo.polylines[0]?.[0] : undefined;
+                if (np) return { x: np.x, y: np.y };
+                // EXCLUDE flow-owned rooms. Live materialises the flow's own primitives AS rooms, so if
+                // they counted here the anchor would chase the geometry it just positioned: anchor shifts
+                // → primitives redraw at the new anchor → owned rooms move → anchor shifts again, and the
+                // whole figure drifts across the canvas without ever settling. Same discipline as the
+                // autoRooms / suppressors / liveAttachmentsSig filters — the effect's output must never
+                // feed back into its own input.
+                if (selectedRoom?.points?.length && !selectedRoom.flowOwner) return avg(selectedRoom.points)!;
+                const cs = visibleRooms.filter((r) => !r.flowOwner).map((r) => avg(r.points)).filter((c): c is { x: number; y: number } => c !== null);
                 return cs.length ? avg(cs)! : { x: 0, y: 0 };
               })()}
               resolveSpacePolygon={(rawId) => {
@@ -33302,6 +34482,21 @@ User request: ${aiPrompt.trim()}`;
                 if (!room) room = visibleRooms.find((r) => r.id === key);
                 if (!room) room = visibleRooms.find((r) => r.label === key);
                 return room?.points ?? null;
+              }}
+              grabObjectSelection={grabObjectSelection}
+              spaceAttachmentProps={spaceAttachmentProps}
+              // The Agent node's feedback loop photographs the PLAN to review the geometry its parameters
+              // drew. Reuses the same content-cropped snapshot the canvas agents self-review with, so the
+              // crop/scale rules stay in one place.
+              onCaptureCanvas={() => {
+                // snapshotCanvas returns EITHER { dataUrl, widthM, heightM } or { error } — narrow on the
+                // data URL itself rather than key presence, which only widens it back to unknown.
+                const r = agentApiRef.current?.snapshotCanvas() as
+                  | { dataUrl?: unknown; widthM?: unknown; heightM?: unknown }
+                  | undefined;
+                return typeof r?.dataUrl === "string"
+                  ? { dataUrl: r.dataUrl, widthM: Number(r.widthM) || 0, heightM: Number(r.heightM) || 0 }
+                  : null;
               }}
               onCaptureIsometric={async () => {
                 // The Render node snapshots the 3D view's isometric angle. captureAll() renders the
@@ -33679,12 +34874,57 @@ User request: ${aiPrompt.trim()}`;
                             onChange={(key, value) => updateGraphAttr("segments", selectedWall.id, key, value)}
                           />
                         ) : null}
-                        {/* Element Parameters (FlowParamsPanel) removed — the imported Schema's Segment
-                            section above is the single source of truth for per-segment properties. */}
+                        {/* Element Parameters — the params of whatever flow node the Segment source (or the
+                            Canvas node's out-2 Segments endpoint) is wired to. Edited PER-SEGMENT: a value
+                            is stored on THIS segment's graphAttrs under the field's role, falling back to
+                            the flow node's own param as the default. `selectedFlow` is Space-gated, so root
+                            on the live graph directly. */}
+                        {liveFlowGraph ? (
+                          <FlowParamsPanel
+                            flow={liveFlowGraph}
+                            live={liveFlow}
+                            onToggleLive={() => setLiveFlow((v) => !v)}
+                            scope="segment"
+                            // Display id as the flow's Segment root references it: the index into
+                            // history.state.walls (see the grab-from-selection feed).
+                            elementId={(() => {
+                              const i = history.state.walls.findIndex((w) => w.id === selectedWall.id);
+                              return i >= 0 ? `Segment${String(i + 1).padStart(3, "0")}` : undefined;
+                            })()}
+                            attachedObjectIds={(selectedWall.attachments ?? []).map((a) => a.objectId)}
+                            segmentType={String(history.state.graphAttrs?.segments?.[selectedWall.id]?.["seg-type"] ?? selectedWall.segmentType ?? "wall")}
+                            attrs={history.state.graphAttrs?.segments?.[selectedWall.id]}
+                            onParamChange={(_nodeId, key, value) => updateGraphAttr("segments", selectedWall.id, key, value as import("./types").GraphAttrValue | null)}
+                            onFlowParamChange={(nodeId, key, value) => {
+                              if (flowOpen && flowParamApiRef.current) flowParamApiRef.current(nodeId, key, value);
+                              else updateFlowParam(nodeId, key, value);
+                            }}
+                            onEdit={() => setFlowOpen(true)}
+                          />
+                        ) : null}
+                        {/* Agent block — separate from the Input Properties block: Instructions / Prompt /
+                            Refine rounds + Run, for an Agent node wired to this Segment. */}
+                        {liveFlowGraph ? (
+                          <FlowAgentPanel
+                            flow={liveFlowGraph}
+                            scope="segment"
+                            elementId={(() => {
+                              const i = history.state.walls.findIndex((w) => w.id === selectedWall.id);
+                              return i >= 0 ? `Segment${String(i + 1).padStart(3, "0")}` : undefined;
+                            })()}
+                            onParamChange={(nodeId, key, value) => {
+                              if (flowOpen && flowParamApiRef.current) flowParamApiRef.current(nodeId, key, value);
+                              else updateFlowParam(nodeId, key, value);
+                            }}
+                            onRun={runFlowAgentFromProps}
+                          />
+                        ) : null}
                       </div>
                     )}
                     {(propsSplitView || wallPropsTab === "metrics") && (
                       <div className="contents">
+                        {/* Flow Output Metrics — the pipeline's Output node values, mirroring the Space tab. */}
+                        <FlowOutputMetricsBlock flowPreview={flowPreview} />
                         <WallOutputsBlock
                           selectedWall={selectedWall}
                           unit={unit}
@@ -34419,6 +35659,7 @@ User request: ${aiPrompt.trim()}`;
                         onImportFile={(f) => void importParametricObject(f)}
                         onAttach={(objectId) => attachObjectToSpace(selectedRoom, objectId)}
                         onDetach={(attId) => detachSpaceObject(selectedRoom.id, attId)}
+                        onEditInFlow={(attId) => { const att = (selectedRoom.attachments ?? []).find((a) => a.id === attId); if (att) void explodeAttachmentToFlow(att); }}
                         onUpdateAttachment={() => {}}
                         onUpdateParam={(attId, key, value) => updateSpaceAttachmentParam(selectedRoom.id, attId, key, value)}
                         onUpdateChildParam={(attId, path, key, value) => updateSpaceAttachmentChildParam(selectedRoom.id, attId, path, key, value)}
@@ -34578,6 +35819,14 @@ User request: ${aiPrompt.trim()}`;
                       {selectedFlow ? (
                         <FlowParamsPanel
                           flow={selectedFlow}
+                          // Same display id the ID field above shows — scopes a brief to THIS space.
+                          elementId={(() => {
+                            const i = visibleRooms.findIndex((r) => r.id === selectedRoom.id);
+                            return i >= 0 ? `Space${String(i + 1).padStart(3, "0")}` : undefined;
+                          })()}
+                          attachedObjectIds={(selectedRoom.attachments ?? []).map((a) => a.objectId)}
+                          live={liveFlow}
+                          onToggleLive={() => setLiveFlow((v) => !v)}
                           highlightNodeId={flowDragHighlight?.nodeId}
                           highlightObjectIndex={flowDragHighlight?.objIndex}
                           onParamChange={(nodeId, key, value) => {
@@ -34587,6 +35836,23 @@ User request: ${aiPrompt.trim()}`;
                             else updateFlowParam(nodeId, key, value);
                           }}
                           onEdit={() => setFlowOpen(true)}
+                        />
+                      ) : null}
+                      {/* Agent block — separate from the Input Properties (Flow Parameters) block above:
+                          Instructions / Prompt / Refine rounds + Run, for an Agent node wired to this Space. */}
+                      {selectedFlow ? (
+                        <FlowAgentPanel
+                          flow={selectedFlow}
+                          scope="space"
+                          elementId={(() => {
+                            const i = visibleRooms.findIndex((r) => r.id === selectedRoom.id);
+                            return i >= 0 ? `Space${String(i + 1).padStart(3, "0")}` : undefined;
+                          })()}
+                          onParamChange={(nodeId, key, value) => {
+                            if (flowOpen && flowParamApiRef.current) flowParamApiRef.current(nodeId, key, value);
+                            else updateFlowParam(nodeId, key, value);
+                          }}
+                          onRun={runFlowAgentFromProps}
                         />
                       ) : null}
                       {/* Display (fill colour + opacity / hatch) for a Space now lives in the Flow editor's
@@ -36079,8 +37345,44 @@ User request: ${aiPrompt.trim()}`;
                               onChange={(key, value) => updateGraphAttr("nodes", node.stableKey, key, value)}
                             />
                           ) : null}
-                          {/* Element Parameters (FlowParamsPanel) removed — the imported Schema's Node
-                              section above is the single source of truth for per-node properties. */}
+                          {/* Element Parameters — the params of whatever flow node the Node source (or the
+                              Canvas node's out-1 Nodes endpoint) is wired to. Edited PER-NODE: a value is
+                              stored on THIS node's graphAttrs under the field's role, falling back to the
+                              flow node's own param as the default. `selectedFlow` is Space-gated, so root
+                              on the live graph directly. */}
+                          {liveFlowGraph ? (
+                            <FlowParamsPanel
+                              flow={liveFlowGraph}
+                              live={liveFlow}
+                              onToggleLive={() => setLiveFlow((v) => !v)}
+                              scope="node"
+                              elementId={displayId}
+                              // Objects attached to this node (the block below) own their Properties there —
+                              // suppress the duplicate flow brief the auto-injected pobj-source would add.
+                              attachedObjectIds={(((history.state.nodeMeta ?? {})[node.stableKey] ?? {}).attachments ?? []).map((a) => a.objectId)}
+                              attrs={history.state.graphAttrs?.nodes?.[node.stableKey]}
+                              onParamChange={(_nodeId, key, value) => updateGraphAttr("nodes", node.stableKey, key, value as import("./types").GraphAttrValue | null)}
+                              onFlowParamChange={(nodeId, key, value) => {
+                                if (flowOpen && flowParamApiRef.current) flowParamApiRef.current(nodeId, key, value);
+                                else updateFlowParam(nodeId, key, value);
+                              }}
+                              onEdit={() => setFlowOpen(true)}
+                            />
+                          ) : null}
+                          {/* Agent block — separate from the Input Properties block: Instructions / Prompt /
+                              Refine rounds + Run, for an Agent node wired to this Node. */}
+                          {liveFlowGraph ? (
+                            <FlowAgentPanel
+                              flow={liveFlowGraph}
+                              scope="node"
+                              elementId={displayId}
+                              onParamChange={(nodeId, key, value) => {
+                                if (flowOpen && flowParamApiRef.current) flowParamApiRef.current(nodeId, key, value);
+                                else updateFlowParam(nodeId, key, value);
+                              }}
+                              onRun={runFlowAgentFromProps}
+                            />
+                          ) : null}
                           {/* Display — canvas-native equivalent of the flow "Display Node" node
                               (marker shape / style / colour / size / hatch). */}
                           <NodeDisplayBlock
@@ -36099,7 +37401,9 @@ User request: ${aiPrompt.trim()}`;
                             library={history.state.objectLibrary ?? {}}
                             attachments={((history.state.nodeMeta ?? {})[node.stableKey] ?? {}).attachments ?? []}
                             onImportFile={(f) => void importParametricObject(f)}
-                            onAttach={(objectId) => attachObjectToNode(node.stableKey, objectId)}
+                            // `displayId` ("Node002") is what the flow's Node source pins — pass it so the
+                            // attach also mirrors into the graph as Node → Parametric Object.
+                            onAttach={(objectId) => attachObjectToNode(node.stableKey, objectId, displayId)}
                             onDetach={(attId) => detachNodeObject(node.stableKey, attId)}
                             onUpdateAttachment={() => {}}
                             onUpdateParam={(attId, key, value) => updateNodeAttachmentParam(node.stableKey, attId, key, value)}
@@ -36114,6 +37418,8 @@ User request: ${aiPrompt.trim()}`;
                       {/* Outputs block — shown when Metrics tab is active */}
                       {(propsSplitView || nodePropsTab === "metrics") && (
                       <div className="rounded border border-slate-200 bg-white p-2 space-y-2">
+                        {/* Flow Output Metrics — the pipeline's Output node values, mirroring the Space tab. */}
+                        <FlowOutputMetricsBlock flowPreview={flowPreview} />
                         {/* Pipe-solver results for THIS node (rows defined by the schema's results.node). */}
                         {graphSchema?.results?.node?.length ? (
                           <SchemaMetricsBlock
@@ -36787,7 +38093,8 @@ User request: ${aiPrompt.trim()}`;
           initial={activeSegDefaultsRef.current?.type === segParamsDialog.segType ? activeSegDefaultsRef.current.vals : undefined}
           onCancel={() => setSegParamsDialog(null)}
           onConfirm={(vals) => {
-            // Pin the values for reuse, then start the click-click draw with this type.
+            // Pin the values for reuse, then start the draw with this type — click-click, or the freehand
+            // sketch-as gesture when that's what opened the dialog.
             activeSegDefaultsRef.current = { type: segParamsDialog.segType, vals };
             pendingSegObjectIdRef.current = null; // typed schema segment — no imported object attached
             pendingSegObjectParamsRef.current = null;
@@ -36795,6 +38102,13 @@ User request: ${aiPrompt.trim()}`;
             setFurnitureNodeMode(false);
             setSingleSegStart(null);
             setSingleSegPreview(null);
+            if (segParamsDialog.via === "freehand") {
+              setFreehandSegType(segParamsDialog.segType);
+              setTool("freehand");
+              setSegParamsDialog(null);
+              toast.info(`Sketch a ${segParamsDialog.label.toLowerCase()} — it straightens when you release`);
+              return;
+            }
             setSingleSegType(segParamsDialog.segType);
             setTool("single-segment");
             setSegParamsDialog(null);
@@ -36850,6 +38164,10 @@ User request: ${aiPrompt.trim()}`;
                 startSegOpeningPlace(objectId, sym, vals);
               } else {
                 startSegObjectDraw(objectId); // clears activeSegmentConfigRef — set the wall config AFTER it
+                // Sketch-as: same arming, but the gesture is freehand. The object still rides along via
+                // pendingSegObjectIdRef, and the segments commit as plain "line" so lineSegConfigProps()
+                // applies the wall display config below exactly as it does for the click-click chain.
+                if (objParamsDialog.via === "freehand") { setFreehandSegType("line"); setTool("freehand"); }
                 // Wall popup: apply the full display config to each drawn segment via lineSegConfigProps()
                 // (the segment owns thickness / mode / fill / justification — the miter render reads them).
                 if (seg) {

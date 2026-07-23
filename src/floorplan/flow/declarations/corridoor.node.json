@@ -2,30 +2,122 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "corridoor",
-  "materialisesSpace": true,
-  "meta": { "label": "Corridoor", "category": "Partition", "color": "#0d9488" },
-  "description": "Cut a Corridoor Space through the input space — a Horizontal / Vertical / Cross band through its centroid, an Insetted LOOP inside the boundary, or a Skeleton / BSP / Split path (the partition node's centerline network thickened to Width and clipped).",
-  "instructions": "Cuts a corridor Space out of the input Space; wire a Space (or an upstream result) into the input and read the corridor from the output.\n\nSHAPES (`shape`)\n• horizontal / vertical / cross — a straight band `width` m wide through the centroid, clipped to the space.\n• insetted — a loop `offset` m inside the boundary and `width` m thick (the courtyard comes back as a hole).\n• skeleton / bsp / split — reuse that partition node's centerline network, thickened to `width` and clipped; `count` sets the BSP seeds / Split pieces the centerlines come from.\n\nA concave space can yield several disjoint corridor pieces. Chain Corridoor → Core Racking to line the corridor sides with fixed-size core Spaces.",
-  "handles": { "input": true, "output": true },
-  "vars": { "isInset": "shape == 'insetted'", "isPath": "shape == 'skeleton' || shape == 'bsp' || shape == 'split'" },
+  "meta": {
+    "label": "Corridoor",
+    "category": "Partition",
+    "color": "#0d9488"
+  },
+  "description": "A pure CALCULATION node — carve a corridor through the polygon: coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: `polygon` takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry's val-points into valin-polygon. A nested [[[x,y],...],...] list is accepted too — the LARGEST piece is used, since this node works on one polygon.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      },
+      {
+        "key": "shape",
+        "label": "Shape"
+      },
+      {
+        "key": "width",
+        "label": "Width"
+      },
+      {
+        "key": "offset",
+        "label": "Inset offset"
+      },
+      {
+        "key": "count",
+        "label": "Cells (n)"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
+    ]
+  },
+  "vars": {
+    "isInset": "shape == 'insetted'",
+    "isPath": "shape == 'skeleton' || shape == 'bsp' || shape == 'split'"
+  },
   "parameters": [
+    {
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    },
     {
       "key": "shape",
       "label": "Shape",
       "kind": "select",
       "default": "horizontal",
       "options": [
-        { "value": "horizontal", "label": "Horizontal band" },
-        { "value": "vertical", "label": "Vertical band" },
-        { "value": "cross", "label": "Cross" },
-        { "value": "insetted", "label": "Insetted loop" },
-        { "value": "skeleton", "label": "Skeleton path" },
-        { "value": "bsp", "label": "BSP path" },
-        { "value": "split", "label": "Split path" }
+        {
+          "value": "horizontal",
+          "label": "Horizontal band"
+        },
+        {
+          "value": "vertical",
+          "label": "Vertical band"
+        },
+        {
+          "value": "cross",
+          "label": "Cross"
+        },
+        {
+          "value": "insetted",
+          "label": "Insetted loop"
+        },
+        {
+          "value": "skeleton",
+          "label": "Skeleton path"
+        },
+        {
+          "value": "bsp",
+          "label": "BSP path"
+        },
+        {
+          "value": "split",
+          "label": "Split path"
+        }
       ]
     },
-    { "key": "width", "label": "Width", "kind": "range", "default": 1.2, "min": 0.1, "max": 10, "step": 0.1, "unit": "m" },
-    { "key": "offset", "label": "Inset offset", "kind": "range", "default": 0.5, "min": 0, "max": 20, "step": 0.1, "unit": "m", "showWhen": "isInset" },
-    { "key": "count", "label": "Cells (n)", "kind": "range", "default": 3, "min": 2, "max": 12, "step": 1, "showWhen": "isPath" }
+    {
+      "key": "width",
+      "label": "Width",
+      "kind": "range",
+      "default": 1.2,
+      "min": 0.1,
+      "max": 10,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "offset",
+      "label": "Inset offset",
+      "kind": "range",
+      "default": 0.5,
+      "min": 0,
+      "max": 20,
+      "step": 0.1,
+      "unit": "m",
+      "showWhen": "isInset"
+    },
+    {
+      "key": "count",
+      "label": "Cells (n)",
+      "kind": "range",
+      "default": 3,
+      "min": 2,
+      "max": 12,
+      "step": 1,
+      "showWhen": "isPath"
+    }
   ]
 }

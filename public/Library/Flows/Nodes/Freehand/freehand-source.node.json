@@ -1,0 +1,12 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "freehand-source",
+  "meta": { "label": "Freehand", "category": "Canvas", "color": "#ea580c" },
+  "description": "Pipeline input — the freehand strokes drawn on the canvas, as a polyline network (a graph). Optionally filtered by stroke colour. Feeds the Graph nodes.",
+  "instructions": "Pipeline input — emits the canvas's freehand drawing as connected polylines (a graph). Set `Colour` to grab only strokes of that hex colour (blank = every freehand stroke).\n\nFreehand is already VECTOR, so no raster Vectorise is needed — wire this straight into a Graph Reduce (Dissolve merges chains, Prune drops spurs) to tidy the wobble into a clean node/edge graph, then Mitered Join / Graph to Spaces as usual.",
+  "handles": { "input": false, "output": true },
+  "parameters": [
+    { "key": "color", "label": "Colour", "kind": "text", "default": "", "placeholder": "#ea580c (blank = all)" }
+  ]
+}

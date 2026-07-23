@@ -3,8 +3,8 @@
   "version": 2,
   "tool": "input-props",
   "meta": { "label": "Input Properties", "category": "Space", "color": "#9333ea" },
-  "description": "Define adjustable parameters (slider / options / checkbox / text); each exposes its value as an output.",
-  "instructions": "Takes a Space (forwarded unchanged on the main output) and exposes user-defined adjustable parameters — each renders its own control (slider / options / checkbox / textbox) and publishes its current value as a `val-<propId>` output endpoint on the right. The value-output handles are DYNAMIC (built from the `props` list edited on the node), not fixed.\n\nTIP: use it as a control panel — define a param once and wire its value into several nodes (e.g. an offset that drives Inset AND Split).",
+  "description": "Define adjustable parameters (slider / options / checkbox / text / colour); each exposes its value as an output.",
+  "instructions": "Takes a Space (forwarded unchanged on the main output) and exposes user-defined adjustable parameters — each renders its own control (slider / options / checkbox / textbox / colour swatch) and publishes its current value as a `val-<propId>` output endpoint on the right. The value-output handles are DYNAMIC (built from the `props` list edited on the node), not fixed.\n\nAn Options param takes a comma-separated list (`equal, front-remaining`); a Colour param publishes its `#rrggbb` string, so wire it into a `valin-color` endpoint (Rectangle / Circle …) to drive a node's tint.\n\nTIP: use it as a control panel — define a param once and wire its value into several nodes (e.g. an offset that drives Inset AND Split).",
   "handles": { "input": true, "output": true },
   "defaults": { "props": [] },
   "parameters": []

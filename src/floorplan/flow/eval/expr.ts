@@ -134,6 +134,57 @@ const compile = (expr: string): Thunk => {
   if (!n) { n = parse(tokenize(expr)); astCache.set(expr, n); }
   return n;
 };
+/** The identifiers an expression READS from the scope — its wireable inputs. Function names (`floor(`)
+ *  and the always-injected `PI` are excluded; first-appearance order, each name once. Drives the
+ *  Expression flow node's dynamic `valin-<var>` endpoints. */
+export const freeVars = (expr: unknown): string[] => {
+  if (typeof expr !== "string" || !expr.trim()) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const toks = tokenize(expr);
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.t !== "id") continue;
+    if (toks[i + 1]?.v === "(") continue; // a function call, not a variable
+    if (t.v === "PI" || seen.has(t.v)) continue;
+    seen.add(t.v);
+    out.push(t.v);
+  }
+  return out;
+};
+
+/** An Expression node's body is either ONE expression (→ a single `result` output, back-compatible) OR a
+ *  block of `name = expr` lines (→ one `val-<name>` output each, evaluated top-to-bottom so a later line can
+ *  reference an earlier name — exactly like a pobj `vars` block). `parseExprDefs` returns the ordered
+ *  definitions; a body with no `name =` line becomes the single `{ name: "result", expr: <body> }`. */
+export const parseExprDefs = (src: unknown): { name: string; expr: string }[] => {
+  const body = typeof src === "string" ? src : "";
+  const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+  const DEF = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/; // `name = expr`, but NOT `==` (a comparison)
+  const defs: { name: string; expr: string }[] = [];
+  for (const line of lines) {
+    const m = DEF.exec(line);
+    if (m) defs.push({ name: m[1], expr: m[2].trim() });
+  }
+  return defs.length ? defs : [{ name: "result", expr: lines.join(" ") }];
+};
+
+/** The output names an Expression body publishes (`val-<name>` each). */
+export const exprOutputs = (src: unknown): string[] => parseExprDefs(src).map((d) => d.name);
+
+/** The INPUT variables an Expression body reads — every free variable across its lines that ISN'T defined
+ *  by an earlier line in the same block (those are internal). Each becomes a `valin-<var>` endpoint. */
+export const exprInputs = (src: unknown): string[] => {
+  const defs = parseExprDefs(src);
+  const defined = new Set(defs.map((d) => d.name));
+  const out: string[] = []; const seen = new Set<string>();
+  for (const d of defs) for (const v of freeVars(d.expr)) {
+    if (defined.has(v) || seen.has(v)) continue;
+    seen.add(v); out.push(v);
+  }
+  return out;
+};
+
 export const evalRaw = (expr: unknown, sc: Scope): number | string | boolean => {
   if (typeof expr === "number" || typeof expr === "boolean") return expr;
   if (typeof expr !== "string" || !expr.trim()) return 0;

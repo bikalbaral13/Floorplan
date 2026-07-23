@@ -82,7 +82,11 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   // A floating/unconnected tool node produces no op — so it never previews or runs until it's
   // wired to the Selected Space (or to another tool that is).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "pobj-source" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "grid-source").map((n) => n.id);
+  // Roots also include the 2D-primitive GENERATORS: a flow can now be built entirely from a coordinate
+  // list (Polygon / Network / Vertices …) with no canvas Space, Segment or Graph wired in, so those nodes
+  // seed reachability in their own right. They are deliberately NOT added to ROOT_TOOLS below — the
+  // primitive IS the content, so it must still count toward `hasPreviewOnly` and commit as geometry.
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "grab-object" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "pobj-source" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "freehand-source" || dataOf(n).tool === "image" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "rectangle" || dataOf(n).tool === "circle" || dataOf(n).tool === "polygon" || dataOf(n).tool === "polyline" || dataOf(n).tool === "network" || dataOf(n).tool === "vertices" || dataOf(n).tool === "line" || dataOf(n).tool === "arc" || dataOf(n).tool === "ngon" || dataOf(n).tool === "ellipse" || dataOf(n).tool === "rounded-rect" || dataOf(n).tool === "sector" || dataOf(n).tool === "point").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
@@ -97,6 +101,8 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     const node = byId.get(id)!;
     const data = dataOf(node);
     if (data.tool === "source") continue;
+    if (data.tool === "grab-object") continue; // Space/param source — geometry comes from the canvas, not an op
+    if (data.tool === "agent") continue; // authoring-time tuner — forwards its input geometry, emits no op
     if (data.tool === "space-creator") continue; // generator → emitted as a top-level `create`, not an op
     if (data.tool === "pobj-source") continue; // parametric-site generator → emitted as a top-level `create`
     if (data.tool === "rectangle" || data.tool === "circle") continue; // 2D primitive generator → preview-only (no recipe runner)
@@ -120,6 +126,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     // Graph nodes (Mitered Join / Graph Smoothing) operate on polylines and have no recipe runner — on
     // COMMIT they're preview-only pass-throughs (the live preview shows the ribbon / smoothed graph).
     if (data.tool === "mitered-join" || data.tool === "graph-smooth") continue;
+    if (data.tool === "graph-to-path") continue; // graph → path band Space — no recipe op; commits via the host's band-Space commit (onRunCommit)
     if (data.tool === "buffer") continue; // segment→Space buffer — preview-only (no recipe runner)
     if (data.tool === "segment-split") continue; // segment splitter — preview-only (no recipe runner)
     if (data.tool === "segment-to-door") continue; // door symbol from a segment — preview-only (no recipe runner)
@@ -138,6 +145,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "dimension") continue; // dimension-string overlay / graph pass-through — not a recipe op
     if (data.tool === "area-dimension") continue; // centroid area annotation — not a recipe op
     if (data.tool === "merge") continue; // boolean union — preview-only (no recipe runner yet)
+    if (data.tool === "boolean-2d") continue; // 2D boolean (union/subtract/intersect/xor) — value-only (no recipe runner)
     if (data.tool === "graph-to-spaces") continue; // face extraction — preview-only (no recipe runner)
     if (data.tool === "graph-to-grid") continue; // grid generator — preview-only (emits a graph, no recipe op)
     if (data.tool === "grid-field") continue; // synthetic elevation grid-field — preview-only (no recipe op)
@@ -151,8 +159,20 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "grid-distance") continue; // grid-field heatmap — preview-only (no recipe op)
     if (data.tool === "grid-threshold") continue; // grid-field mask — preview-only (no recipe op)
     if (data.tool === "marching-squares") continue; // iso-contours → graph — preview-only (no recipe op)
+    if (data.tool === "grid-geometry") continue; // grid → matrix VALUE — value-only (no recipe op)
+    if (data.tool === "render-grid") continue; // grid-field display — preview-only (no recipe op)
+    if (data.tool === "matrix-transpose") continue; // matrix transpose — value-only (no recipe op)
+    if (data.tool === "matrix-inverse") continue; // matrix inverse — value-only (no recipe op)
     if (data.tool === "longest-branch") continue; // graph longest-path — preview-only (no recipe runner)
     if (data.tool === "graph-reduce") continue; // graph reduce/clean ops — preview-only (no recipe runner)
+    if (data.tool === "graph-simplify") continue; // Douglas–Peucker graph simplify — value-only (no recipe runner)
+    if (data.tool === "graph-clip") continue; // clip graph to a Space boundary — value-only (no recipe runner)
+    if (data.tool === "graph-fit-lines") continue; // best-fit straight segments per branch — value-only (no recipe runner)
+    if (data.tool === "graph-classify") continue; // branch-tier classifier (Longest/Secondary/Tertiary) — value-only (no recipe runner)
+    if (data.tool === "set-thickness") continue; // sets per-edge graph thickness — value-only (no recipe runner)
+    if (data.tool === "merge-graph") continue; // merges several graphs into one — value-only (no recipe runner)
+    if (data.tool === "graph-to-openings") continue; // carves opening-typed edges into a graph — value-only (no recipe runner)
+    if (data.tool === "freehand-geometry") continue; // freehand strokes → graph JSON — value-only (no recipe runner)
     if (data.tool === "voronoi-bloom") continue; // graph node-grown Voronoi cells — preview-only (no recipe runner)
     if (data.tool === "spring-layout") continue; // topology-preserving spring layout — preview-only (no recipe runner)
     if (data.tool === "param-manip") continue; // feedback controller — preview-only (no recipe runner)
@@ -320,8 +340,15 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
         if (!u) return null;
         const tool = dataOf(u).tool;
         if (tool === "source") return null;
+        // A Grab Object WITH a Space wired into its input is a pass-through (Space → Grab Object → op): see
+        // through it to the upstream source. Standalone (no geometry input) it's a source boundary like Source.
+        if (tool === "grab-object") {
+          const up = edges.find((e) => e.target === srcId && !(e.targetHandle && (e.targetHandle.startsWith("valin-") || e.targetHandle.startsWith("gin-"))));
+          return up ? resolveOn(up.source, up.sourceHandle) : null;
+        }
         // See THROUGH pass-through nodes (BUA/Math forward their input space; Densify is commit-transparent).
-        if (tool === "bua" || tool === "math" || tool === "densify" || tool === "mitered-join" || tool === "graph-smooth" || tool === "hatching") {
+        // The Agent node is one too: it only tunes downstream params, and forwards its input geometry as-is.
+        if (tool === "bua" || tool === "math" || tool === "densify" || tool === "mitered-join" || tool === "graph-smooth" || tool === "hatching" || tool === "agent") {
           const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
           return up ? resolveOn(up.source, up.sourceHandle) : null;
         }
@@ -345,9 +372,16 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
         if (!u) return null;
         const t = dataOf(u).tool;
         if (t === "source") { const sid = String(dataOf(u).params.id ?? "").trim(); return sid || null; }
+        // Grab Object: see through to the wired upstream Space (commit targets THAT space); with no input it
+        // falls back to its own referenced id, mirroring a Source.
+        if (t === "grab-object") {
+          const up = edges.find((e) => e.target === srcId && !(e.targetHandle && (e.targetHandle.startsWith("valin-") || e.targetHandle.startsWith("gin-"))));
+          if (up) return resolveSourceSpace(up.source);
+          const sid = String(dataOf(u).params.id ?? "").trim(); return sid || null;
+        }
         // A Space Creator commits as a `create`d room with a stable id — target it by that id.
         if (t === "space-creator" || t === "pobj-source") return `flowcreate_${srcId}`;
-        if (t === "bua" || t === "math" || t === "densify" || t === "mitered-join" || t === "graph-smooth" || t === "hatching") {
+        if (t === "bua" || t === "math" || t === "densify" || t === "mitered-join" || t === "graph-smooth" || t === "hatching" || t === "agent") {
           const up = edges.find((e) => e.target === srcId && !(e.targetHandle && e.targetHandle.startsWith("valin-")));
           return up ? resolveSourceSpace(up.source) : null;
         }
@@ -392,7 +426,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
   // render live and can be committed as canvas geometry, so a flow built on any root (Space / Space
   // Creator / Graph / Segment / Node / Image / Canvas) with at least one tool connected isn't an error —
   // it just has 0 RECIPE operations. Any reachable non-root tool node counts.
-  const ROOT_TOOLS = new Set(["source", "space-creator", "pobj-source", "graph-source", "segment-source", "node-source", "canvas-source", "image", "grid-source"]);
+  const ROOT_TOOLS = new Set(["source", "grab-object", "space-creator", "pobj-source", "graph-source", "segment-source", "node-source", "canvas-source", "freehand-source", "image", "grid-source"]);
   const hasPreviewOnly = nodes.some((n) => reachable.has(n.id) && !ROOT_TOOLS.has(dataOf(n).tool));
   if (operations.length === 0 && createEntries.length === 0 && !hasPreviewOnly) {
     return { ...empty, error: "Nothing to run — connect a tool node to a Space / Segment / Graph / Node / Image / Canvas source." };
@@ -400,7 +434,7 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
 
   // Embed the Space (source) node's entered id so commit targets THAT space (by display id "Space001",
   // room id, or label) instead of whatever happens to be selected on the canvas. Omitted when blank.
-  const srcNode = nodes.find((n) => dataOf(n).tool === "source" && String(dataOf(n).params.id ?? "").trim() !== "");
+  const srcNode = nodes.find((n) => (dataOf(n).tool === "source" || dataOf(n).tool === "grab-object") && String(dataOf(n).params.id ?? "").trim() !== "");
   const sourceSpaceId = srcNode ? String(dataOf(srcNode).params.id).trim() : undefined;
   const recipe: Record<string, unknown> = { operations };
   if (sourceSpaceId) recipe.sourceSpaceId = sourceSpaceId;

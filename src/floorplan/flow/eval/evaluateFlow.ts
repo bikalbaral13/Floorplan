@@ -8,18 +8,18 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 import type { Point } from "../../types";
-import { FLOW_TOOLS, outputSlots, inputProps, placeObjectRng, randomOptimiseRectParams, schemaNodeToSchemas, schemaNodeToResultDefs, schemaEntries, type FlowNodeData, type FlowToolType } from "../flowTypes";
+import { FLOW_TOOLS, outputSlots, inputProps, placeObjectRng, randomOptimiseRectParams, schemaNodeToSchemas, schemaNodeToResultDefs, schemaEntries, coerceSelectWire, type FlowNodeData, type FlowToolType } from "../flowTypes";
 import { computePull, type PullParams } from "../../algorithms/geometry/pull";
-import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalSkeletonRegions, evalCorridoor, evalCoreRacking, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, voronoiSeeds, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow } from "./evalNodes";
+import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalCorridoor, evalCoreRacking, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalLoop, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, renderGridField, evalMatrixTranspose, evalMatrixInverse, gridFieldFromMatrix, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalGraphSimplify, evalGraphClip, evalGraphFitLines, evalGraphClassify, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow, skeletonPathBands, clipBandsToBoundaries, evalBoolean2d } from "./evalNodes";
 import { toFootingSpec, footingElevationPolys, footingPlanPolys, footingMeshPrisms } from "./footing";
 import { toStaircaseSpec, staircaseElevationPolys, staircaseMeshPrisms, type ElevationView } from "./staircase";
 import { evalParametricGeometry, evalParametricPrisms } from "./parametricObject";
 import { resolvePlaceObjectParams } from "./objectFootprints";
+import { evalRaw, parseExprDefs, type Scope } from "./expr";
 import { floorplanElevationPolys, type ElevSeg, type ElevKind, type ElevationView as FloorElevView } from "./floorplanElevation";
 import type { FlowMesh, FlowMeshPrism } from "./meshTypes";
 import { conditionMetricValue, evaluateSpaceCondition } from "../conditional";
-import { computeVoronoiEdges, type VoronoiMetric } from "../../algorithms/partitioning/voronoi";
-import { polygonArea } from "../../algorithms/geometry/polygon";
+import { polygonArea, polygonCentroid } from "../../algorithms/geometry/polygon";
 import { computeBua } from "../bua";
 
 const num = (v: unknown, d: number): number => (typeof v === "number" && isFinite(v) ? v : Number(v) || d);
@@ -197,12 +197,28 @@ function computeMath(params: Record<string, unknown>): Record<string, number> {
     case "multiply": r = a * b; break;
     case "add": r = a + b; break;
     case "subtract": r = a - b; break;
+    case "min": r = Math.min(a, b); break;
+    case "max": r = Math.max(a, b); break;
     default: r = b !== 0 ? a / b : 0; break; // divide
   }
   if (params.round === "ceil") r = Math.ceil(r);
   else if (params.round === "floor") r = Math.floor(r);
   else if (params.round === "round") r = Math.round(r);
   return { result: isFinite(r) ? r : 0 };
+}
+
+/** Match node: select-equality gate — result = 1 when `value` equals `match` (string compare, so a select
+ *  option like "u-shape" works; numbers compare numerically when both sides parse). The branching primitive:
+ *  multiply the 0/1 into a Loop's count to switch a configuration's geometry on/off. */
+function computeMatch(params: Record<string, unknown>): Record<string, number> {
+  const v = params.value;
+  const m = params.match;
+  const vn = typeof v === "number" ? v : Number(v);
+  const mn = Number(m);
+  const eq = isFinite(vn) && String(m).trim() !== "" && isFinite(mn)
+    ? vn === mn
+    : String(v ?? "").trim() === String(m ?? "").trim();
+  return { result: eq ? 1 : 0 };
 }
 
 /** Random node: a deterministic pseudo-random number in [min, max], rounded to `decimals` places. The
@@ -221,11 +237,438 @@ function computeRandom(params: Record<string, unknown>): Record<string, number> 
   return { result: isFinite(r) ? r : 0 };
 }
 
-/** Scalar value outputs for a node (e.g. Inset's area in m²), per its `valueOutputs`. */
-function computeNodeValues(tool: FlowToolType, polys: Point[][], ppm: number): Record<string, number> | undefined {
+/** Tools that can take their outline as a coordinate LIST instead of a wired Space, and the param the
+ *  list lives on. Resolved BEFORE the generic no-geometry bail so the node actually runs — see the call
+ *  site at `inputOf`. */
+const LIST_INPUT_PARAM: Partial<Record<FlowToolType, string>> = {
+  inset: "polygon",
+  skeleton: "vertices",
+  "convex-decomp": "polygon",
+  voronoi: "polygon",
+  bsp: "polygon",
+  split: "polygon",
+  "optimise-rect": "polygon",
+  "rect-pack": "polygon",
+  mesh: "polygon",
+  densify: "polygon",
+  smoothing: "polygon",
+  "convex-hull": "polygon",
+  "bounding-shape": "polygon",
+  corridoor: "polygon",
+  "core-racking": "polygon",
+  treemap: "polygon",
+  "circle-packing": "polygon",
+  visibility: "polygon",
+  contour: "polygon",
+  pull: "polygon",
+  transform: "polygon",
+  merge: "polygon",
+};
+
+/** Tier-2 counterpart: graph value nodes take their polylines from a `graph` JSON param instead of a
+ *  wired graph. Each block resolves it itself (they read `inputPolylinesOf`, which the singular `input`
+ *  gate never reaches) — this map only documents the set. */
+const GRAPH_INPUT_TOOLS = new Set<FlowToolType>([
+  "graph-smooth", "graph-reduce", "graph-classify", "set-thickness", "merge-graph", "graph-to-openings", "spring-layout", "longest-branch",
+  "mitered-join", "voronoi-bloom", "graph-to-spaces",
+]);
+void GRAPH_INPUT_TOOLS;
+
+/** Parse a `[[x,y],…]` metre-pair list into a polygon in world px, placed at `anchor`. Returns undefined
+ *  for anything that isn't at least a triangle. Shared by the list-driven tools above. */
+function polygonFromMetreList(raw: unknown, anchor: Point, ppm: number): Point[] | undefined {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  const toPts = (list: unknown[]): Point[] => list
+    .filter((p): p is unknown[] => Array.isArray(p) && p.length >= 2)
+    .map((p) => ({ x: anchor.x + num(p[0], 0) * ppm, y: anchor.y + num(p[1], 0) * ppm }));
+  try {
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return undefined;
+    // Accept the NESTED `[[[x,y],…],…]` form too, not just a single `[[x,y],…]` outline — that is what
+    // every multi-piece value node publishes on `val-polygons`, so chaining them (Split → Inset) would
+    // otherwise feed each PIECE where a point was expected: `num([x,y])` is NaN → 0, collapsing the whole
+    // outline onto the anchor. A single-op node takes ONE polygon, so pick the LARGEST piece by area.
+    if (Array.isArray(arr[0]) && Array.isArray((arr[0] as unknown[])[0])) {
+      let best: Point[] | undefined;
+      let bestA = -1;
+      for (const sub of arr as unknown[][]) {
+        const pts = toPts(sub);
+        if (pts.length < 3) continue;
+        const a = Math.abs(polygonArea(pts));
+        if (a > bestA) { bestA = a; best = pts; }
+      }
+      return best;
+    }
+    const pts = toPts(arr as unknown[]);
+    return pts.length >= 3 ? pts : undefined;
+  } catch { return undefined; } // malformed list → treated as no input
+}
+
+/** THE COORDINATE FRAME for every list/graph value on the wire: metres relative to the flow ANCHOR.
+ *
+ *  It must be the anchor and not each producer's own centroid, or the offsets COMPOUND — Space Geometry
+ *  re-centring on the space centroid and then Skeleton re-centring on the branch centroid shifts the
+ *  result by the difference between the two, which is why a Network redraw landed off the plan. The
+ *  anchor is constant across the whole graph, so a value emitted here and rebuilt downstream lands
+ *  exactly where it started, however many hops it passes through. */
+
+/** Like `polygonFromMetreList` but returns EVERY polygon, for ops that consume a whole set (Merge unions
+ *  them; Transform moves them all). Accepts the flat single-outline form as a one-element list. */
+function polygonsFromMetreList(raw: unknown, anchor: Point, ppm: number): Point[][] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  const toPts = (list: unknown[]): Point[] => list
+    .filter((p): p is unknown[] => Array.isArray(p) && p.length >= 2)
+    .map((p) => ({ x: anchor.x + num(p[0], 0) * ppm, y: anchor.y + num(p[1], 0) * ppm }));
+  try {
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return [];
+    if (Array.isArray(arr[0]) && Array.isArray((arr[0] as unknown[])[0])) {
+      return (arr as unknown[][]).map(toPts).filter((pl) => pl.length >= 3);
+    }
+    const pts = toPts(arr as unknown[]);
+    return pts.length >= 3 ? [pts] : [];
+  } catch { return []; }
+}
+
+/** Inverse of `polylinesToGraphJson`: a graph JSON `{nodes:[{id,x,y}], edges:[{from_node_id,to_node_id}]}`
+ *  → one 2-point polyline per edge, in world px at `anchor`. This is how a graph travels between value
+ *  nodes; a node given as a bare id string carries no position, so edges referencing it are skipped. */
+function polylinesFromGraphJson(raw: unknown, anchor: Point, ppm: number): Point[][] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const g = JSON.parse(raw) as { nodes?: unknown[]; edges?: unknown[] } | null;
+    const at = new Map<string, Point>();
+    for (const n of Array.isArray(g?.nodes) ? g!.nodes : []) {
+      if (!n || typeof n !== "object") continue;
+      const o = n as { id?: unknown; x?: unknown; y?: unknown };
+      if (typeof o.id !== "string") continue;
+      at.set(o.id, { x: anchor.x + num(o.x, 0) * ppm, y: anchor.y + num(o.y, 0) * ppm });
+    }
+    const out: Point[][] = [];
+    for (const e of Array.isArray(g?.edges) ? g!.edges : []) {
+      const o = e as { from_node_id?: unknown; to_node_id?: unknown };
+      const a = at.get(String(o?.from_node_id)); const b = at.get(String(o?.to_node_id));
+      if (a && b) out.push([a, b]);
+    }
+    return out;
+  } catch { return []; }
+}
+
+/** Serialize polygons as `[[x,y],…]` metre pairs, anchor-relative (see the frame note above). */
+function polysToMetreListJson(polys: Point[][], ppm: number, anchor: Point): string {
+  if (!polys.length) return "[]";
+  const r = (v: number) => Math.round(v * 1e4) / 1e4;
+  return JSON.stringify(polys.map((poly) => poly.map((p) => [r((p.x - anchor.x) / ppm), r((p.y - anchor.y) / ppm)])));
+}
+
+/** Split every segment at any vertex (from the whole line set) lying on its INTERIOR — the T-junction /
+ *  endpoint-on-edge resolution that turns a raw set of cell rings into a PURE planar graph. Where two
+ *  stacked cells meet one taller neighbour, the neighbour contributes a single LONG edge while the two
+ *  cells contribute two SHORT collinear edges; the shared mid-vertex is a node on the short edges but not
+ *  on the long one, so they OVERLAP. polylinesToGraphJson keys edges by node pair and can't dedupe that
+ *  (different pairs), so the long edge survives on top of the two short ones — which Mitered Join then
+ *  strokes as overlapping walls and errors on. Splitting the long edge at the mid-vertex makes the three
+ *  edges a clean shared chain. Split points reuse the existing vertex, so they collapse onto the real node
+ *  downstream. Returns 2-point polylines. */
+function splitPolylinesAtJunctions(lines: Point[][]): Point[][] {
+  const keyOf = (p: Point) => `${Math.round(p.x)}_${Math.round(p.y)}`;
+  // One representative vertex per quantized position — the junction candidates.
+  const verts = new Map<string, Point>();
+  for (const pl of lines) for (const p of pl) verts.set(keyOf(p), p);
+  const vlist = [...verts.values()];
+  // On-segment (strictly interior) test via the distance-sum identity, matching splitWallsAtIntersections.
+  const between = (p: Point, a: Point, b: Point): boolean => {
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    if (d < 0.1) return false;
+    const d1 = Math.hypot(p.x - a.x, p.y - a.y);
+    const d2 = Math.hypot(p.x - b.x, p.y - b.y);
+    if (d1 < 0.1 || d2 < 0.1) return false; // an endpoint, not an interior split
+    return Math.abs(d - (d1 + d2)) < 0.1;
+  };
+  const out: Point[][] = [];
+  for (const pl of lines) {
+    for (let i = 0; i + 1 < pl.length; i++) {
+      const a = pl[i], b = pl[i + 1];
+      if (keyOf(a) === keyOf(b)) continue; // zero-length
+      const cuts = vlist.filter((v) => between(v, a, b));
+      if (cuts.length === 0) { out.push([a, b]); continue; }
+      cuts.sort((u, v) => Math.hypot(u.x - a.x, u.y - a.y) - Math.hypot(v.x - a.x, v.y - a.y));
+      let prev = a;
+      for (const c of cuts) {
+        if (keyOf(c) === keyOf(prev)) continue;
+        out.push([prev, c]);
+        prev = c;
+      }
+      if (keyOf(prev) !== keyOf(b)) out.push([prev, b]);
+    }
+  }
+  return out;
+}
+
+/** Polylines → a graph as JSON: `{nodes:[{id,x,y}], edges:[{from_node_id,to_node_id,length}]}`, in
+ *  anchor-relative metres. Ids are synthesized from the quantized position (these are derived branches,
+ *  not canvas segments, so there are no real canvas ids to reuse — unlike Graph Geometry). */
+function polylinesToGraphJson(lines: Point[][], ppm: number, anchor: Point, thicknessM?: number): { json: string; nodeCount: number; edgeCount: number } {
+  if (!lines.length) return { json: '{"nodes":[],"edges":[]}', nodeCount: 0, edgeCount: 0 };
+  const r = (v: number) => Math.round(v * 1e4) / 1e4;
+  const idOf = new Map<string, string>();
+  const outNodes: { id: string; x: number; y: number }[] = [];
+  const keyOf = (p: Point) => `${Math.round(p.x)}_${Math.round(p.y)}`;
+  const nodeId = (p: Point): string => {
+    const k = keyOf(p);
+    let existing = idOf.get(k);
+    if (!existing) {
+      existing = `n${outNodes.length + 1}`;
+      idOf.set(k, existing);
+      outNodes.push({ id: existing, x: r((p.x - anchor.x) / ppm), y: r((p.y - anchor.y) / ppm) });
+    }
+    return existing;
+  };
+  const seenEdge = new Set<string>();
+  const outEdges: { from_node_id: string; to_node_id: string; length: number; thickness?: number }[] = [];
+  for (const pl of lines) {
+    for (let i = 0; i + 1 < pl.length; i++) {
+      const a = pl[i]; const b = pl[i + 1];
+      if (keyOf(a) === keyOf(b)) continue; // zero-length segment
+      const ia = nodeId(a); const ib = nodeId(b);
+      const ek = ia < ib ? `${ia}|${ib}` : `${ib}|${ia}`;
+      if (seenEdge.has(ek)) continue; // collapse duplicate / overlapping segments
+      seenEdge.add(ek);
+      // `thickness` rides along only when the caller supplies one (BSP's partition walls); a derived graph
+      // like Skeleton's branches has no width, so it publishes length alone.
+      outEdges.push({
+        from_node_id: ia,
+        to_node_id: ib,
+        length: r(Math.hypot(b.x - a.x, b.y - a.y) / ppm),
+        ...(thicknessM != null ? { thickness: r(thicknessM) } : {}),
+      });
+    }
+  }
+  return { json: JSON.stringify({ nodes: outNodes, edges: outEdges }), nodeCount: outNodes.length, edgeCount: outEdges.length };
+}
+
+/** Parse a graph JSON string (or already-parsed object) into {nodes, edges}, tolerating missing / garbage
+ *  fields. Node ids are coerced to strings; x/y default to 0; each edge keeps its length + optional
+ *  thickness. Shared by the Set Thickness / Merge Graph nodes, which work on the graph STRUCTURE directly
+ *  (not via polylines) so per-edge `thickness` survives. */
+type GraphNodeJson = { id: string; x: number; y: number };
+type GraphEdgeJson = { from_node_id: string; to_node_id: string; length?: number; thickness?: number; type?: string };
+function parseGraphJson(raw: unknown): { nodes: GraphNodeJson[]; edges: GraphEdgeJson[] } {
+  let g: unknown = raw;
+  if (typeof raw === "string") { try { g = JSON.parse(raw); } catch { return { nodes: [], edges: [] }; } }
+  const o = (g && typeof g === "object" ? g : {}) as { nodes?: unknown[]; edges?: unknown[] };
+  const nodes: GraphNodeJson[] = [];
+  for (const n of Array.isArray(o.nodes) ? o.nodes : []) {
+    if (!n || typeof n !== "object") continue;
+    const p = n as { id?: unknown; x?: unknown; y?: unknown };
+    if (p.id == null) continue;
+    nodes.push({ id: String(p.id), x: num(p.x, 0), y: num(p.y, 0) });
+  }
+  const edges: GraphEdgeJson[] = [];
+  for (const e of Array.isArray(o.edges) ? o.edges : []) {
+    if (!e || typeof e !== "object") continue;
+    const p = e as { from_node_id?: unknown; to_node_id?: unknown; length?: unknown; thickness?: unknown; type?: unknown };
+    if (p.from_node_id == null || p.to_node_id == null) continue;
+    const edge: GraphEdgeJson = { from_node_id: String(p.from_node_id), to_node_id: String(p.to_node_id) };
+    if (typeof p.length === "number" && isFinite(p.length)) edge.length = p.length;
+    if (typeof p.thickness === "number" && isFinite(p.thickness)) edge.thickness = p.thickness;
+    if (typeof p.type === "string" && p.type) edge.type = p.type;
+    edges.push(edge);
+  }
+  return { nodes, edges };
+}
+
+/** Set Thickness — overwrite `thickness` (metres) on EVERY edge of a graph, preserving nodes, ids, coords
+ *  and edge lengths. Value-only: coordinates are untouched (thickness is frame-independent). */
+function setGraphThicknessJson(raw: unknown, thicknessM: number): { json: string; nodeCount: number; edgeCount: number } {
+  const g = parseGraphJson(raw);
+  const t = Math.round(Math.max(0, thicknessM) * 1e4) / 1e4;
+  const edges = g.edges.map((e) => ({ ...e, thickness: t }));
+  return { json: JSON.stringify({ nodes: g.nodes, edges }), nodeCount: g.nodes.length, edgeCount: edges.length };
+}
+
+/** Merge Graph — union several graph JSONs into one, PRESERVING each edge's own thickness. Nodes at the
+ *  same position (quantized to ~1 mm, in the shared anchor frame) collapse to one, so graphs that meet at a
+ *  junction stay connected; edges are de-duplicated by node pair (first occurrence — and its thickness —
+ *  wins). Inputs in different anchor frames simply don't share nodes (still a valid union). */
+function mergeGraphJsons(raws: unknown[]): { json: string; nodeCount: number; edgeCount: number } {
+  const r = (v: number) => Math.round(v * 1e4) / 1e4;
+  const posKey = (x: number, y: number) => `${Math.round(x * 1e3)}_${Math.round(y * 1e3)}`; // ~1 mm merge
+  const idAt = new Map<string, string>();
+  const nodes: GraphNodeJson[] = [];
+  const seenEdge = new Set<string>();
+  const edges: GraphEdgeJson[] = [];
+  for (const raw of raws) {
+    const g = parseGraphJson(raw);
+    const localId = new Map<string, string>(); // this graph's old id → global id
+    for (const n of g.nodes) {
+      const k = posKey(n.x, n.y);
+      let gid = idAt.get(k);
+      if (!gid) { gid = `n${nodes.length + 1}`; idAt.set(k, gid); nodes.push({ id: gid, x: r(n.x), y: r(n.y) }); }
+      localId.set(n.id, gid);
+    }
+    for (const e of g.edges) {
+      const a = localId.get(e.from_node_id), b = localId.get(e.to_node_id);
+      if (!a || !b || a === b) continue;
+      const ek = a < b ? `${a}|${b}` : `${b}|${a}`;
+      if (seenEdge.has(ek)) continue;
+      seenEdge.add(ek);
+      const edge: GraphEdgeJson = { from_node_id: a, to_node_id: b };
+      if (e.length != null) edge.length = e.length;
+      if (e.thickness != null) edge.thickness = e.thickness;
+      if (e.type != null) edge.type = e.type;
+      edges.push(edge);
+    }
+  }
+  return { json: JSON.stringify({ nodes, edges }), nodeCount: nodes.length, edgeCount: edges.length };
+}
+
+/** Graph to Openings — carve door/window gaps into a partition graph. Classifies edges by tracing the
+ *  planar faces (half-edge walk, like Graph Reduce's outer/inner): the largest-area face per component is
+ *  the OUTER boundary, every other face is a ROOM. Then:
+ *   • one OUTER opening centered on EACH boundary edge (a window, `outerWidthM`);
+ *   • one INNER opening centered on the LONGEST interior edge of EACH room (a door, `innerWidthM`),
+ *     de-duplicated so a wall shared by two rooms is opened once.
+ *  A marked edge A→B is split into A→P1 (wall), P1→P2 (`type:"opening"`), P2→B (wall) — the jamb nodes P1/P2
+ *  are added to the graph and the wall sub-edges keep the edge's thickness. Edges too short to hold the
+ *  opening plus a jamb on each side are left as a solid wall. Every non-opening edge is tagged `type:"wall"`
+ *  so downstream (Mitered Join) can stroke walls and skip openings. Coordinates stay in the input frame. */
+function graphToOpenings(
+  g: { nodes: GraphNodeJson[]; edges: GraphEdgeJson[] },
+  outerWidthM: number,
+  innerWidthM: number,
+): { nodes: GraphNodeJson[]; edges: GraphEdgeJson[] } {
+  const pos = new Map(g.nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
+  const undirKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  type IEdge = { a: string; b: string; thickness?: number; len: number };
+  const edges: IEdge[] = [];
+  const seen = new Set<string>();
+  for (const e of g.edges) {
+    const A = pos.get(e.from_node_id), B = pos.get(e.to_node_id);
+    if (!A || !B || e.from_node_id === e.to_node_id) continue;
+    const k = undirKey(e.from_node_id, e.to_node_id);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    edges.push({ a: e.from_node_id, b: e.to_node_id, thickness: e.thickness, len: Math.hypot(B.x - A.x, B.y - A.y) });
+  }
+  if (edges.length === 0) return { nodes: g.nodes.slice(), edges: [] };
+
+  // ── Planar face tracing (half-edge; next = the neighbour clockwise-before the arrival edge) ──────────
+  const adjAng = new Map<string, { to: string; ang: number }[]>();
+  const pushAng = (from: string, to: string) => {
+    const A = pos.get(from)!, B = pos.get(to)!;
+    (adjAng.get(from) ?? adjAng.set(from, []).get(from)!).push({ to, ang: Math.atan2(B.y - A.y, B.x - A.x) });
+  };
+  for (const e of edges) { pushAng(e.a, e.b); pushAng(e.b, e.a); }
+  for (const list of adjAng.values()) list.sort((p, q) => p.ang - q.ang);
+  const heKey = (u: string, v: string) => `${u}>${v}`;
+  const nextHE = (u: string, v: string): [string, string] => {
+    const list = adjAng.get(v)!;
+    const idx = list.findIndex((n) => n.to === u);
+    const prev = list[(idx - 1 + list.length) % list.length];
+    return [v, prev.to];
+  };
+  type Face = { edgeKeys: string[]; area: number };
+  const visited = new Set<string>();
+  const faces: Face[] = [];
+  for (const e of edges) {
+    for (const [s0, t0] of [[e.a, e.b], [e.b, e.a]] as [string, string][]) {
+      if (visited.has(heKey(s0, t0))) continue;
+      const edgeKeys: string[] = [];
+      const pts: { x: number; y: number }[] = [];
+      let u = s0, v = t0, guard = 0;
+      while (guard++ < edges.length * 2 + 5) {
+        if (visited.has(heKey(u, v))) break;
+        visited.add(heKey(u, v));
+        edgeKeys.push(undirKey(u, v));
+        pts.push(pos.get(u)!);
+        [u, v] = nextHE(u, v);
+        if (u === s0 && v === t0) break;
+      }
+      let area = 0;
+      for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; area += p.x * q.y - q.x * p.y; }
+      faces.push({ edgeKeys, area: area / 2 });
+    }
+  }
+  // Component of each node (BFS over the undirected graph) → the per-component outer (max |area|) face.
+  const adjN = new Map<string, string[]>();
+  for (const e of edges) { (adjN.get(e.a) ?? adjN.set(e.a, []).get(e.a)!).push(e.b); (adjN.get(e.b) ?? adjN.set(e.b, []).get(e.b)!).push(e.a); }
+  const compOf = new Map<string, number>();
+  let comp = 0;
+  for (const start of pos.keys()) {
+    if (compOf.has(start) || !adjN.has(start)) continue;
+    const stack = [start]; compOf.set(start, comp);
+    while (stack.length) { const x = stack.pop()!; for (const y of adjN.get(x) ?? []) if (!compOf.has(y)) { compOf.set(y, comp); stack.push(y); } }
+    comp++;
+  }
+  const outerFaceIdx = new Set<number>();
+  const bestByComp = new Map<number, number>();
+  faces.forEach((f, i) => {
+    if (!f.edgeKeys.length) return;
+    const anyNode = f.edgeKeys[0].split("|")[0];
+    const c = compOf.get(anyNode) ?? -1;
+    const prev = bestByComp.get(c);
+    if (prev == null || Math.abs(f.area) > Math.abs(faces[prev].area)) bestByComp.set(c, i);
+  });
+  for (const i of bestByComp.values()) outerFaceIdx.add(i);
+  const boundary = new Set<string>();
+  for (const i of outerFaceIdx) for (const k of faces[i].edgeKeys) boundary.add(k);
+
+  // ── Choose which edges get an opening ────────────────────────────────────────────────────────────────
+  const openWidthOf = new Map<string, number>(); // undirected edge key → opening width (m)
+  // OUTER: every boundary edge → one window.
+  if (outerWidthM > 0) for (const k of boundary) openWidthOf.set(k, outerWidthM);
+  // INNER: each room (bounded face) → a door on its LONGEST interior edge (deduped across rooms).
+  if (innerWidthM > 0) {
+    const lenOf = new Map<string, number>();
+    for (const e of edges) lenOf.set(undirKey(e.a, e.b), e.len);
+    faces.forEach((f, i) => {
+      if (outerFaceIdx.has(i) || !f.edgeKeys.length) return; // skip the outer face; only rooms
+      let best: string | null = null, bestLen = 0;
+      for (const k of f.edgeKeys) {
+        if (boundary.has(k)) continue; // interior walls only
+        const L = lenOf.get(k) ?? 0;
+        if (L > bestLen) { bestLen = L; best = k; }
+      }
+      if (best && !openWidthOf.has(best)) openWidthOf.set(best, innerWidthM);
+    });
+  }
+
+  // ── Emit: split marked edges, tag every edge type wall/opening ───────────────────────────────────────
+  const r = (v: number) => Math.round(v * 1e4) / 1e4;
+  const outNodes: GraphNodeJson[] = g.nodes.map((n) => ({ id: n.id, x: r(n.x), y: r(n.y) }));
+  const outEdges: GraphEdgeJson[] = [];
+  let jamb = 0;
+  const addNode = (x: number, y: number): string => { const id = `op${++jamb}`; outNodes.push({ id, x: r(x), y: r(y) }); return id; };
+  for (const e of edges) {
+    const k = undirKey(e.a, e.b);
+    const w = openWidthOf.get(k);
+    const A = pos.get(e.a)!, B = pos.get(e.b)!;
+    const th = e.thickness;
+    const wall = (from: string, to: string, len: number): GraphEdgeJson => ({ from_node_id: from, to_node_id: to, length: r(len), ...(th != null ? { thickness: th } : {}), type: "wall" });
+    // Only carve when the wall is long enough to keep a jamb (≥10 cm) on each side of the opening.
+    if (w != null && w > 0 && e.len > w + 0.2) {
+      const t1 = 0.5 - w / (2 * e.len), t2 = 0.5 + w / (2 * e.len);
+      const p1 = addNode(A.x + (B.x - A.x) * t1, A.y + (B.y - A.y) * t1);
+      const p2 = addNode(A.x + (B.x - A.x) * t2, A.y + (B.y - A.y) * t2);
+      outEdges.push(wall(e.a, p1, e.len * t1));
+      outEdges.push({ from_node_id: p1, to_node_id: p2, length: r(w), ...(th != null ? { thickness: th } : {}), type: "opening" });
+      outEdges.push(wall(p2, e.b, e.len * (1 - t2)));
+    } else {
+      outEdges.push(wall(e.a, e.b, e.len));
+    }
+  }
+  return { nodes: outNodes, edges: outEdges };
+}
+
+/** Value outputs for a node (e.g. Inset's area in m²), per its `valueOutputs`. Mostly scalars; `points`
+ *  is a JSON vertex LIST (nodeValues and the value wire both already carry strings). */
+function computeNodeValues(tool: FlowToolType, polys: Point[][], ppm: number, anchor: Point): Record<string, number | string> | undefined {
   const def = FLOW_TOOLS[tool];
-  if (!def.valueOutputs?.length || !(polys[0]?.length >= 3) || ppm <= 0) return undefined;
-  const out: Record<string, number> = {};
+  // >= 2, not >= 3: a GRAPH output is a set of 2-point polylines, which a triangle-minimum guard would
+  // reject. Area/perimeter are meaningless on a 2-point run and simply come out as 0.
+  if (!def.valueOutputs?.length || !(polys[0]?.length >= 2) || ppm <= 0) return undefined;
+  const out: Record<string, number | string> = {};
   for (const vo of def.valueOutputs) {
     if (vo.key === "area") {
       // Sum every output polygon (Inset → 1; Optimise Rectangle → all placed rects / union).
@@ -243,16 +686,31 @@ function computeNodeValues(tool: FlowToolType, polys: Point[][], ppm: number): R
       out.perimeter = per / ppm;
     } else if (vo.key === "vertices") {
       out.vertices = polys[0].length;
+    } else if (vo.key === "points") {
+      // The vertex LIST, in the `[[x,y],…]` metre-pair JSON a Polygon node's `points` consumes — so a Space
+      // can be re-emitted as a coordinate list and drawn back out. ANCHOR-relative: see the frame note on
+      // polysToMetreListJson. Re-centring on this polygon's own centroid would compound with the next hop's
+      // re-centring and drift the geometry off the plan.
+      const poly = polys[0];
+      const r = (v: number) => Math.round(v * 1e4) / 1e4; // 0.1 mm — keeps the JSON short
+      out.points = JSON.stringify(poly.map((p) => [r((p.x - anchor.x) / ppm), r((p.y - anchor.y) / ppm)]));
+    } else if (vo.key === "graph") {
+      // The whole result as a node/edge GRAPH JSON — what a graph→graph value node publishes, and what
+      // `polylinesFromGraphJson` / the Network node consume.
+      out.graph = polylinesToGraphJson(polys, ppm, anchor).json;
+    } else if (vo.key === "polygons") {
+      // EVERY output polygon as a nested `[[[x,y],…],…]` list — for a multi-piece node (Convex
+      // Decomposition, …) this is the whole result on one endpoint, which a Polygon node draws directly.
+      out.polygons = polysToMetreListJson(polys, ppm, anchor);
     }
   }
   return Object.keys(out).length ? out : undefined;
 }
 import { computeSkeletonBoundaryJoins } from "../../algorithms/skeleton/computeSkeleton";
-import { sutherlandHodgmanClip } from "../../algorithms/geometry/sutherlandHodgman";
 import { rasterUnion } from "./rasterUnion";
 import { polygonUnionVector } from "./vectorUnion";
 import { vectorizeImage, type VectorizeParams, type VectorizeColorMode } from "../../algorithms/vector/vectorizeImage";
-import { solvePipeNetwork, normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "../../algorithms/network/pipeNetworkSolver";
+import { solvePipeNetwork, normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeGraphNode, type PipeSolveResult } from "../../algorithms/network/pipeNetworkSolver";
 import { computeFrame, type FrameGraphInput, type FrameSchema } from "../../algorithms/structure/frameBuilder";
 import { computeMiteredWalls, computeWallDimensions } from "../../algorithms/structure/wallBuilder";
 import { computeMiteredUnion } from "../../wallGeometry";
@@ -305,6 +763,9 @@ export interface FlowPreviewItem {
   massing?: { points: Point[]; floors: number; direction: "upward" | "downward"; floorPolys?: Point[][] };
   /** Graph nodes (Graph Smoothing) only: render the polygons as OPEN polylines (not closed/filled). */
   openPath?: boolean;
+  /** Polygon node only: the canvas LAYER name its live-materialised Space lands on (from the `layer` param).
+   *  Blank/absent → the node's own per-node Live layer. */
+  layer?: string;
   /** Dimension node only: the witness lines, dimension line and arrow ticks — drawn as open polylines. */
   dimLines?: Point[][];
   /** Dimension node only: positioned dimension text (world-pixel anchor + preformatted value + rotation°). */
@@ -423,6 +884,7 @@ export interface FlowPreviewItem {
 function evalNode(tool: FlowToolType, input: Point[], params: Record<string, unknown>, ppm: number): Point[][] {
   switch (tool) {
     case "inset": return evalInset(input, params, ppm);
+    case "loop": return evalLoop(input, params, ppm);
     case "optimise-rect": return evalOptimise(input, params, ppm);
     case "split": return evalSplit(input, params, ppm);
     // Entries referencing a parametric library object get their dims measured from the object first.
@@ -488,16 +950,20 @@ export function evaluateFlow(
     sources instanceof Map ? (sources.get(srcNodeId) ?? []) : (sources.length >= 3 ? [sources] : []);
   // Need at least one pipeline root with usable geometry: a Space node resolving to a polygon, OR a
   // Space Creator (which always generates one).
-  const hasValidSource = nodes.some((n) => dataOf(n).tool === "source" && polysForSource(n.id).some((p) => p.length >= 3));
+  const hasValidSource = nodes.some((n) => { const t = dataOf(n).tool; return (t === "source" || (t === "grab-object" && dataOf(n).params.hostKind === "space")) && polysForSource(n.id).some((p) => p.length >= 3); });
   const hasCreator = nodes.some((n) => dataOf(n).tool === "space-creator");
-  const hasGraph = nodes.some((n) => (dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "grid-source") &&
+  const hasGraph = nodes.some((n) => (dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "freehand-source") &&
     ((graphsBySourceNode.get(n.id)?.some((g) => g.length > 0)) || graphSegments.length > 0));
   const hasImage = !!flowImage && nodes.some((n) => dataOf(n).tool === "image");
   const cc = canvasContent;
   const hasCanvas = !!cc && nodes.some((n) => dataOf(n).tool === "canvas-source") &&
     (cc.spaces.length > 0 || cc.nodes.length > 0 || cc.segments.length > 0 || cc.graphs.length > 0 || cc.images.length > 0);
   const hasPipe = !!pipeGraph && pipeGraph.edges.length > 0 && nodes.some((n) => dataOf(n).tool === "pipe-solver");
-  if (!hasValidSource && !hasCreator && !hasGraph && !hasImage && !hasCanvas && !hasPipe) return [];
+  // 2D primitive GENERATORS are self-sufficient roots exactly like a Space Creator (they synthesise their
+  // polygon from params, no canvas input needed) — so a flow built purely from Rectangle → Loop → … (e.g.
+  // the general-node staircase) evaluates without a Space/Graph/Canvas root.
+  const hasPrim = nodes.some((n) => { const t = dataOf(n).tool; return t === "rectangle" || t === "circle" || t === "polygon" || t === "polyline" || t === "network" || t === "line" || t === "ngon" || t === "ellipse" || t === "rounded-rect" || t === "sector" || t === "arc"; });
+  if (!hasValidSource && !hasCreator && !hasGraph && !hasImage && !hasCanvas && !hasPipe && !hasPrim) return [];
 
   // Adjacency + indegree.
   const succs = new Map<string, string[]>();
@@ -566,12 +1032,37 @@ export function evaluateFlow(
 
   // Reachability from source nodes (only connected tools are active).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "rectangle" || dataOf(n).tool === "circle" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "image" || dataOf(n).tool === "pipe-solver" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "footing" || dataOf(n).tool === "staircase" || dataOf(n).tool === "schema-to-drawing").map((n) => n.id);
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "grab-object" || dataOf(n).tool === "pobj-source" || dataOf(n).tool === "input-props" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "rectangle" || dataOf(n).tool === "arc" || dataOf(n).tool === "circle" || dataOf(n).tool === "polygon" || dataOf(n).tool === "polyline" || dataOf(n).tool === "vertices" || dataOf(n).tool === "network" || dataOf(n).tool === "line" || dataOf(n).tool === "ngon" || dataOf(n).tool === "ellipse" || dataOf(n).tool === "rounded-rect" || dataOf(n).tool === "sector" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "freehand-source" || dataOf(n).tool === "image" || dataOf(n).tool === "pipe-solver" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "footing" || dataOf(n).tool === "staircase" || dataOf(n).tool === "schema-to-drawing").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
     reachable.add(id);
     for (const s of succs.get(id)!) if (!reachable.has(s)) stack.push(s);
+  }
+
+  // CHAIN ANCHOR — wiring a 2D-primitive chain INTO a Node source (its Stamp endpoint) anchors the whole
+  // chain at that node's canvas point: every node UPSTREAM of a resolved Node source draws relative to the
+  // node instead of `createAnchor`, so the drawing FOLLOWS the node when it moves (placement-by-location,
+  // mirroring the pobj-source host-input semantics). Walk upstream from each resolved node-source through
+  // geometry edges (valin-* wires aren't chain membership); first anchor wins per node. Only the primitive
+  // generators (Rectangle / Circle / Polygon / Polyline) consult the map, so nothing else re-anchors.
+  const chainAnchorByNode = new Map<string, Point>();
+  for (const n of nodes) {
+    if (dataOf(n).tool !== "node-source") continue;
+    const pt = (graphsBySourceNode.get(n.id) ?? []).flat().find((pl) => pl.length >= 1)?.[0];
+    if (!pt) continue;
+    const upStack = [n.id];
+    const upSeen = new Set<string>([n.id]);
+    while (upStack.length) {
+      const cur = upStack.pop()!;
+      for (const e of edges) {
+        if (e.target !== cur || upSeen.has(e.source)) continue;
+        if (e.targetHandle && e.targetHandle.startsWith("valin-")) continue;
+        upSeen.add(e.source);
+        if (!chainAnchorByNode.has(e.source)) chainAnchorByNode.set(e.source, pt);
+        upStack.push(e.source);
+      }
+    }
   }
 
   // Per-node geometry outputs. `outputs` is the flat polygon list (one per out-i handle for most nodes).
@@ -752,18 +1243,6 @@ export function evaluateFlow(
     }
     return out;
   };
-  // Clip one ribbon polygon to whichever boundary contains it (a ribbon belongs to a single space; the
-  // others clip it to empty). Returns the largest non-empty clip, or the ribbon unchanged if it sits in
-  // no boundary (so an unexpected miss never silently drops geometry).
-  const clipRibbonToBoundaries = (ribbon: Point[], bounds: Point[][]): Point[] => {
-    let best: Point[] = [];
-    for (const b of bounds) {
-      const c = sutherlandHodgmanClip(ribbon, b);
-      if (c.length >= 3 && c.length > best.length) best = c;
-    }
-    return best.length >= 3 ? best : ribbon;
-  };
-
   // Scalar value outputs produced per node (populated as nodes are evaluated, in topo order). Mostly
   // numbers; a few are string lists (BUA's pass-through Ratio).
   const nodeValues = new Map<string, Record<string, number | string>>();
@@ -856,17 +1335,35 @@ export function evaluateFlow(
       if (!srcVals) continue;
       const srcKey = edge.sourceHandle && edge.sourceHandle.startsWith("val-") ? edge.sourceHandle.slice(4) : undefined;
       const v = srcKey ? srcVals[srcKey] : Object.values(srcVals)[0];
-      if (typeof v === "number" && isFinite(v)) out[vi.key] = v;
-      else if (typeof v === "string" && v.length) out[vi.key] = v;
+      if (!((typeof v === "number" && isFinite(v)) || (typeof v === "string" && v.length))) continue;
+      // A SELECT target resolves its option across the wire by value / label / index (see coerceSelectWire),
+      // so options connect without exact-string matching. Non-select params keep the raw wired value.
+      const field = (def.fields as Array<{ key: string; kind?: string; options?: unknown }> | undefined)?.find((f) => f.key === vi.key);
+      if (field?.kind === "select" && Array.isArray(field.options)) {
+        const srcNode = byId.get(edge.source);
+        const srcOpts = srcNode ? selectOutOptions(dataOf(srcNode).tool, dataOf(srcNode).params, srcKey) : undefined;
+        const coerced = coerceSelectWire(v, field.options as Array<{ value: string; label?: string }>, srcOpts);
+        if (coerced !== undefined) out[vi.key] = coerced;
+      } else out[vi.key] = v;
     }
     return out;
+  };
+  // Options a source node publishes on `key` (an input-props select prop, or a declared select field) — used to
+  // map a wired select onto the target's options BY INDEX when the strings don't match.
+  const selectOutOptions = (tool: string, params: Record<string, unknown>, key?: string): string[] | undefined => {
+    if (!key) return undefined;
+    const prop = inputProps(params).find((p) => p.id === key);
+    if (prop) return prop.type === "select" ? prop.options : undefined;
+    const f = (FLOW_TOOLS[tool as FlowToolType] as { fields?: Array<{ key: string; kind?: string; options?: unknown }> } | undefined)
+      ?.fields?.find((ff) => ff.key === key);
+    return f?.kind === "select" && Array.isArray(f.options) ? (f.options as Array<{ value: string }>).map((o) => o.value) : undefined;
   };
 
   const items: FlowPreviewItem[] = [];
   for (const id of order) {
     const node = byId.get(id)!;
     const data = dataOf(node);
-    if (data.tool === "source") continue;
+    if (data.tool === "source") continue; // plain geometry source (from the canvas via `sources`); no params of its own
     if (data.tool === "image") { outputs.set(id, []); continue; } // image root carries no geometry — feeds Vectorisation
     // Space Creator (generator, no input) — always active. Synthesise its polygon and publish it as this
     // node's single output, so downstream nodes consume it exactly like a Space source.
@@ -888,9 +1385,38 @@ export function evaluateFlow(
       const props = inputProps(data.params);
       const overrides: Record<string, unknown> = {};
       for (const p of props) overrides[p.id] = p.type === "checkbox" ? p.value === true : p.value;
+      // HOST / ANCHOR — the object draws ONLY where a wired source puts it: a Space source becomes its HOST
+      // (the largest incoming polygon, centroid-anchored and converted to LOCAL METRES, so its `host` op +
+      // pipeline — inset → split → optimise … — run over that footprint, exactly like attaching a parametric
+      // object to a Space in the Properties tab); a Node / Segment source just ANCHORS it at the point (or
+      // the segment midpoint).
+      //
+      // UNWIRED it emits NO geometry (params still publish as `val-*`). It must not fall back to
+      // `createAnchor`: that tracks the canvas SELECTION, so an imported object teleported onto whichever
+      // node you happened to click, with no edge to say so. An unwired pobj-source is a params brief — an
+      // Input Properties node whose props came from a file — and Input Properties draws nothing either.
+      let anchor: Point | undefined;
+      let hostLocal: Point[] | undefined;
+      let bestHostA = 0;
+      let anchorPt: Point | undefined;
+      for (const hp of inputPolylinesOf(id, 1)) {
+        if (hp.length >= 3) {
+          const a = Math.abs(polygonArea(hp));
+          if (a > bestHostA) {
+            bestHostA = a;
+            const c = polygonCentroid(hp);
+            anchor = c;
+            hostLocal = hp.map((p) => ({ x: (p.x - c.x) / ppm, y: (p.y - c.y) / ppm }));
+          }
+        } else if (hp.length >= 1 && !anchorPt) {
+          anchorPt = hp.length >= 2 ? { x: (hp[0].x + hp[hp.length - 1].x) / 2, y: (hp[0].y + hp[hp.length - 1].y) / 2 } : hp[0];
+        }
+      }
+      if (!hostLocal && anchorPt) anchor = anchorPt;
       let poly: Point[] = [];
-      try {
-        const geom = evalParametricGeometry(defText, createAnchor, ppm, overrides);
+      // No wired host / anchor → no geometry. Params below still publish, so it works as a brief.
+      if (anchor) try {
+        const geom = evalParametricGeometry(defText, anchor, ppm, overrides, hostLocal);
         // Pick the largest closed fill ring as the site footprint.
         let bestA = -Infinity;
         for (const ring of geom.fill) {
@@ -920,14 +1446,60 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "pobj-source", polygons: poly.length >= 3 ? [poly] : [], color: FLOW_TOOLS["pobj-source"].color, isFinal, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
+    // Grab Object (no geometry) — republish the parameters of the object attached to a canvas Space / Node /
+    // Segment (baked into `props` by the host) as `val-<key>` value outputs, so an attached object's
+    // Properties can drive downstream ops. Same value-emit shape as pobj-source, minus the footprint.
+    if (data.tool === "grab-object") {
+      const props = inputProps(data.params);
+      const vals: Record<string, number | string> = {};
+      for (const p of props) {
+        const nx = Number(p.value);
+        if (p.type === "range" && isFinite(nx)) vals[p.id] = nx;
+        else if (typeof p.value === "number" && isFinite(p.value)) vals[p.id] = p.value;
+        else if (typeof p.value === "boolean") vals[p.id] = p.value ? 1 : 0;
+        else vals[p.id] = String(p.value ?? "");
+      }
+      nodeValues.set(id, vals);
+      // Geometry: PASS THROUGH a Space wired into the input — so Grab Object sits mid-pipeline
+      // (Space → Grab Object → Inset), the incoming footprint flowing on to the op. With nothing wired in it
+      // falls back to its OWN referenced Space's footprint (standalone source, supplied by the host via
+      // `sources`, Host = Space only). Node / Segment hosts emit no polygon (values only, for now).
+      const passed = inputsOf(id).filter((p) => p.length >= 3);
+      const geom = passed.length ? passed : (data.params.hostKind === "space" ? polysForSource(id).filter((p) => p.length >= 3) : []);
+      outputs.set(id, geom);
+      items.push({ nodeId: id, tool: "grab-object", polygons: geom, color: FLOW_TOOLS["grab-object"].color, isFinal: succs.get(id)!.length === 0, values: vals });
+      continue;
+    }
+    // Agent — PURE pass-through. The model call happens only when the user presses Run on the node (the
+    // host's onRunAgent action), which bakes its answer into the DOWNSTREAM nodes' params and into this
+    // node's `props`. Evaluation therefore stays synchronous and deterministic: nothing here can call out,
+    // and a saved flow re-evaluates identically with no model involved. The baked suggestions are
+    // republished as `val-<key>` outputs (same shape as Grab Object) for anyone who prefers to wire them.
+    if (data.tool === "agent") {
+      const vals: Record<string, number | string> = {};
+      for (const p of inputProps(data.params)) {
+        const nx = Number(p.value);
+        if (p.type === "range" && isFinite(nx)) vals[p.id] = nx;
+        else if (typeof p.value === "number" && isFinite(p.value)) vals[p.id] = p.value;
+        else if (typeof p.value === "boolean") vals[p.id] = p.value ? 1 : 0;
+        else vals[p.id] = String(p.value ?? "");
+      }
+      nodeValues.set(id, vals);
+      const geom = inputsOf(id).filter((p) => p.length >= 3);
+      outputs.set(id, geom);
+      items.push({ nodeId: id, tool: "agent", polygons: geom, color: FLOW_TOOLS.agent.color, isFinal: succs.get(id)!.length === 0, values: vals });
+      continue;
+    }
     // Rectangle / Circle (2D primitive generators, no input) — synthesise a polygon centred at (centerX,
     // centerY) in metres and publish it as this node's output, exactly like a Space source. Also expose the
     // defining dimensions as scalar values (val-length / val-breadth, or val-radius) for downstream wiring.
     if (data.tool === "rectangle" || data.tool === "circle") {
       const vin = resolveValueInputs(id);
       const gp = { ...data.params, ...vin };
-      const cx = createAnchor.x + num(gp.centerX, 0) * ppm;
-      const cy = createAnchor.y + num(gp.centerY, 0) * ppm;
+      // Anchored at the chain's Node when wired into one (chainAnchorByNode), else the flow anchor.
+      const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
+      const cx = anchor0.x + num(gp.centerX, 0) * ppm;
+      const cy = anchor0.y + num(gp.centerY, 0) * ppm;
       let poly: Point[] = [];
       if (data.tool === "rectangle") {
         const w = Math.max(0.1, num(gp.length, 4)) * ppm;
@@ -945,9 +1517,198 @@ export function evaluateFlow(
       }
       outputs.set(id, poly.length >= 3 ? [poly] : []);
       if (poly.length >= 3) {
+        // Publish the resolved OUTLINE alongside the defining dimensions, so the shape can feed a value
+        // node (Inset, Convex Hull, Split …) without a Space in between. Anchor-relative metres, the same
+        // frame every list value uses. Merged, so length/breadth (or radius) are kept.
+        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+        nodeValues.set(id, {
+          ...(nodeValues.get(id) ?? {}),
+          points: JSON.stringify(poly.map((p) => [rr((p.x - anchor0.x) / ppm), rr((p.y - anchor0.y) / ppm)])),
+        });
         const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: data.tool, polygons: [poly], color: FLOW_TOOLS[data.tool].color, isFinal, valueInputs: Object.keys(vin).length ? vin : undefined });
+        // A `color` param / wired `valin-color` (e.g. from a decompiled object's colour) overrides the tool tint.
+        const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS[data.tool].color;
+        items.push({ nodeId: id, tool: data.tool, polygons: [poly], color: tint, isFinal, values: nodeValues.get(id), valueInputs: Object.keys(vin).length ? vin : undefined });
       }
+      continue;
+    }
+    // Arc (2D primitive): an OPEN polyline sweeping from Start to End angle (degrees, short way) at `radius`,
+    // centred at (centerX, centerY). Every field is wireable — for a door swing: centre = hinge, radius = leaf
+    // width, Start = closed, End = open. No fill / no downstream Space (openPath).
+    if (data.tool === "arc") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
+      const cx = anchor0.x + num(gp.centerX, 0) * ppm;
+      const cy = anchor0.y + num(gp.centerY, 0) * ppm;
+      const r = Math.max(0.01, num(gp.radius, 1)) * ppm;
+      const a0 = (num(gp.startAngle, 0) * Math.PI) / 180;
+      let da = (num(gp.endAngle, 90) * Math.PI) / 180 - a0;
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      const N = 24;
+      const pts: Point[] = [];
+      for (let i = 0; i <= N; i++) { const a = a0 + (da * i) / N; pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
+      outputs.set(id, []); // an open arc is a stroke, not a Space — nothing flows downstream
+      const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS.arc.color;
+      if (pts.length >= 2) items.push({ nodeId: id, tool: "arc", polygons: [pts], color: tint, isFinal: succs.get(id)!.length === 0, openPath: true, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Line (2D primitive): a straight OPEN segment (x1,y1)→(x2,y2) in metres. Unlike Arc it DOES flow
+    // downstream — a 2-point polyline that graph consumers (e.g. Mitered Join) can stroke into a wall.
+    if (data.tool === "line") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
+      const a = { x: anchor0.x + num(gp.x1, 0) * ppm, y: anchor0.y + num(gp.y1, 0) * ppm };
+      const b = { x: anchor0.x + num(gp.x2, 3) * ppm, y: anchor0.y + num(gp.y2, 0) * ppm };
+      const pts = [a, b];
+      nodeValues.set(id, { length: Math.hypot(b.x - a.x, b.y - a.y) / ppm });
+      outputs.set(id, [pts]); // flows on as a 2-point polyline (mitered-join & graph ops accept minLen 2)
+      const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS.line.color;
+      items.push({ nodeId: id, tool: "line", polygons: [pts], color: tint, isFinal: succs.get(id)!.length === 0, openPath: true, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // N-gon / Ellipse / Rounded Rectangle / Sector (2D primitive generators) — synthesise a CLOSED polygon
+    // centred at (centerX, centerY) metres and publish it exactly like Rectangle / Circle.
+    if (data.tool === "ngon" || data.tool === "ellipse" || data.tool === "rounded-rect" || data.tool === "sector") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
+      const cx = anchor0.x + num(gp.centerX, 0) * ppm;
+      const cy = anchor0.y + num(gp.centerY, 0) * ppm;
+      const rot = (num(gp.rotation, 0) * Math.PI) / 180;
+      const rc = Math.cos(rot), rs = Math.sin(rot);
+      const place = (x: number, y: number): Point => ({ x: cx + x * rc - y * rs, y: cy + x * rs + y * rc });
+      const poly: Point[] = [];
+      if (data.tool === "ngon") {
+        const n = Math.max(3, Math.min(64, Math.round(num(gp.sides, 6))));
+        const r = Math.max(0.05, num(gp.radius, 2)) * ppm;
+        for (let i = 0; i < n; i++) { const a = (i / n) * 2 * Math.PI; poly.push(place(r * Math.cos(a), r * Math.sin(a))); }
+        nodeValues.set(id, { radius: num(gp.radius, 2), sides: n });
+      } else if (data.tool === "ellipse") {
+        const rx = Math.max(0.05, num(gp.radiusX, 2)) * ppm;
+        const ry = Math.max(0.05, num(gp.radiusY, 1.2)) * ppm;
+        const n = 40;
+        for (let i = 0; i < n; i++) { const a = (i / n) * 2 * Math.PI; poly.push(place(rx * Math.cos(a), ry * Math.sin(a))); }
+        nodeValues.set(id, { radiusX: num(gp.radiusX, 2), radiusY: num(gp.radiusY, 1.2) });
+      } else if (data.tool === "rounded-rect") {
+        const w = Math.max(0.1, num(gp.length, 3)) * ppm;
+        const h = Math.max(0.1, num(gp.breadth, 2)) * ppm;
+        const r = Math.max(0, Math.min(num(gp.cornerRadius, 0.3) * ppm, Math.min(w, h) / 2 - 1e-6));
+        // 4 corner arcs (quarter each, 6 segments) joined by the straights; corner centres inset by r.
+        const corners = [
+          { x: w / 2 - r, y: h / 2 - r, a0: 0 },            // +x +y
+          { x: -(w / 2 - r), y: h / 2 - r, a0: Math.PI / 2 },  // -x +y
+          { x: -(w / 2 - r), y: -(h / 2 - r), a0: Math.PI },   // -x -y
+          { x: w / 2 - r, y: -(h / 2 - r), a0: 1.5 * Math.PI }, // +x -y
+        ];
+        for (const c of corners) {
+          for (let i = 0; i <= 6; i++) { const a = c.a0 + (i / 6) * (Math.PI / 2); poly.push(place(c.x + r * Math.cos(a), c.y + r * Math.sin(a))); }
+        }
+        nodeValues.set(id, { length: num(gp.length, 3), breadth: num(gp.breadth, 2) });
+      } else {
+        // Sector: a FILLED pie wedge — centre + arc from startAngle, sweeping (end − start) normalised into
+        // (0°, 360°] (equal angles ⇒ a full disc). Closed polygon, unlike the open Arc stroke.
+        const r = Math.max(0.05, num(gp.radius, 2)) * ppm;
+        const a0 = (num(gp.startAngle, 0) * Math.PI) / 180;
+        let sweep = ((num(gp.endAngle, 90) - num(gp.startAngle, 0)) * Math.PI) / 180;
+        sweep = ((sweep % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        if (sweep === 0) sweep = 2 * Math.PI;
+        const full = Math.abs(sweep - 2 * Math.PI) < 1e-9;
+        const n = Math.max(4, Math.round(40 * (sweep / (2 * Math.PI))));
+        if (!full) poly.push(place(0, 0)); // the pie tip (omitted for a full disc)
+        for (let i = 0; i <= n; i++) { const a = a0 + (sweep * i) / n; poly.push(place(r * Math.cos(a), r * Math.sin(a))); }
+        nodeValues.set(id, { radius: num(gp.radius, 2), sweep: (sweep * 180) / Math.PI });
+      }
+      outputs.set(id, poly.length >= 3 ? [poly] : []);
+      if (poly.length >= 3) {
+        const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS[data.tool].color;
+        items.push({ nodeId: id, tool: data.tool, polygons: [poly], color: tint, isFinal: succs.get(id)!.length === 0, valueInputs: Object.keys(vin).length ? vin : undefined });
+      }
+      continue;
+    }
+    // Polygon / Polyline (2D primitives): build a point list from the `points` JSON (metre pairs, LOCAL to the
+    // flow anchor). Polygon → a closed, filled Space; Polyline → an open stroke (openPath, no fill/3D). A
+    // `color` param / wired `valin-color` overrides the tool tint. Used by object decompile for poly/line rules.
+    if (data.tool === "polygon" || data.tool === "polyline") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      // Anchored at the chain's Node when wired into one (chainAnchorByNode), else the flow anchor.
+      const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
+      // `points` accepts EITHER one outline `[[x,y],…]` or a LIST of them `[[[x,y],…],…]` — Skeleton's
+      // val-polygons and any other multi-polygon producer emit the nested form. Distinguished by nesting
+      // depth; without this the nested form passes the per-point filter and every coordinate collapses to
+      // the anchor (num([x,y]) is NaN → 0), drawing a degenerate blob.
+      const toPts = (list: unknown[]): Point[] => list
+        .filter((p): p is unknown[] => Array.isArray(p) && p.length >= 2)
+        .map((p) => ({ x: anchor0.x + num(p[0], 0) * ppm, y: anchor0.y + num(p[1], 0) * ppm }));
+      let polyList: Point[][] = [];
+      try {
+        const raw = typeof gp.points === "string" ? JSON.parse(gp.points) : gp.points;
+        if (Array.isArray(raw)) {
+          const nested = Array.isArray(raw[0]) && Array.isArray((raw[0] as unknown[])[0]);
+          polyList = nested ? (raw as unknown[][]).map(toPts) : [toPts(raw as unknown[])];
+        }
+      } catch { /* malformed points → nothing */ }
+      const minLen = data.tool === "polygon" ? 3 : 2;
+      polyList = polyList.filter((pl) => pl.length >= minLen);
+      const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS[data.tool].color;
+      const isFinal = succs.get(id)!.length === 0;
+      if (data.tool === "polygon") {
+        outputs.set(id, polyList);
+        if (polyList.length) {
+          // Echo the resolved outline(s) on `val-points`, in the same metres-local-to-anchor convention
+          // `points` consumes — so a wired override chains straight on. A SINGLE polygon echoes flat even
+          // if it arrived nested, so single-outline consumers (Inset's valin-polygon) always match.
+          const r = (v: number) => Math.round(v * 1e4) / 1e4;
+          const asList = polyList.map((pl) => pl.map((p) => [r((p.x - anchor0.x) / ppm), r((p.y - anchor0.y) / ppm)]));
+          const vals = { points: JSON.stringify(polyList.length === 1 ? asList[0] : asList) };
+          nodeValues.set(id, vals);
+          // `values` must ride on the item too: nodeValues feeds DOWNSTREAM wiring, but the node's own
+          // readout row is baked from the preview item's `values` — without it the row shows "—".
+          const layerName = typeof gp.layer === "string" && gp.layer.trim() ? gp.layer.trim() : undefined;
+          items.push({ nodeId: id, tool: "polygon", polygons: polyList, color: tint, isFinal, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined, cellCount: polyList.length, layer: layerName });
+        }
+      } else {
+        outputs.set(id, []); // an open polyline is a stroke, not a Space — nothing flows downstream
+        if (polyList.length) items.push({ nodeId: id, tool: "polyline", polygons: polyList, color: tint, isFinal, openPath: true });
+      }
+      continue;
+    }
+    // Network (2D primitive): DRAW a graph JSON as canvas segments — one open 2-point stroke per edge,
+    // between its endpoint nodes. Accepts what Graph Geometry / Skeleton's `branches` publish:
+    // {nodes:[{id,x,y},…], edges:[{from_node_id,to_node_id},…]}, coordinates in metres LOCAL to the anchor
+    // like every other 2D primitive. A node given as a bare id string carries no position, so edges
+    // referencing it are skipped rather than collapsed onto the anchor.
+    if (data.tool === "network") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
+      const segs: Point[][] = [];
+      const at = new Map<string, Point>();
+      try {
+        const raw = typeof gp.graph === "string" ? JSON.parse(gp.graph) : gp.graph;
+        const g = raw as { nodes?: unknown[]; edges?: unknown[] } | null;
+        for (const n of Array.isArray(g?.nodes) ? g!.nodes : []) {
+          if (!n || typeof n !== "object") continue; // bare id string → no position to place it at
+          const o = n as { id?: unknown; x?: unknown; y?: unknown };
+          if (typeof o.id !== "string") continue;
+          at.set(o.id, { x: anchor0.x + num(o.x, 0) * ppm, y: anchor0.y + num(o.y, 0) * ppm });
+        }
+        for (const e of Array.isArray(g?.edges) ? g!.edges : []) {
+          const o = e as { from_node_id?: unknown; to_node_id?: unknown };
+          const a = at.get(String(o?.from_node_id)); const b = at.get(String(o?.to_node_id));
+          if (a && b) segs.push([a, b]);
+        }
+      } catch { /* malformed graph → nothing drawn */ }
+      const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS.network.color;
+      const vals = { nodeCount: at.size, edgeCount: segs.length };
+      nodeValues.set(id, vals);
+      // 2-point polylines flow on downstream (Mitered Join & graph consumers accept minLen 2), exactly
+      // like the Line primitive.
+      outputs.set(id, segs);
+      items.push({ nodeId: id, tool: "network", polygons: segs, color: tint, isFinal: succs.get(id)!.length === 0, openPath: true, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
     // File Upload (value source): publish the chosen file's path as a `val-path` text value for
@@ -1051,6 +1812,41 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "point", polygons: [], color: FLOW_TOOLS.point.color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
+    // Vertices (value source / pass-through): republish a vertex list on val-points. A wired valin-points
+    // overrides the typed list. No geometry, nothing drawn — Polygon is what DRAWS a list.
+    if (data.tool === "vertices") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const vals = { points: typeof gp.points === "string" ? gp.points : JSON.stringify(gp.points ?? []) };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "vertices", polygons: [], color: FLOW_TOOLS.vertices.color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Node Geometry (value source): read the Node wired into the input and publish its canvas point as
+    // val-x / val-y in METRES — so a Point (or any value input) can grab a node's location. Resolved straight
+    // from the node-source's canvas point (order-independent), so it works no matter when this node evaluates.
+    if (data.tool === "node-geometry") {
+      const ge = edges.find((e) => e.target === id && !(e.targetHandle && (e.targetHandle.startsWith("valin-") || e.targetHandle.startsWith("gin-"))));
+      const pt = ge ? (graphsBySourceNode.get(ge.source) ?? []).flat().find((pl) => pl.length >= 1)?.[0] : undefined;
+      const vals = { x: pt ? pt.x / ppm : 0, y: pt ? pt.y / ppm : 0 };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "node-geometry", polygons: [], color: FLOW_TOOLS["node-geometry"].color, isFinal: false, values: vals });
+      continue;
+    }
+    // Segment Geometry (value source): read the Segment wired into the input and publish its MIDPOINT as
+    // val-x / val-y (metres), plus val-angle (degrees) and val-length (metres) — so a Point can place an
+    // object on the segment (e.g. a door in a wall). Resolved straight from the segment-source's polyline.
+    if (data.tool === "segment-geometry") {
+      const ge = edges.find((e) => e.target === id && !(e.targetHandle && (e.targetHandle.startsWith("valin-") || e.targetHandle.startsWith("gin-"))));
+      const pl = ge ? (graphsBySourceNode.get(ge.source) ?? []).flat().find((p) => p.length >= 2) : undefined;
+      const a = pl?.[0], b = pl?.[pl.length - 1];
+      const vals = a && b
+        ? { x: (a.x + b.x) / 2 / ppm, y: (a.y + b.y) / 2 / ppm, x1: a.x / ppm, y1: a.y / ppm, x2: b.x / ppm, y2: b.y / ppm, angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI, length: Math.hypot(b.x - a.x, b.y - a.y) / ppm }
+        : { x: 0, y: 0, x1: 0, y1: 0, x2: 0, y2: 0, angle: 0, length: 0 };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "segment-geometry", polygons: [], color: FLOW_TOOLS["segment-geometry"].color, isFinal: false, values: vals });
+      continue;
+    }
     // Parameter Manipulator (value source): publishes its Start value on `val-result` so the wire to the
     // target reads as a number. The actual iteration happens at the controlled target node (see the
     // paramControllers sweep) — this node only seeds/labels the loop.
@@ -1080,7 +1876,7 @@ export function evaluateFlow(
     }
     // Graph (generator): emit the referenced graph(s) as polylines. A node may reference several graphs
     // (by id, or the live selection when grabbing) → one output handle per graph, or a single bundle.
-    if (data.tool === "graph-source" || data.tool === "segment-source" || data.tool === "grid-source") {
+    if (data.tool === "graph-source" || data.tool === "segment-source" || data.tool === "grid-source" || data.tool === "freehand-source") {
       const resolved = (graphsBySourceNode.get(id) ?? [])
         .map((g) => g.filter((s) => s.length >= 2)).filter((g) => g.length > 0);
       // The live-selection fallback (graphSegments) only applies to graph-source; a segment-source with no
@@ -1149,15 +1945,15 @@ export function evaluateFlow(
       if (allGeom.length > 0) items.push({ nodeId: id, tool: "canvas-source", polygons: allGeom, color: FLOW_TOOLS["canvas-source"].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: handles.length });
       continue;
     }
-    // Value calculator nodes (no geometry output) — BUA Calculator, Math, Random. Always active. Resolve
-    // any wired value inputs (overriding params), compute scalar outputs, and publish them for downstream
-    // value consumers. BUA also reads its plot area from an optional space input.
-    if (data.tool === "bua" || data.tool === "math" || data.tool === "random") {
+    // Value calculator nodes (no geometry output) — BUA Calculator, Math, Random, Match. Always active.
+    // Resolve any wired value inputs (overriding params), compute scalar outputs, and publish them for
+    // downstream value consumers. BUA also reads its plot area from an optional space input.
+    if (data.tool === "bua" || data.tool === "math" || data.tool === "random" || data.tool === "match") {
       const vin = resolveValueInputs(id);
       const params = { ...data.params, ...vin };
       const buaInput = data.tool === "bua" ? inputOf(id) : null;
       if (buaInput && buaInput.length >= 3 && ppm > 0) params.plotArea = polygonArea(buaInput) / (ppm * ppm);
-      const computed = data.tool === "bua" ? computeBua(params) : data.tool === "random" ? computeRandom(params) : computeMath(params);
+      const computed = data.tool === "bua" ? computeBua(params) : data.tool === "random" ? computeRandom(params) : data.tool === "match" ? computeMatch(params) : computeMath(params);
       // Pass-through field outputs (fields flagged `output`): emit the control's own value as `val-<key>`.
       // Checkbox → 1|0; text → the verbatim string (e.g. Ratio "10, 90"); range/number → the number.
       const passthrough: Record<string, number | string> = {};
@@ -1181,6 +1977,45 @@ export function evaluateFlow(
         values: { ...vals },
         valueInputs: Object.keys(vin).length ? vin : undefined,
       });
+      continue;
+    }
+    // Expression node — a named FORMULA over wired inputs, evaluated through the shared safe engine
+    // (./expr — the same language as pobj `vars` / `showWhen`: arithmetic, comparison, && || !, ternary,
+    // min/max/floor/ceil/round/abs/sqrt/trig, 'string' literals). Each free variable in `expr` is a dynamic
+    // `valin-<var>` endpoint; the legacy `valin-deps` endpoint merges the SOURCE's whole value map into the
+    // scope under its own keys (wire a params node's output once → every parameter is in scope by name).
+    // One Expression node replaces a chain of Math/Conditional/Match nodes — e.g. the staircase's
+    // "(midSteps>0 && midSteps<steps) ? midSteps : floor(steps/2)". Publishes `val-result` (booleans → 1|0).
+    if (data.tool === "expr") {
+      const scope: Scope = { PI: Math.PI };
+      // Pass 1 — `deps` (the whole params node merged by name). Pass 2 — explicit per-variable wires, which
+      // OVERRIDE deps, so wiring a parameter DIRECTLY into `valin-<var>` always wins over the bulk merge
+      // (order-independent; matches runFlowIR). This is what makes "connect the parameter directly" work.
+      for (const e of edges) {
+        if (e.target !== id || e.targetHandle !== "valin-deps") continue;
+        const srcVals = nodeValues.get(e.source);
+        if (srcVals) Object.assign(scope, srcVals);
+      }
+      for (const e of edges) {
+        if (e.target !== id || !e.targetHandle?.startsWith("valin-") || e.targetHandle === "valin-deps") continue;
+        const srcVals = nodeValues.get(e.source);
+        if (!srcVals) continue;
+        const key = e.targetHandle.slice(6);
+        const srcKey = e.sourceHandle && e.sourceHandle.startsWith("val-") ? e.sourceHandle.slice(4) : undefined;
+        const v = srcKey ? srcVals[srcKey] : Object.values(srcVals)[0];
+        if (v != null) scope[key] = v;
+      }
+      // Evaluate each `name = expr` definition IN ORDER — a later line sees earlier names in scope (a vars
+      // block) — and publish each as its own `val-<name>` output. A single-expression body → one `result`.
+      const vals: Record<string, number | string> = {};
+      for (const d of parseExprDefs(data.params.expr)) {
+        const raw = evalRaw(d.expr, scope);
+        const val = typeof raw === "boolean" ? (raw ? 1 : 0) : raw;
+        scope[d.name] = val;
+        vals[d.name] = val;
+      }
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "expr", polygons: [], color: FLOW_TOOLS.expr.color, isFinal: false, values: vals });
       continue;
     }
     // Input Properties — always active. Forwards the input Space unchanged on its main output, and
@@ -1593,7 +2428,8 @@ export function evaluateFlow(
       const segDefs = schema.segment;
       const segAttrs = pipeGraph?.attrs.segments ?? {};
       const typeDef = findDef(segDefs, ROLES.segType);
-      const np = data.params;
+      // Wired values (Input Properties → shape / thickness / hinge / swing) override the node params.
+      const np = { ...data.params, ...resolveValueInputs(id) };
       const npColor = typeof np.color === "string" && np.color ? np.color : FLOW_TOOLS["segment-to-door"].color;
       let drawColor = npColor;
       const fill: Point[][] = [];
@@ -1727,52 +2563,6 @@ export function evaluateFlow(
           doorLines: lines.length ? lines : undefined,
         });
       }
-      continue;
-    }
-    // Parametric Renderer: parse the wired/typed parametric definition and draw its lines at each input
-    // node point — the generic, file-driven analogue of Node to Staircase (geometry from the definition).
-    if (data.tool === "param-render") {
-      const vin = resolveValueInputs(id);
-      const defText = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
-      const fill: Point[][] = [];
-      const lines: Point[][] = [];
-      let drawColor = FLOW_TOOLS["param-render"].color;
-      for (const pl of inputPolylinesOf(id, 1)) {
-        const p = pl[0];
-        if (!p) continue;
-        const g = evalParametricGeometry(defText, p, ppm);
-        drawColor = g.color || drawColor;
-        fill.push(...g.fill);
-        lines.push(...g.lines);
-      }
-      const all = [...fill, ...lines];
-      outputs.set(id, fill.length ? fill : all);
-      handleGroups.set(id, [all]);
-      if (all.length > 0) {
-        items.push({
-          nodeId: id, tool: "param-render", polygons: [], color: drawColor,
-          isFinal: succs.get(id)!.length === 0,
-          doorFill: fill.length ? fill : undefined,
-          doorLines: lines.length ? lines : undefined,
-        });
-      }
-      continue;
-    }
-    // Parametric 3D Renderer: evaluate the definition into a 3D mesh at each input node (one lofted prism
-    // per geometry box, extruded by height) and publish on the mesh channel for a downstream Mesh to 3D.
-    if (data.tool === "param-render-3d") {
-      const vin = resolveValueInputs(id);
-      const defText = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
-      const meshes: FlowMesh[] = [];
-      let mi = 0;
-      for (const pl of inputPolylinesOf(id, 1)) {
-        const p = pl[0];
-        if (!p) continue;
-        const prisms = evalParametricPrisms(defText, p, ppm);
-        if (prisms.length) meshes.push({ id: `${id}-${mi++}`, prisms });
-      }
-      meshOutputs.set(id, meshes);
-      outputs.set(id, []);
       continue;
     }
     // Node to Footing: draw a column-footing section on each incoming node — spread (flat pad), sloped
@@ -2150,20 +2940,35 @@ export function evaluateFlow(
       continue;
     }
     // Transform: affine-transform every input Space (Scale/Rotate/Mirror about an anchor, then Translate).
+    // Transform — pure CALCULATION node: moves/rotates/scales the WHOLE set, so it reads every polygon
+    // from the list (not just the largest). Publishes on `val-polygons`, draws NOTHING.
     if (data.tool === "transform") {
-      const gp = { ...data.params, ...resolveValueInputs(id) };
-      const out = evalTransform(inputPolylinesOf(id, 3), gp, ppm);
-      outputs.set(id, out);
-      handleGroups.set(id, [out]);
-      if (out.length > 0) items.push({ nodeId: id, tool: "transform", polygons: out, color: FLOW_TOOLS.transform.color, isFinal: succs.get(id)!.length === 0, cellCount: out.length });
+      // This block runs BEFORE the shared `evalParams`/`surfacedVin` are built, so it resolves its own.
+      const vinTf = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinTf };
+      const anchorTf = chainAnchorByNode.get(id) ?? createAnchor;
+      const geomInTf = inputPolylinesOf(id, 3);
+      const tfInputs = geomInTf.length ? geomInTf : polygonsFromMetreList(gp.polygon, anchorTf, ppm);
+      const out = evalTransform(tfInputs, gp, ppm);
+      outputs.set(id, []);
+      const values = computeNodeValues("transform", out, ppm, anchorTf);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "transform", polygons: [], color: FLOW_TOOLS.transform.color, isFinal: false, values, valueInputs: Object.keys(vinTf).length ? vinTf : undefined });
       continue;
     }
     // Pull: two Space inputs (A = main, B = gin-b) → two transformed Spaces on out-0 / out-1.
+    // Pull — pure CALCULATION node, and the only TWO-polygon one: `polygon` is outline A, `polygonB` is
+    // outline B (the old `gin-b` Space input). Publishes both results on `val-polygons`, draws NOTHING.
     if (data.tool === "pull") {
-      const A = inputOf(id);
-      const B = geomInputOf(id, "b").find((p) => p.length >= 3) ?? null;
+      const anchorPull = chainAnchorByNode.get(id) ?? createAnchor;
+      // Runs BEFORE the shared `evalParams`/`surfacedVin` are built, so it resolves its own.
+      const vinPull = resolveValueInputs(id);
+      const gpPull = { ...data.params, ...vinPull };
+      const A = polygonFromMetreList(gpPull.polygon, anchorPull, ppm) ?? inputOf(id);
+      const B = polygonFromMetreList(gpPull.polygonB, anchorPull, ppm)
+        ?? geomInputOf(id, "b").find((p) => p.length >= 3) ?? null;
       if (A && A.length >= 3 && B) {
-        const gp = { ...data.params, ...resolveValueInputs(id) };
+        const gp = gpPull;
         const pullParams: PullParams = {
           mode: gp.mode === "centroid" || gp.mode === "distance" ? gp.mode : "touch",
           anchor: gp.anchor === "A" || gp.anchor === "B" ? gp.anchor : "both",
@@ -2172,9 +2977,14 @@ export function evaluateFlow(
           edgeSlide: gp.edgeSlide !== false,
         };
         const { a, b } = computePull(A, B, pullParams, ppm);
-        outputs.set(id, [a, b]);
-        handleGroups.set(id, [[a], [b]]);
-        items.push({ nodeId: id, tool: "pull", polygons: [a, b], color: FLOW_TOOLS.pull.color, isFinal: succs.get(id)!.length === 0, cellCount: 2 });
+        outputs.set(id, []);
+        const values = computeNodeValues("pull", [a, b], ppm, anchorPull);
+        if (values) nodeValues.set(id, values);
+        items.push({ nodeId: id, tool: "pull", polygons: [], color: FLOW_TOOLS.pull.color, isFinal: false, values, valueInputs: Object.keys(vinPull).length ? vinPull : undefined });
+      } else {
+        // No usable pair yet — still surface a wired list onto the param so the wire doesn't look dead.
+        outputs.set(id, []);
+        items.push({ nodeId: id, tool: "pull", polygons: [], color: FLOW_TOOLS.pull.color, isFinal: false, valueInputs: Object.keys(vinPull).length ? vinPull : undefined });
       }
       continue;
     }
@@ -2267,52 +3077,84 @@ export function evaluateFlow(
     // Fill Depressions: Priority-Flood condition the incoming DEM field; publish the filled field on.
     if (data.tool === "fill-depressions") {
       const gp = { ...data.params, ...resolveValueInputs(id) };
-      const inField = fieldInputOf(id);
+      // Pure MATRIX value node (no geometry endpoints): the DEM matrix from valin-matrix / the Matrix box.
+      const fieldIn = fieldInputOf(id);
+      const inField = fieldIn ?? (typeof gp.matrix === "string" && gp.matrix.trim() ? gridFieldFromMatrix(gp.matrix, gp, ppm) : null);
       if (inField) {
-        const { field, cells } = evalFillDepressions(inField, gp);
+        const { field } = evalFillDepressions(inField, gp);
         fields.set(id, field);
-        if (cells.length > 0) {
-          items.push({ nodeId: id, tool: "fill-depressions", polygons: [], color: FLOW_TOOLS["fill-depressions"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
-        }
+        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+        const toM = (arr: number[] | undefined): number[][] => { const M: number[][] = []; for (let j = 0; j < field.rows; j++) { const row: number[] = []; for (let i = 0; i < field.cols; i++) row.push(rr(arr ? (arr[i * field.rows + j] ?? 0) : 0)); M.push(row); } return M; };
+        const inMatrixJson = fieldIn ? JSON.stringify(toM(fieldIn.values)) : (typeof gp.matrix === "string" ? gp.matrix : "[]");
+        const vals = { matrix: JSON.stringify(toM(field.values)) }; // filled (conditioned) DEM
+        nodeValues.set(id, vals);
+        items.push({ nodeId: id, tool: "fill-depressions", polygons: [], color: FLOW_TOOLS["fill-depressions"].color, isFinal: false, values: vals, valueInputs: { matrix: inMatrixJson } });
       }
       continue;
     }
     // Flow Direction: D8 steepest-descent receiver per cell; publish the dir-carrying field, draw arrows.
     if (data.tool === "flow-direction") {
       const gp = { ...data.params, ...resolveValueInputs(id) };
-      const inField = fieldInputOf(id);
+      // Pure MATRIX value node (no geometry endpoints): reads the DEM matrix from valin-matrix / the Matrix box.
+      // (`fieldInputOf` stays as a harmless fallback and returns null now that there's no geometry input.)
+      const fieldIn = fieldInputOf(id);
+      const inField = fieldIn ?? (typeof gp.matrix === "string" && gp.matrix.trim() ? gridFieldFromMatrix(gp.matrix, gp, ppm) : null);
       if (inField) {
-        const { field, cells, segments } = evalFlowDirection(inField, gp);
-        fields.set(id, field);
-        if (cells.length > 0 || segments.length > 0) {
-          items.push({ nodeId: id, tool: "flow-direction", polygons: [], color: FLOW_TOOLS["flow-direction"].color, isFinal: succs.get(id)!.length === 0, grid: { segments, nodes: [], nodeR: 0, segW: 1, cells, showValues: gp.showCellValues === true } });
-        }
+        const { field } = evalFlowDirection(inField, gp);
+        fields.set(id, field); // downstream grid nodes still read the dir-carrying field
+        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+        // Reshape a flat cell array (index i*rows+j) into a rows×cols matrix.
+        const toM = (arr: number[] | undefined, dflt: number): number[][] => {
+          const M: number[][] = [];
+          for (let j = 0; j < field.rows; j++) { const row: number[] = []; for (let i = 0; i < field.cols; i++) row.push(arr ? (arr[i * field.rows + j] ?? dflt) : dflt); M.push(row); }
+          return M;
+        };
+        // Input matrix (the DEM) → shown in the Matrix box; output = the D8 direction-code matrix.
+        const inMatrixJson = fieldIn ? JSON.stringify(toM(fieldIn.values, 0).map((r) => r.map(rr))) : (typeof gp.matrix === "string" ? gp.matrix : "[]");
+        const vals = { matrix: JSON.stringify(toM(field.dir, -1)) };
+        nodeValues.set(id, vals);
+        items.push({ nodeId: id, tool: "flow-direction", polygons: [], color: FLOW_TOOLS["flow-direction"].color, isFinal: false, values: vals, valueInputs: { matrix: inMatrixJson } });
       }
       continue;
     }
     // Flow Accumulation: upstream contributing cells/area per cell along the dir channel; publish + heatmap.
     if (data.tool === "flow-accumulation") {
       const gp = { ...data.params, ...resolveValueInputs(id), ppm };
-      const inField = fieldInputOf(id);
+      // Pure MATRIX value node (no geometry endpoints): the flow-direction matrix from valin-matrix / Matrix box
+      // — its cells ARE the D8 direction codes, so rebuild the `dir` channel (channel "dir").
+      const fieldIn = fieldInputOf(id);
+      const inField = fieldIn ?? (typeof gp.matrix === "string" && gp.matrix.trim() ? gridFieldFromMatrix(gp.matrix, gp, ppm, "dir") : null);
       if (inField) {
-        const { field, cells } = evalFlowAccumulation(inField, gp);
+        const { field } = evalFlowAccumulation(inField, gp);
         fields.set(id, field);
-        if (cells.length > 0) {
-          items.push({ nodeId: id, tool: "flow-accumulation", polygons: [], color: FLOW_TOOLS["flow-accumulation"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
-        }
+        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+        const toM = (arr: number[] | undefined): number[][] => { const M: number[][] = []; for (let j = 0; j < field.rows; j++) { const row: number[] = []; for (let i = 0; i < field.cols; i++) row.push(rr(arr ? (arr[i * field.rows + j] ?? 0) : 0)); M.push(row); } return M; };
+        const inMatrixJson = fieldIn ? JSON.stringify(toM(fieldIn.values)) : (typeof gp.matrix === "string" ? gp.matrix : "[]");
+        const vals = { matrix: JSON.stringify(toM(field.values)) }; // accumulation counts per cell
+        nodeValues.set(id, vals);
+        items.push({ nodeId: id, tool: "flow-accumulation", polygons: [], color: FLOW_TOOLS["flow-accumulation"].color, isFinal: false, values: vals, valueInputs: { matrix: inMatrixJson } });
       }
       continue;
     }
     // Watershed: flood upstream over the dir channel from an outlet cell; publish the basin mask + outline.
     if (data.tool === "watershed") {
       const gp = { ...data.params, ...resolveValueInputs(id) };
-      const inField = fieldInputOf(id);
+      // Pure MATRIX value node (no geometry endpoints): the flow-direction matrix from valin-matrix / Matrix box
+      // — its cells ARE the D8 direction codes, so rebuild the `dir` channel (channel "dir").
+      const fieldIn = fieldInputOf(id);
+      const inField = fieldIn ?? (typeof gp.matrix === "string" && gp.matrix.trim() ? gridFieldFromMatrix(gp.matrix, gp, ppm, "dir") : null);
       if (inField) {
-        const { field, cells, segments } = evalWatershed(inField, gp);
+        // Outlet "col,row" (cell index) → explicit outlet; blank / unparseable → lowest cell.
+        const outletParts = String(gp.outlet ?? "").split(/[\s,]+/).map((s) => parseInt(s, 10)).filter((n) => Number.isFinite(n));
+        const wsp = outletParts.length >= 2 ? { ...gp, useLowestCell: false, col: outletParts[0], row: outletParts[1] } : { ...gp, useLowestCell: true };
+        const { field } = evalWatershed(inField, wsp);
         fields.set(id, field);
-        if (cells.length > 0 || segments.length > 0) {
-          items.push({ nodeId: id, tool: "watershed", polygons: [], color: FLOW_TOOLS.watershed.color, isFinal: succs.get(id)!.length === 0, grid: { segments, nodes: [], nodeR: 0, segW: 1.5, cells, showValues: gp.showCellValues === true } });
-        }
+        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+        const toM = (arr: number[] | undefined): number[][] => { const M: number[][] = []; for (let j = 0; j < field.rows; j++) { const row: number[] = []; for (let i = 0; i < field.cols; i++) row.push(rr(arr ? (arr[i * field.rows + j] ?? 0) : 0)); M.push(row); } return M; };
+        const inMatrixJson = fieldIn ? JSON.stringify(toM(fieldIn.values)) : (typeof gp.matrix === "string" ? gp.matrix : "[]");
+        const vals = { matrix: JSON.stringify(toM(field.values)) }; // basin mask (0/1) per cell
+        nodeValues.set(id, vals);
+        items.push({ nodeId: id, tool: "watershed", polygons: [], color: FLOW_TOOLS.watershed.color, isFinal: false, values: vals, valueInputs: { matrix: inMatrixJson } });
       }
       continue;
     }
@@ -2332,24 +3174,90 @@ export function evaluateFlow(
     // Grid Threshold: value op X → a 0/1 mask field; publish the mask, fill passing cells.
     if (data.tool === "grid-threshold") {
       const gp = { ...data.params, ...resolveValueInputs(id) };
-      const inField = fieldInputOf(id);
+      // Pure MATRIX value node (no geometry endpoints): the matrix from valin-matrix / the Matrix box.
+      const fieldIn = fieldInputOf(id);
+      const inField = fieldIn ?? (typeof gp.matrix === "string" && gp.matrix.trim() ? gridFieldFromMatrix(gp.matrix, gp, ppm) : null);
       if (inField) {
-        const { field, cells } = evalGridThreshold(inField, gp);
+        const { field } = evalGridThreshold(inField, gp);
         fields.set(id, field);
-        if (cells.length > 0) {
-          items.push({ nodeId: id, tool: "grid-threshold", polygons: [], color: FLOW_TOOLS["grid-threshold"].color, isFinal: succs.get(id)!.length === 0, grid: { segments: [], nodes: [], nodeR: 0, segW: 0.5, cells, showValues: gp.showCellValues === true } });
-        }
+        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+        const toM = (arr: number[] | undefined): number[][] => { const M: number[][] = []; for (let j = 0; j < field.rows; j++) { const row: number[] = []; for (let i = 0; i < field.cols; i++) row.push(rr(arr ? (arr[i * field.rows + j] ?? 0) : 0)); M.push(row); } return M; };
+        const inMatrixJson = fieldIn ? JSON.stringify(toM(fieldIn.values)) : (typeof gp.matrix === "string" ? gp.matrix : "[]");
+        const vals = { matrix: JSON.stringify(toM(field.values)) }; // 0/1 mask
+        nodeValues.set(id, vals);
+        items.push({ nodeId: id, tool: "grid-threshold", polygons: [], color: FLOW_TOOLS["grid-threshold"].color, isFinal: false, values: vals, valueInputs: { matrix: inMatrixJson } });
       }
       continue;
     }
     // Marching Squares: iso-contours from a grid field → contour lines (a graph) to chain on.
     if (data.tool === "marching-squares") {
       const gp = { ...data.params, ...resolveValueInputs(id) };
-      const inField = fieldInputOf(id);
+      // A wired grid-FIELD (geometry input) OR a MATRIX (valin-matrix / Matrix box — e.g. a Grid Threshold mask
+      // for streamlines). Output stays VECTOR: the contour polylines (geometry output).
+      const inField = fieldInputOf(id) ?? (typeof gp.matrix === "string" && gp.matrix.trim() ? gridFieldFromMatrix(gp.matrix, gp, ppm) : null);
       const segs = inField ? evalMarchingSquares(inField, gp) : [];
       outputs.set(id, segs);
       handleGroups.set(id, [segs]);
       if (segs.length > 0) items.push({ nodeId: id, tool: "marching-squares", polygons: segs, openPath: true, color: FLOW_TOOLS["marching-squares"].color, isFinal: succs.get(id)!.length === 0 });
+      continue;
+    }
+    // Grid Geometry: tap any incoming grid-field and publish it as VALUE — a bare rows×cols matrix
+    // (val-matrix), the full grid with its world frame (val-grid), plus val-rows / val-cols. The bridge from
+    // the DEM / grid pipeline into the matrix / linear-algebra nodes. Passes the field through too, so a
+    // Render Grid can tap the same output. Draws nothing.
+    if (data.tool === "grid-geometry") {
+      const inField = fieldInputOf(id);
+      const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+      let matrixJson = "[]", gridJson = "", rows = 0, cols = 0;
+      if (inField) {
+        rows = inField.rows; cols = inField.cols;
+        fields.set(id, inField);
+        // Reshape the flat `values` (index i*rows+j) into a rows×cols row-major matrix (matrix[row][col]).
+        const M: number[][] = [];
+        for (let j = 0; j < rows; j++) { const row: number[] = []; for (let i = 0; i < cols; i++) row.push(rr(inField.values[i * rows + j])); M.push(row); }
+        matrixJson = JSON.stringify(M);
+        gridJson = JSON.stringify({ rows, cols, minX: rr(inField.minX), minY: rr(inField.minY), cellW: rr(inField.cellW), cellH: rr(inField.cellH), values: M });
+      }
+      const vals = { matrix: matrixJson, grid: gridJson, rows, cols };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "grid-geometry", polygons: [], color: FLOW_TOOLS["grid-geometry"].color, isFinal: false, values: vals });
+      continue;
+    }
+    // Render Grid 2D: the DECOUPLED display node — take any grid-field and draw it (heatmap / categorical /
+    // arrows). Lets the compute nodes run value-only (preview off) while ONE render node shows the result.
+    if (data.tool === "render-grid") {
+      const gp = { ...data.params, ...resolveValueInputs(id) };
+      // Prefer a wired grid-field (keeps its world frame). Otherwise, a bare matrix VALUE (val-matrix, e.g.
+      // from Transpose / Inverse) is placed onto a synthetic grid via cellSize / originX / originY, so matrix
+      // results are drawable — offset the origin to sit them beside the source grid.
+      const inField = fieldInputOf(id) ?? (typeof gp.matrix === "string" && gp.matrix.trim() ? gridFieldFromMatrix(gp.matrix, gp, ppm) : null);
+      if (inField) {
+        fields.set(id, inField);
+        const { cells, segments } = renderGridField(inField, gp);
+        if (cells.length > 0 || segments.length > 0) {
+          items.push({ nodeId: id, tool: "render-grid", polygons: [], color: FLOW_TOOLS["render-grid"].color, isFinal: succs.get(id)!.length === 0, grid: { segments, nodes: [], nodeR: 0, segW: gp.mode === "arrows" ? 1 : 0.5, cells, showValues: gp.showCellValues === true } });
+        }
+      }
+      continue;
+    }
+    // Transpose: matrix VALUE in (val-matrix / a val-grid), transpose (Aᵀ) out. Pure value node; draws nothing.
+    if (data.tool === "matrix-transpose") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixTranspose(gp.matrix);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-transpose", polygons: [], color: FLOW_TOOLS["matrix-transpose"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Inverse: square matrix VALUE in, its inverse (A⁻¹, Gauss–Jordan) out; non-square / singular → empty.
+    if (data.tool === "matrix-inverse") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixInverse(gp.matrix);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-inverse", polygons: [], color: FLOW_TOOLS["matrix-inverse"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
     // Area Dimension (Space node): centroid annotation (Label / Area / L×B) per Space; Space forwarded on.
@@ -2361,101 +3269,279 @@ export function evaluateFlow(
       if (areaLabels.length > 0) items.push({ nodeId: id, tool: "area-dimension", polygons: [], color: FLOW_TOOLS["area-dimension"].color, isFinal: succs.get(id)!.length === 0, areaLabels });
       continue;
     }
+    // Mitered Join — pure CALCULATION node: graph in, wall polygons out on `val-polygons`. Draws nothing.
     if (data.tool === "mitered-join") {
-      const gp = { ...data.params, ...resolveValueInputs(id) };
-      const inSegs = inputPolylinesOf(id);
-      // "Use same width for all" OFF → stroke each centerline edge at its source segment's own canvas
-      // thickness (matched to a canvas wall by endpoints via pipeGraph); unmatched edges use the slider.
+      const vinMj = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinMj };
+      const anchorMj = chainAnchorByNode.get(id) ?? createAnchor;
+      const inGeomMj = inputPolylinesOf(id);
+      // Parse the input graph once — used to build the centerlines AND resolve per-edge widths below. Edges
+      // tagged `type:"opening"` (from Graph to Openings) are dropped here, so they're never stroked and read
+      // as gaps between the wall runs; every other edge is stroked.
+      const mjGraph = parseGraphJson(gp.graph);
+      const mjNodePx = new Map(mjGraph.nodes.map((n) => [n.id, { x: anchorMj.x + n.x * ppm, y: anchorMj.y + n.y * ppm }]));
+      const graphSegs = (): Point[][] => {
+        const out: Point[][] = [];
+        for (const e of mjGraph.edges) {
+          if (e.type === "opening") continue;
+          const A = mjNodePx.get(e.from_node_id), B = mjNodePx.get(e.to_node_id);
+          if (A && B) out.push([A, B]);
+        }
+        return out;
+      };
+      const inSegs = inGeomMj.length ? inGeomMj : (mjGraph.edges.length ? graphSegs() : polylinesFromGraphJson(gp.graph, anchorMj, ppm));
+      // "Use same width for all" OFF → stroke each centerline edge at its OWN thickness, not the Width
+      // slider. Two sources, in priority order: (1) the input GRAPH JSON's per-edge `thickness` — what Set
+      // Thickness / Merge Graph publish (metres → px at this anchor); (2) a matching CANVAS wall's width
+      // via pipeGraph (for a graph traced off canvas walls). Endpoints are matched with a small tolerance;
+      // an edge that matches neither returns undefined, so evalMiteredJoin falls back to the slider.
+      type WEdge = { ax: number; ay: number; bx: number; by: number; w: number };
       const segWidthPx = (() => {
-        if (gp.useSameWidth !== false || !pipeGraph) return undefined;
-        const xy = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
+        if (gp.useSameWidth !== false) return undefined;
         const TOL = Math.max(1, 0.05 * ppm);
-        const edges = pipeGraph.edges
-          .map((e) => { const A = xy.get(e.a), B = xy.get(e.b); return A && B && e.widthPx != null ? { ax: A.x, ay: A.y, bx: B.x, by: B.y, w: e.widthPx } : null; })
-          .filter((e): e is { ax: number; ay: number; bx: number; by: number; w: number } => e !== null);
-        if (edges.length === 0) return undefined;
-        return (a: Point, b: Point): number | undefined => {
-          for (const e of edges) {
+        const matcher = (es: WEdge[]) => (a: Point, b: Point): number | undefined => {
+          for (const e of es) {
             const fwd = Math.hypot(a.x - e.ax, a.y - e.ay) < TOL && Math.hypot(b.x - e.bx, b.y - e.by) < TOL;
             const rev = Math.hypot(a.x - e.bx, a.y - e.by) < TOL && Math.hypot(b.x - e.ax, b.y - e.ay) < TOL;
             if (fwd || rev) return e.w;
           }
           return undefined;
         };
+        // (1) per-edge thickness carried by the input graph JSON (reuses the parse above; openings are
+        // skipped — they aren't stroked, so they never need a width).
+        const graphEdges: WEdge[] = [];
+        for (const e of mjGraph.edges) {
+          if (e.type === "opening") continue;
+          const A = mjNodePx.get(e.from_node_id), B = mjNodePx.get(e.to_node_id);
+          if (A && B && e.thickness != null) graphEdges.push({ ax: A.x, ay: A.y, bx: B.x, by: B.y, w: Math.max(0.001, e.thickness) * ppm });
+        }
+        // (2) canvas-wall thickness by endpoint (the previous behaviour), as a fallback.
+        const canvasEdges: WEdge[] = [];
+        if (pipeGraph) {
+          const xy = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
+          for (const e of pipeGraph.edges) {
+            const A = xy.get(e.a), B = xy.get(e.b);
+            if (A && B && e.widthPx != null) canvasEdges.push({ ax: A.x, ay: A.y, bx: B.x, by: B.y, w: e.widthPx });
+          }
+        }
+        const graphMatch = graphEdges.length ? matcher(graphEdges) : undefined;
+        const canvasMatch = canvasEdges.length ? matcher(canvasEdges) : undefined;
+        if (!graphMatch && !canvasMatch) return undefined;
+        return (a: Point, b: Point): number | undefined => graphMatch?.(a, b) ?? canvasMatch?.(a, b);
       })();
-      let polys = evalMiteredJoin(inSegs, gp, ppm, segWidthPx);
-      // Get Outer Boundary: dissolve the joined ribbon into the single closed Space bounded by its OUTER
-      // edge (largest union loop). Clipping/Union are skipped — clipping to the centerline would shave off
-      // the outer half. Works for Sharp / Rectangular alike (their tiles abut, so the vector union is clean).
-      if (gp.getOuterBoundary) {
-        // Rectangular joints butt with flat junction boxes whose outer edge is COLLINEAR with the wall —
-        // keep those collinear breakpoints so each partition's wall thickness reads as its own segment when
-        // the outer boundary is dimensioned (room · wall · room). Sharp/curved miter to real corners, so
-        // there's nothing collinear to keep.
-        const keepColl = gp.join === "rectangular";
-        const outer = polygonUnionVector(polys, 0.5, keepColl) ?? rasterUnion(polys);
-        if (outer && outer.length >= 3) polys = [outer];
-      } else {
-        // Clip the ribbon to its source boundary so leaf-branch ends don't poke outside the space (the
-        // half-width end-caps overshoot the polygon at the corners they reach). The boundary is the input
-        // polygon of the upstream Skeleton feeding this graph; with none found (e.g. a raw Graph source)
-        // there's nothing to clip to, so leave the ribbon untouched.
-        if (gp.clipToBoundary !== false) {
-          // Prefer the explicitly-wired clip Space (gin-boundary); else auto-detect the upstream Skeleton's space.
-          const explicit = geomInputOf(id, "boundary").filter((p) => p.length >= 3);
-          const bounds = explicit.length ? explicit : upstreamBoundaries(id);
-          if (bounds.length) polys = polys.map((r) => clipRibbonToBoundaries(r, bounds)).filter((p) => p.length >= 3);
-        }
-        // Union: fuse the per-segment ribbons into a single Space (exact vector union for the abutting miter
-        // joints; raster fallback if any overlap). Unchecked → keep one polygon per segment.
-        if (gp.union && polys.length > 1) {
-          const merged = polygonUnionVector(polys) ?? rasterUnion(polys);
-          if (merged && merged.length >= 3) polys = [merged];
-        }
-      }
-      outputs.set(id, polys);
-      // Output handles: Get Outer Boundary / "single" → one endpoint carrying the resulting Space(s);
-      // otherwise one endpoint per Space (Union already collapsed polys to a single Space).
-      handleGroups.set(id, (gp.getOuterBoundary || gp.outputMode === "single") ? [polys] : polys.map((p) => [p]));
-      // Carry the input centerlines + width/joint so COMMIT can lay down real Path walls in the document.
-      // Skipped for Get Outer Boundary — that commits the outer-boundary polygon as a closed Space instead
-      // (handled by the host's generic terminal-geometry commit, since there's no miteredPath here).
-      const commitSegs = inSegs.filter((s) => s.length >= 2);
-      const baseWidthM = num(gp.width, 2);
-      const segWidthsM = segWidthPx ? commitSegs.map((s) => { const w = segWidthPx(s[0], s[1]); return w != null ? w / ppm : baseWidthM; }) : undefined;
-      const miteredPath = gp.getOuterBoundary ? undefined : { segments: commitSegs, widthM: baseWidthM, join: typeof gp.join === "string" ? gp.join : "sharp", segWidthsM };
-      if (polys.length > 0) items.push({ nodeId: id, tool: "mitered-join", polygons: polys, color: FLOW_TOOLS["mitered-join"].color, isFinal: succs.get(id)!.length === 0, cellCount: polys.length, ...(miteredPath ? { miteredPath } : {}) });
+      const polys = evalMiteredJoin(inSegs, gp, ppm, segWidthPx);
+      // Pure VALUE node (math in / math out): stroke the graph into per-segment mitred wall polygons and
+      // publish them on `val-polygons` ONLY — draws nothing on the canvas (no geometry output / commit).
+      // COMBINING the bands is delegated to other nodes: union into a seamless poché → Boolean 2D (Union) or
+      // Merge; clip to a footprint → Boolean 2D (Intersect); outer boundary → Graph Reduce "Keep Outer
+      // Boundary" upstream. Wire val-polygons into a Polygon node (renders even-odd) to draw.
+      outputs.set(id, []);
+      const mjValues = computeNodeValues("mitered-join", polys, ppm, anchorMj);
+      if (mjValues) nodeValues.set(id, mjValues);
+      items.push({ nodeId: id, tool: "mitered-join", polygons: [], color: FLOW_TOOLS["mitered-join"].color, isFinal: false, values: mjValues, valueInputs: Object.keys(vinMj).length ? vinMj : undefined });
       continue;
     }
-    if (data.tool === "graph-smooth") {
+    // Graph to Path: thicken the incoming graph (polylines) into ONE seamless constant-width band —
+    // the Skeleton node's Make-path decoupled into its own node (same skeletonPathBands machinery).
+    // materialisesSpace → the band live-materialises as a real Space when the Live toggle is on, and
+    // Run Flow commits it as a Corridor Space (host band-Space commit; see onRunCommit).
+    if (data.tool === "graph-to-path") {
       const gp = { ...data.params, ...resolveValueInputs(id) };
-      const polys = evalGraphSmooth(inputPolylinesOf(id), gp);
+      const lines = inputPolylinesOf(id).filter((pl) => pl.length >= 2);
+      const widthPx = Math.max(0.05, num(gp.width, 1)) * (ppm > 0 ? ppm : 1);
+      let polys = lines.length ? skeletonPathBands(lines, widthPx).filter((p) => p.length >= 3) : [];
+      // Clip the band to its source boundary — a Space wired into the `gin-boundary` "Clip space" input
+      // takes priority; else auto-detect the upstream Skeleton's source Space. Uses a CONCAVE-SAFE boolean
+      // intersection (clipBandsToBoundaries), so an L / U / concave space trims the path correctly —
+      // Sutherland–Hodgman (the old clip) only handled convex boundaries. A wired checkbox arrives as
+      // 0/1 or "false", so compare loosely.
+      const clipOn = !(gp.clipToBoundary === false || gp.clipToBoundary === 0 || gp.clipToBoundary === "false");
+      if (clipOn && polys.length) {
+        const explicit = geomInputOf(id, "boundary").filter((p) => p.length >= 3);
+        const bounds = explicit.length ? explicit : upstreamBoundaries(id);
+        if (bounds.length) polys = clipBandsToBoundaries(polys, bounds);
+      }
       outputs.set(id, polys);
-      if (polys.length > 0) items.push({ nodeId: id, tool: "graph-smooth", polygons: polys, color: FLOW_TOOLS["graph-smooth"].color, isFinal: succs.get(id)!.length === 0, openPath: true });
+      handleGroups.set(id, gp.outputMode === "single" ? [polys] : polys.map((p) => [p]));
+      if (polys.length > 0) items.push({ nodeId: id, tool: "graph-to-path", polygons: polys, color: FLOW_TOOLS["graph-to-path"].color, isFinal: succs.get(id)!.length === 0, cellCount: polys.length });
+      continue;
+    }
+    // Graph Smoothing — pure CALCULATION node: graph in, graph out on `val-graph`. Draws nothing.
+    if (data.tool === "graph-smooth") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const polys = evalGraphSmooth(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm), gp);
+      outputs.set(id, []);
+      const values = computeNodeValues("graph-smooth", polys, ppm, anchorG);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "graph-smooth", polygons: [], color: FLOW_TOOLS["graph-smooth"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
       continue;
     }
     // Longest Branch: the single longest path through the incoming graph, emitted as one polyline graph.
+    // Longest Branch — pure CALCULATION node: graph in, graph out on `val-graph`. Draws nothing.
     if (data.tool === "longest-branch") {
-      const branch = evalLongestBranch(inputPolylinesOf(id));
-      outputs.set(id, branch);
-      if (branch.length > 0) items.push({ nodeId: id, tool: "longest-branch", polygons: branch, color: FLOW_TOOLS["longest-branch"].color, isFinal: succs.get(id)!.length === 0, openPath: true });
+      const vinG = resolveValueInputs(id);
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const branch = evalLongestBranch(inG.length ? inG : polylinesFromGraphJson({ ...data.params, ...vinG }.graph, anchorG, ppm));
+      outputs.set(id, []);
+      const values = computeNodeValues("longest-branch", branch, ppm, anchorG);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "longest-branch", polygons: [], color: FLOW_TOOLS["longest-branch"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
       continue;
     }
     // Spring Layout: force-directed (spring) layout on EVERY vertex → a new graph (polylines) with the
     // same number of segments and edges, just new coordinates (no degree-2 contraction).
+    // Spring Layout — pure CALCULATION node: graph in, graph out on `val-graph`. Draws nothing.
     if (data.tool === "spring-layout") {
-      const gp = { ...data.params, ...resolveValueInputs(id) };
-      const polys = evalSpringLayout(inputPolylinesOf(id), gp, ppm);
-      outputs.set(id, polys);
-      if (polys.length > 0) items.push({ nodeId: id, tool: "spring-layout", polygons: polys, color: FLOW_TOOLS["spring-layout"].color, isFinal: succs.get(id)!.length === 0, openPath: true });
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const polys = evalSpringLayout(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm), gp, ppm);
+      outputs.set(id, []);
+      const values = computeNodeValues("spring-layout", polys, ppm, anchorG);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "spring-layout", polygons: [], color: FLOW_TOOLS["spring-layout"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
       continue;
     }
     // Graph Reduce: clean / reduce the incoming graph by the chosen algorithm (mode) → a graph out.
+    // Graph Reduce — pure CALCULATION node: graph in, graph out on `val-graph`. Draws nothing.
     if (data.tool === "graph-reduce") {
-      const gp = { ...data.params, ...resolveValueInputs(id) };
-      const polys = evalGraphReduce(inputPolylinesOf(id), gp, ppm);
-      outputs.set(id, polys);
-      if (polys.length > 0) items.push({ nodeId: id, tool: "graph-reduce", polygons: polys, color: FLOW_TOOLS["graph-reduce"].color, isFinal: succs.get(id)!.length === 0, openPath: true });
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      // Join to Boundary needs the boundary polygon (wire Space Geometry val-points into valin-boundary).
+      const boundaryG = gp.mode === "join-boundary" ? polygonFromMetreList(gp.boundary, anchorG, ppm) : undefined;
+      const polys = evalGraphReduce(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm), gp, ppm, boundaryG);
+      outputs.set(id, []);
+      const values = computeNodeValues("graph-reduce", polys, ppm, anchorG);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "graph-reduce", polygons: [], color: FLOW_TOOLS["graph-reduce"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Simplify — pure CALCULATION node: Douglas–Peucker on every incoming polyline (graph in, graph out on
+    // `val-graph`). Collapses a dense freehand/vectorised stroke into a few straight segments. Draws nothing.
+    if (data.tool === "graph-simplify") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const polys = evalGraphSimplify(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm), gp, ppm);
+      outputs.set(id, []);
+      const values = computeNodeValues("graph-simplify", polys, ppm, anchorG);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "graph-simplify", polygons: [], color: FLOW_TOOLS["graph-simplify"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Clip inside Space — pure CALCULATION node: trim the incoming graph to a boundary polygon (graph in,
+    // graph out on `val-graph`). Wire Space Geometry val-points into valin-boundary. Draws nothing.
+    if (data.tool === "graph-clip") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const boundaryG = polygonFromMetreList(gp.boundary, anchorG, ppm);
+      const polys = evalGraphClip(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm), gp, ppm, boundaryG);
+      outputs.set(id, []);
+      const values = computeNodeValues("graph-clip", polys, ppm, anchorG);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "graph-clip", polygons: [], color: FLOW_TOOLS["graph-clip"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Fit Lines — pure CALCULATION node: replace each incoming branch with straight, best-fit (TLS) segments
+    // (graph in, graph out on `val-graph`). Feed branches (Graph Reduce → Dissolve) for the cleanest result.
+    if (data.tool === "graph-fit-lines") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const polys = evalGraphFitLines(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm), gp, ppm);
+      outputs.set(id, []);
+      const values = computeNodeValues("graph-fit-lines", polys, ppm, anchorG);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "graph-fit-lines", polygons: [], color: FLOW_TOOLS["graph-fit-lines"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Graph Classify — pure CALCULATION node: hierarchical branch ordering of a tree-like graph, split onto
+    // THREE outputs — `val-longest`, `val-secondary`, `val-tertiary`, each carrying that tier's edges as a
+    // graph JSON. Draws nothing. Width each output (Set Thickness) → Merge Graph → Mitered Join for a road net.
+    if (data.tool === "graph-classify") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const tiers = evalGraphClassify(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm));
+      outputs.set(id, []);
+      const values: Record<string, number | string> = {
+        longest: polylinesToGraphJson(tiers.longest, ppm, anchorG).json,
+        secondary: polylinesToGraphJson(tiers.secondary, ppm, anchorG).json,
+        tertiary: polylinesToGraphJson(tiers.tertiary, ppm, anchorG).json,
+      };
+      nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "graph-classify", polygons: [], color: FLOW_TOOLS["graph-classify"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Set Thickness: overwrite `thickness` (metres) on every edge of the incoming graph, keeping its node
+    // ids + coordinates. A pure value node — graph in (val-graph, else the param, else wired geometry),
+    // graph out; draws nothing. Works on the graph STRUCTURE so nothing else about the graph changes.
+    if (data.tool === "set-thickness") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const rawGraph = (typeof gp.graph === "string" && gp.graph.trim())
+        ? gp.graph
+        : (inG.length ? polylinesToGraphJson(inG, ppm, anchorG).json : "");
+      const res = setGraphThicknessJson(rawGraph, Math.max(0, num(gp.thickness, 0.1)));
+      outputs.set(id, []);
+      const values: Record<string, number | string> = { graph: res.json, nodeCount: res.nodeCount, edgeCount: res.edgeCount };
+      nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "set-thickness", polygons: [], color: FLOW_TOOLS["set-thickness"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Merge Graph: union EVERY graph wired into valin-graph (fan-in) into one, preserving each edge's own
+    // thickness (so a 0.2 m outer graph + 0.1 m inner graph merge with both widths intact). Coincident
+    // nodes collapse so the merged graph stays connected. A pure value node — draws nothing.
+    if (data.tool === "merge-graph") {
+      const raws: string[] = [];
+      for (const e of edges) {
+        if (e.target !== id || e.targetHandle !== "valin-graph") continue;
+        const srcVals = nodeValues.get(e.source);
+        if (!srcVals) continue;
+        const srcKey = e.sourceHandle && e.sourceHandle.startsWith("val-") ? e.sourceHandle.slice(4) : "graph";
+        const gj = srcVals[srcKey] ?? srcVals.graph;
+        if (typeof gj === "string" && gj.trim()) raws.push(gj);
+      }
+      // A manual graph param is used only when nothing is wired in.
+      if (!raws.length && typeof data.params.graph === "string" && data.params.graph.trim()) raws.push(data.params.graph);
+      const merged = mergeGraphJsons(raws);
+      outputs.set(id, []);
+      const values: Record<string, number | string> = { graph: merged.json, nodeCount: merged.nodeCount, edgeCount: merged.edgeCount };
+      nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "merge-graph", polygons: [], color: FLOW_TOOLS["merge-graph"].color, isFinal: false, values });
+      continue;
+    }
+    // Graph to Openings: carve door/window gaps into a partition graph — one window per OUTER boundary edge,
+    // one door per ROOM (its longest interior wall). Output is a graph whose edges carry from/to/thickness +
+    // `type` ("wall" | "opening"); Mitered Join strokes the walls and skips the openings (leaving gaps). A
+    // pure value node — draws nothing.
+    if (data.tool === "graph-to-openings") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const g = graphToOpenings(parseGraphJson(gp.graph), Math.max(0, num(gp.outerWidth, 1)), Math.max(0, num(gp.innerWidth, 0.9)));
+      outputs.set(id, []);
+      const values: Record<string, number | string> = {
+        graph: JSON.stringify({ nodes: g.nodes, edges: g.edges }),
+        nodeCount: g.nodes.length,
+        edgeCount: g.edges.length,
+        openings: g.edges.filter((e) => e.type === "opening").length,
+      };
+      nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "graph-to-openings", polygons: [], color: FLOW_TOOLS["graph-to-openings"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
       continue;
     }
     // Voronoi Bloom: grow a circle from each graph node, clipped to its Voronoi cell → one Space per grown
@@ -2466,27 +3552,39 @@ export function evaluateFlow(
       const explicit = geomInputOf(id, "boundary").filter((p) => p.length >= 3);
       const auto = explicit.length ? explicit : upstreamBoundaries(id);
       const boundary = auto.find((p) => p.length >= 3) ?? null;
-      const polys = evalVoronoiBloom(inputPolylinesOf(id), boundary, gp, ppm);
-      outputs.set(id, polys);
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const polys = evalVoronoiBloom(inG.length ? inG : polylinesFromGraphJson(gp.graph, anchorG, ppm), boundary, gp, ppm);
+      outputs.set(id, []);
       handleGroups.set(id, gp.outputMode === "single" ? [polys] : polys.map((p) => [p]));
-      if (polys.length > 0) items.push({ nodeId: id, tool: "voronoi-bloom", polygons: polys, color: FLOW_TOOLS["voronoi-bloom"].color, isFinal: succs.get(id)!.length === 0, cellCount: polys.length });
+      const vbValues = computeNodeValues("voronoi-bloom", polys, ppm, anchorG);
+      if (vbValues) nodeValues.set(id, vbValues);
+      items.push({ nodeId: id, tool: "voronoi-bloom", polygons: [], color: FLOW_TOOLS["voronoi-bloom"].color, isFinal: false, values: vbValues });
       continue;
     }
     // Graph to Spaces: extract the graph's bounded faces as Spaces. "single" → all on one endpoint;
     // "perCell" → one endpoint per space.
     if (data.tool === "graph-to-spaces") {
-      let faces = evalGraphToSpaces(inputPolylinesOf(id), ppm, pathEdges);
+      const anchorGS = chainAnchorByNode.get(id) ?? createAnchor;
+      const inGS = inputPolylinesOf(id);
+      let faces = evalGraphToSpaces(inGS.length ? inGS : polylinesFromGraphJson({ ...data.params, ...resolveValueInputs(id) }.graph, anchorGS, ppm), ppm, pathEdges);
       // Area floor — drop noise faces (text boxes, hatching, dimension loops) below Min area.
       const ppm2 = ppm * ppm || 1;
       const minA = Math.max(0, num(data.params.minArea, 0));
       if (minA > 0) faces = faces.filter((f) => Math.abs(polygonArea(f)) / ppm2 >= minA);
       let totalArea = 0;
       for (const f of faces) totalArea += Math.abs(polygonArea(f)) / ppm2;
-      outputs.set(id, faces);
+      outputs.set(id, []);
       handleGroups.set(id, data.params.outputMode === "single" ? [faces] : faces.map((p) => [p]));
-      const gvals = { spaces: faces.length, totalArea };
+      const gvals: Record<string, number | string> = { spaces: faces.length, totalArea };
+      const gsPolys = computeNodeValues("graph-to-spaces", faces, ppm, anchorGS);
+      if (gsPolys?.polygons != null) gvals.polygons = gsPolys.polygons;
       nodeValues.set(id, gvals);
-      if (faces.length > 0) items.push({ nodeId: id, tool: "graph-to-spaces", polygons: faces, color: FLOW_TOOLS["graph-to-spaces"].color, isFinal: succs.get(id)!.length === 0, cellCount: faces.length, values: gvals });
+      // Expose the faces on `polygons` (not just handleGroups): that is the channel the preview overlay and
+      // the host's Live-materialise effect both read, so the extracted rooms can become REAL Spaces. Auto
+      // room detection deliberately ignores `flowOwner` walls, so Live segments alone never produce a Space
+      // — this node is how a graph turns into rooms.
+      items.push({ nodeId: id, tool: "graph-to-spaces", polygons: faces, color: FLOW_TOOLS["graph-to-spaces"].color, isFinal: false, values: gvals });
       continue;
     }
     // Graph Metrics: measure the incoming graph's topology and forward the graph unchanged so it can
@@ -2499,15 +3597,110 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "graph-metrics", polygons: [], color: FLOW_TOOLS["graph-metrics"].color, isFinal: succs.get(id)!.length === 0, values: vals });
       continue;
     }
+    // Graph Geometry: publish the incoming graph's STRUCTURE as JSON on val-graph — the node id list plus
+    // one entry per edge (from_node_id / to_node_id / thickness in METRES). Read from the canvas graph
+    // (`pipeGraph`) rather than derived from the polylines, so the ids are the REAL canvas ids that line up
+    // with the Schema / Properties tab. Thickness prefers the segment's schema `wall-thickness` attribute
+    // and falls back to the drawn segment width. The graph is forwarded unchanged on the main output.
+    if (data.tool === "graph-geometry") {
+      const lines = inputPolylinesOf(id);
+      outputs.set(id, lines);
+      let graphJson = '{"nodes":[],"edges":[]}';
+      let nodeCount = 0;
+      let edgeCount = 0;
+      if (pipeGraph && pipeGraph.edges.length) {
+        // Restrict to the edges actually wired in (e.g. one Skeleton branch), matching endpoints against
+        // the input polylines exactly as Wall Builder does. Nothing matched → publish the whole graph.
+        const ptById = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
+        const d2 = (p: { x: number; y: number }, q: { x: number; y: number }) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+        const TOL2 = 9;
+        const onInput = (A: { x: number; y: number }, B: { x: number; y: number }): boolean =>
+          lines.some((pl) => {
+            for (let i = 0; i + 1 < pl.length; i++) {
+              const s = pl[i], t = pl[i + 1];
+              if ((d2(s, A) < TOL2 && d2(t, B) < TOL2) || (d2(s, B) < TOL2 && d2(t, A) < TOL2)) return true;
+            }
+            return false;
+          });
+        const matched = lines.length
+          ? pipeGraph.edges.filter((e) => {
+              const A = ptById.get(e.a); const B = ptById.get(e.b);
+              return A && B ? onInput(A, B) : false;
+            })
+          : [];
+        const use = matched.length ? matched : pipeGraph.edges;
+        const segDefs = undefined; // no schema node required — role lookup falls back to the drawn width
+        const usedIds: string[] = [];
+        const seenNode = new Set<string>();
+        const outEdges = use.map((e) => {
+          for (const nid of [e.a, e.b]) if (!seenNode.has(nid)) { seenNode.add(nid); usedIds.push(nid); }
+          // Schema `wall-thickness` (metres) wins; otherwise the drawn segment width (px → m).
+          const fromWidth = typeof e.widthPx === "number" && e.widthPx > 0 ? e.widthPx / ppm : 0;
+          const thickness = resolveNum(segDefs, pipeGraph.attrs.segments, e.id, "thickness", ROLES.wallThickness, fromWidth);
+          return { from_node_id: e.a, to_node_id: e.b, thickness: Math.round(thickness * 1e4) / 1e4 };
+        });
+        // Node POSITIONS ride along — an id-only list can't be redrawn, so without these the JSON couldn't
+        // feed a Network node. ANCHOR-relative metres, the shared frame (see polysToMetreListJson).
+        const anchorGg = chainAnchorByNode.get(id) ?? createAnchor;
+        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+        const outNodes = usedIds.map((nid) => {
+          const n = ptById.get(nid);
+          return { id: nid, x: n ? rr((n.x - anchorGg.x) / ppm) : 0, y: n ? rr((n.y - anchorGg.y) / ppm) : 0 };
+        });
+        nodeCount = outNodes.length;
+        edgeCount = outEdges.length;
+        graphJson = JSON.stringify({ nodes: outNodes, edges: outEdges });
+      }
+      const vals = { graph: graphJson, nodeCount, edgeCount };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "graph-geometry", polygons: [], color: FLOW_TOOLS["graph-geometry"].color, isFinal: succs.get(id)!.length === 0, values: vals });
+      continue;
+    }
+    // Freehand Geometry: serialise the wired Freehand strokes (polylines) into graph JSON on `val-graph`, so the
+    // pure-value Graph nodes (Set Thickness, Merge Graph, Mitered Join, Graph to Openings) can consume the
+    // freehand drawing. Freehand is already vector — this is the geometry→JSON bridge, mirroring Graph Geometry.
+    if (data.tool === "freehand-geometry") {
+      const anchorFg = chainAnchorByNode.get(id) ?? createAnchor;
+      const lines = inputPolylinesOf(id);
+      outputs.set(id, lines); // forward the strokes on the main output so this node can sit inline in a pipeline
+      const g = polylinesToGraphJson(lines, ppm, anchorFg);
+      const vals = { graph: g.json, nodeCount: g.nodeCount, edgeCount: g.edgeCount };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "freehand-geometry", polygons: [], color: FLOW_TOOLS["freehand-geometry"].color, isFinal: succs.get(id)!.length === 0, values: vals });
+      continue;
+    }
     // Merge (multi-space): boolean UNION of EVERY connected space → one combined Space (outer outline).
+    // Merge — pure CALCULATION node, and the only one that consumes a whole SET: it unions every polygon
+    // in the list into one outline, so it reads them all rather than the largest. Draws NOTHING.
     if (data.tool === "merge") {
-      const inputs = inputsOf(id).filter((p) => p.length >= 3);
+      const anchorMg = chainAnchorByNode.get(id) ?? createAnchor;
+      const geomInMg = inputsOf(id).filter((p) => p.length >= 3);
+      const vinMg = resolveValueInputs(id);
+      const mgInputs = geomInMg.length ? geomInMg : polygonsFromMetreList({ ...data.params, ...vinMg }.polygon, anchorMg, ppm);
       // Prefer the exact vector union (straight edges) for abutting/touching spaces; fall back to the
       // raster union only when interiors actually overlap (vector returns null).
-      const merged = inputs.length ? (polygonUnionVector(inputs) ?? rasterUnion(inputs)) : null;
+      const merged = mgInputs.length ? (polygonUnionVector(mgInputs) ?? rasterUnion(mgInputs)) : null;
       const out = merged && merged.length >= 3 ? [merged] : [];
-      outputs.set(id, out);
-      if (out.length) items.push({ nodeId: id, tool: "merge", polygons: out, color: FLOW_TOOLS.merge.color, isFinal: succs.get(id)!.length === 0 });
+      outputs.set(id, []);
+      const values = computeNodeValues("merge", out, ppm, anchorMg);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "merge", polygons: [], color: FLOW_TOOLS.merge.color, isFinal: false, values, valueInputs: Object.keys(vinMg).length ? vinMg : undefined });
+      continue;
+    }
+    // Boolean 2D: a pure CALCULATION node — union / subtract / intersect / xor of two 2D shapes A and B.
+    // Each shape is a coordinate list (flat outline OR nested list, read even-odd so a poché's holes count);
+    // the result is published on val-polygons (outer + hole rings) for a Polygon node to draw even-odd.
+    if (data.tool === "boolean-2d") {
+      const anchorB2 = chainAnchorByNode.get(id) ?? createAnchor;
+      const vinB2 = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinB2 };
+      const opnA = polygonsFromMetreList(typeof gp.a === "string" ? gp.a : "", anchorB2, ppm);
+      const opnB = polygonsFromMetreList(typeof gp.b === "string" ? gp.b : "", anchorB2, ppm);
+      const res = evalBoolean2d(opnA, opnB, typeof gp.op === "string" ? gp.op : "union");
+      outputs.set(id, []);
+      const values = computeNodeValues("boolean-2d", res, ppm, anchorB2);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "boolean-2d", polygons: [], color: FLOW_TOOLS["boolean-2d"].color, isFinal: false, values, valueInputs: Object.keys(vinB2).length ? vinB2 : undefined });
       continue;
     }
     // Inset 3D (Mass): inset each incoming Mass footprint by Offset — Inside shrinks it, Outside grows it —
@@ -2540,11 +3733,10 @@ export function evaluateFlow(
       if (out.length) items.push({ nodeId: id, tool: "smooth-3d", polygons: out, color: FLOW_TOOLS["smooth-3d"].color, isFinal: succs.get(id)!.length === 0 });
       continue;
     }
-    const input = inputOf(id);
-    if (!input || input.length < 3) { outputs.set(id, []); continue; }
-    // Apply wired value inputs (amber endpoints) before geometry runs: each `valin-<key>` number
-    // overrides the matching param. `surfacedVin` is what the host bakes back onto the controls — only
-    // numeric/slider-backed keys (string-coerced ones like Split's ratios are applied but not echoed).
+    // Apply wired value inputs (amber endpoints) UP FRONT — before the geometry-input check — so a value
+    // wired into `valin-<key>` overrides the matching param AND surfaces back onto the node's controls (via
+    // valueInputs → vinByNode) even when the op has no geometry input connected yet. `surfacedVin` is what
+    // the host bakes back onto the controls — only numeric/slider-backed keys.
     let evalParams = data.params;
     let optimisedTilt: number | undefined;
     let surfacedVin: Record<string, number | string> = {};
@@ -2552,15 +3744,37 @@ export function evaluateFlow(
       const vin = resolveValueInputs(id);
       if (Object.keys(vin).length) {
         const merged: Record<string, unknown> = { ...data.params };
+        // Field kinds for this tool — a value wired into a checkbox param must coerce to a real BOOLEAN
+        // (some algorithms test `param !== false` / `param === false`, which a numeric 0/1 would fail).
+        const fieldsByKey = new Map((FLOW_TOOLS[data.tool].fields as Array<{ key: string; kind?: string }> | undefined ?? []).map((f) => [f.key, f.kind] as const));
         for (const [k, v] of Object.entries(vin)) {
           if (data.tool === "optimise-rect" && k === "optimiseAxisTilt") merged[k] = Number(v) !== 0;
           else if (data.tool === "optimise-rect" && k === "count") merged[k] = Math.max(1, Math.round(Number(v)));
           else if (data.tool === "split" && k === "ratios") merged[k] = String(v);
+          else if (data.tool === "inset" && k === "inside") merged[k] = typeof v === "string" ? v === "true" || v === "1" : Number(v) !== 0;
+          else if (data.tool === "inset" && (k === "mode" || k === "frontEdgeMode" || k === "outputMode" || k === "setbacks")) merged[k] = String(v);
+          else if (fieldsByKey.get(k) === "checkbox") merged[k] = typeof v === "string" ? v === "true" || v === "1" : Number(v) !== 0;
           else merged[k] = v; // numeric params (offsets, angle, axis tilt, edge index, …)
         }
         evalParams = merged;
         surfacedVin = { ...vin }; // host bakes these back; Split's `ratios` is stringified there
       }
+    }
+    // A list-driven tool (Inset's `polygon`, Skeleton's `vertices`) can run with NO wired Space, so resolve
+    // its coordinate list HERE — before the bail below. This gate runs ahead of every tool's own block, so
+    // without it the node `continue`s past its code and silently produces nothing, while line 3012 still
+    // surfaces the wired value onto its params. That reads as "the list arrived but nothing happened".
+    let input = inputOf(id);
+    if ((!input || input.length < 3) && LIST_INPUT_PARAM[data.tool]) {
+      const anchorForList = chainAnchorByNode.get(id) ?? createAnchor;
+      input = polygonFromMetreList(evalParams[LIST_INPUT_PARAM[data.tool]!], anchorForList, ppm) ?? input;
+    }
+    if (!input || input.length < 3) {
+      outputs.set(id, []);
+      // No geometry to operate on yet — but still surface any wired value inputs onto the node, so a value
+      // wired in visibly "passes through" to this node before its geometry input is connected.
+      if (Object.keys(surfacedVin).length) items.push({ nodeId: id, tool: data.tool, polygons: [], color: FLOW_TOOLS[data.tool].color, isFinal: false, valueInputs: surfacedVin });
+      continue;
     }
     // Optimise Rectangle "optimise axis tilt": auto-pick the Custom tilt that maximises packed area and
     // use it for the geometry; it drives axisAngle, so drop a wired axisAngle from the bake-back.
@@ -2636,70 +3850,103 @@ export function evaluateFlow(
     //  • several inputs → one handle per INPUT SPACE (its segments bundled);
     //  • "single" output mode → one handle carrying every segment.
     if (data.tool === "skeleton") {
-      // "Regions" (default) → the closed face polygons the medial axis carves out (insettable spaces).
-      // "Branches" → the raw medial-axis line segments (old behaviour, for visualisation).
-      const regions = data.params.emit !== "branches";
-      const inputs = inputsOf(id);
+      // Pure SKELETONIZATION: always the raw medial-axis BRANCHES (unpruned — `pruneEnds:false`). The old
+      // post-processing (prune spurs, longest branch, join to boundary) and the Regions/Emit switch have
+      // moved to the Graph Reduce node — wire val-branches into a Graph Reduce for those.
+      // A wired Space wins; with none, fall back to the `vertices` coordinate list. Reads `inputsOf` (the
+      // MULTI-space accessor), which the singular `input` the list gate resolved earlier never reaches.
+      const geomIn = inputsOf(id);
+      const anchorSk = chainAnchorByNode.get(id) ?? createAnchor;
+      const skelFromList = geomIn.length ? undefined : polygonFromMetreList(evalParams.vertices, anchorSk, ppm);
+      const inputs = skelFromList ? [skelFromList] : geomIn;
       const groups: Point[][][] = [];
-      const allJoins: Point[][] = [];
-      const wantJoins = !regions && data.params.type === "straight-skeleton" && Boolean(data.params.pruneEnds) && Boolean(data.params.joinToBoundary);
       for (const sp of inputs) {
         if (sp.length < 3) continue;
-        const out = regions ? evalSkeletonRegions(sp, evalParams, ppm) : evalSkeleton(sp, evalParams, ppm);
+        const out = evalSkeleton(sp, { ...evalParams, pruneEnds: false, longestBranch: false, makePath: false }, ppm);
         if (out.length) groups.push(out);
-        if (wantJoins) allJoins.push(...computeSkeletonBoundaryJoins(sp, "straight-skeleton").map((e) => [e.p1, e.p2]));
       }
       const all = groups.flat();
-      outputs.set(id, all);
-      const handles: Point[][][] =
-        evalParams.outputMode === "single" ? [all]
-        : groups.length > 1 ? groups
-        : (groups[0] ?? []).map((p) => [p]);
-      handleGroups.set(id, handles);
-      const isFinal = succs.get(id)!.length === 0;
-      if (all.length > 0) items.push({ nodeId: id, tool: "skeleton", polygons: all, color: FLOW_TOOLS.skeleton.color, isFinal, cellCount: handles.length });
-      if (allJoins.length > 0) items.push({ nodeId: `${id}__join`, tool: "skeleton", polygons: allJoins, color: "#ef4444", isFinal });
+      outputs.set(id, []); // value-only: nothing flows on as a Space
+      handleGroups.set(id, evalParams.outputMode === "single" ? [all] : groups.length > 1 ? groups : (groups[0] ?? []).map((p) => [p]));
+      // Publish the medial axis both ways: `branches` as node/edge GRAPH JSON, `polygons` as the raw lines.
+      const branchGraph = polylinesToGraphJson(all, ppm, anchorSk);
+      const skelVals = {
+        branches: branchGraph.json,
+        polygons: polysToMetreListJson(all, ppm, anchorSk),
+        polygonCount: all.length,
+        nodeCount: branchGraph.nodeCount,
+        edgeCount: branchGraph.edgeCount,
+      };
+      nodeValues.set(id, skelVals);
+      // Pushed even with NO output so a wired `vertices` still surfaces onto the param (a list-driven
+      // Skeleton never reaches the generic no-geometry bail). Value-only: nothing is drawn.
+      items.push({ nodeId: id, tool: "skeleton", polygons: [], color: FLOW_TOOLS.skeleton.color, isFinal: false, values: skelVals, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Split / BSP (multi-space): partition EVERY incoming space. Output handles are GROUPED —
     //  • single input space → one handle per piece (unchanged);
     //  • several input spaces → one handle per INPUT SPACE, each carrying that space's pieces (a bundle);
     //  • "single" output mode → one handle carrying every piece of every space.
-    if (data.tool === "split" || data.tool === "bsp") {
-      const inputs = inputsOf(id);
-      const groups: Point[][][] = [];
-      for (const sp of inputs) {
-        if (sp.length < 3) continue;
-        const pieces = data.tool === "split" ? evalSplit(sp, evalParams, ppm) : evalBsp(sp, evalParams, ppm);
-        if (pieces.length) groups.push(pieces);
+    // BSP is a pure CALCULATION node: coordinates in, coordinates out. Split it out from the shared
+    // block below — that one reads `inputsOf` (the MULTI-space accessor), which the singular `input`
+    // resolved by the list gate never reaches. Publishes every cell on `val-polygons` and draws NOTHING,
+    // in 2D or 3D (it used to emit `bspWalls` for the live 3D partition preview).
+    if (data.tool === "bsp") {
+      const anchorBsp = chainAnchorByNode.get(id) ?? createAnchor;
+      const geomInBsp = inputsOf(id);
+      const bspFromList = geomInBsp.length ? undefined : polygonFromMetreList(evalParams.polygon, anchorBsp, ppm);
+      const bspInputs = bspFromList ? [bspFromList] : geomInBsp;
+      const cells = bspInputs.flatMap((sp) => (sp.length >= 3 ? evalBsp(sp, evalParams, ppm) : []));
+      outputs.set(id, []);
+      const values: Record<string, number | string> = { ...(computeNodeValues("bsp", cells, ppm, anchorBsp) ?? {}) };
+      // `val-graph` — the PARTITION NETWORK: every cell boundary as a node/edge graph. Each cell is closed
+      // back to its first point so the ring's last edge isn't dropped, and polylinesToGraphJson dedupes by
+      // node pair, so a wall shared by two cells becomes ONE edge rather than two coincident ones. Edges
+      // carry NO thickness — BSP is partition-only; apply wall thickness downstream with a Set Thickness node.
+      if (cells.length) {
+        const rings = cells.filter((c) => c.length >= 3).map((c) => [...c, c[0]]);
+        // Split ring edges at T-junctions FIRST, so a long cell edge spanning two shorter neighbours becomes
+        // a chain through the shared mid-vertex instead of overlapping them — a pure planar graph (val-graph
+        // only; val-polygons still carries the un-split cells).
+        const pureRings = splitPolylinesAtJunctions(rings);
+        const g = polylinesToGraphJson(pureRings, ppm, anchorBsp);
+        values.graph = g.json;
+        values.nodeCount = g.nodeCount;
+        values.edgeCount = g.edgeCount;
       }
-      const allPieces = groups.flat();
-      outputs.set(id, allPieces);
-      const handles: Point[][][] =
-        evalParams.outputMode === "single" ? [allPieces]
-        : groups.length > 1 ? groups
-        : (groups[0] ?? []).map((p) => [p]);
-      handleGroups.set(id, handles);
-      if (allPieces.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        if (data.tool === "bsp") {
-          const innerWidthPx = evalParams.showInnerOpenings ? Math.max(0.05, num(evalParams.innerOpeningWidth, 0.9)) * ppm : null;
-          const outerWidthPx = evalParams.showOuterOpenings ? Math.max(0.05, num(evalParams.outerOpeningWidth, 1.0)) * ppm : null;
-          const bspWalls = computeBspOpeningWalls(allPieces, { innerWidthPx, outerWidthPx });
-          const displayPolygons = (innerWidthPx != null || outerWidthPx != null)
-            ? bspWalls.filter((w) => w.kind === "wall").map((w) => [w.a, w.b])
-            : undefined;
-          items.push({ nodeId: id, tool: "bsp", polygons: allPieces, color: FLOW_TOOLS.bsp.color, isFinal, displayPolygons, bspWalls, cellCount: handles.length });
-        } else {
-          items.push({ nodeId: id, tool: "split", polygons: allPieces, color: FLOW_TOOLS.split.color, isFinal, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined, cellCount: handles.length });
-        }
-      }
+      nodeValues.set(id, values);
+      // Pushed even with NO cells, so a wired `polygon` still surfaces back onto the param.
+      items.push({ nodeId: id, tool: "bsp", polygons: [], color: FLOW_TOOLS.bsp.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
+      continue;
+    }
+    // Split is a pure CALCULATION node: coordinates in, coordinates out. Publishes every piece on
+    // `val-polygons` and draws NOTHING. Reads its list via the same fallback as BSP, because this block
+    // used `inputsOf` (the MULTI-space accessor) which the singular gate-resolved `input` never reaches.
+    // NOTE: the per-piece `out-i` handles are gone, so a single piece can no longer be picked downstream.
+    if (data.tool === "split") {
+      const anchorSplit = chainAnchorByNode.get(id) ?? createAnchor;
+      const geomInSplit = inputsOf(id);
+      const splitFromList = geomInSplit.length ? undefined : polygonFromMetreList(evalParams.polygon, anchorSplit, ppm);
+      const splitInputs = splitFromList ? [splitFromList] : geomInSplit;
+      const pieces = splitInputs.flatMap((sp) => (sp.length >= 3 ? evalSplit(sp, evalParams, ppm) : []));
+      outputs.set(id, []);
+      const values = computeNodeValues("split", pieces, ppm, anchorSplit);
+      if (values) nodeValues.set(id, values);
+      // Pushed even with NO pieces, so a wired `polygon` still surfaces back onto the param.
+      items.push({ nodeId: id, tool: "split", polygons: [], color: FLOW_TOOLS.split.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Optimise Rectangle (multi-space): pack EVERY incoming space, flattening the placed rectangles
     // across all inputs. Axis-tilt auto-optimisation is recomputed per space. Area sums every rect.
+    // Optimise Rectangle is a pure CALCULATION node: coordinates in, coordinates out. Publishes every
+    // packed rectangle on `val-polygons` (plus `val-area`) and draws NOTHING. Reads its list via the same
+    // fallback as Split/BSP, because this block uses `inputsOf` — the MULTI-space accessor the singular
+    // gate-resolved `input` never reaches.
     if (data.tool === "optimise-rect") {
-      const inputs = inputsOf(id);
+      const anchorOpt = chainAnchorByNode.get(id) ?? createAnchor;
+      const geomInOpt = inputsOf(id);
+      const optFromList = geomInOpt.length ? undefined : polygonFromMetreList(evalParams.polygon, anchorOpt, ppm);
+      const inputs = optFromList ? [optFromList] : geomInOpt;
       const random = Boolean(data.params.random);
       const seed = Math.max(1, Math.round(Number(data.params.seed) || 1));
       const polys: Point[][] = [];
@@ -2712,35 +3959,44 @@ export function evaluateFlow(
         }
         polys.push(...evalOptimise(sp, prm, ppm));
       });
-      outputs.set(id, polys);
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        const values = computeNodeValues("optimise-rect", polys, ppm);
-        if (values) nodeValues.set(id, values);
-        // Only surface the auto-tilt back to the slider for a single, non-random space (else tilts differ).
-        const tiltOut = inputs.length === 1 && !random ? optimisedTilt : undefined;
-        items.push({ nodeId: id, tool: "optimise-rect", polygons: polys, color: FLOW_TOOLS["optimise-rect"].color, isFinal, values, optimisedTilt: tiltOut, valueInputs: !random && Object.keys(surfacedVin).length ? surfacedVin : undefined, cellCount: polys.length });
-      }
+      outputs.set(id, []);
+      const values = computeNodeValues("optimise-rect", polys, ppm, anchorOpt);
+      if (values) nodeValues.set(id, values);
+      // Only surface the auto-tilt back to the slider for a single, non-random space (else tilts differ).
+      const tiltOut = inputs.length === 1 && !random ? optimisedTilt : undefined;
+      // Pushed even with NO rectangles, so a wired `polygon` still surfaces back onto the param.
+      items.push({ nodeId: id, tool: "optimise-rect", polygons: [], color: FLOW_TOOLS["optimise-rect"].color, isFinal: false, values, optimisedTilt: tiltOut, valueInputs: !random && Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Densify (multi-space): add vertices to EVERY incoming space (shape unchanged), one per input.
+    // Densify is a pure CALCULATION node: coordinates in, coordinates out. Reads its list via the same
+    // fallback as Split/BSP (this block uses `inputsOf`, which the singular gate-resolved `input` misses),
+    // publishes on `val-polygons`, and draws NOTHING.
     if (data.tool === "densify") {
-      const polys = inputsOf(id).flatMap((sp) => evalDensify(sp, evalParams, ppm));
-      outputs.set(id, polys);
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "densify", polygons: polys, color: FLOW_TOOLS.densify.color, isFinal, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined, cellCount: polys.length });
-      }
+      const anchorDen = chainAnchorByNode.get(id) ?? createAnchor;
+      const geomInDen = inputsOf(id);
+      const denFromList = geomInDen.length ? undefined : polygonFromMetreList(evalParams.polygon, anchorDen, ppm);
+      const denInputs = denFromList ? [denFromList] : geomInDen;
+      const polys = denInputs.flatMap((sp) => evalDensify(sp, evalParams, ppm));
+      outputs.set(id, []);
+      const values = computeNodeValues("densify", polys, ppm, anchorDen);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "densify", polygons: [], color: FLOW_TOOLS.densify.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Smoothing (multi-space): smooth EVERY incoming space, emitting one smoothed polygon per input.
+    // Smoothing is a pure CALCULATION node: coordinates in, coordinates out. Same list fallback as
+    // Densify (this block uses `inputsOf`), publishes on `val-polygons`, and draws NOTHING.
     if (data.tool === "smoothing") {
-      const polys = inputsOf(id).flatMap((sp) => evalSmoothing(sp, evalParams, ppm));
-      outputs.set(id, polys);
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "smoothing", polygons: polys, color: FLOW_TOOLS.smoothing.color, isFinal, cellCount: polys.length });
-      }
+      const anchorSm = chainAnchorByNode.get(id) ?? createAnchor;
+      const geomInSm = inputsOf(id);
+      const smFromList = geomInSm.length ? undefined : polygonFromMetreList(evalParams.polygon, anchorSm, ppm);
+      const smInputs = smFromList ? [smFromList] : geomInSm;
+      const polys = smInputs.flatMap((sp) => evalSmoothing(sp, evalParams, ppm));
+      outputs.set(id, []);
+      const values = computeNodeValues("smoothing", polys, ppm, anchorSm);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "smoothing", polygons: [], color: FLOW_TOOLS.smoothing.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Inset (multi-space pilot): inset EVERY incoming space, emitting one polygon per input — so two
@@ -2748,7 +4004,29 @@ export function evaluateFlow(
     if (data.tool === "inset") {
       const ctrl = paramControllers.get(id);
       let winning: number | null = null; // the swept param value the loop settled on (for the slider readout)
-      const polys = inputsOf(id).flatMap((sp) => {
+      // POLYGON INPUT — Inset can run off a coordinate list ([[x,y],… metre pairs) instead of a wired Space,
+      // via the `polygon` param / `valin-polygon` endpoint (e.g. Space Geometry's val-points).
+      //
+      // A connected Space ALWAYS WINS. That keeps every existing Space → Inset flow byte-identical, and it
+      // is also what makes the grab below safe: the grab writes the incoming outline into `polygon`, so if
+      // the list could override the geometry, the next evaluation would re-read its own grabbed (centroid-
+      // relative) list and teleport the result onto the anchor. Geometry-wins breaks that feedback loop.
+      const geomIn = inputsOf(id);
+      const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
+      // Wired Space wins; otherwise fall back to the `polygon` list (already resolved into `input` by the
+      // gate above, but re-derived here because this block works from `inputsOf` — the MULTI-space list).
+      const polyFromList = geomIn.length ? undefined : polygonFromMetreList(evalParams.polygon, anchor0, ppm);
+      const insetInputs = polyFromList ? [polyFromList] : geomIn;
+      // GRAB — with a Space wired in, surface its outline as the `polygon` list so the param shows what
+      // Inset is working on. SINGLE input only: the param holds one polygon, and baking a multi-cell site
+      // flow's outlines would bloat every saved flow for no gain. Anchor-relative, the shared frame — so
+      // unwiring the Space later leaves a list that rebuilds in the same place.
+      if (!polyFromList && insetInputs.length === 1 && insetInputs[0].length >= 3) {
+        const src = insetInputs[0];
+        const r = (v: number) => Math.round(v * 1e4) / 1e4;
+        surfacedVin = { ...surfacedVin, polygon: JSON.stringify(src.map((p) => [r((p.x - anchor0.x) / ppm), r((p.y - anchor0.y) / ppm)])) };
+      }
+      const polys = insetInputs.flatMap((sp) => {
         if (!ctrl) return evalInset(sp, evalParams, ppm);
         // Controlled (by a Loop or a Manipulator+Conditional): try each swept value of the chosen param,
         // returning the first inset whose result meets the condition (else the last computed step).
@@ -2764,7 +4042,7 @@ export function evaluateFlow(
         winning = lastV;
         return last.length >= 3 ? [last] : [];
       });
-      outputs.set(id, polys);
+      outputs.set(id, []); // value-only: nothing flows on as a Space
       // Surface the settled value back onto the controlled param (so the Offset slider reflects it) and,
       // for a Manipulator, onto its Value output / readout.
       if (ctrl && winning != null) {
@@ -2775,12 +4053,11 @@ export function evaluateFlow(
           if (mit) mit.values = { result: winning };
         }
       }
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        const values = computeNodeValues("inset", polys, ppm);
-        if (values) nodeValues.set(id, values);
-        items.push({ nodeId: id, tool: "inset", polygons: polys, color: FLOW_TOOLS.inset.color, isFinal, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined, cellCount: polys.length });
-      }
+      const values = computeNodeValues("inset", polys, ppm, anchor0);
+      if (values) nodeValues.set(id, values);
+      // Value-only now: the inset outline leaves on `val-polygons` / `val-points` and nothing is drawn.
+      // Pushed even with no result so a wired `polygon` still surfaces onto the param.
+      items.push({ nodeId: id, tool: "inset", polygons: [], color: FLOW_TOOLS.inset.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Loop/Manipulator controlled (e.g. a Voronoi whose Seeds is driven): sweep the chosen param over the
@@ -2855,77 +4132,89 @@ export function evaluateFlow(
     }
     // Convex Decomposition: one output handle per convex piece (like Split/BSP). `cellCount` carries
     // the live piece count so the host bakes the per-piece handle count (params.pieceCount).
+    // Convex Decomposition is a pure CALCULATION node: coordinates in, coordinates out. It declares no
+    // geometry input or output, publishes every piece on `val-polygons`, and draws NOTHING — `polygons: []`
+    // keeps it off the canvas, and `outputs` is cleared so no stray consumer picks the pieces up as a
+    // Space. Wire val-polygons into a Polygon node to draw the result.
     if (data.tool === "convex-decomp") {
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "convex-decomp", polygons: polys, color: FLOW_TOOLS["convex-decomp"].color, isFinal, cellCount: polys.length });
-      }
+      outputs.set(id, []);
+      const values = computeNodeValues("convex-decomp", polys, ppm, chainAnchorByNode.get(id) ?? createAnchor);
+      if (values) nodeValues.set(id, values);
+      // Pushed even with NO pieces, so a wired `polygon` still surfaces back onto the param. Guarding on
+      // polys.length would leave the box empty whenever the decomposition produced nothing, making a live
+      // wire look dead — the same trap Skeleton had.
+      items.push({ nodeId: id, tool: "convex-decomp", polygons: [], color: FLOW_TOOLS["convex-decomp"].color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Meshing: one output handle per mesh cell (triangle/quad), like Convex Decomposition.
+    // Meshing is a pure CALCULATION node: coordinates in, coordinates out. Publishes every cell on
+    // `val-polygons` and draws NOTHING. (Reads its polygon through the generic list gate — this block
+    // works from `polys`, so no per-block fallback is needed.)
     if (data.tool === "mesh") {
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "mesh", polygons: polys, color: FLOW_TOOLS.mesh.color, isFinal, cellCount: polys.length });
-      }
+      outputs.set(id, []);
+      const values = computeNodeValues("mesh", polys, ppm, chainAnchorByNode.get(id) ?? createAnchor);
+      if (values) nodeValues.set(id, values);
+      // Pushed even with NO cells, so a wired `polygon` still surfaces back onto the param.
+      items.push({ nodeId: id, tool: "mesh", polygons: [], color: FLOW_TOOLS.mesh.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Circle Packing: one output handle per inscribed circle/n-gon.
+    // Circle Packing — pure CALCULATION node: publishes every circle on `val-polygons`, draws NOTHING.
     if (data.tool === "circle-packing") {
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "circle-packing", polygons: polys, color: FLOW_TOOLS["circle-packing"].color, isFinal, cellCount: polys.length });
-      }
+      outputs.set(id, []);
+      const values = computeNodeValues("circle-packing", polys, ppm, chainAnchorByNode.get(id) ?? createAnchor);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "circle-packing", polygons: [], color: FLOW_TOOLS["circle-packing"].color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Rectangle Packing: one output handle per placed rectangle, plus placed-count + utilization% values.
+    // Rectangle Packing is a pure CALCULATION node: coordinates in, coordinates out. Publishes every
+    // rectangle on `val-polygons` alongside the existing placed/utilization scalars, and draws NOTHING.
     if (data.tool === "rect-pack") {
-      if (polys.length > 0) {
-        const placed = polys.length;
-        const placedArea = polys.reduce((a, c) => a + Math.abs(polygonArea(c)), 0);
-        const utilization = 100 * placedArea / (Math.abs(polygonArea(input)) || 1);
-        const vals = { placed, utilization };
-        nodeValues.set(id, vals);
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "rect-pack", polygons: polys, color: FLOW_TOOLS["rect-pack"].color, isFinal, cellCount: placed, values: vals });
-      }
+      const anchorPack = chainAnchorByNode.get(id) ?? createAnchor;
+      const placed = polys.length;
+      const placedArea = polys.reduce((a, c) => a + Math.abs(polygonArea(c)), 0);
+      const utilization = 100 * placedArea / (Math.abs(polygonArea(input)) || 1);
+      const vals: Record<string, number | string> = { placed, utilization };
+      const polyVal = computeNodeValues("rect-pack", polys, ppm, anchorPack);
+      if (polyVal?.polygons != null) vals.polygons = polyVal.polygons;
+      nodeValues.set(id, vals);
+      outputs.set(id, []);
+      // Pushed even with NO rectangles, so a wired `polygon` still surfaces back onto the param.
+      items.push({ nodeId: id, tool: "rect-pack", polygons: [], color: FLOW_TOOLS["rect-pack"].color, isFinal: false, values: vals, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Squarified Treemap: one output handle per packed cell. Optional inner/outer openings (like BSP):
     // INNER = shared edge between two cells (door); OUTER = each cell's longest perimeter edge (window).
+    // Squarified Treemap — pure CALCULATION node: publishes every cell on `val-polygons`, draws NOTHING.
+    // The opening walls it used to emit (`bspWalls` → the live 3D partition preview, like BSP's) are gone
+    // with the drawing, so its four opening params are inert — see the note in the declaration.
     if (data.tool === "treemap") {
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        const innerWidthPx = data.params.showInnerOpenings ? Math.max(0.05, num(data.params.innerOpeningWidth, 0.9)) * ppm : null;
-        const outerWidthPx = data.params.showOuterOpenings ? Math.max(0.05, num(data.params.outerOpeningWidth, 1.0)) * ppm : null;
-        const bspWalls = computeBspOpeningWalls(polys, { innerWidthPx, outerWidthPx });
-        const displayPolygons = (innerWidthPx != null || outerWidthPx != null)
-          ? bspWalls.filter((w) => w.kind === "wall").map((w) => [w.a, w.b])
-          : undefined;
-        items.push({ nodeId: id, tool: "treemap", polygons: polys, color: FLOW_TOOLS.treemap.color, isFinal, cellCount: polys.length, displayPolygons, bspWalls });
-      }
+      outputs.set(id, []);
+      const values = computeNodeValues("treemap", polys, ppm, chainAnchorByNode.get(id) ?? createAnchor);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "treemap", polygons: [], color: FLOW_TOOLS.treemap.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // Visibility Polygon: point mode → one region; segment mode → one region per sample (per-cell handles).
+    // Visibility Polygon — pure CALCULATION node: publishes the region(s) on `val-polygons`, draws NOTHING.
     if (data.tool === "visibility") {
-      if (polys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "visibility", polygons: polys, color: FLOW_TOOLS.visibility.color, isFinal, cellCount: polys.length });
-      }
+      outputs.set(id, []);
+      const values = computeNodeValues("visibility", polys, ppm, chainAnchorByNode.get(id) ?? createAnchor);
+      if (values) nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "visibility", polygons: [], color: FLOW_TOOLS.visibility.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
+    // Voronoi is a pure CALCULATION node: coordinates in, coordinates out. It declares no geometry input
+    // or output, publishes every cell on `val-polygons`, and draws NOTHING — `polygons: []` keeps it off
+    // the canvas (this used to render metric edges for Manhattan/Chebyshev) and `outputs` is cleared so no
+    // stray consumer picks the cells up as Spaces. Wire val-polygons into a Polygon node to draw them.
     if (data.tool === "voronoi") {
-      const metric = (typeof data.params.metric === "string" ? data.params.metric : "euclidean") as VoronoiMetric;
-      let renderPolys = polys;
-      // Rectilinear → the cells ARE polygons (render them). Otherwise non-Euclidean shows metric edges.
-      if (metric !== "euclidean" && !data.params.rectilinear) {
-        const seeds = voronoiSeeds(input, data.params);
-        renderPolys = computeVoronoiEdges(input, seeds, metric).map((e) => [e.p1, e.p2]);
-      }
-      if (renderPolys.length > 0) {
-        const isFinal = succs.get(id)!.length === 0;
-        items.push({ nodeId: id, tool: "voronoi", polygons: renderPolys, color: FLOW_TOOLS.voronoi.color, isFinal, cellCount: polys.length, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
-      }
+      outputs.set(id, []);
+      const values = computeNodeValues("voronoi", polys, ppm, chainAnchorByNode.get(id) ?? createAnchor);
+      if (values) nodeValues.set(id, values);
+      // Pushed even with NO cells, so a wired `polygon` still surfaces back onto the param.
+      items.push({ nodeId: id, tool: "voronoi", polygons: [], color: FLOW_TOOLS.voronoi.color, isFinal: false, values, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
       continue;
     }
     // BSP: thread the closed cells, but also build the partition as wall/door/window segments so the
@@ -2972,11 +4261,19 @@ export function evaluateFlow(
       }
       continue;
     }
-    if (polys.length > 0) {
-      const isFinal = succs.get(id)!.length === 0;
-      const values = computeNodeValues(data.tool, polys, ppm);
+    // A pure VALUE node (declares no geometry input AND no geometry output) never draws: it publishes its
+    // result on `val-*` only. Keep its polygons off the canvas and clear `outputs` so nothing picks them
+    // up as a Space, and push the item even with no result so a wired list still surfaces onto the param.
+    // Doing it HERE covers every value node that falls through to the generic tail (Convex Hull, Bounding
+    // Shape, …) without a per-tool block.
+    const def = FLOW_TOOLS[data.tool];
+    const valueOnly = !def.hasInput && !def.hasOutput;
+    if (valueOnly) outputs.set(id, []);
+    if (polys.length > 0 || valueOnly) {
+      const isFinal = valueOnly ? false : succs.get(id)!.length === 0;
+      const values = computeNodeValues(data.tool, polys, ppm, chainAnchorByNode.get(id) ?? createAnchor);
       if (values) nodeValues.set(id, values);
-      items.push({ nodeId: id, tool: data.tool, polygons: polys, color: FLOW_TOOLS[data.tool].color, isFinal, values, optimisedTilt, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
+      items.push({ nodeId: id, tool: data.tool, polygons: valueOnly ? [] : polys, color: def.color, isFinal, values, optimisedTilt, valueInputs: Object.keys(surfacedVin).length ? surfacedVin : undefined });
     }
   }
   return items;

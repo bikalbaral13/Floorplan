@@ -65,6 +65,8 @@ export function buildFlowToolCatalog(): string {
         ? " DYNAMIC value-OUT: one val-<propId> per entry in params.props;"
         : def.type === "output"
         ? " DYNAMIC value-IN: one valin-<slotId> per entry in params.slots;"
+        : def.type === "expr"
+        ? " DYNAMIC value-IN: one valin-<var> per INPUT variable of params.expr (plus valin-deps to merge a whole params node's values into scope by name); DYNAMIC value-OUT: one val-<name> per `name = expr` line (a single expression → val-result);"
         : "";
       const header = `- "${def.type}" (${def.label}); ${outN};${valOut}${valIn}${geomIn}${outLabels}${dynamic} params: ${fieldDesc || "none"}; defaults: ${JSON.stringify(def.defaultParams)}`;
       // Append the node's own usage guide (from its declaration's `instructions`) so the agent follows
@@ -114,7 +116,7 @@ KEY VALUE-DRIVEN NODES:
 - "floor-massing": value-IN valin-n (floor count); value-OUT val-floors. "inset"/"optimise-rect": value-OUT val-area; "split" takes valin-ratios/valin-angle/valin-target (target = first-piece area).
 
 DYNAMIC nodes:
-- "input-props": params = { "props": [ { "id", "name", "type": "range"|"select"|"checkbox"|"text", "value", "min", "max", "step", "options": string[] } ] }. Each prop exposes value-OUT "val-<propId>".
+- "input-props": params = { "props": [ { "id", "name", "type": "range"|"select"|"checkbox"|"text"|"color", "value", "min", "max", "step", "options": string[] } ] }. Each prop exposes value-OUT "val-<propId>". A "color" prop's value is a "#rrggbb" string (wire into "valin-color"); a "select" prop's choices are its "options" array.
 - "output": params = { "slots": [ { "id", "label" } ] }. Each slot is a value-IN "valin-<slotId>".
 
 SCHEMAS + BUILDING nodes (graph/floorplan flows):
@@ -194,7 +196,7 @@ export function validateFlowGraph(g: SerializedFlow): FlowValidation {
     if (!ids.has(e.source)) errors.push(`edge "${e.id ?? ""}": source "${e.source}" is not a node`);
     if (!ids.has(e.target)) errors.push(`edge "${e.id ?? ""}": target "${e.target}" is not a node`);
   }
-  const ROOTS = ["source", "canvas-source", "graph-source", "segment-source", "node-source", "space-creator"];
+  const ROOTS = ["source", "grab-object", "pobj-source", "canvas-source", "graph-source", "segment-source", "node-source", "grid-source", "image", "space-creator"];
   if (nodes.length && !nodes.some((n) => ROOTS.includes(String(n.data?.tool)))) {
     warnings.push("no root node (source / canvas-source / space-creator …) — the pipeline may have no input");
   }

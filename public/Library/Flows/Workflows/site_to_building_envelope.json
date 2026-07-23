@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "src",
+      "position": {
+        "x": -448,
+        "y": 88
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "id": "Space001",
+          "grabFromSelection": false
+        }
+      }
+    },
+    {
+      "id": "inset",
+      "position": {
+        "x": 142,
+        "y": 144
+      },
+      "data": {
+        "tool": "inset",
+        "params": {
+          "mode": "front-remaining",
+          "inside": true,
+          "uniformSetback": 3,
+          "inputCount": 0,
+          "front": 5,
+          "remaining": 3
+        }
+      }
+    },
+    {
+      "id": "pobj-source_21",
+      "position": {
+        "x": -214,
+        "y": 86
+      },
+      "data": {
+        "tool": "pobj-source",
+        "params": {
+          "definition": "{\"kind\":\"parametric-object\",\"version\":2,\"meta\":{\"id\":\"site\",\"name\":\"Site\",\"category\":\"Site\",\"symbol\":\"settings\",\"icon\":{\"paths\":[\"M3 3h18v18H3V3zm2 2v14h14V5H5zm4 4h6v6H9V9z\"]}},\"description\":\"Site design brief — PARAMETERS ONLY (no geometry / operations). Attach it to a Space to edit the brief in the Properties tab, then grab it in a Flow with a Grab Object node: each parameter becomes a val-<key> output you wire into an operation's value input. Grouped for the three core site ops — Inset (setbacks), Split, and Optimise Rectangle. The operations themselves live in the flow, driven by these parameters.\",\"hostKind\":\"space\",\"parameters\":[{\"key\":\"setback\",\"label\":\"Setback — Inset · uniform (→ valin-uniformSetback)\",\"kind\":\"number\",\"default\":3,\"min\":0,\"max\":10,\"step\":0.5,\"unit\":\"m\"},{\"key\":\"frontSetback\",\"label\":\"Front Setback — Inset · front (→ valin-front)\",\"kind\":\"number\",\"default\":5,\"min\":0,\"max\":20,\"step\":0.5,\"unit\":\"m\"},{\"key\":\"remainingSetback\",\"label\":\"Remaining Setback — Inset · remaining (→ valin-remaining)\",\"kind\":\"number\",\"default\":3,\"min\":0,\"max\":20,\"step\":0.5,\"unit\":\"m\"},{\"key\":\"splitRatio\",\"label\":\"Split Ratio\",\"kind\":\"number\",\"default\":0.6,\"min\":0.1,\"max\":0.9,\"step\":0.05},{\"key\":\"splitAngle\",\"label\":\"Split Angle — Split (→ valin-angle)\",\"kind\":\"number\",\"default\":0,\"min\":0,\"max\":360,\"step\":1,\"unit\":\"°\"},{\"key\":\"splitTargetArea\",\"label\":\"Split First-Piece Area — Split (→ valin-target)\",\"kind\":\"number\",\"default\":50,\"min\":1,\"max\":200,\"step\":1,\"unit\":\"m²\"},{\"key\":\"rectCount\",\"label\":\"Rectangles — Optimise · count (→ valin-count)\",\"kind\":\"number\",\"default\":1,\"min\":1,\"max\":20,\"step\":1},{\"key\":\"rectAxisAngle\",\"label\":\"Rectangle Axis Angle — Optimise (→ valin-axisAngle)\",\"kind\":\"number\",\"default\":0,\"min\":0,\"max\":180,\"step\":0.5,\"unit\":\"°\"},{\"key\":\"optimiseAxisTilt\",\"label\":\"Optimise Axis Tilt — Optimise (→ valin-optimiseAxisTilt)\",\"kind\":\"checkbox\",\"default\":false},{\"key\":\"buildingHeight\",\"label\":\"Building Height\",\"kind\":\"number\",\"default\":12,\"min\":3,\"max\":100,\"unit\":\"m\"},{\"key\":\"color\",\"label\":\"Color\",\"kind\":\"color\",\"default\":\"#4A90E2\"}]}",
+          "props": [
+            {
+              "id": "setback",
+              "name": "Setback — Inset · uniform (→ valin-uniformSetback)",
+              "type": "range",
+              "value": 3,
+              "min": 0,
+              "max": 10,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "frontSetback",
+              "name": "Front Setback — Inset · front (→ valin-front)",
+              "type": "range",
+              "value": 5,
+              "min": 0,
+              "max": 20,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "remainingSetback",
+              "name": "Remaining Setback — Inset · remaining (→ valin-remaining)",
+              "type": "range",
+              "value": 3,
+              "min": 0,
+              "max": 20,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "splitRatio",
+              "name": "Split Ratio",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 0.9,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "splitAngle",
+              "name": "Split Angle — Split (→ valin-angle)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "splitTargetArea",
+              "name": "Split First-Piece Area — Split (→ valin-target)",
+              "type": "range",
+              "value": 50,
+              "min": 1,
+              "max": 200,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "rectCount",
+              "name": "Rectangles — Optimise · count (→ valin-count)",
+              "type": "range",
+              "value": 1,
+              "min": 1,
+              "max": 20,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "rectAxisAngle",
+              "name": "Rectangle Axis Angle — Optimise (→ valin-axisAngle)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 180,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "optimiseAxisTilt",
+              "name": "Optimise Axis Tilt — Optimise (→ valin-optimiseAxisTilt)",
+              "type": "checkbox",
+              "value": false,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "buildingHeight",
+              "name": "Building Height",
+              "type": "range",
+              "value": 12,
+              "min": 3,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "color",
+              "name": "Color",
+              "type": "text",
+              "value": "#4A90E2",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "split_22",
+      "position": {
+        "x": 384,
+        "y": 206
+      },
+      "data": {
+        "tool": "split",
+        "params": {
+          "type": "normal",
+          "outputMode": "perCell",
+          "count": 2,
+          "principalMethod": "pca",
+          "mode": "target",
+          "target": 50,
+          "ratios": "1, 2, 1",
+          "splitAlongMinorPrincipalAxis": false,
+          "angle": 0,
+          "stripLength": 1,
+          "stripPosition": 50,
+          "handleCount": 0
+        }
+      }
+    },
+    {
+      "id": "optimise-rect_23",
+      "position": {
+        "x": 696,
+        "y": 290
+      },
+      "data": {
+        "tool": "optimise-rect",
+        "params": {
+          "outputMode": "perCell",
+          "shape": "rectangle",
+          "random": false,
+          "seed": 1,
+          "reference": "custom",
+          "referenceEdge": 0,
+          "optimiseAxisTilt": 0,
+          "axisAngle": 0,
+          "steps": 3,
+          "minNotch": 0,
+          "minThickness": 0,
+          "count": 1,
+          "gap": 0,
+          "union": false,
+          "shrinkEnabled": false,
+          "targetArea": 50,
+          "shrinkAngle": 0,
+          "optimiseShrinkEnabled": false,
+          "shrinkSlide": 0,
+          "exactArea": false,
+          "inputCount": 0
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "xy-edge__src-pobj-source_21",
+      "source": "src",
+      "target": "pobj-source_21",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "xy-edge__pobj-source_21-inset",
+      "source": "pobj-source_21",
+      "target": "inset",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "xy-edge__inset-split_22",
+      "source": "inset",
+      "target": "split_22",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-setback-insetvalin-uniformSetback",
+      "source": "pobj-source_21",
+      "target": "inset",
+      "sourceHandle": "val-setback",
+      "targetHandle": "valin-uniformSetback"
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-frontSetback-insetvalin-front",
+      "source": "pobj-source_21",
+      "target": "inset",
+      "sourceHandle": "val-frontSetback",
+      "targetHandle": "valin-front"
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-remainingSetback-insetvalin-remaining",
+      "source": "pobj-source_21",
+      "target": "inset",
+      "sourceHandle": "val-remainingSetback",
+      "targetHandle": "valin-remaining"
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-splitAngle-split_22valin-angle",
+      "source": "pobj-source_21",
+      "target": "split_22",
+      "sourceHandle": "val-splitAngle",
+      "targetHandle": "valin-angle"
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-splitTargetArea-split_22valin-target",
+      "source": "pobj-source_21",
+      "target": "split_22",
+      "sourceHandle": "val-splitTargetArea",
+      "targetHandle": "valin-target"
+    },
+    {
+      "id": "xy-edge__split_22out-1-optimise-rect_23",
+      "source": "split_22",
+      "target": "optimise-rect_23",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-rectCount-optimise-rect_23valin-count",
+      "source": "pobj-source_21",
+      "target": "optimise-rect_23",
+      "sourceHandle": "val-rectCount",
+      "targetHandle": "valin-count"
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-rectAxisAngle-optimise-rect_23valin-axisAngle",
+      "source": "pobj-source_21",
+      "target": "optimise-rect_23",
+      "sourceHandle": "val-rectAxisAngle",
+      "targetHandle": "valin-axisAngle"
+    },
+    {
+      "id": "xy-edge__pobj-source_21val-optimiseAxisTilt-optimise-rect_23valin-optimiseAxisTilt",
+      "source": "pobj-source_21",
+      "target": "optimise-rect_23",
+      "sourceHandle": "val-optimiseAxisTilt",
+      "targetHandle": "valin-optimiseAxisTilt"
+    }
+  ]
+}

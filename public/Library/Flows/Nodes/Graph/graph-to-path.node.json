@@ -1,0 +1,36 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-to-path",
+  "materialisesSpace": true,
+  "meta": { "label": "Graph to Path", "category": "Graph", "color": "#0d9488" },
+  "description": "Thicken a graph (polylines — Skeleton branches, smoothed graphs, canvas Graphs) into ONE seamless constant-width PATH band (closed Space polygons) of Width metres — the Skeleton node's Make-path as its own reusable node. Clip to boundary trims the band to the source space. With the Flow Live toggle ON the band materialises as a real editable Space; Run Flow commits it as a Corridor Space.",
+  "instructions": "Takes a GRAPH input (polylines — e.g. Skeleton in Branches mode, Graph Smoothing, a canvas Graph source) and thickens every edge to a `width`-metre band, mitred flush at shared junctions and unioned into ONE seamless closed path polygon — the exact corridor machinery the Skeleton node's Make-path uses. `clipToBoundary` trims the band to the upstream Skeleton's source Space (or the `gin-boundary` clip Space when wired). One output handle per band, or a single bundle (`outputMode`). Every parameter is wireable (valin-*).\n\nWith the Flow Live toggle ON the band materialises as a REAL editable Space that tracks the params; Run Flow commits it as a Corridor-region Space. Idiom: Space → Skeleton (Branches, prune / longest branch as needed) → Graph to Path (width) — the decoupled Make-path.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(handleCount)))",
+    "geomInputs": [
+      { "key": "boundary", "label": "Clip space" }
+    ],
+    "valueInputs": [
+      { "key": "width", "label": "Width" },
+      { "key": "clipToBoundary", "label": "Clip to boundary" },
+      { "key": "outputMode", "label": "Outputs" }
+    ]
+  },
+  "parameters": [
+    { "key": "width", "label": "Width", "kind": "range", "default": 1, "min": 0.1, "max": 50, "step": 0.1, "unit": "m" },
+    { "key": "clipToBoundary", "label": "Clip to boundary", "kind": "checkbox", "default": true },
+    {
+      "key": "outputMode",
+      "label": "Outputs",
+      "kind": "select",
+      "default": "perCell",
+      "options": [
+        { "value": "perCell", "label": "Per band (one each)" },
+        { "value": "single", "label": "Single (all)" }
+      ]
+    }
+  ]
+}

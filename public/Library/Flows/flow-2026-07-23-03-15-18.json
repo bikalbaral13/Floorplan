@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "source_1",
+      "position": {
+        "x": 160,
+        "y": 120
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Space001"
+        }
+      }
+    },
+    {
+      "id": "space-geometry_2",
+      "position": {
+        "x": 365.5129870129869,
+        "y": 155.87662337662337
+      },
+      "data": {
+        "tool": "space-geometry",
+        "params": {}
+      }
+    },
+    {
+      "id": "skeleton_3",
+      "position": {
+        "x": 732.6623376623376,
+        "y": 172.7857142857143
+      },
+      "data": {
+        "tool": "skeleton",
+        "params": {
+          "vertices": "[[-6.6304,1.8952],[-1.732,3.6554],[-0.1724,0.415],[2.7466,-0.7651],[4.586,1.4551],[9.1446,3.1953],[11.144,0.335],[10.0043,-2.1652],[10.3842,-4.9655],[1.507,-3.9254],[-3.8313,-3.3653],[-6.7104,-4.6054],[-9.5495,3.5353],[-7.3502,3.9954],[-7.79,2.3552],[-5.7507,-1.0451]]",
+          "type": "sampled-voronoi",
+          "samples": 5,
+          "level": 1,
+          "reduceLevel": 0,
+          "handleCount": 0
+        }
+      }
+    },
+    {
+      "id": "network_4",
+      "position": {
+        "x": 1588.5488660496126,
+        "y": 201.17003604590747
+      },
+      "data": {
+        "tool": "network",
+        "params": {
+          "graph": "{\"nodes\":[{\"id\":\"n1\",\"x\":10.3462,\"y\":-4.6855},{\"id\":\"n2\",\"x\":6.823,\"y\":-1.2349},{\"id\":\"n3\",\"x\":6.5351,\"y\":-1.2954},{\"id\":\"n4\",\"x\":2.5716,\"y\":-2.5197},{\"id\":\"n5\",\"x\":1.8173,\"y\":-2.2238},{\"id\":\"n6\",\"x\":-2.8912,\"y\":-0.5837},{\"id\":\"n7\",\"x\":-3.0158,\"y\":-0.7366},{\"id\":\"n8\",\"x\":-5.8044,\"y\":-2.5725},{\"id\":\"n9\",\"x\":-6.7965,\"y\":-1.21},{\"id\":\"n10\",\"x\":-8.6198,\"y\":2.7535},{\"id\":\"n11\",\"x\":-8.6363,\"y\":2.7806},{\"id\":\"n12\",\"x\":-7.5701,\"y\":3.9494}],\"edges\":[{\"from_node_id\":\"n1\",\"to_node_id\":\"n2\",\"length\":4.9315},{\"from_node_id\":\"n2\",\"to_node_id\":\"n3\",\"length\":0.2942},{\"from_node_id\":\"n3\",\"to_node_id\":\"n4\",\"length\":4.1483},{\"from_node_id\":\"n4\",\"to_node_id\":\"n5\",\"length\":0.8103},{\"from_node_id\":\"n5\",\"to_node_id\":\"n6\",\"length\":4.986},{\"from_node_id\":\"n6\",\"to_node_id\":\"n7\",\"length\":0.1972},{\"from_node_id\":\"n7\",\"to_node_id\":\"n8\",\"length\":3.3387},{\"from_node_id\":\"n8\",\"to_node_id\":\"n9\",\"length\":1.6854},{\"from_node_id\":\"n9\",\"to_node_id\":\"n10\",\"length\":4.3628},{\"from_node_id\":\"n10\",\"to_node_id\":\"n11\",\"length\":0.0317},{\"from_node_id\":\"n11\",\"to_node_id\":\"n12\",\"length\":1.582}]}",
+          "color": ""
+        }
+      }
+    },
+    {
+      "id": "graph-fit-lines_5",
+      "position": {
+        "x": 1012.3555179562209,
+        "y": 196.45415457399633
+      },
+      "data": {
+        "tool": "graph-fit-lines",
+        "params": {
+          "graph": "{\"nodes\":[{\"id\":\"n1\",\"x\":-6.0271,\"y\":1.7554},{\"id\":\"n2\",\"x\":-6.5424,\"y\":1.6012},{\"id\":\"n3\",\"x\":-4.6254,\"y\":0.933},{\"id\":\"n4\",\"x\":-5.4719,\"y\":1.2808},{\"id\":\"n5\",\"x\":-3.2692,\"y\":0.2373},{\"id\":\"n6\",\"x\":-3.8623,\"y\":0.4809},{\"id\":\"n7\",\"x\":-4.591,\"y\":0.9036},{\"id\":\"n8\",\"x\":-2.6459,\"y\":1.5812},{\"id\":\"n9\",\"x\":-2.739,\"y\":1.1752},{\"id\":\"n10\",\"x\":-3.1689,\"y\":0.1715},{\"id\":\"n11\",\"x\":-2.2218,\"y\":3.4794},{\"id\":\"n12\",\"x\":-2.0813,\"y\":3.0882},{\"id\":\"n13\",\"x\":-2.2869,\"y\":2.191},{\"id\":\"n14\",\"x\":-0.3284,\"y\":0.739},{\"id\":\"n15\",\"x\":-2.912,\"y\":-0.5045},{\"id\":\"n16\",\"x\":-3.1368,\"y\":0.0573},{\"id\":\"n17\",\"x\":-0.6535,\"y\":-1.6151},{\"id\":\"n18\",\"x\":-0.9457,\"y\":-1.5828},{\"id\":\"n19\",\"x\":-1.9837,\"y\":-1.1878},{\"id\":\"n20\",\"x\":-2.8912,\"y\":-0.5837},{\"id\":\"n21\",\"x\":-0.0407,\"y\":-1.7793},{\"id\":\"n22\",\"x\":0.5835,\"y\":-1.9154},{\"id\":\"n23\",\"x\":0.1062,\"y\":-1.8448},{\"id\":\"n24\",\"x\":1.1872,\"y\":-2.1022},{\"id\":\"n25\",\"x\":1.1586,\"y\":-2.1016},{\"id\":\"n26\",\"x\":2.4547,\"y\":-0.6471},{\"id\":\"n27\",\"x\":1.8173,\"y\":-2.2238},{\"id\":\"n28\",\"x\":4.7194,\"y\":-2.0251},{\"id\":\"n29\",\"x\":4.4056,\"y\":-2.228},{\"id\":\"n30\",\"x\":2.5716,\"y\":-2.5197},{\"id\":\"n31\",\"x\":5.2902,\"y\":-1.7492},{\"id\":\"n32\",\"x\":5.9241,\"y\":-1.5255},{\"id\":\"n33\",\"x\":6.5104,\"y\":-1.2625},{\"id\":\"n34\",\"x\":6.5351,\"y\":-1.2954},{\"id\":\"n35\",\"x\":6.2985,\"y\":-1.4334},{\"id\":\"n36\",\"x\":4.4021,\"y\":1.2331},{\"id\":\"n37\",\"x\":5.5589,\"y\":0.2746},{\"id\":\"n38\",\"x\":7.0719,\"y\":-0.9523},{\"id\":\"n39\",\"x\":6.823,\"y\":-1.2349},{\"id\":\"n40\",\"x\":7.8414,\"y\":-0.2318},{\"id\":\"n41\",\"x\":7.8166,\"y\":-0.262},{\"id\":\"n42\",\"x\":7.4023,\"y\":-0.6771},{\"id\":\"n43\",\"x\":8.4152,\"y\":1.0015},{\"id\":\"n44\",\"x\":8.3289,\"y\":0.4962},{\"id\":\"n45\",\"x\":8.1816,\"y\":0.0596},{\"id\":\"n46\",\"x\":8.6887,\"y\":3.0213},{\"id\":\"n47\",\"x\":8.8606,\"y\":2.571},{\"id\":\"n48\",\"x\":8.6955,\"y\":1.604},{\"id\":\"n49\",\"x\":9.0932,\"y\":0.1788},{\"id\":\"n50\",\"x\":8.4135,\"y\":0.0698},{\"id\":\"n51\",\"x\":10.9441,\"y\":0.621},{\"id\":\"n52\",\"x\":10.5138,\"y\":0.3203},{\"id\":\"n53\",\"x\":9.5337,\"y\":0.1631},{\"id\":\"n54\",\"x\":10.1183,\"y\":-1.9152},{\"id\":\"n55\",\"x\":7.9465,\"y\":-2.7292},{\"id\":\"n56\",\"x\":8.6105,\"y\":-3.2098},{\"id\":\"n57\",\"x\":9.091,\"y\":-3.715},{\"id\":\"n58\",\"x\":9.3888,\"y\":-4.245},{\"id\":\"n59\",\"x\":10.3462,\"y\":-4.6855},{\"id\":\"n60\",\"x\":9.5037,\"y\":-4.7998},{\"id\":\"n61\",\"x\":2.3947,\"y\":-4.0294},{\"id\":\"n62\",\"x\":-3.2975,\"y\":-3.4213},{\"id\":\"n63\",\"x\":-3.0158,\"y\":-0.7366},{\"id\":\"n64\",\"x\":-4.7035,\"y\":-2.1328},{\"id\":\"n65\",\"x\":-5.2606,\"y\":-2.4243},{\"id\":\"n66\",\"x\":-5.8398,\"y\":-2.6644},{\"id\":\"n67\",\"x\":-5.8044,\"y\":-2.5725},{\"id\":\"n68\",\"x\":-6.2525,\"y\":-3.2912},{\"id\":\"n69\",\"x\":-6.4225,\"y\":-4.4814},{\"id\":\"n70\",\"x\":-6.7556,\"y\":-3.7081},{\"id\":\"n71\",\"x\":-6.7017,\"y\":-1.8631},{\"id\":\"n72\",\"x\":-7.4784,\"y\":-0.3078},{\"id\":\"n73\",\"x\":-7.196,\"y\":-0.5249},{\"id\":\"n74\",\"x\":-6.7965,\"y\":-1.21},{\"id\":\"n75\",\"x\":-8.2611,\"y\":1.2454},{\"id\":\"n76\",\"x\":-7.843,\"y\":0.9364},{\"id\":\"n77\",\"x\":-7.4887,\"y\":0.2242},{\"id\":\"n78\",\"x\":-9.2656,\"y\":2.7212},{\"id\":\"n79\",\"x\":-9.1575,\"y\":2.7589},{\"id\":\"n80\",\"x\":-8.7054,\"y\":2.7925},{\"id\":\"n81\",\"x\":-8.6363,\"y\":2.7806},{\"id\":\"n82\",\"x\":-8.6198,\"y\":2.7535},{\"id\":\"n83\",\"x\":-8.2031,\"y\":1.6451},{\"id\":\"n84\",\"x\":-8.3128,\"y\":3.1105},{\"id\":\"n85\",\"x\":-8.3627,\"y\":3.0362},{\"id\":\"n86\",\"x\":-7.9336,\"y\":3.4924},{\"id\":\"n87\",\"x\":-8.0585,\"y\":3.3063},{\"id\":\"n88\",\"x\":-7.5701,\"y\":3.9494},{\"id\":\"n89\",\"x\":-7.5544,\"y\":3.8743},{\"id\":\"n90\",\"x\":-7.7543,\"y\":3.5763},{\"id\":\"n91\",\"x\":-7.746,\"y\":2.5192},{\"id\":\"n92\",\"x\":-6.2231,\"y\":-0.8661}],\"edges\":[{\"from_node_id\":\"n1\",\"to_node_id\":\"n2\",\"length\":0.5379},{\"from_node_id\":\"n3\",\"to_node_id\":\"n4\",\"length\":0.9152},{\"from_node_id\":\"n4\",\"to_node_id\":\"n1\",\"length\":0.7304},{\"from_node_id\":\"n5\",\"to_node_id\":\"n6\",\"length\":0.6412},{\"from_node_id\":\"n6\",\"to_node_id\":\"n7\",\"length\":0.8425},{\"from_node_id\":\"n7\",\"to_node_id\":\"n3\",\"length\":0.0452},{\"from_node_id\":\"n8\",\"to_node_id\":\"n9\",\"length\":0.4165},{\"from_node_id\":\"n9\",\"to_node_id\":\"n10\",\"length\":1.0919},{\"from_node_id\":\"n10\",\"to_node_id\":\"n5\",\"length\":0.1199},{\"from_node_id\":\"n11\",\"to_node_id\":\"n12\",\"length\":0.4157},{\"from_node_id\":\"n12\",\"to_node_id\":\"n13\",\"length\":0.9204},{\"from_node_id\":\"n13\",\"to_node_id\":\"n8\",\"length\":0.7076},{\"from_node_id\":\"n14\",\"to_node_id\":\"n15\",\"length\":2.8673},{\"from_node_id\":\"n15\",\"to_node_id\":\"n16\",\"length\":0.6051},{\"from_node_id\":\"n16\",\"to_node_id\":\"n10\",\"length\":0.1174},{\"from_node_id\":\"n17\",\"to_node_id\":\"n18\",\"length\":0.294},{\"from_node_id\":\"n18\",\"to_node_id\":\"n19\",\"length\":1.1106},{\"from_node_id\":\"n19\",\"to_node_id\":\"n20\",\"length\":1.0902},{\"from_node_id\":\"n20\",\"to_node_id\":\"n15\",\"length\":0.0819},{\"from_node_id\":\"n21\",\"to_node_id\":\"n17\",\"length\":0.6345},{\"from_node_id\":\"n22\",\"to_node_id\":\"n23\",\"length\":0.4825},{\"from_node_id\":\"n23\",\"to_node_id\":\"n21\",\"length\":0.1608},{\"from_node_id\":\"n24\",\"to_node_id\":\"n25\",\"length\":0.0286},{\"from_node_id\":\"n25\",\"to_node_id\":\"n22\",\"length\":0.6045},{\"from_node_id\":\"n26\",\"to_node_id\":\"n27\",\"length\":1.7007},{\"from_node_id\":\"n27\",\"to_node_id\":\"n24\",\"length\":0.6417},{\"from_node_id\":\"n28\",\"to_node_id\":\"n29\",\"length\":0.3737},{\"from_node_id\":\"n29\",\"to_node_id\":\"n30\",\"length\":1.8571},{\"from_node_id\":\"n30\",\"to_node_id\":\"n27\",\"length\":0.8103},{\"from_node_id\":\"n31\",\"to_node_id\":\"n28\",\"length\":0.634},{\"from_node_id\":\"n32\",\"to_node_id\":\"n31\",\"length\":0.6722},{\"from_node_id\":\"n33\",\"to_node_id\":\"n34\",\"length\":0.0412},{\"from_node_id\":\"n34\",\"to_node_id\":\"n35\",\"length\":0.2739},{\"from_node_id\":\"n35\",\"to_node_id\":\"n32\",\"length\":0.3856},{\"from_node_id\":\"n36\",\"to_node_id\":\"n37\",\"length\":1.5023},{\"from_node_id\":\"n37\",\"to_node_id\":\"n33\",\"length\":1.8078},{\"from_node_id\":\"n38\",\"to_node_id\":\"n39\",\"length\":0.3766},{\"from_node_id\":\"n39\",\"to_node_id\":\"n34\",\"length\":0.2941},{\"from_node_id\":\"n40\",\"to_node_id\":\"n41\",\"length\":0.0391},{\"from_node_id\":\"n41\",\"to_node_id\":\"n42\",\"length\":0.5865},{\"from_node_id\":\"n42\",\"to_node_id\":\"n38\",\"length\":0.43},{\"from_node_id\":\"n43\",\"to_node_id\":\"n44\",\"length\":0.5126},{\"from_node_id\":\"n44\",\"to_node_id\":\"n45\",\"length\":0.4607},{\"from_node_id\":\"n45\",\"to_node_id\":\"n40\",\"length\":0.448},{\"from_node_id\":\"n46\",\"to_node_id\":\"n47\",\"length\":0.482},{\"from_node_id\":\"n47\",\"to_node_id\":\"n48\",\"length\":0.981},{\"from_node_id\":\"n48\",\"to_node_id\":\"n43\",\"length\":0.6645},{\"from_node_id\":\"n49\",\"to_node_id\":\"n50\",\"length\":0.6883},{\"from_node_id\":\"n50\",\"to_node_id\":\"n45\",\"length\":0.2322},{\"from_node_id\":\"n51\",\"to_node_id\":\"n52\",\"length\":0.5249},{\"from_node_id\":\"n52\",\"to_node_id\":\"n53\",\"length\":0.9926},{\"from_node_id\":\"n53\",\"to_node_id\":\"n49\",\"length\":0.4409},{\"from_node_id\":\"n54\",\"to_node_id\":\"n42\",\"length\":2.9849},{\"from_node_id\":\"n55\",\"to_node_id\":\"n39\",\"length\":1.8695},{\"from_node_id\":\"n56\",\"to_node_id\":\"n55\",\"length\":0.8191},{\"from_node_id\":\"n57\",\"to_node_id\":\"n56\",\"length\":0.6972},{\"from_node_id\":\"n58\",\"to_node_id\":\"n57\",\"length\":0.6079},{\"from_node_id\":\"n59\",\"to_node_id\":\"n60\",\"length\":0.8502},{\"from_node_id\":\"n60\",\"to_node_id\":\"n58\",\"length\":0.5666},{\"from_node_id\":\"n61\",\"to_node_id\":\"n30\",\"length\":1.52},{\"from_node_id\":\"n62\",\"to_node_id\":\"n63\",\"length\":2.6994},{\"from_node_id\":\"n63\",\"to_node_id\":\"n20\",\"length\":0.1973},{\"from_node_id\":\"n64\",\"to_node_id\":\"n63\",\"length\":2.1903},{\"from_node_id\":\"n65\",\"to_node_id\":\"n64\",\"length\":0.6287},{\"from_node_id\":\"n66\",\"to_node_id\":\"n67\",\"length\":0.0985},{\"from_node_id\":\"n67\",\"to_node_id\":\"n65\",\"length\":0.5637},{\"from_node_id\":\"n68\",\"to_node_id\":\"n66\",\"length\":0.7504},{\"from_node_id\":\"n69\",\"to_node_id\":\"n70\",\"length\":0.842},{\"from_node_id\":\"n70\",\"to_node_id\":\"n68\",\"length\":0.6534},{\"from_node_id\":\"n71\",\"to_node_id\":\"n67\",\"length\":1.1439},{\"from_node_id\":\"n72\",\"to_node_id\":\"n73\",\"length\":0.3562},{\"from_node_id\":\"n73\",\"to_node_id\":\"n74\",\"length\":0.793},{\"from_node_id\":\"n74\",\"to_node_id\":\"n71\",\"length\":0.66},{\"from_node_id\":\"n75\",\"to_node_id\":\"n76\",\"length\":0.5199},{\"from_node_id\":\"n76\",\"to_node_id\":\"n77\",\"length\":0.7954},{\"from_node_id\":\"n77\",\"to_node_id\":\"n72\",\"length\":0.5321},{\"from_node_id\":\"n78\",\"to_node_id\":\"n79\",\"length\":0.1145},{\"from_node_id\":\"n79\",\"to_node_id\":\"n80\",\"length\":0.4533},{\"from_node_id\":\"n80\",\"to_node_id\":\"n81\",\"length\":0.0702},{\"from_node_id\":\"n81\",\"to_node_id\":\"n82\",\"length\":0.0317},{\"from_node_id\":\"n82\",\"to_node_id\":\"n83\",\"length\":1.1842},{\"from_node_id\":\"n83\",\"to_node_id\":\"n75\",\"length\":0.4039},{\"from_node_id\":\"n84\",\"to_node_id\":\"n85\",\"length\":0.0894},{\"from_node_id\":\"n85\",\"to_node_id\":\"n81\",\"length\":0.3744},{\"from_node_id\":\"n86\",\"to_node_id\":\"n87\",\"length\":0.2241},{\"from_node_id\":\"n87\",\"to_node_id\":\"n84\",\"length\":0.321},{\"from_node_id\":\"n88\",\"to_node_id\":\"n89\",\"length\":0.0767},{\"from_node_id\":\"n89\",\"to_node_id\":\"n90\",\"length\":0.3589},{\"from_node_id\":\"n90\",\"to_node_id\":\"n86\",\"length\":0.198},{\"from_node_id\":\"n91\",\"to_node_id\":\"n82\",\"length\":0.9047},{\"from_node_id\":\"n92\",\"to_node_id\":\"n74\",\"length\":0.6686}]}",
+          "snapTol": 0
+        }
+      }
+    },
+    {
+      "id": "graph-reduce_6",
+      "position": {
+        "x": 1296.8528260766038,
+        "y": 201.58704813639926
+      },
+      "data": {
+        "tool": "graph-reduce",
+        "params": {
+          "graph": "{\"nodes\":[{\"id\":\"n1\",\"x\":-6.5424,\"y\":1.6012},{\"id\":\"n2\",\"x\":-3.1689,\"y\":0.1715},{\"id\":\"n3\",\"x\":-2.2218,\"y\":3.4794},{\"id\":\"n4\",\"x\":-2.912,\"y\":-0.5045},{\"id\":\"n5\",\"x\":-0.3284,\"y\":0.739},{\"id\":\"n6\",\"x\":-2.8912,\"y\":-0.5837},{\"id\":\"n7\",\"x\":1.8173,\"y\":-2.2238},{\"id\":\"n8\",\"x\":-3.0158,\"y\":-0.7366},{\"id\":\"n9\",\"x\":2.4547,\"y\":-0.6471},{\"id\":\"n10\",\"x\":2.5716,\"y\":-2.5197},{\"id\":\"n11\",\"x\":6.5351,\"y\":-1.2954},{\"id\":\"n12\",\"x\":2.3947,\"y\":-4.0294},{\"id\":\"n13\",\"x\":4.4021,\"y\":1.2331},{\"id\":\"n14\",\"x\":6.823,\"y\":-1.2349},{\"id\":\"n15\",\"x\":7.4023,\"y\":-0.6771},{\"id\":\"n16\",\"x\":10.3462,\"y\":-4.6855},{\"id\":\"n17\",\"x\":8.1816,\"y\":0.0596},{\"id\":\"n18\",\"x\":10.1183,\"y\":-1.9152},{\"id\":\"n19\",\"x\":8.6887,\"y\":3.0213},{\"id\":\"n20\",\"x\":10.9441,\"y\":0.621},{\"id\":\"n21\",\"x\":-3.2975,\"y\":-3.4213},{\"id\":\"n22\",\"x\":-5.8044,\"y\":-2.5725},{\"id\":\"n23\",\"x\":-6.4225,\"y\":-4.4814},{\"id\":\"n24\",\"x\":-6.7965,\"y\":-1.21},{\"id\":\"n25\",\"x\":-8.6198,\"y\":2.7535},{\"id\":\"n26\",\"x\":-6.2231,\"y\":-0.8661},{\"id\":\"n27\",\"x\":-9.2656,\"y\":2.7212},{\"id\":\"n28\",\"x\":-8.6363,\"y\":2.7806},{\"id\":\"n29\",\"x\":-7.5701,\"y\":3.9494},{\"id\":\"n30\",\"x\":-7.746,\"y\":2.5192}],\"edges\":[{\"from_node_id\":\"n1\",\"to_node_id\":\"n2\",\"length\":3.664},{\"from_node_id\":\"n2\",\"to_node_id\":\"n3\",\"length\":3.4408},{\"from_node_id\":\"n2\",\"to_node_id\":\"n4\",\"length\":0.7232},{\"from_node_id\":\"n5\",\"to_node_id\":\"n4\",\"length\":2.8673},{\"from_node_id\":\"n4\",\"to_node_id\":\"n6\",\"length\":0.0819},{\"from_node_id\":\"n6\",\"to_node_id\":\"n7\",\"length\":4.986},{\"from_node_id\":\"n6\",\"to_node_id\":\"n8\",\"length\":0.1972},{\"from_node_id\":\"n9\",\"to_node_id\":\"n7\",\"length\":1.7007},{\"from_node_id\":\"n7\",\"to_node_id\":\"n10\",\"length\":0.8103},{\"from_node_id\":\"n10\",\"to_node_id\":\"n11\",\"length\":4.1483},{\"from_node_id\":\"n10\",\"to_node_id\":\"n12\",\"length\":1.52},{\"from_node_id\":\"n11\",\"to_node_id\":\"n13\",\"length\":3.308},{\"from_node_id\":\"n11\",\"to_node_id\":\"n14\",\"length\":0.2942},{\"from_node_id\":\"n14\",\"to_node_id\":\"n15\",\"length\":0.8042},{\"from_node_id\":\"n14\",\"to_node_id\":\"n16\",\"length\":4.9315},{\"from_node_id\":\"n15\",\"to_node_id\":\"n17\",\"length\":1.0724},{\"from_node_id\":\"n15\",\"to_node_id\":\"n18\",\"length\":2.9849},{\"from_node_id\":\"n17\",\"to_node_id\":\"n19\",\"length\":3.0048},{\"from_node_id\":\"n17\",\"to_node_id\":\"n20\",\"length\":2.819},{\"from_node_id\":\"n21\",\"to_node_id\":\"n8\",\"length\":2.6994},{\"from_node_id\":\"n8\",\"to_node_id\":\"n22\",\"length\":3.3387},{\"from_node_id\":\"n22\",\"to_node_id\":\"n23\",\"length\":2.0065},{\"from_node_id\":\"n22\",\"to_node_id\":\"n24\",\"length\":1.6854},{\"from_node_id\":\"n24\",\"to_node_id\":\"n25\",\"length\":4.3628},{\"from_node_id\":\"n24\",\"to_node_id\":\"n26\",\"length\":0.6686},{\"from_node_id\":\"n27\",\"to_node_id\":\"n28\",\"length\":0.6321},{\"from_node_id\":\"n28\",\"to_node_id\":\"n25\",\"length\":0.0317},{\"from_node_id\":\"n28\",\"to_node_id\":\"n29\",\"length\":1.582},{\"from_node_id\":\"n25\",\"to_node_id\":\"n30\",\"length\":0.9047}]}",
+          "mode": "longest-branch",
+          "boundary": "",
+          "minLength": 0.3,
+          "iterate": true,
+          "mergeTol": 0.5
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "xy-edge__source_1-space-geometry_2",
+      "source": "source_1",
+      "target": "space-geometry_2",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "xy-edge__space-geometry_2val-points-skeleton_3valin-vertices",
+      "source": "space-geometry_2",
+      "target": "skeleton_3",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-vertices"
+    },
+    {
+      "id": "xy-edge__skeleton_3val-branches-graph-fit-lines_5valin-graph",
+      "source": "skeleton_3",
+      "target": "graph-fit-lines_5",
+      "sourceHandle": "val-branches",
+      "targetHandle": "valin-graph"
+    },
+    {
+      "id": "xy-edge__graph-fit-lines_5val-graph-graph-reduce_6valin-graph",
+      "source": "graph-fit-lines_5",
+      "target": "graph-reduce_6",
+      "sourceHandle": "val-graph",
+      "targetHandle": "valin-graph"
+    },
+    {
+      "id": "xy-edge__graph-reduce_6val-graph-network_4valin-graph",
+      "source": "graph-reduce_6",
+      "target": "network_4",
+      "sourceHandle": "val-graph",
+      "targetHandle": "valin-graph"
+    }
+  ]
+}

@@ -5,7 +5,17 @@
   "meta": { "label": "Display 3D", "category": "3d primitives", "color": "#7e22ce" },
   "description": "Style a 3D primitive / Boolean for the 3D view — Colour · Opacity · Solid or Wireframe · Show edges. Wire a Cuboid / Cylinder / Sphere / Cone / Boolean in.",
   "instructions": "Styles an upstream 3D primitive / Transform 3D / Boolean for the 3D view — Colour · Opacity · draw Type (Solid / Wireframe) · optional edge lines. Colour lives HERE (the primitive nodes carry none), so every visible 3D form should end in a Display 3D. Wire a primitive / boolean into the input.\n\nTIP: drop Opacity below 1 for glazing/study massing; turn on Show edges for a crisp architectural read.",
-  "handles": { "input": true, "output": true },
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "color", "label": "Color" },
+      { "key": "opacity", "label": "Opacity" },
+      { "key": "displayType", "label": "Type" },
+      { "key": "showEdges", "label": "Show edges" },
+      { "key": "show", "label": "Show" }
+    ]
+  },
   "parameters": [
     { "key": "color", "label": "Color", "kind": "color", "default": "#94a3b8" },
     { "key": "opacity", "label": "Opacity", "kind": "range", "default": 1, "min": 0, "max": 1, "step": 0.05 },
@@ -19,6 +29,7 @@
         { "value": "wireframe", "label": "Wireframe" }
       ]
     },
-    { "key": "showEdges", "label": "Show edges", "kind": "checkbox", "default": false }
+    { "key": "showEdges", "label": "Show edges", "kind": "checkbox", "default": false },
+    { "key": "show", "label": "Show", "kind": "checkbox", "default": true }
   ]
 }

@@ -1,0 +1,1088 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "grpCanvas",
+      "type": "group",
+      "position": {
+        "x": -748,
+        "y": 586
+      },
+      "width": 256,
+      "height": 198,
+      "data": {
+        "tool": "group",
+        "params": {
+          "label": "Canvas Import"
+        }
+      }
+    },
+    {
+      "id": "grpMath",
+      "type": "group",
+      "position": {
+        "x": 272,
+        "y": -214
+      },
+      "width": 256,
+      "height": 154,
+      "data": {
+        "tool": "group",
+        "params": {
+          "label": "Math Engine"
+        }
+      }
+    },
+    {
+      "id": "grp2d",
+      "type": "group",
+      "position": {
+        "x": 952,
+        "y": 246
+      },
+      "width": 256,
+      "height": 330,
+      "data": {
+        "tool": "group",
+        "params": {
+          "label": "2D Primitives"
+        }
+      }
+    },
+    {
+      "id": "grp3d",
+      "type": "group",
+      "position": {
+        "x": 672,
+        "y": -354
+      },
+      "width": 256,
+      "height": 462,
+      "data": {
+        "tool": "group",
+        "params": {
+          "label": "3D Primitives"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -140,
+        "y": 360
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 2,
+              "min": 1.6,
+              "max": 2.2,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.5,
+              "min": 0.9,
+              "max": 2,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "mattressThickness",
+              "name": "Mattress thickness",
+              "type": "range",
+              "value": 0.25,
+              "min": 0.1,
+              "max": 0.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "legHeight",
+              "name": "Leg height",
+              "type": "range",
+              "value": 0.25,
+              "min": 0.1,
+              "max": 0.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "headboardHeight",
+              "name": "Headboard height",
+              "type": "range",
+              "value": 0.5,
+              "min": 0,
+              "max": 1.2,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "frameThickness",
+              "name": "Frame thickness",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.05,
+              "max": 0.25,
+              "step": 0.01,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "calc",
+      "position": {
+        "x": 28,
+        "y": 54
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Bed maths",
+          "expr": "legX = length/2 - 0.12 + px\nnegLegX = 0.12 - length/2 + px\nlegZ = width/2 - 0.12 + py\nnegLegZ = 0.12 - width/2 + py\nbaseY = legHeight\nmattY = legHeight + frameThickness\nmattTopY = legHeight + frameThickness + mattressThickness\nmattL = length - 0.12\nmattW = width - 0.12\nheadX = 0 - length/2 - 0.03 + px\nheadTotalH = legHeight + frameThickness + mattressThickness + headboardHeight\npillX = 0.45 - length/2 + px\npillZ = width/4 + py\nnegPillZ = 0 - width/4 + py\npillW = width/2 - 0.15\ncx = px\ncy = py",
+          "_collapsed": true
+        }
+      },
+      "parentId": "grpMath"
+    },
+    {
+      "id": "cBase",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 54
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Frame",
+          "length": 2,
+          "breadth": 1.5,
+          "height": 0.12,
+          "posX": 0,
+          "posY": 0.25,
+          "posZ": 0,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#6b4f3a",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cMatt",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 98
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Mattress",
+          "length": 1.88,
+          "breadth": 1.38,
+          "height": 0.25,
+          "posX": 0,
+          "posY": 0.37,
+          "posZ": 0,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#e8e4da",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cHead",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 142
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Headboard",
+          "length": 0.06,
+          "breadth": 1.5,
+          "height": 1.12,
+          "posX": -1.03,
+          "posY": 0,
+          "posZ": 0,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#6b4f3a",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cLeg1",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 186
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Leg 1",
+          "length": 0.08,
+          "breadth": 0.08,
+          "height": 0.25,
+          "posX": -0.88,
+          "posY": 0,
+          "posZ": 0.63,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#6b4f3a",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cLeg2",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 230
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Leg 2",
+          "length": 0.08,
+          "breadth": 0.08,
+          "height": 0.25,
+          "posX": -0.88,
+          "posY": 0,
+          "posZ": -0.63,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#6b4f3a",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cLeg3",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 274
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Leg 3",
+          "length": 0.08,
+          "breadth": 0.08,
+          "height": 0.25,
+          "posX": 0.88,
+          "posY": 0,
+          "posZ": 0.63,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#6b4f3a",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cLeg4",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 318
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Leg 4",
+          "length": 0.08,
+          "breadth": 0.08,
+          "height": 0.25,
+          "posX": 0.88,
+          "posY": 0,
+          "posZ": -0.63,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#6b4f3a",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cPill1",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 362
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Pillow 1",
+          "length": 0.5,
+          "breadth": 0.6,
+          "height": 0.14,
+          "posX": -0.55,
+          "posY": 0.62,
+          "posZ": 0.375,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#e8e4da",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "cPill2",
+      "parentId": "grp3d",
+      "position": {
+        "x": 28,
+        "y": 406
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "nodeLabel": "Pillow 2",
+          "length": 0.5,
+          "breadth": 0.6,
+          "height": 0.14,
+          "posX": -0.55,
+          "posY": 0.62,
+          "posZ": -0.375,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#e8e4da",
+          "_collapsed": true
+        }
+      }
+    },
+    {
+      "id": "rFrame",
+      "position": {
+        "x": 28,
+        "y": 54
+      },
+      "data": {
+        "tool": "rectangle",
+        "params": {
+          "nodeLabel": "Frame outline (source)",
+          "length": 2,
+          "breadth": 1.5,
+          "centerX": 0,
+          "centerY": 0,
+          "rotation": 0,
+          "color": "#6b4f3a",
+          "_collapsed": true,
+          "_hidden": true
+        }
+      },
+      "parentId": "grp2d"
+    },
+    {
+      "id": "rMatt",
+      "position": {
+        "x": 28,
+        "y": 98
+      },
+      "data": {
+        "tool": "rectangle",
+        "params": {
+          "nodeLabel": "Mattress",
+          "length": 1.88,
+          "breadth": 1.38,
+          "centerX": 0,
+          "centerY": 0,
+          "rotation": 0,
+          "color": "#e8e4da",
+          "_collapsed": true
+        }
+      },
+      "parentId": "grp2d"
+    },
+    {
+      "id": "rPill1",
+      "position": {
+        "x": 28,
+        "y": 142
+      },
+      "data": {
+        "tool": "rectangle",
+        "params": {
+          "nodeLabel": "Pillow 1",
+          "length": 0.5,
+          "breadth": 0.6,
+          "centerX": -0.55,
+          "centerY": 0.375,
+          "rotation": 0,
+          "color": "#e8e4da",
+          "_collapsed": true
+        }
+      },
+      "parentId": "grp2d"
+    },
+    {
+      "id": "rPill2",
+      "position": {
+        "x": 28,
+        "y": 186
+      },
+      "data": {
+        "tool": "rectangle",
+        "params": {
+          "nodeLabel": "Pillow 2",
+          "length": 0.5,
+          "breadth": 0.6,
+          "centerX": -0.55,
+          "centerY": -0.375,
+          "rotation": 0,
+          "color": "#e8e4da",
+          "_collapsed": true
+        }
+      },
+      "parentId": "grp2d"
+    },
+    {
+      "id": "nodeSrc",
+      "position": {
+        "x": 28,
+        "y": 54
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Node001",
+          "outputMode": "single",
+          "_collapsed": true
+        }
+      },
+      "parentId": "grpCanvas"
+    },
+    {
+      "id": "ng",
+      "position": {
+        "x": 28,
+        "y": 98
+      },
+      "data": {
+        "tool": "node-geometry",
+        "params": {
+          "_collapsed": true
+        }
+      },
+      "parentId": "grpCanvas"
+    },
+    {
+      "id": "pt",
+      "position": {
+        "x": 28,
+        "y": 142
+      },
+      "data": {
+        "tool": "point",
+        "params": {
+          "x": 3,
+          "y": 2,
+          "_collapsed": true
+        }
+      },
+      "parentId": "grpCanvas"
+    },
+    {
+      "id": "agent",
+      "position": {
+        "x": -520,
+        "y": 360
+      },
+      "data": {
+        "tool": "agent",
+        "params": {
+          "instructions": "You are a furniture parameter assistant. Set the parameters of the Bed (the Input Properties node on your output) to satisfy the prompt — length, width, mattress thickness, leg height, headboard height, frame thickness. Respect standard mattress sizes (single ~0.9×1.9, double ~1.35×1.9, queen ~1.5×2.0, king ~1.8×2.0) and comfortable proportions.",
+          "prompt": "Make a king-size bed",
+          "rounds": 1,
+          "props": [],
+          "rationale": "",
+          "inputHash": ""
+        }
+      }
+    },
+    {
+      "id": "insetFrame",
+      "parentId": "grpMath",
+      "position": {
+        "x": 28,
+        "y": 98
+      },
+      "data": {
+        "tool": "inset",
+        "params": {
+          "_collapsed": true,
+          "nodeLabel": "Inner frame",
+          "polygon": "",
+          "inside": true,
+          "mode": "equal",
+          "uniformSetback": 0.12,
+          "front": 0,
+          "remaining": 0,
+          "frontEdgeMode": "longest",
+          "frontEdgeIndex": 0,
+          "setbacks": "1, 0.5, 0.5"
+        }
+      }
+    },
+    {
+      "id": "polyOuter",
+      "parentId": "grp2d",
+      "position": {
+        "x": 28,
+        "y": 230
+      },
+      "data": {
+        "tool": "polygon",
+        "params": {
+          "_collapsed": true,
+          "nodeLabel": "Outer rect",
+          "points": "",
+          "color": "#6b4f3a"
+        }
+      }
+    },
+    {
+      "id": "polyInner",
+      "parentId": "grp2d",
+      "position": {
+        "x": 28,
+        "y": 274
+      },
+      "data": {
+        "tool": "polygon",
+        "params": {
+          "_collapsed": true,
+          "nodeLabel": "Inner rect",
+          "points": "",
+          "color": "#a1887f"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0_props_calc_valin-length",
+      "source": "props",
+      "target": "calc",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e1_props_calc_valin-width",
+      "source": "props",
+      "target": "calc",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e2_props_calc_valin-mattressThickness",
+      "source": "props",
+      "target": "calc",
+      "sourceHandle": "val-mattressThickness",
+      "targetHandle": "valin-mattressThickness"
+    },
+    {
+      "id": "e3_props_calc_valin-legHeight",
+      "source": "props",
+      "target": "calc",
+      "sourceHandle": "val-legHeight",
+      "targetHandle": "valin-legHeight"
+    },
+    {
+      "id": "e4_props_calc_valin-headboardHeight",
+      "source": "props",
+      "target": "calc",
+      "sourceHandle": "val-headboardHeight",
+      "targetHandle": "valin-headboardHeight"
+    },
+    {
+      "id": "e5_props_calc_valin-frameThickness",
+      "source": "props",
+      "target": "calc",
+      "sourceHandle": "val-frameThickness",
+      "targetHandle": "valin-frameThickness"
+    },
+    {
+      "id": "e6_pt_calc_valin-px",
+      "source": "pt",
+      "target": "calc",
+      "sourceHandle": "val-x",
+      "targetHandle": "valin-px"
+    },
+    {
+      "id": "e7_pt_calc_valin-py",
+      "source": "pt",
+      "target": "calc",
+      "sourceHandle": "val-y",
+      "targetHandle": "valin-py"
+    },
+    {
+      "id": "e8_props_cBase_valin-length",
+      "source": "props",
+      "target": "cBase",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e9_props_cBase_valin-breadth",
+      "source": "props",
+      "target": "cBase",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e10_props_cBase_valin-height",
+      "source": "props",
+      "target": "cBase",
+      "sourceHandle": "val-frameThickness",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e11_calc_cBase_valin-posX",
+      "source": "calc",
+      "target": "cBase",
+      "sourceHandle": "val-cx",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e12_calc_cBase_valin-posZ",
+      "source": "calc",
+      "target": "cBase",
+      "sourceHandle": "val-cy",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e13_calc_cBase_valin-posY",
+      "source": "calc",
+      "target": "cBase",
+      "sourceHandle": "val-baseY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e14_calc_cMatt_valin-length",
+      "source": "calc",
+      "target": "cMatt",
+      "sourceHandle": "val-mattL",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e15_calc_cMatt_valin-breadth",
+      "source": "calc",
+      "target": "cMatt",
+      "sourceHandle": "val-mattW",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e16_props_cMatt_valin-height",
+      "source": "props",
+      "target": "cMatt",
+      "sourceHandle": "val-mattressThickness",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e17_calc_cMatt_valin-posX",
+      "source": "calc",
+      "target": "cMatt",
+      "sourceHandle": "val-cx",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e18_calc_cMatt_valin-posZ",
+      "source": "calc",
+      "target": "cMatt",
+      "sourceHandle": "val-cy",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e19_calc_cMatt_valin-posY",
+      "source": "calc",
+      "target": "cMatt",
+      "sourceHandle": "val-mattY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e20_props_cHead_valin-breadth",
+      "source": "props",
+      "target": "cHead",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e21_calc_cHead_valin-height",
+      "source": "calc",
+      "target": "cHead",
+      "sourceHandle": "val-headTotalH",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e22_calc_cHead_valin-posX",
+      "source": "calc",
+      "target": "cHead",
+      "sourceHandle": "val-headX",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e23_calc_cHead_valin-posZ",
+      "source": "calc",
+      "target": "cHead",
+      "sourceHandle": "val-cy",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e24_props_cLeg1_valin-height",
+      "source": "props",
+      "target": "cLeg1",
+      "sourceHandle": "val-legHeight",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e25_calc_cLeg1_valin-posX",
+      "source": "calc",
+      "target": "cLeg1",
+      "sourceHandle": "val-negLegX",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e26_calc_cLeg1_valin-posZ",
+      "source": "calc",
+      "target": "cLeg1",
+      "sourceHandle": "val-legZ",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e27_props_cLeg2_valin-height",
+      "source": "props",
+      "target": "cLeg2",
+      "sourceHandle": "val-legHeight",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e28_calc_cLeg2_valin-posX",
+      "source": "calc",
+      "target": "cLeg2",
+      "sourceHandle": "val-negLegX",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e29_calc_cLeg2_valin-posZ",
+      "source": "calc",
+      "target": "cLeg2",
+      "sourceHandle": "val-negLegZ",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e30_props_cLeg3_valin-height",
+      "source": "props",
+      "target": "cLeg3",
+      "sourceHandle": "val-legHeight",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e31_calc_cLeg3_valin-posX",
+      "source": "calc",
+      "target": "cLeg3",
+      "sourceHandle": "val-legX",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e32_calc_cLeg3_valin-posZ",
+      "source": "calc",
+      "target": "cLeg3",
+      "sourceHandle": "val-legZ",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e33_props_cLeg4_valin-height",
+      "source": "props",
+      "target": "cLeg4",
+      "sourceHandle": "val-legHeight",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e34_calc_cLeg4_valin-posX",
+      "source": "calc",
+      "target": "cLeg4",
+      "sourceHandle": "val-legX",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e35_calc_cLeg4_valin-posZ",
+      "source": "calc",
+      "target": "cLeg4",
+      "sourceHandle": "val-negLegZ",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e36_calc_cPill1_valin-breadth",
+      "source": "calc",
+      "target": "cPill1",
+      "sourceHandle": "val-pillW",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e37_calc_cPill1_valin-posX",
+      "source": "calc",
+      "target": "cPill1",
+      "sourceHandle": "val-pillX",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e38_calc_cPill1_valin-posY",
+      "source": "calc",
+      "target": "cPill1",
+      "sourceHandle": "val-mattTopY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e39_calc_cPill1_valin-posZ",
+      "source": "calc",
+      "target": "cPill1",
+      "sourceHandle": "val-pillZ",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e40_calc_cPill2_valin-breadth",
+      "source": "calc",
+      "target": "cPill2",
+      "sourceHandle": "val-pillW",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e41_calc_cPill2_valin-posX",
+      "source": "calc",
+      "target": "cPill2",
+      "sourceHandle": "val-pillX",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e42_calc_cPill2_valin-posY",
+      "source": "calc",
+      "target": "cPill2",
+      "sourceHandle": "val-mattTopY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e43_calc_cPill2_valin-posZ",
+      "source": "calc",
+      "target": "cPill2",
+      "sourceHandle": "val-negPillZ",
+      "targetHandle": "valin-posZ"
+    },
+    {
+      "id": "e44_props_rFrame_valin-length",
+      "source": "props",
+      "target": "rFrame",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e45_props_rFrame_valin-breadth",
+      "source": "props",
+      "target": "rFrame",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e46_calc_rFrame_valin-centerX",
+      "source": "calc",
+      "target": "rFrame",
+      "sourceHandle": "val-cx",
+      "targetHandle": "valin-centerX"
+    },
+    {
+      "id": "e47_calc_rFrame_valin-centerY",
+      "source": "calc",
+      "target": "rFrame",
+      "sourceHandle": "val-cy",
+      "targetHandle": "valin-centerY"
+    },
+    {
+      "id": "e48_calc_rMatt_valin-length",
+      "source": "calc",
+      "target": "rMatt",
+      "sourceHandle": "val-mattL",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e49_calc_rMatt_valin-breadth",
+      "source": "calc",
+      "target": "rMatt",
+      "sourceHandle": "val-mattW",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e50_calc_rMatt_valin-centerX",
+      "source": "calc",
+      "target": "rMatt",
+      "sourceHandle": "val-cx",
+      "targetHandle": "valin-centerX"
+    },
+    {
+      "id": "e51_calc_rMatt_valin-centerY",
+      "source": "calc",
+      "target": "rMatt",
+      "sourceHandle": "val-cy",
+      "targetHandle": "valin-centerY"
+    },
+    {
+      "id": "e52_calc_rPill1_valin-breadth",
+      "source": "calc",
+      "target": "rPill1",
+      "sourceHandle": "val-pillW",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e53_calc_rPill1_valin-centerX",
+      "source": "calc",
+      "target": "rPill1",
+      "sourceHandle": "val-pillX",
+      "targetHandle": "valin-centerX"
+    },
+    {
+      "id": "e54_calc_rPill1_valin-centerY",
+      "source": "calc",
+      "target": "rPill1",
+      "sourceHandle": "val-pillZ",
+      "targetHandle": "valin-centerY"
+    },
+    {
+      "id": "e55_calc_rPill2_valin-breadth",
+      "source": "calc",
+      "target": "rPill2",
+      "sourceHandle": "val-pillW",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e56_calc_rPill2_valin-centerX",
+      "source": "calc",
+      "target": "rPill2",
+      "sourceHandle": "val-pillX",
+      "targetHandle": "valin-centerX"
+    },
+    {
+      "id": "e57_calc_rPill2_valin-centerY",
+      "source": "calc",
+      "target": "rPill2",
+      "sourceHandle": "val-negPillZ",
+      "targetHandle": "valin-centerY"
+    },
+    {
+      "id": "e58_nodeSrc_ng",
+      "source": "nodeSrc",
+      "target": "ng",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e59_ng_pt_valin-x",
+      "source": "ng",
+      "target": "pt",
+      "sourceHandle": "val-x",
+      "targetHandle": "valin-x"
+    },
+    {
+      "id": "e60_ng_pt_valin-y",
+      "source": "ng",
+      "target": "pt",
+      "sourceHandle": "val-y",
+      "targetHandle": "valin-y"
+    },
+    {
+      "id": "e61_agent_props",
+      "source": "agent",
+      "target": "props",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e62_props_nodeSrc_gin-stamp",
+      "source": "props",
+      "target": "nodeSrc",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e63_agent_nodeSrc_gin-stamp",
+      "source": "agent",
+      "target": "nodeSrc",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e64_rFrame_polyOuter",
+      "source": "rFrame",
+      "target": "polyOuter",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-points"
+    },
+    {
+      "id": "e65_rFrame_inset",
+      "source": "rFrame",
+      "target": "insetFrame",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-polygon"
+    },
+    {
+      "id": "e66_props_inset_setback",
+      "source": "props",
+      "target": "insetFrame",
+      "sourceHandle": "val-frameThickness",
+      "targetHandle": "valin-uniformSetback"
+    },
+    {
+      "id": "e67_inset_polyInner",
+      "source": "insetFrame",
+      "target": "polyInner",
+      "sourceHandle": "val-polygons",
+      "targetHandle": "valin-points"
+    }
+  ]
+}

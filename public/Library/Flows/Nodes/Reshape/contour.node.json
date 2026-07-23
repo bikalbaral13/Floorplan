@@ -7,14 +7,49 @@
     "category": "Reshape",
     "color": "#0e7490"
   },
-  "description": "Generate nested inward-offset contour rings at a fixed interval.",
-  "instructions": "Generates nested inward-offset rings (topographic-style contours) at a fixed `interval` (m), up to `maxLevels` rings — each ring is an output polygon carried on the single output handle.\n\nTIP: use it for setback studies (each ring = a further setback), terracing / step-backs, or a quick read of how deep a Space is. A small `interval` with high `maxLevels` gives many fine rings; inner rings stop automatically once the offset collapses the shape. Wire a Space into the input handle.",
+  "description": "A pure CALCULATION node — offset the boundary into contour rings: coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: `polygon` takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry's val-points into valin-polygon. A nested [[[x,y],...],...] list is accepted too — the LARGEST piece is used, since this node works on one polygon.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
+    ]
   },
   "parameters": [
-    { "key": "interval", "label": "Interval", "kind": "range", "default": 0.5, "min": 0.05, "max": 10, "step": 0.05, "unit": "m" },
-    { "key": "maxLevels", "label": "Max levels", "kind": "range", "default": 12, "min": 1, "max": 30, "step": 1 }
+    {
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "interval",
+      "label": "Interval",
+      "kind": "range",
+      "default": 0.5,
+      "min": 0.05,
+      "max": 10,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "maxLevels",
+      "label": "Max levels",
+      "kind": "range",
+      "default": 12,
+      "min": 1,
+      "max": 30,
+      "step": 1
+    }
   ]
 }

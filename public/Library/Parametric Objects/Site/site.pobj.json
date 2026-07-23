@@ -2,225 +2,48 @@
   "kind": "parametric-object",
   "version": 3,
   "meta": {
-    "id": "site.v1",
+    "id": "site",
     "name": "Site",
-    "category": "Architecture/Site",
+    "category": "Site",
+    "symbol": "massing",
     "units": "m"
   },
-  "description": "A footprint-only Site study (NO massing / no vertical extrusion — the result stays a flat 2D plan footprint). Attach to a SPACE (the plot). It runs three optional planning tools over the host footprint, each independently switched on/off by a checkbox toggle, so you can use all three, any two, one, or none: (1) INSET — set back the plot boundary (front applied to `frontEdgeIndex`, `remaining` to the other edges); (2) SPLIT — carve a buildable zone of a target area (`splitCoverage` × plot area) at `splitAngle`, keeping the `splitKeep` piece and emitting the remainder as a flat open-space footprint; (3) OPTIMISE RECTANGLE — pack the largest `optShape` (rectangle by default) into what remains. Each pipeline op carries a `when` gate reading its `use…` toggle: a disabled op is skipped and the footprint passes through unchanged. OUTPUTS are footprint metrics read via evalParametricOutputs and shown in Space Properties → Output Metrics.",
+  "description": "Site → Building Envelope, as ONE object (the site_to_building_envelope workflow compiled into a pipeline). Attach it to a plot Space: tick the operations you want — Apply Setback (inset), Split Plot, and Fit Rectangle (optimise-rect) — and each ticked op runs over the footprint. The setback polygon is drawn as a dashed reference; the final envelope is the solid footprint. Each operation's parameters only appear in Properties when its toggle is on.",
   "parameters": [
-    {
-      "key": "useInset",
-      "label": "Use Inset",
-      "kind": "checkbox",
-      "default": true
-    },
-    {
-      "key": "useSplit",
-      "label": "Use Split",
-      "kind": "checkbox",
-      "default": true
-    },
-    {
-      "key": "useOptimise",
-      "label": "Use Optimise Rectangle",
-      "kind": "checkbox",
-      "default": true
-    },
-    {
-      "key": "front",
-      "label": "Inset · Front Setback",
-      "kind": "number",
-      "default": 10.8,
-      "min": 0,
-      "max": 30,
-      "step": 0.1,
-      "unit": "m"
-    },
-    {
-      "key": "remaining",
-      "label": "Inset · Side / Rear Setback",
-      "kind": "number",
-      "default": 3.2,
-      "min": 0,
-      "max": 30,
-      "step": 0.1,
-      "unit": "m"
-    },
-    {
-      "key": "frontEdgeIndex",
-      "label": "Inset · Front Edge Index",
-      "kind": "number",
-      "default": 3,
-      "min": 0,
-      "max": 40,
-      "step": 1
-    },
-    {
-      "key": "splitCoverage",
-      "label": "Split · Buildable Coverage",
-      "kind": "number",
-      "default": 0.5,
-      "min": 0.05,
-      "max": 1,
-      "step": 0.01
-    },
-    {
-      "key": "splitAngle",
-      "label": "Split · Angle",
-      "kind": "number",
-      "default": 0,
-      "min": 0,
-      "max": 360,
-      "step": 5,
-      "unit": "°"
-    },
-    {
-      "key": "splitKeep",
-      "label": "Split · Keep Piece Index",
-      "kind": "number",
-      "default": 0,
-      "min": 0,
-      "max": 8,
-      "step": 1
-    },
-    {
-      "key": "optShape",
-      "label": "Optimise · Shape",
-      "kind": "select",
-      "default": "rectangle",
-      "options": [
-        "rectangle",
-        "lshape",
-        "tshape",
-        "zshape",
-        "ishape",
-        "cshape",
-        "stepped",
-        "cross"
-      ]
-    },
-    {
-      "key": "optCount",
-      "label": "Optimise · Number of Rectangles",
-      "kind": "number",
-      "default": 1,
-      "min": 1,
-      "max": 10,
-      "step": 1
-    },
-    {
-      "key": "optReference",
-      "label": "Optimise · Reference",
-      "kind": "select",
-      "default": "none",
-      "options": [
-        "none",
-        "custom",
-        "by-edge"
-      ]
-    },
-    {
-      "key": "optAxisAngle",
-      "label": "Optimise · Axis Angle",
-      "kind": "number",
-      "default": 0,
-      "min": 0,
-      "max": 360,
-      "step": 5,
-      "unit": "°"
-    },
-    {
-      "key": "color",
-      "label": "Colour",
-      "kind": "color",
-      "default": "#4d7c0f"
-    }
+    { "key": "useInset", "label": "Apply Setback (Inset)", "kind": "checkbox", "default": true },
+    { "key": "insetMode", "label": "Setback Mode", "kind": "select", "default": "front-remaining", "showWhen": "useInset", "options": [ { "value": "front-remaining", "label": "Front & sides/rear" }, { "value": "equal", "label": "Uniform" } ] },
+    { "key": "setback", "label": "Uniform Setback", "kind": "number", "default": 3, "min": 0, "max": 30, "step": 0.5, "unit": "m", "showWhen": "useInset" },
+    { "key": "frontSetback", "label": "Front Setback", "kind": "number", "default": 5, "min": 0, "max": 30, "step": 0.5, "unit": "m", "showWhen": "useInset" },
+    { "key": "remainingSetback", "label": "Side / Rear Setback", "kind": "number", "default": 3, "min": 0, "max": 30, "step": 0.5, "unit": "m", "showWhen": "useInset" },
+    { "key": "useSplit", "label": "Split Plot", "kind": "checkbox", "default": false },
+    { "key": "splitTargetArea", "label": "Split First-Piece Area", "kind": "number", "default": 200, "min": 1, "max": 5000, "step": 1, "unit": "m²", "showWhen": "useSplit" },
+    { "key": "splitAngle", "label": "Split Angle", "kind": "number", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°", "showWhen": "useSplit" },
+    { "key": "useOptimise", "label": "Fit Rectangle", "kind": "checkbox", "default": true },
+    { "key": "rectShape", "label": "Envelope Shape", "kind": "select", "default": "rectangle", "showWhen": "useOptimise", "options": [ { "value": "rectangle", "label": "Rectangle" }, { "value": "square", "label": "Square" }, { "value": "lshape", "label": "L-shape" }, { "value": "tshape", "label": "T-shape" }, { "value": "cshape", "label": "C-shape" } ] },
+    { "key": "rectCount", "label": "Rectangle Count", "kind": "number", "default": 1, "min": 1, "max": 20, "step": 1, "showWhen": "useOptimise" },
+    { "key": "rectAxisAngle", "label": "Rectangle Axis Angle", "kind": "number", "default": 0, "min": 0, "max": 180, "step": 1, "unit": "°", "showWhen": "useOptimise" },
+    { "key": "optimiseAxisTilt", "label": "Auto-optimise Tilt", "kind": "checkbox", "default": false, "showWhen": "useOptimise" },
+    { "key": "useMassing", "label": "Extrude 3D Block", "kind": "checkbox", "default": false },
+    { "key": "buildingHeight", "label": "Building Height", "kind": "number", "default": 12, "min": 3, "max": 300, "step": 1, "unit": "m", "showWhen": "useMassing" },
+    { "key": "color", "label": "Colour", "kind": "color", "default": "#4A90E2" }
   ],
   "geometry": {
     "vars": {
-      "_doc": "splitTarget = a fraction of the plot area, used as the split's target buildable area (m²).",
-      "splitTarget": "hostArea * splitCoverage"
+      "_doc": "plotArea = host footprint area (m²). The pipeline runs over the host footprint in local metres; each op is gated by its use* toggle.",
+      "plotArea": "hostArea"
     },
     "pipeline": [
-      {
-        "op": "host"
-      },
-      {
-        "op": "inset",
-        "when": "useInset",
-        "params": {
-          "mode": "front-remaining",
-          "front": "front",
-          "remaining": "remaining",
-          "frontEdgeMode": "index",
-          "frontEdgeIndex": "frontEdgeIndex",
-          "inside": true
-        }
-      },
-      {
-        "op": "outline",
-        "when": "useInset"
-      },
-      {
-        "op": "split",
-        "when": "useSplit",
-        "params": {
-          "mode": "target",
-          "target": {
-            "$expr": "splitTarget"
-          },
-          "angle": "splitAngle",
-          "keep": "splitKeep"
-        }
-      },
-      {
-        "op": "outline",
-        "when": "useSplit"
-      },
-      {
-        "op": "optimise-rect",
-        "when": "useOptimise",
-        "params": {
-          "shape": "optShape",
-          "count": "optCount",
-          "reference": "optReference",
-          "axisAngle": "optAxisAngle"
-        }
-      },
-      {
-        "op": "fill"
-      }
+      { "op": "host", "params": {} },
+      { "op": "inset", "when": "useInset", "params": { "mode": "insetMode", "inside": true, "uniformSetback": "setback", "front": "frontSetback", "remaining": "remainingSetback", "frontEdgeMode": "longest" } },
+      { "op": "outline", "when": "useInset", "params": {} },
+      { "op": "split", "when": "useSplit", "params": { "type": "normal", "mode": "target", "target": "splitTargetArea", "angle": "splitAngle", "count": 2, "keep": 0 } },
+      { "op": "optimise-rect", "when": "useOptimise", "params": { "shape": "rectShape", "reference": "custom", "axisAngle": "rectAxisAngle", "optimiseAxisTilt": "optimiseAxisTilt", "count": "rectCount" } },
+      { "op": "fill", "params": {} },
+      { "op": "extrude", "when": "useMassing", "params": { "height": "buildingHeight" } }
     ]
   },
   "outputs": [
-    {
-      "key": "plotArea",
-      "label": "Plot Area",
-      "expr": "hostArea",
-      "unit": "m²"
-    },
-    {
-      "key": "useInset",
-      "label": "Inset Enabled",
-      "expr": "useInset ? 1 : 0"
-    },
-    {
-      "key": "useSplit",
-      "label": "Split Enabled",
-      "expr": "useSplit ? 1 : 0"
-    },
-    {
-      "key": "useOptimise",
-      "label": "Optimise Enabled",
-      "expr": "useOptimise ? 1 : 0"
-    },
-    {
-      "key": "splitTarget",
-      "label": "Split Buildable Target",
-      "expr": "useSplit ? splitTarget : 0",
-      "unit": "m²"
-    }
+    { "key": "plotArea", "label": "Plot Area", "expr": "plotArea", "unit": "m²" }
   ],
   "hostKind": "space"
 }

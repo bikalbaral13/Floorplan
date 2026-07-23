@@ -1,6 +1,6 @@
 import type { Point } from "../../types";
 
-export type SkeletonType = "straight-skeleton" | "segment-sweepline" | "sampled-voronoi";
+export type SkeletonType = "straight-skeleton" | "segment-sweepline" | "sampled-voronoi" | "thinning";
 
 /** Visvalingam-Whyatt polyline simplification. Repeatedly drops the interior
  *  vertex whose triangle (with its two neighbours) has the smallest area until
@@ -54,8 +54,12 @@ export interface SkeletonEdge {
   p2: Point;
 }
 
-/** Compute a 2D polygon skeleton via one of three pipelines:
- *  - `straight-skeleton`: full event-driven straight skeleton with edge-collapse and split events.
+/** Compute a 2D polygon skeleton via one of four pipelines:
+ *  - `straight-skeleton`: full event-driven straight skeleton with edge-collapse, split and
+ *    vertex/pinch events (degeneracy-sanitised for rectilinear shapes, validated with a rotation retry).
+ *  - `thinning`: rectilinear centerline — for axis-aligned plans (L/T/C/U/Z/stepped, any world rotation)
+ *    the orthogonal per-limb spine with right-angle junctions; falls back to the straight skeleton when
+ *    the polygon is not rectilinear in its own edge frame.
  *  - `segment-sweepline`: grid labelling by nearest polygon edge → emit segments where labels differ.
  *  - `sampled-voronoi`: point-Voronoi of boundary samples → emit cell-boundary edges between cells whose seeds belong to different polygon edges (medial-axis approximation). */
 export const computePolygonSkeleton = (
@@ -67,6 +71,7 @@ export const computePolygonSkeleton = (
   const samples = opts.samples ?? 4;
   const pruneEnds = opts.pruneEnds ?? false;
 
+  if (type === "thinning") return computeThinningSkeleton(polygon) ?? computeStraightSkeleton(polygon, pruneEnds);
   if (type === "straight-skeleton") return computeStraightSkeleton(polygon, pruneEnds);
   if (type === "segment-sweepline") return computeSegmentSweepline(polygon, samples);
   return computeSampledVoronoiSkeleton(polygon, samples);
@@ -209,8 +214,69 @@ export const computeSkeletonBoundaryJoins = (
 };
 
 // ── Straight skeleton ─────────────────────────────────────────────────────────
+/** Robustness wrapper. Axis-aligned (rectilinear) polygons collapse with EXACTLY simultaneous events
+ *  — coincident wavefront vertices, zero-length edges and fold-back spikes that the classic edge/split
+ *  event pair alone mishandles (long crisscross arcs escaping the polygon). `runStraightSkeleton`
+ *  sanitises the wavefront between events; this wrapper then VALIDATES the arcs (quarter-point samples
+ *  must stay inside the polygon) and, if any escape, retries once with the polygon rotated by a small fixed
+ *  angle (breaking residual exact-parallel degeneracies), mapping the arcs back and keeping whichever
+ *  result is cleaner. */
 const computeStraightSkeleton = (polygon: Point[], pruneEnds: boolean): SkeletonEdge[] => {
-  type SkV = { x: number; y: number; px: number; py: number };
+  const N = polygon.length;
+  const pip = (px: number, py: number): boolean => {
+    let inside = false;
+    for (let i = 0, j = N - 1; i < N; j = i++) {
+      const a = polygon[i], b = polygon[j];
+      if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+    }
+    return inside;
+  };
+  const distToBoundary = (px: number, py: number): number => {
+    let best = Infinity;
+    for (let i = 0; i < N; i++) {
+      const a = polygon[i], b = polygon[(i + 1) % N];
+      const ex = b.x - a.x, ey = b.y - a.y;
+      const len2 = ex * ex + ey * ey || 1e-9;
+      const t = Math.max(0, Math.min(1, ((px - a.x) * ex + (py - a.y) * ey) / len2));
+      best = Math.min(best, Math.hypot(px - (a.x + t * ex), py - (a.y + t * ey)));
+    }
+    return best;
+  };
+  // Arcs that leave the polygon (beyond a 1px graze) mean the wavefront degenerated. Sampled at the
+  // quarter points, not just the midpoint — a chord that dips OUT and back (crossing a concave notch)
+  // can still have an inside midpoint, so one sample misses it.
+  const violations = (edges: SkeletonEdge[]): number => {
+    let bad = 0;
+    for (const e of edges) {
+      for (const t of [0.25, 0.5, 0.75]) {
+        const mx = e.p1.x + (e.p2.x - e.p1.x) * t, my = e.p1.y + (e.p2.y - e.p1.y) * t;
+        if (!pip(mx, my) && distToBoundary(mx, my) > 1.0) { bad++; break; }
+      }
+    }
+    return bad;
+  };
+  const prune = (edges: SkeletonEdge[]): SkeletonEdge[] => {
+    if (!pruneEnds) return edges;
+    const VTX_TOL = 1.5;
+    const nearVertex = (p: Point) => polygon.some((v) => Math.hypot(v.x - p.x, v.y - p.y) < VTX_TOL);
+    return edges.filter((e) => !nearVertex(e.p1) && !nearVertex(e.p2));
+  };
+  const first = runStraightSkeleton(polygon);
+  const vFirst = violations(first);
+  if (vFirst === 0) return prune(first);
+  const cx = polygon.reduce((s, p) => s + p.x, 0) / N;
+  const cy = polygon.reduce((s, p) => s + p.y, 0) / N;
+  const th = 0.0137, cosT = Math.cos(th), sinT = Math.sin(th);
+  const rot = (p: Point): Point => ({ x: cx + (p.x - cx) * cosT - (p.y - cy) * sinT, y: cy + (p.x - cx) * sinT + (p.y - cy) * cosT });
+  const unrot = (p: Point): Point => ({ x: cx + (p.x - cx) * cosT + (p.y - cy) * sinT, y: cy - (p.x - cx) * sinT + (p.y - cy) * cosT });
+  const second = runStraightSkeleton(polygon.map(rot)).map((e) => ({ p1: unrot(e.p1), p2: unrot(e.p2) }));
+  return prune(violations(second) < vFirst ? second : first);
+};
+
+const runStraightSkeleton = (polygon: Point[]): SkeletonEdge[] => {
+  // (px,py) = the anchor where this vertex's current skeleton arc started; (dx,dy) = the unit bisector
+  // direction the vertex was travelling when anchored (undefined until its first advance).
+  type SkV = { x: number; y: number; px: number; py: number; dx?: number; dy?: number };
   const skeletonEdges: SkeletonEdge[] = [];
   let elapsedT = 0;
   let signedArea = 0;
@@ -257,7 +323,12 @@ const computeStraightSkeleton = (polygon: Point[], pruneEnds: boolean): Skeleton
     const dot = prevN.nx * nextN.nx + prevN.ny * nextN.ny;
     const denom = 1 + dot;
     if (Math.abs(denom) < 1e-6) return { vx: 0, vy: 0 };
-    return { vx: (prevN.nx + nextN.nx) / denom, vy: (prevN.ny + nextN.ny) / denom };
+    let vx = (prevN.nx + nextN.nx) / denom, vy = (prevN.ny + nextN.ny) / denom;
+    // Near-anti-parallel flanks (needle vertex) → speed explodes; cap it so events stay finite and
+    // the spike sanitiser (below) can excise the needle instead of the vertex rocketing off.
+    const sp = Math.hypot(vx, vy);
+    if (sp > 50) { vx *= 50 / sp; vy *= 50 / sp; }
+    return { vx, vy };
   };
   const isReflex = (prev: SkV, v: SkV, next: SkV): boolean => {
     const ax = v.x - prev.x, ay = v.y - prev.y;
@@ -266,7 +337,82 @@ const computeStraightSkeleton = (polygon: Point[], pruneEnds: boolean): Skeleton
     return (cross * insideSign) < 0;
   };
 
+  // A vertex's arc ends here — draw it from its anchor and let the caller re-anchor.
+  const emitArc = (v: SkV) => {
+    if (Math.hypot(v.x - v.px, v.y - v.py) > 0.5)
+      skeletonEdges.push({ p1: { x: v.px, y: v.py }, p2: { x: v.x, y: v.y } });
+  };
+  // Degeneracy sanitiser — rectilinear shapes collapse with EXACTLY simultaneous events, which the
+  // edge/split pair alone mishandles: coincident wavefront vertices, zero-length edges (whose normals
+  // are garbage) and fold-back spikes freeze or corrupt every later velocity. Between events:
+  //  (a) merge ADJACENT coincident vertices (their arcs end; fresh anchor at the merge point);
+  //  (b) excise fold-back SPIKES (consecutive anti-parallel edges — a collapsed strip), emitting the
+  //      seam arc and re-anchoring the surviving endpoint whose flank changed;
+  //  (c) split a component at NON-ADJACENT coincident vertices — the missing VERTEX/PINCH event (e.g.
+  //      an L-shape's reflex arc meeting a corner arc, pinching the wavefront into its two limbs).
+  const EPS = 0.75;
+  const sanitizeComponents = () => {
+    for (let guard = 0; guard < polygon.length * 8; guard++) {
+      let changed = false;
+      outer: for (let c = 0; c < components.length; c++) {
+        const comp = components[c];
+        const K = comp.length;
+        if (K < 3) continue;
+        // (a) adjacent coincident → merge into one re-anchored vertex
+        for (let i = 0; i < K; i++) {
+          const a = comp[i], b = comp[(i + 1) % K];
+          if (Math.hypot(b.x - a.x, b.y - a.y) >= EPS) continue;
+          emitArc(a); emitArc(b);
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          const merged: SkV = { x: mx, y: my, px: mx, py: my };
+          const next: SkV[] = [];
+          for (let k = 0; k < K; k++) {
+            if (k === i) next.push(merged);
+            else if (k !== (i + 1) % K) next.push(comp[k]);
+          }
+          components[c] = next;
+          changed = true; break outer;
+        }
+        // (b) fold-back spike → excise the tip, emit the seam arc
+        for (let i = 0; i < K; i++) {
+          const p = comp[(i - 1 + K) % K], v = comp[i], n = comp[(i + 1) % K];
+          const d1x = v.x - p.x, d1y = v.y - p.y, d2x = n.x - v.x, d2y = n.y - v.y;
+          const L1 = Math.hypot(d1x, d1y), L2 = Math.hypot(d2x, d2y);
+          if (L1 < 1e-9 || L2 < 1e-9) continue;
+          if ((d1x * d2x + d1y * d2y) / (L1 * L2) > -0.999) continue;
+          const q = L1 <= L2 ? p : n; // nearer collinear endpoint — the spike folds back onto it
+          emitArc(v);
+          if (Math.hypot(v.x - q.x, v.y - q.y) > 0.5)
+            skeletonEdges.push({ p1: { x: v.x, y: v.y }, p2: { x: q.x, y: q.y } });
+          emitArc(q); q.px = q.x; q.py = q.y; // its flanking edge changed — its arc bends here
+          components[c] = comp.filter((_, k) => k !== i);
+          changed = true; break outer;
+        }
+        // (c) non-adjacent coincident → pinch: split into two components at the touch point
+        for (let i = 0; i < K; i++) {
+          for (let j = i + 2; j < K; j++) {
+            if (i === 0 && j === K - 1) continue; // adjacent around the wrap
+            const a = comp[i], b = comp[j];
+            if (Math.hypot(b.x - a.x, b.y - a.y) >= EPS) continue;
+            emitArc(a); emitArc(b);
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+            const compA: SkV[] = [];
+            for (let k = i + 1; k < j; k++) compA.push(comp[k]);
+            compA.push({ x: mx, y: my, px: mx, py: my });
+            const compB: SkV[] = [];
+            for (let k = (j + 1) % K; k !== i; k = (k + 1) % K) compB.push(comp[k]);
+            compB.push({ x: mx, y: my, px: mx, py: my });
+            components.splice(c, 1, compA, compB);
+            changed = true; break outer;
+          }
+        }
+      }
+      if (!changed) break;
+    }
+  };
+
   for (let step = 0; step < maxSteps; step++) {
+    sanitizeComponents();
     components = components.filter((c) => {
       if (c.length < 3) { closeComponent(c); return false; }
       return true;
@@ -329,7 +475,9 @@ const computeStraightSkeleton = (polygon: Point[], pruneEnds: boolean): Skeleton
           const elen2 = ex2 * ex2 + ey2 * ey2;
           if (elen2 < 1e-6) continue;
           const s = ((hitX - ax) * ex2 + (hitY - ay) * ey2) / elen2;
-          if (s < 0.02 || s > 0.98) continue;
+          // Allow hits AT the edge endpoints (s ≈ 0 / 1): in rectilinear shapes the reflex arc meets a
+          // corner arc exactly (a vertex event) — the sanitiser merges the resulting duplicate vertex.
+          if (s < -0.02 || s > 1.02) continue;
           best = { kind: "split", t, comp: c, rIdx: i, jIdx: j, hit: { x: hitX, y: hitY } };
         }
       }
@@ -341,8 +489,23 @@ const computeStraightSkeleton = (polygon: Point[], pruneEnds: boolean): Skeleton
       const comp = components[c];
       const { vels } = compState[c];
       for (let i = 0; i < comp.length; i++) {
-        comp[i].x += vels[i].vx * best.t;
-        comp[i].y += vels[i].vy * best.t;
+        const v = comp[i];
+        const sp = Math.hypot(vels[i].vx, vels[i].vy);
+        if (sp > 1e-9) {
+          const ux = vels[i].vx / sp, uy = vels[i].vy / sp;
+          // Arc-fidelity guard: a skeleton arc is straight ONLY while the vertex's bisector direction
+          // holds. Degeneracy handling (speed caps, sanitiser merges) can bend it between events; when
+          // it has bent > ~2° since this arc was anchored, close the segment and re-anchor — the arc
+          // becomes a faithful polyline instead of one long cut-across chord (the boundary-hugging
+          // artefact on concave limbs).
+          if (v.dx !== undefined && v.dy !== undefined && v.dx * ux + v.dy * uy < 0.99939) {
+            emitArc(v);
+            v.px = v.x; v.py = v.y;
+          }
+          v.dx = ux; v.dy = uy;
+        }
+        v.x += vels[i].vx * best.t;
+        v.y += vels[i].vy * best.t;
       }
     }
 
@@ -393,12 +556,223 @@ const computeStraightSkeleton = (polygon: Point[], pruneEnds: boolean): Skeleton
     }
   }
 
+  sanitizeComponents();
   for (const c of components) closeComponent(c);
+  return skeletonEdges;
+};
 
-  if (!pruneEnds) return skeletonEdges;
-  const VTX_TOL = 1.5;
-  const nearVertex = (p: Point) => polygon.some((v) => Math.hypot(v.x - p.x, v.y - p.y) < VTX_TOL);
-  return skeletonEdges.filter((e) => !nearVertex(e.p1) && !nearVertex(e.p2));
+// ── Thinning (rectilinear centerline) ────────────────────────────────────────
+/** The "thinned line" of a rectilinear plan: each limb's AXIS-ALIGNED centerline meeting at right-angle
+ *  junctions — the orthogonal spine a designer would draw — instead of the straight skeleton's 45°
+ *  bisector network (which is medially correct but architecturally wrong for L/T/C/U/Z plans).
+ *  Pipeline: dominant edge frame (length-weighted circular mean folded mod 90° — NOT PCA, whose axis is
+ *  diagonal on an L) → rectilinearity gate (every edge within ~5° of an axis) → snap edges exactly H/V →
+ *  grid cells from the snapped edge coordinates → greedy largest-rectangle partition (bars before stubs,
+ *  so a T decomposes into bar + stem) → per-rectangle long-axis centerline, tips inset HALF THE LIMB
+ *  WIDTH at cap edges (medial-style termination; `joinToBoundary` re-extends them) and flush at junction
+ *  cuts → junction connectors: a flush tip extends along its own direction to the first perpendicular
+ *  centerline; parallel limbs sharing a side cut (Z / offset bars) get a jog at the overlap midpoint.
+ *  Returns null when the polygon is not rectilinear (or the partition degenerates) — caller falls back. */
+const computeThinningSkeleton = (polygon: Point[]): SkeletonEdge[] | null => {
+  if (polygon.length < 4) return null;
+  // Dominant edge frame — fold every edge direction mod 90° and take the length-weighted circular mean.
+  let fx = 0, fy = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const a4 = Math.atan2(dy, dx) * 4;
+    fx += Math.cos(a4) * len; fy += Math.sin(a4) * len;
+  }
+  const theta = Math.atan2(fy, fx) / 4;
+  let ccx = 0, ccy = 0;
+  for (const p of polygon) { ccx += p.x / polygon.length; ccy += p.y / polygon.length; }
+  const cosT = Math.cos(-theta), sinT = Math.sin(-theta);
+  const rotP = (p: Point): Point => ({ x: ccx + (p.x - ccx) * cosT - (p.y - ccy) * sinT, y: ccy + (p.x - ccx) * sinT + (p.y - ccy) * cosT });
+  const unrotP = (x: number, y: number): Point => ({ x: ccx + (x - ccx) * cosT + (y - ccy) * sinT, y: ccy - (x - ccx) * sinT + (y - ccy) * cosT });
+  const pts: Point[] = polygon.map(rotP);
+
+  // Rectilinearity gate: every edge longer than snap noise must lie within ~5° of horizontal/vertical.
+  const DEG5 = Math.tan((5 * Math.PI) / 180);
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const dx = Math.abs(b.x - a.x), dy = Math.abs(b.y - a.y);
+    if (Math.hypot(dx, dy) < 1.5) continue;
+    if (Math.min(dx, dy) > Math.max(dx, dy) * DEG5) return null;
+  }
+
+  // Merge consecutive same-orientation edges (collinear runs / sub-pixel steps) so H and V alternate —
+  // the property that makes the per-edge snap below assignment-consistent.
+  const isH = (a: Point, b: Point) => Math.abs(b.x - a.x) >= Math.abs(b.y - a.y);
+  for (let guard = 0; guard < polygon.length; guard++) {
+    let merged = false;
+    for (let i = 0; i < pts.length && pts.length > 4; i++) {
+      const p0 = pts[(i - 1 + pts.length) % pts.length], p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+      if (isH(p0, p1) === isH(p1, p2)) { pts.splice(i, 1); merged = true; break; }
+    }
+    if (!merged) break;
+  }
+  if (pts.length < 4 || pts.length % 2 !== 0) return null;
+
+  // Snap: an H edge fixes both endpoints' y (their mean), a V edge their x — with alternation each
+  // vertex takes x from its V edge and y from its H edge, exactly once.
+  const K = pts.length;
+  const snapped: Point[] = pts.map((p) => ({ ...p }));
+  for (let i = 0; i < K; i++) {
+    const a = pts[i], b = pts[(i + 1) % K];
+    if (isH(a, b)) { const y = (a.y + b.y) / 2; snapped[i].y = y; snapped[(i + 1) % K].y = y; }
+    else { const x = (a.x + b.x) / 2; snapped[i].x = x; snapped[(i + 1) % K].x = x; }
+  }
+  // Cluster the axis coordinates (sub-pixel duplicates collapse) and quantise the outline onto them.
+  const cluster = (vals: number[]): number[] => {
+    const sorted = [...vals].sort((a, b) => a - b);
+    const out: number[] = [];
+    for (const v of sorted) if (!out.length || v - out[out.length - 1] > 0.75) out.push(v);
+    return out;
+  };
+  const xs = cluster(snapped.map((p) => p.x));
+  const ys = cluster(snapped.map((p) => p.y));
+  if (xs.length < 2 || ys.length < 2) return null;
+  const snapTo = (v: number, list: number[]) => list.reduce((best, c) => (Math.abs(c - v) < Math.abs(best - v) ? c : best), list[0]);
+  const poly2: Point[] = snapped.map((p) => ({ x: snapTo(p.x, xs), y: snapTo(p.y, ys) }));
+
+  const pip2 = (px: number, py: number): boolean => {
+    let inside = false;
+    for (let i = 0, j = poly2.length - 1; i < poly2.length; j = i++) {
+      const a = poly2[i], b = poly2[j];
+      if (((a.y > py) !== (b.y > py)) && (px < (b.x - a.x) * (py - a.y) / ((b.y - a.y) || 1e-9) + a.x)) inside = !inside;
+    }
+    return inside;
+  };
+  const distToOutline = (px: number, py: number): number => {
+    let best = Infinity;
+    for (let i = 0; i < poly2.length; i++) {
+      const a = poly2[i], b = poly2[(i + 1) % poly2.length];
+      const ex = b.x - a.x, ey = b.y - a.y;
+      const len2 = ex * ex + ey * ey || 1e-9;
+      const t = Math.max(0, Math.min(1, ((px - a.x) * ex + (py - a.y) * ey) / len2));
+      best = Math.min(best, Math.hypot(px - (a.x + t * ex), py - (a.y + t * ey)));
+    }
+    return best;
+  };
+  const onOutline = (px: number, py: number) => distToOutline(px, py) < 0.75;
+
+  // Cell grid + greedy largest-rectangle partition (largest bars claimed first: a T becomes bar + stem).
+  const nxC = xs.length - 1, nyC = ys.length - 1;
+  const at = (i: number, j: number) => j * nxC + i;
+  const inside: boolean[] = new Array(nxC * nyC);
+  for (let j = 0; j < nyC; j++) for (let i = 0; i < nxC; i++)
+    inside[at(i, j)] = pip2((xs[i] + xs[i + 1]) / 2, (ys[j] + ys[j + 1]) / 2);
+  const used: boolean[] = new Array(nxC * nyC).fill(false);
+  type CellRect = { i1: number; i2: number; j1: number; j2: number };
+  const rects: CellRect[] = [];
+  for (let iter = 0; iter < 64; iter++) {
+    let best: CellRect | null = null;
+    let bestA = 0;
+    for (let i1 = 0; i1 < nxC; i1++) for (let j1 = 0; j1 < nyC; j1++) {
+      if (!inside[at(i1, j1)] || used[at(i1, j1)]) continue;
+      for (let i2 = i1; i2 < nxC; i2++) for (let j2 = j1; j2 < nyC; j2++) {
+        let ok = true;
+        for (let i = i1; i <= i2 && ok; i++) for (let j = j1; j <= j2 && ok; j++) if (!inside[at(i, j)] || used[at(i, j)]) ok = false;
+        if (!ok) continue;
+        const area = (xs[i2 + 1] - xs[i1]) * (ys[j2 + 1] - ys[j1]);
+        if (area > bestA) { bestA = area; best = { i1, i2, j1, j2 }; }
+      }
+    }
+    if (!best) break;
+    for (let i = best.i1; i <= best.i2; i++) for (let j = best.j1; j <= best.j2; j++) used[at(i, j)] = true;
+    rects.push(best);
+  }
+  for (let k = 0; k < inside.length; k++) if (inside[k] && !used[k]) return null; // partition failed
+  if (!rects.length) return null;
+
+  // Per-rectangle centerline along the LONG axis. Ends flush at junction cuts; inset half the limb
+  // width at cap edges (the medial-style tip — joinToBoundary re-extends it to the cap when wanted).
+  type Seg = { ax: number; ay: number; bx: number; by: number; horiz: boolean; aFlush: boolean; bFlush: boolean };
+  const segs: Seg[] = [];
+  const segOfRect: (Seg | null)[] = [];
+  for (const r of rects) {
+    const x1 = xs[r.i1], x2 = xs[r.i2 + 1], y1 = ys[r.j1], y2 = ys[r.j2 + 1];
+    const w = x2 - x1, h = y2 - y1;
+    let seg: Seg | null = null;
+    if (w >= h) {
+      const yMid = (y1 + y2) / 2;
+      const capL = onOutline(x1, yMid), capR = onOutline(x2, yMid);
+      const ax = x1 + (capL ? h / 2 : 0), bx = x2 - (capR ? h / 2 : 0);
+      if (bx - ax > 0.5) seg = { ax, ay: yMid, bx, by: yMid, horiz: true, aFlush: !capL, bFlush: !capR };
+    } else {
+      const xMid = (x1 + x2) / 2;
+      const capB = onOutline(xMid, y1), capT = onOutline(xMid, y2);
+      const ay = y1 + (capB ? w / 2 : 0), by = y2 - (capT ? w / 2 : 0);
+      if (by - ay > 0.5) seg = { ax: xMid, ay, bx: xMid, by, horiz: false, aFlush: !capB, bFlush: !capT };
+    }
+    segOfRect.push(seg);
+    if (seg) segs.push(seg);
+  }
+  if (!segs.length) return null;
+
+  // Junction connectors 1 — perpendicular: a flush tip continues along its own direction to the first
+  // perpendicular centerline it meets (the T-stem rising to the bar line; the L-arm reaching the leg line).
+  const maxSpan = (xs[xs.length - 1] - xs[0]) + (ys[ys.length - 1] - ys[0]);
+  const connectors: Seg[] = [];
+  for (const s of segs) {
+    const tips: Array<[boolean, number, number, number, number]> = [
+      [s.aFlush, s.ax, s.ay, s.horiz ? -1 : 0, s.horiz ? 0 : -1],
+      [s.bFlush, s.bx, s.by, s.horiz ? 1 : 0, s.horiz ? 0 : 1],
+    ];
+    for (const [flush, tx, ty, dirx, diry] of tips) {
+      if (!flush) continue;
+      let bestD = Infinity;
+      for (const o of segs) {
+        if (o === s) continue;
+        if (diry === 0 && !o.horiz) {
+          const d = (o.ax - tx) * dirx;
+          const minY = Math.min(o.ay, o.by) - 0.5, maxY = Math.max(o.ay, o.by) + 0.5;
+          if (d > 0.25 && ty >= minY && ty <= maxY && d < bestD) bestD = d;
+        } else if (dirx === 0 && o.horiz) {
+          const d = (o.ay - ty) * diry;
+          const minX = Math.min(o.ax, o.bx) - 0.5, maxX = Math.max(o.ax, o.bx) + 0.5;
+          if (d > 0.25 && tx >= minX && tx <= maxX && d < bestD) bestD = d;
+        }
+      }
+      if (isFinite(bestD) && bestD < maxSpan)
+        connectors.push({ ax: tx, ay: ty, bx: tx + dirx * bestD, by: ty + diry * bestD, horiz: diry === 0, aFlush: false, bFlush: false });
+    }
+  }
+  // Junction connectors 2 — parallel limbs sharing a side cut (Z / offset bars): jog between the two
+  // centerlines at the midpoint of the shared interval.
+  for (let a = 0; a < rects.length; a++) for (let b = a + 1; b < rects.length; b++) {
+    const sa = segOfRect[a], sb = segOfRect[b];
+    if (!sa || !sb || sa.horiz !== sb.horiz) continue;
+    const ra = rects[a], rb = rects[b];
+    const stackedV = ra.j2 + 1 === rb.j1 || rb.j2 + 1 === ra.j1; // share a horizontal cut line
+    const stackedH = ra.i2 + 1 === rb.i1 || rb.i2 + 1 === ra.i1; // share a vertical cut line
+    if (sa.horiz && stackedV) {
+      const ox1 = Math.max(xs[ra.i1], xs[rb.i1]), ox2 = Math.min(xs[ra.i2 + 1], xs[rb.i2 + 1]);
+      if (ox2 - ox1 < 0.5) continue;
+      const xm = (ox1 + ox2) / 2;
+      const inA = xm >= Math.min(sa.ax, sa.bx) - 0.5 && xm <= Math.max(sa.ax, sa.bx) + 0.5;
+      const inB = xm >= Math.min(sb.ax, sb.bx) - 0.5 && xm <= Math.max(sb.ax, sb.bx) + 0.5;
+      if (inA && inB && Math.abs(sb.ay - sa.ay) > 0.5)
+        connectors.push({ ax: xm, ay: sa.ay, bx: xm, by: sb.ay, horiz: false, aFlush: false, bFlush: false });
+    } else if (!sa.horiz && stackedH) {
+      const oy1 = Math.max(ys[ra.j1], ys[rb.j1]), oy2 = Math.min(ys[ra.j2 + 1], ys[rb.j2 + 1]);
+      if (oy2 - oy1 < 0.5) continue;
+      const ym = (oy1 + oy2) / 2;
+      const inA = ym >= Math.min(sa.ay, sa.by) - 0.5 && ym <= Math.max(sa.ay, sa.by) + 0.5;
+      const inB = ym >= Math.min(sb.ay, sb.by) - 0.5 && ym <= Math.max(sb.ay, sb.by) + 0.5;
+      if (inA && inB && Math.abs(sb.ax - sa.ax) > 0.5)
+        connectors.push({ ax: sa.ax, ay: ym, bx: sb.ax, by: ym, horiz: true, aFlush: false, bFlush: false });
+    }
+  }
+
+  const out: SkeletonEdge[] = [];
+  for (const s of [...segs, ...connectors]) {
+    if (Math.hypot(s.bx - s.ax, s.by - s.ay) < 0.5) continue;
+    out.push({ p1: unrotP(s.ax, s.ay), p2: unrotP(s.bx, s.by) });
+  }
+  return out.length ? out : null;
 };
 
 // ── Segment sweepline (grid nearest-edge labelling) ──────────────────────────

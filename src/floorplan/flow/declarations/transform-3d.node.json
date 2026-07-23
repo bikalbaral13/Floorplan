@@ -5,7 +5,20 @@
   "meta": { "label": "Transform 3D", "category": "3d primitives", "color": "#7e22ce" },
   "description": "Transform a 3D primitive — Translate (X/Y/Z) · Rotate (X/Y/Z) · uniform Scale · Mirror across a plane. Wire a Cuboid / Cylinder / Sphere / Cone in; chain several to stack. Y is up.",
   "instructions": "Affine-transforms an upstream 3D primitive (Cuboid / Cylinder / Sphere / Cone / Mass): Translate (X/Y/Z, m) · Rotate about X/Y/Z (°) · uniform Scale · Mirror across a plane. Y is up, Z is depth. Chain several to stack transforms. Wire a primitive into the input; wire the output into Display 3D or Boolean.\n\nTIP: use it to position primitive B relative to A before a Boolean, or to mirror a form across a plane.",
-  "handles": { "input": true, "output": true },
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueInputs": [
+      { "key": "translateX", "label": "Move X" },
+      { "key": "translateY", "label": "Move Y" },
+      { "key": "translateZ", "label": "Move Z" },
+      { "key": "rotateX", "label": "Rotate X" },
+      { "key": "rotateY", "label": "Rotate Y" },
+      { "key": "rotateZ", "label": "Rotate Z" },
+      { "key": "scale", "label": "Scale" },
+      { "key": "show", "label": "Show" }
+    ]
+  },
   "parameters": [
     { "key": "translateX", "label": "Move X", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
     { "key": "translateY", "label": "Move Y (up)", "kind": "range", "default": 0, "min": -50, "max": 50, "step": 0.1, "unit": "m" },
@@ -25,6 +38,12 @@
         { "value": "y", "label": "Across XZ (flip Y)" },
         { "value": "z", "label": "Across XY (flip Z)" }
       ]
+    },
+    {
+      "key": "show",
+      "label": "Show",
+      "kind": "checkbox",
+      "default": true
     }
   ]
 }

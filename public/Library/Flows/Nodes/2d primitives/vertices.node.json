@@ -1,0 +1,36 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "vertices",
+  "meta": {
+    "label": "Vertices",
+    "category": "2d primitives",
+    "color": "#0891b2"
+  },
+  "description": "A vertex list ([[x,y],… metre pairs) — receives vertices and republishes them. Draws nothing.",
+  "instructions": "A pure VALUE node for a vertex list: it receives vertices on `valin-points` and republishes them on `val-points`. It draws NOTHING on the canvas and emits no Space — wire it into a Polygon node when you want the list drawn.\n\nUse it to carry an outline between operations, e.g. Space Geometry → Vertices → Inset (`valin-polygon`), or Vertices → Polygon.\n\nA wired list overrides the typed one; with nothing wired the typed list is published as-is, so it also works as a standalone coordinate source.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "points",
+        "label": "Points"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "points",
+        "label": "Points"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "points",
+      "label": "Points (JSON)",
+      "kind": "text",
+      "default": "[[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]]"
+    }
+  ]
+}

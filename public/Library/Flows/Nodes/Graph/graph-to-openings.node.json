@@ -1,0 +1,76 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-to-openings",
+  "meta": {
+    "label": "Graph to Openings",
+    "category": "Graph",
+    "color": "#7c3aed"
+  },
+  "description": "A pure CALCULATION node — carve door/window openings into a partition graph: graph in, graph out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a partition GRAPH and returns a graph whose edges carry `type` (\"wall\" | \"opening\"). It has no geometry input or output and draws nothing on the canvas.\n\nINPUT: graph takes { \"nodes\": [{ \"id\", \"x\", \"y\" }, ...], \"edges\": [{ \"from_node_id\", \"to_node_id\", \"thickness\" }, ...] } — coordinates in metres, local to the anchor. Wire a Merge Graph (or BSP) val-graph into valin-graph.\n\nWHAT IT DOES: it traces the planar faces of the graph — the largest face per component is the OUTER boundary, every other face is a ROOM. It then centres one OUTER opening (window, `Outer opening width`) on EACH boundary edge, and one INNER opening (door, `Inner opening width`) on the LONGEST interior wall of EACH room (deduped so a shared wall opens once). A carved edge A→B becomes A→P1 (wall) · P1→P2 (opening) · P2→B (wall); the jamb nodes are added and the wall parts keep the edge's thickness. Walls shorter than the opening plus a jamb each side stay solid.\n\nOUTPUT: val-graph publishes the graph with every edge tagged `type` \"wall\" or \"opening\". Wire it into Mitered Join — with \"Use same width for all\" OFF it strokes the walls (at their own thickness) and SKIPS the openings, leaving real gaps.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "graph",
+        "label": "Graph"
+      },
+      {
+        "key": "outerWidth",
+        "label": "Outer opening"
+      },
+      {
+        "key": "innerWidth",
+        "label": "Inner opening"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "graph",
+        "label": "Graph (JSON)"
+      },
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      },
+      {
+        "key": "edgeCount",
+        "label": "Edges"
+      },
+      {
+        "key": "openings",
+        "label": "Openings"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "graph",
+      "label": "Graph (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "outerWidth",
+      "label": "Outer opening width",
+      "kind": "range",
+      "default": 1,
+      "min": 0,
+      "max": 5,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "innerWidth",
+      "label": "Inner opening width",
+      "kind": "range",
+      "default": 0.9,
+      "min": 0,
+      "max": 5,
+      "step": 0.05,
+      "unit": "m"
+    }
+  ]
+}

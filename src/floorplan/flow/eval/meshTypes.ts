@@ -25,6 +25,11 @@ export interface FlowMeshPrism {
   yTop: number;
   /** Fill colour for this prism. */
   color: string;
+  /** Optional interior hole outlines (plan-px world coords), punched through the FULL prism height.
+   *  Only meaningful for STRAIGHT prisms (top ≈ bottom): the canvas then extrudes the footprint as a
+   *  Shape-with-holes instead of fan-triangulating, so concave / holed outlines render correctly.
+   *  Used by the wall-band carve (column footprints subtracted from wall prisms). */
+  holes?: Point[][];
 }
 
 export interface FlowMesh {

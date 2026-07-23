@@ -1,0 +1,476 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "src_space",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Space001"
+        }
+      }
+    },
+    {
+      "id": "agent_1",
+      "position": {
+        "x": 0,
+        "y": 210
+      },
+      "data": {
+        "tool": "agent",
+        "params": {
+          "instructions": "You are a furniture-layout assistant. Read the space's dimensions and aspect, then orient each connected object (bed, sofa, table, chair, wardrobe) by setting its Rotation so the arrangement is sensible and collision-free: put the bed's long side and the wardrobe flat against a wall, face the sofa into the room, keep the table central with the chair drawn up to it. Adjust each object's Rotation (and Width/Depth only if a piece must fit); keep every object inside the space.",
+          "prompt": "",
+          "rounds": 1,
+          "props": [],
+          "rationale": "",
+          "inputHash": ""
+        }
+      }
+    },
+    {
+      "id": "pobj_bed",
+      "position": {
+        "x": 380,
+        "y": 0
+      },
+      "data": {
+        "tool": "pobj-source",
+        "params": {
+          "definition": "{\"kind\": \"parametric-object\", \"version\": 2, \"meta\": {\"id\": \"bed\", \"name\": \"Bed\", \"category\": \"Furniture\", \"units\": \"m\"}, \"parameters\": [{\"key\": \"width\", \"label\": \"Width\", \"kind\": \"number\", \"default\": 1.6, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"depth\", \"label\": \"Depth\", \"kind\": \"number\", \"default\": 2.0, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"rotation\", \"label\": \"Rotation\", \"kind\": \"number\", \"default\": 0, \"min\": 0, \"max\": 360, \"step\": 1, \"unit\": \"\\u00b0\"}, {\"key\": \"color\", \"label\": \"Colour\", \"kind\": \"color\", \"default\": \"#b45309\"}], \"geometry\": {\"vars\": {\"W\": \"width\", \"D\": \"depth\"}, \"cases\": [{\"rules\": [{\"comment\": \"footprint\", \"box\": {\"x0\": \"-W/2\", \"x1\": \"W/2\", \"y0\": \"-D/2\", \"y1\": \"D/2\", \"h0\": \"0\", \"h1\": \"0.5\"}}]}]}, \"hostKind\": \"node\"}",
+          "objectId": "bed",
+          "nodeLabel": "Bed",
+          "props": [
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.6,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Depth",
+              "type": "range",
+              "value": 2.0,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "color",
+              "value": "#b45309",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node_1",
+      "position": {
+        "x": 720,
+        "y": 0
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Node001",
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "pobj_sofa",
+      "position": {
+        "x": 380,
+        "y": 140
+      },
+      "data": {
+        "tool": "pobj-source",
+        "params": {
+          "definition": "{\"kind\": \"parametric-object\", \"version\": 2, \"meta\": {\"id\": \"sofa\", \"name\": \"Sofa\", \"category\": \"Furniture\", \"units\": \"m\"}, \"parameters\": [{\"key\": \"width\", \"label\": \"Width\", \"kind\": \"number\", \"default\": 2.0, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"depth\", \"label\": \"Depth\", \"kind\": \"number\", \"default\": 0.9, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"rotation\", \"label\": \"Rotation\", \"kind\": \"number\", \"default\": 0, \"min\": 0, \"max\": 360, \"step\": 1, \"unit\": \"\\u00b0\"}, {\"key\": \"color\", \"label\": \"Colour\", \"kind\": \"color\", \"default\": \"#7c3aed\"}], \"geometry\": {\"vars\": {\"W\": \"width\", \"D\": \"depth\"}, \"cases\": [{\"rules\": [{\"comment\": \"footprint\", \"box\": {\"x0\": \"-W/2\", \"x1\": \"W/2\", \"y0\": \"-D/2\", \"y1\": \"D/2\", \"h0\": \"0\", \"h1\": \"0.8\"}}]}]}, \"hostKind\": \"node\"}",
+          "objectId": "sofa",
+          "nodeLabel": "Sofa",
+          "props": [
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 2.0,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.9,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "color",
+              "value": "#7c3aed",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node_2",
+      "position": {
+        "x": 720,
+        "y": 140
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Node002",
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "pobj_table",
+      "position": {
+        "x": 380,
+        "y": 280
+      },
+      "data": {
+        "tool": "pobj-source",
+        "params": {
+          "definition": "{\"kind\": \"parametric-object\", \"version\": 2, \"meta\": {\"id\": \"table\", \"name\": \"Table\", \"category\": \"Furniture\", \"units\": \"m\"}, \"parameters\": [{\"key\": \"width\", \"label\": \"Width\", \"kind\": \"number\", \"default\": 1.2, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"depth\", \"label\": \"Depth\", \"kind\": \"number\", \"default\": 0.8, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"rotation\", \"label\": \"Rotation\", \"kind\": \"number\", \"default\": 0, \"min\": 0, \"max\": 360, \"step\": 1, \"unit\": \"\\u00b0\"}, {\"key\": \"color\", \"label\": \"Colour\", \"kind\": \"color\", \"default\": \"#0f766e\"}], \"geometry\": {\"vars\": {\"W\": \"width\", \"D\": \"depth\"}, \"cases\": [{\"rules\": [{\"comment\": \"footprint\", \"box\": {\"x0\": \"-W/2\", \"x1\": \"W/2\", \"y0\": \"-D/2\", \"y1\": \"D/2\", \"h0\": \"0\", \"h1\": \"0.75\"}}]}]}, \"hostKind\": \"node\"}",
+          "objectId": "table",
+          "nodeLabel": "Table",
+          "props": [
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.2,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "color",
+              "value": "#0f766e",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "position": {
+        "x": 720,
+        "y": 280
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Node003",
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "pobj_chair",
+      "position": {
+        "x": 380,
+        "y": 420
+      },
+      "data": {
+        "tool": "pobj-source",
+        "params": {
+          "definition": "{\"kind\": \"parametric-object\", \"version\": 2, \"meta\": {\"id\": \"chair\", \"name\": \"Chair\", \"category\": \"Furniture\", \"units\": \"m\"}, \"parameters\": [{\"key\": \"width\", \"label\": \"Width\", \"kind\": \"number\", \"default\": 0.5, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"depth\", \"label\": \"Depth\", \"kind\": \"number\", \"default\": 0.5, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"rotation\", \"label\": \"Rotation\", \"kind\": \"number\", \"default\": 0, \"min\": 0, \"max\": 360, \"step\": 1, \"unit\": \"\\u00b0\"}, {\"key\": \"color\", \"label\": \"Colour\", \"kind\": \"color\", \"default\": \"#f59e0b\"}], \"geometry\": {\"vars\": {\"W\": \"width\", \"D\": \"depth\"}, \"cases\": [{\"rules\": [{\"comment\": \"footprint\", \"box\": {\"x0\": \"-W/2\", \"x1\": \"W/2\", \"y0\": \"-D/2\", \"y1\": \"D/2\", \"h0\": \"0\", \"h1\": \"0.9\"}}]}]}, \"hostKind\": \"node\"}",
+          "objectId": "chair",
+          "nodeLabel": "Chair",
+          "props": [
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "color",
+              "value": "#f59e0b",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "position": {
+        "x": 720,
+        "y": 420
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Node004",
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "pobj_wardrobe",
+      "position": {
+        "x": 380,
+        "y": 560
+      },
+      "data": {
+        "tool": "pobj-source",
+        "params": {
+          "definition": "{\"kind\": \"parametric-object\", \"version\": 2, \"meta\": {\"id\": \"wardrobe\", \"name\": \"Wardrobe\", \"category\": \"Furniture\", \"units\": \"m\"}, \"parameters\": [{\"key\": \"width\", \"label\": \"Width\", \"kind\": \"number\", \"default\": 1.2, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"depth\", \"label\": \"Depth\", \"kind\": \"number\", \"default\": 0.6, \"min\": 0.3, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"rotation\", \"label\": \"Rotation\", \"kind\": \"number\", \"default\": 0, \"min\": 0, \"max\": 360, \"step\": 1, \"unit\": \"\\u00b0\"}, {\"key\": \"color\", \"label\": \"Colour\", \"kind\": \"color\", \"default\": \"#b91c1c\"}], \"geometry\": {\"vars\": {\"W\": \"width\", \"D\": \"depth\"}, \"cases\": [{\"rules\": [{\"comment\": \"footprint\", \"box\": {\"x0\": \"-W/2\", \"x1\": \"W/2\", \"y0\": \"-D/2\", \"y1\": \"D/2\", \"h0\": \"0\", \"h1\": \"2.0\"}}]}]}, \"hostKind\": \"node\"}",
+          "objectId": "wardrobe",
+          "nodeLabel": "Wardrobe",
+          "props": [
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.2,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.3,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "color",
+              "value": "#b91c1c",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "position": {
+        "x": 720,
+        "y": 560
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Node005",
+          "outputMode": "single"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_space_agent",
+      "source": "src_space",
+      "target": "agent_1",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e_agent_bed",
+      "source": "agent_1",
+      "target": "pobj_bed",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e_bed_node",
+      "source": "pobj_bed",
+      "target": "node_1",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e_agent_sofa",
+      "source": "agent_1",
+      "target": "pobj_sofa",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e_sofa_node",
+      "source": "pobj_sofa",
+      "target": "node_2",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e_agent_table",
+      "source": "agent_1",
+      "target": "pobj_table",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e_table_node",
+      "source": "pobj_table",
+      "target": "node_3",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e_agent_chair",
+      "source": "agent_1",
+      "target": "pobj_chair",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e_chair_node",
+      "source": "pobj_chair",
+      "target": "node_4",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e_agent_wardrobe",
+      "source": "agent_1",
+      "target": "pobj_wardrobe",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e_wardrobe_node",
+      "source": "pobj_wardrobe",
+      "target": "node_5",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    }
+  ]
+}

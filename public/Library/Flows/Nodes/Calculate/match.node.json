@@ -1,0 +1,22 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "match",
+  "meta": { "label": "Match", "category": "Calculate", "color": "#ca8a04" },
+  "description": "result = 1 when the wired value equals Match, else 0. The select-branching primitive: turn a select param ('u-shape') into a 0/1 gate that drives Loop counts.",
+  "instructions": "String/number equality test: publishes `val-result` = 1 when the wired `value` equals the `match` text, else 0. This is how a SELECT parameter branches a flow: wire a select's value (e.g. an Input Properties / Parametric Object `config`) into Value, set Match to one option ('straight' / 'u-shape'), and multiply the resulting 0/1 into a Loop's Count — the branch's geometry vanishes when the option isn't active (count 0 = no copies).\n\nTIP: one Match node per option, then `count = N × match` via a Math node.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "value", "label": "Value" }
+    ],
+    "valueOutputs": [
+      { "key": "result", "label": "1 / 0" }
+    ]
+  },
+  "parameters": [
+    { "key": "value", "label": "Value (if no input)", "kind": "text", "default": "" },
+    { "key": "match", "label": "Match", "kind": "text", "default": "", "placeholder": "e.g. u-shape" }
+  ]
+}

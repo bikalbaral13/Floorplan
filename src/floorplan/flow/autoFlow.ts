@@ -178,6 +178,105 @@ export function mergeNodeObjectIntoFlow(doc: SerializedFlow | null, nodeId: stri
   return out;
 }
 
+/** A parametric object's `parameters` list → an Input Properties `props` array. The two vocabularies line
+ *  up 1:1 apart from number→range (the same value with a slider). Loose rows: `inputProps()` sanitises them
+ *  on read, so this needn't satisfy the strict InputProp shape. Shared by the flow Import browser and the
+ *  attach-from-Properties bridge, so an object imported by hand and one attached to a node are identical. */
+export const pobjPropList = (pobj: Record<string, unknown>): Record<string, unknown>[] => {
+  const params = Array.isArray(pobj.parameters) ? (pobj.parameters as Record<string, unknown>[]) : [];
+  const propType = (kind: unknown): string =>
+    kind === "number" ? "range" : kind === "checkbox" ? "checkbox" : kind === "select" ? "select" : kind === "color" ? "color" : "text";
+  return params.map((p) => ({
+    id: String(p.key),
+    name: String(p.label ?? p.key),
+    type: propType(p.kind),
+    value: p.default ?? (p.kind === "checkbox" ? false : p.kind === "number" ? 0 : ""),
+    min: typeof p.min === "number" ? p.min : 0,
+    max: typeof p.max === "number" ? p.max : 100,
+    step: typeof p.step === "number" ? p.step : 1,
+    options: Array.isArray(p.options) ? (p.options as Record<string, unknown>[]).map((o) => String(o.value)) : [],
+  }));
+};
+
+/** Merge an object ATTACHED to a canvas node into the shared flow as a Parametric Object → Node chain, so
+ *  attaching from the Properties tab and wiring it up in the flow are the same act (the flow owns the
+ *  parameter values; the Properties panel renders that node's props).
+ *
+ *  Direction: `pobj-source → node-source`, matching how an Input Properties node hangs off its root — the
+ *  object's output feeds the Node's input, and the edge DECLARES "this object belongs to that node" rather
+ *  than carrying geometry. A Node root has no plain input (`"input": false`), so the edge lands on its only
+ *  endpoint, `gin-stamp`. (The reverse — `node-source → pobj-source` — would instead HOST the object, since
+ *  a wired source anchors it; that's the attach-to-Space shape, not this one.)
+ *
+ *  - Reuses a "Node" (node-source) already pinned to this node id, else adds one (grab off).
+ *  - Idempotent per (node id, object id): re-attaching the same object to the same node is a no-op.
+ *  Pure — returns a new graph; never mutates `doc`. */
+/** The graph id `mergeAttachedObjectIntoFlow` gives the injected `pobj-source`, so the attachment can store
+ *  it (SegmentAttachment.flowNodeId) and both sides stay linked for two-way param sync. */
+export const attachedObjectFlowNodeId = (nodeDisplayId: string, objectId: string): string =>
+  `auto-pobj-${nodeDisplayId.trim()}-${objectId}`;
+
+export function mergeAttachedObjectIntoFlow(
+  doc: SerializedFlow | null,
+  nodeDisplayId: string,
+  pobj: Record<string, unknown>,
+): SerializedFlow {
+  const nid = nodeDisplayId.trim();
+  const out: SerializedFlow = doc && Array.isArray(doc.nodes)
+    ? {
+        version: doc.version ?? 1,
+        nodes: doc.nodes.map((n) => ({ ...n, data: { ...n.data, params: { ...n.data.params } } })),
+        edges: (doc.edges ?? []).map((e) => ({ ...e })),
+      }
+    : { version: 1, nodes: [], edges: [] };
+  const objId = String((pobj.meta as { id?: string } | undefined)?.id ?? "");
+  if (!nid || !objId) return out;
+
+  // Reuse the Node (node-source) pinned to this canvas node, else add one. It's the TARGET here, so it sits
+  // to the right and the object is placed to its left.
+  let src = out.nodes.find((n) => n.data.tool === "node-source" && String(n.data.params.id ?? "") === nid);
+  if (!src) {
+    const srcCount = out.nodes.filter((n) => n.data.tool === "node-source").length;
+    src = {
+      id: `auto-nodesrc-${nid}`,
+      type: "op",
+      position: { x: 620, y: 200 + srcCount * 90 },
+      data: { tool: "node-source", params: { ...FLOW_TOOLS["node-source"].defaultParams, id: nid, grabFromSelection: false, outputMode: "single" } },
+    };
+    out.nodes.push(src);
+  }
+
+  // This object already wired into this node? → idempotent no-op.
+  const attached = out.edges.some((e) => {
+    if (e.target !== src!.id) return false;
+    const s = out.nodes.find((n) => n.id === e.source);
+    return s?.data.tool === "pobj-source" && String(s.data.params.objectId ?? "") === objId;
+  });
+  if (attached) return out;
+
+  const objCount = out.nodes.filter((n) => n.data.tool === "pobj-source").length;
+  const obj: SerializedFlowNode = {
+    id: attachedObjectFlowNodeId(nid, objId),
+    type: "op",
+    position: { x: (src.position?.x ?? 620) - 340, y: 200 + objCount * 90 },
+    data: {
+      tool: "pobj-source",
+      params: {
+        ...FLOW_TOOLS["pobj-source"].defaultParams,
+        definition: JSON.stringify(pobj),
+        objectId: objId,
+        props: pobjPropList(pobj),
+        nodeLabel: String((pobj.meta as { name?: string } | undefined)?.name ?? objId),
+      },
+    },
+  };
+  out.nodes.push(obj);
+  // Object OUTPUT → Node input. The Node has no plain input handle (`"input": false`), so target its only
+  // endpoint, `gin-stamp` — the same green dot a manual wire lands on.
+  out.edges.push({ id: `auto-edge-pobj-${nid}-${objId}`, source: obj.id, target: src.id, sourceHandle: null, targetHandle: "gin-stamp" });
+  return out;
+}
+
 /** Ensure the shared Canvas-Graph → Graph to Walls chain exists, so the WHOLE wall network is stroked
  *  into mitred walls (junctions mitre via the canvas engine, honouring each wall's thickness/justification).
  *  Unlike doors/windows this is graph-level, not per-segment: ONE canvas-source (out-3 = Graph) feeds ONE

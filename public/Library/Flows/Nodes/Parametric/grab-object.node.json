@@ -1,0 +1,14 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "grab-object",
+  "meta": { "label": "Grab Object", "category": "Parametric", "color": "#0891b2" },
+  "description": "Read a parametric object attached to a canvas Space / Node / Segment and expose each of its parameters as a val-<key> output.",
+  "instructions": "Reads the parametric object attached to a canvas Space / Node / Segment and republishes each of its parameters as a `val-<key>` value output — so an attached object's Properties can drive flow operations. Pick the Host kind; with 'Grab from selection' on it tracks the selected element of that kind (turn it off and type an id like Space001 to pin one). Emits VALUES only (no geometry) — pair it with a Space / Node / Segment source for the footprint. Wire each `val-<key>` into a downstream value input (e.g. val-front → Inset's valin-front).",
+  "handles": { "input": false, "output": false },
+  "parameters": [
+    { "key": "hostKind", "label": "Host", "kind": "select", "default": "space", "options": [ { "value": "space", "label": "Space" }, { "value": "node", "label": "Node" }, { "value": "segment", "label": "Segment" } ] },
+    { "key": "grabFromSelection", "label": "Grab from selection", "kind": "checkbox", "default": true },
+    { "key": "id", "label": "ID", "kind": "text", "default": "", "placeholder": "e.g. Space001", "showWhen": "!grabFromSelection" }
+  ]
+}

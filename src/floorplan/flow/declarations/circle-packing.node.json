@@ -2,33 +2,89 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "circle-packing",
-  "meta": { "label": "Circle Packing", "category": "Partition", "color": "#0ea5e9" },
-  "description": "Pack the largest inscribed circles / n-gons into a space — one Space per shape (InCircles).",
-  "instructions": "Greedily inscribes the N largest non-overlapping circles (or regular n-gons) inside the Space → one output Space per shape. `count` = how many; `minRadius` (m) stops packing shapes smaller than this. `sides` = 30 → true circles; 3–29 → inscribed regular n-gons, which can `optimizeRotation` (auto-pick the best angle) or use a fixed `rotation`.\n\nOne output handle per shape, or a single bundle (`outputMode`). Count / min-radius are wireable.",
+  "meta": {
+    "label": "Circle Packing",
+    "category": "Partition",
+    "color": "#0ea5e9"
+  },
+  "description": "A pure CALCULATION node — pack inscribed circles / n-gons: coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: `polygon` takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry's val-points into valin-polygon. A nested [[[x,y],...],...] list is accepted too — the LARGEST piece is used, since this node works on one polygon.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true,
-    "outputCount": "outputMode == 'single' ? 1 : max(1, min(50, round(handleCount)))",
+    "input": false,
+    "output": false,
     "valueInputs": [
-      { "key": "count", "label": "Count" },
-      { "key": "minRadius", "label": "Min radius" }
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      },
+      {
+        "key": "count",
+        "label": "Count"
+      },
+      {
+        "key": "minRadius",
+        "label": "Min radius"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
     ]
   },
   "parameters": [
-    { "key": "count", "label": "Count", "kind": "range", "default": 8, "min": 1, "max": 50, "step": 1 },
-    { "key": "minRadius", "label": "Min radius", "kind": "range", "default": 0.5, "min": 0, "max": 20, "step": 0.1, "unit": "m" },
-    { "key": "sides", "label": "Sides", "kind": "range", "default": 30, "min": 3, "max": 30, "step": 1 },
-    { "key": "optimizeRotation", "label": "Optimise rotation", "kind": "checkbox", "default": true, "showWhen": "sides < 30" },
-    { "key": "rotation", "label": "Rotation", "kind": "range", "default": 0, "min": 0, "max": 360, "step": 1, "unit": "°", "showWhen": "sides < 30 && !optimizeRotation" },
     {
-      "key": "outputMode",
-      "label": "Outputs",
-      "kind": "select",
-      "default": "perCell",
-      "options": [
-        { "value": "perCell", "label": "Per circle (one each)" },
-        { "value": "single", "label": "Single (all)" }
-      ]
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "count",
+      "label": "Count",
+      "kind": "range",
+      "default": 8,
+      "min": 1,
+      "max": 50,
+      "step": 1
+    },
+    {
+      "key": "minRadius",
+      "label": "Min radius",
+      "kind": "range",
+      "default": 0.5,
+      "min": 0,
+      "max": 20,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "sides",
+      "label": "Sides",
+      "kind": "range",
+      "default": 30,
+      "min": 3,
+      "max": 30,
+      "step": 1
+    },
+    {
+      "key": "optimizeRotation",
+      "label": "Optimise rotation",
+      "kind": "checkbox",
+      "default": true,
+      "showWhen": "sides < 30"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "range",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "°",
+      "showWhen": "sides < 30 && !optimizeRotation"
     }
   ]
 }

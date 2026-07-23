@@ -1,0 +1,23 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "segment-geometry",
+  "meta": { "label": "Segment Geometry", "category": "Segment", "color": "#0f766e" },
+  "description": "Reads a Segment and outputs its two endpoints (x1,y1 / x2,y2), midpoint (x,y), angle and length.",
+  "instructions": "Wire a Segment source into the input; this publishes the segment's two ENDPOINTS `val-x1`/`val-y1` and `val-x2`/`val-y2`, its MIDPOINT `val-x`/`val-y`, plus `val-angle` (degrees) and `val-length` (metres) — all in metres. Wire the midpoint into a Point to place an object on the segment, or the endpoints / angle to build and orient it along the wall (e.g. a door). It has no geometry of its own.",
+  "handles": {
+    "input": true,
+    "output": false,
+    "valueOutputs": [
+      { "key": "x", "label": "X (mid)", "unit": "m" },
+      { "key": "y", "label": "Y (mid)", "unit": "m" },
+      { "key": "x1", "label": "X1 (start)", "unit": "m" },
+      { "key": "y1", "label": "Y1 (start)", "unit": "m" },
+      { "key": "x2", "label": "X2 (end)", "unit": "m" },
+      { "key": "y2", "label": "Y2 (end)", "unit": "m" },
+      { "key": "angle", "label": "Angle", "unit": "°" },
+      { "key": "length", "label": "Length", "unit": "m" }
+    ]
+  },
+  "parameters": []
+}

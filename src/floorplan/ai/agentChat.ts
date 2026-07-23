@@ -54,12 +54,17 @@ export interface AgentToolApi {
   listDrawTools: () => unknown;
   /** Draw one typed segment between two METRE points (bridge drawSegment). */
   drawSegment: (a: Record<string, unknown>) => unknown;
+  /** Draw a freehand stroke from a list of METRE points (bridge drawFreehand). */
+  drawFreehand: (a: Record<string, unknown>) => unknown;
   /** Cut a door/window parametric object into the wall nearest a METRE point (bridge placeOpening). */
   placeOpening: (a: Record<string, unknown>) => unknown;
   /** Drop a node-hosted parametric object at a METRE point (bridge placeObject). */
   placeObject: (a: Record<string, unknown>) => unknown;
   /** Attach a space-hosted parametric object (Floor / Massing / Site / Core …) to a space by label. */
   attachSpaceObject: (a: Record<string, unknown>) => unknown;
+  /** Turn Flow LIVE materialisation on/off. With Live ON, an attached host-aware pipeline object
+   *  (Site / Massing) commits each op (inset / split / optimise) as real Spaces on their own layers. */
+  setFlowLive: (a: Record<string, unknown>) => unknown;
   /** Place the ATTACHED image onto the canvas as the underlay, scaled so its full width spans
    *  `worldWidthM` metres (the calibration). Returns the placed world rect + natural pixel size. */
   setImageUnderlay: (a: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -79,7 +84,7 @@ export interface AgentToolApi {
   clearCanvas: () => unknown;
   /** Import the parametric object library (public/Library/Parametric Objects) — all of it, or only the
    *  given category folders (Kitchen / Electrical / Architectural / …). */
-  importObjects: (a?: { categories?: string[] }) => Promise<unknown> | unknown;
+  importObjects: (a?: { categories?: string[]; ids?: string[] }) => Promise<unknown> | unknown;
   /** Library-management read side: every object's id / name / hostKind / symbol / category / param count. */
   listObjects: () => unknown;
   /** One object's COMPLETE stored `.pobj` definition (meta + parameters + hostKind + geometry) — for editing. */
@@ -220,6 +225,21 @@ SKELETON PATHS (the canonical flow example) — "skeletonise the space; MAIN (lo
 - rest:  {"type":"straight-skeleton","emit":"branches","pruneEnds":true,"makePath":true,"pathWidth":0.5}  (ALL branches — the main run is simply covered by the wider band on top)
 Notes: emit MUST be "branches" for paths; longestBranch requires pruneEnds true; makePath emits ONE seamless constant-width band polygon per network (already mitred/unioned — never build the band yourself from segments); flow_commit materialises each band as a corridor Space. Different widths per branch tier = one skeleton node per tier. Check preview polygons > 0 per node, then flow_commit.`;
 
+const P_GRAB_OBJECT_RECIPE = `PARAMETRIC-DRIVEN FLOW — CREATE A SPACE, ATTACH AN OBJECT, GRAB ITS PARAMETERS INTO THE FLOW (then optionally drive ops with them):
+The Flow **grab-object** node is the bridge from a canvas Space's attached parametric object into the node graph: it emits the Space's footprint on its geometry output AND republishes EVERY parameter of the attached object as a val-<paramKey> value output. Do these steps IN ORDER — each depends on the previous; never skip one.
+STEP 1 · CREATE THE SPACE — reuse a space from list_spaces, or apply_model ONE closed loop of "wall" segments (the Space auto-detects from the loop — NO rooms[] entry). Re-run list_spaces to read its label (e.g. "Space001"). A Space MUST exist before you can attach.
+STEP 2 · ATTACH A PARAMETRIC OBJECT — pick any space-host object (hostKind "space" — e.g. "site"; list_objects / list_draw_tools show which qualify). get_object <id> for its parameter list + defaults, then attach_space_object { space:"<label>", object:"<id>", paramsJson:"{\\"setback\\":3}" } — paramsJson overrides only the params the user named (omit it to attach with defaults). Re-run list_spaces and CONFIRM the space now lists the attachment (with its params) before continuing.
+STEP 3 · GRAB ALL PARAMETERS IN THE FLOW — flow_apply a graph containing ONE grab-object node: params { hostKind:"space", grabFromSelection:false, id:"<label>", props:[ …one row per object parameter… ] }.
+   • grabFromSelection MUST be false with an explicit id — that is what makes it resolve HEADLESSLY. (grabFromSelection:true only mirrors the live CANVAS SELECTION, which you cannot set from here, so it leaves props EMPTY — the node grabs nothing.)
+   • props IS the fetch — it must mirror EVERY parameter of the attached object, one row each: { id:<paramKey>, name:<label>, type:(number→"range" | select→"select" | checkbox→"checkbox" | color→"color" | text→"text"), value:<the attachment's CURRENT value from list_spaces, else the object DEFAULT from get_object>, min, max, step, options:[] }. Numbers carry real min/max/step; select carries its options:[…]; other kinds use 0 / [] placeholders. Any parameter you omit is simply unavailable downstream — so include ALL of them.
+   • flow_apply → the preview lists the grab-object node with polygons:1 (its footprint); the parameters are now IN the flow, each exposed as a val-<paramKey> output. A grab-object-ONLY graph is a SOURCE with nothing to commit, so an "ok:false / nothing to run" note is EXPECTED and does NOT mean the fetch failed — do NOT flow_commit until at least one operation node is added.
+TO DRIVE OPERATIONS with the grabbed parameters (only when the user asks to inset / optimise-rect / split / …) — add op nodes and wire the grab-object node into them:
+   • geometry edge grab-object→op { sourceHandle:null, targetHandle:null };
+   • one value edge per driven param { sourceHandle:"val-<paramKey>", targetHandle:"valin-<opInputKey>" } (the mapping is by the EDGE, not the name — any param can drive any input).
+   Wireable op inputs (confirm with flow_node_catalog): inset → valin-uniformSetback (equal mode) / valin-front / valin-remaining / valin-frontEdgeIndex · optimise-rect → valin-count / valin-axisAngle / valin-optimiseAxisTilt · split → valin-angle / valin-target / valin-ratios. A wired value bites only when the op is in the matching MODE (split target ⇒ mode:"target"; inset front/remaining ⇒ mode:"front-remaining"; equal-mode inset uses uniformSetback). Chain ops left→right with plain geometry edges (~280 px apart in x); check each op's preview polygon count > 0, then flow_commit and VERIFY with list_spaces / get_state.
+EXAMPLE — steps 1–3 grab ALL of "site"'s params on Space001, then one inset driven by the grabbed setback:
+{"version":1,"nodes":[{"id":"grab-object_1","position":{"x":80,"y":180},"data":{"tool":"grab-object","params":{"hostKind":"space","grabFromSelection":false,"id":"Space001","props":[{"id":"setback","name":"Setback","type":"range","value":3,"min":0,"max":10,"step":0.5,"options":[]},{"id":"splitRatio","name":"Split Ratio","type":"range","value":0.6,"min":0.1,"max":0.9,"step":0.05,"options":[]},{"id":"buildingHeight","name":"Building Height","type":"range","value":12,"min":3,"max":100,"step":1,"options":[]},{"id":"color","name":"Color","type":"color","value":"#4A90E2","min":0,"max":100,"step":1,"options":[]}]}},{"id":"inset_1","position":{"x":360,"y":180},"data":{"tool":"inset","params":{"inside":true,"mode":"equal","outputMode":"perCell","uniformSetback":1}}}],"edges":[{"id":"g","source":"grab-object_1","target":"inset_1","sourceHandle":null,"targetHandle":null},{"id":"v","source":"grab-object_1","target":"inset_1","sourceHandle":"val-setback","targetHandle":"valin-uniformSetback"}]}`;
+
 const P_TRACING = `TRACING AN ATTACHED DRAWING (import the image onto the canvas, replicate it at TRUE size, perfectly overlaid):
 When the user attaches a floor-plan image and asks to trace / replicate / reproduce it, the deliverable is the drawing REBUILT as live geometry with the image SNAPPED exactly underneath it. The plan drawn from the WRITTEN dimensions is the truth; the image is then fitted onto the plan — never the other way round. Follow this sequence:
 1) READ — identify every room (name labels like HALL, BED ROOM, KITCHEN), wall, door, window, stair, and every WRITTEN dimension. Convert imperial to metres exactly: 1' = 0.3048 m, 1" = 0.0254 m (e.g. 11'-0" = 3.353, 15'-11½" = 4.864, 6'-8" = 2.032). Written dimensions are the truth — never size rooms by eye when a number is legible. Work out the building outline's overall envelope W_m × H_m (sum of the written dims + wall thicknesses).
@@ -290,7 +310,7 @@ ${P_POBJ_FORMAT}`;
 
 /** Orchestrator ("agent" mode) instructions — the full-capability default: canvas design + Flow gateway +
  *  parametric-library management. */
-export const AGENT_SYSTEM_PROMPT = `You are the Orchestrator Agent for a live 2D architectural CAD canvas — the full-capability agent whose toolbox spans all three specialist domains: CANVAS DESIGN (the Design Agent's scope — draw/edit walls, openings, objects, spaces, underlays), the FLOW ENGINE (the Flow Agent's scope — the node-graph Operations Pipeline, via flow_node_catalog / flow_apply / flow_commit) and the PARAMETRIC OBJECT LIBRARY (the Parametric Agent's scope — create / adjust / delete object definitions, via list_objects / get_object / save_object / delete_object). Route each request to whichever domain fits and combine them freely. ${P_JSON_FIRST}
+export const AGENT_SYSTEM_PROMPT = `You are the Orchestrator Agent for a live 2D architectural CAD canvas — the full-capability agent whose toolbox spans all three specialist domains: CANVAS DESIGN (the Design Agent's scope — draw/edit walls, openings, objects, spaces, underlays), the FLOW ENGINE (the Flow Agent's scope — the node-graph Operations Pipeline, via flow_node_catalog / flow_apply / flow_commit) and the PARAMETRIC OBJECT LIBRARY (the Parametric Agent's scope — create / adjust / delete object definitions, via list_objects / get_object / save_object / delete_object). Route each request to whichever domain fits and combine them freely.\n\nSPECIALIST WORKFLOWS — when a request matches one of these intents, handle it the way that specialist agent does: attach the matching compiled Site object to the target Space, set its parameters, then call set_flow_live(true) so it materialises as real Spaces.\n• SITE → BUILDING ENVELOPE (build a buildable envelope / apply setbacks / inset → split → optimise-rectangle): this is the Site → Building Envelope Agent's job — import_objects { "categories": ["Site"], "ids": ["site"] } if needed, then attach the "site" object to the plot Space and set insetMode / frontSetback / remainingSetback and the useInset / useSplit / useOptimise / useMassing toggles + their params.\n• CORES + CIRCULATION (a corridor with fixed-size cores racked along it): this is the Circulation Agent's job — import_objects { "categories": ["Site"], "ids": ["circulation"] } if needed, then attach the "circulation" object to the Space and set the corridor shape / width and the core length / breadth / gap / side / orientation.\nThese two objects run their whole pipeline internally, so prefer attaching them over hand-building a Flow. ${P_JSON_FIRST}
 
 ${P_CANVAS_WORKFLOW}
 
@@ -309,6 +329,8 @@ ${P_CORRIDOR_RECIPE}
 ${P_FURNISH_RECIPE_FLOW}
 
 ${P_FLOW_ENGINE}
+
+${P_GRAB_OBJECT_RECIPE}
 
 ${P_PARAMETRIC_LIBRARY}
 
@@ -390,6 +412,9 @@ export interface RunAgentParams {
   api: AgentToolApi;
   /** Tool subset + default system prompt for this run (default "orchestrator" — all tools). */
   toolset?: AgentToolset;
+  /** Explicit tool allow-list (an imported agent's `accessibleTools`). When set, it overrides `toolset`'s
+   *  subset — the run gets exactly these tools (unknown names ignored). */
+  toolNames?: readonly string[];
   /** Override for the toolset's default system prompt (edited in the panel). Blank → default. */
   systemPrompt?: string;
   /** Detailed live-library catalog (buildDetailedObjectCatalog) — appended to the system prompt so the
@@ -476,11 +501,12 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("list_draw_tools", () => p.api.listDrawTools()),
     }),
     import_objects: tool({
-      description: "Load the parametric object library from public/Library/Parametric Objects (bundled + agent-saved). The Library is organised by CATEGORY folder — Kitchen, Furniture, Bathroom, Electrical, Structural, Architectural, Site, System — and the optional `categories` imports ONLY those folders (case-insensitive), e.g. [\"Architectural\"] for walls/doors/windows or [\"Kitchen\",\"Electrical\"]; omit it to load EVERYTHING. The result's availableCategories lists the folders that exist. Call when objectsLoaded is 0 or the needed objects aren't loaded; returns the detailed object catalog (ids + params) to place from.",
+      description: "Load parametric objects from public/Library/Parametric Objects (bundled + agent-saved). Scope it: `categories` imports whole CATEGORY folders (Kitchen, Furniture, Architectural, Site, …), case-insensitive; `ids` imports ONLY the objects with those exact meta.ids (a single file / a few objects). Combine them to import one object efficiently, e.g. { categories: [\"Site\"], ids: [\"site\"] } loads just the Site object. Omit both to load EVERYTHING. The result's availableCategories lists the folders; call when objectsLoaded is 0 or the needed object isn't loaded — returns the detailed catalog (ids + params) to place from.",
       inputSchema: z.object({
         categories: z.array(z.string()).optional().describe('Library category folders to import, e.g. ["Architectural"] — omit for ALL'),
+        ids: z.array(z.string()).optional().describe('Import ONLY objects with these exact meta.ids, e.g. ["site"]. Pair with `categories` to scan just that folder.'),
       }),
-      execute: wrap("import_objects", (a: { categories?: string[] }) => p.api.importObjects(a)),
+      execute: wrap("import_objects", (a: { categories?: string[]; ids?: string[] }) => p.api.importObjects(a)),
     }),
     list_designs: tool({
       description: "List saved DESIGN files under public/Library/Designs — each is a complete exported floor-plan (FloorPlanModel JSON: walls, spaces, openings, furniture, layers, scale). Returns Designs-relative paths, e.g. \"floorplan-2026-07-09.json\". Call before import_design to discover what's available.",
@@ -550,6 +576,15 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("draw_segment", (a: { type: string; x1: number; y1: number; x2: number; y2: number; thicknessM?: number; paramsJson?: string }) =>
         p.api.drawSegment({ type: a.type, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, thicknessM: a.thicknessM, params: parseParams(a.paramsJson) })),
     }),
+    draw_freehand: tool({
+      description: "Draw a FREEHAND stroke on the canvas from a list of METRE points [[x,y],…] (≥2 points) — the same freehand sketch the Freehand tool makes. Optional `color` hex (default the Freehand orange #EA580C). Use it to sketch a circulation path; the Flow Freehand source reads these strokes, so a freehand stroke + the freehand_circulation workflow turns your sketch into corridor/road geometry.",
+      inputSchema: z.object({
+        points: z.array(z.array(z.number())).describe("Ordered [x,y] METRE points along the stroke, e.g. [[0,0],[3,0.2],[6,1]]"),
+        color: z.string().optional().describe('Stroke colour hex (default "#EA580C")'),
+      }),
+      execute: wrap("draw_freehand", (a: { points: number[][]; color?: string }) =>
+        p.api.drawFreehand({ points: a.points, color: a.color })),
+    }),
     place_opening: tool({
       description: "Cut a DOOR or WINDOW parametric object into the wall nearest the METRE point (x,y) — the wall is split and the opening rendered. Draw the wall first. object = catalog id, symbol (\"door\"/\"window\") or name.",
       inputSchema: z.object({
@@ -582,6 +617,11 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       }),
       execute: wrap("attach_space_object", (a: { space: string; object: string; paramsJson?: string }) =>
         p.api.attachSpaceObject({ space: a.space, object: a.object, params: parseParams(a.paramsJson) })),
+    }),
+    set_flow_live: tool({
+      description: "Turn Flow LIVE materialisation ON or off. With Live ON, an attached host-aware pipeline object (Site / Massing) commits each of its ops (inset / split / optimise-rect) as REAL Spaces on their own layers — the building envelope becomes editable canvas geometry, not just a preview. Call it after attach_space_object to materialise the attachment. Omit `on` (or true) to enable.",
+      inputSchema: z.object({ on: z.boolean().optional().describe("true = enable Live (default), false = disable") }),
+      execute: wrap("set_flow_live", (a: { on?: boolean }) => p.api.setFlowLive({ on: a.on })),
     }),
     set_image_underlay: tool({
       description: "Place the ATTACHED image onto the canvas as a locked, semi-transparent underlay, CALIBRATED so the image's full width spans worldWidthM metres (compute it from a labelled dimension: worldWidthM = knownDimM / fractionOfImageWidth). Top-left lands at (xM,yM) (default 0,0). Returns { xPx, yPx, widthPx, heightPx, naturalWidth, naturalHeight } — use this rect to map image fractions to world pixels when tracing. Requires an attached image.",
@@ -651,6 +691,26 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       inputSchema: z.object({}),
       execute: wrap("flow_commit", () => p.api.flowCommit()),
     }),
+    open_workflow: tool({
+      description: "OPEN a saved WORKFLOW (a complete, pre-wired Flow graph) from public/Library/Flows and live-evaluate it — then RETURN its full graph ({version,nodes,edges}) so you can tune node params and re-apply. Prefer this over composing a graph by hand when a workflow for the task exists: it preserves the exact nodes AND wiring (so nothing is dropped). `path` is Flows-relative, e.g. \"Workflows/site_to_building_envelope.json\". Typical loop: open_workflow → edit the returned graph's node params → flow_apply(edited graph) → flow_commit.",
+      inputSchema: z.object({
+        path: z.string().describe('Flows-relative workflow file, e.g. "Workflows/site_to_building_envelope.json"'),
+      }),
+      execute: wrap("open_workflow", async (a: { path: string }) => {
+        const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/").replace(/^Flows\//i, "");
+        const res = await fetch(encodeURI(`/Library/Flows/${rel}`));
+        if (!res.ok) throw new Error(`workflow not found: ${rel} (HTTP ${res.status}) — check the Flows folder`);
+        let parsed: unknown;
+        try { parsed = JSON.parse(await res.text()); } catch { throw new Error(`workflow ${rel} is not valid JSON`); }
+        if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { nodes?: unknown }).nodes)) {
+          throw new Error(`workflow ${rel} has no nodes[] — not a Flow graph`);
+        }
+        const p2 = parsed as { version?: number; nodes: unknown[]; edges?: unknown[] };
+        const graph = { version: p2.version ?? 1, nodes: p2.nodes, edges: p2.edges ?? [] };
+        const applied = (await p.api.flowApply(JSON.stringify(graph))) as Record<string, unknown>;
+        return { ...applied, path: `Flows/${rel}`, graph };
+      }),
+    }),
     snapshot_canvas: tool({
       description: "Render the CURRENT canvas (all drawn geometry, labels, openings, furniture) to a PNG and receive it AS AN IMAGE — the visual ground truth of what the user sees. Top of the image = NORTH (-y). Use it for the mandatory SELF-REVIEW after drawing/editing, or whenever the text state is ambiguous. Also returns the captured extent { widthM, heightM }.",
       inputSchema: z.object({}),
@@ -694,8 +754,12 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
     parametric: ["get_state", "list_objects", "get_object", "save_object", "delete_object", "import_objects"],
   };
   type AnyAgentTool = (typeof allTools)[keyof typeof allTools];
-  const tools: Record<string, AnyAgentTool> =
-    toolset === "orchestrator" ? allTools : Object.fromEntries(SUBSETS[toolset].map((n) => [n, allTools[n]]));
+  // An explicit toolNames allow-list (imported agent) wins; else the mode's subset; else all (orchestrator).
+  const toolNameList: readonly (keyof typeof allTools)[] =
+    p.toolNames?.length ? (p.toolNames.filter((n) => n in allTools) as (keyof typeof allTools)[])
+    : toolset === "orchestrator" ? (Object.keys(allTools) as (keyof typeof allTools)[])
+    : SUBSETS[toolset];
+  const tools: Record<string, AnyAgentTool> = Object.fromEntries(toolNameList.map((n) => [n, allTools[n]]));
 
   // User message: scale + optional grounding boxes + the instruction, with the reference drawing attached
   // first (as a file part) so the model reads it before acting.

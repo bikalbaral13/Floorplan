@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "kind": "flow-node",
+  "tool": "merge",
+  "label": "Ceiling Fan",
+  "category": "Objects",
+  "description": "A parametric 3-blade ceiling fan object.",
+  "params": {}
+}

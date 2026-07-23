@@ -15,6 +15,9 @@ import { buildToolDefFromDeclaration, type NodeDeclaration } from "./nodeDeclara
 // two in sync (a full migration would load one copy via import.meta.glob and retire the other).
 import optimiseRectDecl from "./declarations/optimise-rect.node.json";
 import densifyDecl from "./declarations/densify.node.json";
+import loopDecl from "./declarations/loop.node.json";
+import matchDecl from "./declarations/match.node.json";
+import loop3dDecl from "./declarations/loop-3d.node.json";
 import insetDecl from "./declarations/inset.node.json";
 import boundingShapeDecl from "./declarations/bounding-shape.node.json";
 import convexHullDecl from "./declarations/convex-hull.node.json";
@@ -22,8 +25,18 @@ import smoothingDecl from "./declarations/smoothing.node.json";
 import contourDecl from "./declarations/contour.node.json";
 // 2d primitives
 import pointDecl from "./declarations/point.node.json";
+import verticesDecl from "./declarations/vertices.node.json";
+import networkDecl from "./declarations/network.node.json";
 import rectangleDecl from "./declarations/rectangle.node.json";
+import arcDecl from "./declarations/arc.node.json";
 import circleDecl from "./declarations/circle.node.json";
+import polygonDecl from "./declarations/polygon.node.json";
+import polylineDecl from "./declarations/polyline.node.json";
+import lineDecl from "./declarations/line.node.json";
+import ngonDecl from "./declarations/ngon.node.json";
+import ellipseDecl from "./declarations/ellipse.node.json";
+import roundedRectDecl from "./declarations/rounded-rect.node.json";
+import sectorDecl from "./declarations/sector.node.json";
 // Calculate
 import buaDecl from "./declarations/bua.node.json";
 import mathDecl from "./declarations/math.node.json";
@@ -36,6 +49,10 @@ import cuboidDecl from "./declarations/cuboid.node.json";
 import cylinderDecl from "./declarations/cylinder.node.json";
 import sphereDecl from "./declarations/sphere.node.json";
 import coneDecl from "./declarations/cone.node.json";
+import frustumDecl from "./declarations/frustum.node.json";
+import taperedBoxDecl from "./declarations/tapered-box.node.json";
+import torusDecl from "./declarations/torus.node.json";
+import capsuleDecl from "./declarations/capsule.node.json";
 import transform3dDecl from "./declarations/transform-3d.node.json";
 import boolean3dDecl from "./declarations/boolean-3d.node.json";
 import display3dDecl from "./declarations/display-3d.node.json";
@@ -46,9 +63,13 @@ import displaySegmentDecl from "./declarations/display-segment.node.json";
 // Node
 import bloomDecl from "./declarations/bloom.node.json";
 import nodeSourceDecl from "./declarations/node-source.node.json";
+import nodeGeometryDecl from "./declarations/node-geometry.node.json";
+import segmentGeometryDecl from "./declarations/segment-geometry.node.json";
 import displayNodeDecl from "./declarations/display-node.node.json";
 // Canvas
 import canvasSourceDecl from "./declarations/canvas-source.node.json";
+import freehandSourceDecl from "./declarations/freehand-source.node.json";
+import freehandGeometryDecl from "./declarations/freehand-geometry.node.json";
 import separateDecl from "./declarations/separate.node.json";
 // Mass
 import massDecl from "./declarations/mass.node.json";
@@ -58,11 +79,24 @@ import meshTo3dDecl from "./declarations/mesh-to-3d.node.json";
 // Graph
 import graphSourceDecl from "./declarations/graph-source.node.json";
 import miteredJoinDecl from "./declarations/mitered-join.node.json";
+import graphToPathDecl from "./declarations/graph-to-path.node.json";
 import graphSmoothDecl from "./declarations/graph-smooth.node.json";
 import graphMetricsDecl from "./declarations/graph-metrics.node.json";
+import graphGeometryDecl from "./declarations/graph-geometry.node.json";
 import showDirectionDecl from "./declarations/show-direction.node.json";
 import graphToSpacesDecl from "./declarations/graph-to-spaces.node.json";
 import graphReduceDecl from "./declarations/graph-reduce.node.json";
+import graphSimplifyDecl from "./declarations/graph-simplify.node.json";
+import graphClipDecl from "./declarations/graph-clip.node.json";
+import graphFitLinesDecl from "./declarations/graph-fit-lines.node.json";
+import graphClassifyDecl from "./declarations/graph-classify.node.json";
+import gridGeometryDecl from "./declarations/grid-geometry.node.json";
+import renderGridDecl from "./declarations/render-grid.node.json";
+import matrixTransposeDecl from "./declarations/matrix-transpose.node.json";
+import matrixInverseDecl from "./declarations/matrix-inverse.node.json";
+import setThicknessDecl from "./declarations/set-thickness.node.json";
+import mergeGraphDecl from "./declarations/merge-graph.node.json";
+import graphToOpeningsDecl from "./declarations/graph-to-openings.node.json";
 import voronoiBloomDecl from "./declarations/voronoi-bloom.node.json";
 import springLayoutDecl from "./declarations/spring-layout.node.json";
 import pipeSolverDecl from "./declarations/pipe-solver.node.json";
@@ -94,7 +128,9 @@ import schemaToLayersDecl from "./declarations/schema-to-layers.node.json";
 import hatchingDecl from "./declarations/hatching.node.json";
 import spaceGeometryDecl from "./declarations/space-geometry.node.json";
 import mergeDecl from "./declarations/merge.node.json";
+import boolean2dDecl from "./declarations/boolean-2d.node.json";
 import inputPropsDecl from "./declarations/input-props.node.json";
+import agentDecl from "./declarations/agent.node.json";
 
 /** Parse a Split "ratios" entry (string "1, 2, 1" / "1:2:1", or an array) into positive numbers.
  *  In ratio mode the entries also drive the piece count, so the ratios input is the single source
@@ -123,11 +159,16 @@ export const parseDimEdges = (v: unknown): number[] => {
 };
 export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "node-source" | "canvas-source" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "corridoor" | "core-racking" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "pobj-source" | "param-object" | "param-grab" | "param-render" | "param-render-3d" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "create-polygon" | "create-segment" | "create-arc" | "create-box" | "rectangle" | "circle" | "cuboid" | "cylinder" | "sphere" | "cone" | "transform-3d" | "boolean-3d" | "display-3d";
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "segment-geometry" | "node-source" | "node-geometry" | "canvas-source" | "freehand-source" | "freehand-geometry" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "corridoor" | "core-racking" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-geometry" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "grid-geometry" | "render-grid" | "matrix-transpose" | "matrix-inverse" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "graph-simplify" | "graph-clip" | "graph-fit-lines" | "graph-classify" | "set-thickness" | "merge-graph" | "graph-to-openings" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "boolean-2d" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "pobj-source" | "grab-object" | "param-object" | "param-grab" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "rectangle" | "arc" | "circle" | "polygon" | "polyline" | "vertices" | "network" | "cuboid" | "cylinder" | "sphere" | "cone" | "transform-3d" | "boolean-3d" | "display-3d" | "agent" | "loop" | "match" | "loop-3d" | "line" | "ngon" | "ellipse" | "rounded-rect" | "sector" | "frustum" | "tapered-box" | "torus" | "capsule";
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
-export type InputPropType = "range" | "select" | "checkbox" | "text";
+export type InputPropType = "range" | "select" | "checkbox" | "text" | "color";
+
+/** A `color` prop publishes its `#rrggbb` string on `val-<propId>`; wire it into a `valin-color`
+ *  endpoint (Rectangle / Circle …) to drive a node's tint. */
+export const DEFAULT_PROP_COLOR = "#4a90e2";
+const HEX6_RE = /^#[0-9a-fA-F]{6}$/;
 export interface InputProp {
   id: string;
   name: string;
@@ -139,7 +180,21 @@ export interface InputProp {
   step: number;
   /** select only */
   options: string[];
+  /** Optional conditional visibility: show this parameter only when a sibling prop (`when` = its id) has a
+   *  matching value — a `select` option, or `true`/`false` for a `checkbox`. Author-set in the editor. UI-only:
+   *  a hidden parameter keeps its value and still publishes its `val-<id>` output, so wiring is unaffected. */
+  showIf?: { when: string; equals: string | number | boolean };
 }
+
+/** Whether an Input Properties parameter is currently visible — honours its optional `showIf` gate against the
+ *  CURRENT values of its sibling params. Fail-open: no gate (or a deleted/dangling controller) shows it. */
+export const propVisible = (p: InputProp, all: InputProp[]): boolean => {
+  const si = p.showIf;
+  if (!si || !si.when) return true;
+  const ctrl = all.find((x) => x.id === si.when);
+  if (!ctrl) return true;
+  return typeof ctrl.value === "boolean" ? ctrl.value === (si.equals === true) : String(ctrl.value) === String(si.equals);
+};
 
 /** Normalise an Input Properties node's params into its parameter list. */
 export const inputProps = (params: Record<string, unknown>): InputProp[] => {
@@ -147,11 +202,19 @@ export const inputProps = (params: Record<string, unknown>): InputProp[] => {
   if (!Array.isArray(raw)) return [];
   return raw.map((r, i) => {
     const o = (r ?? {}) as Record<string, unknown>;
-    const type = (["range", "select", "checkbox", "text"].includes(o.type as string) ? o.type : "range") as InputPropType;
+    const type = (["range", "select", "checkbox", "text", "color"].includes(o.type as string) ? o.type : "range") as InputPropType;
     const value: string | number | boolean =
       type === "checkbox" ? o.value === true
       : type === "range" ? (Number(o.value) || 0)
+      // `<input type="color">` silently rejects anything that isn't #rrggbb, so a missing / short / named
+      // colour falls back to the default rather than leaving the swatch stuck on black.
+      : type === "color" ? (typeof o.value === "string" && HEX6_RE.test(o.value) ? o.value.toLowerCase() : DEFAULT_PROP_COLOR)
       : typeof o.value === "string" ? o.value : String(o.value ?? "");
+    // Conditional visibility ({ when: <sibling prop id>, equals }) — passed through when well-formed.
+    const siRaw = o.showIf as Record<string, unknown> | undefined;
+    const showIf = siRaw && typeof siRaw.when === "string" && siRaw.when
+      ? { when: siRaw.when, equals: (siRaw.equals ?? "") as string | number | boolean }
+      : undefined;
     return {
       id: typeof o.id === "string" && o.id ? o.id : `p${i + 1}`,
       name: typeof o.name === "string" ? o.name : "",
@@ -161,8 +224,36 @@ export const inputProps = (params: Record<string, unknown>): InputProp[] => {
       max: Number.isFinite(Number(o.max)) ? Number(o.max) : 10,
       step: Number(o.step) || 1,
       options: Array.isArray(o.options) ? o.options.map(String) : [],
+      ...(showIf ? { showIf } : {}),
     };
   });
+};
+
+/** Coerce a wired value onto one of a target SELECT's options, so options connect across nodes WITHOUT needing
+ *  identical strings (the pain when a source's "Wireframe"/"Solid" meets a target's "solid"/"wireframe").
+ *  Preference: exact value (case-insensitive) → label (case-insensitive) → a numeric INDEX → the value's
+ *  position in the SOURCE options mapped to the target (index-based — just order the two option lists the same).
+ *  Returns the matched target option value, or undefined when nothing fits (the caller keeps the node's own). */
+export const coerceSelectWire = (
+  value: number | string,
+  targetOptions: ReadonlyArray<string | { value: string; label?: string }>,
+  sourceOptions?: ReadonlyArray<string>,
+): string | undefined => {
+  const opts = targetOptions.map((o) => (typeof o === "string" ? { value: o, label: o } : { value: o.value, label: o.label ?? o.value }));
+  if (!opts.length) return undefined;
+  const s = String(value).trim();
+  const sl = s.toLowerCase();
+  const byVal = opts.find((o) => o.value.toLowerCase() === sl);
+  if (byVal) return byVal.value;
+  const byLabel = opts.find((o) => o.label.toLowerCase() === sl);
+  if (byLabel) return byLabel.value;
+  const idx = typeof value === "number" ? value : (/^\d+$/.test(s) ? Number(s) : NaN);
+  if (Number.isInteger(idx) && idx >= 0 && idx < opts.length) return opts[idx].value;
+  if (sourceOptions && sourceOptions.length) {
+    const i = sourceOptions.findIndex((o) => String(o).toLowerCase() === sl);
+    if (i >= 0 && i < opts.length) return opts[i].value;
+  }
+  return undefined;
 };
 
 // ── Schema node (general component-property schemas) ─────────────────────────
@@ -470,6 +561,9 @@ export interface ParamField {
   secret?: boolean;
   /** Placeholder for text / textarea inputs. */
   placeholder?: string;
+  /** Visible row count for a `textarea` (default 3). Raise it for fields meant to hold a long pasted
+   *  block — e.g. the Agent node's Instructions persona. The box stays user-resizable either way. */
+  rows?: number;
   /** Only render this field when the predicate (over the node's params) holds. */
   showIf?: (params: Record<string, unknown>) => boolean;
   /** Expose this param's own value as a scalar `val-<key>` output endpoint aligned to its row
@@ -521,6 +615,11 @@ export interface FlowToolDef {
    *  params — see FloorPlanEditor's live-materialise effect. Opt-in per tool (inset, optimise-rect, …).
    *  Carried from a node-declaration file's `materialisesSpace`. */
   materialisesSpace?: boolean;
+  /** This node outputs real SEGMENT geometry (open strokes — a graph, centerline or linework, not a room
+   *  face). Flow "Live" materialises it as one editable wall per point-pair; canvas nodes are wall
+   *  endpoints in this model, so junctions appear automatically where segments meet — "graph as nodes and
+   *  segments". The open-path counterpart of `materialisesSpace`; carried from `materialisesSegments`. */
+  materialisesSegments?: boolean;
 }
 
 /** Default Metrics-tab result rows for the Frame Builder, used when no Output Schema node overrides
@@ -545,6 +644,12 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "space-creator": buildToolDefFromDeclaration(spaceCreatorDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/densify.node.json) — behaviour stays in code (evalDensify).
   densify: buildToolDefFromDeclaration(densifyDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/loop.node.json) — behaviour in code (evalLoop): array the input N times.
+  loop: buildToolDefFromDeclaration(loopDecl as unknown as NodeDeclaration),
+  // Data-declared — value node (computeMatch in evaluateFlow): select-equality → 1/0 gate.
+  match: buildToolDefFromDeclaration(matchDecl as unknown as NodeDeclaration),
+  // Data-declared — behaviour in the host's primitiveMasses walk (FloorPlanEditor): array a 3D primitive.
+  "loop-3d": buildToolDefFromDeclaration(loop3dDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/inset.node.json) — behaviour stays in code (evalInset).
   inset: buildToolDefFromDeclaration(insetDecl as unknown as NodeDeclaration),
   // PROTOTYPE — built from ./declarations/optimise-rect.node.json (params schema + handles + showWhen +
@@ -586,6 +691,10 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   corridoor: buildToolDefFromDeclaration(corridoorDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/core-racking.node.json) — behaviour stays in code (evalCoreRacking).
   "core-racking": buildToolDefFromDeclaration(coreRackingDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/agent.node.json). Geometry passes straight through in evaluateFlow;
+  // the model call lives in the host's onRunAgent action (never in eval), which bakes its answer into the
+  // DOWNSTREAM nodes' params and into this node's own `props` (→ one val-<key> output per suggestion).
+  agent: buildToolDefFromDeclaration(agentDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/voronoi.node.json) — behaviour stays in code.
   voronoi: buildToolDefFromDeclaration(voronoiDecl as unknown as NodeDeclaration),
   conditional: {
@@ -657,10 +766,29 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "rect-pack": buildToolDefFromDeclaration(rectPackDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/point.node.json) — behaviour stays in code.
   point: buildToolDefFromDeclaration(pointDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/vertices.node.json) — a pure VALUE node: vertex list in, same list
+  // out, nothing drawn. Polygon is the node that DRAWS a list; this one only carries it.
+  vertices: buildToolDefFromDeclaration(verticesDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/network.node.json) — DRAWS a graph JSON as canvas segments
+  // (the inverse of Graph Geometry). Behaviour stays in code (evaluateFlow).
+  network: buildToolDefFromDeclaration(networkDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/rectangle.node.json) — behaviour stays in code.
   rectangle: buildToolDefFromDeclaration(rectangleDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/arc.node.json) — an OPEN arc polyline (centre / radius / start / end
+  // angles), evaluated in evaluateFlow. Deliberately NOT IR-safe: a flow using it takes the evaluateFlow
+  // path, where rectangles honour their `rotation` and this arc renders (the IR does neither).
+  arc: buildToolDefFromDeclaration(arcDecl as unknown as NodeDeclaration),
+  polygon: buildToolDefFromDeclaration(polygonDecl as unknown as NodeDeclaration),
+  polyline: buildToolDefFromDeclaration(polylineDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/circle.node.json) — behaviour stays in code.
   circle: buildToolDefFromDeclaration(circleDecl as unknown as NodeDeclaration),
+  // Batch-A 2D primitives (declarations + evaluateFlow cases): a wireable 2-point Line (open stroke),
+  // regular N-gon, Ellipse, Rounded Rectangle and a FILLED Sector (the arc node stays an open stroke).
+  line: buildToolDefFromDeclaration(lineDecl as unknown as NodeDeclaration),
+  ngon: buildToolDefFromDeclaration(ngonDecl as unknown as NodeDeclaration),
+  ellipse: buildToolDefFromDeclaration(ellipseDecl as unknown as NodeDeclaration),
+  "rounded-rect": buildToolDefFromDeclaration(roundedRectDecl as unknown as NodeDeclaration),
+  sector: buildToolDefFromDeclaration(sectorDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/visibility.node.json) — behaviour stays in code.
   visibility: buildToolDefFromDeclaration(visibilityDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/smoothing.node.json) — behaviour stays in code (evalSmoothing).
@@ -734,8 +862,18 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "segment-source": buildToolDefFromDeclaration(segmentSourceDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/node-source.node.json) — behaviour stays in code.
   "node-source": buildToolDefFromDeclaration(nodeSourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/node-geometry.node.json) — reads a Node's canvas point and publishes
+  // its x / y as value outputs (evaluated in evaluateFlow); wire into a Point to place geometry at the node.
+  "node-geometry": buildToolDefFromDeclaration(nodeGeometryDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/segment-geometry.node.json) — reads a Segment's midpoint / angle /
+  // length and publishes them as value outputs (evaluated in evaluateFlow); wire X / Y into a Point.
+  "segment-geometry": buildToolDefFromDeclaration(segmentGeometryDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/canvas-source.node.json) — behaviour stays in code.
   "canvas-source": buildToolDefFromDeclaration(canvasSourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/freehand-source.node.json) — behaviour stays in code (graph-source machinery).
+  "freehand-source": buildToolDefFromDeclaration(freehandSourceDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/freehand-geometry.node.json) — behaviour stays in code (polylines → graph JSON).
+  "freehand-geometry": buildToolDefFromDeclaration(freehandGeometryDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/separate.node.json) — behaviour stays in code.
   separate: buildToolDefFromDeclaration(separateDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/segment-split.node.json) — behaviour stays in code. NOTE: the
@@ -778,10 +916,15 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   transform: buildToolDefFromDeclaration(transformDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/mitered-join.node.json) — behaviour stays in code.
   "mitered-join": buildToolDefFromDeclaration(miteredJoinDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/graph-to-path.node.json) — behaviour stays in code.
+  "graph-to-path": buildToolDefFromDeclaration(graphToPathDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/graph-smooth.node.json) — behaviour stays in code.
   "graph-smooth": buildToolDefFromDeclaration(graphSmoothDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/graph-metrics.node.json) — behaviour stays in code.
   "graph-metrics": buildToolDefFromDeclaration(graphMetricsDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/graph-geometry.node.json) — publishes the graph STRUCTURE (node ids +
+  // from/to/thickness edges) as JSON on val-graph. Behaviour stays in code (evaluateFlow).
+  "graph-geometry": buildToolDefFromDeclaration(graphGeometryDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/show-direction.node.json) — behaviour stays in code.
   "show-direction": buildToolDefFromDeclaration(showDirectionDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/dimension.node.json) — behaviour stays in code.
@@ -945,21 +1088,18 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     type: "fill-depressions",
     label: "Fill Depressions",
     color: "#9333ea",
-    // Grid-field node: hydrologically condition a DEM (treat cell values as elevations) by Priority-Flood
-    // so every cell drains to the border. epsilon > 0 forces a tiny slope across flats (Priority-Flood+ε).
-    // Publishes the filled elevation field downstream (→ Flow Direction).
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "epsilon", label: "Min slope (ε)" }],
-    defaultParams: { epsilon: 0, edgesAreOutlets: true, highlightFilled: false, fillColor: "#0ea5e9", lowColor: "#1e3a8a", highColor: "#ef4444", showCellValues: false },
+    // Pure MATRIX value node: a DEM MATRIX in (valin-matrix — the wired matrix shows in the Matrix box) with
+    // wireable Min slope (ε) / Edges-drain params, the hydrologically-conditioned (filled) DEM MATRIX out
+    // (val-matrix, bottom-right). No geometry endpoints. Draws nothing — wire Render Grid to display.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "matrix", label: "Matrix" }, { key: "epsilon", label: "Min slope (ε)" }, { key: "edgesAreOutlets", label: "Edges drain off" }],
+    valueOutputs: [{ key: "matrix", label: "Matrix (JSON)" }],
+    defaultParams: { matrix: "", epsilon: 0, edgesAreOutlets: true },
     fields: [
+      { key: "matrix", label: "Matrix", kind: "text" },
       { key: "epsilon", label: "Min slope (ε)", kind: "number" },
       { key: "edgesAreOutlets", label: "Edges drain off-grid", kind: "checkbox" },
-      { key: "highlightFilled", label: "Show only raised cells", kind: "checkbox" },
-      { key: "fillColor", label: "Raised colour", kind: "color", showIf: (p) => p.highlightFilled === true },
-      { key: "lowColor", label: "Low colour", kind: "color", showIf: (p) => p.highlightFilled !== true },
-      { key: "highColor", label: "High colour", kind: "color", showIf: (p) => p.highlightFilled !== true },
-      { key: "showCellValues", label: "Show values", kind: "checkbox" },
     ],
     hint: "Fill sinks/pits in a DEM grid-field (Priority-Flood) so every cell drains to the border. Set Min slope (ε) > 0 to also resolve flats (Priority-Flood+ε). Feed from Grid / Graph to Grid; chain into Flow Direction.",
   },
@@ -967,13 +1107,16 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     type: "flow-direction",
     label: "Flow Direction",
     color: "#9333ea",
-    // Grid-field node: D8 steepest-descent receiver per cell → a direction code (the field's `dir`
-    // channel). Elevations pass through. Feed it a filled DEM (Fill Depressions); chain into Flow
-    // Accumulation / Watershed. Rho8 randomises the receiver among downslope neighbours (deterministic).
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { method: "d8", showArrows: true, colorByDirection: false, showCellValues: false },
+    // Pure MATRIX value node: a DEM MATRIX in (valin-matrix, next to the Matrix box — the wired matrix appears
+    // there) and a wireable Method, the D8 direction-code MATRIX out (val-matrix, bottom-right). No geometry
+    // endpoints. Draws nothing — wire Render Grid (arrows) to display.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "matrix", label: "Matrix" }, { key: "method", label: "Method" }],
+    valueOutputs: [{ key: "matrix", label: "Matrix (JSON)" }],
+    defaultParams: { matrix: "", method: "d8" },
     fields: [
+      { key: "matrix", label: "Matrix", kind: "text" },
       {
         key: "method",
         label: "Method",
@@ -983,48 +1126,44 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
           { value: "rho8", label: "Rho8 (stochastic)" },
         ],
       },
-      { key: "showArrows", label: "Show arrows", kind: "checkbox" },
-      { key: "colorByDirection", label: "Colour cells by direction", kind: "checkbox" },
-      { key: "showCellValues", label: "Show direction codes", kind: "checkbox", showIf: (p) => p.colorByDirection === true },
     ],
-    hint: "D8 flow direction — each cell points to its steepest-descent neighbour (code 0..7). Feed a filled DEM (Fill Depressions); emits arrows + a dir-carrying field for Flow Accumulation / Watershed. Rho8 randomises among downslope neighbours.",
+    hint: "D8 flow direction as a VALUE node — a DEM matrix in (wire val-matrix into valin-matrix, or a grid-field), the direction-code matrix (0..7, -1 = sink) out on val-matrix. Wire Render Grid (arrows) to see it. Rho8 randomises among downslope neighbours.",
   },
   "flow-accumulation": {
     type: "flow-accumulation",
     label: "Flow Accumulation",
     color: "#9333ea",
-    // Grid-field node: how many upstream cells (or how much area) drain through each cell, following the
-    // incoming dir channel (Flow Direction). High accumulation = channels. Passes the count field + dir on.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: { asArea: false, logDisplay: true, lowColor: "#f1f5f9", highColor: "#1d4ed8", showCellValues: false },
+    // Pure MATRIX value node: a flow-direction MATRIX in (valin-matrix — the wired matrix shows in the Matrix
+    // box), the accumulation-count MATRIX out (val-matrix, bottom-right). No geometry endpoints. Draws nothing
+    // — wire Render Grid to display.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "matrix", label: "Matrix" }],
+    valueOutputs: [{ key: "matrix", label: "Matrix (JSON)" }],
+    defaultParams: { matrix: "", asArea: false },
     fields: [
+      { key: "matrix", label: "Matrix", kind: "text" },
       { key: "asArea", label: "Contributing area (m²)", kind: "checkbox" },
-      { key: "logDisplay", label: "Log colour scale", kind: "checkbox" },
-      { key: "lowColor", label: "Low colour", kind: "color" },
-      { key: "highColor", label: "High colour", kind: "color" },
-      { key: "showCellValues", label: "Show values", kind: "checkbox" },
     ],
-    hint: "Flow accumulation — upstream contributing cells (or area) per cell, following Flow Direction. High values trace the channel network. Feed from Flow Direction; chain into Grid Threshold (streams) / Watershed.",
+    hint: "Flow accumulation as a VALUE node — a flow-direction matrix / grid-field in, the accumulation-count matrix out on val-matrix. Feed from Flow Direction; wire Render Grid to see the channels.",
   },
   "watershed": {
     type: "watershed",
     label: "Watershed",
     color: "#9333ea",
-    // Grid-field node: delineate the catchment draining to an outlet by flooding upstream over the dir
-    // channel. Outlet = lowest-value cell (feed elevations from Flow Direction) or an explicit (col, row).
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "col", label: "Outlet col" }, { key: "row", label: "Outlet row" }],
-    defaultParams: { useLowestCell: true, col: 0, row: 0, fillColor: "#0ea5e9", showBoundary: true, showCellValues: false },
+    // Pure MATRIX value node: a flow-direction MATRIX in (valin-matrix — the wired matrix shows in the Matrix
+    // box) + a wireable Outlet, the basin-mask MATRIX out (val-matrix, bottom-right). No geometry endpoints.
+    // Outlet = "col,row" cell index (blank = lowest cell). Draws nothing — wire Render Grid to display.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "matrix", label: "Matrix" }, { key: "outlet", label: "Outlet" }],
+    valueOutputs: [{ key: "matrix", label: "Matrix (JSON)" }],
+    defaultParams: { matrix: "", outlet: "" },
     fields: [
-      { key: "useLowestCell", label: "Outlet = lowest cell", kind: "checkbox" },
-      { key: "col", label: "Outlet column (m)", kind: "number", showIf: (p) => p.useLowestCell !== true },
-      { key: "row", label: "Outlet row (n)", kind: "number", showIf: (p) => p.useLowestCell !== true },
-      { key: "fillColor", label: "Basin colour", kind: "color" },
-      { key: "showBoundary", label: "Show boundary", kind: "checkbox" },
+      { key: "matrix", label: "Matrix", kind: "text" },
+      { key: "outlet", label: "Outlet (col,row)", kind: "text", placeholder: "blank = lowest cell" },
     ],
-    hint: "Delineate the watershed draining to an outlet cell — floods upstream over the Flow Direction dir channel. Outlet = the lowest-value cell, or an explicit (col, row) address. Emits a basin mask + outline. Feed from Flow Direction.",
+    hint: "Watershed as a MATRIX value node — a flow-direction matrix in, the basin-mask matrix out on val-matrix. Outlet = 'col,row' cell index (blank = lowest cell). Wire Render Grid (categorical) to see the basin.",
   },
   "morphology": {
     type: "morphology",
@@ -1167,13 +1306,16 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     type: "grid-threshold",
     label: "Grid Threshold",
     color: "#9333ea",
-    // Grid-field node: pass each cell's value through `value op threshold` → a 0/1 MASK field. Publishes
-    // the mask downstream (Marching Squares / Cells→Spaces); fills passing cells (and optionally failing).
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "threshold", label: "Threshold" }],
-    defaultParams: { op: ">", threshold: 0, passColor: "#22c55e", failColor: "#475569", showFail: false, showCellValues: false },
+    // Pure MATRIX value node: a MATRIX in (valin-matrix — the wired matrix shows in the Matrix box) with a
+    // wireable Test / Threshold, a 0/1 MASK MATRIX out (val-matrix, bottom-right). No geometry endpoints.
+    // Draws nothing — chain into Marching Squares (streamlines) or Render Grid.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "matrix", label: "Matrix" }, { key: "op", label: "Test" }, { key: "threshold", label: "Threshold" }],
+    valueOutputs: [{ key: "matrix", label: "Matrix (JSON)" }],
+    defaultParams: { matrix: "", op: ">", threshold: 0 },
     fields: [
+      { key: "matrix", label: "Matrix", kind: "text" },
       {
         key: "op",
         label: "Test",
@@ -1188,27 +1330,25 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
         ],
       },
       { key: "threshold", label: "Threshold (X)", kind: "number" },
-      { key: "passColor", label: "Pass colour", kind: "color" },
-      { key: "showFail", label: "Show fail cells", kind: "checkbox" },
-      { key: "failColor", label: "Fail colour", kind: "color", showIf: (p) => p.showFail === true },
-      { key: "showCellValues", label: "Show values", kind: "checkbox" },
     ],
-    hint: "Threshold a grid field — keep cells where value passes the test → a 0/1 mask. Feed from Graph to Grid / Grid Distance; chain into Marching Squares.",
+    hint: "Grid Threshold as a MATRIX value node — a matrix in, a 0/1 mask matrix out (cells where value passes the test). Feed from Flow Accumulation; chain into Marching Squares for streamlines.",
   },
   "marching-squares": {
     type: "marching-squares",
     label: "Marching Squares",
     color: "#9333ea",
-    // Grid-field node: extract iso-contours from the field (cell-centre samples) → contour line segments
-    // emitted as a graph (chains into Dimension / Mitered Join).
+    // Matrix / grid-field IN → contour LINES out (polylines, a graph). Takes a MATRIX (valin-matrix — e.g. a
+    // Grid Threshold mask for streamlines — shown in the Matrix box) or a wired grid-field; keeps its geometry
+    // OUTPUT so the contours render / chain into Polygon / Network / Mitered Join.
     hasInput: true,
     hasOutput: true,
-    valueInputs: [{ key: "levels", label: "Levels" }],
-    defaultParams: { levels: 5 },
+    valueInputs: [{ key: "matrix", label: "Matrix" }, { key: "levels", label: "Levels" }],
+    defaultParams: { matrix: "", levels: 5 },
     fields: [
+      { key: "matrix", label: "Matrix", kind: "text" },
       { key: "levels", label: "Contour levels", kind: "range", min: 1, max: 12, step: 1 },
     ],
-    hint: "Extract iso-contours from a grid field — N evenly-spaced levels between min and max. Emits contour lines (a graph) to chain on. Feed from Graph to Grid / Grid Distance / Grid Threshold.",
+    hint: "Extract iso-contours from a MATRIX / grid field — N evenly-spaced levels between min and max → contour lines (a graph). Feed a Grid Threshold mask (val-matrix) for streamlines, or any grid-field. Chain into Polygon / Network / Mitered Join.",
   },
   // Data-declared (see ./declarations/area-dimension.node.json) — behaviour stays in code.
   "area-dimension": buildToolDefFromDeclaration(areaDimensionDecl as unknown as NodeDeclaration),
@@ -1218,16 +1358,32 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     type: "longest-branch",
     label: "Longest Branch",
     color: "#0e7490",
-    // Graph node: takes a graph (polylines — e.g. Skeleton branches) and returns its single longest
-    // branch — the path between the two farthest tips (weighted graph diameter) — as one polyline graph.
-    hasInput: true,
-    hasOutput: true,
-    defaultParams: {},
-    fields: [],
-    hint: "Return the longest branch of the incoming graph (the path between its two farthest tips) as a single polyline.",
+    // Pure VALUE node: takes a graph as JSON (`valin-graph`) and returns its single longest branch — the
+    // path between the two farthest tips (weighted graph diameter) — on `val-graph`. Draws nothing.
+    hasInput: false,
+    hasOutput: false,
+    valueInputs: [{ key: "graph", label: "Graph" }],
+    valueOutputs: [{ key: "graph", label: "Graph (JSON)" }],
+    defaultParams: { graph: "" },
+    fields: [{ key: "graph", label: "Graph (JSON)", kind: "text" }],
+    hint: "Return the longest branch of the incoming graph (the path between its two farthest tips) as a graph on val-graph.",
   },
   // Data-declared (see ./declarations/graph-reduce.node.json) — behaviour stays in code.
   "graph-reduce": buildToolDefFromDeclaration(graphReduceDecl as unknown as NodeDeclaration),
+  "graph-simplify": buildToolDefFromDeclaration(graphSimplifyDecl as unknown as NodeDeclaration),
+  "graph-clip": buildToolDefFromDeclaration(graphClipDecl as unknown as NodeDeclaration),
+  "graph-fit-lines": buildToolDefFromDeclaration(graphFitLinesDecl as unknown as NodeDeclaration),
+  "graph-classify": buildToolDefFromDeclaration(graphClassifyDecl as unknown as NodeDeclaration),
+  "grid-geometry": buildToolDefFromDeclaration(gridGeometryDecl as unknown as NodeDeclaration),
+  "render-grid": buildToolDefFromDeclaration(renderGridDecl as unknown as NodeDeclaration),
+  "matrix-transpose": buildToolDefFromDeclaration(matrixTransposeDecl as unknown as NodeDeclaration),
+  "matrix-inverse": buildToolDefFromDeclaration(matrixInverseDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/set-thickness.node.json) — behaviour stays in code.
+  "set-thickness": buildToolDefFromDeclaration(setThicknessDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/merge-graph.node.json) — behaviour stays in code.
+  "merge-graph": buildToolDefFromDeclaration(mergeGraphDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/graph-to-openings.node.json) — behaviour stays in code.
+  "graph-to-openings": buildToolDefFromDeclaration(graphToOpeningsDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/voronoi-bloom.node.json) — behaviour stays in code.
   "voronoi-bloom": buildToolDefFromDeclaration(voronoiBloomDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/spring-layout.node.json) — behaviour stays in code.
@@ -1360,6 +1516,8 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     hasInput: true,
     hasOutput: true,
     geomInputs: [{ key: "schema", label: "Schema" }],
+    // Wireable so an Input Properties brief can drive the door (a wired value overrides the node param).
+    valueInputs: [{ key: "shape", label: "Shape" }, { key: "thickness", label: "Thickness" }, { key: "hinge", label: "Hinge" }, { key: "swing", label: "Swing" }],
     defaultParams: { shape: "arc", thickness: 0.05, hinge: "left", swing: "left", lintelHeight: 2.1, color: "#9333ea" },
     fields: [
       {
@@ -1487,19 +1645,44 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     type: "pobj-source",
     label: "Parametric Site",
     color: "#0f766e",
-    // GEOMETRY SOURCE from a parametric object: evaluates a self-contained .pobj definition into its
-    // footprint polygon and publishes it as this node's geometry output (a Space ROOT — like Space Creator),
-    // while exposing each of the object's parameters as a `val-<key>` value output (e.g. offset → val-offset)
-    // to drive downstream nodes. Load a .pobj file via the "Load Parametric Site" button; edit values
-    // in-node; a wired `valin-def` overrides the stored definition. Commits its footprint as a real Space.
-    hasInput: false,
+    // GEOMETRY SOURCE / HOSTABLE parametric object: evaluates a .pobj definition into its footprint polygon
+    // and publishes it as this node's geometry output, while exposing each parameter as a `val-<key>` value
+    // output (e.g. offset → val-offset) to drive downstream nodes. OPTIONAL HOST (left input): wire a Space
+    // — or a Node / Segment — source in to ATTACH the object to that geometry; its `host` op + pipeline then
+    // run over the wired footprint (centroid-anchored, in local metres), exactly like attaching the object to
+    // a Space in the Properties tab. Unhosted it evaluates self-contained geometry only (a `host`-based object
+    // yields nothing until hosted). Edit values in-node; a wired `valin-def` overrides the stored definition.
+    // Commits its footprint as a real Space.
+    hasInput: true,
     hasOutput: true,
     valueInputs: [{ key: "def", label: "Definition" }],
     defaultParams: { definition: "", props: [] },
     fields: [],
-    hint: "Evaluate a parametric object's footprint as a Space source; each parameter (e.g. offset) is a val-<key> output → wire into Inset / Optimise Rectangle.",
-    instructions: "A geometry ROOT built from a parametric object (.pobj). Evaluates the object's footprint polygon and emits it on the geometry output — consume it exactly like a Space source (wire into Inset, then Optimise Rectangle, etc.). Every parameter of the object is also published as a value output `val-<key>` (e.g. a param named `offset` → `val-offset`); wire those into downstream value inputs (e.g. val-offset → Inset's valin-inset) so one object parameter drives the whole chain. Load a definition with the \"Load Parametric Site\" button (or wire a Parametric Object into Definition); edit parameter values directly in the node. Commits its footprint as a real Space.",
+    hint: "Attach to a host by wiring a Space (or Node / Segment) source into the input; its footprint is emitted on the geometry output and each parameter is a val-<key> output → wire into Inset / Optimise Rectangle.",
+    instructions: "A parametric object (.pobj) evaluated to a footprint. ATTACH TO A HOST: wire a Space source (or a Node / Segment) into the left input to host the object on that geometry — its `host` op and pipeline (e.g. inset → split → optimise) run over the wired footprint, just like attaching the object to a Space in the Properties tab. With no host wired it evaluates self-contained geometry only (a `host`-based object yields nothing until hosted). The footprint is emitted on the geometry output — consume it exactly like a Space source (wire into Inset, then Optimise Rectangle, etc.) or let it commit as a real Space. Every parameter of the object is also published as a value output `val-<key>` (e.g. a param named `offset` → `val-offset`); wire those into downstream value inputs (e.g. val-offset → Inset's valin-offset) so one object parameter drives the whole chain. Load a definition with the Import button (or wire a Parametric Object into Definition); edit parameter values directly in the node.",
     materialisesSpace: true,
+  },
+  "grab-object": {
+    type: "grab-object",
+    label: "Grab Object",
+    color: "#0891b2",
+    // Reads a canvas Space / Node / Segment (by id, the current selection, OR — preferred — a Space wired into
+    // its INPUT) and republishes each parameter of the parametric object attached to it as a `val-<key>` value
+    // output, while PASSING THE GEOMETRY THROUGH on its output. So it sits mid-pipeline: Space → Grab Object →
+    // Inset/Split/… — the incoming Space's geometry flows on to the op, and the `val-<key>` handles wire into
+    // the op's value inputs so the attached object's Properties drive it. With nothing wired in it falls back to
+    // its own referenced element (by id / selection). Host resolves the element → its attachment → params,
+    // baked into `props` (shown read-only); one amber `val-<key>` endpoint per parameter.
+    hasInput: true,
+    hasOutput: true,
+    defaultParams: { hostKind: "space", grabFromSelection: true, id: "", props: [] },
+    fields: [
+      { key: "hostKind", label: "Host", kind: "select", options: [{ value: "space", label: "Space" }, { value: "node", label: "Node" }, { value: "segment", label: "Segment" }], showIf: (p) => !p._hasInput },
+      { key: "grabFromSelection", label: "Grab from selection", kind: "checkbox", showIf: (p) => !p._hasInput },
+      { key: "id", label: "ID", kind: "text", placeholder: "e.g. Space001", showIf: (p) => !p.grabFromSelection && !p._hasInput },
+    ],
+    hint: "Wire a Space into its input → passes the geometry through AND exposes that Space's attached object's parameters as val-<key> outputs.",
+    instructions: "Republishes the parameters of the parametric object attached to a Space as `val-<key>` value outputs, and passes the Space's GEOMETRY through on its output — so it belongs mid-pipeline: wire a Space (source) node into its input, then wire its geometry output into an op (Inset / Split / Optimise) and each `val-<key>` into that op's value input (e.g. val-setback → Inset's valin-uniformSetback). The attached object of whatever Space flows in is what it reads — the Space node itself needs no parameters. With nothing wired into the input it falls back to its own referenced element: pick the Host kind, and with 'Grab from selection' on it tracks the selected element (turn it off and type an id like Space001 to pin one). NOTE: geometry resolves for Host = Space; Node/Segment emit values only.",
   },
   "param-object": {
     type: "param-object",
@@ -1534,35 +1717,6 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     defaultParams: { props: [] },
     fields: [],
     hint: "Fetch the parameters of a wired Parametric Object as interactive controls (sliders / options / …) and pass the definition on with your values applied.",
-  },
-  "param-render": {
-    type: "param-render",
-    label: "Parametric Renderer",
-    color: "#0f766e",
-    // Generic, file-driven analogue of Node to Staircase: evaluates a parametric definition (wired from a
-    // Parametric Object node into `valin-def`, or its own `definition` param) and draws the resulting lines
-    // at EACH input node point. The geometry comes entirely from the definition — no per-object TypeScript.
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "def", label: "Definition" }],
-    defaultParams: { definition: "" },
-    fields: [],
-    hint: "Evaluate a parametric definition (from a Parametric Object node) and draw its lines at each input node — the file-driven analogue of Node to Staircase.",
-  },
-  "param-render-3d": {
-    type: "param-render-3d",
-    label: "Parametric 3D Renderer",
-    color: "#7c3aed",
-    // Evaluates a parametric definition (wired from a Parametric Object / Grab Parameters into `valin-def`,
-    // or its own `definition` param) into a 3D MESH at each input node — one lofted prism per geometry box
-    // (footprint extruded h0→h1 metres). Publishes the mesh on the mesh channel; wire into Mesh to 3D to
-    // show it in the 3D view. Same definition + parameters as the 2D Parametric Renderer.
-    hasInput: true,
-    hasOutput: true,
-    valueInputs: [{ key: "def", label: "Definition" }],
-    defaultParams: { definition: "" },
-    fields: [],
-    hint: "Evaluate a parametric definition into a 3D mesh at each input node (footprints extruded by height) → wire into Mesh to 3D.",
   },
   "param-geometry": {
     type: "param-geometry",
@@ -2111,6 +2265,12 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   sphere: buildToolDefFromDeclaration(sphereDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/cone.node.json) — behaviour stays in code.
   cone: buildToolDefFromDeclaration(coneDecl as unknown as NodeDeclaration),
+  // Batch-A 3D primitives — rendered host-side by primitiveMasses like cuboid/cylinder/sphere/cone:
+  // Frustum (tapered cylinder), Tapered Box (rectangular frustum), Torus (flat ring, partial sweep), Capsule.
+  frustum: buildToolDefFromDeclaration(frustumDecl as unknown as NodeDeclaration),
+  "tapered-box": buildToolDefFromDeclaration(taperedBoxDecl as unknown as NodeDeclaration),
+  torus: buildToolDefFromDeclaration(torusDecl as unknown as NodeDeclaration),
+  capsule: buildToolDefFromDeclaration(capsuleDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/transform-3d.node.json) — behaviour stays in code.
   "transform-3d": buildToolDefFromDeclaration(transform3dDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/boolean-3d.node.json) — behaviour stays in code.
@@ -2283,66 +2443,6 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   //    without recomputing geometry. ──
   // Data-declared (see ./declarations/expr.node.json) — display-only node (evaluator ignores it).
   expr: buildToolDefFromDeclaration(exprDecl as unknown as NodeDeclaration),
-  "create-polygon": {
-    type: "create-polygon",
-    label: "Create Polygon",
-    color: "#059669",
-    hasInput: false,
-    hasOutput: true,
-    valueInputs: [{ key: "deps", label: "params / vars" }],
-    defaultParams: { label: "", spec: "", note: "" },
-    fields: [
-      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
-      { key: "spec", label: "Points (x, y) · extrude", kind: "textarea" },
-      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
-    ],
-    hint: "A closed polygon (2D fill + optional 0→H extrude) — a parametric object's `poly` rule.",
-  },
-  "create-segment": {
-    type: "create-segment",
-    label: "Create Segment",
-    color: "#0d9488",
-    hasInput: false,
-    hasOutput: true,
-    valueInputs: [{ key: "deps", label: "params / vars" }],
-    defaultParams: { label: "", spec: "", note: "" },
-    fields: [
-      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
-      { key: "spec", label: "Points (x, y)", kind: "textarea" },
-      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
-    ],
-    hint: "An open polyline (2D stroke) — a parametric object's `line` rule.",
-  },
-  "create-arc": {
-    type: "create-arc",
-    label: "Create Arc",
-    color: "#0891b2",
-    hasInput: false,
-    hasOutput: true,
-    valueInputs: [{ key: "deps", label: "params / vars" }],
-    defaultParams: { label: "", spec: "", note: "" },
-    fields: [
-      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
-      { key: "spec", label: "Arc (repeated chords)", kind: "textarea" },
-      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
-    ],
-    hint: "An arc / swept polyline (repeated chords, e.g. a door swing) — a repeated `line` rule.",
-  },
-  "create-box": {
-    type: "create-box",
-    label: "Create Box",
-    color: "#b45309",
-    hasInput: false,
-    hasOutput: true,
-    valueInputs: [{ key: "deps", label: "params / vars" }],
-    defaultParams: { label: "", spec: "", note: "" },
-    fields: [
-      { key: "label", label: "Element", kind: "text", showIf: (p) => !!p.label },
-      { key: "spec", label: "x0…x1 · y0…y1 · h0→h1", kind: "textarea" },
-      { key: "note", label: "When / repeat", kind: "text", showIf: (p) => !!p.note },
-    ],
-    hint: "An axis-aligned box (2D rect + 3D prism) — a parametric object's `box` rule.",
-  },
   output: {
     type: "output",
     label: "Output Metrics",
@@ -2360,6 +2460,8 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "space-geometry": buildToolDefFromDeclaration(spaceGeometryDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/merge.node.json) — behaviour stays in code.
   merge: buildToolDefFromDeclaration(mergeDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/boolean-2d.node.json) — behaviour stays in code.
+  "boolean-2d": buildToolDefFromDeclaration(boolean2dDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/input-props.node.json) — behaviour stays in code (dynamic prop outputs).
   "input-props": buildToolDefFromDeclaration(inputPropsDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/file-upload.node.json) — behaviour stays in code.
@@ -2452,6 +2554,13 @@ export interface FlowNodeData extends Record<string, unknown> {
   /** Injected by the host — the Layout Generation node's "Add Room" action (enter add-room-on-canvas mode:
    *  the next canvas click drops a new room into the current generated layout). */
   onAddRoom?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Agent node's "Run" action: analyses the wired Space with the selected
+   *  Library agent and bakes the suggested parameters into the nodes chained downstream. */
+  onRunAgent?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Object Node's "decompile" toggle: hide/show every node + edge DOWNSTREAM of
+   *  this one (the materialised Inset / Circle Packing / Cylinder … chain), collapsing it back to the lone
+   *  Object Node. Reflected by the transient `_decompileHidden` param. */
+  onToggleDecompile?: (nodeId: string) => void;
 }
 
 /** Default model per Generate-node media kind. Changing the kind dropdown swaps the model to its default

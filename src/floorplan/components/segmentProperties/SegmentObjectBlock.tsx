@@ -1,8 +1,18 @@
 import { useMemo, useRef } from "react";
-import { Upload, Trash2 } from "lucide-react";
+import { Upload, Trash2, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "../../types";
 import { evalParametricRefs, type RefInstance } from "../../flow/eval/parametricObject";
+import { evalTruthy, type Scope } from "../../flow/eval/expr";
+
+/** Filter a parametric object's parameters to those currently VISIBLE — a param with a `showWhen` expression
+ *  is shown only when it evaluates truthy against the object's own current values. Shared by the attachment
+ *  editor and the pre-draw creation dialog so both honour conditional fields (e.g. Spine Width appears only
+ *  when Spine / Corridor is ticked). */
+export const visibleParams = (
+  params: ParametricObjectParam[],
+  values: Record<string, number | string | boolean | undefined>,
+): ParametricObjectParam[] => params.filter((d) => !d.showWhen || evalTruthy(d.showWhen, values as Scope));
 
 export interface SegmentObjectBlockProps {
   expanded: boolean;
@@ -16,6 +26,9 @@ export interface SegmentObjectBlockProps {
   /** Attach a library object (by id) to the selected segment. */
   onAttach: (objectId: string) => void;
   onDetach: (attId: string) => void;
+  /** Explode a host-aware PIPELINE object (Site/Floor/Massing) into an editable Flow graph snapshot — shown
+   *  as a per-attachment button when provided. Only offered for objects that carry a geometry.pipeline. */
+  onEditInFlow?: (attId: string) => void;
   /** Patch an attachment's host placement (t / flip). */
   onUpdateAttachment: (attId: string, patch: Partial<SegmentAttachment>) => void;
   /** Set one Input Property value on an attachment. */
@@ -234,15 +247,24 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
           {/* Each attachment: name, Input Properties, position, flip, detach. */}
           {p.attachments.map((att) => {
             const obj = p.library[att.objectId];
+            const pipelineRaw = obj?.geometry?.pipeline;
+            const hasPipeline = Array.isArray(pipelineRaw) && pipelineRaw.length > 0;
             return (
               <div key={att.id} className="space-y-1.5 rounded border border-slate-100 bg-slate-50 p-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-medium text-slate-700">{obj?.meta.name ?? att.objectId}{obj ? "" : " (missing)"}</span>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700" title="Detach" onClick={() => p.onDetach(att.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-0.5">
+                    {p.onEditInFlow && hasPipeline && (
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-teal-600 hover:text-teal-700" title="Edit in Flow — explode this object's pipeline (inset / split / optimise …) into editable, connected flow nodes" onClick={() => p.onEditInFlow!(att.id)}>
+                        <Workflow className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700" title="Detach" onClick={() => p.onDetach(att.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                {obj?.parameters.map((def) => (
+                {obj && visibleParams(obj.parameters, att.params).map((def) => (
                   <ParamField key={def.key} def={def} value={att.params[def.key]} onChange={(val) => p.onUpdateParam(att.id, def.key, val)} />
                 ))}
                 {/* Nested components (ref rules) — select + edit per instance, SketchUp-style. */}

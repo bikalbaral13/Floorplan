@@ -7,20 +7,39 @@
     "category": "Reshape",
     "color": "#7c3aed"
   },
-  "description": "Fit the largest rectangle(s) inside the input space.",
-  "materialisesSpace": true,
-  "instructions": "Packs the largest inscribed shape(s) into each connected input Space and emits one geometry output per placed rectangle, plus a `val-area` value output carrying the total packed area (m²).\n\nWORKFLOW: wire a Space — or an upstream Inset / Split result — into the input handle, tune the params, then read the packed rectangle(s) from the outputs (or wire them onward to Split, Place Object, etc.).\n\nKEY PARAMS\n• shape — rectangle | square | hexagon | l/t/z/i/c-shape | stepped | cross. The inscribed (non-rectangular) shapes hide reference/count and instead use axisAngle + minNotch + minThickness.\n• reference — none = any-angle best fit · custom = fixed angle (axisAngle) · by-edge = align to edge `referenceEdge`. Only applies to rectangle/square/hexagon.\n• optimiseAxisTilt — with reference=custom, auto-sweeps the tilt for maximum area (overrides axisAngle).\n• count (1–20) — how many rectangles to pack. When >1, `gap` sets the minimum spacing (m) between them and `union` merges the pack into one Space.\n• shrinkEnabled — shrink the packed rect toward `targetArea` (m²); shrinkAngle/shrinkSlide place the shrink, optimiseShrink auto-places it, exactArea forces the exact area.\n• random — per-space auto-roll of tilt/count/union from `seed` (re-roll bumps the seed); hides the controls it drives.\n• minNotch / minThickness (m) — inscribed shapes only: reject a result whose cut-out or limbs fall below these.\n\nRECIPES\n• Clean orthogonal room → shape=rectangle, reference=none.\n• Align to a street/edge → reference=by-edge + referenceEdge.\n• Hit a required area → shrinkEnabled + targetArea.\n• Several input Spaces are each packed independently; outputMode=single bundles every rect onto one handle.",
+  "description": "Pack optimal rectangles inside a polygon — a pure CALCULATION node: coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the packed rectangles as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want them drawn.\n\nINPUT: polygon takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry val-points into valin-polygon.\n\nOUTPUT: val-polygons publishes every rectangle as a nested [[[x,y],...],...] list, which a Polygon node accepts directly. val-area still reports the total packed area (m2).\n\nPACKING: shape / count / gap / union / reference / axisAngle shape the result; optimiseAxisTilt auto-picks the tilt that maximises packed area. Every parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true,
-    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(inputCount)))",
+    "input": false,
+    "output": false,
     "valueInputs": [
-      { "key": "axisAngle", "label": "Axis tilt" },
-      { "key": "count", "label": "Rectangles (n)" },
-      { "key": "optimiseAxisTilt", "label": "Optimise axis tilt" }
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      },
+      {
+        "key": "axisAngle",
+        "label": "Axis tilt"
+      },
+      {
+        "key": "count",
+        "label": "Rectangles (n)"
+      },
+      {
+        "key": "optimiseAxisTilt",
+        "label": "Optimise axis tilt"
+      }
     ],
     "valueOutputs": [
-      { "key": "area", "label": "Area", "unit": "m²" }
+      {
+        "key": "area",
+        "label": "Area",
+        "unit": "m²"
+      },
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
     ]
   },
   "vars": {
@@ -29,15 +48,10 @@
   },
   "parameters": [
     {
-      "key": "outputMode",
-      "label": "Outputs",
-      "kind": "select",
-      "default": "perCell",
-      "options": [
-        { "value": "perCell", "label": "Per rect (one each)" },
-        { "value": "single", "label": "Single (all)" }
-      ],
-      "showWhen": "inputCount > 1"
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
     },
     {
       "key": "shape",
@@ -45,16 +59,46 @@
       "kind": "select",
       "default": "rectangle",
       "options": [
-        { "value": "rectangle", "label": "Rectangle" },
-        { "value": "square", "label": "Square" },
-        { "value": "hexagon", "label": "Hexagon" },
-        { "value": "lshape", "label": "L-shape (inscribed)" },
-        { "value": "tshape", "label": "T-shape (inscribed)" },
-        { "value": "zshape", "label": "Z-shape (inscribed)" },
-        { "value": "ishape", "label": "I-shape (inscribed)" },
-        { "value": "cshape", "label": "C-shape (inscribed)" },
-        { "value": "stepped", "label": "Stepped (inscribed)" },
-        { "value": "cross", "label": "Cross (inscribed)" }
+        {
+          "value": "rectangle",
+          "label": "Rectangle"
+        },
+        {
+          "value": "square",
+          "label": "Square"
+        },
+        {
+          "value": "hexagon",
+          "label": "Hexagon"
+        },
+        {
+          "value": "lshape",
+          "label": "L-shape (inscribed)"
+        },
+        {
+          "value": "tshape",
+          "label": "T-shape (inscribed)"
+        },
+        {
+          "value": "zshape",
+          "label": "Z-shape (inscribed)"
+        },
+        {
+          "value": "ishape",
+          "label": "I-shape (inscribed)"
+        },
+        {
+          "value": "cshape",
+          "label": "C-shape (inscribed)"
+        },
+        {
+          "value": "stepped",
+          "label": "Stepped (inscribed)"
+        },
+        {
+          "value": "cross",
+          "label": "Cross (inscribed)"
+        }
       ]
     },
     {
@@ -78,9 +122,18 @@
       "kind": "select",
       "default": "none",
       "options": [
-        { "value": "none", "label": "None (any-angle)" },
-        { "value": "custom", "label": "Custom angle" },
-        { "value": "by-edge", "label": "By edge" }
+        {
+          "value": "none",
+          "label": "None (any-angle)"
+        },
+        {
+          "value": "custom",
+          "label": "Custom angle"
+        },
+        {
+          "value": "by-edge",
+          "label": "By edge"
+        }
       ],
       "showWhen": "!random && isRect"
     },

@@ -2,18 +2,54 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "graph-smooth",
-  "meta": { "label": "Graph Smoothing", "category": "Graph", "color": "#9d174d" },
-  "description": "Smooth a graph's polylines — through the vertices (NURBS/Catmull-Rom) or away from them (Chaikin).",
-  "instructions": "Smooths each polyline of an incoming graph. `interpolate` (Through vertices) on → an interpolating curve (Catmull-Rom, passes through the nodes); off → an approximating curve (Chaikin, stays away from them). `level` sets the smoothness (more = smoother). Smoothness is wireable.\n\nTIP: use it to round a skeleton spine or a hand-drawn graph before Mitered Join.",
+  "meta": {
+    "label": "Graph Smoothing",
+    "category": "Graph",
+    "color": "#9d174d"
+  },
+  "description": "A pure CALCULATION node — smooth a graph: graph in, graph out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a GRAPH as JSON and returns a graph as JSON. It has no geometry input or output and draws nothing on the canvas.\n\nINPUT: graph takes { \"nodes\": [{ \"id\", \"x\", \"y\" }, ...], \"edges\": [{ \"from_node_id\", \"to_node_id\" }, ...] } — coordinates in metres, local to the anchor. Wire Graph Geometry val-graph, or Skeleton val-branches, into valin-graph.\n\nOUTPUT: val-graph publishes the result in the same shape — wire it into a Network node to draw it, or into another graph value node to chain.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true,
+    "input": false,
+    "output": false,
     "valueInputs": [
-      { "key": "level", "label": "Smoothness" }
+      {
+        "key": "graph",
+        "label": "Graph"
+      },
+      {
+        "key": "level",
+        "label": "Smoothness"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "graph",
+        "label": "Graph (JSON)"
+      }
     ]
   },
   "parameters": [
-    { "key": "interpolate", "label": "Through vertices", "kind": "checkbox", "default": true },
-    { "key": "level", "label": "Smoothness", "kind": "range", "default": 2, "min": 1, "max": 8, "step": 1 }
+    {
+      "key": "graph",
+      "label": "Graph (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "interpolate",
+      "label": "Through vertices",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "level",
+      "label": "Smoothness",
+      "kind": "range",
+      "default": 2,
+      "min": 1,
+      "max": 8,
+      "step": 1
+    }
   ]
 }

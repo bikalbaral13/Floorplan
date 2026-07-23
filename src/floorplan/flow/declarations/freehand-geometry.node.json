@@ -1,0 +1,31 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "freehand-geometry",
+  "meta": {
+    "label": "Freehand Geometry",
+    "category": "Freehand",
+    "color": "#ea580c"
+  },
+  "description": "Read the wired Freehand source and publish its strokes as graph JSON — the node id list plus every edge (from_node_id, to_node_id). Forwards the graph on.",
+  "instructions": "Wire a Freehand source into this node to publish the freehand drawing's STRUCTURE as JSON on `val-graph`:\n\n{ \"nodes\": [{ \"id\": \"n1\", \"x\": 0, \"y\": 0 }, …],\n  \"edges\": [{ \"from_node_id\": \"n1\", \"to_node_id\": \"n2\" }, …] }\n\nEach stroke becomes a chain of nodes/edges. Node positions are METRES relative to the drawing centroid, so the JSON can be fed straight into a Network node to redraw it, or into the pure-value Graph nodes (Set Thickness, Merge Graph, Mitered Join, Graph to Openings) — freehand is already vector, so no raster Vectorise is needed.\n\nThe strokes are forwarded unchanged on the main output too, so this node can sit inline in a pipeline (e.g. Freehand → Freehand Geometry → Graph Reduce). Also publishes `val-nodeCount` / `val-edgeCount` for wiring into Math / Output.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueOutputs": [
+      {
+        "key": "graph",
+        "label": "Graph (JSON)"
+      },
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      },
+      {
+        "key": "edgeCount",
+        "label": "Edges"
+      }
+    ]
+  },
+  "parameters": []
+}

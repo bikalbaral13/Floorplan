@@ -32,7 +32,9 @@
         { "value": "divide", "label": "÷ Divide (A ÷ B)" },
         { "value": "multiply", "label": "× Multiply" },
         { "value": "add", "label": "+ Add" },
-        { "value": "subtract", "label": "− Subtract (A − B)" }
+        { "value": "subtract", "label": "− Subtract (A − B)" },
+        { "value": "min", "label": "Min (smaller of A, B)" },
+        { "value": "max", "label": "Max (larger of A, B)" }
       ]
     },
     {

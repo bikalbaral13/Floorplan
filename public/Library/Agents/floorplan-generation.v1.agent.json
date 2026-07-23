@@ -1,0 +1,39 @@
+{
+  "kind": "agent",
+  "schemaVersion": 1,
+  "id": "floorplan-generation.v1",
+  "name": "Floorplan Generation Agent",
+  "version": "1.0.0",
+  "runner": "canvas",
+  "label": "Floorplan",
+  "icon": "layout-dashboard",
+  "color": "#7c3aed",
+  "description": "Generates a floor plan from a brief — draws walls, forms and subdivides rooms, cuts doors/windows, labels spaces.",
+  "instructions": "You are the Floorplan Generation Agent. From a natural-language brief (room list, areas, adjacencies) you produce a coherent 2D floor plan on the canvas. Prefer closed wall loops (they auto-detect spaces). Use the floorplan object (floorplan.bsp.v1) or the layout-generation / partition flows to subdivide an envelope into rooms, then cut doors between adjacent rooms and windows on exterior walls. Keep exterior walls ~0.23 m and interior ~0.12 m. Always call get_state / list_spaces first, and snapshot_canvas to self-review before finishing. Stay structural — do not furnish rooms.",
+  "accessibleTools": [
+    "get_state", "get_plan", "get_selection", "list_spaces", "list_draw_tools",
+    "draw_segment", "place_opening", "merge_spaces", "attach_space_object", "apply_model",
+    "import_objects", "list_objects", "get_object",
+    "flow_node_catalog", "flow_apply", "flow_commit",
+    "list_designs", "import_design", "snapshot_canvas"
+  ],
+  "accessibleParametricObjects": {
+    "mode": "allow",
+    "categories": ["Architectural"],
+    "ids": ["floorplan.bsp.v1", "wall.segment.v1", "door.single.v1", "window.standard.v1", "room.v1"]
+  },
+  "accessibleFlows": {
+    "mode": "allow",
+    "workflows": ["Workflows/layout-generation.json", "Workflows/raster-to-spaces.json"],
+    "nodeCategories": ["Space", "Partition", "Reshape", "2d primitives", "Building"]
+  },
+  "accessibleDesigns": {
+    "mode": "all",
+    "paths": []
+  },
+  "examples": [
+    "create a 2-bedroom apartment, ~65 m²",
+    "subdivide this envelope into 4 rooms with a central corridor",
+    "add doors between adjacent rooms and windows on the south wall"
+  ]
+}

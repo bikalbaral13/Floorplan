@@ -1,0 +1,37 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-clip",
+  "meta": {
+    "label": "Clip inside Space",
+    "category": "Graph",
+    "color": "#0e7490"
+  },
+  "description": "A pure CALCULATION node — clip a graph to a Space boundary: keep only the parts inside (or outside) the polygon. Graph in, graph out; draws nothing.",
+  "instructions": "A value-only node: graph as JSON in, clipped graph as JSON out. It has no geometry input or output and draws nothing on the canvas.\n\nEach polyline is split at every crossing with the boundary polygon; the parts that fall INSIDE the Space are kept (switch Keep to \"Outside Space\" to keep the parts outside instead). Roads that run past the plot edge are trimmed to the plot.\n\nINPUT: wire the graph (Freehand Geometry / Simplify / Graph Reduce val-graph) into valin-graph, and wire Space Geometry's val-points into valin-boundary to supply the plot outline. OUTPUT: val-graph — chain into a Network node to draw, or into another graph value node. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "graph", "label": "Graph" },
+      { "key": "boundary", "label": "Boundary" }
+    ],
+    "valueOutputs": [
+      { "key": "graph", "label": "Graph (JSON)" }
+    ]
+  },
+  "parameters": [
+    { "key": "graph", "label": "Graph (JSON)", "kind": "text", "default": "" },
+    { "key": "boundary", "label": "Boundary (JSON)", "kind": "text", "default": "" },
+    {
+      "key": "mode",
+      "label": "Keep",
+      "kind": "select",
+      "default": "inside",
+      "options": [
+        { "value": "inside", "label": "Inside Space" },
+        { "value": "outside", "label": "Outside Space" }
+      ]
+    }
+  ]
+}

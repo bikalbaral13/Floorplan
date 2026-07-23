@@ -7,26 +7,78 @@
     "category": "Reshape",
     "color": "#059669"
   },
-  "description": "Fit the minimum enclosing circle / ellipse / regular n-gon around the input space.",
-  "instructions": "Fits the minimum enclosing shape around the input Space → one output Space.\n\nSHAPES (`shape`)\n• circle — smallest circumscribed circle (Welzl). No parameters.\n• ellipse — minimum-area enclosing ellipse (Khachiyan). No parameters.\n• ngon — regular n-gon with `sides` (3–12); set orientation with `angle`, or tick `optimize` to auto-pick the tightest rotation (hides `angle`).\n\nTIP: use the n-gon for a quick regularised footprint; the circle/ellipse for radial massing, reach analysis, or a bounding envelope. Wire a Space in — the whole boundary is enclosed.",
+  "description": "A pure CALCULATION node — fit a bounding shape (rectangle / circle / n-gon): coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: polygon takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry val-points into valin-polygon. A nested [[[x,y],...],...] list (from Split / Voronoi / BSP …) is accepted too — the LARGEST piece is used, since this node works on one polygon.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
+    ]
   },
   "parameters": [
+    {
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    },
     {
       "key": "shape",
       "label": "Shape",
       "kind": "select",
       "default": "ngon",
       "options": [
-        { "value": "circle", "label": "Circumcircle" },
-        { "value": "ellipse", "label": "Min. ellipse" },
-        { "value": "ngon", "label": "Regular n-gon" }
+        {
+          "value": "circle",
+          "label": "Circumcircle"
+        },
+        {
+          "value": "ellipse",
+          "label": "Min. ellipse"
+        },
+        {
+          "value": "ngon",
+          "label": "Regular n-gon"
+        }
       ]
     },
-    { "key": "sides", "label": "Sides (n)", "kind": "range", "default": 6, "min": 3, "max": 12, "step": 1, "showWhen": "shape == 'ngon'" },
-    { "key": "angle", "label": "Angle", "kind": "range", "default": 0, "min": 0, "max": 360, "step": 0.5, "unit": "°", "showWhen": "shape == 'ngon' && !optimize" },
-    { "key": "optimize", "label": "Optimise orientation", "kind": "checkbox", "default": false, "showWhen": "shape == 'ngon'" }
+    {
+      "key": "sides",
+      "label": "Sides (n)",
+      "kind": "range",
+      "default": 6,
+      "min": 3,
+      "max": 12,
+      "step": 1,
+      "showWhen": "shape == 'ngon'"
+    },
+    {
+      "key": "angle",
+      "label": "Angle",
+      "kind": "range",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 0.5,
+      "unit": "°",
+      "showWhen": "shape == 'ngon' && !optimize"
+    },
+    {
+      "key": "optimize",
+      "label": "Optimise orientation",
+      "kind": "checkbox",
+      "default": false,
+      "showWhen": "shape == 'ngon'"
+    }
   ]
 }

@@ -1,0 +1,17 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "node-geometry",
+  "meta": { "label": "Node Geometry", "category": "Node", "color": "#4f46e5" },
+  "description": "Reads a Node and outputs its X / Y canvas position in metres (val-x / val-y).",
+  "instructions": "Wire a Node source into the input; this publishes that node's canvas position as `val-x` / `val-y` value outputs, in metres. Wire those into a Point's X / Y (or any value input) to place geometry at the node — the coordinate follows the node when it moves. It has no geometry of its own.",
+  "handles": {
+    "input": true,
+    "output": false,
+    "valueOutputs": [
+      { "key": "x", "label": "X", "unit": "m" },
+      { "key": "y", "label": "Y", "unit": "m" }
+    ]
+  },
+  "parameters": []
+}

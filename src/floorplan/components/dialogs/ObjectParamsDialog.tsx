@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ParamField } from "../segmentProperties/SegmentObjectBlock";
+import { ParamField, visibleParams } from "../segmentProperties/SegmentObjectBlock";
 import { SegmentDisplayFields, type AddSegmentConfig } from "./AddSegmentDialog";
 import type { ParametricObjectFile, Unit } from "../../types";
 
@@ -69,7 +69,8 @@ export function ObjectParamsDialog({ open, object, initial, segment, onConfirm, 
 
   // With a Segment group present, the object's own colour param is redundant (the segment Colour drives both
   // 2D + 3D), so hide colour-kind params; show the rest (height / base …).
-  const objectParams = segment ? object.parameters.filter((p) => p.kind !== "color") : object.parameters;
+  const baseParams = segment ? object.parameters.filter((p) => p.kind !== "color") : object.parameters;
+  const objectParams = visibleParams(baseParams, vals);
   const hasObjectParams = objectParams.length > 0;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>

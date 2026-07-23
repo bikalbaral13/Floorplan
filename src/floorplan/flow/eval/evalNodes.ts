@@ -56,6 +56,7 @@ const pc: {
   union: (geom: PcMultiPolygon | PcRing[], ...geoms: (PcMultiPolygon | PcRing[])[]) => PcMultiPolygon;
   intersection: (subject: PcMultiPolygon | PcRing[], ...clips: (PcMultiPolygon | PcRing[])[]) => PcMultiPolygon;
   difference: (subject: PcMultiPolygon | PcRing[], ...clips: (PcMultiPolygon | PcRing[])[]) => PcMultiPolygon;
+  xor: (geom: PcMultiPolygon | PcRing[], ...geoms: (PcMultiPolygon | PcRing[])[]) => PcMultiPolygon;
 } =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (PolygonClippingNS as any).default ?? (PolygonClippingNS as any);
@@ -80,6 +81,45 @@ const pcResultToPieces = (mp: PcMultiPolygon): CorridoorPiece[] =>
     points: pcRingToPts(poly[0] ?? []),
     holes: poly.slice(1).map(pcRingToPts).filter((h) => h.length >= 3),
   })).filter((p) => p.points.length >= 3);
+
+/** Interpret a flat list of rings with the EVEN-ODD rule (a ring nested in another → a hole, disjoint rings
+ *  → union) and normalise to a polygon-clipping MultiPolygon (explicit outer + holes) by XOR-ing the rings.
+ *  Matches how the flow renders a nested polygon list, so a Mitered-Join poché (outer + room holes) becomes
+ *  a proper holed shape rather than a solid fill. */
+const ringsToPcMulti = (rings: Point[][]): PcMultiPolygon => {
+  const mps = rings.filter((r) => r.length >= 3).map((r) => [ptsToPcRing(r)] as PcRing[]);
+  if (mps.length === 0) return [];
+  if (mps.length === 1) return [mps[0]];
+  try { return pc.xor(mps[0], ...mps.slice(1)); }
+  catch { return mps; } // fallback: treat every ring as its own solid polygon
+};
+
+/** Flatten a polygon-clipping MultiPolygon into a flat ring list (outer + hole rings), even-odd renderable. */
+const pcMultiToRings = (mp: PcMultiPolygon): Point[][] => {
+  const out: Point[][] = [];
+  for (const poly of mp) for (const ring of poly) { const pts = pcRingToPts(ring); if (pts.length >= 3) out.push(pts); }
+  return out;
+};
+
+/** Boolean 2D — union / subtract (A−B) / intersect / xor of two shapes, each a flat ring list read with the
+ *  even-odd rule. Returns the result as a flat ring list (outer + hole rings) that a Polygon node renders
+ *  even-odd. With an EMPTY B, intersect is empty and the others return A itself in canonical DISSOLVED form
+ *  (A's rings XOR-merged into clean loops) — so wiring only Shape A into a Union merges its parts, e.g.
+ *  Mitered-Join per-segment bands → one seamless poché. */
+export function evalBoolean2d(a: Point[][], b: Point[][], op: string): Point[][] {
+  const A = ringsToPcMulti(a);
+  if (A.length === 0) return [];
+  const B = ringsToPcMulti(b);
+  if (B.length === 0) return op === "intersect" || op === "intersection" ? [] : pcMultiToRings(A);
+  try {
+    return pcMultiToRings(
+      op === "subtract" || op === "difference" ? pc.difference(A, B)
+      : op === "intersect" || op === "intersection" ? pc.intersection(A, B)
+      : op === "xor" ? pc.xor(A, B)
+      : pc.union(A, B),
+    );
+  } catch { return pcMultiToRings(A); }
+}
 
 /** Distance from point `p` to segment a–b (same units as the inputs). */
 const pointSegDist = (p: Point, a: Point, b: Point): number => {
@@ -528,6 +568,36 @@ export function evalDensify(inputPts: Point[], params: Record<string, unknown>, 
     default:            pts = densifyPts(inputPts, true, Math.max(0.05, num(params.maxLength, 5)) * ppm, 0); break; // "length"
   }
   return pts.length >= 3 ? [pts] : [];
+}
+
+/** Loop / Array (node label "Loop") → repeat the input polygon `count` times; copy i is translated by
+ *  (i·stepX, i·stepY) metres and rotated i·stepRot° about the input's own centroid, so the copies form a
+ *  linear (or spiralling) array. This is the general parametric-COUNT builder — e.g. a straight staircase in
+ *  plan = one tread Rectangle looped `steps` times, stepping `going` along X — so a count-driven object is
+ *  built from ordinary flow nodes instead of the pobj geometry engine. Returns one polygon per copy. */
+export function evalLoop(inputPts: Point[], params: Record<string, unknown>, ppm: number): Point[][] {
+  if (inputPts.length < 3) return [];
+  // Count clamps at 0, not 1: a count of 0 emits NOTHING, which is how a Match gate switches a whole
+  // branch (e.g. one staircase configuration) off — the branch's loops all get count = N × 0.
+  const count = Math.max(0, Math.min(1000, Math.round(num(params.count, 1))));
+  if (count === 0) return [];
+  const stepX = num(params.stepX, 0) * ppm;
+  const stepY = num(params.stepY, 0) * ppm;
+  const stepRot = (num(params.stepRot, 0) * Math.PI) / 180;
+  let cx = 0, cy = 0;
+  for (const p of inputPts) { cx += p.x; cy += p.y; }
+  cx /= inputPts.length; cy /= inputPts.length;
+  const out: Point[][] = [];
+  for (let i = 0; i < count; i++) {
+    const th = i * stepRot, cs = Math.cos(th), sn = Math.sin(th);
+    const dx = i * stepX, dy = i * stepY;
+    out.push(inputPts.map((p) => {
+      const rx = (p.x - cx) * cs - (p.y - cy) * sn + cx;
+      const ry = (p.x - cx) * sn + (p.y - cy) * cs + cy;
+      return { x: rx + dx, y: ry + dy };
+    }));
+  }
+  return out;
 }
 
 // ── Graph nodes (operate on polylines/segments, not closed rings) ─────────────────────────────────
@@ -1685,6 +1755,118 @@ export function evalCellularAutomaton(
   return { field: { ...inField, values }, cells };
 }
 
+/** Render Grid → turn any GridField into coloured cells (+ optional D8 arrows) for the Render Grid 2D node,
+ *  decoupling display from the compute nodes. Modes:
+ *   • "heatmap"     — low→high colour ramp over `values` (lowColor/highColor).
+ *   • "categorical" — a distinct hue per integer value (labels / basins / masks).
+ *   • "arrows"      — heatmap cells plus a short segment per cell along its D8 flow direction (needs `dir`).
+ *  Cell geometry matches the compute nodes exactly (flat index i*rows+j; x0=minX+i*cellW). */
+export function renderGridField(field: GridField, params: Record<string, unknown>): { cells: { poly: Point[]; color: string; value: number }[]; segments: Point[][] } {
+  const { cols, rows, minX, minY, cellW, cellH, values } = field;
+  const idx = (i: number, j: number) => i * rows + j;
+  const mode = typeof params.mode === "string" ? params.mode : "heatmap";
+  const lowC = parseHex(params.lowColor, "#1e3a8a"), highC = parseHex(params.highColor, "#ef4444");
+  let lo = Infinity, hi = -Infinity;
+  for (const v of values) if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const span = (hi - lo) || 1;
+  const CATS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2", "#db2777", "#65a30d", "#ca8a04", "#4f46e5"];
+  const cells: { poly: Point[]; color: string; value: number }[] = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const c = idx(i, j), v = values[c], x0 = minX + i * cellW, y0 = minY + j * cellH;
+    const color = mode === "categorical" ? CATS[((Math.round(v) % CATS.length) + CATS.length) % CATS.length] : hexLerp(lowC, highC, (v - lo) / span);
+    cells.push({ poly: [{ x: x0, y: y0 }, { x: x0 + cellW, y: y0 }, { x: x0 + cellW, y: y0 + cellH }, { x: x0, y: y0 + cellH }], color, value: Math.round(v * 100) / 100 });
+  }
+  const segments: Point[][] = [];
+  if (mode === "arrows" && field.dir) {
+    const D8: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]; // E,SE,S,SW,W,NW,N,NE (+y down)
+    const len = Math.min(cellW, cellH) * 0.4;
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const d = field.dir[idx(i, j)];
+      if (d == null || d < 0) continue;
+      const [ux, uy] = D8[d], n = Math.hypot(ux, uy) || 1;
+      const cx = minX + (i + 0.5) * cellW, cy = minY + (j + 0.5) * cellH;
+      segments.push([{ x: cx, y: cy }, { x: cx + (ux / n) * len, y: cy + (uy / n) * len }]);
+    }
+  }
+  return { cells, segments };
+}
+
+/** Parse a matrix VALUE (from Grid Geometry's val-matrix, or a val-grid `{values:[[…]]}`) into a numeric
+ *  2D array. Ragged / invalid input → []. */
+const parseMatrix = (raw: unknown): number[][] => {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const v: unknown = JSON.parse(raw);
+    const rows2d = Array.isArray(v) ? v
+      : (v && typeof v === "object" && Array.isArray((v as { values?: unknown }).values)) ? (v as { values: unknown[] }).values
+      : null;
+    if (!rows2d || !Array.isArray(rows2d[0])) return [];
+    return (rows2d as unknown[][]).map((row) => (Array.isArray(row) ? row.map((x) => (Number.isFinite(Number(x)) ? Number(x) : 0)) : []));
+  } catch { return []; }
+};
+
+/** Transpose (Aᵀ): rows ↔ columns. */
+const transposeMatrix = (M: number[][]): number[][] => {
+  const rows = M.length, cols = M[0]?.length ?? 0;
+  const T: number[][] = [];
+  for (let j = 0; j < cols; j++) { const row: number[] = []; for (let i = 0; i < rows; i++) row.push(M[i][j] ?? 0); T.push(row); }
+  return T;
+};
+
+/** Inverse (A⁻¹) of a SQUARE matrix by Gauss–Jordan elimination with partial pivoting. Non-square or singular
+ *  (pivot ≈ 0) → null. Values rounded to 1e-6. */
+const invertMatrix = (M: number[][]): number[][] | null => {
+  const n = M.length;
+  if (n === 0 || M.some((r) => r.length !== n)) return null;
+  const A = M.map((r, i) => [...r, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]); // [M | I]
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    if (Math.abs(A[piv][col]) < 1e-12) return null; // singular
+    [A[col], A[piv]] = [A[piv], A[col]];
+    const d = A[col][col];
+    for (let k = 0; k < 2 * n; k++) A[col][k] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = A[r][col];
+      for (let k = 0; k < 2 * n; k++) A[r][k] -= f * A[col][k];
+    }
+  }
+  return A.map((r) => r.slice(n).map((x) => Math.round(x * 1e6) / 1e6));
+};
+
+/** Transpose node → matrix VALUE in, its transpose out (+ result dimensions). */
+export function evalMatrixTranspose(raw: unknown): { matrix: string; rows: number; cols: number } {
+  const T = transposeMatrix(parseMatrix(raw));
+  return { matrix: JSON.stringify(T), rows: T.length, cols: T[0]?.length ?? 0 };
+}
+
+/** Inverse node → square matrix VALUE in, its inverse out (+ dimensions). Non-square / singular → empty. */
+export function evalMatrixInverse(raw: unknown): { matrix: string; rows: number; cols: number } {
+  const inv = invertMatrix(parseMatrix(raw));
+  if (!inv) return { matrix: "[]", rows: 0, cols: 0 };
+  return { matrix: JSON.stringify(inv), rows: inv.length, cols: inv[0]?.length ?? 0 };
+}
+
+/** Build a GridField from a bare matrix VALUE (which has no world frame) so Render Grid can draw a matrix
+ *  produced by Transpose / Inverse / any Matrix node. Placement = `cellSize` (m) + `originX` / `originY` (m),
+ *  so the result can be offset beside the source grid. Empty matrix → null. */
+export function gridFieldFromMatrix(raw: unknown, params: Record<string, unknown>, ppm: number, channel: "values" | "dir" = "values"): GridField | null {
+  const M = parseMatrix(raw);
+  const rows = M.length, cols = M[0]?.length ?? 0;
+  if (rows === 0 || cols === 0) return null;
+  const cell = Math.max(0.01, num(params.cellSize, 1)) * ppm;
+  const minX = num(params.originX, 0) * ppm, minY = num(params.originY, 0) * ppm;
+  const values = new Array<number>(cols * rows).fill(0);
+  const kind = new Array<number>(cols * rows).fill(0);
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) values[i * rows + j] = M[j][i] ?? 0;
+  const field: GridField = { cols, rows, minX, minY, cellW: cell, cellH: cell, kind, values };
+  // Flow Accumulation / Watershed receive a FLOW-DIRECTION matrix (D8 codes 0..7, -1) which they read from
+  // `dir` — carry it in that channel so the matrix chain keeps the directions.
+  if (channel === "dir") field.dir = values.map((v) => Math.round(v));
+  return field;
+}
+
 /** Grid Threshold: pass each cell's value through `value op threshold` → a 0/1 mask field. Returns the
  *  mask field (values 0/1) + render cells (pass colour, optional fail colour). */
 export function evalGridThreshold(
@@ -1932,6 +2114,26 @@ export function evalMiteredJoin(
     }
     return polys;
   }
+  // "Square" = mitred junctions (like Sharp) but with PROJECTING end caps: every free end (a degree-1 node)
+  // is extended outward by half its width before mitring, so its butt cap lands half-a-thickness PAST the real
+  // endpoint. The path then overshoots the boundary, and a downstream clip (Boolean 2D ∩ Space) trims it flush
+  // — fixing dead ends that otherwise stop short of the boundary (like SVG stroke-linecap: square).
+  if (params.join === "square") {
+    const TOLc = Math.max(1, 0.01 * ppm);
+    const keyc = (p: Point) => `${Math.round(p.x / TOLc)},${Math.round(p.y / TOLc)}`;
+    const deg = new Map<string, number>();
+    for (const w of walls) { deg.set(keyc(w.start), (deg.get(keyc(w.start)) ?? 0) + 1); deg.set(keyc(w.end), (deg.get(keyc(w.end)) ?? 0) + 1); }
+    const capped: Wall[] = walls.map((w) => {
+      const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len, h = halfOf(w);
+      const start = deg.get(keyc(w.start)) === 1 ? { x: w.start.x - ux * h, y: w.start.y - uy * h } : w.start;
+      const end = deg.get(keyc(w.end)) === 1 ? { x: w.end.x + ux * h, y: w.end.y + uy * h } : w.end;
+      return { ...w, start, end };
+    });
+    const mitredSq = [...computeMiteredWallPolygons(capped).values()].filter((poly) => poly.length >= 3);
+    return mitredSq.length > 0 ? mitredSq : capped.map(segRect);
+  }
   // "Curved" = Minkowski sum of each segment with a disk → a STADIUM (rectangle + semicircular caps).
   // Straight runs stay straight; only the corners/junctions round off where the caps overlap.
   if (params.join === "curved") {
@@ -2116,6 +2318,155 @@ export function evalLongestBranch(polylines: Point[][]): Point[][] {
   return bestPath.length >= 2 ? [bestPath] : [];
 }
 
+/** Graph Classify → hierarchical branch ordering of a tree-like graph (a skeleton / medial axis), like a
+ *  Strahler / stream order for a road network. Working PER connected component: the weighted-diameter path
+ *  (the single longest route through the component) is tier 1 = "Longest". Removing it drops the branches
+ *  that hung off it into their own components; each branch's tier-2 = "Secondary" path is its longest route
+ *  ROOTED AT the junction where it meets the trunk — NOT a free tip-to-tip diameter, which would orphan the
+ *  stub joining branch to trunk into a deeper tier (see the peel loop). Everything left after that (the
+ *  shorter sibling arms, and anything deeper) is tier ≥3 = "Tertiary". Returns all three tiers at once as
+ *  2-point polylines — the node publishes each on its own `val-longest` / `val-secondary` / `val-tertiary`
+ *  output; width each (Set Thickness) then Merge Graph → Mitered Join to stroke a hierarchical road network.
+ *  Feed a CONNECTED graph (a Sampled-Voronoi skeleton, optionally Graph Reduce → Largest Component) so
+ *  "Longest" is the one main spine rather than one-per-fragment. Endpoints snap to whole pixels so shared
+ *  junctions collapse. */
+export function evalGraphClassify(polylines: Point[][]): { longest: Point[][]; secondary: Point[][]; tertiary: Point[][] } {
+  const key = (p: Point) => `${Math.round(p.x)}_${Math.round(p.y)}`;
+  interface CEdge { a: string; b: string; w: number; pa: Point; pb: Point; live: boolean; level: number }
+  const edgesArr: CEdge[] = [];
+  const edgeSeen = new Set<string>();
+  for (const pl of polylines) {
+    for (let i = 0; i + 1 < pl.length; i++) {
+      const a = pl[i], b = pl[i + 1];
+      const ka = key(a), kb = key(b);
+      if (ka === kb) continue;
+      const ek = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+      if (edgeSeen.has(ek)) continue; // collapse duplicate / overlapping segments
+      edgeSeen.add(ek);
+      edgesArr.push({ a: ka, b: kb, w: Math.hypot(b.x - a.x, b.y - a.y), pa: a, pb: b, live: true, level: 0 });
+    }
+  }
+  if (!edgesArr.length) return { longest: [], secondary: [], tertiary: [] };
+
+  // node key → indices of still-live edges touching it (rebuilt each round as edges are peeled off).
+  const liveAdj = (): Map<string, number[]> => {
+    const m = new Map<string, number[]>();
+    for (let i = 0; i < edgesArr.length; i++) {
+      const e = edgesArr[i];
+      if (!e.live) continue;
+      (m.get(e.a) ?? m.set(e.a, []).get(e.a)!).push(i);
+      (m.get(e.b) ?? m.set(e.b, []).get(e.b)!).push(i);
+    }
+    return m;
+  };
+  // Dijkstra over the live subgraph from ONE OR MORE sources (all seeded at 0, so each node gets its
+  // distance to the NEAREST source and a path reconstructs back to whichever source owns it).
+  // prevEdge[node] = edge index used to reach it; sources never get one, so reconstruction stops there.
+  const dijkstra = (srcs: string[], adj: Map<string, number[]>) => {
+    const dist = new Map<string, number>();
+    const prevEdge = new Map<string, number>();
+    const pq: { k: string; d: number }[] = [];
+    for (const s of srcs) { dist.set(s, 0); pq.push({ k: s, d: 0 }); }
+    while (pq.length) {
+      let mi = 0;
+      for (let i = 1; i < pq.length; i++) if (pq[i].d < pq[mi].d) mi = i;
+      const { k, d } = pq.splice(mi, 1)[0];
+      if (d > (dist.get(k) ?? Infinity)) continue;
+      for (const ei of adj.get(k) ?? []) {
+        const e = edgesArr[ei];
+        const to = e.a === k ? e.b : e.a;
+        const nd = d + e.w;
+        if (nd < (dist.get(to) ?? Infinity)) { dist.set(to, nd); prevEdge.set(to, ei); pq.push({ k: to, d: nd }); }
+      }
+    }
+    return { dist, prevEdge };
+  };
+
+  // Rebuild the edge path from `dst` back to the Dijkstra source.
+  const pathEdgesTo = (dst: string, prevEdge: Map<string, number>): number[] => {
+    const pe: number[] = [];
+    let cur = dst;
+    while (prevEdge.has(cur)) { const ei = prevEdge.get(cur)!; pe.push(ei); const e = edgesArr[ei]; cur = e.a === cur ? e.b : e.a; }
+    return pe;
+  };
+  // nodeLevel[n] = shallowest tier already classified AT n, so a branch hanging there is one tier deeper.
+  const nodeLevel = new Map<string, number>();
+  const commit = (pathEdges: number[], lvl: number) => {
+    for (const ei of pathEdges) {
+      const e = edgesArr[ei];
+      e.level = lvl; e.live = false;
+      if ((nodeLevel.get(e.a) ?? Infinity) > lvl) nodeLevel.set(e.a, lvl);
+      if ((nodeLevel.get(e.b) ?? Infinity) > lvl) nodeLevel.set(e.b, lvl);
+    }
+  };
+
+  // Peel ONE path per live component per round. A component that already touches a classified node HANGS
+  // off it, so its path is the longest route ROOTED AT that junction — not a free tip-to-tip diameter. That
+  // distinction matters: a free diameter runs between two far tips and orphans the little stub joining the
+  // branch to its parent, which then lands a tier DEEPER than the arms it feeds (tertiary appearing before
+  // secondary). Rooting keeps the stub at the head of its own branch, so only the shorter sibling arms drop
+  // a tier. A component touching nothing is a fresh island — its free diameter is a trunk (tier 1).
+  for (let round = 0; round < edgesArr.length + 2; round++) {
+    const adj = liveAdj();
+    if (adj.size === 0) break;
+    const seen = new Set<string>();
+    let progressed = false;
+    for (const start of adj.keys()) {
+      if (seen.has(start)) continue;
+      // Flood this component, collecting its nodes and the SHALLOWEST tier already classified inside it.
+      const compNodes: string[] = [];
+      let rootLvl = Infinity;
+      const stack = [start];
+      seen.add(start);
+      while (stack.length) {
+        const u = stack.pop()!;
+        compNodes.push(u);
+        const lv = nodeLevel.get(u);
+        if (lv !== undefined && lv < rootLvl) rootLvl = lv;
+        for (const ei of adj.get(u) ?? []) {
+          const e = edgesArr[ei];
+          const v = e.a === u ? e.b : e.a;
+          if (!seen.has(v)) { seen.add(v); stack.push(v); }
+        }
+      }
+      let pe: number[]; let lvl: number;
+      if (rootLvl !== Infinity) {
+        // A feeder must BEGIN on its parent tier and be THE LONGEST such route. Seed EVERY attachment node
+        // at that shallowest tier at once (multi-source) and take the farthest node reached, so the branch
+        // starts at whichever junction yields the longest run. Rooting at one arbitrary junction instead
+        // (the first the flood visited) picks the longest feeder *from that junction* — wrong whenever the
+        // component meets its parent at several points, i.e. anywhere the axis loops.
+        const roots = compNodes.filter((n) => nodeLevel.get(n) === rootLvl);
+        const { dist, prevEdge } = dijkstra(roots, adj);
+        let far = roots[0], fd = -1;
+        for (const [k, d] of dist) if (d > fd) { fd = d; far = k; }
+        pe = pathEdgesTo(far, prevEdge);
+        lvl = rootLvl + 1;
+      } else {
+        // Free diameter (double sweep): farthest node A from start, then farthest B from A.
+        let a = start, ad = -1;
+        for (const [k, d] of dijkstra([start], adj).dist) if (d > ad) { ad = d; a = k; }
+        const { dist, prevEdge } = dijkstra([a], adj);
+        let b = a, bd = -1;
+        for (const [k, d] of dist) if (d > bd) { bd = d; b = k; }
+        pe = pathEdgesTo(b, prevEdge);
+        lvl = 1;
+      }
+      if (pe.length) { commit(pe, lvl); progressed = true; }
+    }
+    if (!progressed) break;
+  }
+  for (const e of edgesArr) if (e.live) e.level = 3; // safety: anything left unpeeled is deep → tertiary
+
+  // Bucket every classified edge by tier: level 1 → Longest, 2 → Secondary, ≥3 → Tertiary.
+  const out = { longest: [] as Point[][], secondary: [] as Point[][], tertiary: [] as Point[][] };
+  for (const e of edgesArr) {
+    if (e.level <= 0) continue;
+    (e.level === 1 ? out.longest : e.level === 2 ? out.secondary : out.tertiary).push([e.pa, e.pb]);
+  }
+  return out;
+}
+
 /** Graph Reduce → clean / reduce an incoming graph (polylines) by one of several algorithms, all sharing
  *  the snapped weighted adjacency (endpoints rounded to whole pixels so junctions collapse). Every mode
  *  returns a graph (polylines). Lengths (`minLength`, `mergeTol`) are in METRES → converted via ppm.
@@ -2125,7 +2476,7 @@ export function evalLongestBranch(polylines: Point[][]): Point[][] {
  *   • mst            — minimum spanning forest (Kruskal) — cheapest loop-free network per component.
  *   • largest        — keep only the component with the most nodes.
  *   • loops/bridges  — split edges into cycle edges (loops) vs bridge edges (dead-ends) via Tarjan. */
-export function evalGraphReduce(polylines: Point[][], params: Record<string, unknown>, ppm: number): Point[][] {
+export function evalGraphReduce(polylines: Point[][], params: Record<string, unknown>, ppm: number, boundary?: Point[]): Point[][] {
   const mode = typeof params.mode === "string" ? params.mode : "longest-branch";
   if (mode === "longest-branch") return evalLongestBranch(polylines);
 
@@ -2157,6 +2508,41 @@ export function evalGraphReduce(polylines: Point[][], params: Record<string, unk
     });
     return m;
   };
+
+  // Join to Boundary (moved off the Skeleton node): extend each OPEN leaf tip — a node touched by exactly
+  // one edge — along its edge direction out to the `boundary` polygon, and add that completion segment. So a
+  // pruned/raw medial axis reaches the walls. No boundary supplied → pass the graph through unchanged.
+  if (mode === "join-boundary") {
+    if (!boundary || boundary.length < 3) return segs(edges);
+    const poly = boundary; // captured (narrowed) so the closure below sees Point[], not Point[] | undefined
+    // Nearest forward hit of the ray (origin + t·dir, t>0) against the boundary polygon's edges.
+    const rayHit = (o: Point, dx: number, dy: number): Point | null => {
+      let best: Point | null = null, bestT = Infinity;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        const ex = b.x - a.x, ey = b.y - a.y;
+        const denom = dx * ey - dy * ex;
+        if (Math.abs(denom) < 1e-9) continue;
+        const t = ((a.x - o.x) * ey - (a.y - o.y) * ex) / denom;      // param along the ray
+        const s = ((a.x - o.x) * dy - (a.y - o.y) * dx) / denom;      // param along the boundary edge
+        if (t > 1e-6 && s >= -1e-6 && s <= 1 + 1e-6 && t < bestT) { bestT = t; best = { x: o.x + dx * t, y: o.y + dy * t }; }
+      }
+      return best;
+    };
+    const adj = adjOf(edges);
+    const joins: Point[][] = [];
+    for (const [nodeKey, inc] of adj) {
+      if (inc.length !== 1) continue;                 // leaf tips only
+      const e = edges[inc[0]];
+      const tip = e.a === nodeKey ? e.pa : e.pb;
+      const other = e.a === nodeKey ? e.pb : e.pa;
+      let dx = tip.x - other.x, dy = tip.y - other.y;
+      const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
+      const hit = rayHit(tip, dx, dy);
+      if (hit && Math.hypot(hit.x - tip.x, hit.y - tip.y) > toPx(0.02)) joins.push([tip, hit]);
+    }
+    return [...segs(edges), ...joins];
+  }
 
   if (mode === "prune") {
     const thr = toPx(num(params.minLength, 1));
@@ -2371,6 +2757,641 @@ export function evalGraphReduce(polylines: Point[][], params: Record<string, unk
   }
 
   return segs(edges);
+}
+
+/** Ramer–Douglas–Peucker on ONE polyline → the sorted list of RETAINED vertex indices (endpoints always
+ *  kept; interior vertices within `eps` px of the chord to their retained neighbours dropped). Iterative
+ *  split-at-farthest so deep polylines don't overflow the stack. */
+const douglasPeuckerIdx = (pts: Point[], eps: number): number[] => {
+  const n = pts.length;
+  if (n <= 2 || eps <= 0) return pts.map((_, i) => i);
+  const keep = new Array<boolean>(n).fill(false);
+  keep[0] = keep[n - 1] = true;
+  const stack: [number, number][] = [[0, n - 1]];
+  while (stack.length) {
+    const [lo, hi] = stack.pop()!;
+    if (hi <= lo + 1) continue;
+    const a = pts[lo], b = pts[hi];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1e-9;
+    let far = -1, farD = eps;
+    for (let i = lo + 1; i < hi; i++) {
+      // perpendicular distance of pts[i] from the a→b line
+      const d = Math.abs((pts[i].x - a.x) * dy - (pts[i].y - a.y) * dx) / len;
+      if (d > farD) { farD = d; far = i; }
+    }
+    if (far !== -1) { keep[far] = true; stack.push([lo, far], [far, hi]); }
+  }
+  const idx: number[] = [];
+  for (let i = 0; i < n; i++) if (keep[i]) idx.push(i);
+  return idx;
+};
+
+/** RDP simplification of ONE polyline (keeps a SUBSET of the original vertices). */
+const douglasPeucker = (pts: Point[], eps: number): Point[] => {
+  if (pts.length < 3 || eps <= 0) return pts.slice();
+  return douglasPeuckerIdx(pts, eps).map((i) => pts[i]);
+};
+
+/** Douglas–Peucker on ONE polyline, ring-aware. A closed ring (endpoints coincide) has a zero-length chord,
+ *  which would collapse the whole loop — so we anchor on the vertex farthest from the start, DP each arc, and
+ *  re-close. Open polylines go straight through the plain recursion. */
+const douglasPeuckerAny = (pts: Point[], eps: number): Point[] => {
+  const n = pts.length;
+  const closed = n >= 4 && Math.hypot(pts[0].x - pts[n - 1].x, pts[0].y - pts[n - 1].y) < 1e-6;
+  if (!closed) return douglasPeucker(pts, eps);
+  const open = pts.slice(0, n - 1); // drop the duplicated closing vertex
+  let far = 0, fd = -1;
+  for (let i = 1; i < open.length; i++) {
+    const d = Math.hypot(open[i].x - open[0].x, open[i].y - open[0].y);
+    if (d > fd) { fd = d; far = i; }
+  }
+  const arc1 = douglasPeucker(open.slice(0, far + 1), eps);       // start → farthest
+  const arc2 = douglasPeucker(open.slice(far), eps);              // farthest → end
+  const merged = [...arc1.slice(0, -1), ...arc2];                 // stitch at the shared farthest vertex
+  if (merged.length >= 3) merged.push({ x: merged[0].x, y: merged[0].y }); // re-close
+  return merged;
+};
+
+/** Simplify → Douglas–Peucker on every incoming polyline. `tolerance` is in METRES (bigger = fewer, straighter
+ *  segments). Turns a dense freehand/vectorised stroke into a handful of straight runs; closed rings keep
+ *  their closure (see douglasPeuckerAny). Note: like Graph Reduce, this round-trips through polylines, so any
+ *  per-edge thickness/type on the incoming graph is dropped — simplify BEFORE Set Thickness. */
+export function evalGraphSimplify(polylines: Point[][], params: Record<string, unknown>, ppm: number): Point[][] {
+  const eps = Math.max(0, num(params.tolerance, 0.3)) * ppm;
+  if (eps <= 0) return polylines;
+  return polylines.map((pl) => douglasPeuckerAny(pl, eps)).filter((pl) => pl.length >= 2);
+}
+
+/** Even-odd point-in-polygon (ray cast). */
+const pointInPolyEO = (x: number, y: number, poly: Point[]): boolean => {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi || 1e-12) + xi)) inside = !inside;
+  }
+  return inside;
+};
+
+/** Parameter t∈[0,1] along a→b where it crosses segment c→d, or null if there's no proper crossing. */
+const segCrossParam = (a: Point, b: Point, c: Point, d: Point): number | null => {
+  const rx = b.x - a.x, ry = b.y - a.y;
+  const sx = d.x - c.x, sy = d.y - c.y;
+  const denom = rx * sy - ry * sx;
+  if (Math.abs(denom) < 1e-12) return null; // parallel / collinear
+  const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / denom;
+  const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / denom;
+  if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) return null;
+  return t;
+};
+
+/** Clip inside Space → keep the parts of each polyline that fall INSIDE `boundary` (or outside, when
+ *  `mode` is "outside"). Each segment is split at every crossing with the polygon edges; a sub-segment is
+ *  kept when its midpoint's inside-test matches the requested side. Consecutive kept sub-segments are
+ *  stitched back into polylines, so a road running through the plot survives as one clipped run. No boundary
+ *  → the graph passes through unchanged. */
+export function evalGraphClip(polylines: Point[][], params: Record<string, unknown>, _ppm: number, boundary?: Point[]): Point[][] {
+  void _ppm;
+  if (!boundary || boundary.length < 3) return polylines;
+  const keepInside = params.mode !== "outside";
+  const out: Point[][] = [];
+  for (const pl of polylines) {
+    let cur: Point[] = [];
+    const flush = () => { if (cur.length >= 2) out.push(cur); cur = []; };
+    for (let i = 0; i + 1 < pl.length; i++) {
+      const a = pl[i], b = pl[i + 1];
+      const ts: number[] = [0, 1];
+      for (let j = 0; j < boundary.length; j++) {
+        const c = boundary[j], d = boundary[(j + 1) % boundary.length];
+        const t = segCrossParam(a, b, c, d);
+        if (t !== null && t > 1e-9 && t < 1 - 1e-9) ts.push(t);
+      }
+      ts.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < ts.length; k++) {
+        const t0 = ts[k], t1 = ts[k + 1];
+        if (t1 - t0 < 1e-9) continue;
+        const mid = (t0 + t1) / 2;
+        const inside = pointInPolyEO(a.x + (b.x - a.x) * mid, a.y + (b.y - a.y) * mid, boundary);
+        if (inside === keepInside) {
+          const p0 = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
+          const p1 = { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 };
+          if (!cur.length) cur.push(p0);
+          cur.push(p1);
+        } else {
+          flush();
+        }
+      }
+    }
+    flush();
+  }
+  return out;
+}
+
+/** Rebuild topological BRANCHES from a set of segments/polylines. Endpoints within `tol` px are quantised
+ *  into shared nodes; edges are deduped; then every maximal chain of degree-2 nodes between two ANCHORS
+ *  (degree ≠ 2 — a junction with 3+ edges, or a degree-1 dead end) is walked into one branch polyline
+ *  (anchor → interior degree-2 vertices → anchor). Pure cycles (all degree-2) come out as closed loops.
+ *  This is what lets Fit Lines see a chain like n3–n5–n6–n7 as ONE junction-to-junction branch — the raw
+ *  per-edge segments a graph JSON round-trips into (polylinesFromGraphJson emits one 2-point line per edge)
+ *  are re-chained here first. */
+const extractBranches = (polylines: Point[][], tol: number): Point[][] => {
+  // Cluster nearby endpoints into nodes. `reps` is the first-seen representative used ONLY for matching; each
+  // node's OUTPUT position (computed below) is the CENTROID of every point that merged into it.
+  const reps: Point[] = [];
+  const acc: { x: number; y: number; n: number }[] = [];
+  const nodeId = (p: Point): number => {
+    for (let i = 0; i < reps.length; i++) if (Math.hypot(reps[i].x - p.x, reps[i].y - p.y) <= tol) { acc[i].x += p.x; acc[i].y += p.y; acc[i].n++; return i; }
+    reps.push({ x: p.x, y: p.y }); acc.push({ x: p.x, y: p.y, n: 1 }); return reps.length - 1;
+  };
+  const edges: [number, number][] = [];
+  const adj = new Map<number, number[]>();
+  const seen = new Set<string>();
+  const addEdge = (a: number, b: number) => {
+    if (a === b) return;
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    if (seen.has(key)) return; seen.add(key);
+    const ei = edges.length; edges.push([a, b]);
+    if (!adj.has(a)) adj.set(a, []); adj.get(a)!.push(ei);
+    if (!adj.has(b)) adj.set(b, []); adj.get(b)!.push(ei);
+  };
+  for (const pl of polylines) for (let i = 0; i + 1 < pl.length; i++) addEdge(nodeId(pl[i]), nodeId(pl[i + 1]));
+  // A junction sits at the MIDDLE of its crossing (the centroid of the merged points), not at whichever stroke
+  // vertex happened to be seen first — that first-vertex choice is what made the junction drift off-crossing.
+  const nodes: Point[] = acc.map((s) => ({ x: s.x / s.n, y: s.y / s.n }));
+  const deg = (n: number) => adj.get(n)?.length ?? 0;
+  const used = new Array<boolean>(edges.length).fill(false);
+  const branches: Point[][] = [];
+  const walk = (start: number, ei0: number) => {
+    const pts: Point[] = [nodes[start]];
+    let prev = start, ei = ei0;
+    for (;;) {
+      used[ei] = true;
+      const [a, b] = edges[ei];
+      const next = a === prev ? b : a;
+      pts.push(nodes[next]);
+      const inc = adj.get(next) ?? [];
+      if (inc.length === 2) { const nextEi = inc[0] === ei ? inc[1] : inc[0]; if (used[nextEi]) break; prev = next; ei = nextEi; continue; }
+      break; // anchor (junction or dead end) ends the branch
+    }
+    if (pts.length >= 2) branches.push(pts);
+  };
+  for (const n of adj.keys()) if (deg(n) !== 2) for (const ei of adj.get(n)!) if (!used[ei]) walk(n, ei);
+  for (let ei = 0; ei < edges.length; ei++) if (!used[ei]) walk(edges[ei][0], ei); // leftover pure cycles
+  return branches;
+};
+
+/** A fitted infinite line: a point on it (the run's centroid) plus a unit direction. */
+type FitLine = { cx: number; cy: number; dx: number; dy: number };
+
+/** Total-least-squares (orthogonal regression) line through `pts` — the principal axis of their scatter
+ *  matrix. Unlike joining the endpoints this uses EVERY sample, so a wobbly hand-drawn side straightens to
+ *  the line the stroke actually follows rather than to the accident of where the stroke started/stopped. */
+const tlsFitLine = (pts: Point[]): FitLine => {
+  let cx = 0, cy = 0;
+  for (const p of pts) { cx += p.x; cy += p.y; }
+  cx /= pts.length; cy /= pts.length;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const p of pts) { const ex = p.x - cx, ey = p.y - cy; sxx += ex * ex; syy += ey * ey; sxy += ex * ey; }
+  const theta = 0.5 * Math.atan2(2 * sxy, sxx - syy); // major-axis angle
+  return { cx, cy, dx: Math.cos(theta), dy: Math.sin(theta) };
+};
+
+/** Intersection of two fitted lines, or null when they're (near) parallel. */
+const fitLineIsect = (a: FitLine, b: FitLine): Point | null => {
+  const den = a.dx * b.dy - a.dy * b.dx;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((b.cx - a.cx) * b.dy - (b.cy - a.cy) * b.dx) / den;
+  return { x: a.cx + a.dx * t, y: a.cy + a.dy * t };
+};
+
+/** Foot of the perpendicular from `p` onto the line. */
+const fitLineProj = (l: FitLine, p: Point): Point => {
+  const t = (p.x - l.cx) * l.dx + (p.y - l.cy) * l.dy;
+  return { x: l.cx + l.dx * t, y: l.cy + l.dy * t };
+};
+
+/** Douglas–Peucker, returning the KEPT indices. These are the corner candidates: the vertices where the
+ *  stroke genuinely turns, as opposed to sampling noise along a side. */
+const dpKeepIndices = (pts: Point[], eps: number): number[] => {
+  const keep = new Uint8Array(pts.length);
+  keep[0] = 1; keep[pts.length - 1] = 1;
+  const stack: [number, number][] = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [i, j] = stack.pop()!;
+    if (j <= i + 1) continue;
+    const a = pts[i], b = pts[j];
+    const ex = b.x - a.x, ey = b.y - a.y;
+    const L = Math.hypot(ex, ey);
+    let best = -1, bestD = -1;
+    for (let k = i + 1; k < j; k++) {
+      // When the chord is degenerate (a closed loop's split points coincide) fall back to radial distance.
+      const d = L < 1e-9
+        ? Math.hypot(pts[k].x - a.x, pts[k].y - a.y)
+        : Math.abs((pts[k].x - a.x) * ey - (pts[k].y - a.y) * ex) / L;
+      if (d > bestD) { bestD = d; best = k; }
+    }
+    if (bestD > eps && best > 0) { keep[best] = 1; stack.push([i, best], [best, j]); }
+  }
+  const out: number[] = [];
+  for (let i = 0; i < pts.length; i++) if (keep[i]) out.push(i);
+  return out;
+};
+
+const polyLen = (pts: Point[]): number => {
+  let t = 0;
+  for (let i = 0; i + 1 < pts.length; i++) t += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+  return t;
+};
+/** Smallest angle between two undirected line directions, in radians (0…π/2). */
+const dirDelta = (a: FitLine, b: FitLine): number => {
+  let d = Math.abs(Math.atan2(a.dy, a.dx) - Math.atan2(b.dy, b.dx)) % Math.PI;
+  return d > Math.PI / 2 ? Math.PI - d : d;
+};
+
+/** Least-squares fit of a degree-`deg` polynomial to one run, returned as a SAMPLED polyline. Two details
+ *  make it well behaved: the fit happens in the run's own principal frame (local x along its TLS direction),
+ *  so a vertical run isn't an infinite-gradient "function"; and the parameter is normalised to [-1,1], which
+ *  keeps the Vandermonde system conditioned enough to invert at higher degrees. Degenerate systems (too few
+ *  distinct samples, collinear data) fall back to the straight chord. */
+const polyFitRun = (run: Point[], deg: number): Point[] => {
+  const L = tlsFitLine(run);
+  const us: number[] = [], vs: number[] = [];
+  for (const p of run) {
+    const ex = p.x - L.cx, ey = p.y - L.cy;
+    us.push(ex * L.dx + ey * L.dy);
+    vs.push(-ex * L.dy + ey * L.dx);
+  }
+  const uMin = Math.min(...us), uMax = Math.max(...us);
+  const span = uMax - uMin;
+  const ends = [run[0], run[run.length - 1]];
+  if (span < 1e-9) return ends;
+  const norm = (u: number) => (2 * (u - uMin)) / span - 1;
+  const N = Math.min(deg, run.length - 1) + 1; // can't fit more coefficients than samples
+  if (N < 2) return ends;
+  // Normal equations AᵀA·a = Aᵀv, built directly from the power sums.
+  const M: number[][] = Array.from({ length: N }, () => new Array(N + 1).fill(0));
+  for (let i = 0; i < us.length; i++) {
+    const t = norm(us[i]);
+    const pw: number[] = [1];
+    for (let k = 1; k < 2 * N; k++) pw.push(pw[k - 1] * t);
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) M[r][c] += pw[r + c];
+      M[r][N] += pw[r] * vs[i];
+    }
+  }
+  for (let c = 0; c < N; c++) { // Gauss–Jordan with partial pivoting
+    let piv = c;
+    for (let r = c + 1; r < N; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    if (Math.abs(M[piv][c]) < 1e-12) return ends;
+    [M[c], M[piv]] = [M[piv], M[c]];
+    for (let r = 0; r < N; r++) {
+      if (r === c) continue;
+      const f = M[r][c] / M[c][c];
+      for (let k = c; k <= N; k++) M[r][k] -= f * M[c][k];
+    }
+  }
+  const a = M.map((row, i) => row[N] / row[i]); // Gauss–Jordan leaves a diagonal system
+  const samples = Math.max(8, Math.min(64, run.length));
+  const out: Point[] = [];
+  for (let i = 0; i < samples; i++) {
+    const u = uMin + (span * i) / (samples - 1);
+    const t = norm(u);
+    let v = 0, tp = 1;
+    for (let k = 0; k < N; k++) { v += a[k] * tp; tp *= t; }
+    out.push({ x: L.cx + L.dx * u - L.dy * v, y: L.cy + L.dy * u + L.dx * v });
+  }
+  return out;
+};
+
+/** Fit ONE branch to a chain of straight segments (or, at degree > 1, curves). Returns polylines. */
+const fitBranchToSegments = (branch: Point[], tol: number, snapRad: number, ortho: boolean, degree: number, closeTol: number): Point[][] => {
+  let pts = branch.slice();
+  const a0 = pts[0], z0 = pts[pts.length - 1];
+  // A scribbled triangle / rectangle / circle comes back from extractBranches as ONE cycle whose ends meet.
+  let closed = pts.length >= 4 && Math.hypot(z0.x - a0.x, z0.y - a0.y) <= Math.max(closeTol, tol);
+  if (closed) {
+    if (Math.hypot(z0.x - a0.x, z0.y - a0.y) < 1e-9) pts.pop(); // drop the duplicated closing vertex
+    // Rotate so the chain STARTS at a real corner (vertex farthest from the centroid). DP pins its two
+    // endpoints, so starting mid-side would split that side in two and pin a false corner there.
+    let cx = 0, cy = 0;
+    for (const p of pts) { cx += p.x; cy += p.y; }
+    cx /= pts.length; cy /= pts.length;
+    let bi = 0, bd = -1;
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.hypot(pts[i].x - cx, pts[i].y - cy);
+      if (d > bd) { bd = d; bi = i; }
+    }
+    pts = [...pts.slice(bi), ...pts.slice(0, bi)];
+    pts.push({ ...pts[0] });
+  }
+  if (pts.length < 2) return [];
+
+  // Corners → the runs between them → one TLS line per run.
+  const idx = dpKeepIndices(pts, tol);
+  let runs: Point[][] = [];
+  for (let s = 0; s + 1 < idx.length; s++) {
+    const run = pts.slice(idx[s], idx[s + 1] + 1);
+    if (run.length >= 2) runs.push(run);
+  }
+  if (!runs.length) return [];
+  // DP can split one straight side at a noise spike; fuse neighbours that end up near-collinear (< 8°).
+  const COLLIN = (8 * Math.PI) / 180;
+  const fused: Point[][] = [];
+  for (const r of runs) {
+    const prev = fused[fused.length - 1];
+    if (prev && dirDelta(tlsFitLine(prev), tlsFitLine(r)) < COLLIN) fused[fused.length - 1] = [...prev, ...r.slice(1)];
+    else fused.push(r);
+  }
+  if (closed && fused.length > 2 && dirDelta(tlsFitLine(fused[0]), tlsFitLine(fused[fused.length - 1])) < COLLIN) {
+    fused[0] = [...fused.pop()!, ...fused[0].slice(1)];
+  }
+  runs = fused;
+  if (closed && runs.length < 3) closed = false; // a loop needs 3+ sides; otherwise treat it as open
+
+  // Degree > 1 → fit a CURVE to each run instead of a straight line. Corner detection still runs first, so
+  // the sides of a rectangle stay four separate pieces rather than one polynomial smeared through the
+  // corners; each side is then free to bow. Direction snapping (ortho / square-up) and corner-by-
+  // intersection are line-only ideas and don't apply, so they're skipped — adjoining curves already meet at
+  // the shared corner, and weldEndpoints closes any sub-pixel gap.
+  if (degree > 1) return runs.map((r) => polyFitRun(r, degree)).filter((c) => c.length >= 2);
+
+  let lines = runs.map(tlsFitLine);
+
+  // Direction snapping — both flavours are the same "round the angle onto a grid" step, differing only in
+  // where that grid is anchored:
+  //   • ortho      → anchored at the WORLD axes with a 90° step, so every side lands exactly horizontal or
+  //                  vertical (what a skewed floor-plan scribble wants). Takes precedence over angleSnap.
+  //   • angleSnap  → anchored at the LONGEST side, so a rectangle drawn at an angle keeps its rotation and
+  //                  only its corners are squared.
+  let base: number | null = null, step = 0;
+  if (ortho) { base = 0; step = Math.PI / 2; }
+  else if (snapRad > 0 && lines.length > 1) {
+    let bi = 0, bl = -1;
+    runs.forEach((r, i) => { const L = polyLen(r); if (L > bl) { bl = L; bi = i; } });
+    base = Math.atan2(lines[bi].dy, lines[bi].dx);
+    step = snapRad;
+  }
+  if (base !== null) {
+    const b = base;
+    const snapAng = (l: FitLine): FitLine => {
+      const a = Math.atan2(l.dy, l.dx);
+      const s = b + Math.round((a - b) / step) * step;
+      return { cx: l.cx, cy: l.cy, dx: Math.cos(s), dy: Math.sin(s) };
+    };
+    lines = lines.map(snapAng);
+    // Snapping can land CONSECUTIVE sides on the same axis (e.g. a shallow dog-leg both rounding to
+    // horizontal). Parallel neighbours have no intersection, so fuse them into one run and refit rather
+    // than leaving a phantom corner where the raw stroke vertex happened to sit.
+    const parallel = (p: FitLine, q: FitLine) => Math.abs(p.dx * q.dy - p.dy * q.dx) < 1e-9;
+    const nr: Point[][] = [], nl: FitLine[] = [];
+    for (let i = 0; i < runs.length; i++) {
+      if (nl.length && parallel(nl[nl.length - 1], lines[i])) {
+        nr[nr.length - 1] = [...nr[nr.length - 1], ...runs[i].slice(1)];
+        nl[nl.length - 1] = snapAng(tlsFitLine(nr[nr.length - 1]));
+      } else { nr.push(runs[i]); nl.push(lines[i]); }
+    }
+    if (closed && nr.length > 2 && parallel(nl[0], nl[nl.length - 1])) {
+      nr[0] = [...nr.pop()!, ...nr[0].slice(1)];
+      nl.pop();
+      nl[0] = snapAng(tlsFitLine(nr[0]));
+    }
+    runs = nr; lines = nl;
+    if (closed && runs.length < 3) closed = false;
+  }
+
+  // Corners = where consecutive fitted lines meet. Near-parallel neighbours would intersect far away, so
+  // keep the raw stroke vertex whenever the intersection drifts implausibly far from it.
+  const n = lines.length;
+  const corner = (i: number, j: number, raw: Point): Point => {
+    const p = fitLineIsect(lines[i], lines[j]);
+    if (!p) return raw;
+    // Snapping rotates a side about its centroid, so it legitimately drags corners further than free
+    // fitting does — allow more drift before falling back to the raw stroke vertex.
+    const limit = (base !== null ? 1 : 0.5) * Math.min(polyLen(runs[i]), polyLen(runs[j])) + 2 * tol;
+    return Math.hypot(p.x - raw.x, p.y - raw.y) <= limit ? p : raw;
+  };
+  const verts: Point[] = [];
+  if (closed) {
+    for (let i = 0; i < n; i++) verts.push(corner((i - 1 + n) % n, i, runs[i][0]));
+  } else {
+    verts.push(fitLineProj(lines[0], runs[0][0]));
+    for (let i = 1; i < n; i++) verts.push(corner(i - 1, i, runs[i][0]));
+    verts.push(fitLineProj(lines[n - 1], runs[n - 1][runs[n - 1].length - 1]));
+  }
+
+  const segs: Point[][] = [];
+  const m = verts.length;
+  for (let i = 0; i < (closed ? m : m - 1); i++) {
+    const a = verts[i], b = verts[(i + 1) % m];
+    if (Math.hypot(b.x - a.x, b.y - a.y) > 1e-6) segs.push([a, b]);
+  }
+  return segs;
+};
+
+/** Trim OVERSHOOT tails — the little stubs a scribble leaves poking past a crossing (the pen carried on
+ *  after the wall it was meeting). For every fitted segment, find where the other segments cross it; if an
+ *  end sticks out beyond the OUTERMOST crossing by no more than `trim`, cut it back to that crossing.
+ *  Deliberately conservative in three ways, so real geometry survives:
+ *   • only the part BEYOND a crossing is cut — a wall genuinely finishing in open space has no crossing to
+ *     overshoot, so it is never shortened;
+ *   • a tail longer than 40% of its own segment is left alone — that is a real limb, not a slip of the pen
+ *     (it also stops a short segment with one mid-crossing from collapsing to nothing);
+ *   • every crossing is preserved, since only material outside [tMin,tMax] is removed — so trimming can
+ *     never create a NEW dangle, and one pass is enough.
+ *  A segment that crosses nothing at all and is itself shorter than `trim` is dropped as speckle. */
+const trimOvershoots = (segs: Point[][], trim: number): Point[][] => {
+  const out: Point[][] = [];
+  for (let i = 0; i < segs.length; i++) {
+    const p0 = segs[i][0], p1 = segs[i][1];
+    const rx = p1.x - p0.x, ry = p1.y - p0.y;
+    const len = Math.hypot(rx, ry);
+    if (len < 1e-9) continue;
+    let tMin = Infinity, tMax = -Infinity;
+    for (let j = 0; j < segs.length; j++) {
+      if (j === i) continue;
+      const q0 = segs[j][0], q1 = segs[j][1];
+      const sx = q1.x - q0.x, sy = q1.y - q0.y;
+      const den = rx * sy - ry * sx;
+      if (Math.abs(den) < 1e-9) continue; // parallel — no crossing
+      const dx = q0.x - p0.x, dy = q0.y - p0.y;
+      const t = (dx * sy - dy * sx) / den; // along THIS segment
+      const u = (dx * ry - dy * rx) / den; // along the other one
+      if (t < -1e-9 || t > 1 + 1e-9) continue;
+      // Allow the crossing to fall slightly off the far end of the other segment, so a neighbour that
+      // stops a hair short still counts as the thing being overshot.
+      const uTol = trim / (Math.hypot(sx, sy) || 1);
+      if (u < -uTol || u > 1 + uTol) continue;
+      if (t < tMin) tMin = t;
+      if (t > tMax) tMax = t;
+    }
+    if (tMin === Infinity) { // crosses nothing
+      if (len > trim) out.push(segs[i]); // …and is substantial → keep; otherwise it's speckle
+      continue;
+    }
+    // A crossing that sits exactly on an endpoint gives tail ≈ 0, but only ≈ — neighbouring branches fit
+    // their shared corner independently, so it lands a hair off. Without a floor those hairs get "trimmed",
+    // shifting the endpoint just enough to break the shared position that makes it one node, which silently
+    // tears junctions apart. Ignore anything below a couple of pixels: too small to see, big enough to hurt.
+    const MIN_CUT = 2;
+    const cut = (tail: number) => tail > MIN_CUT && tail <= trim && tail <= 0.4 * len;
+    const a = cut(tMin * len) ? { x: p0.x + rx * tMin, y: p0.y + ry * tMin } : p0;
+    const b = cut((1 - tMax) * len) ? { x: p0.x + rx * tMax, y: p0.y + ry * tMax } : p1;
+    if (Math.hypot(b.x - a.x, b.y - a.y) > 1e-6) out.push([a, b]);
+  }
+  return out;
+};
+
+/** Weld fitted endpoints back into shared junctions. Branches are fitted INDEPENDENTLY, and each projects
+ *  the junction it shares with its neighbours onto its OWN fitted line — so a corner that was one node
+ *  before fitting comes out as two or three points a pixel or two apart. Left alone the output graph is
+ *  quietly disconnected at every junction: spur pruning walks straight through them (nothing looks like a
+ *  free end) and downstream nodes see a broken graph. Cluster endpoints within `tol` and snap each cluster
+ *  to its centroid, restoring the shared positions. */
+const weldEndpoints = (polys: Point[][], tol: number, axisAligned: boolean): Point[][] => {
+  if (axisAligned) {
+    // ORTHO: welding to a 2-D centroid would drag endpoints a fraction OFF their axis, undoing the exact
+    // horizontal/vertical the snap just produced. Rectify per axis instead — chain-cluster the x values and
+    // the y values independently and move each to its cluster mean. A horizontal side's two endpoints share
+    // one y exactly, so they land in the same cluster and it stays exactly horizontal; endpoints that were
+    // within `tol` collapse onto identical coordinates, so junctions become exact. This is also just what
+    // rectifying an orthogonal plan means: collinear walls end up sharing one coordinate.
+    const snap1D = (vals: number[]): Map<number, number> => {
+      const sorted = [...new Set(vals)].sort((a, b) => a - b);
+      const map = new Map<number, number>();
+      for (let i = 0; i < sorted.length;) {
+        let j = i, sum = sorted[i];
+        while (j + 1 < sorted.length && sorted[j + 1] - sorted[j] <= tol) { j++; sum += sorted[j]; }
+        const mean = sum / (j - i + 1);
+        for (let k = i; k <= j; k++) map.set(sorted[k], mean);
+        i = j + 1;
+      }
+      return map;
+    };
+    const ends = polys.flatMap((s) => [s[0], s[s.length - 1]]);
+    const mx = snap1D(ends.map((p) => p.x));
+    const my = snap1D(ends.map((p) => p.y));
+    const fix = (p: Point): Point => ({ x: mx.get(p.x) ?? p.x, y: my.get(p.y) ?? p.y });
+    return polys.map((s) => {
+      const o = s.slice();
+      o[0] = fix(s[0]);
+      o[o.length - 1] = fix(s[s.length - 1]);
+      return o;
+    });
+  }
+  const reps: { x: number; y: number; n: number }[] = [];
+  const idxOf = (p: Point): number => {
+    for (let i = 0; i < reps.length; i++) {
+      if (Math.hypot(reps[i].x / reps[i].n - p.x, reps[i].y / reps[i].n - p.y) <= tol) {
+        reps[i].x += p.x; reps[i].y += p.y; reps[i].n++; return i;
+      }
+    }
+    reps.push({ x: p.x, y: p.y, n: 1 });
+    return reps.length - 1;
+  };
+  const ends = polys.map((s) => [idxOf(s[0]), idxOf(s[s.length - 1])] as const);
+  const at = (i: number): Point => ({ x: reps[i].x / reps[i].n, y: reps[i].y / reps[i].n });
+  return polys.map((s, i) => {
+    const out = s.slice();
+    out[0] = at(ends[i][0]);
+    out[out.length - 1] = at(ends[i][1]);
+    return out;
+  });
+};
+
+/** Prune short DANGLING spurs — the stray tails a traced plan is left with. This is the main cleanup:
+ *  because branch rebuilding fuses nearby endpoints, a stroke that runs past the wall it meets is split AT
+ *  that crossing, so the overshoot arrives as its own little segment hanging off the junction rather than as
+ *  a tail on a longer line. Walk in from every FREE end (degree 1) through degree-2 nodes to the first real
+ *  junction; if that whole chain is no longer than `maxLen`, drop it. Repeat, since removing one spur can
+ *  expose another behind it. Chains longer than `maxLen` are left alone, so real walls survive. */
+const pruneShortSpurs = (segs: Point[][], maxLen: number): Point[][] => {
+  const key = (p: Point) => `${Math.round(p.x)}_${Math.round(p.y)}`;
+  let cur = segs;
+  for (let pass = 0; pass < 16; pass++) {
+    const deg = new Map<string, number>();
+    const adj = new Map<string, number[]>();
+    cur.forEach((s, i) => {
+      for (const p of [s[0], s[s.length - 1]]) { // works for a curve polyline too, not just a 2-point line
+        const k = key(p);
+        deg.set(k, (deg.get(k) ?? 0) + 1);
+        (adj.get(k) ?? adj.set(k, []).get(k)!).push(i);
+      }
+    });
+    const drop = new Set<number>();
+    for (const [k0, d] of deg) {
+      if (d !== 1) continue; // only start from a free end
+      const chain: number[] = [];
+      let node = k0, from = -1, len = 0;
+      for (;;) {
+        const nxt = (adj.get(node) ?? []).filter((i) => i !== from && !drop.has(i));
+        if (nxt.length !== 1) break; // a junction (or nothing left) ends the spur
+        const ei = nxt[0];
+        const s = cur[ei];
+        len += polyLen(s);
+        if (len > maxLen) { chain.length = 0; break; } // too long to be a stray tail — it's a real wall
+        chain.push(ei);
+        const other = key(s[0]) === node ? key(s[s.length - 1]) : key(s[0]);
+        if ((deg.get(other) ?? 0) !== 2) break; // reached a junction or the far free end
+        from = ei; node = other;
+      }
+      if (chain.length) for (const ei of chain) drop.add(ei);
+    }
+    if (!drop.size) break;
+    cur = cur.filter((_, i) => !drop.has(i));
+  }
+  return cur;
+};
+
+/** Fit Lines → straighten a freehand scribble into clean straight sides. Rebuilds branches
+ *  (extractBranches: anchors = degree ≠ 2, so a chain of degree-2 nodes between two anchors is ONE branch),
+ *  then fits EACH branch to a chain of straight segments: Douglas–Peucker finds the corners, every run
+ *  between two corners gets a total-least-squares line, and the corners are re-derived as the INTERSECTIONS
+ *  of those lines so they come out sharp and a closed shape closes exactly. A scribbled triangle fits to 3
+ *  sides, a rectangle to 4, a straight stroke to 1, a circle to as many as `tolerance` allows.
+ *  Closed branches (a loop, or ends meeting within tolerance) are fitted as closed polygons.
+ *  PARAMS: `snapTol` node-merge when rebuilding; `tolerance` how far a fitted line may sit from the stroke
+ *  (bigger = fewer, longer sides); `ortho` force every side exactly horizontal or vertical (world axes) —
+ *  the one to use for a skewed floor-plan scribble; `angleSnap` degrees to square sides up to, measured
+ *  from the longest side so a rotated rectangle keeps its rotation (0 = off — leave it off for triangles).
+ *  `ortho` takes precedence over `angleSnap`; `trimEnds` cuts overshoot stubs left past a crossing. */
+export function evalGraphFitLines(polylines: Point[][], params: Record<string, unknown>, ppm: number): Point[][] {
+  const scale = ppm > 0 ? ppm : 1;
+  const snapTol = Math.max(0, num(params.snapTol, 0.3)) * scale;
+  const tol = Math.max(1e-6, num(params.tolerance, 0.25)) * scale;
+  const snapRad = (Math.max(0, Math.min(90, num(params.angleSnap, 0))) * Math.PI) / 180;
+  // A checkbox is a real boolean from the UI, but a VALUE WIRE only ever carries numbers / strings — so
+  // `Boolean(v)` would read the string "false" as true. Coerce the wire forms explicitly.
+  const ortho = ((v: unknown): boolean => {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      return s !== "" && s !== "0" && s !== "false" && s !== "no" && s !== "off";
+    }
+    return false;
+  })(params.ortho);
+  const trim = Math.max(0, num(params.trimEnds, 0.5)) * scale;
+  const degree = Math.max(1, Math.min(6, Math.round(num(params.degree, 1))));
+  const branches = extractBranches(polylines, Math.max(snapTol, 1e-6));
+  const out: Point[][] = [];
+  for (const br of branches) {
+    if (br.length < 2) continue;
+    out.push(...fitBranchToSegments(br, tol, snapRad, ortho, degree, Math.max(snapTol, tol)));
+  }
+  // Clean up ACROSS all branches, not per branch: a stub hangs off a line fitted from a DIFFERENT stroke,
+  // so neither the crossings nor the junction degrees exist until every branch has been fitted.
+  // ORDER MATTERS:
+  //  1. weld — branches are fitted independently and each pulls the junction it shares onto its own line,
+  //     so corners arrive a pixel or two apart. Until they're welded nothing is topologically connected:
+  //     every node looks degree-2 and a spur walk sails through the junction into the wall behind it.
+  //  2. prune — remove the short dangling limbs (the stray tails), now that junctions are real.
+  //  3. trim  — mop up the rarer case pruning can't see: two strokes crossing WITHOUT their endpoints
+  //     merging, where the overshoot is a tail on a long segment rather than a stub of its own. Straight
+  //     lines only; on curves "the part beyond the crossing" isn't well defined.
+  const welded = weldEndpoints(out, Math.max(snapTol, tol), ortho && degree === 1);
+  if (trim <= 0) return welded;
+  const pruned = pruneShortSpurs(welded, trim);
+  return degree === 1 ? trimOvershoots(pruned, trim) : pruned;
 }
 
 /** Spring Layout → a deterministic Fruchterman–Reingold layout that PRESERVES the full topology. Every
@@ -3098,6 +4119,25 @@ export function skeletonPathBands(lines: Point[][], widthPx: number): Point[][] 
   return loops.slice().sort((l1, l2) => Math.abs(polygonArea(l2)) - Math.abs(polygonArea(l1)));
 }
 
+/** Clip constant-width path BANDS to their bounding Space(s) with a CONCAVE-SAFE boolean intersection
+ *  (polygon-clipping) — unlike Sutherland–Hodgman (convex clip only), this trims a band correctly against
+ *  an L / U / concave boundary. Each band is intersected with the UNION of the bounds; a band lying wholly
+ *  outside every bound drops. Degenerate input (self-intersecting ring, empty clip) → the raw bands, so a
+ *  clip failure never silently loses the path. Returns outer rings (path bands don't carry holes). */
+export function clipBandsToBoundaries(bands: Point[][], bounds: Point[][]): Point[][] {
+  const rings = bands.filter((b) => b.length >= 3);
+  const bnds = bounds.filter((b) => b.length >= 3);
+  if (!rings.length || !bnds.length) return rings;
+  try {
+    const subject: PcMultiPolygon = rings.map((b) => [ptsToPcRing(b)]);
+    const clip: PcMultiPolygon = bnds.map((b) => [ptsToPcRing(b)]);
+    const pieces = pcResultToPieces(pc.intersection(subject, clip));
+    return pieces.length ? pieces.map((p) => p.points) : rings;
+  } catch {
+    return rings;
+  }
+}
+
 /** Skeleton → the medial axis / straight skeleton. Default output: each segment as a 2-point polyline
  *  (p1, p2) so the Flow canvas preview draws it as a line. Mirrors the Skeleton block's three pipelines
  *  via the shared `computePolygonSkeleton` — `samples` (sampled-voronoi / sweepline) and `pruneEnds`
@@ -3136,8 +4176,8 @@ export function evalSkeletonRegions(inputPts: Point[], params: Record<string, un
   // polygons here (Make path only applies to the "branches" emit).
   const lines: [Point, Point][] = evalSkeleton(inputPts, { ...params, makePath: false }, ppm).map((s) => [s[0], s[1]]);
   // Join-to-boundary completions re-close the faces when the skeleton tips were pruned back.
-  if (params.type === "straight-skeleton" && Boolean(params.pruneEnds) && Boolean(params.joinToBoundary)) {
-    lines.push(...computeSkeletonBoundaryJoins(inputPts, "straight-skeleton").map((e) => [e.p1, e.p2]));
+  if (Boolean(params.joinToBoundary) && (params.type === "thinning" || (params.type === "straight-skeleton" && Boolean(params.pruneEnds)))) {
+    lines.push(...computeSkeletonBoundaryJoins(inputPts, params.type === "thinning" ? "thinning" : "straight-skeleton").map((e) => [e.p1, e.p2]));
   }
   // The polygon boundary closes the outermost faces.
   for (let i = 0; i < inputPts.length; i++) lines.push([inputPts[i], inputPts[(i + 1) % inputPts.length]]);

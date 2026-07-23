@@ -69,6 +69,10 @@ export interface BuildArchInput {
   /** Filling Mode = Fill → also emit hatch regions for the wall polygons (rendered as a clipped
    *  diagonal pattern in the DXF). Off → walls are outline-only. */
   fill?: boolean;
+  /** Additional wall-carve footprints (plan px) beyond the legacy column nodes — e.g. parametric
+   *  `cutsWall` objects (column.v1). Subtracted from the wall band exactly like column footprints,
+   *  so the DXF matches the canvas carve. */
+  extraCarvePolys?: V[][];
 }
 
 type V = { x: number; y: number };
@@ -206,8 +210,9 @@ export function buildArchitecturalDrawing(input: BuildArchInput): ArchitecturalD
   //    gaps at openings (door/window segments are excluded). Emitted as a list of polylines. ──
   const wallsForMiter = wallSegs.map((w) => ({ ...w, thickness: w.thickness > 2 ? w.thickness : repThickPx }));
   const miterMap = computeMiteredWallPolygons(wallsForMiter);
-  // Column footprints clip the wall band — no wall material inside a column (Architectural view parity).
-  const colPolys = columnFootprintPolygons(nodes, nodeMeta, ppm);
+  // Carve footprints clip the wall band — no wall material inside a column (Architectural view parity).
+  // Legacy column nodes + any extra carves the host passes (parametric `cutsWall` objects).
+  const colPolys = [...columnFootprintPolygons(nodes, nodeMeta, ppm), ...(input.extraCarvePolys ?? []).filter((p) => p.length >= 3)];
   if (colPolys.length > 0) {
     const wallBandPolys: V[][] = [];
     for (const w of wallsForMiter) {

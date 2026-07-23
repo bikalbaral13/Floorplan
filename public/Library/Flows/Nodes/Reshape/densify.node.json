@@ -7,51 +7,145 @@
     "category": "Reshape",
     "color": "#16a34a"
   },
-  "description": "Resample a space: Densify (add vertices → feeds Voronoi/Skeleton) or Simplify (remove collinear / Douglas-Peucker / target count) to low-poly.",
-  "instructions": "Resamples a Space's boundary — either ADD vertices (feeds Voronoi / Skeleton / Smoothing) or REMOVE them (simplify to low-poly). Wire a Space in; emits one output per input Space.\n\nMODES (`mode`)\n• length — densify so no edge exceeds `maxLength` (m).\n• count — densify to `count` points per edge.\n• collinear — drop vertices whose turn is under `collinearTol`° (the inverse of densify).\n• rdp — Douglas-Peucker: shape-preserving simplify by `rdpTol` (m).\n• visvalingam — simplify down to `targetVertices` vertices.\n• stride — crude: keep every `stride`-th vertex.\n\nOnly the active mode's parameter is shown. TIP: densify BEFORE Voronoi/Skeleton for smoother medial axes; simplify AFTER tracing a raster to strip noise vertices. `outputMode=single` bundles every resampled Space onto one handle.",
+  "description": "A pure CALCULATION node — add vertices along the boundary (shape unchanged): coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a polygon as a coordinate LIST and returns the result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: polygon takes the outline as JSON [[x,y],...] metre pairs, local to the anchor. Wire Space Geometry val-points into valin-polygon. A nested [[[x,y],...],...] list (from Split / Voronoi / BSP …) is accepted too — the LARGEST piece is used, since this node works on one polygon.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true,
-    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(inputCount)))",
+    "input": false,
+    "output": false,
     "valueInputs": [
-      { "key": "maxLength", "label": "Max segment length" },
-      { "key": "count", "label": "Points / edge" },
-      { "key": "rdpTol", "label": "Tolerance" },
-      { "key": "targetVertices", "label": "Target vertices" },
-      { "key": "stride", "label": "Keep every Nth" }
+      {
+        "key": "polygon",
+        "label": "Polygon"
+      },
+      {
+        "key": "maxLength",
+        "label": "Max segment length"
+      },
+      {
+        "key": "count",
+        "label": "Points / edge"
+      },
+      {
+        "key": "rdpTol",
+        "label": "Tolerance"
+      },
+      {
+        "key": "targetVertices",
+        "label": "Target vertices"
+      },
+      {
+        "key": "stride",
+        "label": "Keep every Nth"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
     ]
   },
   "parameters": [
+    {
+      "key": "polygon",
+      "label": "Polygon (JSON)",
+      "kind": "text",
+      "default": ""
+    },
     {
       "key": "mode",
       "label": "Mode",
       "kind": "select",
       "default": "length",
       "options": [
-        { "value": "length", "label": "Densify · by max length" },
-        { "value": "count", "label": "Densify · points / edge" },
-        { "value": "collinear", "label": "Simplify · remove collinear" },
-        { "value": "rdp", "label": "Simplify · Douglas-Peucker" },
-        { "value": "visvalingam", "label": "Simplify · target vertices" },
-        { "value": "stride", "label": "Reduce · keep every Nth" }
+        {
+          "value": "length",
+          "label": "Densify · by max length"
+        },
+        {
+          "value": "count",
+          "label": "Densify · points / edge"
+        },
+        {
+          "value": "collinear",
+          "label": "Simplify · remove collinear"
+        },
+        {
+          "value": "rdp",
+          "label": "Simplify · Douglas-Peucker"
+        },
+        {
+          "value": "visvalingam",
+          "label": "Simplify · target vertices"
+        },
+        {
+          "value": "stride",
+          "label": "Reduce · keep every Nth"
+        }
       ]
     },
-    { "key": "maxLength", "label": "Max segment length", "kind": "range", "default": 5, "min": 0.2, "max": 50, "step": 0.2, "unit": "m", "showWhen": "mode == 'length'" },
-    { "key": "count", "label": "Points / edge", "kind": "range", "default": 2, "min": 1, "max": 20, "step": 1, "showWhen": "mode == 'count'" },
-    { "key": "collinearTol", "label": "Angle tolerance", "kind": "range", "default": 1, "min": 0, "max": 30, "step": 0.5, "unit": "°", "showWhen": "mode == 'collinear'" },
-    { "key": "rdpTol", "label": "Tolerance", "kind": "range", "default": 1, "min": 0.05, "max": 20, "step": 0.05, "unit": "m", "showWhen": "mode == 'rdp'" },
-    { "key": "targetVertices", "label": "Target vertices", "kind": "range", "default": 8, "min": 3, "max": 60, "step": 1, "showWhen": "mode == 'visvalingam'" },
-    { "key": "stride", "label": "Keep every Nth", "kind": "range", "default": 2, "min": 2, "max": 10, "step": 1, "showWhen": "mode == 'stride'" },
     {
-      "key": "outputMode",
-      "label": "Outputs",
-      "kind": "select",
-      "default": "perCell",
-      "options": [
-        { "value": "perCell", "label": "Per space (one each)" },
-        { "value": "single", "label": "Single (all spaces)" }
-      ],
-      "showWhen": "inputCount > 1"
+      "key": "maxLength",
+      "label": "Max segment length",
+      "kind": "range",
+      "default": 5,
+      "min": 0.2,
+      "max": 50,
+      "step": 0.2,
+      "unit": "m",
+      "showWhen": "mode == 'length'"
+    },
+    {
+      "key": "count",
+      "label": "Points / edge",
+      "kind": "range",
+      "default": 2,
+      "min": 1,
+      "max": 20,
+      "step": 1,
+      "showWhen": "mode == 'count'"
+    },
+    {
+      "key": "collinearTol",
+      "label": "Angle tolerance",
+      "kind": "range",
+      "default": 1,
+      "min": 0,
+      "max": 30,
+      "step": 0.5,
+      "unit": "°",
+      "showWhen": "mode == 'collinear'"
+    },
+    {
+      "key": "rdpTol",
+      "label": "Tolerance",
+      "kind": "range",
+      "default": 1,
+      "min": 0.05,
+      "max": 20,
+      "step": 0.05,
+      "unit": "m",
+      "showWhen": "mode == 'rdp'"
+    },
+    {
+      "key": "targetVertices",
+      "label": "Target vertices",
+      "kind": "range",
+      "default": 8,
+      "min": 3,
+      "max": 60,
+      "step": 1,
+      "showWhen": "mode == 'visvalingam'"
+    },
+    {
+      "key": "stride",
+      "label": "Keep every Nth",
+      "kind": "range",
+      "default": 2,
+      "min": 2,
+      "max": 10,
+      "step": 1,
+      "showWhen": "mode == 'stride'"
     }
   ]
 }

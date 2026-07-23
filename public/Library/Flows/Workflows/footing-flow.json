@@ -1,0 +1,708 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "pobj",
+      "position": {
+        "x": 0,
+        "y": 300
+      },
+      "data": {
+        "tool": "pobj-source",
+        "params": {
+          "definition": "{\"kind\": \"parametric-object\", \"version\": 3, \"meta\": {\"id\": \"footing_test\", \"name\": \"Footing Test\", \"category\": \"Structural\", \"units\": \"m\"}, \"description\": \"PILOT \\u2014 parameters ONLY (no geometry block), mirroring footing.ts's toFootingSpec. The footing is built from GENERAL flow nodes (a multi-output Expression block + Cuboids for the 3D layer stack + Rectangles for the plan footprints), not the footing render engine \\u2014 see footing-flow.json, which reproduces buildFootingLayers for the SPREAD type (column + RCC pad + PCC + soling), in 2D plan and 3D. Declared-for-parity but not consumed by the flow (they need primitives that don't exist yet \\u2014 a tapered-prism 'frustum' and a per-instance-scaled loop): the SLOPED type's frustum and the STEPPED type's widening steps.\", \"parameters\": [{\"key\": \"type\", \"label\": \"Footing type\", \"kind\": \"select\", \"default\": \"spread\", \"options\": [{\"value\": \"spread\", \"label\": \"Spread (flat pad)\"}, {\"value\": \"sloped\", \"label\": \"Sloped (frustum)\"}, {\"value\": \"stepped\", \"label\": \"Stepped\"}]}, {\"key\": \"columnWidth\", \"label\": \"Column width\", \"kind\": \"number\", \"default\": 0.3, \"min\": 0.1, \"max\": 1.5, \"step\": 0.01, \"unit\": \"m\"}, {\"key\": \"columnDepth\", \"label\": \"Column depth\", \"kind\": \"number\", \"default\": 0.3, \"min\": 0.1, \"max\": 1.5, \"step\": 0.01, \"unit\": \"m\"}, {\"key\": \"columnHeight\", \"label\": \"Column height\", \"kind\": \"number\", \"default\": 1.0, \"min\": 0.2, \"max\": 6, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"baseWidth\", \"label\": \"Base width\", \"kind\": \"number\", \"default\": 1.5, \"min\": 0.3, \"max\": 5, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"baseDepth\", \"label\": \"Base depth\", \"kind\": \"number\", \"default\": 1.5, \"min\": 0.3, \"max\": 5, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"rccThickness\", \"label\": \"RCC thickness\", \"kind\": \"number\", \"default\": 0.2, \"min\": 0.05, \"max\": 1, \"step\": 0.01, \"unit\": \"m\"}, {\"key\": \"pccThickness\", \"label\": \"PCC thickness\", \"kind\": \"number\", \"default\": 0.1, \"min\": 0, \"max\": 0.5, \"step\": 0.01, \"unit\": \"m\"}, {\"key\": \"solingThickness\", \"label\": \"Soling thickness\", \"kind\": \"number\", \"default\": 0.1, \"min\": 0, \"max\": 0.5, \"step\": 0.01, \"unit\": \"m\"}, {\"key\": \"frustumHeight\", \"label\": \"Frustum height\", \"kind\": \"number\", \"default\": 0.2, \"min\": 0.05, \"max\": 1, \"step\": 0.01, \"unit\": \"m\"}, {\"key\": \"frustumTopWidth\", \"label\": \"Frustum top width\", \"kind\": \"number\", \"default\": 0.6, \"min\": 0.1, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"frustumTopDepth\", \"label\": \"Frustum top depth\", \"kind\": \"number\", \"default\": 0.6, \"min\": 0.1, \"max\": 3, \"step\": 0.05, \"unit\": \"m\"}, {\"key\": \"steps\", \"label\": \"Steps\", \"kind\": \"number\", \"default\": 3, \"min\": 1, \"max\": 8, \"step\": 1}, {\"key\": \"skew\", \"label\": \"Eccentric skew\", \"kind\": \"select\", \"default\": \"center\", \"options\": [{\"value\": \"center\", \"label\": \"Centred\"}, {\"value\": \"left\", \"label\": \"Left face flush\"}, {\"value\": \"right\", \"label\": \"Right face flush\"}]}, {\"key\": \"rotation\", \"label\": \"Rotation\", \"kind\": \"number\", \"default\": 0, \"min\": 0, \"max\": 360, \"step\": 1, \"unit\": \"\\u00b0\"}, {\"key\": \"color\", \"label\": \"Colour\", \"kind\": \"color\", \"default\": \"#7c3aed\"}]}",
+          "objectId": "footing_test",
+          "nodeLabel": "Footing Test",
+          "props": [
+            {
+              "id": "type",
+              "name": "Footing type",
+              "type": "select",
+              "value": "spread",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": [
+                "spread",
+                "sloped",
+                "stepped"
+              ]
+            },
+            {
+              "id": "columnWidth",
+              "name": "Column width",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.1,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "columnDepth",
+              "name": "Column depth",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.1,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "columnHeight",
+              "name": "Column height",
+              "type": "range",
+              "value": 1.0,
+              "min": 0.2,
+              "max": 6,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "baseWidth",
+              "name": "Base width",
+              "type": "range",
+              "value": 1.5,
+              "min": 0.3,
+              "max": 5,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "baseDepth",
+              "name": "Base depth",
+              "type": "range",
+              "value": 1.5,
+              "min": 0.3,
+              "max": 5,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "rccThickness",
+              "name": "RCC thickness",
+              "type": "range",
+              "value": 0.2,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "pccThickness",
+              "name": "PCC thickness",
+              "type": "range",
+              "value": 0.1,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "solingThickness",
+              "name": "Soling thickness",
+              "type": "range",
+              "value": 0.1,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "frustumHeight",
+              "name": "Frustum height",
+              "type": "range",
+              "value": 0.2,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "frustumTopWidth",
+              "name": "Frustum top width",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "frustumTopDepth",
+              "name": "Frustum top depth",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "steps",
+              "name": "Steps",
+              "type": "range",
+              "value": 3,
+              "min": 1,
+              "max": 8,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "skew",
+              "name": "Eccentric skew",
+              "type": "select",
+              "value": "center",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": [
+                "center",
+                "left",
+                "right"
+              ]
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "color",
+              "value": "#7c3aed",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "calc",
+      "position": {
+        "x": 420,
+        "y": 60
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Footing maths",
+          "expr": "cxBase = skew=='left' ? (columnWidth-baseWidth)/2 : (skew=='right' ? (baseWidth-columnWidth)/2 : 0)\ncolPosY = -columnHeight\nv1 = columnHeight + rccThickness\nrccPosY = -v1\nv2 = v1 + pccThickness\npccPosY = -v2\nv3 = v2 + solingThickness\nsolPosY = -v3\ndepth = columnHeight + rccThickness + pccThickness + solingThickness\nbaseArea = baseWidth * baseDepth"
+        }
+      }
+    },
+    {
+      "id": "rectCol",
+      "position": {
+        "x": 1180,
+        "y": 0
+      },
+      "data": {
+        "tool": "rectangle",
+        "params": {
+          "length": 1,
+          "breadth": 1,
+          "centerX": 0,
+          "centerY": 0,
+          "rotation": 0,
+          "color": "#94a3b8"
+        }
+      }
+    },
+    {
+      "id": "rectBase",
+      "position": {
+        "x": 1180,
+        "y": 130
+      },
+      "data": {
+        "tool": "rectangle",
+        "params": {
+          "length": 1,
+          "breadth": 1,
+          "centerX": 0,
+          "centerY": 0,
+          "rotation": 0,
+          "color": "#94a3b8"
+        }
+      }
+    },
+    {
+      "id": "xform",
+      "position": {
+        "x": 2180,
+        "y": 40
+      },
+      "data": {
+        "tool": "transform",
+        "params": {
+          "translateX": 0,
+          "translateY": 0,
+          "rotate": 0,
+          "scale": 1,
+          "mirror": "none",
+          "anchor": "group-centroid"
+        }
+      }
+    },
+    {
+      "id": "nodep",
+      "position": {
+        "x": 2520,
+        "y": 40
+      },
+      "data": {
+        "tool": "node-source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "Node001",
+          "outputMode": "single"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 2180,
+        "y": 240
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "depth",
+              "label": "Founding depth (m)"
+            },
+            {
+              "id": "area",
+              "label": "Base area (m2)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cubCol",
+      "position": {
+        "x": 1860,
+        "y": 260
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "length": 1,
+          "breadth": 1,
+          "height": 1,
+          "posX": 0,
+          "posY": 0,
+          "posZ": 0,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#7c3aed"
+        }
+      }
+    },
+    {
+      "id": "cubRcc",
+      "position": {
+        "x": 1860,
+        "y": 390
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "length": 1,
+          "breadth": 1,
+          "height": 1,
+          "posX": 0,
+          "posY": 0,
+          "posZ": 0,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#94a3b8"
+        }
+      }
+    },
+    {
+      "id": "cubPcc",
+      "position": {
+        "x": 1860,
+        "y": -260
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "length": 1,
+          "breadth": 1,
+          "height": 1,
+          "posX": 0,
+          "posY": 0,
+          "posZ": 0,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#cbd5e1"
+        }
+      }
+    },
+    {
+      "id": "cubSol",
+      "position": {
+        "x": 1860,
+        "y": -130
+      },
+      "data": {
+        "tool": "cuboid",
+        "params": {
+          "length": 1,
+          "breadth": 1,
+          "height": 1,
+          "posX": 0,
+          "posY": 0,
+          "posZ": 0,
+          "rotX": 0,
+          "rotY": 0,
+          "rotZ": 0,
+          "scale": 1,
+          "nodeFollow": true,
+          "color": "#a8a29e"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0_pobj_calc_valin-skew",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-skew",
+      "targetHandle": "valin-skew"
+    },
+    {
+      "id": "e1_pobj_calc_valin-columnWidth",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-columnWidth",
+      "targetHandle": "valin-columnWidth"
+    },
+    {
+      "id": "e2_pobj_calc_valin-baseWidth",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-baseWidth",
+      "targetHandle": "valin-baseWidth"
+    },
+    {
+      "id": "e3_pobj_calc_valin-columnHeight",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-columnHeight",
+      "targetHandle": "valin-columnHeight"
+    },
+    {
+      "id": "e4_pobj_calc_valin-rccThickness",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-rccThickness",
+      "targetHandle": "valin-rccThickness"
+    },
+    {
+      "id": "e5_pobj_calc_valin-pccThickness",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-pccThickness",
+      "targetHandle": "valin-pccThickness"
+    },
+    {
+      "id": "e6_pobj_calc_valin-solingThickness",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-solingThickness",
+      "targetHandle": "valin-solingThickness"
+    },
+    {
+      "id": "e7_pobj_calc_valin-baseDepth",
+      "source": "pobj",
+      "target": "calc",
+      "sourceHandle": "val-baseDepth",
+      "targetHandle": "valin-baseDepth"
+    },
+    {
+      "id": "e8_pobj_rectCol_valin-length",
+      "source": "pobj",
+      "target": "rectCol",
+      "sourceHandle": "val-columnWidth",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e9_pobj_rectCol_valin-breadth",
+      "source": "pobj",
+      "target": "rectCol",
+      "sourceHandle": "val-columnDepth",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e10_pobj_rectCol_valin-color",
+      "source": "pobj",
+      "target": "rectCol",
+      "sourceHandle": "val-color",
+      "targetHandle": "valin-color"
+    },
+    {
+      "id": "e11_pobj_rectBase_valin-length",
+      "source": "pobj",
+      "target": "rectBase",
+      "sourceHandle": "val-baseWidth",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e12_pobj_rectBase_valin-breadth",
+      "source": "pobj",
+      "target": "rectBase",
+      "sourceHandle": "val-baseDepth",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e13_calc_rectBase_valin-centerX",
+      "source": "calc",
+      "target": "rectBase",
+      "sourceHandle": "val-cxBase",
+      "targetHandle": "valin-centerX"
+    },
+    {
+      "id": "e14_pobj_rectBase_valin-color",
+      "source": "pobj",
+      "target": "rectBase",
+      "sourceHandle": "val-color",
+      "targetHandle": "valin-color"
+    },
+    {
+      "id": "e15_pobj_xform_valin-rotate",
+      "source": "pobj",
+      "target": "xform",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotate"
+    },
+    {
+      "id": "e16_rectCol_xform_geo",
+      "source": "rectCol",
+      "target": "xform",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e17_rectBase_xform_geo",
+      "source": "rectBase",
+      "target": "xform",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e18_xform_nodep_gin-stamp",
+      "source": "xform",
+      "target": "nodep",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e19_pobj_nodep_gin-stamp",
+      "source": "pobj",
+      "target": "nodep",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e20_calc_out_valin-depth",
+      "source": "calc",
+      "target": "out",
+      "sourceHandle": "val-depth",
+      "targetHandle": "valin-depth"
+    },
+    {
+      "id": "e21_calc_out_valin-area",
+      "source": "calc",
+      "target": "out",
+      "sourceHandle": "val-baseArea",
+      "targetHandle": "valin-area"
+    },
+    {
+      "id": "e22_pobj_cubCol_valin-length",
+      "source": "pobj",
+      "target": "cubCol",
+      "sourceHandle": "val-columnWidth",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e23_pobj_cubCol_valin-breadth",
+      "source": "pobj",
+      "target": "cubCol",
+      "sourceHandle": "val-columnDepth",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e24_pobj_cubCol_valin-height",
+      "source": "pobj",
+      "target": "cubCol",
+      "sourceHandle": "val-columnHeight",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e25_calc_cubCol_valin-posY",
+      "source": "calc",
+      "target": "cubCol",
+      "sourceHandle": "val-colPosY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e26_cubCol_nodep_gin-stamp",
+      "source": "cubCol",
+      "target": "nodep",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e27_pobj_cubRcc_valin-length",
+      "source": "pobj",
+      "target": "cubRcc",
+      "sourceHandle": "val-baseWidth",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e28_pobj_cubRcc_valin-breadth",
+      "source": "pobj",
+      "target": "cubRcc",
+      "sourceHandle": "val-baseDepth",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e29_pobj_cubRcc_valin-height",
+      "source": "pobj",
+      "target": "cubRcc",
+      "sourceHandle": "val-rccThickness",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e30_calc_cubRcc_valin-posY",
+      "source": "calc",
+      "target": "cubRcc",
+      "sourceHandle": "val-rccPosY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e31_calc_cubRcc_valin-posX",
+      "source": "calc",
+      "target": "cubRcc",
+      "sourceHandle": "val-cxBase",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e32_cubRcc_nodep_gin-stamp",
+      "source": "cubRcc",
+      "target": "nodep",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e33_pobj_cubPcc_valin-length",
+      "source": "pobj",
+      "target": "cubPcc",
+      "sourceHandle": "val-baseWidth",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e34_pobj_cubPcc_valin-breadth",
+      "source": "pobj",
+      "target": "cubPcc",
+      "sourceHandle": "val-baseDepth",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e35_pobj_cubPcc_valin-height",
+      "source": "pobj",
+      "target": "cubPcc",
+      "sourceHandle": "val-pccThickness",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e36_calc_cubPcc_valin-posY",
+      "source": "calc",
+      "target": "cubPcc",
+      "sourceHandle": "val-pccPosY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e37_calc_cubPcc_valin-posX",
+      "source": "calc",
+      "target": "cubPcc",
+      "sourceHandle": "val-cxBase",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e38_cubPcc_nodep_gin-stamp",
+      "source": "cubPcc",
+      "target": "nodep",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    },
+    {
+      "id": "e39_pobj_cubSol_valin-length",
+      "source": "pobj",
+      "target": "cubSol",
+      "sourceHandle": "val-baseWidth",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e40_pobj_cubSol_valin-breadth",
+      "source": "pobj",
+      "target": "cubSol",
+      "sourceHandle": "val-baseDepth",
+      "targetHandle": "valin-breadth"
+    },
+    {
+      "id": "e41_pobj_cubSol_valin-height",
+      "source": "pobj",
+      "target": "cubSol",
+      "sourceHandle": "val-solingThickness",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e42_calc_cubSol_valin-posY",
+      "source": "calc",
+      "target": "cubSol",
+      "sourceHandle": "val-solPosY",
+      "targetHandle": "valin-posY"
+    },
+    {
+      "id": "e43_calc_cubSol_valin-posX",
+      "source": "calc",
+      "target": "cubSol",
+      "sourceHandle": "val-cxBase",
+      "targetHandle": "valin-posX"
+    },
+    {
+      "id": "e44_cubSol_nodep_gin-stamp",
+      "source": "cubSol",
+      "target": "nodep",
+      "sourceHandle": null,
+      "targetHandle": "gin-stamp"
+    }
+  ]
+}

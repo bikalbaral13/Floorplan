@@ -1,0 +1,62 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "boolean-2d",
+  "meta": {
+    "label": "Boolean 2D",
+    "category": "Space",
+    "color": "#7e22ce"
+  },
+  "description": "A pure CALCULATION node — boolean of two 2D shapes: Union · Subtract · Intersect · XOR. Coordinates in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes two shapes A and B as coordinate lists and returns the boolean result as a coordinate list. It has no geometry input or output and draws nothing on the canvas — wire val-polygons into a Polygon node when you want it drawn.\n\nINPUT: `a` (Shape A) and `b` (Shape B) each take an outline as JSON [[x,y],...] metre pairs, OR a nested list [[[x,y],...],...]; a nested list is read with the EVEN-ODD rule, so a Mitered-Join poché (outer + room holes) is treated as a holed shape, not a solid fill. Wire val-polygons / val-points into valin-a and valin-b.\n\nOP: Union (A ∪ B) merges; Subtract (A − B) cuts B out of A; Intersect (A ∩ B) keeps the overlap; XOR keeps the non-overlap. Order matters for Subtract — A is the main shape, B the tool.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list (outer + hole rings), which a Polygon node draws even-odd.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "a",
+        "label": "Shape A"
+      },
+      {
+        "key": "b",
+        "label": "Shape B"
+      },
+      {
+        "key": "op",
+        "label": "Operation"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "a",
+      "label": "Shape A (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "b",
+      "label": "Shape B (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "op",
+      "label": "Operation",
+      "kind": "select",
+      "default": "union",
+      "options": [
+        { "value": "union", "label": "Union (A ∪ B)" },
+        { "value": "subtract", "label": "Subtract (A − B)" },
+        { "value": "intersect", "label": "Intersect (A ∩ B)" },
+        { "value": "xor", "label": "XOR (A ⊕ B)" }
+      ]
+    }
+  ]
+}

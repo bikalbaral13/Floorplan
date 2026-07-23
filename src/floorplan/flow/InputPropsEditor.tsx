@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Plus, X } from "lucide-react";
-import { inputProps, type InputProp, type InputPropType } from "./flowTypes";
+import { DEFAULT_PROP_COLOR, inputProps, propVisible, type InputProp, type InputPropType } from "./flowTypes";
 
 let propSeq = 1;
 export const nextPropId = () => `p_${propSeq++}_${Math.random().toString(36).slice(2, 6)}`;
@@ -9,11 +10,40 @@ const TYPE_OPTIONS: { value: InputPropType; label: string }[] = [
   { value: "select", label: "Options" },
   { value: "checkbox", label: "Checkbox" },
   { value: "text", label: "Textbox" },
+  { value: "color", label: "Colour" },
 ];
 
 /** Default value for a freshly-chosen control type. */
 const defaultValue = (type: InputPropType, options: string[]): string | number | boolean =>
-  type === "checkbox" ? false : type === "range" ? 0 : type === "select" ? (options[0] ?? "") : "";
+  type === "checkbox" ? false
+  : type === "range" ? 0
+  : type === "select" ? (options[0] ?? "")
+  : type === "color" ? DEFAULT_PROP_COLOR
+  : "";
+
+/** The Options list for a `select` prop. While the field is focused the RAW text is what's shown, so
+ *  in-progress input survives — parsing to `options` normalises away the very characters being typed
+ *  (a trailing comma, the space after it), and echoing that back into a controlled `value` would delete
+ *  them on each keystroke. `options` still re-parses live so downstream stays in sync; blur drops the
+ *  draft and the field snaps back to the canonical `join(", ")`. */
+const OptionsInput = ({ p, className, onChange }: { p: InputProp; className: string; onChange: (patch: Partial<InputProp>) => void }) => {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      type="text"
+      className={className}
+      placeholder="option1, option2, …"
+      value={draft ?? p.options.join(", ")}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setDraft(raw);
+        const options = raw.split(",").map((s) => s.trim()).filter(Boolean);
+        onChange({ options, value: options.includes(String(p.value)) ? p.value : (options[0] ?? "") });
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  );
+};
 
 /** Editor for the Input Properties node. Two modes:
  *   - Full (default, used on the flow canvas): edit each parameter's name, type, config (min/max/step
@@ -27,12 +57,16 @@ export const InputPropsEditor = ({
   onRowRef,
   nodrag,
   valuesOnly,
+  hideGated,
 }: {
   params: Record<string, unknown>;
   onParamChange: (key: string, value: unknown) => void;
   onRowRef?: (propId: string, el: HTMLDivElement | null) => void;
   nodrag?: boolean;
   valuesOnly?: boolean;
+  /** Consumer view (Properties tab): actually HIDE parameters whose `showIf` gate isn't met, instead of just
+   *  dimming them. Off on the canvas node so every row (and its `val-<id>` handle) stays put for authoring. */
+  hideGated?: boolean;
 }) => {
   const props = inputProps(params);
   const nd = nodrag ? " nodrag" : "";
@@ -83,16 +117,35 @@ export const InputPropsEditor = ({
         </label>
       );
     }
+    if (p.type === "color") {
+      const hex = typeof p.value === "string" && p.value ? p.value : DEFAULT_PROP_COLOR;
+      return (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="color"
+            className={`h-6 w-8 shrink-0 cursor-pointer rounded border border-slate-200 bg-white${nd}`}
+            value={hex}
+            onChange={(e) => update(p.id, { value: e.target.value })}
+          />
+          <span className="font-mono text-[10px] text-slate-700">{hex}</span>
+        </div>
+      );
+    }
     return <input type="text" className={`${inputCls} w-full`} placeholder="value" value={String(p.value ?? "")} onChange={(e) => update(p.id, { value: e.target.value })} />;
   };
 
   // ── Interaction-only (Properties tab): label + value control, nothing structural. ──
   if (valuesOnly) {
     if (props.length === 0) return <span className="text-[10px] italic text-slate-400">No parameters defined</span>;
+    // In the consumer view, drop parameters whose `showIf` gate isn't met (the canvas node dims them instead).
+    const shown = hideGated ? props.filter((p) => propVisible(p, props)) : props;
     return (
       <div className="space-y-1.5">
-        {props.map((p, i) => (
-          <div key={p.id} className="space-y-0.5">
+        {shown.map((p, i) => (
+          // Anchor each row so the node can align this parameter's `val-<id>` output handle to it
+          // (pobj-source exposes every parameter as an output endpoint; without the ref they'd all
+          // stack at the node's default handle position). onRowRef is a no-op where unused (Properties tab).
+          <div key={p.id} ref={(el) => onRowRef?.(p.id, el)} className="space-y-0.5">
             <span className="text-[10px] text-slate-500">{p.name.trim() || `Parameter ${i + 1}`}</span>
             {valueControl(p)}
           </div>
@@ -105,7 +158,7 @@ export const InputPropsEditor = ({
   return (
     <div className="space-y-1.5">
       {props.map((p, i) => (
-        <div key={p.id} ref={(el) => onRowRef?.(p.id, el)} className="space-y-1 rounded-md border border-slate-200 bg-slate-50/60 p-1.5">
+        <div key={p.id} ref={(el) => onRowRef?.(p.id, el)} className={`space-y-1 rounded-md border border-slate-200 bg-slate-50/60 p-1.5${propVisible(p, props) ? "" : " opacity-60"}`}>
           <div className="flex items-center gap-1">
             <input
               type="text"
@@ -138,20 +191,48 @@ export const InputPropsEditor = ({
           )}
 
           {p.type === "select" && (
-            <input
-              type="text"
-              className={`${inputCls} w-full`}
-              placeholder="option1, option2, …"
-              value={p.options.join(", ")}
-              onChange={(e) => {
-                const options = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
-                const value = options.includes(String(p.value)) ? p.value : (options[0] ?? "");
-                update(p.id, { options, value });
-              }}
-            />
+            <OptionsInput p={p} className={`${inputCls} w-full`} onChange={(patch) => update(p.id, patch)} />
           )}
 
           {valueControl(p)}
+
+          {/* Conditional visibility — show this parameter only when another checkbox / select prop matches.
+              Only offered when there's a gate to point at; clearing it back to "Always" drops the showIf. */}
+          {(() => {
+            const gates = props.filter((x) => x.id !== p.id && (x.type === "checkbox" || x.type === "select"));
+            if (gates.length === 0) return null;
+            const g = p.showIf?.when ? props.find((x) => x.id === p.showIf!.when) : undefined;
+            return (
+              <div className="flex items-center gap-1 border-t border-slate-200/70 pt-1">
+                <span className="shrink-0 text-[9px] uppercase tracking-wide text-slate-400">Show when</span>
+                <select
+                  className={`${inputCls} min-w-0 flex-1`}
+                  value={p.showIf?.when ?? ""}
+                  onChange={(e) => {
+                    const when = e.target.value;
+                    if (!when) { update(p.id, { showIf: undefined }); return; }
+                    const gg = props.find((x) => x.id === when);
+                    update(p.id, { showIf: { when, equals: gg?.type === "checkbox" ? true : (gg?.options[0] ?? "") } });
+                  }}
+                >
+                  <option value="">Always</option>
+                  {gates.map((x) => <option key={x.id} value={x.id}>{x.name.trim() || "Parameter"}</option>)}
+                </select>
+                {g?.type === "checkbox" && (
+                  <select className={`${inputCls} w-24 shrink-0`} value={p.showIf?.equals === true ? "1" : "0"} onChange={(e) => update(p.id, { showIf: { when: g.id, equals: e.target.value === "1" } })}>
+                    <option value="1">is checked</option>
+                    <option value="0">is unchecked</option>
+                  </select>
+                )}
+                {g?.type === "select" && (
+                  <select className={`${inputCls} w-24 shrink-0`} value={String(p.showIf?.equals ?? "")} onChange={(e) => update(p.id, { showIf: { when: g.id, equals: e.target.value } })}>
+                    {g.options.length === 0 && <option value="">—</option>}
+                    {g.options.map((o) => <option key={o} value={o}>{`= ${o}`}</option>)}
+                  </select>
+                )}
+              </div>
+            );
+          })()}
         </div>
       ))}
       <button

@@ -2,43 +2,81 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "voronoi-bloom",
-  "meta": { "label": "Voronoi Bloom", "category": "Graph", "color": "#1d4ed8" },
-  "description": "Grow a circle from each graph node clipped to its Voronoi cell (or a capsule from each edge) — one Space per grown cell. Radius is wireable to animate the tessellation.",
-  "instructions": "Grows geometry from an incoming graph, clipped to Voronoi cells — one output Space per grown cell. `mode` = Voronoi Vertices (a circle of `radius` from each NODE, clipped to that node's Voronoi cell — small r → separate disks, large r → the full Voronoi diagram) or Voronoi Edges (an equal-radius capsule from each SEGMENT; `intersect` lets capsules meet along the segment-Voronoi bisectors → one Space per segment). `sides` sets circle/cap resolution.\n\nThe `gin-boundary` input is the Space the cells grow inside (else the upstream Skeleton's source, or the bounding box). One handle per cell, or a single bundle. Radius is wireable — animate it to watch the tessellation assemble.",
+  "meta": {
+    "label": "Voronoi Bloom",
+    "category": "Graph",
+    "color": "#1d4ed8"
+  },
+  "description": "A pure CALCULATION node — grow Voronoi cells from graph nodes: graph in, coordinates out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a GRAPH as JSON and returns polygons as a coordinate list. It has no geometry input or output and draws nothing on the canvas.\n\nINPUT: graph takes { \"nodes\": [{ \"id\", \"x\", \"y\" }, ...], \"edges\": [{ \"from_node_id\", \"to_node_id\" }, ...] } — coordinates in metres, local to the anchor. Wire Graph Geometry val-graph, or Skeleton val-branches, into valin-graph.\n\nOUTPUT: val-polygons publishes the result as a nested [[[x,y],...],...] list, which a Polygon node accepts directly.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
-    "input": true,
-    "output": true,
-    "outputCount": "outputMode == 'single' ? 1 : max(1, min(80, round(handleCount)))",
-    "geomInputs": [
-      { "key": "boundary", "label": "Clip space" }
-    ],
+    "input": false,
+    "output": false,
     "valueInputs": [
-      { "key": "radius", "label": "Radius" }
+      {
+        "key": "graph",
+        "label": "Graph"
+      },
+      {
+        "key": "radius",
+        "label": "Radius"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "polygons",
+        "label": "Polygons (JSON)"
+      }
     ]
   },
   "parameters": [
+    {
+      "key": "graph",
+      "label": "Graph (JSON)",
+      "kind": "text",
+      "default": ""
+    },
     {
       "key": "mode",
       "label": "Bloom from",
       "kind": "select",
       "default": "vertices",
       "options": [
-        { "value": "vertices", "label": "Voronoi Vertices" },
-        { "value": "edges", "label": "Voronoi Edges" }
+        {
+          "value": "vertices",
+          "label": "Voronoi Vertices"
+        },
+        {
+          "value": "edges",
+          "label": "Voronoi Edges"
+        }
       ]
     },
-    { "key": "intersect", "label": "Intersect to spaces", "kind": "checkbox", "default": true, "showWhen": "mode == 'edges'" },
-    { "key": "radius", "label": "Radius", "kind": "range", "default": 1, "min": 0, "max": 30, "step": 0.05, "unit": "m" },
-    { "key": "sides", "label": "Circle sides", "kind": "range", "default": 24, "min": 3, "max": 64, "step": 1 },
     {
-      "key": "outputMode",
-      "label": "Outputs",
-      "kind": "select",
-      "default": "perCell",
-      "options": [
-        { "value": "perCell", "label": "Per cell (one each)" },
-        { "value": "single", "label": "Single (all)" }
-      ]
+      "key": "intersect",
+      "label": "Intersect to spaces",
+      "kind": "checkbox",
+      "default": true,
+      "showWhen": "mode == 'edges'"
+    },
+    {
+      "key": "radius",
+      "label": "Radius",
+      "kind": "range",
+      "default": 1,
+      "min": 0,
+      "max": 30,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "sides",
+      "label": "Circle sides",
+      "kind": "range",
+      "default": 24,
+      "min": 3,
+      "max": 64,
+      "step": 1
     }
   ]
 }

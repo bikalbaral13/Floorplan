@@ -117,6 +117,10 @@ interface LeftToolbarProps {
   onAddNodeType?: (nodeType: string) => void;
   /** Pick a schema segment TYPE — host pops the type's parameter dialog, then starts the draw. */
   onAddSegmentType?: (segType: string, label: string) => void;
+  /** Freehand "Sketch as" — armed segment type ("" = plain ink), and its two handlers. */
+  freehandSegType?: string;
+  onFreehandPlain?: () => void;
+  onFreehandType?: (segType: string, label: string) => void;
   /** Start drawing a Space tagged with a schema space-type (room / open-space / custom). */
   onAddSpaceType?: (spaceType: string) => void;
   /** Start the plain Add Node (point) tool, clearing any pending schema node-type tag. */
@@ -194,6 +198,9 @@ export const LeftToolbar = ({
   schemaSpaceTools,
   onAddNodeType,
   onAddSegmentType,
+  freehandSegType,
+  onFreehandPlain,
+  onFreehandType,
   onAddSpaceType,
   onPlainNodeClick,
   onOpenAddNodeDialog,
@@ -250,6 +257,9 @@ export const LeftToolbar = ({
       schemaSpaceTools={schemaSpaceTools}
       onAddNodeType={onAddNodeType}
       onAddSegmentType={onAddSegmentType}
+      freehandSegType={freehandSegType}
+      onFreehandPlain={onFreehandPlain}
+      onFreehandType={onFreehandType}
       onAddSpaceType={onAddSpaceType}
       onPlainNodeClick={onPlainNodeClick}
       onOpenAddNodeDialog={onOpenAddNodeDialog}

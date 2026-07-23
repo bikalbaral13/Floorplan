@@ -1,0 +1,37 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-fit-lines",
+  "meta": {
+    "label": "Fit Lines",
+    "category": "Graph",
+    "color": "#0e7490"
+  },
+  "description": "A pure CALCULATION node — straighten a freehand scribble into clean straight sides: a scribbled triangle fits to 3 lines, a rectangle to 4, a stroke to 1. Graph in, graph out; draws nothing.",
+  "instructions": "A value-only node: graph as JSON in, straightened graph as JSON out. Draws nothing on the canvas.\n\nIt REBUILDS branches from the graph topology: endpoints within Junction merge are fused into shared nodes (each junction sits at the CENTROID of the merged points), then every chain of degree-2 nodes between two ANCHORS (a junction with 3+ edges, or a dead end) becomes one branch.\n\nEach branch is then fitted to a CHAIN OF STRAIGHT SEGMENTS: corners are detected (Douglas-Peucker at Fit tolerance), every run between two corners gets a total-least-squares best-fit line using all its samples, and the corners are re-derived as the INTERSECTIONS of those lines so they come out sharp. A branch that closes on itself (a scribbled loop, or ends meeting within tolerance) is fitted as a closed polygon, so a triangle gives 3 sides and a rectangle 4. A circle gives as many sides as Fit tolerance allows.\n\nPARAMS: Junction merge (m) — node-merge tolerance when rebuilding branches; raise it if a crossing splits into two junctions. Fit tolerance (m) — how far a fitted line may sit from the stroke; bigger means fewer, longer sides (raise it if a wobbly side breaks into several). Ortho (checkbox) — force every side exactly HORIZONTAL or VERTICAL (snapped to the world axes, each side going to whichever is nearer). This is the one for a floor-plan scribble drawn slightly skewed: it pulls the whole sketch straight. Sides that end up on the same axis are fused, so a shallow dog-leg becomes one clean run. Square up (deg) — the relative alternative: snap side directions to multiples of this angle, measured from the LONGEST side, so a rectangle drawn at an angle KEEPS its rotation but gets exact 90 deg corners; 0 = off, and leave it off for triangles or it will force them square. Ortho takes precedence over Square up (Square up is hidden while Ortho is on). Trim ends (m) — remove the OVERSHOOT stubs a scribble leaves poking past a crossing (the pen carrying on after the wall it was meeting), which is what leaves stray little tails sticking out of a traced floor plan. Only the part BEYOND the outermost crossing is cut, and only up to this length, so a wall that genuinely finishes in open space is never shortened; a tail longer than 40 percent of its own segment is also left alone, since that is a real limb rather than a slip. A segment that crosses nothing and is shorter than this is dropped as speckle. Raise it until the stray tails disappear; 0 = off. Degree (n) — the order of the polynomial fitted to each side: 1 (default) is a straight line, 2 a parabola, 3 a cubic, and so on up to 6. Corner detection still runs first at any degree, so a rectangle stays four separate sides rather than one curve smeared through its corners — each side is simply allowed to bow. Use 1 for architectural plans; raise it to follow a genuinely curved stroke with few pieces. Above 1 the output is sampled polylines rather than single segments, and Ortho / Square up / Trim ends' overshoot cutting do not apply (they are straight-line ideas); spur pruning still does.\n\nINPUT: wire a graph (Freehand Geometry / Graph Reduce / Simplify val-graph) into valin-graph. OUTPUT: val-graph — chain into Clip inside Space / Network / Set Thickness -> Mitered Join. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "graph", "label": "Graph" },
+      { "key": "snapTol", "label": "Junction merge" },
+      { "key": "tolerance", "label": "Fit tolerance" },
+      { "key": "ortho", "label": "Ortho" },
+      { "key": "angleSnap", "label": "Square up" },
+      { "key": "trimEnds", "label": "Trim ends" },
+      { "key": "degree", "label": "Degree" }
+    ],
+    "valueOutputs": [
+      { "key": "graph", "label": "Graph (JSON)" }
+    ]
+  },
+  "parameters": [
+    { "key": "graph", "label": "Graph (JSON)", "kind": "text", "default": "" },
+    { "key": "snapTol", "label": "Junction merge", "kind": "range", "default": 0.3, "min": 0, "max": 5, "step": 0.05, "unit": "m" },
+    { "key": "tolerance", "label": "Fit tolerance", "kind": "range", "default": 0.25, "min": 0.01, "max": 5, "step": 0.01, "unit": "m" },
+    { "key": "ortho", "label": "Ortho", "kind": "checkbox", "default": false },
+    { "key": "angleSnap", "label": "Square up", "kind": "range", "default": 0, "min": 0, "max": 90, "step": 15, "unit": "°", "showWhen": "!ortho" },
+    { "key": "trimEnds", "label": "Trim ends", "kind": "range", "default": 0.5, "min": 0, "max": 5, "step": 0.05, "unit": "m" },
+    { "key": "degree", "label": "Degree", "kind": "range", "default": 1, "min": 1, "max": 6, "step": 1 }
+  ]
+}

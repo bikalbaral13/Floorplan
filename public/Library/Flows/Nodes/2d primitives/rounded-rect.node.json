@@ -1,0 +1,137 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "rounded-rect",
+  "meta": {
+    "label": "Rounded Rectangle",
+    "category": "2d primitives",
+    "color": "#0891b2"
+  },
+  "description": "2D primitive — a Length × Breadth rectangle with filleted corners (Corner Radius), centred at (X, Y), optionally rotated. Emits a Space polygon.",
+  "instructions": "A ROUNDED RECTANGLE — Length × Breadth with each corner filleted at `cornerRadius` metres (clamped to half the smaller side; radius = half the smaller side ⇒ a stadium / slot). Centred at (centerX, centerY), rotated by `rotation`°. Emits a closed Space polygon (furniture, rugs, pads). All params wireable. Publishes `val-length` / `val-breadth`.",
+  "handles": {
+    "input": false,
+    "output": true,
+    "valueInputs": [
+      {
+        "key": "length",
+        "label": "Length"
+      },
+      {
+        "key": "breadth",
+        "label": "Breadth"
+      },
+      {
+        "key": "cornerRadius",
+        "label": "Corner Radius"
+      },
+      {
+        "key": "centerX",
+        "label": "Center X"
+      },
+      {
+        "key": "centerY",
+        "label": "Center Y"
+      },
+      {
+        "key": "rotation",
+        "label": "Rotation"
+      },
+      {
+        "key": "color",
+        "label": "Colour"
+      },
+      {
+        "key": "show",
+        "label": "Show"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "length",
+        "label": "Length",
+        "unit": "m"
+      },
+      {
+        "key": "breadth",
+        "label": "Breadth",
+        "unit": "m"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "length",
+      "label": "Length",
+      "kind": "range",
+      "default": 3,
+      "min": 0.2,
+      "max": 100,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "breadth",
+      "label": "Breadth",
+      "kind": "range",
+      "default": 2,
+      "min": 0.2,
+      "max": 100,
+      "step": 0.1,
+      "unit": "m"
+    },
+    {
+      "key": "cornerRadius",
+      "label": "Corner Radius",
+      "kind": "range",
+      "default": 0.3,
+      "min": 0,
+      "max": 10,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "centerX",
+      "label": "Center X",
+      "kind": "range",
+      "default": 0,
+      "min": -200,
+      "max": 200,
+      "step": 0.5,
+      "unit": "m"
+    },
+    {
+      "key": "centerY",
+      "label": "Center Y",
+      "kind": "range",
+      "default": 0,
+      "min": -200,
+      "max": 200,
+      "step": 0.5,
+      "unit": "m"
+    },
+    {
+      "key": "rotation",
+      "label": "Rotation",
+      "kind": "range",
+      "default": 0,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "unit": "°"
+    },
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "color",
+      "default": ""
+    },
+    {
+      "key": "show",
+      "label": "Show",
+      "kind": "checkbox",
+      "default": true
+    }
+  ],
+  "materialisesSpace": true
+}

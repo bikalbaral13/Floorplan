@@ -25,6 +25,8 @@ export interface NodeParamDecl {
   step?: number;
   unit?: string;
   placeholder?: string;
+  /** `textarea` only — visible row count (default 3). */
+  rows?: number;
   secret?: boolean;
   output?: boolean;
   role?: string;
@@ -42,6 +44,8 @@ export interface NodeDeclaration {
   instructions?: string;
   /** This node outputs real Space polygon(s) → eligible for Flow "Live" materialisation (see FlowToolDef). */
   materialisesSpace?: boolean;
+  /** This node outputs real SEGMENT geometry (open strokes) → Live materialises it as walls (see FlowToolDef). */
+  materialisesSegments?: boolean;
   handles?: {
     input?: boolean;
     output?: boolean;
@@ -88,6 +92,7 @@ export function buildToolDefFromDeclaration(decl: NodeDeclaration): FlowToolDef 
     if (p.step != null) field.step = p.step;
     if (p.unit != null) field.unit = p.unit;
     if (p.placeholder != null) field.placeholder = p.placeholder;
+    if (p.rows != null) field.rows = p.rows;
     if (p.secret) field.secret = true;
     if (p.output) field.output = true;
     if (p.role != null) field.role = p.role;
@@ -115,6 +120,7 @@ export function buildToolDefFromDeclaration(decl: NodeDeclaration): FlowToolDef 
   };
   if (decl.instructions) def.instructions = decl.instructions;
   if (decl.materialisesSpace) def.materialisesSpace = true;
+  if (decl.materialisesSegments) def.materialisesSegments = true;
   if (h.outputCount) {
     const expr = h.outputCount;
     def.outputCount = (params) => Math.max(0, Math.round(evalNum(expr, buildScope(params, vars))));

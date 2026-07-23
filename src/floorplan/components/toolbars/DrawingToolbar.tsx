@@ -117,6 +117,14 @@ export interface DrawingToolbarProps {
   /** Pick a schema segment TYPE — the host pops the type's parameter dialog, then starts the draw. When
    *  set this supersedes the inline onSingleSegmentClick for schema types. */
   onAddSegmentType?: (segType: string, label: string) => void;
+  /** The segment type Freehand will SKETCH AS ("" / undefined = plain ink). Drives the button highlight. */
+  freehandSegType?: string;
+  /** Main Freehand click — plain scribble, clearing any armed sketch-as type (today's behaviour). */
+  onFreehandPlain?: () => void;
+  /** Pick a segment TYPE to SKETCH AS. The stroke is drawn as raw ink while dragging, then on mouse-up it is
+   *  fitted to straight segments and committed as that type — so a sketched wall becomes a real wall. Uses
+   *  the SAME parameter dialog as Add Segment, so the two tools differ only in the input gesture. */
+  onFreehandType?: (segType: string, label: string) => void;
   /** Schema-driven space TYPES — added to the Add Space dropdown (room / open-space / custom), with icons. */
   schemaSpaceTools?: DrawToolEntry[];
   /** Start drawing a Space tagged with a schema space-type (room / open-space / custom). */
@@ -142,8 +150,10 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
   const [selectPopoverOpen, setSelectPopoverOpen] = useState<boolean>(false);
   const [segmentModeOpen, setSegmentModeOpen] = useState<boolean>(false);
   const [addNodeModeOpen, setAddNodeModeOpen] = useState<boolean>(false);
-  // "Miscellaneous" dropdown — groups the Text / Freehand / Measure tools.
+  // "Miscellaneous" dropdown — groups the Text / Measure tools (Freehand is its own button below it).
   const [miscOpen, setMiscOpen] = useState<boolean>(false);
+  // Freehand "Sketch as" dropdown — the same schema segment types Add Segment offers.
+  const [freehandTypeOpen, setFreehandTypeOpen] = useState<boolean>(false);
   const objectsFileRef = useRef<HTMLInputElement | null>(null);
 
   const resetModes = () => {
@@ -330,7 +340,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               )}
             </div>
           </div>
-          {/* Row 3 — Add Space (popover) + Freehand. */}
+          {/* Row 3 — Add Space (popover). */}
           <div className="flex flex-col items-center gap-2">
             {/* "Add Space" popover — Shapes ▸ (Rectangle / Circle), Polygon, Path. */}
             <Popover open={addSpaceOpen} onOpenChange={setAddSpaceOpen}>
@@ -489,12 +499,12 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             {/* Path tool retired — its "Path Type" (Straight / NURBS) now lives in the Add Segment dialog,
                 so a single Add Segment draw produces straight lines or NURBS curves. */}
             {/* Grid moved to Preferences (top-right). Connection moved into the Space dropdown.
-                Freehand moved into the Miscellaneous dropdown.
+                Freehand is a standalone button below the Miscellaneous dropdown.
                 Wall & Furniture are no longer standalone — they come from the schema-driven Add Segment /
                 Add Node dropdowns (e.g. Floorplan Tracer → wall / object). */}
           </div>
           <hr className="border-slate-200" />
-          {/* Remaining tools — Select, Miscellaneous (Text / Freehand / Measure), Delete selection. */}
+          {/* Remaining tools — Select, Miscellaneous (Text / Measure), Freehand, Delete selection. */}
           <div className="flex flex-col items-center gap-2">
             {/* Select tool — split popover. Active when Select is the current tool
              *  (regardless of scope). Dropdown chooses the scope filter: All / Node /
@@ -572,12 +582,12 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               </Popover>
             </div>
             {/* Pan moved to the top-center toolbar. */}
-            {/* Miscellaneous — a dropdown grouping Text / Freehand / Measure. The corner chevron matches
+            {/* Miscellaneous — a dropdown grouping Text / Measure. The corner chevron matches
                 the Select-scope split button. Active while any of its tools is current. */}
             <Popover open={miscOpen} onOpenChange={setMiscOpen}>
               <PopoverTrigger asChild>
                 <Button
-                  variant={p.tool === "text" || p.tool === "freehand" || p.tool === "measure" ? "default" : "outline"}
+                  variant={p.tool === "text" || p.tool === "measure" ? "default" : "outline"}
                   size="sm"
                   className="relative h-9 w-9 shrink-0 p-0"
                   title="Miscellaneous"
@@ -604,15 +614,6 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                     Text
                   </Button>
                   <Button
-                    variant={p.tool === "freehand" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
-                    onClick={() => { setMiscOpen(false); p.onToolChange("freehand"); }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Freehand
-                  </Button>
-                  <Button
                     variant={p.tool === "measure" ? "default" : "ghost"}
                     size="sm"
                     className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
@@ -624,6 +625,65 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 </div>
               </PopoverContent>
             </Popover>
+            {/* Freehand — split button, promoted out of the Miscellaneous dropdown. Main click sketches raw
+                ink exactly as before. The corner chevron picks a segment TYPE to SKETCH AS: the rough stroke
+                is fitted to straight segments on mouse-up and committed as that type, so a scribbled wall
+                becomes a real wall (same params dialog as Add Segment — only the input gesture differs).
+                The dropdown appears only when a schema supplies segment types, matching Add Segment. */}
+            <div className="relative h-9 w-9 shrink-0">
+              <Button
+                variant={p.tool === "freehand" ? "default" : "outline"}
+                size="sm"
+                className="h-9 w-9 p-0"
+                title={p.tool === "freehand" && p.freehandSegType ? `Freehand — sketching as ${p.freehandSegType}` : "Freehand"}
+                aria-label="Freehand"
+                onClick={() => { if (p.onFreehandPlain) p.onFreehandPlain(); else p.onToolChange("freehand"); }}
+              >
+                <Pencil className="h-6 w-6" />
+              </Button>
+              {segTypeList.length > 0 && (
+                <Popover open={freehandTypeOpen} onOpenChange={setFreehandTypeOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-tl bg-white/70 hover:bg-white"
+                      title="Sketch as type"
+                      aria-label="Sketch as type"
+                      aria-expanded={freehandTypeOpen}
+                    >
+                      <ChevronDown className="h-2.5 w-2.5 text-slate-500" aria-hidden />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent side="right" align="start" className="w-44 p-2 shadow-xl" sideOffset={10}>
+                    <h4 className="mb-2 px-1 text-xs font-semibold uppercase text-slate-500">Sketch as</h4>
+                    <div className="flex flex-col gap-1">
+                      {/* Back to raw ink — the main-button behaviour, reachable without losing the menu. */}
+                      <Button
+                        variant={p.tool === "freehand" && !p.freehandSegType ? "default" : "ghost"}
+                        size="sm"
+                        className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                        onClick={() => { setFreehandTypeOpen(false); if (p.onFreehandPlain) p.onFreehandPlain(); else p.onToolChange("freehand"); }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Plain sketch
+                      </Button>
+                      {segTypeList.map((t) => (
+                        <Button
+                          key={t.value}
+                          variant={p.tool === "freehand" && p.freehandSegType === t.value ? "default" : "ghost"}
+                          size="sm"
+                          className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                          onClick={() => { setFreehandTypeOpen(false); p.onFreehandType?.(t.value, t.label); }}
+                        >
+                          {typeIcon(t.icon, SEG_LUCIDE[t.symbol ?? t.value])}
+                          {t.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
             {/* "New" moved to the top-right Files dropdown (File ▸ New). Merge spaces moved into the
                 Space dropdown. */}
             <ToolButton

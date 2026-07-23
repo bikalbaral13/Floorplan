@@ -1,0 +1,23 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-inverse",
+  "meta": { "label": "Inverse", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — invert a SQUARE matrix (A⁻¹) by Gauss–Jordan elimination. Matrix in, matrix out; draws nothing. Non-square or singular input → empty.",
+  "instructions": "A value-only node: a SQUARE matrix as JSON in, its inverse as JSON out. It has no geometry input or output and draws nothing on the canvas.\n\nINPUT: wire a square matrix into valin-matrix — Grid Geometry's `val-matrix` (a bare n×n 2D array `[[…],…]`), or another Matrix node's output (e.g. AᵀA from Transpose → Multiply). A val-grid `{ \"values\": [[…]] }` is accepted too.\n\nMETHOD: Gauss–Jordan elimination with partial pivoting. A non-square matrix, or a singular one (pivot ≈ 0), returns an EMPTY matrix — check `val-rows` > 0. Note: inverting AᵀA is the textbook least-squares step but numerically shaky for large / ill-conditioned systems (a QR-based Least Squares node is the robust alternative).\n\nOUTPUT: `val-matrix` — the inverse; plus `val-rows` / `val-cols`. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "matrix", "label": "Matrix" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Matrix (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" }
+    ]
+  },
+  "parameters": [
+    { "key": "matrix", "label": "Matrix (JSON)", "kind": "text", "default": "" }
+  ]
+}

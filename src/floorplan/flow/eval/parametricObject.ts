@@ -19,7 +19,7 @@ import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
 import * as PolygonClippingNS from "polygon-clipping";
 // Flow op adapters reused verbatim by the pipeline runner — a pobj `pipeline` calls the SAME functions the
 // Flow editor dispatches to, so an object renders identically to the flow it was authored from.
-import { evalInset, evalOptimise, evalSplit } from "./evalNodes";
+import { evalInset, evalOptimise, evalSplit, evalCorridoor, evalCoreRacking } from "./evalNodes";
 // Safe expression engine (shared with the node-declaration schema loader) — see ./expr.
 import { evalNum, evalRaw, evalTruthy, toNum, type Scope } from "./expr";
 
@@ -113,7 +113,8 @@ function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?:
   const W = Math.max(2, num("W", 10));
   const D = Math.max(2, num("D", 8));
   const rooms = Math.max(1, Math.min(40, Math.round(num("rooms", 4))));
-  const ww = Math.max(0.05, num("wallWidth", 0.15));
+  const ww = Math.max(0.05, num("wallWidth", 0.15));       // INTERIOR (partition) wall thickness
+  const ew = Math.max(0.05, num("extWall", 0.23));         // EXTERIOR (perimeter) wall thickness
   const wh = Math.max(0.1, num("wallHeight", 2.8));
   const sill = Math.max(0, num("sillHeight", 0.9));
   const lintel = Math.max(sill + 0.1, num("lintelHeight", 2.1));
@@ -122,6 +123,181 @@ function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?:
   const random = flag("random");
   const rng = mulberry32(Math.max(1, Math.round(num("seed", 1))));
   const ox = -W / 2, oy = -D / 2;
+  // Architectural drawing colours (overridable via optional params): walls = solid GREY poché (pure black
+  // reads too dark in both 2D and 3D), doors = red, windows = green. A colour string param wins over the
+  // default. WALL_COLOR is used for the wall fill + outline (2D) AND the wall prism (3D), so one value drives
+  // both — keeping fill == outline is what hides the band overlap seams (grey-on-grey).
+  const col = (k: string, d: string): string => { const v = sc[k]; return typeof v === "string" && v ? v : d; };
+  const WALL_COLOR = col("wallColor", "#6b7280");
+  const DOOR_COLOR = col("doorColor", "#dc2626");
+  const WINDOW_COLOR = col("windowColor", "#16a34a");
+
+  // FOOTPRINT (mode-driven). Rectangular = one W×D cell. L / T = a rectilinear outline decomposed into
+  // non-overlapping rectangular CELLS (each BSP'd independently) + the OUTLINE polygon (floor slab + the
+  // perimeter walls) + the internal ARM-BOUNDARY seam(s), drawn as partition walls so a door joins the arms.
+  // All coords are LOCAL (0..W, 0..D); +ox/+oy re-centres at the end. `lw/ld` (L) and `sw/ty` (T) come from
+  // the case vars (matching defaults here keep it self-contained). See floorplan.pobj.json cases.
+  const mode = typeof sc["mode"] === "string" ? String(sc["mode"]) : "rectangular";
+  const P = (x: number, y: number): Point => ({ x, y });
+  // Perimeter edges of a footprint = its outline polygon's edges (consecutive vertex pairs). The newer modes
+  // derive them straight from the drawn outline so the facade list can't drift from the shape (L / T keep
+  // their hand-listed edges above for provenance).
+  const edgesOf = (o: Point[]): WallSeg[] => o.map((p, i) => { const q = o[(i + 1) % o.length]; return { x0: p.x, y0: p.y, x1: q.x, y1: q.y }; });
+  let cells: Rect[];
+  let outline: Point[];
+  let perimEdges: WallSeg[];
+  let armSeams: WallSeg[];
+  if (mode === "L-shape") {
+    const lw = Math.max(1, Math.min(W - 1, num("lw", W * 0.45)));  // left (vertical) arm width
+    const ld = Math.max(1, Math.min(D - 1, num("ld", D * 0.45)));  // bottom (horizontal) arm depth
+    cells = [{ x0: 0, y0: 0, x1: lw, y1: D }, { x0: lw, y0: 0, x1: W, y1: ld }];
+    outline = [P(0, 0), P(W, 0), P(W, ld), P(lw, ld), P(lw, D), P(0, D)];
+    perimEdges = [
+      { x0: 0, y0: 0, x1: W, y1: 0 },     // bottom (full width)
+      { x0: W, y0: 0, x1: W, y1: ld },    // right of the bottom arm
+      { x0: lw, y0: ld, x1: W, y1: ld },  // notch — horizontal
+      { x0: lw, y0: ld, x1: lw, y1: D },  // notch — vertical
+      { x0: 0, y0: D, x1: lw, y1: D },    // top of the left arm
+      { x0: 0, y0: 0, x1: 0, y1: D },     // left (full height)
+    ];
+    armSeams = [{ x0: lw, y0: 0, x1: lw, y1: ld }];  // where the two arms meet
+  } else if (mode === "T-shape") {
+    const sw = Math.max(1, Math.min(W - 1, num("sw", W * 0.42)));               // stem width
+    const tyl = Math.max(1, Math.min(D - 1, num("ty", D / 2 - D * 0.42) + D / 2)); // local y where stem meets bar
+    const sl = W / 2 - sw / 2, sr = W / 2 + sw / 2;
+    cells = [{ x0: 0, y0: tyl, x1: W, y1: D }, { x0: sl, y0: 0, x1: sr, y1: tyl }];
+    outline = [P(sl, 0), P(sr, 0), P(sr, tyl), P(W, tyl), P(W, D), P(0, D), P(0, tyl), P(sl, tyl)];
+    perimEdges = [
+      { x0: sl, y0: 0, x1: sr, y1: 0 },     // stem bottom
+      { x0: sr, y0: 0, x1: sr, y1: tyl },   // stem right
+      { x0: sr, y0: tyl, x1: W, y1: tyl },  // bar underside (right)
+      { x0: W, y0: tyl, x1: W, y1: D },     // bar right
+      { x0: 0, y0: D, x1: W, y1: D },       // bar top (full width)
+      { x0: 0, y0: tyl, x1: 0, y1: D },     // bar left
+      { x0: 0, y0: tyl, x1: sl, y1: tyl },  // bar underside (left)
+      { x0: sl, y0: 0, x1: sl, y1: tyl },   // stem left
+    ];
+    armSeams = [{ x0: sl, y0: tyl, x1: sr, y1: tyl }];  // bar underside over the stem
+  } else if (mode === "I-shape") {
+    // I-BEAM — full-width top & bottom FLANGES joined by a narrower central WEB; symmetric notches on both
+    // sides. 3 cells (each BSP'd independently); the two web↔flange seams get connecting doors.
+    const fd = Math.max(0.5, Math.min(D * 0.45, num("flangeD", D * 0.28)));  // flange (bar) depth
+    const web = Math.max(1, Math.min(W - 1, num("webW", W * 0.4)));          // web (stem) width
+    const sl = W / 2 - web / 2, sr = W / 2 + web / 2;
+    cells = [
+      { x0: 0, y0: 0, x1: W, y1: fd },           // bottom flange
+      { x0: sl, y0: fd, x1: sr, y1: D - fd },     // web
+      { x0: 0, y0: D - fd, x1: W, y1: D },        // top flange
+    ];
+    outline = [
+      P(0, 0), P(W, 0), P(W, fd), P(sr, fd), P(sr, D - fd), P(W, D - fd),
+      P(W, D), P(0, D), P(0, D - fd), P(sl, D - fd), P(sl, fd), P(0, fd),
+    ];
+    perimEdges = edgesOf(outline);
+    armSeams = [
+      { x0: sl, y0: fd, x1: sr, y1: fd },          // web ↔ bottom flange
+      { x0: sl, y0: D - fd, x1: sr, y1: D - fd },  // web ↔ top flange
+    ];
+  } else if (mode === "C-shape") {
+    // C / U — left BACK bar (full height) with top & bottom ARMS reaching right around an open courtyard
+    // (notch open on the +x side). 3 cells; the two back↔arm seams get connecting doors.
+    const ad = Math.max(0.5, Math.min(D * 0.45, num("armD", D * 0.3)));   // arm (top/bottom) depth
+    const bw = Math.max(1, Math.min(W - 1, num("backW", W * 0.32)));      // back (left) bar width
+    cells = [
+      { x0: 0, y0: 0, x1: bw, y1: D },       // left back (full height)
+      { x0: bw, y0: 0, x1: W, y1: ad },      // bottom arm
+      { x0: bw, y0: D - ad, x1: W, y1: D },  // top arm
+    ];
+    outline = [
+      P(0, 0), P(W, 0), P(W, ad), P(bw, ad), P(bw, D - ad), P(W, D - ad), P(W, D), P(0, D),
+    ];
+    perimEdges = edgesOf(outline);
+    armSeams = [
+      { x0: bw, y0: 0, x1: bw, y1: ad },      // back ↔ bottom arm
+      { x0: bw, y0: D - ad, x1: bw, y1: D },  // back ↔ top arm
+    ];
+  } else if (mode === "Z-shape") {
+    // Z / S — bottom bar (left-aligned) + top bar (right-aligned) linked by a central vertical STEM, giving a
+    // zigzag footprint. 3 cells; the bottom-bar↔stem and stem↔top-bar seams get connecting doors.
+    const bt = Math.max(0.5, Math.min(D * 0.45, num("barT", D * 0.3)));   // bar (top/bottom) thickness
+    const zsw = Math.max(1, Math.min(W - 1, num("stemW", W * 0.34)));     // central stem width
+    const sl = W / 2 - zsw / 2, sr = W / 2 + zsw / 2;
+    cells = [
+      { x0: 0, y0: 0, x1: sr, y1: bt },        // bottom bar (left) + stem foot
+      { x0: sl, y0: bt, x1: sr, y1: D - bt },  // stem
+      { x0: sl, y0: D - bt, x1: W, y1: D },    // top bar (right) + stem head
+    ];
+    outline = [
+      P(0, 0), P(sr, 0), P(sr, D - bt), P(W, D - bt), P(W, D), P(sl, D), P(sl, bt), P(0, bt),
+    ];
+    perimEdges = edgesOf(outline);
+    armSeams = [
+      { x0: sl, y0: bt, x1: sr, y1: bt },          // bottom bar ↔ stem
+      { x0: sl, y0: D - bt, x1: sr, y1: D - bt },  // stem ↔ top bar
+    ];
+  } else if (mode === "stepped") {
+    // STEPPED (staircase / terrace) — `n` left-aligned horizontal bands, each narrower going up, so the right
+    // edge terraces inward (a 1-step version is an L-shape). Each band is its own BSP cell; the band-to-band
+    // seams get connecting doors. `steps` (2–6) is a parameter.
+    const n = Math.max(2, Math.min(6, Math.round(num("steps", 3))));
+    const bh = D / n;
+    const widthAt = (i: number): number => W * (n - i) / n;   // band i (0 = bottom = full width)
+    cells = [];
+    for (let i = 0; i < n; i++) cells.push({ x0: 0, y0: i * bh, x1: widthAt(i), y1: (i + 1) * bh });
+    outline = [P(0, 0), P(W, 0)];
+    for (let i = 0; i < n; i++) {
+      outline.push(P(widthAt(i), (i + 1) * bh));                       // up this band's right edge
+      if (i < n - 1) outline.push(P(widthAt(i + 1), (i + 1) * bh));    // step left onto the next band
+    }
+    outline.push(P(0, D));                                             // top-left corner, then close down x=0
+    perimEdges = edgesOf(outline);
+    armSeams = [];
+    for (let i = 0; i < n - 1; i++) armSeams.push({ x0: 0, y0: (i + 1) * bh, x1: widthAt(i + 1), y1: (i + 1) * bh });
+  } else {
+    cells = [{ x0: 0, y0: 0, x1: W, y1: D }];
+    outline = [P(0, 0), P(W, 0), P(W, D), P(0, D)];
+    perimEdges = [
+      { x0: 0, y0: 0, x1: W, y1: 0 }, { x0: 0, y0: D, x1: W, y1: D },
+      { x0: 0, y0: 0, x1: 0, y1: D }, { x0: W, y0: 0, x1: W, y1: D },
+    ];
+    armSeams = [];
+  }
+
+  // SPINE / CORRIDOR (optional): when `have_spine` is on, a corridor strip of width `spineWidth` runs along
+  // the LONGEST axis of each footprint cell (centred), and the BSP rooms fill only the FLANKING space on
+  // either side — the spine strip itself is never subdivided. Per-cell means the corridor traces the shape:
+  // a single central run in `rectangular`, an L of two runs in `L-shape`, a run per arm/band otherwise. Cells
+  // too thin to seat a corridor plus rooms fall back to a plain full-cell BSP.
+  const spineOn = flag("have_spine");
+  const spineWReq = Math.max(0.6, num("spineWidth", 1.5));
+  const bspCells: Rect[] = [];
+  const spineRects: Rect[] = [];
+  const spineWalls: WallSeg[] = [];
+  if (spineOn) {
+    for (const c of cells) {
+      const cw = c.x1 - c.x0, ch = c.y1 - c.y0;
+      const horiz = cw >= ch;                              // spine follows the cell's longer side
+      const half = Math.min(spineWReq / 2, (horiz ? ch : cw) / 2 - 0.8);  // keep ≥0.8 m of rooms each side
+      if (half < 0.3) { bspCells.push(c); continue; }      // cell too thin for a corridor → plain BSP
+      if (horiz) {
+        const yc = (c.y0 + c.y1) / 2;
+        spineRects.push({ x0: c.x0, y0: yc - half, x1: c.x1, y1: yc + half });
+        bspCells.push({ x0: c.x0, y0: c.y0, x1: c.x1, y1: yc - half });
+        bspCells.push({ x0: c.x0, y0: yc + half, x1: c.x1, y1: c.y1 });
+        spineWalls.push({ x0: c.x0, y0: yc - half, x1: c.x1, y1: yc - half });
+        spineWalls.push({ x0: c.x0, y0: yc + half, x1: c.x1, y1: yc + half });
+      } else {
+        const xc = (c.x0 + c.x1) / 2;
+        spineRects.push({ x0: xc - half, y0: c.y0, x1: xc + half, y1: c.y1 });
+        bspCells.push({ x0: c.x0, y0: c.y0, x1: xc - half, y1: c.y1 });
+        bspCells.push({ x0: xc + half, y0: c.y0, x1: c.x1, y1: c.y1 });
+        spineWalls.push({ x0: xc - half, y0: c.y0, x1: xc - half, y1: c.y1 });
+        spineWalls.push({ x0: xc + half, y0: c.y0, x1: xc + half, y1: c.y1 });
+      }
+    }
+  } else {
+    for (const c of cells) bspCells.push(c);
+  }
 
   // Seeded BSP: split to exactly `rooms` leaves, recording each split line as a partition wall + each leaf
   // cell. ROOMS AS SEEDS: every leaf except the first is the FIRST leaf of exactly one split's B-group
@@ -152,13 +328,31 @@ function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?:
       rec({ ...r, y1: ys }, na, leafStart); rec({ ...r, y0: ys }, nb, leafStart + na);
     }
   };
-  rec({ x0: 0, y0: 0, x1: W, y1: D }, rooms, 0);
+  // Distribute the requested rooms across cells by AREA (each cell ≥ 1 room), then BSP each independently so a
+  // room never spans the arm corner. `leaves.length` at each call is the cell's global leaf-start, keeping the
+  // `_pos` controller indices globally unique.
+  const cellAreas = bspCells.map((c) => (c.x1 - c.x0) * (c.y1 - c.y0));
+  const totalArea = cellAreas.reduce((s, a) => s + a, 0) || 1;
+  const roomsPer = cellAreas.map((a) => Math.max(1, Math.round(rooms * a / totalArea)));
+  const biggest = cellAreas.indexOf(Math.max(...cellAreas));
+  roomsPer[biggest] = Math.max(1, roomsPer[biggest] + (rooms - roomsPer.reduce((s, a) => s + a, 0)));
+  for (let ci = 0; ci < bspCells.length; ci++) rec(bspCells[ci], roomsPer[ci], leaves.length);
+  // Arm-boundary seams are PARTITION walls (before the perimeter count) so each gets a connecting door.
+  for (const seam of armSeams) walls.push(seam);
+  // Spine (corridor) long edges are PARTITION walls too, but get a door PER adjacent room (handled below)
+  // rather than the single door of the generic partition pass — record their indices to divert them.
+  const spineWallSet = new Set<number>();
+  for (const sw of spineWalls) { spineWallSet.add(walls.length); walls.push(sw); }
   const partitionCount = walls.length;
-  // Perimeter walls.
-  walls.push({ x0: 0, y0: 0, x1: W, y1: 0 }, { x0: 0, y0: D, x1: W, y1: D }, { x0: 0, y0: 0, x1: 0, y1: D }, { x0: W, y0: 0, x1: W, y1: D });
+  // Perimeter walls = the footprint outline edges.
+  for (const e of perimEdges) walls.push(e);
 
-  // Floor slab (just below the walls).
-  shapes.push({ pts: rectPts(ox, oy, ox + W, oy + D), closed: true, h0: -0.02, h1: 0 });
+  // Floor slab (just below the walls) — the footprint outline polygon.
+  shapes.push({ pts: outline.map((p) => ({ x: ox + p.x, y: oy + p.y })), closed: true, h0: -0.02, h1: 0 });
+  // Spine corridors: a light circulation-floor fill (flat, under the walls) marking each corridor strip; the
+  // BSP rooms deliberately never cover these.
+  const CORRIDOR_COLOR = col("corridorColor", "#e2e8f0");
+  for (const sp of spineRects) shapes.push({ pts: rectPts(ox + sp.x0, oy + sp.y0, ox + sp.x1, oy + sp.y1), closed: true, h0: 0, h1: 0, color: CORRIDOR_COLOR });
 
   // Rooms: each BSP leaf is a COMPOSED Room child (`room[k]`) — clear width/depth HARD-bound to the leaf,
   // constraints (min/max area, max ratio) free per instance, the light fill making the whole room clickable
@@ -175,61 +369,92 @@ function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?:
     );
   }
 
-  // Walls: COMPOSED from the library Wall when possible (instance path `wall[k]` — so each wall's thickness
-  // and height are individually overridable; hatch poché comes from the wall object). Length + mitre cuts
-  // are HARD (the plan owns layout and joints); thickness/height are SOFT. Perimeter runs (the last 4) meet
-  // on TRUE MITRED diagonals — exact centreline lengths with ±1 end cuts (outer corner extends, inner
-  // retracts), so corners join seam-to-seam with no overlap in 2D or 3D; partitions butt in square. Falls
-  // back to the inline (half-thickness-extended) box without a library.
-  const perimMiters: [number, number][] = [[-1, -1], [1, 1], [1, 1], [-1, -1]]; // bottom, top, left, right
-  for (let wi = 0; wi < walls.length; wi++) {
-    const s = walls[wi];
-    const vert = Math.abs(s.x1 - s.x0) < 1e-6;
-    const perim = wi >= partitionCount;
-    const [mA, mB] = perim ? perimMiters[wi - partitionCount] : [0, 0];
-    const len = vert ? s.y1 - s.y0 : s.x1 - s.x0;
-    const composed = emitRef?.(
-      "wall.segment.v1", `wall[${wi}]`, { length: len, miterA: mA, miterB: mB }, { thickness: ww, height: wh },
-      { x: ox + (s.x0 + s.x1) / 2, y: oy + (s.y0 + s.y1) / 2, rot: vert ? 90 : 0 },
-    );
-    if (composed) continue;
-    const ext = perim ? ww : 0;
-    const pts = vert
-      ? rectPts(ox + s.x0 - ww / 2, oy + s.y0 - ext / 2, ox + s.x0 + ww / 2, oy + s.y1 + ext / 2)
-      : rectPts(ox + s.x0 - ext / 2, oy + s.y0 - ww / 2, ox + s.x1 + ext / 2, oy + s.y0 + ww / 2);
-    shapes.push({ pts, closed: true, h0: 0, h1: wh });
-  }
-
-  // Opening spans: a door/window slides ONLY within ITS room edge, not the full split line / facade.
-  // For a partition: the longest overlap between a leaf pair facing each other across it (the actual
-  // doorway wall of two rooms). For a facade: the widest single leaf edge on that side.
+  // Opening spans (door on a partition = longest facing-room overlap; window on a facade = widest leaf edge)
+  // are computed BEFORE the walls so each wall band can be SPLIT to leave a gap at its door / window.
   const EPS = 1e-6;
   const doorSpanOnPartition = (s: WallSeg, vert: boolean): [number, number] | null => {
     let best: [number, number] | null = null;
-    for (const a of leaves) {
-      for (const b of leaves) {
-        const facing = vert
-          ? Math.abs(a.x1 - s.x0) < EPS && Math.abs(b.x0 - s.x0) < EPS
-          : Math.abs(a.y1 - s.y0) < EPS && Math.abs(b.y0 - s.y0) < EPS;
-        if (!facing) continue;
-        const lo = Math.max(vert ? a.y0 : a.x0, vert ? b.y0 : b.x0, vert ? s.y0 : s.x0);
-        const hi = Math.min(vert ? a.y1 : a.x1, vert ? b.y1 : b.x1, vert ? s.y1 : s.x1);
-        if (hi - lo >= dw + 0.3 && (!best || hi - lo > best[1] - best[0])) best = [lo, hi];
-      }
+    for (const a of leaves) for (const b of leaves) {
+      const facing = vert ? Math.abs(a.x1 - s.x0) < EPS && Math.abs(b.x0 - s.x0) < EPS : Math.abs(a.y1 - s.y0) < EPS && Math.abs(b.y0 - s.y0) < EPS;
+      if (!facing) continue;
+      const lo = Math.max(vert ? a.y0 : a.x0, vert ? b.y0 : b.x0, vert ? s.y0 : s.x0);
+      const hi = Math.min(vert ? a.y1 : a.x1, vert ? b.y1 : b.x1, vert ? s.y1 : s.x1);
+      if (hi - lo >= dw + 0.3 && (!best || hi - lo > best[1] - best[0])) best = [lo, hi];
     }
     return best;
   };
-  const facadeSpan = (side: "bottom" | "top" | "left" | "right", minLen: number): [number, number] | null => {
+  // Widest room edge lying ON a given perimeter edge (any L / T facade), as a span along the edge's varying
+  // axis — used to centre a window (or the entrance) on the largest room facing that wall.
+  const perimSpan = (e: WallSeg): [number, number] | null => {
+    const vert = Math.abs(e.x1 - e.x0) < EPS;
+    const coord = vert ? e.x0 : e.y0;
+    const elo = Math.min(vert ? e.y0 : e.x0, vert ? e.y1 : e.x1);
+    const ehi = Math.max(vert ? e.y0 : e.x0, vert ? e.y1 : e.x1);
     let best: [number, number] | null = null;
     for (const l of leaves) {
-      const on = side === "bottom" ? Math.abs(l.y0) < EPS : side === "top" ? Math.abs(l.y1 - D) < EPS
-        : side === "left" ? Math.abs(l.x0) < EPS : Math.abs(l.x1 - W) < EPS;
+      const on = vert ? (Math.abs(l.x0 - coord) < EPS || Math.abs(l.x1 - coord) < EPS) : (Math.abs(l.y0 - coord) < EPS || Math.abs(l.y1 - coord) < EPS);
       if (!on) continue;
-      const span: [number, number] = side === "bottom" || side === "top" ? [l.x0, l.x1] : [l.y0, l.y1];
-      if (span[1] - span[0] >= minLen && (!best || span[1] - span[0] > best[1] - best[0])) best = span;
+      const lo = Math.max(vert ? l.y0 : l.x0, elo), hi = Math.min(vert ? l.y1 : l.x1, ehi);
+      if (hi - lo > 0 && (!best || hi - lo > best[1] - best[0])) best = [lo, hi];
     }
     return best;
   };
+  // The bottom-most horizontal perimeter edge hosts the entrance (and a 25% window that clears it).
+  let bottomPeri = -1;
+  for (let pi = 0; pi < perimEdges.length; pi++) { const e = perimEdges[pi]; if (Math.abs(e.y1 - e.y0) < EPS && Math.abs(e.y0) < EPS) { bottomPeri = pi; break; } }
+  // openingsByWall[wallIndex] = list of [lo, hi] spans (along the wall's varying axis) to leave OPEN. Centres
+  // match the door / window drawing below (same span clamp + default pct) so the gap sits under the symbol.
+  const openingsByWall = new Map<number, Array<[number, number]>>();
+  const addOpening = (wi: number, center: number, width: number): void => { const l = openingsByWall.get(wi) ?? []; l.push([center - width / 2, center + width / 2]); openingsByWall.set(wi, l); };
+  const spanCenter = (a: number, b: number, half: number, margin: number, pct: number): number => { const lo = a + half + margin, hi = b - half - margin; return Math.min(hi, Math.max(lo, a + (pct / 100) * (b - a))); };
+  for (let i = 0; i < partitionCount; i++) { if (spineWallSet.has(i)) continue; const s = walls[i]; const vert = Math.abs(s.x1 - s.x0) < EPS; const span = doorSpanOnPartition(s, vert); if (span) addOpening(i, spanCenter(span[0], span[1], dw / 2, 0.15, 50), dw); }
+  // Spine walls: an opening + door for EVERY room lying along the corridor (not just the widest), so the
+  // corridor serves them all. The specs are reused to place the matching door symbols below.
+  const spineDoorSpecs: Array<{ fixed: number; span: [number, number]; vert: boolean }> = [];
+  for (const wi of spineWallSet) {
+    const s = walls[wi];
+    const vert = Math.abs(s.x1 - s.x0) < EPS;
+    const fixed = vert ? s.x0 : s.y0;
+    const wlo = vert ? s.y0 : s.x0, whi = vert ? s.y1 : s.x1;
+    for (const l of leaves) {
+      const near = vert ? (Math.abs(l.x1 - fixed) < EPS || Math.abs(l.x0 - fixed) < EPS) : (Math.abs(l.y1 - fixed) < EPS || Math.abs(l.y0 - fixed) < EPS);
+      if (!near) continue;
+      const lo = Math.max(vert ? l.y0 : l.x0, wlo), hi = Math.min(vert ? l.y1 : l.x1, whi);
+      if (hi - lo < dw + 0.3) continue;
+      addOpening(wi, spanCenter(lo, hi, dw / 2, 0.15, 50), dw);
+      spineDoorSpecs.push({ fixed, span: [lo, hi], vert });
+    }
+  }
+  if (bottomPeri >= 0) { const es = perimSpan(perimEdges[bottomPeri]) ?? [0, W] as [number, number]; if (es[1] - es[0] >= dw + 0.3) addOpening(partitionCount + bottomPeri, spanCenter(es[0], es[1], dw / 2, 0.15, 50), dw); }
+  for (let pi = 0; pi < perimEdges.length; pi++) { const sp = perimSpan(perimEdges[pi]); if (!sp || sp[1] - sp[0] < winw + 0.4) continue; addOpening(partitionCount + pi, spanCenter(sp[0], sp[1], winw / 2, 0.2, pi === bottomPeri ? 25 : 50), winw); }
+
+  // Walls: FILLED bands (closed + extruded) with INTERIOR thickness `ww` (partitions) / EXTERIOR `ew`
+  // (perimeter, which extends by its thickness at the ends so corners overlap solidly). Each band is SPLIT to
+  // leave a gap at every door / window opening — no wall is drawn across an opening. Composition (library
+  // Wall) is intentionally skipped here so the band renders SOLID rather than as a thin centreline.
+  for (let wi = 0; wi < walls.length; wi++) {
+    const s = walls[wi];
+    const vert = Math.abs(s.x1 - s.x0) < EPS;
+    const perim = wi >= partitionCount;
+    const t = perim ? ew : ww;
+    const ext = perim ? t : 0;
+    const openings = (openingsByWall.get(wi) ?? []).slice().sort((p, q) => p[0] - q[0]);
+    const lo0 = (vert ? s.y0 : s.x0) - ext / 2, hi0 = (vert ? s.y1 : s.x1) + ext / 2;
+    const segs: Array<[number, number]> = [];
+    let cur = lo0;
+    for (const [olo, ohi] of openings) { if (olo > cur) segs.push([cur, olo]); cur = Math.max(cur, ohi); }
+    if (cur < hi0) segs.push([cur, hi0]);
+    for (const [pa, pb] of segs) {
+      if (pb - pa <= 1e-4) continue;
+      const pts = vert ? rectPts(ox + s.x0 - t / 2, oy + pa, ox + s.x0 + t / 2, oy + pb) : rectPts(ox + pa, oy + s.y0 - t / 2, ox + pb, oy + s.y0 + t / 2);
+      // Solid near-black poché: fill AND outline are WALL_COLOR, so the seams where bands overlap at corners /
+      // T-junctions vanish (dark-on-dark) and only the wall network's outer + room-side boundary reads.
+      shapes.push({ pts, closed: true, h0: 0, h1: wh, color: WALL_COLOR });
+    }
+  }
+
+  // (`doorSpanOnPartition` / `perimSpan` are defined above — reused here to place the door / window symbols
+  // at the same centres the wall gaps were cut for.)
 
   // Door: COMPOSED from the library Door when possible (instance path `door[k]`), positioned by `_pos`
   // WITHIN its room-edge span (clamped clear of the span ends). `vert` walls open into +x (rotation 270),
@@ -240,7 +465,7 @@ function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?:
     const lo = a + dw / 2 + 0.15, hi = b - dw / 2 - 0.15;
     const at = (pct: number) => Math.min(hi, Math.max(lo, a + (pct / 100) * (b - a)));
     const composed = emitRef?.(
-      "door.single.v1", `door[${doorIdx++}]`, { width: dw, height: Math.min(2.1, wh) }, {},
+      "door.single.v1", `door[${doorIdx++}]`, { width: dw, height: Math.min(2.1, wh), color: DOOR_COLOR }, {},
       (pos) => {
         const pct = typeof pos === "number" ? pos : defPct;
         const c = at(pct);
@@ -256,35 +481,40 @@ function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?:
       arc.push(vert ? { x: hx + dw * Math.sin(ang), y: hy + dw * Math.cos(ang) } : { x: hx + dw * Math.cos(ang), y: hy + dw * Math.sin(ang) });
     }
     const tip = vert ? { x: hx + dw, y: hy } : { x: hx, y: hy + dw };
-    shapes.push({ pts: [{ x: hx, y: hy }, tip], closed: false, h0: 0, h1: 0 });
-    shapes.push({ pts: arc, closed: false, h0: 0, h1: 0 });
+    shapes.push({ pts: [{ x: hx, y: hy }, tip], closed: false, h0: 0, h1: 0, color: DOOR_COLOR });
+    shapes.push({ pts: arc, closed: false, h0: 0, h1: 0, color: DOOR_COLOR });
   };
-  // A door on each partition wall — inside the longest facing-room span (skip when nothing fits).
+  // A door on each partition wall — inside the longest facing-room span (skip when nothing fits). Spine walls
+  // are handled separately (a door per adjacent room), so they're skipped here.
   for (let i = 0; i < partitionCount; i++) {
+    if (spineWallSet.has(i)) continue;
     const s = walls[i];
     const vert = Math.abs(s.x1 - s.x0) < 1e-6;
     const span = doorSpanOnPartition(s, vert);
     if (!span) continue;
     door(vert ? s.x0 : s.y0, span, vert, 50);
   }
-  // Entrance door on the bottom edge — within the widest bottom room's edge.
-  const entranceSpan = facadeSpan("bottom", dw + 0.3) ?? [0, W];
-  door(0, entranceSpan, false, 50);
+  // Corridor doors — one per room along each spine wall (spans computed with the openings above).
+  for (const sd of spineDoorSpecs) door(sd.fixed, sd.span, sd.vert, 50);
+  // Entrance door on the bottom perimeter edge — within its widest room facade.
+  if (bottomPeri >= 0) { const es = perimSpan(perimEdges[bottomPeri]) ?? [0, W] as [number, number]; door(0, es, false, 50); }
 
   // Window: COMPOSED from the library Window when possible (instance path `window[k]`), positioned by
   // `_pos` WITHIN the widest room edge on its facade; sill/lintel drive its 3D glazing. Falls back to the
   // inline glazing line + sill→lintel box. One per facade.
   let winIdx = 0;
-  const win = (side: "bottom" | "top" | "left" | "right", defPct: number): void => {
-    const horizontal = side === "bottom" || side === "top";
-    const fixed = side === "bottom" ? 0 : side === "top" ? D : side === "left" ? 0 : W;
-    const span = facadeSpan(side, winw + 0.4) ?? (horizontal ? [0, W] as [number, number] : [0, D] as [number, number]);
+  const win = (e: WallSeg, defPct: number): void => {
+    const vertEdge = Math.abs(e.x1 - e.x0) < EPS;   // vertical perimeter edge → window runs along y
+    const horizontal = !vertEdge;                    // horizontal edge → glazing line runs along x
+    const fixed = vertEdge ? e.x0 : e.y0;
+    const span = perimSpan(e);
+    if (!span || span[1] - span[0] < winw + 0.4) return;
     const [a, b] = span;
     const lo = a + winw / 2 + 0.2, hi = b - winw / 2 - 0.2;
     const at = (pct: number) => Math.min(hi, Math.max(lo, a + (pct / 100) * (b - a)));
     const composed = emitRef?.(
       "window.standard.v1", `window[${winIdx++}]`,
-      { width: winw, thickness: ww, sillHeight: sill, lintelHeight: lintel }, {},
+      { width: winw, thickness: ew, sillHeight: sill, lintelHeight: lintel, color: WINDOW_COLOR }, {},
       (pos) => {
         const pct = typeof pos === "number" ? pos : defPct;
         const c = at(pct);
@@ -294,17 +524,15 @@ function generateFloorplan(sc: Scope, shapes: Shape[], emitRef?: EmitRef, peek?:
     if (composed) return;
     const c = at(defPct), cx = horizontal ? c : fixed, cy = horizontal ? fixed : c;
     if (horizontal) {
-      shapes.push({ pts: [{ x: ox + cx - winw / 2, y: oy + cy }, { x: ox + cx + winw / 2, y: oy + cy }], closed: false, h0: 0, h1: 0 });
-      shapes.push({ pts: rectPts(ox + cx - winw / 2, oy + cy - ww / 2, ox + cx + winw / 2, oy + cy + ww / 2), closed: true, h0: sill, h1: lintel });
+      shapes.push({ pts: [{ x: ox + cx - winw / 2, y: oy + cy }, { x: ox + cx + winw / 2, y: oy + cy }], closed: false, h0: 0, h1: 0, color: WINDOW_COLOR });
+      shapes.push({ pts: rectPts(ox + cx - winw / 2, oy + cy - ew / 2, ox + cx + winw / 2, oy + cy + ew / 2), closed: true, h0: sill, h1: lintel, color: WINDOW_COLOR });
     } else {
-      shapes.push({ pts: [{ x: ox + cx, y: oy + cy - winw / 2 }, { x: ox + cx, y: oy + cy + winw / 2 }], closed: false, h0: 0, h1: 0 });
-      shapes.push({ pts: rectPts(ox + cx - ww / 2, oy + cy - winw / 2, ox + cx + ww / 2, oy + cy + winw / 2), closed: true, h0: sill, h1: lintel });
+      shapes.push({ pts: [{ x: ox + cx, y: oy + cy - winw / 2 }, { x: ox + cx, y: oy + cy + winw / 2 }], closed: false, h0: 0, h1: 0, color: WINDOW_COLOR });
+      shapes.push({ pts: rectPts(ox + cx - ew / 2, oy + cy - winw / 2, ox + cx + ew / 2, oy + cy + winw / 2), closed: true, h0: sill, h1: lintel, color: WINDOW_COLOR });
     }
   };
-  win("bottom", 25);  // 25% keeps clear of the entrance when they share the room edge
-  win("top", 50);
-  win("left", 50);
-  win("right", 50);
+  // One window per perimeter edge (25% on the entrance edge so it clears the door at 50%).
+  for (let pi = 0; pi < perimEdges.length; pi++) win(perimEdges[pi], pi === bottomPeri ? 25 : 50);
 
   // Furnish (composition only — needs the library): rooms get ROLES by size — the largest leaf is the
   // LIVING room (sofa + TV unit + dining table), the smallest (when ≥3 rooms) is the BATHROOM (toilet +
@@ -405,6 +633,10 @@ const injectHostScope = (scope: Scope, host?: Point[]): void => {
 // (evalInset / evalOptimise / …) so a pobj renders identically to the flow it replicates. Polygons stay in
 // LOCAL METRES (ppm = 1); a terminal `floor-massing` / `extrude` op lofts them into stacked prisms.
 type PolySet = Point[][];
+/** A per-op snapshot of the pipeline's footprint set (LOCAL METRES), captured after each geometry-
+ *  transforming op (inset / split / optimise-rect …). Lets a host commit each pipeline step onto its own
+ *  layer as real Spaces (see evalParametricPipelineSteps), rather than only drawing the final footprint. */
+export interface PipelineStep { op: string; polys: Point[][]; }
 const num2 = (v: unknown, d: number): number => { const n = typeof v === "number" ? v : Number(v); return Number.isFinite(n) ? n : d; };
 
 /** Resolve a pipeline op's params against the parameter scope: numbers / booleans pass through; a string
@@ -423,8 +655,10 @@ const resolveOpParams = (raw: Record<string, unknown>, scope: Scope): Record<str
   return out;
 };
 
-/** Execute a pobj op pipeline over the host footprint → a Shape stack (2D plan + 3D mesh, same as rules). */
-function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope: Scope): Shape[] {
+/** Execute a pobj op pipeline over the host footprint → a Shape stack (2D plan + 3D mesh, same as rules).
+ *  When `steps` is supplied, a snapshot of the footprint set (LOCAL METRES) is pushed after each geometry-
+ *  transforming op (inset / split / optimise-rect) so the caller can commit each step onto its own layer. */
+function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope: Scope, steps?: PipelineStep[]): Shape[] {
   let polys: PolySet = [];
   const shapes: Shape[] = [];
   const copy = (poly: Point[]): Point[] => poly.map((p) => ({ x: p.x, y: p.y }));
@@ -443,9 +677,11 @@ function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope
         break;
       case "inset":
         polys = polys.flatMap((poly) => evalInset(poly, rp, 1));
+        if (steps) steps.push({ op: "inset", polys: polys.map(copy) });
         break;
       case "optimise-rect":
         polys = polys.flatMap((poly) => evalOptimise(poly, rp, 1));
+        if (steps) steps.push({ op: "optimise-rect", polys: polys.map(copy) });
         break;
       case "outline":
         // Emit the CURRENT footprint set as flat reference outlines (dashed construction lines in 2D, skipped
@@ -463,16 +699,31 @@ function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope
         // downstream; the other pieces (e.g. amenity open space) are emitted as FLAT footprints (drawn in 2D,
         // skipped in 3D). A degenerate split (no pieces) passes the polygon through unchanged.
         const nextPolys: PolySet = [];
+        const allPieces: PolySet = [];
         for (const poly of polys) {
           const pieces = evalSplit(poly, rp, 1);
-          if (pieces.length === 0) { nextPolys.push(poly); continue; }
+          if (pieces.length === 0) { nextPolys.push(poly); allPieces.push(poly); continue; }
           const keep = Math.max(0, Math.min(pieces.length - 1, Math.floor(num2(rp.keep, 0))));
           nextPolys.push(pieces[keep]);
-          pieces.forEach((pc, i) => { if (i !== keep && pc.length >= 3) shapes.push({ pts: copy(pc), closed: true, h0: 0, h1: 0 }); });
+          pieces.forEach((pc, i) => { if (pc.length >= 3) allPieces.push(pc); if (i !== keep && pc.length >= 3) shapes.push({ pts: copy(pc), closed: true, h0: 0, h1: 0 }); });
         }
         polys = nextPolys;
+        // Step snapshot carries EVERY piece (kept + remainder) so the whole split shows on its layer.
+        if (steps) steps.push({ op: "split", polys: allPieces.map(copy) });
         break;
       }
+      case "corridoor":
+        // Carve a corridor Space through each footprint (evalCorridoor) — the corridor pieces replace the
+        // footprint downstream, so a following `core-racking` racks cores along the corridor.
+        polys = polys.flatMap((poly) => evalCorridoor(poly, rp, 1));
+        if (steps) steps.push({ op: "corridoor", polys: polys.map(copy) });
+        break;
+      case "core-racking":
+        // Rack fixed-size core Spaces along each corridor's sides (evalCoreRacking) — the cores become the
+        // footprint set (emit them with a `fill` op to draw them as solid plan footprints).
+        polys = polys.flatMap((poly) => evalCoreRacking(poly, rp, 1));
+        if (steps) steps.push({ op: "core-racking", polys: polys.map(copy) });
+        break;
       case "floor-massing":
       case "extrude": {
         // Loft each current footprint into `n` stacked floors (massing) or a single solid (extrude).
@@ -503,7 +754,7 @@ function runObjectPipeline(pipeline: unknown[], host: Point[] | undefined, scope
  *  coords — centred so the shared `placer(anchor, ppm, rot)` reconstructs world pixels. When present it
  *  feeds the `host` rule (and the `hostArea` scope var), so host-conforming objects extrude the host
  *  polygon with zero per-object code. Self-contained objects (box/circle/poly) ignore it. */
-function buildParametricShapes(defText: string, overrides?: Record<string, unknown>, host?: Point[], ctx?: RefCtx): ParametricShapes | null {
+function buildParametricShapes(defText: string, overrides?: Record<string, unknown>, host?: Point[], ctx?: RefCtx, steps?: PipelineStep[]): ParametricShapes | null {
   let parsed: unknown;
   try { parsed = JSON.parse(defText); } catch { return null; }
   const def = asObj(parsed);
@@ -557,7 +808,7 @@ function buildParametricShapes(defText: string, overrides?: Record<string, unkno
   // A `pipeline` (op list) takes precedence over `cases`/`rules`: run the dissolved-flow ops over the host
   // footprint and return their Shape stack directly.
   const pipeline = asArr(geom.pipeline);
-  if (pipeline.length > 0) return { shapes: applyPlacementOffsets(runObjectPipeline(pipeline, host, scope)), color, rotationDeg };
+  if (pipeline.length > 0) return { shapes: applyPlacementOffsets(runObjectPipeline(pipeline, host, scope, steps)), color, rotationDeg };
 
   // First matching case (no `when` ⇒ always matches).
   let chosen: Record<string, unknown> | null = null;
@@ -805,6 +1056,22 @@ export function evalParametricGeometry(defText: string, anchor: Point, ppm: numb
   return { fill, lines, color: built.color, refLines, fillSrc, lineSrc, fillColor, lineColor };
 }
 
+/** Parse + evaluate a parametric definition's `geometry.pipeline`, returning the footprint set AFTER each
+ *  geometry-transforming op (inset / split / optimise-rect), in world-px coords anchored at `anchor`. Lets a
+ *  host commit each pipeline STEP as real Spaces on its own layer (e.g. an attached Site's inset → split →
+ *  optimise footprints, each on a "Site · Inset / Split / Optimise" layer) instead of only the final result.
+ *  Objects without a pipeline (rule/case objects) return []. */
+export function evalParametricPipelineSteps(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): { op: string; polygons: Point[][] }[] {
+  const steps: PipelineStep[] = [];
+  const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams }, steps);
+  if (!built) return [];
+  const xf = placer(anchor, ppm, built.rotationDeg);
+  return steps.map((s) => ({
+    op: s.op,
+    polygons: s.polys.filter((poly) => poly.length >= 3).map((poly) => poly.map((p) => xf(p.x, p.y))),
+  })).filter((s) => s.polygons.length > 0);
+}
+
 /** Parse + evaluate a parametric definition into 3D mesh prisms anchored at `anchor` — one lofted prism per
  *  CLOSED shape with a non-zero height span (footprint extruded h0→h1 metres). Open shapes / flat shapes are
  *  skipped. Same shape stack as the plan, so 3D is driven by the SAME parameters. Empty on parse error. */
@@ -830,6 +1097,86 @@ export function evalParametricRefs(defText: string, overrides?: Record<string, u
   const refs: RefInstance[] = [];
   buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams, refs });
   return refs;
+}
+
+// ── Decompose to flat primitives ─────────────────────────────────────────────────────────────────────
+// Walk a definition's box/circle/poly/line rules EXACTLY like buildParametricShapes (same scope: params →
+// geometry vars → chosen-case vars → per-rule vars; `when` gates, `repeat` expands with the loop index) but,
+// instead of building extruded shapes, record each emitted primitive as an evaluated flat spec in LOCAL
+// METRES. Powers the "decompile to 2D primitive nodes" import mode: a `box` → a Rectangle node, a `circle` →
+// a Circle node, etc. host / ref / floorplan rules aren't flat primitives → skipped. No 3D, no host.
+/** One evaluated flat primitive: a `box` (centre cx/cy + size w×h), a `circle` (centre + radius r), or a
+ *  `poly`/`line` (explicit `pts`). `h0`/`h1` are the height span (metres) — so a box → a 3D Cuboid and a
+ *  circle → a 3D Cylinder of height |h1-h0| resting at min(h0,h1). All in the object's LOCAL METRE frame. */
+export interface DecomposedPrimitive { kind: "box" | "circle" | "poly" | "line"; cx: number; cy: number; w?: number; h?: number; r?: number; h0?: number; h1?: number; pts?: Point[]; comment?: string; }
+
+export function decomposeParametricRules(def0: string | Record<string, unknown>, overrides?: Record<string, unknown>): DecomposedPrimitive[] {
+  // Accept a pre-parsed definition so callers that decompose the SAME object many times (the affine probe
+  // re-runs once per numeric param × 2) parse the JSON just once instead of on every call.
+  let parsed: unknown;
+  if (typeof def0 === "string") { try { parsed = JSON.parse(def0); } catch { return []; } } else parsed = def0;
+  const def = asObj(parsed);
+  if (!def) return [];
+  const scope: Scope = {};
+  for (const p of asArr(def.parameters)) {
+    const o = asObj(p);
+    if (!o || typeof o.key !== "string") continue;
+    const d = o.default;
+    scope[o.key] = typeof d === "number" || typeof d === "boolean" || typeof d === "string" ? d : 0;
+  }
+  if (overrides) for (const [k, v] of Object.entries(overrides)) {
+    if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") scope[k] = v;
+  }
+  scope.PI = Math.PI;
+  injectHostScope(scope, undefined);
+  const geom = asObj(def.geometry);
+  if (!geom) return [];
+  const applyVars = (vars: unknown, sc: Scope): void => {
+    const o = asObj(vars);
+    if (!o) return;
+    for (const [k, e] of Object.entries(o)) if (!k.startsWith("_")) sc[k] = evalRaw(e, sc);
+  };
+  applyVars(geom.vars, scope);
+  let chosen: Record<string, unknown> | null = null;
+  for (const c of asArr(geom.cases)) { const o = asObj(c); if (o && evalTruthy(o.when, scope)) { chosen = o; break; } }
+  if (!chosen) return [];
+  const sc: Scope = { ...scope };
+  applyVars(chosen.vars, sc);
+  const out: DecomposedPrimitive[] = [];
+  const emitPrim = (rule: Record<string, unknown>, sBase: Scope): void => {
+    let s = sBase;
+    if (rule.vars != null) { const s2: Scope = { ...s }; applyVars(rule.vars, s2); s = s2; }
+    const comment = typeof rule.comment === "string" ? rule.comment : undefined;
+    const box = asObj(rule.box);
+    if (box) {
+      const x0 = evalNum(box.x0, s), x1 = evalNum(box.x1, s), y0 = evalNum(box.y0, s), y1 = evalNum(box.y1, s);
+      out.push({ kind: "box", cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: Math.abs(x1 - x0), h: Math.abs(y1 - y0), h0: evalNum(box.h0, s), h1: evalNum(box.h1, s), comment });
+      return;
+    }
+    const circle = asObj(rule.circle);
+    if (circle) { out.push({ kind: "circle", cx: evalNum(circle.cx, s), cy: evalNum(circle.cy, s), r: evalNum(circle.r, s), h0: evalNum(circle.h0, s), h1: evalNum(circle.h1, s), comment }); return; }
+    const poly = asObj(rule.poly), line = asObj(rule.line), spec = poly ?? line;
+    if (spec) {
+      const pts = asArr(spec.pts).map((pair) => { const a = asArr(pair); return { x: evalNum(a[0], s), y: evalNum(a[1], s) }; });
+      if (pts.length >= 2) out.push({ kind: poly ? "poly" : "line", cx: 0, cy: 0, pts, comment });
+      return;
+    }
+    // host / ref / floorplan rules aren't flat primitives — skipped (no 2D-primitive node maps to them).
+  };
+  for (const r of asArr(chosen.rules)) {
+    const rule = asObj(r);
+    if (!rule) continue;
+    if (!evalTruthy(rule.when, sc)) continue; // rule-level gate (outer scope), matching buildParametricShapes
+    if (rule.repeat != null) {
+      const count = Math.max(0, Math.min(MAX_REPEAT, Math.round(evalNum(rule.repeat, sc))));
+      const as = typeof rule.as === "string" ? rule.as : "i";
+      for (let i = 0; i < count; i++) { sc[as] = i; emitPrim(rule, sc); }
+    } else {
+      emitPrim(rule, sc);
+    }
+    if (out.length >= MAX_SHAPES) break;
+  }
+  return out;
 }
 
 // ── Geometry inspection (formulas + live values) ─────────────────────────────────────────────────────
