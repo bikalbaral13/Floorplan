@@ -18,6 +18,12 @@ const SIGNIN_PATH = "/signin";
 const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true"
   || (import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS !== "false");
 
+/** The floorplan editor never needs a session: it works from the R2 library and the canvas alone, so it
+ *  runs signed-out in a deployed build too. Other pages keep the real 401 → /signin behaviour. */
+const OPEN_PATHS = ["/floorplan-editor"];
+const authBypassed = (): boolean =>
+  AUTH_BYPASS || OPEN_PATHS.some((p) => window.location.pathname === p || window.location.pathname.startsWith(`${p}/`));
+
 /** Every platform request in this file goes through here rather than through `fetch` directly.
  *
  *  WHILE BYPASSING WITH NO TOKEN, THE REQUEST IS NOT MADE. There is nothing to authenticate with, so the
@@ -29,7 +35,7 @@ const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true"
  *  The moment a token exists — signed in, or bypass off — this is a plain `fetch` again.
  */
 const apiFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  if (AUTH_BYPASS && !localStorage.getItem("token")) {
+  if (authBypassed() && !localStorage.getItem("token")) {
     return Promise.resolve(
       new Response(JSON.stringify({ error: "Not signed in" }), {
         status: 401,
@@ -75,7 +81,7 @@ export const getAuthHeaders = () => {
  */
 let redirecting = false;
 const handleUnauthorized = () => {
-  if (AUTH_BYPASS) return;
+  if (authBypassed()) return;
   localStorage.removeItem("token");
   localStorage.removeItem("role");
   if (redirecting || typeof window === "undefined") return;
