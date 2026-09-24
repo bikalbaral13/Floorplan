@@ -5,14 +5,14 @@
  *  definitions straight from the bucket. This route exists for what needs a signature: enumerating
  *  (r2.dev will not list) and every write.
  *
- *  PASSWORD. On Vercel the bridge is on the public internet, so `requirePassword` is set and every route
- *  except /status needs the `x-bucket-password` header to match R2_ACCESS_PASSWORD. The password lives
- *  ONLY in that environment variable — never in the repo — and when it is unset every locked route
- *  refuses (fail closed). The dev server runs on your own machine and does not ask. */
+ *  WHOSE KEYS. The browser may send its own Cloudflare R2 keys (Preferences ▸ Cloudflare R2) as
+ *  x-r2-endpoint / x-r2-access-key-id / x-r2-secret-access-key / x-r2-bucket headers, and then this signs
+ *  with those. On Vercel that is the ONLY way in — the function has no keys of its own, so nobody without
+ *  keys can touch the bucket. The dev server falls back to the R2_* keys in .env when none are sent. */
 
 import path from "node:path";
 import crypto from "node:crypto";
-import { putObject, getObjectText, listObjects, listObjectsDetailed, deleteObject } from "../tools/r2.mjs";
+import { r2ConfigFrom, putObject, getObjectText, listObjects, listObjectsDetailed, deleteObject } from "../tools/r2.mjs";
 
 
 /** Content types for what the Library holds; /save accepts only these. */
@@ -147,38 +147,43 @@ const buildR2Tree = (objects, publicUrl) => {
   return { root, folders: folders.size - 1 };
 };
 
-/** Constant-time compare, so the password cannot be guessed one character at a time from timings. */
-const passwordMatches = (given, expected) => {
-  const a = Buffer.from(String(given ?? ""));
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+/** R2's S3 endpoint and nothing else — the function must not become a signed proxy to arbitrary hosts. */
+const R2_ENDPOINT_RE = /^https:\/\/[a-z0-9]+\.(?:[a-z]+\.)?r2\.cloudflarestorage\.com\/?$/i;
+
+/** The bucket config carried by the request's x-r2-* headers, or null when they are absent / incomplete. */
+const configFromHeaders = (req, publicUrl, prefix) => {
+  const h = (name) => String(req.headers[name] ?? "").trim();
+  const endpoint = h("x-r2-endpoint");
+  if (!endpoint || !R2_ENDPOINT_RE.test(endpoint)) return null;
+  return r2ConfigFrom({
+    R2_ENDPOINT: endpoint,
+    R2_ACCESS_KEY_ID: h("x-r2-access-key-id"),
+    R2_SECRET_ACCESS_KEY: h("x-r2-secret-access-key"),
+    R2_BUCKET: h("x-r2-bucket"),
+    R2_PUBLIC_URL: publicUrl ?? "",
+    R2_LIBRARY_PREFIX: prefix || "library",
+  });
 };
 
 /** Handle one `/__r2/<route>` request. `route` is the part after /__r2 ("/list", "/save", …).
- *  Options: `requirePassword` (Vercel), `password` (R2_ACCESS_PASSWORD; unset = every locked route refuses),
- *  `uploadLimit` in bytes. */
-export async function handleR2(req, res, cfg, route, url, opts = {}) {
+ *  `envCfg` is the server's own bucket config (from R2_*); it is used only when `allowEnvConfig` is set
+ *  (the dev server) — otherwise the request must bring its own keys. `uploadLimit` is in bytes. */
+export async function handleR2(req, res, envCfg, route, url, opts = {}) {
   try {
-    const locked = !!opts.requirePassword;
-    const expected = opts.password || "";
+    const cfg =
+      configFromHeaders(req, envCfg?.publicUrl ?? opts.publicUrl, envCfg?.prefix) ?? (opts.allowEnvConfig ? envCfg : null);
 
-    // GET /status → whether the bucket is configured and where reads point. Open, so the UI can show
-    // the option before anyone has typed the password.
+    // GET /status → whether the bucket is usable with the keys at hand, and where reads point.
     if (req.method === "GET" && route === "/status") {
       return sendJson(res, 200, {
         ok: true,
         configured: !!cfg,
-        passwordRequired: locked,
         bucket: cfg?.bucket ?? "",
         publicUrl: cfg?.publicUrl ?? "",
         prefix: cfg?.prefix ?? "",
       });
     }
-    if (locked && !expected)
-      return sendJson(res, 503, { error: "R2_ACCESS_PASSWORD is not set on the server" });
-    if (locked && !passwordMatches(req.headers["x-bucket-password"], expected))
-      return sendJson(res, 401, { error: "bucket password required" });
-    if (!cfg) return sendJson(res, 503, { error: "R2 is not configured — set the R2_* variables" });
+    if (!cfg) return sendJson(res, 401, { error: "no Cloudflare R2 keys — enter them in Preferences ▸ Cloudflare R2" });
 
     // POST /save { path, content } → one object under the library prefix.
     if (req.method === "POST" && route === "/save") {

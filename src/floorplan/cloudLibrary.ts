@@ -80,33 +80,55 @@ export interface CloudLibraryStatus {
   prefix: string;
 }
 
-/** Where the bucket password is remembered in this browser (the deployed bridge asks for one). */
-const BUCKET_PASSWORD_KEY = "r2BucketPassword";
-/** One prompt at a time: the library fires several listings at once on load, and each would ask. */
-let passwordPrompt: Promise<string | null> | null = null;
+/** Cloudflare R2 keys entered in Preferences ▸ Cloudflare R2. Kept in THIS browser only and sent to the
+ *  app's own `/__r2` bridge, which signs with them — the deployed bridge has no keys of its own, so
+ *  without these nothing can list or write the bucket there. Locally the dev server falls back to .env. */
+export interface R2Credentials {
+  endpoint: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+}
 
-const storedPassword = (): string => {
-  try { return localStorage.getItem(BUCKET_PASSWORD_KEY) ?? ""; } catch { return ""; }
-};
+const R2_CREDENTIALS_KEY = "r2Credentials";
+const EMPTY_CREDENTIALS: R2Credentials = { endpoint: "", accessKeyId: "", secretAccessKey: "", bucket: "" };
 
-/** `fetch` for the `/__r2/*` bridge. Sends the remembered bucket password; on a 401 (the deployed bridge,
- *  wrong or missing password) asks for it ONCE, retries, and remembers it when the server accepts it.
- *  The dev server never answers 401, so locally this is a plain fetch. */
-async function r2Fetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const send = (password: string) =>
-    fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...(password ? { "x-bucket-password": password } : {}) } });
-  const res = await send(storedPassword());
-  if (res.status !== 401 || typeof window === "undefined") return res;
-  passwordPrompt ??= Promise.resolve(window.prompt("Password for the R2 library bucket")).finally(() => {
-    setTimeout(() => { passwordPrompt = null; }, 0);
-  });
-  const entered = await passwordPrompt;
-  if (!entered) return res;
-  const retry = await send(entered);
-  if (retry.status !== 401) {
-    try { localStorage.setItem(BUCKET_PASSWORD_KEY, entered); } catch { /* private window — ask again next time */ }
+export function r2Credentials(): R2Credentials {
+  try {
+    const raw = JSON.parse(localStorage.getItem(R2_CREDENTIALS_KEY) ?? "null") as Partial<R2Credentials> | null;
+    return { ...EMPTY_CREDENTIALS, ...(raw ?? {}) };
+  } catch {
+    return { ...EMPTY_CREDENTIALS };
   }
-  return retry;
+}
+
+/** Save (or, with empty fields, clear) the keys and forget the memoised status so the next ask re-checks. */
+export function setR2Credentials(value: R2Credentials): void {
+  const clean: R2Credentials = {
+    endpoint: value.endpoint.trim().replace(/\/+$/, ""),
+    accessKeyId: value.accessKeyId.trim(),
+    secretAccessKey: value.secretAccessKey.trim(),
+    bucket: value.bucket.trim(),
+  };
+  try {
+    if (Object.values(clean).some(Boolean)) localStorage.setItem(R2_CREDENTIALS_KEY, JSON.stringify(clean));
+    else localStorage.removeItem(R2_CREDENTIALS_KEY);
+  } catch { /* storage blocked — the keys just won't persist */ }
+  statusPromise = null;
+}
+
+/** `fetch` for the `/__r2/*` bridge, carrying the stored keys as headers when all four are set. */
+function r2Fetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const c = r2Credentials();
+  const keys = c.endpoint && c.accessKeyId && c.secretAccessKey && c.bucket
+    ? {
+        "x-r2-endpoint": c.endpoint,
+        "x-r2-access-key-id": c.accessKeyId,
+        "x-r2-secret-access-key": c.secretAccessKey,
+        "x-r2-bucket": c.bucket,
+      }
+    : {};
+  return fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...keys } });
 }
 
 const UNAVAILABLE: CloudLibraryStatus = {
@@ -129,7 +151,7 @@ export function cloudLibraryStatus(refresh = false): Promise<CloudLibraryStatus>
   if (refresh) statusPromise = null;
   statusPromise ??= (async () => {
     try {
-      const res = await fetch("/__r2/status");
+      const res = await r2Fetch("/__r2/status");
       // `body.ok` must be checked too: an SPA fallback answers unknown routes with 200 + index.html,
       // which parses as neither JSON nor a status — production must read as "not writable", not as a
       // malformed success.

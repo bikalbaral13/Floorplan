@@ -1,10 +1,8 @@
 /** Vercel serverless function behind `/__r2/*` (rewritten here by vercel.json) — the production twin of
- *  the dev server's R2 bridge. Same routes, same code (server/r2Bridge.mjs), but password-protected:
- *  every route except /status needs the `x-bucket-password` header. Set the R2_* variables and
- *  R2_ACCESS_PASSWORD in the Vercel project's Environment Variables. */
+ *  the dev server's R2 bridge, same routes and code (server/r2Bridge.mjs). It holds NO keys: every call
+ *  signs with the Cloudflare R2 keys the browser sends from Preferences ▸ Cloudflare R2. */
 
 import { handleR2 } from "../server/r2Bridge.mjs";
-import { r2ConfigFrom } from "../tools/r2.mjs";
 
 export default async function handler(req, res) {
   const url = new URL(req.url ?? "/", "http://vercel");
@@ -12,9 +10,8 @@ export default async function handler(req, res) {
   const route = url.pathname.startsWith("/__r2/")
     ? url.pathname.slice("/__r2".length)
     : `/${(url.searchParams.get("route") ?? "").replace(/^\/+/, "")}`;
-  await handleR2(req, res, r2ConfigFrom(process.env), route, url, {
-    requirePassword: true,
-    password: process.env.R2_ACCESS_PASSWORD,
+  await handleR2(req, res, null, route, url, {
+    publicUrl: (process.env.R2_PUBLIC_URL ?? "").replace(/\/+$/, ""),
     // Vercel caps a function's request body at 4.5 MB.
     uploadLimit: 4_400_000,
   });

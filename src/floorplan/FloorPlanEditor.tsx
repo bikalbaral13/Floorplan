@@ -193,6 +193,7 @@ import { AutoGenDialog } from "./components/dialogs/AutoGenDialog";
 import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealingDialog";
 import { Export3DDialog, DEFAULT_EXPORT_3D, type Export3DSettings } from "./components/dialogs/Export3DDialog";
 import { ExportJsonDialog } from "./components/dialogs/ExportJsonDialog";
+import { R2KeysSettings } from "./components/R2KeysSettings";
 import { CloudInspectDialog } from "./components/dialogs/CloudInspectDialog";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
 import { MESH3D_FORMATS } from "./export/flowMesh3d";
@@ -28020,6 +28021,7 @@ User request: ${aiPrompt.trim()}`;
                 )}
               </p>
             </label>
+            <R2KeysSettings />
           </div>
           {snappingSection}
           {/* Canvas — display units + Ortho draw lock. These are canvas-wide settings (the same

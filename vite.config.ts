@@ -10,7 +10,7 @@ import { handleR2 } from "./server/r2Bridge.mjs";
 // ── Cloudflare R2 bridge (dev server) ─────────────────────────────────────────────────────────────
 // `/__r2/*` — list / tree / get / save / upload / delete, signed with keys that stay in Node. The logic
 // lives in server/r2Bridge.mjs so the Vercel function (api/r2.mjs) serves the same routes in production;
-// there it is password-protected, here on your own machine it is not.
+// there it signs only with keys the browser sends (Preferences ▸ Cloudflare R2), here it falls back to .env.
 type R2Config = ReturnType<typeof r2ConfigFrom>;
 
 const r2Bridge = (cfg: R2Config): Plugin => ({
@@ -18,7 +18,7 @@ const r2Bridge = (cfg: R2Config): Plugin => ({
   configureServer(server) {
     server.middlewares.use("/__r2", (req, res) => {
       const url = new URL(req.url ?? "/", "http://local");
-      void handleR2(req, res, cfg, url.pathname, url);
+      void handleR2(req, res, cfg, url.pathname, url, { allowEnvConfig: true });
     });
   },
 });
