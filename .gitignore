@@ -57,3 +57,7 @@ tools/tmp-rugmat/*.png
 tools/scribbleplan/baked.json
 tools/scribbleplan/probe.baked.json
 floorplan_with_bedroom_after_improvement.baked.json
+
+# Python bytecode
+**/__pycache__/
+*.pyc
