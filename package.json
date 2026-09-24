@@ -11,14 +11,11 @@
     "preview": "vite preview",
     "verify": "node tools/verify/run.mjs",
     "verify:update": "node tools/verify/run.mjs --update",
-    "library:index": "npm --prefix ../library run index",
-    "prebuild": "npm --prefix ../library run check",
     "bake": "node tools/bake/run.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.6",
-    "@builderpluss/engine": "file:../engine",
-    "@builderpluss/library": "file:../library",
+    "@builderpluss/engine": "file:packages/engine",
     "@hookform/resolvers": "^3.10.0",
     "@huggingface/transformers": "^4.1.0",
     "@radix-ui/react-accordion": "^1.2.11",

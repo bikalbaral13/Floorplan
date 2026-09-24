@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Cloud, CloudOff, Download, FolderDown, Loader2 } from "lucide-react";
+import { Cloud, CloudOff, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { saveLibraryFile, LIB_DESIGNS } from "../../libraryFiles";
+import { LIB_DESIGNS } from "../../libraryFiles";
 import { cloudLibraryStatus, saveToCloudLibrary, type CloudLibraryStatus } from "../../cloudLibrary";
 
 export interface ExportJsonDialogProps {
@@ -25,12 +25,11 @@ export interface ExportJsonDialogProps {
 
 /** Where a design goes when you export it.
  *
- *  Three destinations, because they are genuinely different things and the old code did the first
- *  two at once — a download AND a library write on every click, with the result reported as a toast
+ *  Two destinations, because they are genuinely different things and the old code did both
+ *  at once — a download AND a library write on every click, with the result reported as a toast
  *  after the fact. Splitting them makes the cloud copy a decision rather than a side effect.
  *
  *    Download        the file, to your machine. Always available.
- *    Local Library   ../library/content/Designs — the git-tracked checkout. Dev server only.
  *    Cloud Library   the shared R2 bucket, which new_app and any other app read. Dev server only,
  *                    because the signing keys cannot ship to the browser (see cloudLibrary.ts).
  *
@@ -40,7 +39,7 @@ export interface ExportJsonDialogProps {
 export function ExportJsonDialog({ open, getPayload, defaultName, onClose }: ExportJsonDialogProps) {
   const [name, setName] = useState(defaultName);
   const [cloud, setCloud] = useState<CloudLibraryStatus | null>(null);
-  const [busy, setBusy] = useState<"" | "local" | "cloud">("");
+  const [busy, setBusy] = useState<"" | "cloud">("");
 
   // Re-seed on OPEN only. `defaultName` carries a timestamp, so it is a new string on every parent
   // render — depending on it here would reset the field under the user mid-keystroke.
@@ -65,15 +64,6 @@ export function ExportJsonDialog({ open, getPayload, defaultName, onClose }: Exp
     anchor.click();
     URL.revokeObjectURL(url);
     toast.success(`Downloaded ${fileName}`);
-    onClose();
-  };
-
-  const saveLocal = async () => {
-    setBusy("local");
-    const r = await saveLibraryFile(relPath, getPayload());
-    setBusy("");
-    if (!r.ok) return toast.error(`Could not save to the local Library: ${r.error ?? "unknown error"}`);
-    toast.success(`Saved to Library/${r.path}`);
     onClose();
   };
 
@@ -119,23 +109,6 @@ export function ExportJsonDialog({ open, getPayload, defaultName, onClose }: Exp
             <span className="flex flex-col items-start text-left leading-tight">
               <span>Download file</span>
               <span className="text-xs font-normal text-muted-foreground">To your computer</span>
-            </span>
-          </Button>
-
-          <Button
-            variant="outline"
-            className="justify-start gap-2"
-            onClick={() => void saveLocal()}
-            disabled={!!busy}
-          >
-            {busy === "local" ? (
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-            ) : (
-              <FolderDown className="h-4 w-4 shrink-0" />
-            )}
-            <span className="flex flex-col items-start text-left leading-tight">
-              <span>Save to Library</span>
-              <span className="text-xs font-normal text-muted-foreground">The local checkout — dev server only</span>
             </span>
           </Button>
 

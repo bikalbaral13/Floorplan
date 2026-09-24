@@ -1,0 +1,18 @@
+{
+  /* OPT-IN emit, for a consumer that cannot read TypeScript — a Node HTTP wrapper, say.
+     Nothing in this repo or in monica_recent resolves to `dist/`: `package.json` points at
+     `src/`, so a stale build cannot shadow an edit to the maths. Treat anything under dist/
+     as disposable output, never as a source. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    /* Embeds the original TypeScript in each .js.map. Cheap, and it is what made the sources
+       recoverable the one time dist/ outlived src/. */
+    "inlineSources": true
+  }
+}

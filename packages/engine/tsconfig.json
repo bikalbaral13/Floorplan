@@ -1,0 +1,30 @@
+{
+  /* Type-checking only — this config never emits. Consumers import `src/` directly, so there is
+     no build output that could go stale and silently shadow an edit to the maths. A non-bundler
+     consumer (a Node service) can still opt into an emit via tsconfig.build.json. */
+  "compilerOptions": {
+    /* Matches the host app's target so behaviour can't differ between the package
+       and the source it was extracted from. */
+    "target": "ES2020",
+    /* Deliberately no "DOM": a stray `document` or `fetch` in this package must be a
+       compile error, not a surprise when a second app runs it outside a browser.
+       `console` is declared narrowly in src/globals.d.ts. */
+    "lib": ["ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "noEmit": true,
+
+    /* The engine was written under the app's relaxed settings. Tightening these is a
+       worthwhile follow-up, but doing it during the extraction would mix a behavioural
+       change into a move — keep the two separable. */
+    "strict": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src"]
+}

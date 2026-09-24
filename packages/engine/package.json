@@ -1,0 +1,30 @@
+{
+  "name": "@builderpluss/engine",
+  "version": "0.2.0",
+  "description": "Expression language and computational-geometry library behind parametric floorplans — matrix interpreter, geometry/partitioning/layout algorithms, and chainable Mat / Vec2 / Vec3 / Poly facades. Pure and synchronous: no DOM, no host eval, no I/O.",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./node": "./dist/index.js",
+    "./*": "./src/*/index.ts",
+    "./src/*": "./src/*"
+  },
+  "files": ["src", "README.md"],
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "//build": "ONLY for a non-bundler consumer (a Node service). Consumers here read src/ directly, so a stale dist/ can never shadow an edit — see README.",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "polygon-clipping": "^0.15.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,15 +1,8 @@
-/** Client side of the dev-server Library file bridge (the `library-bridge` middleware in
- *  vite.config.ts). The browser can't write to the repo by itself, so saves POST to the dev server,
- *  which persists assets into `public/Library` — the single home for bundled files. Every call
- *  degrades gracefully (ok:false / null) when the bridge is unavailable (production/static hosting),
- *  so callers fall back to download-only behaviour.
- *
- *  THE R2 BUCKET IS THE SOURCE OF TRUTH. The on-disk Library was moved out of the repo and published
- *  to Cloudflare R2, so `public/Library` no longer exists and every `/Library/...` fetch 404s. Reads
- *  therefore go to the bucket FIRST — {@link libraryFileUrl} / {@link fetchLibraryJson} for content,
- *  {@link listLibraryFiles} for enumeration — and fall back to the local path only so a checkout that
- *  still has the folder (or a bucket that is briefly unreachable) keeps working. That order is the
- *  whole point: one source, with the local copy demoted to a fallback rather than a competitor.
+/** Client side of the Library — the R2 bucket is the ONLY home for library files. Reads go to the
+ *  bucket's public domain; writes, deletes and listings go through the dev server's signed R2 bridge
+ *  (`/__r2/*` in vite.config.ts). Every call degrades gracefully (ok:false / null) when the bridge is
+ *  unavailable (production/static hosting), so callers fall back to download-only behaviour and the
+ *  bundled manifests below.
  *
  *  TOP-LEVEL FOLDERS (the layout the whole app resolves against — see the LIB_* constants):
  *    Objects/    parametric objects (.pobj.json / .json) in category folders — the old "Parametric Objects"
@@ -18,7 +11,7 @@
  *    Designs/    exported whole-plan designs
  *    Agents/     agent definitions (.agent.json) */
 
-import { cloudLibraryUrl, fetchFromCloudLibrary, listCloudLibraryFiles } from "./cloudLibrary";
+import { cloudLibraryUrl, fetchFromCloudLibrary, listCloudLibraryFiles, saveToCloudLibrary, deleteFromBucket, cloudLibraryStatus } from "./cloudLibrary";
 
 /** Library root for parametric objects (was "Parametric Objects"). */
 export const LIB_OBJECTS = "Objects";
@@ -33,7 +26,7 @@ export const LIB_AGENTS = "Agents";
 
 export interface LibrarySaveResult { ok: boolean; path?: string; error?: string }
 
-/** Category folder of public/Library/Objects for a .pobj file — the folders are SEMANTIC
+/** Category folder of Library/Objects for a .pobj file — the folders are SEMANTIC
  *  (Kitchen / Furniture / Bathroom / MEP / Structural / Architectural / Site / System / Decor / Parking /
  *  Services / Outdoor / Puja / Utility / Hydraulics / Electronics); the
  *  hostKind lives inside the file, not the folder. Keyword-matched from meta.category, with a
@@ -62,93 +55,48 @@ export function pobjFolderFor(category: string | undefined, hostKind: string | u
   return "Misc";
 }
 
-/** Write one JSON file inside public/Library. `relPath` is Library-relative, e.g.
+/** Write one file into the R2 Library. `relPath` is Library-relative, e.g.
  *  "Objects/Site/site.pobj.json" or "Workflows/my-flow.json". */
 export async function saveLibraryFile(relPath: string, content: string): Promise<LibrarySaveResult> {
-  try {
-    const res = await fetch("/__library/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: relPath, content }),
-    });
-    // `body.ok` must be checked too: SPA fallbacks answer unknown routes with 200 + index.html.
-    const body = (await res.json().catch(() => null)) as (LibrarySaveResult & { ok?: unknown }) | null;
-    return res.ok && body?.ok === true
-      ? { ok: true, path: typeof body.path === "string" ? body.path : relPath }
-      : { ok: false, error: body?.error ?? `HTTP ${res.status}` };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
+  const res = await saveToCloudLibrary(relPath.replace(/^\/+/, ""), content);
+  return res.ok ? { ok: true, path: relPath } : { ok: false, error: res.error };
 }
 
-/** The URL to READ one Library-relative file from ("Objects/Site/site.json", "Agents/foo.agent.json").
- *
- *  Prefers the R2 bucket's public domain — the source of truth — and falls back to the local
- *  `/Library/...` path only when no read domain is configured. Callers that just want the parsed JSON
- *  should use {@link fetchLibraryJson}, which also retries locally when the bucket 404s a file. */
+/** The public R2 URL of one Library-relative file ("Objects/Site/site.json"), or "" when no read
+ *  domain is configured. Callers that want parsed JSON should use {@link fetchLibraryJson}. */
 export async function libraryFileUrl(relPath: string): Promise<string> {
-  const rel = relPath.replace(/^\/+/, "");
-  return (await cloudLibraryUrl(rel)) || `/Library/${rel}`;
+  return cloudLibraryUrl(relPath.replace(/^\/+/, ""));
 }
 
-/** Fetch + parse one Library-relative JSON file: the bucket first, the local copy second.
- *
- *  BOTH are tried rather than only the winner, because "configured" and "has this file" are different
- *  questions — a bucket that is reachable but missing one object should not black-hole an import that
- *  the local folder could still satisfy. Null only when neither has it. */
+/** Fetch + parse one Library-relative JSON file from the bucket. Null when absent. */
 export async function fetchLibraryJson<T = unknown>(relPath: string): Promise<T | null> {
-  const rel = relPath.replace(/^\/+/, "");
-  const cloud = await fetchFromCloudLibrary<T>(rel);
-  if (cloud != null) return cloud;
+  return fetchFromCloudLibrary<T>(relPath.replace(/^\/+/, ""));
+}
+
+/** Fetch one Library-relative file as TEXT from the bucket, with the same forced revalidation as
+ *  `fetchFromCloudLibrary`. Skills are markdown, so they cannot go through the JSON reader. */
+export async function fetchLibraryText(relPath: string): Promise<string | null> {
+  const url = await cloudLibraryUrl(relPath.replace(/^\/+/, ""));
+  if (!url) return null;
   try {
-    const res = await fetch(encodeURI(`/Library/${rel}`));
-    return res.ok ? ((await res.json()) as T) : null;
+    const res = await fetch(encodeURI(url), { cache: "no-cache" });
+    return res.ok ? await res.text() : null;
   } catch {
     return null;
   }
-}
-
-/** Fetch one Library-relative file as TEXT — same bucket-then-local order as {@link fetchLibraryJson},
- *  and the same forced revalidation (see `fetchFromCloudLibrary` for why the bucket cannot be read with
- *  the default cache mode). Skills are markdown, so they cannot go through the JSON reader. */
-export async function fetchLibraryText(relPath: string): Promise<string | null> {
-  const rel = relPath.replace(/^\/+/, "");
-  const cloudUrl = await cloudLibraryUrl(rel);
-  for (const url of [cloudUrl, `/Library/${rel}`]) {
-    if (!url) continue;
-    try {
-      const res = await fetch(encodeURI(url), { cache: "no-cache" });
-      if (res.ok) return await res.text();
-    } catch { /* try the next source */ }
-  }
-  return null;
 }
 
 /** List every file of the given extension under a Library subfolder (paths relative to it, e.g.
- *  "Site/site.pobj.json" for dir "Objects") — null when NEITHER source can enumerate, so callers fall
- *  back to the bundled manifest. Skills are markdown; pass ext "md" for those.
- *
- *  The BUCKET is asked first. Note that enumerating it still needs the dev bridge (`/__r2/list`):
- *  r2.dev serves objects but will not list them, so a production build has no listing from either
- *  source and lands on the bundled manifest exactly as before. */
+ *  "Site/site.pobj.json" for dir "Objects") — null when the bucket can't be enumerated (r2.dev serves
+ *  objects but won't list them, so a production build needs the `/__r2/list` bridge), in which case
+ *  callers fall back to the bundled manifest. Skills are markdown; pass ext "md" for those. */
 export async function listLibraryFiles(dir: string, ext = "json"): Promise<string[] | null> {
   const suffix = `.${ext.replace(/^\./, "").toLowerCase()}`;
   const cloud = await listCloudLibraryFiles(dir);
-  if (cloud?.length) {
-    const matching = cloud.filter((f) => f.toLowerCase().endsWith(suffix));
-    if (matching.length) return matching;
-  }
-  try {
-    const res = await fetch(`/__library/list?dir=${encodeURIComponent(dir)}&ext=${encodeURIComponent(ext)}`);
-    if (!res.ok) return null;
-    const body = (await res.json().catch(() => null)) as { files?: unknown } | null;
-    return Array.isArray(body?.files) ? body.files.map(String) : null;
-  } catch {
-    return null;
-  }
+  return cloud ? cloud.filter((f) => f.toLowerCase().endsWith(suffix)) : null;
 }
 
-/** Category-relative paths of every bundled object file under public/Library/Objects — the production
+/** Category-relative paths of every bundled object file under Library/Objects — the production
  *  fallback for {@link listParametricObjectFiles} (static hosting can't list directories; dev lists
  *  LIVE through the bridge). NEW bundled objects belong in their category folder AND here. */
 export const BUNDLED_POBJ_FILES: string[] = [
@@ -178,7 +126,7 @@ export const BUNDLED_POBJ_FILES: string[] = [
   "System/titleblock-a1.pobj.json",
 ];
 
-/** Every `.json` under public/Library/Objects, category-relative (e.g. "Site/site.pobj.json"). Live
+/** Every `.json` under Library/Objects, category-relative (e.g. "Site/site.pobj.json"). Live
  *  dev-bridge listing when available — so agent-saved objects appear alongside the bundled set —
  *  otherwise the {@link BUNDLED_POBJ_FILES} manifest. */
 export async function listParametricObjectFiles(): Promise<string[]> {
@@ -187,7 +135,7 @@ export async function listParametricObjectFiles(): Promise<string[]> {
 }
 
 /** Folder-relative paths of every bundled TOOL (flow node declaration / template) under
- *  public/Library/Tools — the production fallback for {@link listFlowNodeFiles} (static hosting can't
+ *  Library/Tools — the production fallback for {@link listFlowNodeFiles} (static hosting can't
  *  list directories; dev lists LIVE through the bridge). Each `.node.json` names a `tool` + its params.
  *  NEW bundled tools belong in their category folder under Tools AND here. */
 export const BUNDLED_FLOW_NODE_FILES: string[] = [
@@ -341,7 +289,7 @@ export const BUNDLED_FLOW_NODE_FILES: string[] = [
   "New Tools/watershed_with_math.json",
 ];
 
-/** Every `.json` under public/Library/Tools, folder-relative (e.g. "2d primitives/point.node.json").
+/** Every `.json` under Library/Tools, folder-relative (e.g. "2d primitives/point.node.json").
  *  Live dev-bridge listing when available — so user-saved tools appear alongside the bundled set —
  *  otherwise the {@link BUNDLED_FLOW_NODE_FILES} manifest. */
 export async function listFlowNodeFiles(): Promise<string[]> {
@@ -349,7 +297,7 @@ export async function listFlowNodeFiles(): Promise<string[]> {
   return listed?.length ? listed.filter((rel) => rel.toLowerCase().endsWith(".json")) : BUNDLED_FLOW_NODE_FILES;
 }
 
-/** Folder-relative paths of every bundled WORKFLOW under public/Library/Workflows — the production
+/** Folder-relative paths of every bundled WORKFLOW under Library/Workflows — the production
  *  fallback for {@link listWorkflowFiles}, mirroring {@link BUNDLED_POBJ_FILES} and
  *  {@link BUNDLED_FLOW_NODE_FILES}. Without it the Import browser showed Objects and Tools but silently
  *  omitted Workflows, because those two fall back to a manifest and this one had nothing to fall back to.
@@ -402,7 +350,7 @@ export const BUNDLED_WORKFLOW_FILES: string[] = [
   "Render/Faithful_Space_Render.json",
 ];
 
-/** Every `.json` under public/Library/Workflows, folder-relative (e.g. "Operations/inset.json").
+/** Every `.json` under Library/Workflows, folder-relative (e.g. "Operations/inset.json").
  *  Live dev-bridge listing when available — so agent-saved and exported flows appear alongside the
  *  bundled set — otherwise the {@link BUNDLED_WORKFLOW_FILES} manifest. Same contract as the Objects and
  *  Tools listings, so the Import browser shows all three roots in dev AND in a production build. */
@@ -411,38 +359,33 @@ export async function listWorkflowFiles(): Promise<string[]> {
   return listed?.length ? listed.filter((rel) => rel.toLowerCase().endsWith(".json")) : BUNDLED_WORKFLOW_FILES;
 }
 
-/** Delete ONE `.json` file inside public/Library by its Library-relative path (e.g.
- *  "Tools/Reshape/inset.node.json"). Path-locked inside public/Library by the bridge; degrades to
- *  ok:false on production hosting. Used by the Flow Agent to remove node / workflow templates. */
-export async function deleteLibraryFile(relPath: string): Promise<{ ok: boolean; deleted?: string; error?: string }> {
-  try {
-    const res = await fetch("/__library/delete-file", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: relPath }),
-    });
-    const body = (await res.json().catch(() => null)) as { ok?: unknown; deleted?: unknown; error?: unknown } | null;
-    return res.ok && body?.ok === true
-      ? { ok: true, deleted: typeof body.deleted === "string" ? body.deleted : relPath }
-      : { ok: false, error: typeof body?.error === "string" ? body.error : `HTTP ${res.status}` };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
+/** Full bucket key of a Library-relative path ("Tools/Reshape/inset.node.json" → "library/Tools/…"). */
+async function bucketKey(relPath: string): Promise<string> {
+  const { prefix } = await cloudLibraryStatus();
+  const p = prefix.replace(/^\/+|\/+$/g, "");
+  const rel = relPath.replace(/^\/+/, "");
+  return p ? `${p}/${rel}` : rel;
 }
 
-/** Delete the object files under public/Library/Objects whose meta.id matches one of
- *  `ids` (the server scans and matches by file content, so renamed files are found too). */
+/** Delete ONE file from the R2 Library by its Library-relative path (e.g. "Tools/Reshape/inset.node.json").
+ *  Degrades to ok:false on production hosting. Used by the Flow Agent to remove node / workflow templates. */
+export async function deleteLibraryFile(relPath: string): Promise<{ ok: boolean; deleted?: string; error?: string }> {
+  const res = await deleteFromBucket(await bucketKey(relPath));
+  return res.ok ? { ok: true, deleted: relPath } : { ok: false, error: res.error };
+}
+
+/** Delete the object files under Library/Objects whose meta.id matches one of `ids` (matched by file
+ *  content, so renamed files are found too). Null when the bucket can't be listed. */
 export async function deleteLibraryObjectFiles(ids: string[]): Promise<{ deleted: string[] } | null> {
-  try {
-    const res = await fetch("/__library/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json().catch(() => null)) as { ok?: unknown; deleted?: unknown } | null;
-    return body?.ok === true ? { deleted: Array.isArray(body.deleted) ? body.deleted.map(String) : [] } : null;
-  } catch {
-    return null;
+  const want = new Set(ids);
+  const files = await listLibraryFiles(LIB_OBJECTS);
+  if (!files) return null;
+  const deleted: string[] = [];
+  for (const rel of files) {
+    const path = `${LIB_OBJECTS}/${rel}`;
+    const json = await fetchLibraryJson<{ meta?: { id?: unknown }; id?: unknown }>(path);
+    const id = json?.meta?.id ?? json?.id;
+    if (typeof id === "string" && want.has(id) && (await deleteLibraryFile(path)).ok) deleted.push(path);
   }
+  return { deleted };
 }

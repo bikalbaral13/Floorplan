@@ -164,7 +164,7 @@ export async function cloudLibraryUrl(relPath: string): Promise<string> {
 }
 
 /** Fetch and parse one JSON file from the cloud Library. Null when unconfigured or absent —
- *  callers fall back to the local `/Library/...` copy rather than failing the import.
+ *  callers treat that as "not in the library".
  *
  *  `cache: "no-cache"` is LOAD-BEARING, not a precaution. r2.dev serves library objects with an ETag and
  *  a Last-Modified and NO Cache-Control, which leaves the browser free to invent a freshness lifetime —
