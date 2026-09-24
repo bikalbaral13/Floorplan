@@ -80,6 +80,35 @@ export interface CloudLibraryStatus {
   prefix: string;
 }
 
+/** Where the bucket password is remembered in this browser (the deployed bridge asks for one). */
+const BUCKET_PASSWORD_KEY = "r2BucketPassword";
+/** One prompt at a time: the library fires several listings at once on load, and each would ask. */
+let passwordPrompt: Promise<string | null> | null = null;
+
+const storedPassword = (): string => {
+  try { return localStorage.getItem(BUCKET_PASSWORD_KEY) ?? ""; } catch { return ""; }
+};
+
+/** `fetch` for the `/__r2/*` bridge. Sends the remembered bucket password; on a 401 (the deployed bridge,
+ *  wrong or missing password) asks for it ONCE, retries, and remembers it when the server accepts it.
+ *  The dev server never answers 401, so locally this is a plain fetch. */
+async function r2Fetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const send = (password: string) =>
+    fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...(password ? { "x-bucket-password": password } : {}) } });
+  const res = await send(storedPassword());
+  if (res.status !== 401 || typeof window === "undefined") return res;
+  passwordPrompt ??= Promise.resolve(window.prompt("Password for the R2 library bucket")).finally(() => {
+    setTimeout(() => { passwordPrompt = null; }, 0);
+  });
+  const entered = await passwordPrompt;
+  if (!entered) return res;
+  const retry = await send(entered);
+  if (retry.status !== 401) {
+    try { localStorage.setItem(BUCKET_PASSWORD_KEY, entered); } catch { /* private window — ask again next time */ }
+  }
+  return retry;
+}
+
 const UNAVAILABLE: CloudLibraryStatus = {
   writable: false,
   readable: false,
@@ -137,7 +166,7 @@ export interface CloudSaveResult {
  *  "Objects/Site/site.json" — the prefix is added server-side so the client cannot escape it. */
 export async function saveToCloudLibrary(relPath: string, content: string): Promise<CloudSaveResult> {
   try {
-    const res = await fetch("/__r2/save", {
+    const res = await r2Fetch("/__r2/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: relPath, content }),
@@ -221,7 +250,7 @@ export interface CloudTree {
  */
 export async function fetchCloudTree(prefix = ""): Promise<{ tree: CloudTree | null; error?: string }> {
   try {
-    const res = await fetch(`/__r2/tree?prefix=${encodeURIComponent(prefix)}`);
+    const res = await r2Fetch(`/__r2/tree?prefix=${encodeURIComponent(prefix)}`);
     const body = (await res.json().catch(() => null)) as (Partial<CloudTree> & { ok?: unknown; error?: unknown }) | null;
     // `body.ok` guards the SPA fallback, which answers unknown routes with 200 + index.html.
     if (!res.ok || body?.ok !== true || !body.tree) {
@@ -263,7 +292,7 @@ export interface CloudFileText {
  */
 export async function fetchBucketFileText(key: string): Promise<CloudFileText> {
   try {
-    const res = await fetch(`/__r2/get?key=${encodeURIComponent(key)}`);
+    const res = await r2Fetch(`/__r2/get?key=${encodeURIComponent(key)}`);
     const body = (await res.json().catch(() => null)) as (CloudFileText & { ok?: unknown }) | null;
     // `body.ok` guards the SPA fallback, which answers unknown routes with 200 + index.html.
     return res.ok && body?.ok === true
@@ -292,7 +321,7 @@ export interface CloudWriteResult {
  */
 export async function uploadToBucket(key: string, file: Blob): Promise<CloudWriteResult> {
   try {
-    const res = await fetch(`/__r2/upload?key=${encodeURIComponent(key)}`, {
+    const res = await r2Fetch(`/__r2/upload?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: file,
@@ -310,7 +339,7 @@ export async function uploadToBucket(key: string, file: Blob): Promise<CloudWrit
  *  must have confirmed with the user before this is reached. */
 export async function deleteFromBucket(key: string): Promise<CloudWriteResult> {
   try {
-    const res = await fetch("/__r2/delete", {
+    const res = await r2Fetch("/__r2/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key }),
@@ -333,7 +362,7 @@ export async function deleteFromBucket(key: string): Promise<CloudWriteResult> {
  */
 export async function listCloudLibraryFiles(dir: string): Promise<string[] | null> {
   try {
-    const res = await fetch(`/__r2/list?dir=${encodeURIComponent(dir)}`);
+    const res = await r2Fetch(`/__r2/list?dir=${encodeURIComponent(dir)}`);
     if (!res.ok) return null;
     const body = (await res.json().catch(() => null)) as { ok?: unknown; files?: unknown } | null;
     return body?.ok === true && Array.isArray(body.files) ? body.files.map(String) : null;

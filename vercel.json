@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/__r2/:route*",
+      "destination": "/api/r2?route=:route*"
+    },
+    {
       "source": "/meshy-assets/:match*",
       "destination": "https://assets.meshy.ai/:match*"
     },
