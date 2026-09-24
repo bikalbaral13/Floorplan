@@ -1,0 +1,116 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "49af69986b6a114c"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": []
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 10,
+          "vertices": 50,
+          "area": 416.6,
+          "bbox": [
+            -5,
+            -4,
+            5,
+            4
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 10,
+          "vertices": 50,
+          "area": 416.6,
+          "bbox": [
+            -5,
+            -4,
+            5,
+            4
+          ],
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "45b20d98a063bcea"
+      },
+      "solids": {
+        "count": 10,
+        "volume": 124.98,
+        "hash": "ec48889a06377087"
+      },
+      "metrics": [
+        {
+          "key": "Shapes",
+          "name": "Shapes",
+          "value": "10"
+        },
+        {
+          "key": "Width",
+          "name": "Width",
+          "value": "10",
+          "unit": "m"
+        },
+        {
+          "key": "Depth",
+          "name": "Depth",
+          "value": "8",
+          "unit": "m"
+        },
+        {
+          "key": "Height",
+          "name": "Height",
+          "value": "3",
+          "unit": "m"
+        },
+        {
+          "key": "Footprint",
+          "name": "Footprint",
+          "value": "416.6",
+          "unit": "m²"
+        },
+        {
+          "key": "Volume",
+          "name": "Volume",
+          "value": "124.98",
+          "unit": "m³"
+        }
+      ]
+    }
+  }
+}

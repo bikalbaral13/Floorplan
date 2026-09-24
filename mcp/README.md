@@ -19,7 +19,7 @@ canvas, and posts the result back — so you see the change happen on screen.
 ## Enable it (one time)
 
 1. **Turn the bridge ON in the app** (it's off by default so it never runs in normal use). Either:
-   - open the app at `http://localhost:2000/?agent=1`, or
+   - open the app at `http://localhost:3000/?agent=1`, or
    - in the browser devtools console: `localStorage.setItem("bp.agentBridge","1")` then reload.
    You can confirm it's polling in the Network tab (requests to `127.0.0.1:41414/next`).
 
@@ -56,8 +56,60 @@ canvas, and posts the result back — so you see the change happen on screen.
 
 **Typical flow:** `import_objects` → `list_draw_tools` → `draw_segment` (shell, type=`wall`) → `place_opening` (doors/windows) → `place_object` (furniture). Everything is in metres and renders as real parametric objects.
 
+## Stepwise mode (build *with* the user, not *at* them)
+
+Two tools turn a one-shot build into a reviewed, step-by-step one:
+
+| Tool | What it does |
+|------|--------------|
+| `begin_step` | **opens a step** and arms the gate. Drawing tools are refused unless a step is open, and you cannot open one while another is open. |
+| `delete_entities` | **retraction** — removes segments / objects / furniture by id (redraw the span you want healed). |
+| `style_segments` | restyle walls in place: thickness (absolute or scaled) and hatch; keeps `wall-thickness` in step. |
+| `attach_segment_object` | the Wall object (or any segment-hosted object) along existing segments without cutting — `all: true` puts `wall-with-math` on every wall. |
+| `export_plan` | the exact bytes Export JSON writes — how a run delivers to `library/Designs/`. |
+| `checkpoint` | **pauses the agent** and hands control to the user: a card appears in the live app with what you just did; the call blocks until they answer. They can edit the canvas by hand and/or type a note first. Returns `{ decision, notes, userEdits, rev }`. |
+| `get_changes_since` | every plan revision after `rev`, each tagged `agent` (your own tool call) or `user` (a hand edit), with the entities added / removed / modified, the properties that changed and geometry in **metres**. |
+
+```
+draw step 1  →  checkpoint("1/6 — calibrate")   ⏸  user nudges a wall, types "north wall is 200mm out"
+             ←  { decision:"continue", notes:"…", userEdits:[…moved wall…] }
+draw step 2  →  checkpoint("2/6 — exterior walls")   ⏸  …
+```
+
+The rule that makes it work: **`userEdits` is ground truth.** Re-fit around what the user changed; never
+revert it.
+
+**The step gate.** Telling a model to "checkpoint after every step" does not hold — it will merge three
+steps into one turn and check in at the end, which is the behaviour stepwise mode exists to prevent. So the
+bridge enforces it: `begin_step` opens a step, `checkpoint` closes it, and every drawing tool is refused
+while no step is open. A model can still do too much inside one step, but never unlabelled — every write
+belongs to a declared step, and every step ends at the user. `"redo step"` keeps the step open so it can be
+redone under the same label. The gate stays **disarmed until the first `begin_step`**, so one-shot use of
+the bridge is completely unaffected; `import_objects` is never gated, since every skill is told to call it
+before anything else. `get_state` reports the open step and the accepted ones, which is how an interrupted
+run is resumed.
+
+**Answering from the chat instead of the app.** When the MCP client supports
+[elicitation](https://modelcontextprotocol.io/specification/server/elicitation) (protocol `2025-06-18`+,
+which the bridge negotiates automatically), `checkpoint` *also* asks in the chat and takes whichever answer
+arrives first — a chat answer closes the card in the app, and the user's canvas edits still come back in the
+result. Clients without elicitation simply use the card. The wait budget is 30 min (`FP_CHECKPOINT_TIMEOUT_MS`).
+
+Attribution is by time window, not by instrumenting every mutator: `agentBridge.ts` marks the span of each
+tool call and `agentRevisions.ts` credits changes inside it (plus a short grace for React's commit) to the
+agent. A checkpoint suspends that span while it waits — so edits made while the card is open are the
+user's, which is the entire point.
+
+
 ## Notes
 - The bridge is **opt-in** and **localhost-only**. Leave it off for normal use; a random web page can't reach
   the channel meaningfully, but don't expose port 41414 beyond localhost.
 - If a tool returns *"browser did not respond"*, the tab isn't open with the bridge enabled (step 1).
-- Change the port with `FP_BRIDGE_PORT` (also update the fetch base in `agentBridge.ts` if you do).
+- **Do not edit `FloorPlanEditor.tsx` while a run is live.** Adding a hook makes Fast Refresh remount the
+  editor and the canvas is wiped; and because the bridge effect re-runs on every refresh, a handler must read
+  component callbacks through a ref (`export_plan` → `exportJsonRef`), never a captured closure.
+- Step-gate state lives in the bridge **process**, so it survives a chat session but not a bridge restart.
+  After a restart the canvas is the real record: `get_changes_since(0)` shows what is already drawn, and by whom.
+- Change the port with `FP_BRIDGE_PORT`, and point the app at it with `?agentPort=41415` or
+  `localStorage.setItem("bp.agentBridgePort", "41415")` — handy for running a second bridge beside the
+  one your MCP client owns.

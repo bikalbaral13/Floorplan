@@ -1,0 +1,636 @@
+{
+  "version": 1,
+  "id": "tessellation-with-math",
+  "title": "Tessellation from Maths — tile a Space with squares, brick, triangles, hexagons or rhombi",
+  "category": "Mathematics",
+  "object": {
+    "hostKind": "space",
+    "name": "Tessellation",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 4h7v7H4z",
+        "M13 4h7v7h-7z",
+        "M4 13h7v7H4z",
+        "M13 13h7v7h-7z"
+      ]
+    }
+  },
+  "description": "Fill a SPACE with a periodic tiling, in plan and as an extruded solid.\n\n  Space (canvas) → Input Properties → Expression → 2D Render / 3D Render\n\nDUAL-USE. It is both a FLOW and an ATTACHABLE OBJECT, from one file. Import it from the flow overlay and it drives whatever Space is selected; import it from Import Objects and it appears in Add Space, to be attached to a Space and carried in the project — its parameters become that instance's Properties tab and its metrics that instance's Metrics tab, so ten spaces can each hold their own pattern. The `object` block is the only thing that makes the second reading possible; nothing else about the file differs.\n\nATTACH IT WITH THE COST IN MIND. Every attached spine re-resolves whenever walls, spaces or the object library change — so a wall being dragged re-evaluates each one. This body runs in roughly 0.6 s on an 8 × 5 m space at the default cell size, against 5 ms for Inset, and the cost scales with the tile count. That is fine for laying a pattern into a finished space, and it will feel heavy if several tessellated spaces are attached while the plan is still being moved around. Reach for the flow while designing and the attachment once the space has settled.\n\nPATTERNS. Five periodic tilings, each a lattice plus one cell template:\n\n  Square       a plain grid                                   4 corners\n  Brick        half-lap running bond, cell S × S/2            4 corners\n  Triangle     equilateral, alternate cells inverted          3 corners\n  Hexagon      pointy-top honeycomb, odd rows offset          6 corners\n  Rhombus      60° rhombi on a sheared lattice                4 corners\n\nONE GENERATOR, NOT FIVE. A pattern is fully described by four numbers and a template — column pitch, row pitch, an alternating row offset, and a shear — so the body does not branch into five constructions. It builds the (i, j) lattice once, then INSTANCES the template across it with `kron`: each centre repeated once per corner, the template tiled once per cell, and a rotation per instance (only Triangle uses it, to invert every other cell). Adding a sixth tiling is a template and four numbers, not another code path.\n\nANGLE ROTATES THE PATTERN, NOT THE SPACE. The host is rotated INTO pattern space, the lattice is generated axis-aligned there — which is what keeps the arithmetic simple — the tiles are clipped against the rotated host, and only the surviving tiles are rotated back out. So the space never moves and the tiling can meet its boundary at any angle.\n\nFIT decides what happens at the edge. \"Clip to boundary\" intersects every cell with the host in ONE call and fills the space exactly, leaving part-cells at the perimeter. \"Whole cells only\" keeps a cell when its centre is inside, so every tile is a complete, identical unit and the edge is ragged — the right choice when the tiles are real objects rather than a surface.\n\nJOINT shrinks each cell about its own centre, so the tiles read as separate units with a grout line between them rather than as one continuous mesh. It is applied to the TEMPLATE, so it costs nothing per cell.\n\nHEIGHT extrudes every tile from Base upward. HEIGHT VARIATION, 0–1, scales each tile's height by a deterministic hash of its index — the same tile is always the same height, so the relief does not flicker as other parameters change — which turns a flat floor into a coffered or stepped one. At 0 every tile is exactly Height.\n\nTHE CELL COUNT CANNOT EXPLODE. A tiny cell size in a large space would otherwise generate thousands of rings, and both the clip and the per-tile extrusion cost more than linearly in that number — 0.05 m cells on an 8 × 5 m space took 70 SECONDS before this was bounded. So the cell size is FLOORED at sqrt(bbox area / (fa · 250)), where `fa` is the pattern's own lattice-cell area factor: a plain area/S² rule would let Triangle through at more than twice the intended count, because its lattice cell covers 0.43 S² where Square's covers 1. The tiling still fills the space; the cells are simply not smaller than that floor, the same case now takes 1.7 s, and CELL SIZE USED is reported as a metric so the floor is visible rather than silent.\n\nVERIFIED THROUGH THE ENGINE on an 8 × 5 m rectangle (40 m²). Whole-cell mode returns exactly the corner count each tiling should have — Square 4, Brick 4, Triangle 3, Hexagon 6, Rhombus 4 — which is the check that the five templates and their lattices actually agree. Clipped mode returns mixed counts at the perimeter, as it must, and covers 92.5–92.8% for every pattern, the balance being the joints; whole-cell coverage runs from 88.9% (Square) to 99.2% (Hexagon), which is the packing efficiency of each tiling against a rectangle. No non-finite vertex appears in any plan or mesh, in any pattern, at any tested setting. Angle 30° and 90° re-tile cleanly, an L-shaped host clips to 95 tiles, a 2-point degenerate host returns nothing rather than throwing, and a cell larger than the host still returns 3 clipped tiles. Base −2 moves the solid to −2.00 → −1.70 without touching the plan. Height variation is a hash of the tile INDEX, so it is stable: two runs at 0.6 give byte-identical geometry, 90 distinct top levels between 0.122 and 0.299 against a 0.30 height — and at 0 there is exactly one top level, 0.300.\n\nWHAT IT DOES NOT DO. Periodic tilings only — no Penrose, no Voronoi, no substitution or aperiodic rules, and no random jitter of position or shape. Every cell in a pattern is the same size; there is no grading toward an edge or a focus. Clipped cells are extruded to the same height as whole ones rather than being tapered, and the tiling is flat — it does not follow a surface.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "Space001"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Space outline [[x, y], …] (m)",
+              "type": "text",
+              "value": "[[0, 0], [8, 0], [8, 5], [0, 5]]",
+              "options": []
+            },
+            {
+              "id": "pattern",
+              "name": "Pattern",
+              "type": "select",
+              "value": "Hexagon",
+              "options": [
+                "Square",
+                "Brick",
+                "Triangle",
+                "Hexagon",
+                "Rhombus"
+              ]
+            },
+            {
+              "id": "cellSize",
+              "name": "Cell size (m)",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.05,
+              "max": 10,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "cellLength",
+              "name": "Cell length (0 = square)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "originCorner",
+              "name": "Start from",
+              "type": "select",
+              "value": "NW",
+              "options": [
+                "NW",
+                "NE",
+                "SW",
+                "SE"
+              ]
+            },
+            {
+              "id": "startOffsetX",
+              "name": "Start offset — X",
+              "type": "range",
+              "value": 0,
+              "min": -4,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "startOffsetY",
+              "name": "Start offset — Y",
+              "type": "range",
+              "value": 0,
+              "min": -4,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "angle",
+              "name": "Pattern angle (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "joint",
+              "name": "Joint / grout width (m)",
+              "type": "range",
+              "value": 0.03,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "fitMode",
+              "name": "Edge",
+              "type": "select",
+              "value": "Clip to boundary",
+              "options": [
+                "Clip to boundary",
+                "Whole cells only"
+              ]
+            },
+            {
+              "id": "height",
+              "name": "Extrude height (m)",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.005,
+              "max": 20,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "heightVariation",
+              "name": "Height variation (0–1)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "base",
+              "name": "Base level (m)",
+              "type": "range",
+              "value": 0,
+              "min": -30,
+              "max": 30,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "ivory marble-look porcelain, matt, 1 mm matching grout",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "geometric paving pattern, repeating, decorative, stone",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Tessellation maths",
+          "expr": "# ── Host polygon and the pattern frame ────────────────────────────────\n_N = rows(P)\n_ok = _N > 2\n_ang = angle * PI / 180\n_ca = cos(_ang)\n_sa = sin(_ang)\n_Px = col(P, 0)\n_Py = col(P, 1)\n_Rx = _Px * _ca + _Py * _sa\n_Ry = 0 - _Px * _sa + _Py * _ca\n_PR = hcat(_Rx, _Ry)\n_x0 = min(_Rx)\n_x1 = max(_Rx)\n_y0 = min(_Ry)\n_y1 = max(_Ry)\n_bw = max(0.001, _x1 - _x0)\n_bh = max(0.001, _y1 - _y0)\n\n_sq3 = sqrt(3)\n_isSq = pattern == 'Square'\n_isBr = pattern == 'Brick'\n_isTr = pattern == 'Triangle'\n_isHx = pattern == 'Hexagon'\n\n# ── Cell size, floored so the cell count can never explode. The floor is\n#    PATTERN-AWARE: a lattice cell covers _fa · S² of plan, and that factor\n#    runs from 0.43 (Triangle) to 1 (Square), so a single area/S² rule would\n#    let the denser tilings through at more than twice the intended count.\n_fa = _isSq ? 1 : (_isBr ? 0.5 : (_isTr ? _sq3 / 4 : (_isHx ? 3 * _sq3 / 8 : _sq3 / 2)))\n_cap = 250\n_Smin = sqrt(_bw * _bh / (_fa * _cap))\n_S = max(max(0.02, cellSize), _Smin)\n# A RECTANGULAR cell is the square cell stretched in y. Only Square and Brick survive that\n# stretch as themselves — a stretched hexagon or triangle is a different tiling, not the same\n# one longer — so the aspect is ignored for the other three and `cellLengthUsed` says so.\n_cellRect = cellLength > 0.001 && (_isSq || _isBr)\n_cellY = _cellRect ? max(0.02, cellLength) : _S\n_hT = _S * _sq3 / 2\n_R6 = _S / 2\n\n# ── One cell template per pattern, centred on the cell's own centroid ──\n_Tsq = vcat(hcat(0 - _S / 2, 0 - _cellY / 2), hcat(_S / 2, 0 - _cellY / 2), hcat(_S / 2, _cellY / 2), hcat(0 - _S / 2, _cellY / 2))\n_Tbr = vcat(hcat(0 - _S / 2, 0 - _cellY / 4), hcat(_S / 2, 0 - _cellY / 4), hcat(_S / 2, _cellY / 4), hcat(0 - _S / 2, _cellY / 4))\n_Ttr = vcat(hcat(0 - _S / 2, 0 - _hT / 3), hcat(_S / 2, 0 - _hT / 3), hcat(0, 2 * _hT / 3))\n_k6 = arange(6)\n_a6 = PI / 2 + _k6 * PI / 3\n_Thx = hcat(_R6 * cos(_a6), _R6 * sin(_a6))\n_Trh = vcat(hcat(0 - 0.75 * _S, 0 - _S * _sq3 / 4), hcat(0.25 * _S, 0 - _S * _sq3 / 4), hcat(0.75 * _S, _S * _sq3 / 4), hcat(0 - 0.25 * _S, _S * _sq3 / 4))\n_T0 = _isSq ? _Tsq : (_isBr ? _Tbr : (_isTr ? _Ttr : (_isHx ? _Thx : _Trh)))\n# Clipping is a BOOLEAN, and two cells that share an edge exactly are merged by\n# it — a joint of 0 would come back as a few fused blobs instead of tiles. So a\n# 1 mm joint is forced when clipping: invisible, and it keeps the cells apart.\n_clipOn = fitMode == 'Clip to boundary'\n_jn = _clipOn ? max(0.001, max(0, joint)) : max(0, joint)\n_shrink = max(0.05, 1 - _jn / _S)\n_T = _T0 * _shrink\n_nv = rows(_T)\n_TX = col(_T, 0)\n_TY = col(_T, 1)\n\n# ── The lattice: column pitch, row pitch, alternating offset, shear ────\n_px = _isTr ? _S / 2 : (_isHx ? _sq3 * _R6 : _S)\n_py = _isSq ? _cellY : (_isBr ? _cellY / 2 : (_isHx ? 1.5 * _R6 : _hT))\n_alt = _isBr ? _S / 2 : (_isHx ? _sq3 * _R6 / 2 : 0)\n_shear = (_isSq || _isBr || _isTr || _isHx) ? 0 : _S / 2\n_ny = ceil((_bh + 2 * _cellY) / _py) + 2\n_shift = abs(_shear) * _ny\n_nx = ceil((_bw + 2 * _S + 2 * _shift) / _px) + 2\n# The start corner phases the lattice; it does not move the tiles that are drawn. Measuring from\n# the far edge is the same expression with the lattice's own span taken off it.\n_fromE = originCorner == 'NE' || originCorner == 'SE'\n_fromN = originCorner == 'NW' || originCorner == 'NE'\n_ox = _fromE ? (_x1 + _S + _shift - _nx * _px + startOffsetX) : (_x0 - _S - _shift + startOffsetX)\n_oy = _fromN ? (_y1 + _cellY - _ny * _py + startOffsetY) : (_y0 - _cellY + startOffsetY)\n_nc = _nx * _ny\n_ii = kron(arange(_nx), ones(_ny, 1))\n_jj = kron(ones(_nx, 1), arange(_ny))\n_iOdd = _ii - floor(_ii / 2) * 2\n_jOdd = _jj - floor(_jj / 2) * 2\n_cxAdd = _isTr ? _px : _px / 2\n_cyAdd = _isTr ? (_hT / 3 + _iOdd * _hT / 3) : _py / 2\n_CX = _ox + _ii * _px + _cxAdd + _shear * _jj + _alt * _jOdd\n_CY = _oy + _jj * _py + _cyAdd\n_TH = _isTr ? _iOdd * PI : fill(_nc, 1, 0)\n\n# ── Instance the template across the lattice ──────────────────────────\n_ONE = ones(_nv, 1)\n_cxE = kron(_CX, _ONE)\n_cyE = kron(_CY, _ONE)\n_thE = kron(_TH, _ONE)\n_gidE = kron(arange(_nc), _ONE)\n_txT = kron(ones(_nc, 1), _TX)\n_tyT = kron(ones(_nc, 1), _TY)\n_cth = cos(_thE)\n_sth = sin(_thE)\n_VX = _cxE + _txT * _cth - _tyT * _sth\n_VY = _cyE + _txT * _sth + _tyT * _cth\n_CELLS = hcat(_VX, _VY, _gidE)\n\n# ── Edge: clip every cell in one call, or keep whole cells by centre ───\n_ctr = hcat(_CX, _CY)\n_mask = inpoly(_ctr, _PR)\n_maskV = kron(_mask, _ONE)\n_kept = compress(_CELLS, _maskV)\n_nk = floor(rows(_kept) / _nv)\n_keptG = _nk > 0 ? hcat(sub(_kept, 0, 0, rows(_kept), 2), kron(arange(_nk), _ONE)) : zeros(0, 3)\n_clipped = intersect(_CELLS, _PR)\n_SEL = _ok ? (_clipOn ? _clipped : _keptG) : zeros(0, 3)\n\n# ── Back out of pattern space into the world ──────────────────────────\n_SX = col(_SEL, 0)\n_SY = col(_SEL, 1)\n_SG = col(_SEL, 2)\n_nAll = rows(_SEL)\nTilePlan = _nAll > 0 ? hcat(_SX * _ca - _SY * _sa, _SX * _sa + _SY * _ca, _SG) : zeros(0, 3)\nSpacePlan = hcat(_Px, _Py, fill(_N, 1, 0))\n\n# ── Extrude every tile. The height hash is on the INDEX, so a tile keeps\n#    its own height while other parameters change. ─────────────────────\n_z0 = base\n_hz = max(0.001, height)\n_hv = max(0, min(1, heightVariation))\n_ngr = _nAll > 0 ? max(_SG) + 1 : 0\nTileMesh = zeros(0, 4)\ntileArea = 0\ncellsDrawn = 0\nminHeight = _hz\nloop g in _ngr:\n  _rg = compress(TilePlan, eq(_SG, g))\n  _ring = sub(_rg, 0, 0, _nAll, 2)\n  _nrg = rows(_ring)\n  _rnd = sin(g * 12.9898 + 78.233) * 43758.5453\n  _fr = _rnd - floor(_rnd)\n  _hg = _hz * (1 - _hv * _fr)\n  _sol = _nrg > 2 ? mprism(_ring, _z0, _z0 + _hg) : zeros(0, 4)\n  TileMesh = vcat(TileMesh, _sol)\n  _rn = shift(_ring, -1)\n  _a2 = _nrg > 2 ? sum(col(_ring, 0) * col(_rn, 1) - col(_rn, 0) * col(_ring, 1)) : 0\n  tileArea = tileArea + abs(_a2) / 2\n  cellsDrawn = cellsDrawn + (_nrg > 2 ? 1 : 0)\n  minHeight = _nrg > 2 ? min(minHeight, _hg) : minHeight\nend\n\n# ── Metrics ───────────────────────────────────────────────────────────\n_Pn = shift(P, -1)\n_pa2 = sum(col(P, 0) * col(_Pn, 1) - col(_Pn, 0) * col(P, 1))\nspaceArea = abs(_pa2) / 2\ncoverage = spaceArea > 0.000001 ? tileArea / spaceArea * 100 : 0\ncellSizeUsed = _S\ncornersPerCell = _nv\nextrudeHeight = _hz\ntopLevel = _z0 + _hz\njointWidth = _jn\nangleUsed = angle\nlatticeCells = _nc\ncellLengthUsed = _cellY\ncellAspect = _S > 0 ? (_cellY / _S) : 1\nrectangularCell = _cellRect ? 1 : 0\nstartsFromEast = _fromE ? 1 : 0\nstartsFromNorth = _fromN ? 1 : 0"
+        }
+      }
+    },
+    {
+      "id": "output_1",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Tiles — plan"
+            },
+            {
+              "id": "s2",
+              "label": "Tiles — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Space outline — plan"
+            },
+            {
+              "id": "s4",
+              "label": "Tiles drawn"
+            },
+            {
+              "id": "s5",
+              "label": "Cell size used (m)"
+            },
+            {
+              "id": "s6",
+              "label": "Corners per cell"
+            },
+            {
+              "id": "s7",
+              "label": "Tiled area (m²)"
+            },
+            {
+              "id": "s8",
+              "label": "Space area (m²)"
+            },
+            {
+              "id": "s9",
+              "label": "Coverage (%)"
+            },
+            {
+              "id": "s10",
+              "label": "Extrude height (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Shortest tile (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Top level (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Joint width (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Pattern angle (deg)"
+            },
+            {
+              "id": "s15",
+              "label": "Lattice cells generated"
+            },
+            {
+              "id": "s16",
+              "label": "Cell length used (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Cell aspect"
+            },
+            {
+              "id": "s18",
+              "label": "Rectangular cell"
+            },
+            {
+              "id": "s19",
+              "label": "Starts from east"
+            },
+            {
+              "id": "s20",
+              "label": "Starts from north"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_space",
+              "kind": "polygon",
+              "name": "Space outline",
+              "color": "#94a3b8",
+              "layer": "Tessellation",
+              "fillMode": "outlined",
+              "lineStyle": "dashed",
+              "show": true
+            },
+            {
+              "id": "pr_tiles",
+              "kind": "polygon",
+              "name": "Tiles",
+              "color": "#0891b2",
+              "layer": "Tessellation",
+              "fillMode": "outlined",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_prism",
+              "kind": "polyhedron",
+              "name": "Tile prisms",
+              "color": "#0e7490",
+              "layer": "Tessellation",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "showEdges": true,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_src_props",
+      "source": "source",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_pattern",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pattern",
+      "targetHandle": "valin-pattern"
+    },
+    {
+      "id": "e_props_math_cellSize",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cellSize",
+      "targetHandle": "valin-cellSize"
+    },
+    {
+      "id": "e_props_math_angle",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-angle",
+      "targetHandle": "valin-angle"
+    },
+    {
+      "id": "e_props_math_joint",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-joint",
+      "targetHandle": "valin-joint"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_heightVariation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-heightVariation",
+      "targetHandle": "valin-heightVariation"
+    },
+    {
+      "id": "e_props_math_base",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-base",
+      "targetHandle": "valin-base"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-TilePlan",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-TileMesh",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-SpacePlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-cellsDrawn",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-cellSizeUsed",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-cornersPerCell",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-tileArea",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-spaceArea",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-coverage",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-extrudeHeight",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-minHeight",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-topLevel",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-jointWidth",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-angleUsed",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-latticeCells",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_out_r2d_space",
+      "source": "output_1",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-pr_space"
+    },
+    {
+      "id": "e_out_r2d_tiles",
+      "source": "output_1",
+      "target": "r2d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-pr_tiles"
+    },
+    {
+      "id": "e_out_r3d_prism",
+      "source": "output_1",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-pr_prism"
+    },
+    {
+      "id": "e_props_math_cellLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cellLength",
+      "targetHandle": "valin-cellLength"
+    },
+    {
+      "id": "e_props_math_originCorner",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-originCorner",
+      "targetHandle": "valin-originCorner"
+    },
+    {
+      "id": "e_props_math_startOffsetX",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-startOffsetX",
+      "targetHandle": "valin-startOffsetX"
+    },
+    {
+      "id": "e_props_math_startOffsetY",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-startOffsetY",
+      "targetHandle": "valin-startOffsetY"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-cellLengthUsed",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-cellAspect",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-rectangularCell",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-startsFromEast",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "output_1",
+      "sourceHandle": "val-startsFromNorth",
+      "targetHandle": "valin-s20"
+    }
+  ]
+}

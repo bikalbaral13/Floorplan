@@ -1,0 +1,632 @@
+{
+  "version": 1,
+  "id": "plant-with-math",
+  "title": "Plant — one Math Engine, trunk, branches and crown",
+  "category": "Building",
+  "object": {
+    "hostKind": "node",
+    "name": "Plant",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 21v-7",
+        "M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10",
+        "M12 14l-3.5-3.5",
+        "M12 12l3.5-3.5"
+      ]
+    }
+  },
+  "description": "A parametric PLANT — tree, shrub or sapling — on the six-node spine:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nDROP IT ON A NODE and it stands there. In PLAN it is the drafting symbol: a crown circle at Radius with a trunk dot at its centre, which is what a plan wants and all a plan wants. In 3D it is the plant itself — a tapered trunk, branches lifting out of it on a cone, and a crown revolved from a profile.\n\nWHY A LATHE AND NOT A SPHERE. A Render 3D row's Sphere / Cylinder kinds are DIMENSIONED: their size lives in fields on the row, so nothing the Math Engine computes can drive them, and — the part that actually bites — the attached-object runtime resolves only Polyhedron, Loft, Tube and Ring, treating every dimensioned kind as a face list. A Sphere row would draw correctly in the Flow overlay and vanish the moment the plant was attached to a node. So the crown is `mlathe`: a half-section revolved about the trunk axis, which is parametric, is a real closed solid, and renders identically down both paths.\n\nTHE CROWN PROFILE IS ONE FORMULA. Stations run 0 → 1 up the crown; the radius at each is Radius × a shape function, and Crown shape picks it:\n\n  Round      sin(πs)              an ellipsoid blob — a broadleaf in leaf\n  Conical    1 − s                full at the base, a point at the tip — a fir\n  Columnar   sin(πs) ^ 0.3        near-full for most of its height — a poplar, a cypress\n\nThe lathe loop closes implicitly, so a profile that starts and ends on the axis needs no caps, and Conical's open base is capped by the closing edge itself. That is why one expression covers all three and adding a fourth is one more ternary.\n\nBRANCHES ARE A CONE, NOT A DRAWING. They leave the top of the clear stem on a cone of half-angle Spread, evenly spaced around it, each a Tube row segment carrying its own radius in a seventh column — so Branches is a real count, 0 draws a clean standard, and the branch radius follows the trunk through Branch taper rather than being typed twice.\n\nBRANCHES STAY INSIDE THE CROWN. Branch length is Branch reach × crown height, but capped at Radius / sin(spread) so the horizontal run can never exceed Radius. Without that cap a 0.1 m shrub grew 1.0 m branches and read as a spider; with it the same shrub measures 0.13 m to the outermost surface. Spread is floored at 5° for the same reason in reverse: at 0° every branch is the same vertical cylinder, so n of them are n coincident solids z-fighting with each other.\n\nVERIFIED THROUGH THE ENGINE on a node host at the defaults (1.5 m crown, 4 m tall, 1.4 m stem, 5 branches at 45°): plan is exactly 2 rings — the crown at 1.5000 m and the trunk at 0.0900 m, every vertex on radius to four decimals. In 3D the trunk is 14 faces (a 12-sided tube plus caps), the branches 5 × 14 = 70, the crown 320; all three are WATERTIGHT — zero unpaired edges — and carry no non-finite vertex. The solid spans z 0 → 4.00 exactly, and Base 3 moves it to 3.00 → 7.00 without changing anything else. Branches 0 drops the branch row entirely rather than emitting a degenerate one; Branches 16 gives 224 faces. Round / Conical / Columnar all close (320 / 340 / 340 faces). Crown facets 6 thins the crown to 96 faces. Radius at both stops (0.1 / 12 m) stays within its own envelope, and a Clear stem set past Overall height clamps to leave a 0.1 m crown instead of inverting. Unhosted — nothing selected — it still draws all three solids. The trunk converts losslessly to a prism on the attachment path; the branches and crown travel the face-list channel, so nothing is drawn twice.\n\nWHAT IT DOES NOT DO. No leaves — the crown is a solid envelope, not foliage, which is the right abstraction at plan and massing scale and the wrong one for a close render. No trunk lean, no branch subdivision, no roots, no seasonal state. The crown is a surface of revolution, so it is exactly symmetric: real canopies are not.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "radius",
+              "name": "Radius (crown)",
+              "type": "range",
+              "value": 1.5,
+              "min": 0.1,
+              "max": 12,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Overall height",
+              "type": "range",
+              "value": 4,
+              "min": 0.3,
+              "max": 30,
+              "step": 0.1,
+              "options": []
+            },
+            {
+              "id": "trunkHeight",
+              "name": "Clear stem (trunk height)",
+              "type": "range",
+              "value": 1.4,
+              "min": 0.05,
+              "max": 12,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "trunkRadius",
+              "name": "Trunk radius",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.01,
+              "max": 0.8,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "branches",
+              "name": "Branches",
+              "type": "range",
+              "value": 5,
+              "min": 0,
+              "max": 16,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "branchSpread",
+              "name": "Branch spread from vertical (deg)",
+              "type": "range",
+              "value": 45,
+              "min": 5,
+              "max": 85,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "branchTaper",
+              "name": "Branch radius / trunk radius",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.1,
+              "max": 1,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "branchReach",
+              "name": "Branch length / crown height",
+              "type": "range",
+              "value": 0.55,
+              "min": 0.1,
+              "max": 1.2,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "canopyShape",
+              "name": "Crown shape",
+              "type": "select",
+              "value": "Round",
+              "options": [
+                "Round",
+                "Conical",
+                "Columnar"
+              ]
+            },
+            {
+              "id": "canopySides",
+              "name": "Crown facets",
+              "type": "range",
+              "value": 20,
+              "min": 6,
+              "max": 48,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "base",
+              "name": "Base elevation",
+              "type": "range",
+              "value": 0,
+              "min": -5,
+              "max": 30,
+              "step": 0.05,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Plant maths",
+          "expr": "_n = rows(P)\n_cx = _n >= 1 ? mean(col(P, 0)) : 0\n_cy = _n >= 1 ? mean(col(P, 1)) : 0\n_R = max(0.05, radius)\n_H = max(0.3, height)\n_tr = max(0.01, trunkRadius)\n_th = min(max(0.05, trunkHeight), _H - 0.1)\n_ch = _H - _th\n_b = base\n_z0 = _b + _th\n_z1 = _b + _H\n_nb = max(0, round(branches))\n_sp = max(5, min(85, branchSpread)) * PI / 180\n_bt = max(0.1, min(1, branchTaper))\n_br = max(0.1, min(1.2, branchReach))\n_ns = max(6, round(canopySides))\nTrunkPlan = hcat(_cx, _cy, _tr)\nCanopyPlan = hcat(_cx, _cy, _R)\nTrunkAxis = hcat(_cx, _cy, _b, _cx, _cy, _z0, _tr)\n_k = arange(_nb)\n_a = _k * 2 * PI / max(1, _nb)\n_bl = min(_ch * _br, _R / max(0.09, sin(_sp)))\n_ex = _cx + sin(_sp) * _bl * cos(_a)\n_ey = _cy + sin(_sp) * _bl * sin(_a)\n_ez = fill(_nb, 1, _z0 + cos(_sp) * _bl)\n_ox = fill(_nb, 1, _cx)\n_oy = fill(_nb, 1, _cy)\n_oz = fill(_nb, 1, _z0)\nBranchAxes = _nb > 0 ? hcat(_ox, _oy, _oz, _ex, _ey, _ez, fill(_nb, 1, _tr * _bt)) : zeros(0, 7)\nBranchPlan = _nb > 0 ? hcat(_ox, _oy, _ex, _ey) : zeros(0, 4)\n_m = 16\n_j = arange(_m + 1)\n_s = _j / _m\n_sine = sin(PI * _s)\n_round = _sine\n_cone = 1 - _s\n_colr = pow(max(0.0001, _sine), 0.3)\n_shape = canopyShape == 'Conical' ? _cone : (canopyShape == 'Columnar' ? _colr : _round)\n_prof = hcat(_s * _ch, _R * _shape)\n_axis = hcat(_cx, _cy, _z0, _cx, _cy, _z1)\nCanopyMesh = _ch > 0.01 ? mlathe(_axis, _prof, _ns) : zeros(0, 4)\ncrownRadius = _R\ncrownDiameter = 2 * _R\ncrownHeight = _ch\noverallHeight = _H\nclearStem = _th\ntrunkRadiusOut = _tr\ntrunkVolume = PI * _tr * _tr * _th\nbranchCount = _nb\nbranchLength = _nb > 0 ? _bl : 0\nspreadDeg = max(0, min(85, branchSpread))\ncanopyPlanArea = PI * _R * _R\nbaseElevation = _b\ntopElevation = _z1"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Crown circle — plan"
+            },
+            {
+              "id": "s2",
+              "label": "Trunk circle — plan"
+            },
+            {
+              "id": "s3",
+              "label": "Branches — plan"
+            },
+            {
+              "id": "s4",
+              "label": "Trunk — axis"
+            },
+            {
+              "id": "s5",
+              "label": "Branches — axes"
+            },
+            {
+              "id": "s6",
+              "label": "Crown — solid"
+            },
+            {
+              "id": "s7",
+              "label": "Crown radius (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Crown diameter (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Crown height (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Overall height (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Clear stem (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Trunk radius (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Trunk volume (m³)"
+            },
+            {
+              "id": "s14",
+              "label": "Branches"
+            },
+            {
+              "id": "s15",
+              "label": "Branch length (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Spread (deg)"
+            },
+            {
+              "id": "s17",
+              "label": "Crown plan area (m²)"
+            },
+            {
+              "id": "s18",
+              "label": "Base elevation (m)"
+            },
+            {
+              "id": "s19",
+              "label": "Top elevation (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_canopy",
+              "kind": "circle",
+              "name": "Crown",
+              "color": "#16a34a",
+              "layer": "Planting",
+              "radius": 1.5,
+              "fillMode": "outlined",
+              "show": true
+            },
+            {
+              "id": "p2_branch",
+              "kind": "stroke",
+              "name": "Branches — plan",
+              "color": "#16a34a",
+              "layer": "Planting",
+              "width": 0.02,
+              "show": false
+            },
+            {
+              "id": "p2_trunk",
+              "kind": "circle",
+              "name": "Trunk",
+              "color": "#7a5230",
+              "layer": "Planting",
+              "radius": 0.09,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_trunk",
+              "kind": "tube",
+              "name": "Trunk",
+              "color": "#7a5230",
+              "layer": "Planting",
+              "radius": 0.09,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_branch",
+              "kind": "tube",
+              "name": "Branches",
+              "color": "#8b6f4e",
+              "layer": "Planting",
+              "radius": 0.045,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_canopy",
+              "kind": "polyhedron",
+              "name": "Crown",
+              "color": "#16a34a",
+              "layer": "Planting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "source",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_radius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-radius",
+      "targetHandle": "valin-radius"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_trunkHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trunkHeight",
+      "targetHandle": "valin-trunkHeight"
+    },
+    {
+      "id": "e_props_math_trunkRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trunkRadius",
+      "targetHandle": "valin-trunkRadius"
+    },
+    {
+      "id": "e_props_math_branches",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-branches",
+      "targetHandle": "valin-branches"
+    },
+    {
+      "id": "e_props_math_branchSpread",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-branchSpread",
+      "targetHandle": "valin-branchSpread"
+    },
+    {
+      "id": "e_props_math_branchTaper",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-branchTaper",
+      "targetHandle": "valin-branchTaper"
+    },
+    {
+      "id": "e_props_math_branchReach",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-branchReach",
+      "targetHandle": "valin-branchReach"
+    },
+    {
+      "id": "e_props_math_canopyShape",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-canopyShape",
+      "targetHandle": "valin-canopyShape"
+    },
+    {
+      "id": "e_props_math_canopySides",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-canopySides",
+      "targetHandle": "valin-canopySides"
+    },
+    {
+      "id": "e_props_math_base",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-base",
+      "targetHandle": "valin-base"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CanopyPlan",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-TrunkPlan",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BranchPlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-TrunkAxis",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BranchAxes",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CanopyMesh",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-crownRadius",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-crownDiameter",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-crownHeight",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallHeight",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-clearStem",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-trunkRadiusOut",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-trunkVolume",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-branchCount",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-branchLength",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-spreadDeg",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-canopyPlanArea",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-baseElevation",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topElevation",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_out_r2d_p2_canopy",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p2_canopy"
+    },
+    {
+      "id": "e_out_r2d_p2_trunk",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p2_trunk"
+    },
+    {
+      "id": "e_out_r2d_p2_branch",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_branch"
+    },
+    {
+      "id": "e_out_r3d_p3_trunk",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_trunk"
+    },
+    {
+      "id": "e_out_r3d_p3_branch",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_branch"
+    },
+    {
+      "id": "e_out_r3d_p3_canopy",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p3_canopy"
+    }
+  ]
+}

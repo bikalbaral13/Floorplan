@@ -1,0 +1,737 @@
+{
+  "version": 1,
+  "id": "fluted-panel-with-math",
+  "title": "Fluted Panel — one Math Engine, four flute profiles, shadow gap and a TV cutout",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Fluted Panel",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 3v18",
+        "M8 3v18",
+        "M12 3v18",
+        "M16 3v18",
+        "M20 3v18"
+      ]
+    }
+  },
+  "description": "A parametric FLUTED PANEL on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. This is the plan's TV wall — a fluted run with a shadow gap at both ends and, optionally, a hole for the screen.\n\nTHREE OF THE FOUR PROFILES ARE THE SAME QUAD. A flute is a quad in plan swept up the wall: back edge on the backer, front edge at the flute depth. Square, Tapered and V-groove differ only in the front edge's half-width — `_frontR` is `_r`, `0.45·_r` or `0` — so they are one table with a different number in it, and V-groove collapsing to a point is a triangle the kernel already accepts.\n\nHALF-ROUND IS THE SAME FLUTE SAMPLED. Each of `sides` slices spans an arc of the semicircle and is still one quad, so a faceted round flute takes the identical path as a square one rather than needing a lathe.\n\nTHE CUTOUT IS A SPLIT IN Z, NOT A SUBTRACTION. Flutes whose width overlaps the cutout are built as two bands, below it and above it. Flutes outside keep a full-height first band and a zero-height second one — one wasted row each, and in exchange the table keeps a single shape and there is no branch.\n\nTHE SHADOW GAP IS A REAL INSET. `_ru0 = _u0 + _sg` shortens the fluted run inside the panel, so the gap is a reveal rather than a flute that happens to be missing, and `runLength` reports what is actually fluted.\n\nTHE PITCH IS REDIVIDED, NOT TRUNCATED: `_pw = _run / round(_run / pitch)`, so the flutes always fill the run exactly and the requested pitch is a target. `actualPitch` reports what you got.\n\nDIMENSIONS AT THE DEFAULTS: 2.032 × 2.972 m, 2.008 m of fluted run, 39 half-round flutes at 0.0515 m actual pitch, 0.036 m total depth.\n\nWHAT THIS CANNOT DO. Flutes are vertical — a horizontal slat wall means hosting this on a segment turned on its side, which the object does not do for you. One cutout, rectangular, centred on the panel's length. The backer is a flat slab with no frame or battens.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Panel length",
+              "type": "range",
+              "value": 2.032,
+              "min": 0.2,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Panel height",
+              "type": "range",
+              "value": 2.972,
+              "min": 0.2,
+              "max": 4.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "baseOffset",
+              "name": "Bottom above floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flutePitch",
+              "name": "Flute pitch",
+              "type": "range",
+              "value": 0.051,
+              "min": 0.012,
+              "max": 0.3,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "profile",
+              "name": "Flute profile",
+              "type": "select",
+              "value": "Half-round",
+              "options": [
+                "Half-round",
+                "Square",
+                "Tapered",
+                "V-groove"
+              ]
+            },
+            {
+              "id": "fluteDepth",
+              "name": "Flute depth",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.004,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "fluteGap",
+              "name": "Gap between flutes",
+              "type": "range",
+              "value": 0.004,
+              "min": 0,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "backerThk",
+              "name": "Backer thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "shadowGap",
+              "name": "Shadow gap at ends",
+              "type": "range",
+              "value": 0.012,
+              "min": 0,
+              "max": 0.1,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "sides",
+              "name": "Facets per round flute",
+              "type": "range",
+              "value": 6,
+              "min": 3,
+              "max": 24,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "cutout",
+              "name": "Cutout (TV / niche)",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "cutoutWidth",
+              "name": "Cutout width",
+              "type": "range",
+              "value": 1.1,
+              "min": 0.1,
+              "max": 5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "cutoutHeight",
+              "name": "Cutout height",
+              "type": "range",
+              "value": 0.65,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "cutoutCentre",
+              "name": "Cutout centre height",
+              "type": "range",
+              "value": 1.372,
+              "min": 0.1,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "light oak veneer, matte lacquer, half-round flutes",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "fluted timber feature wall, warm oak, vertical rhythm, contemporary hotel",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Fluted Panel maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Ht = height * _s\n_z0 = baseOffset\n_z1 = _z0 + _Ht\n_bk = backerThk * _s\n_fd = fluteDepth * _s\n_sg = shadowGap * _s\n_Dtot = _bk + _fd\n_bodyL = _Ln\n_bodyW = _Dtot\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v1 = _Dtot / 2\n_v0 = 0 - _Dtot / 2\n_vb = _v1 - _bk\n_BACK = hcat(_u0, _vb, _u1, _vb, _u1, _v1, _u0, _v1, _z0, _z1, 1)\n# The flute run is inset by the shadow gap at both ends, so the gap is a real reveal and not\n# a flute that happens to be missing.\n_ru0 = _u0 + _sg\n_ru1 = _u1 - _sg\n_run = max(0.02, _ru1 - _ru0)\n_pitch = max(0.008, flutePitch * _s)\n_nf = max(1, round(_run / _pitch))\n_pw = _run / _nf\n_gp = min(fluteGap * _s, _pw / 3)\n_r = (_pw - _gp) / 2\n_fc = _ru0 + (arange(_nf) + 0.5) * _pw\n# A CUTOUT IS A SPLIT IN Z, not a subtraction: the flutes that fall inside its width are built\n# as two bands, below and above it. Flutes outside keep a full-height first band and a\n# zero-height second one, which costs a row and keeps the table one shape.\n_cw = min(cutoutWidth * _s, _run)\n_ch = min(cutoutHeight * _s, _Ht)\n_cc = cutoutCentre\n_cz0 = max(_z0, _cc - _ch / 2)\n_cz1 = min(_z1, _cz0 + _ch)\n_cu0 = 0 - _cw / 2\n_cu1 = _cw / 2\n_inCut = cutout > 0 ? ((_fc + _r) > _cu0) * ((_fc - _r) < _cu1) : fill(_nf, 1, 0)\n_zA1 = _z1 + _inCut * (_cz0 - _z1)\n_zB0 = _z1 + _inCut * (_cz1 - _z1)\n# Profile. Square, Tapered and V-groove are ONE quad each — only the front edge's half-width\n# changes, so they are the same table with a different number in it.\n_isRound = profile == 'Half-round'\n_isSq = profile == 'Square'\n_isTap = profile == 'Tapered'\n_frontR = _isSq ? _r : (_isTap ? (_r * 0.45) : 0)\n_vf = _vb - _fd\n_S1a = hcat(_fc - _r, fill(_nf,1,_vb), _fc + _r, fill(_nf,1,_vb), _fc + _frontR, fill(_nf,1,_vf), _fc - _frontR, fill(_nf,1,_vf), fill(_nf,1,_z0), _zA1, fill(_nf,1,2))\n_S1b = hcat(_fc - _r, fill(_nf,1,_vb), _fc + _r, fill(_nf,1,_vb), _fc + _frontR, fill(_nf,1,_vf), _fc - _frontR, fill(_nf,1,_vf), _zB0, fill(_nf,1,_z1), fill(_nf,1,2))\n_SIMPLE = vcat(_S1a, _S1b)\n# Half-round is the same flute sampled as `sides` slices of a semicircle. Each slice is still\n# one quad — back edge on the backer, front edge on the arc — so it takes the identical path.\n_ns = max(3, round(sides))\n_M = _nf * _ns\n_jf = kron(arange(_nf), ones(_ns, 1))\n_js = kron(ones(_nf, 1), arange(_ns))\n_cF = _ru0 + (_jf + 0.5) * _pw\n_inC = cutout > 0 ? ((_cF + _r) > _cu0) * ((_cF - _r) < _cu1) : fill(_M, 1, 0)\n_zRa = _z1 + _inC * (_cz0 - _z1)\n_zRb = _z1 + _inC * (_cz1 - _z1)\n_t0 = PI * _js / _ns\n_t1 = PI * (_js + 1) / _ns\n_ua = _cF + _r * cos(_t0)\n_ub = _cF + _r * cos(_t1)\n_va = _vb - _fd * sin(_t0)\n_vbb = _vb - _fd * sin(_t1)\n_R1a = hcat(_ua, fill(_M,1,_vb), _ub, fill(_M,1,_vb), _ub, _vbb, _ua, _va, fill(_M,1,_z0), _zRa, fill(_M,1,2))\n_R1b = hcat(_ua, fill(_M,1,_vb), _ub, fill(_M,1,_vb), _ub, _vbb, _ua, _va, _zRb, fill(_M,1,_z1), fill(_M,1,2))\n_ROUND = vcat(_R1a, _R1b)\n_FLUTES = _isRound ? _ROUND : _SIMPLE\nQ = vcat(_BACK, _FLUTES)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBacker3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nFlutes3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nBackerPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nFlutesPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\n# Metrics\npanelLength = _Ln\npanelHeight = _Ht\ntopHeight = _z1\ntotalDepth = _Dtot\nfluteCount = _nf\nactualPitch = _pw\nfluteWidth = 2 * _r\nfaceArea = _Ln * _Ht\ncutoutArea = cutout > 0 ? (_cw * max(0, _cz1 - _cz0)) : 0\nnetArea = faceArea - cutoutArea\nrunLength = _run\nfacetCount = _isRound ? _ns : 1"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Backer — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Flutes — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Backer — plan"
+            },
+            {
+              "id": "s4",
+              "label": "Flutes — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Panel length (m)"
+            },
+            {
+              "id": "s6",
+              "label": "Panel height (m)"
+            },
+            {
+              "id": "s7",
+              "label": "Top of panel (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Total depth (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Flute count"
+            },
+            {
+              "id": "s10",
+              "label": "Actual pitch (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Flute width (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Face area (m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Cutout area (m²)"
+            },
+            {
+              "id": "s14",
+              "label": "Net panel area (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Fluted run (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Facets per flute"
+            },
+            {
+              "id": "s17",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_back",
+              "kind": "polygon",
+              "name": "Backer",
+              "color": "#a8a29e",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_flute",
+              "kind": "polygon",
+              "name": "Flutes",
+              "color": "#c9a87c",
+              "layer": "Wall panel",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_back",
+              "kind": "polyhedron",
+              "name": "Backer",
+              "color": "#8a6a45",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_flute",
+              "kind": "polyhedron",
+              "name": "Flutes",
+              "color": "#c9a87c",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_baseOffset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-baseOffset",
+      "targetHandle": "valin-baseOffset"
+    },
+    {
+      "id": "e_props_math_flutePitch",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flutePitch",
+      "targetHandle": "valin-flutePitch"
+    },
+    {
+      "id": "e_props_math_profile",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-profile",
+      "targetHandle": "valin-profile"
+    },
+    {
+      "id": "e_props_math_fluteDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fluteDepth",
+      "targetHandle": "valin-fluteDepth"
+    },
+    {
+      "id": "e_props_math_fluteGap",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fluteGap",
+      "targetHandle": "valin-fluteGap"
+    },
+    {
+      "id": "e_props_math_backerThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-backerThk",
+      "targetHandle": "valin-backerThk"
+    },
+    {
+      "id": "e_props_math_shadowGap",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-shadowGap",
+      "targetHandle": "valin-shadowGap"
+    },
+    {
+      "id": "e_props_math_sides",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sides",
+      "targetHandle": "valin-sides"
+    },
+    {
+      "id": "e_props_math_cutout",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cutout",
+      "targetHandle": "valin-cutout"
+    },
+    {
+      "id": "e_props_math_cutoutWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cutoutWidth",
+      "targetHandle": "valin-cutoutWidth"
+    },
+    {
+      "id": "e_props_math_cutoutHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cutoutHeight",
+      "targetHandle": "valin-cutoutHeight"
+    },
+    {
+      "id": "e_props_math_cutoutCentre",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cutoutCentre",
+      "targetHandle": "valin-cutoutCentre"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Backer3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Flutes3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BackerPlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-FlutesPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-panelLength",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-panelHeight",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topHeight",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-totalDepth",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-fluteCount",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-actualPitch",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-fluteWidth",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-faceArea",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-cutoutArea",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-netArea",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-runLength",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-facetCount",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_out_r2d_p2_back",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_back"
+    },
+    {
+      "id": "e_out_r2d_p2_flute",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_flute"
+    },
+    {
+      "id": "e_out_r3d_p3_back",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_back"
+    },
+    {
+      "id": "e_out_r3d_p3_flute",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_flute"
+    }
+  ]
+}

@@ -1,10 +1,10 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Room } from "../types";
-import type { RegionSemantics } from "../algorithms/semantics/regionSemantics";
+import type { RegionSemantics } from "@builderpluss/engine";
 
 export type CommandSuggestion = { label: string; example: string };
 export type SemanticState = "off" | "loading" | "ready" | "error";
@@ -47,6 +47,8 @@ interface ToolsPanelProps {
   onAiApiKeyChange: (value: string) => void;
   aiModel: string;
   onAiModelChange: (value: string) => void;
+  /** Preferences -> Image model. Seeds (and re-seeds) the Render tool's model field. */
+  aiImageModel: string;
   aiBusy: boolean;
   onAiGenerate: () => void;
 
@@ -95,6 +97,7 @@ export const ToolsPanel = ({
   onAiApiKeyChange,
   aiModel,
   onAiModelChange,
+  aiImageModel,
   aiBusy,
   onAiGenerate,
   jsonText,
@@ -287,8 +290,10 @@ export const ToolsPanel = ({
     try { return localStorage.getItem("render-api-key") ?? ""; } catch { return ""; }
   });
   const [renderModel, setRenderModel] = useState<string>(() => {
-    try { return localStorage.getItem("render-model-v3") || "gemini-3.1-flash-image-preview"; } catch { return "gemini-3.1-flash-image-preview"; }
+    try { return localStorage.getItem("render-model-v3") || aiImageModel; } catch { return aiImageModel; }
   });
+  // Follow the Preferences image model when the user changes it.
+  useEffect(() => { setRenderModel(aiImageModel); }, [aiImageModel]);
   const [renderPrompt, setRenderPrompt] = useState<string>(
     "Edit the attached architectural massing snapshot into a photorealistic render with daylight, realistic facade materials, landscaping, and sky."
   );
@@ -725,7 +730,7 @@ export const ToolsPanel = ({
                           className="mt-0.5 h-6 w-full rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-mono"
                           value={aiModel}
                           onChange={(e) => onAiModelChange(e.target.value)}
-                          placeholder="gemini-3-flash-preview"
+                          placeholder="gemini-3.8-flash"
                         />
                       </div>
                     </div>

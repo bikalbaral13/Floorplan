@@ -1,0 +1,40 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "export-3d",
+  "meta": { "label": "Export 3D", "category": "Output", "color": "#475569" },
+  "description": "Write the incoming 3D solids to a mesh file (glTF / OBJ / STL / PLY) and download it — the 3D twin of Export DXF. Wire a 3D Render node in and every row it built is exported.",
+  "instructions": "A SINK: wire any 3D geometry into its input and press Download. Nothing is added to the scene and nothing is committed — the node only writes the file.\n\nWIRE A 3D RENDER NODE IN and every solid its rows built is exported, exactly as the viewport shows it: Cuboid and Cylinder rows with their dimensions and per-point placements, Polyhedron rows with their computed face lists. A single 3D primitive (Cuboid, Cylinder, Sphere, Frustum …) with its Transform 3D chain exports the same way.\n\nFORMAT decides what survives:\n• glTF (.glb) — geometry AND colour, one self-contained binary. The default, and what to use for Blender / three.js / AR.\n• Wavefront (.obj) — geometry only (three's OBJ writer emits no material file), but the most widely accepted CAD interchange.\n• STL (.stl) — triangles only, no colour: 3D printing.\n• PLY (.ply) — geometry with per-vertex colour.\n\nAXIS: the viewport is Y-up. \"Z up\" rotates the export so Z is up and +Y is north — the convention CAD and Blender expect, and the one the DXF export writes, so a 2D and a 3D export of the same object line up. Choose \"Y up\" only for a glTF/three.js pipeline that expects the raw scene frame.\n\nUNITS scale the metre coordinates on the way out.",
+  "handles": {
+    "input": true,
+    "output": false
+  },
+  "parameters": [
+    { "key": "fileName", "label": "File name", "kind": "text", "default": "flow-export", "placeholder": "flow-export" },
+    {
+      "key": "format", "label": "Format", "kind": "select", "default": "glb",
+      "options": [
+        { "value": "glb", "label": "glTF (.glb)" },
+        { "value": "obj", "label": "Wavefront (.obj)" },
+        { "value": "stl", "label": "STL (.stl)" },
+        { "value": "ply", "label": "PLY (.ply)" }
+      ]
+    },
+    {
+      "key": "units", "label": "Units", "kind": "select", "default": "m",
+      "options": [
+        { "value": "m", "label": "Metres" },
+        { "value": "cm", "label": "Centimetres" },
+        { "value": "mm", "label": "Millimetres" },
+        { "value": "ft", "label": "Feet" }
+      ]
+    },
+    {
+      "key": "axis", "label": "Up axis", "kind": "select", "default": "z-up",
+      "options": [
+        { "value": "z-up", "label": "Z up (CAD)" },
+        { "value": "y-up", "label": "Y up (scene)" }
+      ]
+    }
+  ]
+}

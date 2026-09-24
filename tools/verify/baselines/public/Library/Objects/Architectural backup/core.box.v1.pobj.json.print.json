@@ -1,0 +1,162 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 1,
+          "vertices": 5,
+          "area": 20,
+          "bbox": [
+            -2,
+            -2.5,
+            2,
+            2.5
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 1,
+          "vertices": 5,
+          "area": 20,
+          "bbox": [
+            -2,
+            -2.5,
+            2,
+            2.5
+          ],
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "730b40be3530bf51"
+      },
+      "solids": {
+        "count": 1,
+        "volume": 100,
+        "hash": "afb176628ba358fd"
+      },
+      "metrics": [
+        {
+          "key": "Shapes",
+          "name": "Shapes",
+          "value": "1"
+        },
+        {
+          "key": "Width",
+          "name": "Width",
+          "value": "4",
+          "unit": "m"
+        },
+        {
+          "key": "Depth",
+          "name": "Depth",
+          "value": "5",
+          "unit": "m"
+        },
+        {
+          "key": "Height",
+          "name": "Height",
+          "value": "5",
+          "unit": "m"
+        },
+        {
+          "key": "Footprint",
+          "name": "Footprint",
+          "value": "20",
+          "unit": "m²"
+        },
+        {
+          "key": "Volume",
+          "name": "Volume",
+          "value": "100",
+          "unit": "m³"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 1,
+          "vertices": 5,
+          "area": 20,
+          "bbox": [
+            -2,
+            -2.5,
+            2,
+            2.5
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 1,
+          "vertices": 5,
+          "area": 20,
+          "bbox": [
+            -2,
+            -2.5,
+            2,
+            2.5
+          ],
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "730b40be3530bf51"
+      },
+      "solids": {
+        "count": 1,
+        "volume": 100,
+        "hash": "afb176628ba358fd"
+      },
+      "metrics": [
+        {
+          "key": "Shapes",
+          "name": "Shapes",
+          "value": "1"
+        },
+        {
+          "key": "Width",
+          "name": "Width",
+          "value": "4",
+          "unit": "m"
+        },
+        {
+          "key": "Depth",
+          "name": "Depth",
+          "value": "5",
+          "unit": "m"
+        },
+        {
+          "key": "Height",
+          "name": "Height",
+          "value": "5",
+          "unit": "m"
+        },
+        {
+          "key": "Footprint",
+          "name": "Footprint",
+          "value": "20",
+          "unit": "m²"
+        },
+        {
+          "key": "Volume",
+          "name": "Volume",
+          "value": "100",
+          "unit": "m³"
+        }
+      ]
+    }
+  }
+}

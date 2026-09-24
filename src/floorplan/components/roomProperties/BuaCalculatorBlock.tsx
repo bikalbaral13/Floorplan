@@ -8,14 +8,14 @@ import {
   insetPolygon,
   polygonArea,
   runCircularSetbackSolver,
-} from "../../algorithms/dcr/circularSetbackSolver";
-import { outsetRectangle } from "../../algorithms/layout/optimiseRect";
+} from "@builderpluss/engine";
+import { outsetRectangle } from "@builderpluss/engine";
 import {
   type Occupancy,
   type Regulations,
   type RoadLocation,
   type SolverResult,
-} from "../../algorithms/dcr/circularSetbackSolver";
+} from "@builderpluss/engine";
 
 /**
  * Shape of the Space fields this block reads/writes. Mirrors the optional

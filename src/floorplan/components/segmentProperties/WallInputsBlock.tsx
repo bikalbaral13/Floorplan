@@ -43,7 +43,10 @@ export interface WallInputsBlockProps {
  *  type sub-panels. All mutations go through `updateSelectedWall`. */
 export const WallInputsBlock = (p: WallInputsBlockProps) => {
   const w = p.selectedWall;
-  const displayId = p.wallIndex >= 0 ? `Segment${String(p.wallIndex + 1).padStart(3, "0")}` : "—";
+  // The segment's OWN id — one name for this element, the same one an export carries and a flow resolves.
+  // It used to read `Segment005`, the wall's position in the list, which is not an identity: delete a wall
+  // above it and the label moves to a different segment while the file kept saying something else.
+  const displayId = w?.id ?? "—";
 
   return (
     <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">

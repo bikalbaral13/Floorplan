@@ -138,7 +138,7 @@ npm install
 npm run dev
 ```
 
-Vite serves the app at **http://localhost:2000/** by default.
+Vite serves the app at **http://localhost:3000/** by default.
 
 ---
 

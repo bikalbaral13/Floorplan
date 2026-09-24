@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
-import { polygonCentroid } from "../../algorithms/geometry/polygon";
+import { polygonCentroid } from "@builderpluss/engine";
 
 export type VoronoiMetric = "euclidean" | "manhattan" | "chebyshev";
 

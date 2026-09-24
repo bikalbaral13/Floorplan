@@ -1,0 +1,816 @@
+{
+  "version": 1,
+  "id": "upholstered-panel-with-math",
+  "title": "Upholstered Panel — one Math Engine, channelled pad field, float gap and halo LED",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Upholstered Panel",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 4h18v16H3z",
+        "M7 4v16",
+        "M11 4v16",
+        "M15 4v16",
+        "M19 4v16"
+      ]
+    }
+  },
+  "description": "A parametric UPHOLSTERED PANEL on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. This is the plan's hero wall: a floor-to-cove channelled panel that floats off the wall with an LED halo behind it. It is deliberately NOT part of the bed — `bed-with-math.headboardHeight` is a board bolted to a bed, and a 2.74 × 2.97 m wall feature is a different thing that must survive the bed being moved.\n\nALL FOUR PATTERNS ARE ONE BROADCAST. The pad field is a grid of `_nu` columns by `_nz` rows, and the pattern only decides whether each count is a division or a 1 — vertical is `_nz = 1`, horizontal is `_nu = 1`, square grid is both, plain is both with the groove set to zero. There is no second body for any of them, which is why changing pattern cannot change anything else about the panel.\n\nTHE GROOVE IS NOT DRAWN. A groove is the gap the pads leave, subtracted half from each side of every pad so the field still fills the frame exactly whatever the count. Drawing the groove as a solid would double-count the same millimetres.\n\nTHE FLOAT GAP IS WHAT MAKES THE HALO POSSIBLE. `_fg` pushes the backer off the wall face, and the halo frame lives in that gap and nowhere else — set the gap to zero and the halo drops out on its own rather than being clipped into the wall.\n\nTHE LIP SHRINKS THE PAD FIELD, it does not overlay it: `_fu0 = _u0 + _lw`. Turn the lip off and the pads take the full face, so the two can never overlap.\n\nDIMENSIONS AT THE DEFAULTS: 2.743 × 2.972 m at 0.133 m total depth, 0.064 m off the wall, 27 vertical channels at 0.101 m pitch, 8.15 m² of face and 11.2 m of halo.\n\nWHAT THIS CANNOT DO. Pads are flat-fronted quads — there is no crowned or buttoned cushion, and a diamond or chevron pattern is not a grid so it is not here. The lip is square, on two sides and the top only.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Panel length",
+              "type": "range",
+              "value": 2.743,
+              "min": 0.3,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Panel height",
+              "type": "range",
+              "value": 2.972,
+              "min": 0.3,
+              "max": 4.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "baseOffset",
+              "name": "Bottom above floor",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "pattern",
+              "name": "Pattern",
+              "type": "select",
+              "value": "Vertical channels",
+              "options": [
+                "Vertical channels",
+                "Horizontal channels",
+                "Square grid",
+                "Plain"
+              ]
+            },
+            {
+              "id": "channelPitch",
+              "name": "Channel pitch",
+              "type": "range",
+              "value": 0.102,
+              "min": 0.03,
+              "max": 0.8,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "paddingDepth",
+              "name": "Padding depth",
+              "type": "range",
+              "value": 0.051,
+              "min": 0.01,
+              "max": 0.2,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "grooveWidth",
+              "name": "Groove width",
+              "type": "range",
+              "value": 0.008,
+              "min": 0,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "backerThk",
+              "name": "Backer thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "floatGap",
+              "name": "Float gap off wall",
+              "type": "range",
+              "value": 0.064,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "haloLed",
+              "name": "Halo LED behind panel",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "ledInset",
+              "name": "Halo inset from edge",
+              "type": "range",
+              "value": 0.02,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "trimLip",
+              "name": "Edge lip",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "trimWidth",
+              "name": "Lip width",
+              "type": "range",
+              "value": 0.013,
+              "min": 0.004,
+              "max": 0.12,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "ivory bouclé upholstery, light oak veneer lip, matte",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "upholstered headboard wall, soft vertical channels, warm halo glow, calm hotel bedroom",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Upholstered Panel maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Ht = height * _s\n_z0 = baseOffset\n_z1 = _z0 + _Ht\n_pad = paddingDepth * _s\n_bk = backerThk * _s\n_fg = floatGap * _s\n_Dtot = _fg + _bk + _pad\n_bodyL = _Ln\n_bodyW = _Dtot\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n# v1 is the WALL side. The panel stands off it by the float gap, which is what makes the halo\n# possible: the LED lives in that gap and there is nowhere else for it to be.\n_v1 = _Dtot / 2\n_v0 = 0 - _Dtot / 2\n_wall = _v1\n_bkV1 = _wall - _fg\n_bkV0 = _bkV1 - _bk\n_padV0 = _v0\n_BACK = hcat(_u0, _bkV0, _u1, _bkV0, _u1, _bkV1, _u0, _bkV1, _z0, _z1, 1)\n# Edge lip — a frame on two sides and the top, standing in the same plane as the pads.\n_lip = trimLip > 0\n_tw = min(trimWidth * _s, min(_Ln, _Ht) / 6)\n_lw = _lip ? _tw : 0\n_LP1 = hcat(_u0, _padV0, _u0 + _tw, _padV0, _u0 + _tw, _bkV0, _u0, _bkV0, _z0, _z1, 3)\n_LP2 = hcat(_u1 - _tw, _padV0, _u1, _padV0, _u1, _bkV0, _u1 - _tw, _bkV0, _z0, _z1, 3)\n_LP3 = hcat(_u0 + _tw, _padV0, _u1 - _tw, _padV0, _u1 - _tw, _bkV0, _u0 + _tw, _bkV0, _z1 - _tw, _z1, 3)\n_LIP = _lip ? vcat(_LP1, _LP2, _LP3) : zeros(0, 11)\n# The pad field. All four patterns are ONE broadcast: a grid of _nu columns by _nz rows, where\n# the pattern only decides whether each count is a division or a 1. Vertical is nz = 1,\n# horizontal is nu = 1, grid is both, plain is both 1 with no groove.\n_isV = pattern == 'Vertical channels'\n_isH = pattern == 'Horizontal channels'\n_isG = pattern == 'Square grid'\n_isP = pattern == 'Plain'\n_fu0 = _u0 + _lw\n_fu1 = _u1 - _lw\n_fz0 = _z0\n_fz1 = _z1 - _lw\n_fL = max(0.05, _fu1 - _fu0)\n_fH = max(0.05, _fz1 - _fz0)\n_pitch = max(0.01, channelPitch * _s)\n_nu = (_isV || _isG) ? max(1, round(_fL / _pitch)) : 1\n_nz = (_isH || _isG) ? max(1, round(_fH / _pitch)) : 1\n_gw = _isP ? 0 : min(grooveWidth * _s, _pitch / 2)\n_pu = _fL / _nu\n_pv = _fH / _nz\n_N = _nu * _nz\n_iu = kron(arange(_nu), ones(_nz, 1))\n_iz = kron(ones(_nu, 1), arange(_nz))\n_pa0 = _fu0 + _iu * _pu + _gw / 2\n_pa1 = _pa0 + _pu - _gw\n_pb0 = _fz0 + _iz * _pv + _gw / 2\n_pb1 = _pb0 + _pv - _gw\n_PADS = hcat(_pa0, fill(_N,1,_padV0), _pa1, fill(_N,1,_padV0), _pa1, fill(_N,1,_bkV0), _pa0, fill(_N,1,_bkV0), _pb0, _pb1, fill(_N,1,2))\n# Halo — a thin frame in the float gap, inset from the panel edge so it throws onto the wall.\n_hi = min(ledInset * _s, min(_Ln, _Ht) / 4)\n_hw = 0.014\n_haloV0 = _bkV1\n_haloV1 = min(_wall, _bkV1 + max(0.006, _fg * 0.6))\n_H1 = hcat(_u0 + _hi, _haloV0, _u0 + _hi + _hw, _haloV0, _u0 + _hi + _hw, _haloV1, _u0 + _hi, _haloV1, _z0 + _hi, _z1 - _hi, 4)\n_H2 = hcat(_u1 - _hi - _hw, _haloV0, _u1 - _hi, _haloV0, _u1 - _hi, _haloV1, _u1 - _hi - _hw, _haloV1, _z0 + _hi, _z1 - _hi, 4)\n_H3 = hcat(_u0 + _hi + _hw, _haloV0, _u1 - _hi - _hw, _haloV0, _u1 - _hi - _hw, _haloV1, _u0 + _hi + _hw, _haloV1, _z1 - _hi - _hw, _z1 - _hi, 4)\n_H4 = hcat(_u0 + _hi + _hw, _haloV0, _u1 - _hi - _hw, _haloV0, _u1 - _hi - _hw, _haloV1, _u0 + _hi + _hw, _haloV1, _z0 + _hi, _z0 + _hi + _hw, 4)\n_HALO = (haloLed > 0 && _fg > 0.005) ? vcat(_H1, _H2, _H3, _H4) : zeros(0, 11)\nQ = vcat(_BACK, _PADS, _LIP, _HALO)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBacker3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nPads3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nLip3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nHalo3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nBackerPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nPadsPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nLipPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nHaloPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\n# Metrics\npanelLength = _Ln\npanelHeight = _Ht\ntopHeight = _z1\ntotalDepth = _Dtot\nstandoff = _fg\npadCount = _N\npadPitchU = _pu\npadPitchZ = _pv\nfaceArea = _Ln * _Ht\nupholsteredArea = _N * (_pu - _gw) * (_pv - _gw)\nhaloRun = (haloLed > 0 && _fg > 0.005) ? (2 * (_Ln - 2 * _hi) + 2 * (_Ht - 2 * _hi)) : 0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Backer — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Pads — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Edge lip — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Halo LED — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Backer — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Pads — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Edge lip — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Halo LED — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Panel length (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Panel height (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Top of panel (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Total depth (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Standoff from wall (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Pad count"
+            },
+            {
+              "id": "s15",
+              "label": "Pad pitch — across (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Pad pitch — up (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Face area (m²)"
+            },
+            {
+              "id": "s18",
+              "label": "Upholstered area (m²)"
+            },
+            {
+              "id": "s19",
+              "label": "Halo LED run (m)"
+            },
+            {
+              "id": "s20",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_back",
+              "kind": "polygon",
+              "name": "Backer",
+              "color": "#a8a29e",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_pads",
+              "kind": "polygon",
+              "name": "Pads",
+              "color": "#e7e5e4",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_lip",
+              "kind": "polygon",
+              "name": "Edge lip",
+              "color": "#b08a5e",
+              "layer": "Wall panel",
+              "show": true
+            },
+            {
+              "id": "p2_halo",
+              "kind": "polygon",
+              "name": "Halo LED",
+              "color": "#fbbf24",
+              "layer": "Wall panel",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_back",
+              "kind": "polyhedron",
+              "name": "Backer",
+              "color": "#78716c",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_pads",
+              "kind": "polyhedron",
+              "name": "Pads",
+              "color": "#eae3d6",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lip",
+              "kind": "polyhedron",
+              "name": "Edge lip",
+              "color": "#b08a5e",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_halo",
+              "kind": "polyhedron",
+              "name": "Halo LED",
+              "color": "#fbbf24",
+              "layer": "Wall panel",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_baseOffset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-baseOffset",
+      "targetHandle": "valin-baseOffset"
+    },
+    {
+      "id": "e_props_math_pattern",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pattern",
+      "targetHandle": "valin-pattern"
+    },
+    {
+      "id": "e_props_math_channelPitch",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-channelPitch",
+      "targetHandle": "valin-channelPitch"
+    },
+    {
+      "id": "e_props_math_paddingDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-paddingDepth",
+      "targetHandle": "valin-paddingDepth"
+    },
+    {
+      "id": "e_props_math_grooveWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-grooveWidth",
+      "targetHandle": "valin-grooveWidth"
+    },
+    {
+      "id": "e_props_math_backerThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-backerThk",
+      "targetHandle": "valin-backerThk"
+    },
+    {
+      "id": "e_props_math_floatGap",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-floatGap",
+      "targetHandle": "valin-floatGap"
+    },
+    {
+      "id": "e_props_math_haloLed",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-haloLed",
+      "targetHandle": "valin-haloLed"
+    },
+    {
+      "id": "e_props_math_ledInset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ledInset",
+      "targetHandle": "valin-ledInset"
+    },
+    {
+      "id": "e_props_math_trimLip",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trimLip",
+      "targetHandle": "valin-trimLip"
+    },
+    {
+      "id": "e_props_math_trimWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trimWidth",
+      "targetHandle": "valin-trimWidth"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Backer3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Pads3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Lip3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Halo3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BackerPlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-PadsPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LipPlan",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-HaloPlan",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-panelLength",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-panelHeight",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topHeight",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-totalDepth",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-standoff",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-padCount",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-padPitchU",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-padPitchZ",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-faceArea",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-upholsteredArea",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-haloRun",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_r2d_p2_back",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_back"
+    },
+    {
+      "id": "e_out_r2d_p2_pads",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_pads"
+    },
+    {
+      "id": "e_out_r2d_p2_lip",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p2_lip"
+    },
+    {
+      "id": "e_out_r2d_p2_halo",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p2_halo"
+    },
+    {
+      "id": "e_out_r3d_p3_back",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_back"
+    },
+    {
+      "id": "e_out_r3d_p3_pads",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_pads"
+    },
+    {
+      "id": "e_out_r3d_p3_lip",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_lip"
+    },
+    {
+      "id": "e_out_r3d_p3_halo",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_halo"
+    }
+  ]
+}

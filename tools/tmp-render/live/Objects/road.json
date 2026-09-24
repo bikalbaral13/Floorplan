@@ -1,0 +1,304 @@
+{
+  "version": 1,
+  "id": "road-with-math",
+  "title": "Road — surface colour and thickness, with the measured area and perimeter",
+  "category": "Building",
+  "object": {
+    "hostKind": "space",
+    "name": "Road"
+  },
+  "description": "Select a Space and it reads as a road: a coloured surface in plan, a slab of the declared thickness in 3D, and its area and perimeter as numbers. Six nodes: Geometry -> Input Properties -> Math Engine -> Output metrics, with a 2D Render node and a 3D Render node alongside — the same shape as plot.json.\n\n  IDENTIFYING TYPE is a CLASSIFIER, not a setting: it reads \"road\" and is EDITABLE: FALSE because changing it would make the object lie about what it is. It exists so that consumers can ask what a space IS without matching on this file's `id` — which breaks the moment the object is renamed, and cannot express \"several objects that are all roads\". Its partner is \"plot\" on plot.json.\n\n  IT DOES NOT WORK IN A FLOW YET, and that is worth stating rather than discovering. A flow receives the canvas as bare polygons — canvasContent.spaces is Point[][], with no id, layer or attachment — so nothing downstream can read this tag off a bundle of spaces. Grab Object reads an attachment's parameters, but only for ONE element resolved from a single-id Space node (a multi-id bundle resolves to an empty list by construction). Making this tag usable needs per-space attachment data to reach the flow; the tag is the half of that work that lives here.\n\n  WHAT YOU DECLARE. Two properties travel with the space and are not derived from it: Colour (the plan surface) and Thickness (the 3D extrusion, in metres). Both are EDITABLE — they are the point of the object. Space outline is EDITABLE: FALSE, because it is fed by the wire from the Geometry node: it is the measured space, not a field to type into, and hand-editing it would put the readout out of step with what is on the canvas.\n\n  WHAT IS MEASURED. Area by the shoelace formula, taken absolute so the winding direction cannot flip its sign. Perimeter as the sum of the edge lengths, the ring wrapped so the closing edge is counted once. Both are in metres, measured on the outline as drawn.\n\n  NOTHING SELECTED IS NOT AN ERROR. An outline with fewer than three points falls back to a stub so the row maths stays well formed, and every published figure is gated on that test — the readout shows zeros and the 3D row an empty solid, rather than throwing or drawing a phantom shape at the origin.\n\n  COLOUR IS A SELECT, NOT A SWATCH, AND THAT IS FORCED BY THE RENDER NODE. A 2D Render row's colour is a property OF THE ROW: the evaluator reads `p.color` off the row and there is no `valin-<row>-color` endpoint, so a Math Engine — which can only put numbers on a wire — cannot tint a row, and neither can a free-form colour parameter. What CAN vary is WHICH ROW RECEIVES THE OUTLINE. So the node carries one row per surface colour, the Math Engine sends the outline to the row whose name matches the Colour parameter, and every other row is fed an empty list and skipped outright (2D Render drops a row with no geometry). Exactly one colour is ever drawn and two can never stack. This is plot.json's booked/free switch generalised from two states to five. Nothing selected fills none of them.\n\n  Adding a surface colour therefore means two edits, not one: a new option on the Colour parameter, and a matching row + `Road<Name>` line. That is the cost of the constraint, and it is why the palette is deliberately short.\n\n  THE 3D RENDER NODE EXTRUDES THE OUTLINE TO THICKNESS, from z = 0. The Math Engine builds it with mprism, so the slab follows the outline exactly — a curved or branching road gives a slab of that shape. Thickness is clamped to a 1 mm floor so a zero cannot collapse the solid into a degenerate face. The 3D row has ONE fixed colour: the Colour parameter drives the plan surface only, as specified. Mirroring it into 3D would need the same row-per-colour treatment there.\n\n  Holes are not subtracted, and the area is the outline's — to wall centrelines if that is how the Space was made.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1180,
+        "y": 40
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry — selected Space"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -880,
+        "y": 0
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Space outline [[x, y], ...]",
+              "type": "text",
+              "value": "[]",
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "identifyingType",
+              "name": "Identifying type",
+              "type": "text",
+              "value": "road",
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "select",
+              "value": "Black",
+              "options": [
+                "Black",
+                "Asphalt",
+                "Concrete",
+                "White",
+                "Red"
+              ],
+              "editable": true
+            },
+            {
+              "id": "thickness",
+              "name": "Thickness (m)",
+              "type": "number",
+              "value": 0.15,
+              "options": [],
+              "editable": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "asphalt carriageway, well-surfaced, urban street, kerbed",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -460,
+        "y": 0
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Road metrics",
+          "expr": "# Road metrics from the selected Space's outline. P arrives as [[x, y], ...] in metres,\n# local to the flow anchor.\n\n_n = rows(P)\n_ok = _n >= 3 ? 1 : 0\n# Nothing selected yet, or a degenerate outline: fall back to a 3-point stub so the row maths\n# below is always well formed. Every published figure is gated on _ok, so the readout is zeros\n# rather than a crash or a phantom shape.\n_Q = _ok > 0 ? P : vcat(hcat(0, 0), hcat(0, 0), hcat(0, 0))\n_k = rows(_Q)\n_x = col(_Q, 0)\n_y = col(_Q, 1)\n\n# The same ring shifted by one vertex, wrapping the last back to the first — the partner every\n# edge-wise term below needs.\n_x2 = vcat(sub(_x, 1, 0, _k - 1, 1), sub(_x, 0, 0, 1, 1))\n_y2 = vcat(sub(_y, 1, 0, _k - 1, 1), sub(_y, 0, 0, 1, 1))\n_Q2 = vcat(sub(_Q, 1, 0, _k - 1, 2), sub(_Q, 0, 0, 1, 2))\n\n# Shoelace, absolute so winding direction does not flip the sign. Holes are not subtracted:\n# this is the outline's area.\narea = _ok * abs(sum(_x * _y2 - _x2 * _y)) / 2\nperimeter = _ok * sum(len(_Q2 - _Q))\n\n# The road slab for the 3D row: the outline extruded from z = 0 to the declared thickness.\n# Clamped to 1 mm so a zero typed into the parameter cannot collapse the solid into a\n# degenerate face. mprism follows the outline exactly, so a curved or branching road gives a\n# slab of that shape rather than a bounding box.\n_t = max(thickness, 0.001)\nSlab = _ok > 0 ? mprism(_Q, 0, _t) : zeros(0, 4)\n\n# COLOUR -> WHICH 2D ROW GETS THE OUTLINE.\n# A 2D Render row's colour is a property OF THE ROW, not of the geometry: a Math Engine can only\n# put numbers on a wire, never a colour, so one row cannot change hue on a condition. Five rows\n# can — one per surface — and the switch becomes a question of WHICH ROW GETS THE OUTLINE. The\n# chosen row receives _Q and draws the road; every other row receives an empty list and is\n# skipped outright, because 2D Render drops a row with no geometry rather than drawing nothing\n# visible on top of it. Exactly one colour is ever on screen and two can never stack.\n# `color` arrives from the select as its option string, and the expression language compares\n# strings with == directly. Nothing selected (_ok = 0) fills no row at all, which keeps the\n# \"nothing selected is not an error\" rule the rest of this engine follows.\nRoadBlack = _ok > 0 && color == 'Black' ? _Q : zeros(0, 2)\nRoadAsphalt = _ok > 0 && color == 'Asphalt' ? _Q : zeros(0, 2)\nRoadConcrete = _ok > 0 && color == 'Concrete' ? _Q : zeros(0, 2)\nRoadWhite = _ok > 0 && color == 'White' ? _Q : zeros(0, 2)\nRoadRed = _ok > 0 && color == 'Red' ? _Q : zeros(0, 2)\n\n# Thickness, echoed back out so it REACHES THE READOUT. A slot fed directly from Input\n# Properties never arrives: the metrics collector reads the Math Engine's published values, which\n# is why plot.json's Number / Direction / Booked are absent from its own panel. One line and one\n# wire buys the panel a figure that is otherwise only visible as a control.\n#\n# COLOUR IS NOT ECHOED, deliberately. The metrics collector keeps NUMERIC slots only — a string\n# slot is dropped whatever it is wired to — so a Colour output would be a wire that provably does\n# nothing. The surface is legible from the drawing itself and from its own control.\nthicknessOut = _t\n"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 40,
+        "y": 0
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Area (m2)"
+            },
+            {
+              "id": "s2",
+              "label": "Perimeter (m)"
+            },
+            {
+              "id": "s3",
+              "label": "Thickness (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 460,
+        "y": -160
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_black",
+              "kind": "polygon",
+              "name": "Road — black",
+              "color": "#000000",
+              "layer": "",
+              "show": true
+            },
+            {
+              "id": "pr_asphalt",
+              "kind": "polygon",
+              "name": "Road — asphalt",
+              "color": "#4b5563",
+              "layer": "",
+              "show": true
+            },
+            {
+              "id": "pr_concrete",
+              "kind": "polygon",
+              "name": "Road — concrete",
+              "color": "#d6d3d1",
+              "layer": "",
+              "show": true
+            },
+            {
+              "id": "pr_white",
+              "kind": "polygon",
+              "name": "Road — white",
+              "color": "#ffffff",
+              "layer": "",
+              "show": true
+            },
+            {
+              "id": "pr_red",
+              "kind": "polygon",
+              "name": "Road — red",
+              "color": "#dc2626",
+              "layer": "",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 460,
+        "y": 160
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_slab",
+              "kind": "polyhedron",
+              "name": "Road slab — Thickness (m)",
+              "color": "#4b5563",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_source_points_props_P",
+      "source": "source",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_P_math",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_color_math",
+      "source": "props",
+      "sourceHandle": "val-color",
+      "target": "math",
+      "targetHandle": "valin-color"
+    },
+    {
+      "id": "e_props_thickness_math",
+      "source": "props",
+      "sourceHandle": "val-thickness",
+      "target": "math",
+      "targetHandle": "valin-thickness"
+    },
+    {
+      "id": "e_math_area_out_s1",
+      "source": "math",
+      "sourceHandle": "val-area",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_perimeter_out_s2",
+      "source": "math",
+      "sourceHandle": "val-perimeter",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_thicknessOut_out_s3",
+      "source": "math",
+      "sourceHandle": "val-thicknessOut",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_Slab_r3d_p3_slab",
+      "source": "math",
+      "sourceHandle": "val-Slab",
+      "target": "r3d",
+      "targetHandle": "valin-p3_slab"
+    },
+    {
+      "id": "e_math_RoadBlack_r2d_pr_black",
+      "source": "math",
+      "sourceHandle": "val-RoadBlack",
+      "target": "r2d",
+      "targetHandle": "valin-pr_black"
+    },
+    {
+      "id": "e_math_RoadAsphalt_r2d_pr_asphalt",
+      "source": "math",
+      "sourceHandle": "val-RoadAsphalt",
+      "target": "r2d",
+      "targetHandle": "valin-pr_asphalt"
+    },
+    {
+      "id": "e_math_RoadConcrete_r2d_pr_concrete",
+      "source": "math",
+      "sourceHandle": "val-RoadConcrete",
+      "target": "r2d",
+      "targetHandle": "valin-pr_concrete"
+    },
+    {
+      "id": "e_math_RoadWhite_r2d_pr_white",
+      "source": "math",
+      "sourceHandle": "val-RoadWhite",
+      "target": "r2d",
+      "targetHandle": "valin-pr_white"
+    },
+    {
+      "id": "e_math_RoadRed_r2d_pr_red",
+      "source": "math",
+      "sourceHandle": "val-RoadRed",
+      "target": "r2d",
+      "targetHandle": "valin-pr_red"
+    }
+  ]
+}

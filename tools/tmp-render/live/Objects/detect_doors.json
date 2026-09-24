@@ -1,0 +1,361 @@
+{
+  "version": 1,
+  "id": "detect-doors",
+  "title": "Detect doors",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Detect doors",
+    "icon": {
+      "paths": [
+        "M5 3v18h9V3z",
+        "M14 12h1",
+        "M5 21h14"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Find every DOOR in the drawing, measure it, and hand the canvas a plan document that carries each one as a real door SEGMENT with the library's door.json attached.\n\n  Geometry (Image kind) → Input Properties → Object Detection [Door] → Math Engine → Output Metrics (+ 2D Render)\n\nSIX NODES, DOWN FROM NINE. The earlier version needed Filter by Label + Graph to Matrix to get the boxes into maths, and Points to Graph + Network to get segments back out. Object Detection now publishes `corners` — a FLAT N×8 matrix, one row per box [x0,y0,x1,y1,x2,y2,x3,y3] in metres, per-row twin `val-o_door_corners` — which the Math Engine lifts directly, and the Math Engine's own encode block writes the plan document at the far end. Both bridges are gone. This is the same shape detect_windows.json now has, so the two flows read as one family.\n\nTHE ROOT IS THE GEOMETRY NODE, not a separate Image node. Selecting a picture on the canvas retargets a grabbing Geometry node onto its Image kernel, so the same node that would carry a Space or a Segment carries the drawing — one root, whatever is selected. “Grab from selection” is ON: pick the underlay and this node follows it. Turn it off and name an overlay (“render-1”) to read a generated redraw instead.\n\nTHE BRIEF SITS IN THE CHAIN, not beside it. Input Properties is wired between the Geometry node and Object Detection, so the tuning values and the picture travel one chain: the detector resolves its image by walking UPSTREAM through geometry edges, so it still finds the picture through the brief.\n\nMIND WHAT A DOOR BOX IS — this is where doors differ from windows and where the parameters earn their keep. The detector usually boxes the leaf AND its swing arc, so the box comes back roughly leaf × leaf:\n• “Wall depth” therefore DEFAULTS TO 0.12 m rather than 0. A window's box short side is a fair reading of the wall; a door's is the swing arc, and letting it through would write a 0.9 m thick wall segment. Set it to 0 to hand the reading back to the box when your drawing shows door leaves without arcs.\n• A SQUARE box says nothing about which way the opening runs, so the long-axis rule becomes a coin flip. “Square-box tolerance” measures how many kept boxes are within that fraction of square and reports the count as “Ambiguous”. It changes no geometry — it tells you how many placements to check by hand. 0 turns the test off.\n• “Min door width” drops boxes too narrow to be an opening — a handle, a label box, an arc read on its own.\n\nWHAT THE MATHS PUBLISHES. min/max over each row's four x's and four y's recovers the box; the mid-line of the LONGER axis is the opening — a wide box gives (x0,cy)→(x1,cy), a tall one (cx,y0)→(cx,y1). Four measures reach Output Metrics: the box POLYGON COORDINATES as a grouped [x, y, box] list, the CENTRE-LINE SEGMENT as [x1, y1, x2, y2, w], the WIDTH (wall depth, per door) and the LENGTH (the leaf opening, per door).\n\nTHE PLAN DOCUMENT. The Math Engine's encode block runs Canvas Encoder after the formulas and publishes `val-json`: each kept centre line becomes a segment of segmentType “door” on the “door” layer, marked as an opening, carrying objectId “door-with-math” and objectPath “Objects/Architectural/door.json” with its leaf, jamb, frame and lintel params. Per-door wall depth rides on the thickness column, so each segment gets its own value. TWO THINGS THE MAP CANNOT VARY, because it is one static entry for every row: every door imports hinge LEFT, swing LEFT — a box has no handedness in it, so set the ones that are wrong on canvas afterwards. Want masonry around each opening as well? Add a wall.json entry to that segment's `extraObjects` — the shape floorplan.v11 uses.\n\nSHOW IN CANVAS. The plan JSON lands in the last Output Metrics slot, and that node's “Show in canvas” button imports it by the same path File ▸ Import takes for a plan you picked. Nothing reaches the canvas until you press it — the flow only ever computes the document.\n\nHOW TO RUN: 1) select the drawing on the canvas — the Geometry node binds to it; 2) paste your Gemini API key into the Object Detection node (it ships BLANK on purpose — never save a key into a shared workflow file); 3) press DETECT on that node. Detect bakes its result into the node — nothing detects on its own and re-running the flow does not re-detect, so press it again after changing the image or the rows. Without a key the node produces nothing while the rest still evaluates, which looks exactly like “found none”. The “Door” row claims “door”, “Door”, “sliding door” and “doorway” alike — matching is case-insensitive and bidirectional containment — so if the found count is 0 while “Unclaimed labels” is full, the model used a different word: rename the row rather than raising Max items.\n\nNEXT: to detect doors AND windows, do not run this and detect_windows.json in turn — the call is billed per image, so open detect_openings_one_call.json and get both families from ONE call.\n\n---\nHOSTED ON AN IMAGE. This file now carries an `object` block with `hostKind: \"image\"`, so it lists as a parametric object and attaches to an imported picture from the Properties tab.\n\nWHAT STILL ONLY WORKS IN THE FLOW EDITOR: an attached object is resolved by the spine runner, which evaluates Input Properties, the Math Engine and the Render rows and NOTHING else. It does not run the Object Detection node, and it reads the Math Engine's `decode` block but never its `encode`. Detection is also an async, billed call that has to be pressed and baked — there is no button on an attached object, and an object re-resolves on every parameter change. So attached, this reports nothing until detect-and-bake exists for attachments. Open it in the Flow editor to actually run it.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -760,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "pooling": "ink",
+          "nodeLabel": "Geometry — the drawing"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -450,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "minW",
+              "name": "Min door width (m)",
+              "type": "range",
+              "value": 0.6,
+              "min": 0,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "bandTh",
+              "name": "Wall depth (m, 0 = box short side)",
+              "type": "range",
+              "value": 0.12,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "squareTol",
+              "name": "Square-box tolerance (0 = off)",
+              "type": "range",
+              "value": 0.15,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "ppm",
+              "name": "Pixels per metre (plan JSON)",
+              "type": "range",
+              "value": 50,
+              "min": 10,
+              "max": 200,
+              "step": 1,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Tuning"
+        }
+      }
+    },
+    {
+      "id": "detect",
+      "position": {
+        "x": -120,
+        "y": 0
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 20,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_door",
+              "name": "Door"
+            }
+          ],
+          "nodeLabel": "Door — press Detect"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Boxes → centre lines, sizes, plan JSON",
+          "expr": "# BOXES -> CENTRE LINE, SIZE, AND A PLAN DOCUMENT.\n# A is the detection's `corners` matrix: one row per box, [x0,y0,x1,y1,x2,y2,x3,y3] in metres.\n_X = hcat(hcat(col(A,0), col(A,2)), hcat(col(A,4), col(A,6)))\n_Y = hcat(hcat(col(A,1), col(A,3)), hcat(col(A,5), col(A,7)))\n_x0 = min(_X, 'rows')\n_x1 = max(_X, 'rows')\n_y0 = min(_Y, 'rows')\n_y1 = max(_Y, 'rows')\n_cx = (_x0 + _x1) / 2\n_cy = (_y0 + _y1) / 2\n\n# The opening runs along the LONGER axis; the short side is the box's other extent.\n_wide = gt(_x1 - _x0, _y1 - _y0)\n_S0 = hcat(where(_wide, _x0, _cx), where(_wide, _cy, _y0))\n_E0 = hcat(where(_wide, _x1, _cx), where(_wide, _cy, _y1))\n_T0 = where(_wide, _y1 - _y0, _x1 - _x0)\n_L0 = len(_E0 - _S0)\n\n# HOW SQUARE IS THE BOX? A door drawn with its swing arc boxes to roughly leaf x leaf, and a square\n# box carries NO information about which way the opening runs - the long-axis rule above becomes a\n# coin flip. Measure it rather than hide it: these rows are reported so you know how many placements\n# to check by hand.\n_w = _x1 - _x0\n_h = _y1 - _y0\n_long = max(hcat(_w, _h), 'rows')\n_short = min(hcat(_w, _h), 'rows')\n_sq = le(_long - _short, squareTol * _long)\n\n# Drop anything narrower than the brief's minimum - a handle, a label box, an arc read on its own.\n_keep = ge(_L0, minW)\nS = compress(_S0, _keep)\nE = compress(_E0, _keep)\nTh = compress(_T0, _keep)\n\n# THE FOUR MEASURES the Output Metrics node reports. `Wid` is the WALL DEPTH written onto each\n# segment: for a door the box short side is the swing arc, not the wall, so the override is on by\n# default and 0 is what hands the reading back to the box.\nLen = len(E - S)\nWid = bandTh > 0 ? Th * 0 + bandTh : Th\nSeg = hcat(hcat(S, E), Wid)\n_K = compress(A, _keep)\n_n = rows(_K)\nBox = hcat(reshape(_K, 4 * _n, 2), floor(arange(4 * _n) / 4))\n\n# One type code per row (all 1 -> the single `door` entry in the encode map) and the plan's scale.\nK = Wid * 0 + 1\nPPM = ppm\n\nFound = rows(A)\nKept = _n\nDropped = Found - _n\nAmbig = sum(compress(_sq, _keep))\n",
+          "decode": "",
+          "encode": "{\n  \"from\": {\n    \"a\": \"S\",\n    \"b\": \"E\",\n    \"thickness\": \"Wid\",\n    \"types\": \"K\",\n    \"pixelsPerMeter\": \"PPM\"\n  },\n  \"objects\": {\n    \"segments\": {\n      \"door\": {\n        \"segmentType\": \"door\",\n        \"layer\": \"door\",\n        \"thickness\": 0.12,\n        \"mode\": \"line\",\n        \"opening\": true,\n        \"objectId\": \"door-with-math\",\n        \"objectPath\": \"Objects/Architectural/door.json\",\n        \"params\": {\n          \"leaves\": \"Single\",\n          \"hinge\": \"left\",\n          \"swing\": \"left\",\n          \"openAngle\": 90,\n          \"fitMode\": \"Fill segment\",\n          \"width\": 0.9,\n          \"leafThickness\": 0.04,\n          \"jambWidth\": 0.05,\n          \"frameDepth\": 0.12,\n          \"lintelHeight\": 2.1,\n          \"headDepth\": 0.12,\n          \"arcSteps\": 24\n        }\n      }\n    },\n    \"points\": {},\n    \"space\": {}\n  },\n  \"pixelsPerMeter\": 50,\n  \"libraryPath\": \"https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library\",\n  \"decimals\": 4\n}",
+          "nodeLabel": "Measure + encode the plan"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_box",
+              "kind": "polygon",
+              "name": "Detected door boxes",
+              "color": "#dc2626",
+              "layer": "Detected · Doors",
+              "lineStyle": "dashed",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_seg",
+              "kind": "stroke",
+              "name": "Door centre lines",
+              "color": "#b91c1c",
+              "layer": "Detected · Door centre lines",
+              "lineStyle": "solid",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "width": 0.1,
+              "show": true
+            }
+          ],
+          "nodeLabel": "Boxes + centre-line bands"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 620,
+        "y": 240
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Doors — detected"
+            },
+            {
+              "id": "s2",
+              "label": "Doors — kept (≥ min width)"
+            },
+            {
+              "id": "s3",
+              "label": "Dropped as too narrow"
+            },
+            {
+              "id": "s4",
+              "label": "Unclaimed labels (rename the row if non-empty)"
+            },
+            {
+              "id": "s5",
+              "label": "Ambiguous — near-square box, orientation is a guess"
+            },
+            {
+              "id": "s6",
+              "label": "Polygon coordinates [x, y, box], per corner"
+            },
+            {
+              "id": "s7",
+              "label": "Centre-line segment [x1, y1, x2, y2, w]"
+            },
+            {
+              "id": "s8",
+              "label": "Width (m, per door — wall depth)"
+            },
+            {
+              "id": "s9",
+              "label": "Length (m, per door — leaf opening)"
+            },
+            {
+              "id": "s10",
+              "label": "Plan JSON — door segments + door.json"
+            }
+          ],
+          "nodeLabel": "What was found"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geom_props",
+      "source": "geom",
+      "sourceHandle": null,
+      "target": "props",
+      "targetHandle": null
+    },
+    {
+      "id": "e2_props_detect",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detect",
+      "targetHandle": null
+    },
+    {
+      "id": "e3_props_minw",
+      "source": "props",
+      "sourceHandle": "val-minW",
+      "target": "math",
+      "targetHandle": "valin-minW"
+    },
+    {
+      "id": "e4_props_bandth",
+      "source": "props",
+      "sourceHandle": "val-bandTh",
+      "target": "math",
+      "targetHandle": "valin-bandTh"
+    },
+    {
+      "id": "e5_props_sqtol",
+      "source": "props",
+      "sourceHandle": "val-squareTol",
+      "target": "math",
+      "targetHandle": "valin-squareTol"
+    },
+    {
+      "id": "e6_props_ppm",
+      "source": "props",
+      "sourceHandle": "val-ppm",
+      "target": "math",
+      "targetHandle": "valin-ppm"
+    },
+    {
+      "id": "e7_detect_math",
+      "source": "detect",
+      "sourceHandle": "val-o_door_corners",
+      "target": "math",
+      "targetHandle": "valin-A"
+    },
+    {
+      "id": "e8_math_box",
+      "source": "math",
+      "sourceHandle": "val-Box",
+      "target": "render",
+      "targetHandle": "valin-pr_box"
+    },
+    {
+      "id": "e9_math_seg",
+      "source": "math",
+      "sourceHandle": "val-Seg",
+      "target": "render",
+      "targetHandle": "valin-pr_seg"
+    },
+    {
+      "id": "e10_found",
+      "source": "math",
+      "sourceHandle": "val-Found",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e11_kept",
+      "source": "math",
+      "sourceHandle": "val-Kept",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e12_dropped",
+      "source": "math",
+      "sourceHandle": "val-Dropped",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e13_unmatched",
+      "source": "detect",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e14_ambig",
+      "source": "math",
+      "sourceHandle": "val-Ambig",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e15_poly",
+      "source": "math",
+      "sourceHandle": "val-Box",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e16_seg",
+      "source": "math",
+      "sourceHandle": "val-Seg",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e17_width",
+      "source": "math",
+      "sourceHandle": "val-Wid",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e18_length",
+      "source": "math",
+      "sourceHandle": "val-Len",
+      "target": "metrics",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e19_planjson",
+      "source": "math",
+      "sourceHandle": "val-json",
+      "target": "metrics",
+      "targetHandle": "valin-s10"
+    }
+  ]
+}

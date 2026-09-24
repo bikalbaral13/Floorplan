@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
-import type { PrincipalAxesMethod } from "../../algorithms/geometry/principalAxes";
+import type { PrincipalAxesMethod } from "@builderpluss/engine";
 
 export interface PrincipalAxesBlockProps {
   selectedRoom: { id: string; points: Point[]; roomType?: string };

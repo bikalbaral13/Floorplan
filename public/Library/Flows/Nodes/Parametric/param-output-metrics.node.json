@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "kind": "flow-node",
-  "tool": "param-output-metrics",
-  "label": "Grab Output Metrics",
-  "category": "Parametric",
-  "description": "Read a wired Parametric Object's output metrics (declared `outputs` + derived size/area/volume). Passes the definition through.",
-  "params": {}
-}

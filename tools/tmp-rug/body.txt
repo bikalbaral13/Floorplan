@@ -1,0 +1,172 @@
+
+# ===========================================================================
+# THE RUG IN ITS OWN FRAME — u along the length, v across, z up. On a space
+# host it takes the space's long direction and fits inside it (fitMode Max,
+# margin from the walls).
+# ===========================================================================
+_Lr = length * _s
+_Wr = width * _s
+_isRound = shape == 'Round'
+_Wr = _isRound ? _Lr : _Wr
+_hR = height * _s
+_rel = relief * _s
+_dB = detail == 'Blocky'
+_dM = detail == 'Medium'
+_dF = detail == 'Fine'
+_nSt = _dB ? 6 : (_dM ? 12 : (_dF ? 18 : 26))
+_pts = _dB ? 16 : (_dM ? 32 : (_dF ? 48 : 72))
+
+# ===========================================================================
+# STEP 1 — THE FIELD: a soft slab (Solid.SoftBox) — near-square corners, or
+# an ellipse for a round rug — with the pile's rolled edge from edgeCharacter
+# ===========================================================================
+_ecC = edgeCharacter == 'Crisp'
+_ecP = edgeCharacter == 'Plump'
+_rPlan = _isRound ? 1 : 0.04
+_rTop = _ecC ? 0.05 : (_ecP ? 0.3 : 0.15)
+_FIELD = Solid.Skin(Solid.SoftBox(hcat(0 - _Lr / 2, 0 - _Wr / 2, 0, _Lr / 2, _Wr / 2, _hR), _rTop, 0, _rPlan, _dB ? 5 : 7, _pts), 0)
+# optional border band: a slightly raised ring of the same pile, inset from the edge
+_bw = borderWidth * _s
+_bOn = showBorder > 0 && _bw > 0.01 * _s && !_isRound
+_BORDER = _bOn ? vcat(Solid.Skin(Solid.SoftBox(hcat(0 - _Lr / 2 + 0.02 * _s, 0 - _Wr / 2 + 0.02 * _s, _hR - 0.001 * _s, _Lr / 2 - 0.02 * _s, 0 - _Wr / 2 + 0.02 * _s + _bw, _hR + _rel * 0.5), 0.3, 0, 0.05, 3, 16), 100000), Solid.Skin(Solid.SoftBox(hcat(0 - _Lr / 2 + 0.02 * _s, _Wr / 2 - 0.02 * _s - _bw, _hR - 0.001 * _s, _Lr / 2 - 0.02 * _s, _Wr / 2 - 0.02 * _s, _hR + _rel * 0.5), 0.3, 0, 0.05, 3, 16), 200000)) : zeros(0, 4)
+
+# ===========================================================================
+# STEP 2 — THE LEAF TABLE: the carved pattern of the reference, one row per
+# leaf. Leaves spring from the four edges, point inward on a diagonal and
+# curve; a hash of (index, seed) sets each one's edge, position, angle,
+# length, width, bend and colour, so Seed draws a new rug.
+# ===========================================================================
+_nLf = max(0, round(leaves))
+_i = arange(max(1, _nLf))
+_h1 = sin((_i + 1) * 12.9898 + seed * 78.233) * 43758.5453
+_r1 = _h1 - floor(_h1)
+_h2 = sin((_i + 1) * 39.3468 + seed * 11.135) * 24634.6345
+_r2 = _h2 - floor(_h2)
+_h3 = sin((_i + 1) * 73.156 + seed * 52.235) * 13758.937
+_r3 = _h3 - floor(_h3)
+_edge = _i % 4
+# base point on its edge, and the inward direction of that edge
+# bases sit just INSIDE their edge (inset 0.05 m) so the leaf body starts on the rug, not on its rim
+_bu = where(eq(_edge, 0), (_r1 - 0.5) * 0.9 * _Lr, where(eq(_edge, 1), (_r1 - 0.5) * 0.9 * _Lr, where(eq(_edge, 2), fill(rows(_i), 1, 0 - _Lr / 2 + 0.05 * _s), fill(rows(_i), 1, _Lr / 2 - 0.05 * _s))))
+_bv = where(eq(_edge, 0), fill(rows(_i), 1, 0 - _Wr / 2 + 0.05 * _s), where(eq(_edge, 1), fill(rows(_i), 1, _Wr / 2 - 0.05 * _s), (_r1 - 0.5) * 0.9 * _Wr))
+_inA = where(eq(_edge, 0), fill(rows(_i), 1, PI / 2), where(eq(_edge, 1), fill(rows(_i), 1, 0 - PI / 2), where(eq(_edge, 2), zeros(rows(_i), 1), fill(rows(_i), 1, PI))))
+_ang = _inA + (_r2 - 0.5) * 1.3
+_len = leafLength * _s * (0.6 + 0.8 * _r3)
+_wid = leafWidth * _s * (0.7 + 0.6 * _r2)
+_bend = (_r3 - 0.5) * 0.9
+_tan = lt(_r1 * 7.3 - floor(_r1 * 7.3), tanShare)
+
+# ===========================================================================
+# STEP 3 — EACH LEAF: a flat strip lofted along its curved spine (a stretched
+# S in plan), width narrow-full-pointed, standing `relief` proud of the pile.
+# Points outside the rug are pulled back onto its edge, so leaves run off the
+# border the way a carved rug's pattern does.
+# ===========================================================================
+_ss = arange(_nSt) / (_nSt - 1)
+_GRN = zeros(0, 4)
+_TAN = zeros(0, 4)
+loop k in _nLf:
+  _a = sub(_ang, k, 0, 1, 1)
+  # LENGTH IS CUT WHERE THE SPINE MEETS THE EDGE, not clamped afterwards: clamping a strip's points onto
+  # the border collapses it into a zero-width, inside-out sliver that renders black. Ray from the base
+  # along the leaf's direction to the rug rectangle, minus a margin for the bow and the half-width.
+  _b0u = sub(_bu, k, 0, 1, 1)
+  _b0v = sub(_bv, k, 0, 1, 1)
+  _dx = cos(_a)
+  _dy = sin(_a)
+  _mg = 0.06 * _s
+  _tu = _dx > 0.0001 ? ((_Lr / 2 - _mg - _b0u) / _dx) : (_dx < -0.0001 ? ((0 - _Lr / 2 + _mg - _b0u) / _dx) : 99)
+  _tv = _dy > 0.0001 ? ((_Wr / 2 - _mg - _b0v) / _dy) : (_dy < -0.0001 ? ((0 - _Wr / 2 + _mg - _b0v) / _dy) : 99)
+  _Lk = max(0.1 * _s, min(sub(_len, k, 0, 1, 1), 0.92 * min(_tu, _tv)))
+  _Wk = sub(_wid, k, 0, 1, 1)
+  _bk = sub(_bend, k, 0, 1, 1)
+  _ca = cos(_a)
+  _sa = sin(_a)
+  # spine: along the direction, bowed sideways by a sine
+  _off = _bk * _Lk * sin(PI * _ss)
+  _su = sub(_bu, k, 0, 1, 1) + _Lk * _ss * _ca - _off * _sa
+  _sv = sub(_bv, k, 0, 1, 1) + _Lk * _ss * _sa + _off * _ca
+  # tangent-free lateral: the direction's normal, rotated by the bow's slope
+  _slope = _bk * PI * cos(PI * _ss)
+  _nu = 0 - _sa - _slope * _ca
+  _nv = _ca - _slope * _sa
+  _nl = sqrt(_nu * _nu + _nv * _nv)
+  _nu = _nu / _nl
+  _nv = _nv / _nl
+  _w = _Wk / 2 * max(0.02, pow(sin(PI * min(1, _ss * 0.94 + 0.03)), 0.7))
+  # ring of 4 corners per station: left top, right top, right bottom, left bottom
+  _ringU = vcat(1, -1, -1, 1)
+  _ringZ = vcat(1, 1, 0, 0)
+  _o4 = ones(4, 1)
+  _pu = kron(_su, _o4) + kron(_w * _nu, _o4) * kron(ones(_nSt, 1), _ringU)
+  _pv = kron(_sv, _o4) + kron(_w * _nv, _o4) * kron(ones(_nSt, 1), _ringU)
+  # clamp into the rug: rectangle, or the ellipse of a round rug
+  _cu2 = max(0 - _Lr / 2 + 0.01 * _s, min(_Lr / 2 - 0.01 * _s, _pu))
+  _cv2 = max(0 - _Wr / 2 + 0.01 * _s, min(_Wr / 2 - 0.01 * _s, _pv))
+  _er = sqrt(pow(_pu / (_Lr / 2 - 0.01 * _s), 2) + pow(_pv / (_Wr / 2 - 0.01 * _s), 2))
+  _ek = where(gt(_er, 1), 1 / max(0.000001, _er), ones(rows(_er), 1))
+  _pu = _isRound ? _pu * _ek : _cu2
+  _pv = _isRound ? _pv * _ek : _cv2
+  # each leaf a hair above the one before, so overlapping leaves stack instead of fighting for the surface
+  _pz = _hR - 0.001 * _s + k * 0.0002 * _s + kron(ones(_nSt, 1), _ringZ) * (_rel + 0.001 * _s)
+  _sk = Solid.Skin(hcat(_pu, _pv, _pz, kron(arange(_nSt), _o4)), (k + 1) * 100000)
+  _isT = sub(_tan, k, 0, 1, 1)
+  _GRN = _isT > 0.5 ? _GRN : vcat(_GRN, _sk)
+  _TAN = _isT > 0.5 ? vcat(_TAN, _sk) : _TAN
+end
+
+# ===========================================================================
+# STEP 4 — FRINGE: short tassels on the two short ends, a comb of thin boxes
+# ===========================================================================
+_frL = fringeLength * _s
+_frOn = _frL > 0.005 * _s && !_isRound
+_nFr = max(2, round(_Wr / (0.025 * _s)))
+_fv = (arange(_nFr) + 0.5) * _Wr / _nFr - _Wr / 2
+_FR = zeros(0, 4)
+loop e in (_frOn ? 2 : 0):
+  _sgn = e < 1 ? -1 : 1
+  _u0f = _sgn * _Lr / 2
+  loop j in _nFr:
+    _vj = sub(_fv, j, 0, 1, 1)
+    _fs = Solid.SoftBox(hcat(min(_u0f, _u0f + _sgn * _frL), _vj - 0.003 * _s, 0, max(_u0f, _u0f + _sgn * _frL), _vj + 0.003 * _s, 0.003 * _s), 0, 0, 0.5, 2, 8)
+    _FR = vcat(_FR, Solid.Skin(_fs, (e * 1000 + j + 1) * 1000))
+  end
+end
+
+# ===========================================================================
+# THE FRAME RULE — the rug on its host
+# ===========================================================================
+_wU = _cu + col(_FIELD, 0)
+_wV = _cv + col(_FIELD, 1)
+Field3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_FIELD, 2), col(_FIELD, 3))
+_wU = _cu + col(_BORDER, 0)
+_wV = _cv + col(_BORDER, 1)
+Border3D = rows(_BORDER) > 0 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_BORDER, 2), col(_BORDER, 3)) : zeros(0, 4)
+_wU = _cu + col(_GRN, 0)
+_wV = _cv + col(_GRN, 1)
+LeavesGreen3D = rows(_GRN) > 0 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_GRN, 2), col(_GRN, 3)) : zeros(0, 4)
+_wU = _cu + col(_TAN, 0)
+_wV = _cv + col(_TAN, 1)
+LeavesTan3D = rows(_TAN) > 0 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_TAN, 2), col(_TAN, 3)) : zeros(0, 4)
+_wU = _cu + col(_FR, 0)
+_wV = _cv + col(_FR, 1)
+Fringe3D = rows(_FR) > 0 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_FR, 2), col(_FR, 3)) : zeros(0, 4)
+
+# ===========================================================================
+# PLAN — the rug outline (an ellipse for a round rug)
+# ===========================================================================
+_c = arange(48) / 48 * 2 * PI
+_r4u = vcat(-1, 1, 1, -1) * _Lr / 2
+_r4v = vcat(-1, -1, 1, 1) * _Wr / 2
+_ou = _cu + (_isRound ? (_Lr / 2 * cos(_c)) : _r4u)
+_ov = _cv + (_isRound ? (_Wr / 2 * sin(_c)) : _r4v)
+RugPlan = hcat(_ou * _ux + _ov * _vx, _ou * _uy + _ov * _vy, fill(rows(_ou), 1, 1))
+
+# ===========================================================================
+# METRICS
+# ===========================================================================
+rugLength = _Lr + (_frOn ? 2 * _frL : 0)
+rugWidth = _Wr
+pileHeight = _hR + _rel
+leafCount = _nLf
+area = _isRound ? PI * _Lr * _Wr / 4 : _Lr * _Wr

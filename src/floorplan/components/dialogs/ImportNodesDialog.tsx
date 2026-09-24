@@ -11,14 +11,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { listFlowNodeFiles } from "../../libraryFiles";
+import { LibrarySourceNote } from "../LibrarySourceNote";
 
-/** One Flow/Nodes folder in the picker — its name + the folder-relative `.node.json` paths under it. */
+/** One Tools folder in the picker — its name + the folder-relative `.node.json` paths under it. */
 type FolderGroup = { folder: string; files: string[] };
 
 export interface ImportNodesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Import the ticked node templates (folder-relative paths under public/Library/Flows/Nodes). */
+  /** Import the ticked tools (folder-relative paths under the Library's Tools/ root). */
   onImportSelected: (relPaths: string[]) => void;
   /** Import `.node.json` files / a folder of them picked from this device via the native file dialogs. */
   onImportFiles: (files: File[]) => void;
@@ -117,6 +118,7 @@ export const ImportNodesDialog = ({ open, onOpenChange, onImportSelected, onImpo
             canvas — or pick <code>.node.json</code> files / a folder from this device.
           </DialogDescription>
         </DialogHeader>
+        <LibrarySourceNote label="Reading from" folder="Tools" />
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span>
             {selected.size} of {total} selected
@@ -146,7 +148,10 @@ export const ImportNodesDialog = ({ open, onOpenChange, onImportSelected, onImpo
           {groups === null ? (
             <p className="p-3 text-sm text-slate-500">Loading library…</p>
           ) : groups.length === 0 ? (
-            <p className="p-3 text-sm text-slate-500">No node templates found at public/Library/Flows/Nodes.</p>
+            <div className="space-y-1 p-3 text-sm text-slate-500">
+              <p>Nothing under <code>Tools/</code> in the shared Library.</p>
+              <LibrarySourceNote label="Checked" folder="Tools" />
+            </div>
           ) : (
             groups.map((g) => {
               const pickedCount = g.files.filter((rel) => selected.has(rel)).length;

@@ -1,0 +1,29 @@
+{
+  "schema": "material/1",
+  "category": "Glazing",
+  "id": "glass.screen",
+  "title": "Glass — display screen",
+  "description": "A switched-off panel: near-black, slightly glossy, no transmission. A switched-ON screen is an emissive override on the instance, not a second material file.",
+  "procedural": {
+    "type": "none",
+    "blenderNode": null,
+    "params": {}
+  },
+  "pbr": {
+    "baseColor": "#0b0e12",
+    "roughness": 0.08,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 8,
+    "angle": 0,
+    "weight": 1,
+    "color": "#0b0e12"
+  },
+  "dxf": {
+    "pattern": "SOLID",
+    "scale": 1,
+    "angle": 0
+  }
+}

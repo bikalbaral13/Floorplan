@@ -1,0 +1,82 @@
+[
+  {
+    "name": "nightstand",
+    "params": 3,
+    "outputs": 6
+  },
+  {
+    "name": "tv-unit",
+    "params": 3,
+    "outputs": 7
+  },
+  {
+    "name": "tv",
+    "params": 2,
+    "outputs": 4
+  },
+  {
+    "name": "wardrobe",
+    "params": 7,
+    "outputs": 12
+  },
+  {
+    "name": "curtain",
+    "params": 5,
+    "outputs": 8
+  },
+  {
+    "name": "tessellation",
+    "params": 4,
+    "outputs": 5
+  },
+  {
+    "name": "light-bulb",
+    "params": 5,
+    "outputs": 7
+  },
+  {
+    "name": "ceiling-fan",
+    "params": 4,
+    "outputs": 5
+  },
+  {
+    "name": "chandelier",
+    "params": 1,
+    "outputs": 5
+  },
+  {
+    "name": "mirror",
+    "params": 2,
+    "outputs": 4
+  },
+  {
+    "name": "window",
+    "params": 3,
+    "outputs": 7
+  },
+  {
+    "name": "bed",
+    "params": 5,
+    "outputs": 9
+  },
+  {
+    "name": "plant",
+    "params": 0,
+    "outputs": 0
+  },
+  {
+    "name": "planter-box",
+    "params": 0,
+    "outputs": 0
+  },
+  {
+    "name": "rug",
+    "params": 0,
+    "outputs": 0
+  },
+  {
+    "name": "wall",
+    "params": 0,
+    "outputs": 0
+  }
+]

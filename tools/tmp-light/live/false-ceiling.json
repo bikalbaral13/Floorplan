@@ -1,0 +1,830 @@
+{
+  "version": 1,
+  "id": "false-ceiling-with-math",
+  "title": "False Ceiling — one Math Engine, perimeter cove band, central panel and cove LED",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "space",
+    "name": "False Ceiling",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 4h18v16H3z",
+        "M6 7h12v10H6z",
+        "M3 4l3 3",
+        "M21 4l-3 3",
+        "M3 20l3-3",
+        "M21 20l-3-3"
+      ]
+    }
+  },
+  "description": "A parametric FALSE CEILING on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SPACE. It takes its extents from the host outline's bounding box, not from width and depth props, because a ceiling that could disagree with the room it sits in would be a second source of truth for the same rectangle. Margin insets it; Fit to host set to Exact stretches it back out.\n\nTWO LEVELS, AND THE COVE IS THE GAP BETWEEN THEM. A perimeter band at `bandSoffit` and a central panel at `panelSoffit`. The cove is never drawn as a thing — it is the reveal that exists because the panel sits higher than the band, and `coveReveal` reports it. Set the panel below the band and the metric goes to zero, which is the honest answer.\n\nTHE PANEL FILLS WHAT THE BANDS LEAVE. `_pu0 = _u0 + _bwC + _pin` — each edge is inset only by the band that is actually on that side, so dropping to Long sides or Three sides widens the panel automatically rather than leaving a gap.\n\nA SHADOW GAP IS AN INSET, NOT A SOLID. `_gapIn` simply adds to the panel inset on every banded side, so the gap and the panel cannot drift apart.\n\nTHE OPENING IS A SPLIT, NOT A SUBTRACTION. With `opening` on, the panel becomes four strips around the hole — left, right, below, above — because the quad-prism kernel extrudes plan quads and has no boolean. That is also why the hole is rectangular.\n\nDIMENSIONS AT THE DEFAULTS, on a 3.962 × 3.734 m room: band soffit 2.972, panel soffit 3.124, a 0.152 m cove reveal, 0.381 m of void above the band, 14.17 m of band run and 10.47 m² of panel.\n\nWHAT THIS CANNOT DO. The outline is the host's BOUNDING BOX — an L-shaped room gets a rectangular ceiling. There is no curved or chamfered cove profile: the kernel extrudes plan quads vertically, so Square, Stepped and Shadow gap are the three sections that can exist. Only one opening, and it is rectangular.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "slabHeight",
+              "name": "Structural slab height",
+              "type": "range",
+              "value": 3.353,
+              "min": 2.2,
+              "max": 6,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "bandSoffit",
+              "name": "Cove band soffit",
+              "type": "range",
+              "value": 2.972,
+              "min": 2,
+              "max": 5.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "panelSoffit",
+              "name": "Central panel soffit",
+              "type": "range",
+              "value": 3.124,
+              "min": 2,
+              "max": 5.8,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "bandWidth",
+              "name": "Cove band width",
+              "type": "range",
+              "value": 0.305,
+              "min": 0.1,
+              "max": 1.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bandSides",
+              "name": "Band runs on",
+              "type": "select",
+              "value": "All four",
+              "options": [
+                "All four",
+                "Long sides",
+                "Short sides",
+                "Three sides"
+              ]
+            },
+            {
+              "id": "panelInset",
+              "name": "Extra panel inset",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "edgeProfile",
+              "name": "Band inner edge",
+              "type": "select",
+              "value": "Square",
+              "options": [
+                "Square",
+                "Stepped",
+                "Shadow gap"
+              ]
+            },
+            {
+              "id": "stepWidth",
+              "name": "Step / shadow-gap width",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.01,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "coveLed",
+              "name": "Cove LED on band",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "ledInset",
+              "name": "LED inset from band edge",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "opening",
+              "name": "Opening in panel (fan / shaft)",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "openingLength",
+              "name": "Opening length",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "openingWidth",
+              "name": "Opening width",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "openingOffsetU",
+              "name": "Opening offset — long axis",
+              "type": "range",
+              "value": 0,
+              "min": -3,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "openingOffsetV",
+              "name": "Opening offset — short axis",
+              "type": "range",
+              "value": 0,
+              "min": -3,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "gypsum board, warm white matte emulsion, seamless taped joints",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "recessed cove ceiling, warm concealed lighting, calm hotel bedroom, crisp shadow lines",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "False Ceiling maths",
+          "expr": "# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# The ceiling takes its EXTENTS FROM THE HOST, not from width/depth props. A ceiling that could\n# disagree with the room it is in would be a second source of truth for the same rectangle.\n_natL = _hostL\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = _natL * _s\n_Wd = _hostW * _s\n_bodyL = _Ln\n_bodyW = _Wd\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n# Levels. The COVE is not drawn — it is the reveal between the two soffits, and it exists\n# because panelSoffit sits above bandSoffit. Invert them and the reveal reports as zero.\n_slab = slabHeight\n_bz = min(bandSoffit, _slab - 0.01)\n_pz = min(max(panelSoffit, _bz), _slab - 0.005)\n# Which of the four bands exist. u is the host's LONG axis, so the bands at v0 / v1 are the\n# long runs and the bands at u0 / u1 are the end runs.\n_all4 = bandSides == 'All four'\n_only2L = bandSides == 'Long sides'\n_only2S = bandSides == 'Short sides'\n_three = bandSides == 'Three sides'\n_hasA = _all4 || _only2L || _three\n_hasB = _all4 || _only2L || _three\n_hasC = _all4 || _only2S || _three\n_hasD = _all4 || _only2S\n_bw = min(bandWidth, min(_Ln, _Wd) / 2 - 0.05)\n_bwA = _hasA ? _bw : 0\n_bwB = _hasB ? _bw : 0\n_bwC = _hasC ? _bw : 0\n_bwD = _hasD ? _bw : 0\n_bA0 = hcat(_u0, _v0, _u1, _v0, _u1, _v0 + _bw, _u0, _v0 + _bw, _bz, _slab, 1)\n_bB0 = hcat(_u0, _v1 - _bw, _u1, _v1 - _bw, _u1, _v1, _u0, _v1, _bz, _slab, 1)\n_bC0 = hcat(_u0, _v0 + _bwA, _u0 + _bw, _v0 + _bwA, _u0 + _bw, _v1 - _bwB, _u0, _v1 - _bwB, _bz, _slab, 1)\n_bD0 = hcat(_u1 - _bw, _v0 + _bwA, _u1, _v0 + _bwA, _u1, _v1 - _bwB, _u1 - _bw, _v1 - _bwB, _bz, _slab, 1)\n_BA = _hasA ? _bA0 : zeros(0, 11)\n_BB = _hasB ? _bB0 : zeros(0, 11)\n_BC = _hasC ? _bC0 : zeros(0, 11)\n_BD = _hasD ? _bD0 : zeros(0, 11)\n_BAND = vcat(_BA, _BB, _BC, _BD)\n# The panel fills whatever the bands leave. A shadow gap is simply a wider inset on every side\n# that has a band, so the gap and the panel cannot contradict each other.\n_isStep = edgeProfile == 'Stepped'\n_isGap = edgeProfile == 'Shadow gap'\n_sw = min(stepWidth, _bw / 2)\n_gapIn = _isGap ? _sw : 0\n_pin = panelInset + _gapIn\n_pu0 = _u0 + _bwC + _pin\n_pu1 = _u1 - _bwD - _pin\n_pv0 = _v0 + _bwA + _pin\n_pv1 = _v1 - _bwB - _pin\n_okPanel = (_pu1 - _pu0) > 0.05 && (_pv1 - _pv0) > 0.05\n# Opening — the panel is cut by SPLITTING it into four strips, not by subtracting a solid.\n_ol = min(openingLength, max(0.05, _pu1 - _pu0 - 0.05))\n_ow = min(openingWidth, max(0.05, _pv1 - _pv0 - 0.05))\n_oc = openingOffsetU\n_od = openingOffsetV\n_ou0 = max(_pu0, min(_oc - _ol / 2, _pu1 - _ol))\n_ou1 = _ou0 + _ol\n_ov0 = max(_pv0, min(_od - _ow / 2, _pv1 - _ow))\n_ov1 = _ov0 + _ow\n_pFull = hcat(_pu0, _pv0, _pu1, _pv0, _pu1, _pv1, _pu0, _pv1, _pz, _slab, 2)\n_pL = hcat(_pu0, _pv0, _ou0, _pv0, _ou0, _pv1, _pu0, _pv1, _pz, _slab, 2)\n_pR = hcat(_ou1, _pv0, _pu1, _pv0, _pu1, _pv1, _ou1, _pv1, _pz, _slab, 2)\n_pB = hcat(_ou0, _pv0, _ou1, _pv0, _ou1, _ov0, _ou0, _ov0, _pz, _slab, 2)\n_pT = hcat(_ou0, _ov1, _ou1, _ov1, _ou1, _pv1, _ou0, _pv1, _pz, _slab, 2)\n_pCut = vcat(_pL, _pR, _pB, _pT)\n_PANELr = opening > 0 ? _pCut : _pFull\n_PANEL = _okPanel ? _PANELr : zeros(0, 11)\n# Stepped lip — a narrow second drop hung on the band's inner edge.\n_lz = _bz - _sw / 2\n_lA0 = hcat(_u0 + _bwC, _v0 + _bwA - _sw, _u1 - _bwD, _v0 + _bwA - _sw, _u1 - _bwD, _v0 + _bwA, _u0 + _bwC, _v0 + _bwA, _lz, _bz, 3)\n_lB0 = hcat(_u0 + _bwC, _v1 - _bwB, _u1 - _bwD, _v1 - _bwB, _u1 - _bwD, _v1 - _bwB + _sw, _u0 + _bwC, _v1 - _bwB + _sw, _lz, _bz, 3)\n_lC0 = hcat(_u0 + _bwC - _sw, _v0 + _bwA, _u0 + _bwC, _v0 + _bwA, _u0 + _bwC, _v1 - _bwB, _u0 + _bwC - _sw, _v1 - _bwB, _lz, _bz, 3)\n_lD0 = hcat(_u1 - _bwD, _v0 + _bwA, _u1 - _bwD + _sw, _v0 + _bwA, _u1 - _bwD + _sw, _v1 - _bwB, _u1 - _bwD, _v1 - _bwB, _lz, _bz, 3)\n_LA = (_isStep && _hasA) ? _lA0 : zeros(0, 11)\n_LB = (_isStep && _hasB) ? _lB0 : zeros(0, 11)\n_LC = (_isStep && _hasC) ? _lC0 : zeros(0, 11)\n_LD = (_isStep && _hasD) ? _lD0 : zeros(0, 11)\n_LIP = vcat(_LA, _LB, _LC, _LD)\n# Cove LED — sits ON TOP of the band soffit, inset from its inner edge, throwing up at the panel.\n_lw = 0.014\n_lt = 0.008\n_li = min(ledInset, max(0, _bw - _lw - 0.005))\n_ea0 = _v0 + _bwA - _li - _lw\n_eb0 = _v1 - _bwB + _li\n_ec0 = _u0 + _bwC - _li - _lw\n_ed0 = _u1 - _bwD + _li\n_gA0 = hcat(_u0 + _bwC, _ea0, _u1 - _bwD, _ea0, _u1 - _bwD, _ea0 + _lw, _u0 + _bwC, _ea0 + _lw, _bz, _bz + _lt, 4)\n_gB0 = hcat(_u0 + _bwC, _eb0, _u1 - _bwD, _eb0, _u1 - _bwD, _eb0 + _lw, _u0 + _bwC, _eb0 + _lw, _bz, _bz + _lt, 4)\n_gC0 = hcat(_ec0, _v0 + _bwA, _ec0 + _lw, _v0 + _bwA, _ec0 + _lw, _v1 - _bwB, _ec0, _v1 - _bwB, _bz, _bz + _lt, 4)\n_gD0 = hcat(_ed0, _v0 + _bwA, _ed0 + _lw, _v0 + _bwA, _ed0 + _lw, _v1 - _bwB, _ed0, _v1 - _bwB, _bz, _bz + _lt, 4)\n_GA = (coveLed > 0 && _hasA) ? _gA0 : zeros(0, 11)\n_GB = (coveLed > 0 && _hasB) ? _gB0 : zeros(0, 11)\n_GC = (coveLed > 0 && _hasC) ? _gC0 : zeros(0, 11)\n_GD = (coveLed > 0 && _hasD) ? _gD0 : zeros(0, 11)\n_LED = vcat(_GA, _GB, _GC, _GD)\nQ = vcat(_BAND, _PANEL, _LIP, _LED)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBand3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nPanel3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nLip3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nLed3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nBandPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nPanelPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nLipPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nLedPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\n# Metrics\ncoveReveal = _pz - _bz\nclearHeight = _bz\npanelHeight = _pz\nvoidDepth = _slab - _bz\nbandRun = _hasA * _Ln + _hasB * _Ln + _hasC * (_Wd - _bwA - _bwB) + _hasD * (_Wd - _bwA - _bwB)\npanelArea = _okPanel ? ((_pu1 - _pu0) * (_pv1 - _pv0) - (opening > 0 ? _ol * _ow : 0)) : 0\nbandArea = _Ln * _Wd - (_pu1 - _pu0) * (_pv1 - _pv0)\nledRun = coveLed > 0 ? bandRun : 0\nceilingArea = _Ln * _Wd"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Cove band — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Central panel — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Stepped lip — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Cove LED — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Cove band — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Central panel — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Stepped lip — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Cove LED — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Cove reveal (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Clear height under band (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Panel soffit (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Ceiling void depth (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Band run (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Panel area (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Band area (m²)"
+            },
+            {
+              "id": "s16",
+              "label": "Cove LED run (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Ceiling area (m²)"
+            },
+            {
+              "id": "s18",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_band",
+              "kind": "polygon",
+              "name": "Cove band",
+              "color": "#e7e5e4",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_panel",
+              "kind": "polygon",
+              "name": "Central panel",
+              "color": "#f5f5f4",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_lip",
+              "kind": "polygon",
+              "name": "Stepped lip",
+              "color": "#d6d3d1",
+              "layer": "Ceiling",
+              "show": true
+            },
+            {
+              "id": "p2_led",
+              "kind": "polygon",
+              "name": "Cove LED",
+              "color": "#fbbf24",
+              "layer": "Ceiling",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_band",
+              "kind": "polyhedron",
+              "name": "Cove band",
+              "color": "#f5f5f4",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_panel",
+              "kind": "polyhedron",
+              "name": "Central panel",
+              "color": "#fafaf9",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lip",
+              "kind": "polyhedron",
+              "name": "Stepped lip",
+              "color": "#e7e5e4",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_led",
+              "kind": "polyhedron",
+              "name": "Cove LED",
+              "color": "#fbbf24",
+              "layer": "Ceiling",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_slabHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-slabHeight",
+      "targetHandle": "valin-slabHeight"
+    },
+    {
+      "id": "e_props_math_bandSoffit",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bandSoffit",
+      "targetHandle": "valin-bandSoffit"
+    },
+    {
+      "id": "e_props_math_panelSoffit",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-panelSoffit",
+      "targetHandle": "valin-panelSoffit"
+    },
+    {
+      "id": "e_props_math_bandWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bandWidth",
+      "targetHandle": "valin-bandWidth"
+    },
+    {
+      "id": "e_props_math_bandSides",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bandSides",
+      "targetHandle": "valin-bandSides"
+    },
+    {
+      "id": "e_props_math_panelInset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-panelInset",
+      "targetHandle": "valin-panelInset"
+    },
+    {
+      "id": "e_props_math_edgeProfile",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-edgeProfile",
+      "targetHandle": "valin-edgeProfile"
+    },
+    {
+      "id": "e_props_math_stepWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-stepWidth",
+      "targetHandle": "valin-stepWidth"
+    },
+    {
+      "id": "e_props_math_coveLed",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-coveLed",
+      "targetHandle": "valin-coveLed"
+    },
+    {
+      "id": "e_props_math_ledInset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ledInset",
+      "targetHandle": "valin-ledInset"
+    },
+    {
+      "id": "e_props_math_opening",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-opening",
+      "targetHandle": "valin-opening"
+    },
+    {
+      "id": "e_props_math_openingLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-openingLength",
+      "targetHandle": "valin-openingLength"
+    },
+    {
+      "id": "e_props_math_openingWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-openingWidth",
+      "targetHandle": "valin-openingWidth"
+    },
+    {
+      "id": "e_props_math_openingOffsetU",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-openingOffsetU",
+      "targetHandle": "valin-openingOffsetU"
+    },
+    {
+      "id": "e_props_math_openingOffsetV",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-openingOffsetV",
+      "targetHandle": "valin-openingOffsetV"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Band3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Panel3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Lip3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Led3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BandPlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-PanelPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LipPlan",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LedPlan",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-coveReveal",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-clearHeight",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-panelHeight",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-voidDepth",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bandRun",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-panelArea",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bandArea",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ledRun",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ceilingArea",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_out_r2d_p2_band",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_band"
+    },
+    {
+      "id": "e_out_r2d_p2_panel",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_panel"
+    },
+    {
+      "id": "e_out_r2d_p2_lip",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p2_lip"
+    },
+    {
+      "id": "e_out_r2d_p2_led",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p2_led"
+    },
+    {
+      "id": "e_out_r3d_p3_band",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_band"
+    },
+    {
+      "id": "e_out_r3d_p3_panel",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_panel"
+    },
+    {
+      "id": "e_out_r3d_p3_lip",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_lip"
+    },
+    {
+      "id": "e_out_r3d_p3_led",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_led"
+    }
+  ]
+}

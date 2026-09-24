@@ -1,0 +1,105 @@
+{
+  "kind": "flow",
+  "status": "needs-canvas",
+  "nodeCount": 12,
+  "edgeCount": 22,
+  "items": [
+    {
+      "nodeId": "bool",
+      "tool": "boolean-2d",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "fwall",
+      "tool": "filter-by-label",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "g2m",
+      "tool": "graph-to-matrix",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "math",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "metrics",
+      "tool": "output",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "mj",
+      "tool": "mitered-join",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "net",
+      "tool": "network",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "ptg",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    }
+  ],
+  "hash": "77676ce80ad92295"
+}

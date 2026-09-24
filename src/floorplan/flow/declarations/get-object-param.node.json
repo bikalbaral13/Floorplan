@@ -1,0 +1,68 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "get-object-param",
+  "meta": {
+    "label": "Get Object Param",
+    "category": "Canvas",
+    "color": "#0e7490"
+  },
+  "description": "Read one parameter off the parametric object attached to each incoming space, node or segment and publish it as a matrix a Math Engine can use. The counterpart of Set Object Param.",
+  "instructions": "Filter by Type answers WHICH spaces; this answers WHAT THEY SAY. Wire a Spaces bundle in and it reads the named parameter off each space's attached object.\n\n`val-values` is an N x 2 matrix of `[indexInTheIncomingBundle, value]`, and the index is what makes it usable: a Math Engine looping over the same bundle can look a space's value up by position, and a row is present only for spaces that actually carry the parameter. `val-count` is how many were found, `val-missing` how many were not — a missing count equal to the bundle size means the parameter name is wrong or nothing is attached.\n\nVALUES ARE NUMERIC. A matrix holds numbers, so a parameter that does not parse as one is reported in `missing` rather than silently written as 0 — a plot with no Number is genuinely unknown, not plot zero. Read a numeric parameter here (Number, Thickness, a checkbox as 1/0); a select or a free-text parameter is not something an expression can carry.\n\nThe geometry passes straight through, so this can sit mid-chain without disturbing the pipeline.\n\nIDENTITY IS RESOLVED BY POSITION IN THE CANVAS BUNDLE — the same rule Filter by Type and Set Object Param follow — so keep it on a path that has not rebuilt the geometry.\n\nSPACES, NODES AND SEGMENTS. All three carry parametric objects, so all three can be addressed; `Host` picks which, and Auto is right whenever the bundle came straight off the Canvas node. Identity is resolved by POSITION IN THAT COLLECTION, so keep this on a path that has not rebuilt the geometry - and note that index 3 means a different element in each of the three, which is why the choice is explicit rather than inferred from the parameter name.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "1",
+    "outputLabels": [
+      "Spaces (pass-through)"
+    ],
+    "valueOutputs": [
+      {
+        "key": "values",
+        "label": "Values [i, v]"
+      },
+      {
+        "key": "count",
+        "label": "Found"
+      },
+      {
+        "key": "missing",
+        "label": "Missing"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "host",
+      "label": "Host",
+      "kind": "select",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto"
+        },
+        {
+          "value": "space",
+          "label": "Space"
+        },
+        {
+          "value": "node",
+          "label": "Node"
+        },
+        {
+          "value": "segment",
+          "label": "Segment"
+        }
+      ],
+      "help": "Which canvas collection the incoming bundle addresses. Auto matches the bundle against the canvas's own arrays by reference and falls back to its shape (1 point = node, 2 = segment, 3+ = space)."
+    },
+    {
+      "key": "paramKey",
+      "label": "Parameter key",
+      "kind": "text",
+      "default": "number",
+      "placeholder": "number"
+    }
+  ]
+}

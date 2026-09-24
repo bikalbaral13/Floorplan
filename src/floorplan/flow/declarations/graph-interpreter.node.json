@@ -1,0 +1,126 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-interpreter",
+  "meta": {
+    "label": "Graph Interpreter",
+    "category": "Graph",
+    "color": "#7c3aed"
+  },
+  "description": "A pure CALCULATION node - the canvas JSON in, matrices out. Reads the payload the Geometry node publishes on `val-canvasJson` and projects it onto the numbers a Math Engine can use: every segment's endpoints, thickness, length and TYPE, every NODE's position and type, the INCIDENCE that joins the two, the PARAMETERS off each element's attached object, and every space's boundary and area. Draws nothing on canvas.",
+  "instructions": "THE BRIDGE FROM THE PLAN INTO THE MATRIX CHAIN. One node in place of Graph Geometry + Graph to Points, and it reads more than the two of them together could.\n\nWHY IT IS NOT THOSE TWO NODES. That pair routes the plan through GEOMETRY: the Canvas node emits polylines, Graph Geometry rebuilds a graph from them, Graph to Points projects it. Polylines carry coordinates and nothing else, so everything that is not a coordinate is lost on the way — the segment's type, its opening flag, the objects attached to it. Graph to Points has a `skipOpenings` switch that drops edges typed \"opening\"; fed a graph rebuilt from polylines it finds none, keeps all of them, and reports the whole plan as wall. This node reads the JSON instead, where all of it survives.\n\nINPUT: `json` — the canvas payload from the Geometry node's `val-canvasJson`. It may arrive through an Input Properties text parameter, which is worth doing: the plan then shows up as a value in the Properties tab, so what the flow is reading is visible rather than implied.\n\nOUTPUTS, all in anchor-relative METRES, one row per segment and row-aligned with each other:\n• a / b — edge start and end points (N x 2)\n• thickness — the segment's own drawn width (N x 1)\n• length — measured from the payload, not recomputed (N x 1)\n• types — an integer CODE per segment, 1-based into `typeNames`, 0 for no match\nand per space:\n• spaces — the boundaries as ONE flat [x, y, groupIndex] matrix\n• areas — one area per space (S x 1)\nplus `segmentCount`, `spaceCount`, `nodeCount`.\n\nThe flat-and-grouped shape for `spaces` is not a style choice. A nested [[[x,y],…],…] list is RAGGED when rooms have different vertex counts, so it fails `isRectMatrix` and reaches the Math Engine as an inert STRING rather than a matrix. Flat with a group column is rectangular whatever the shapes, and the group column splits it back into rooms.\n\nTYPING. `typeNames` is a JSON array, `[\"wall\", \"door\", \"window\"]` by default, and a segment matches a name when its `type` equals it OR any attached object's id begins with it (the library's `door-with-math` / `window-with-math` convention). The LAST match in the list wins, which is what makes an opening read as a door rather than as the wall band it also carries. A segment matching nothing gets code 0.\n\nNODES, INCIDENCE AND PARAMETERS. The payload carries more than geometry and all of it is published:\n• nodes — every node's position (N x 2, anchor-relative metres)\n• nodeTypes — a code per node from the same `typeNames` table, matched on the attached object's id\n• segNodes — each segment's two endpoints as NODE INDICES (M x 2). This is what turns a pile of coordinates into a graph: assembling an incidence matrix in the expression language would otherwise mean clustering endpoints by hand on every evaluation. Exact position matches first, nearest within 2 mm after, and −1 when nothing is close — counted in `unresolvedEnds` rather than guessed, because a wrong incidence silently solves a different network.\n• nodeVals / segVals — the PARAMETERS off each element's attached object, one column per key named in `nodeParams` / `segParams`. A pipe's diameter and a junction's demand are already on the canvas; before this they had to be retyped as a matrix beside the drawing that held them.\n• nodeHas / segHas — a 1/0 mask of the same shape. A missing parameter reads 0 in the values, never a sentinel, and the mask is what tells \"this pipe's minor loss is zero\" from \"this pipe has no minor loss parameter\". A sentinel inside the values would poison any sum that touched it.\n\nParameters are read as the object's DEFAULTS with the instance's overrides on top, so a key added to a definition after an object was placed still reads.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "json",
+        "label": "Canvas JSON"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "a",
+        "label": "Edge start points"
+      },
+      {
+        "key": "b",
+        "label": "Edge end points"
+      },
+      {
+        "key": "thickness",
+        "label": "Edge thickness (m)"
+      },
+      {
+        "key": "length",
+        "label": "Edge length (m)"
+      },
+      {
+        "key": "types",
+        "label": "Edge type codes"
+      },
+      {
+        "key": "spaces",
+        "label": "Space boundaries [x, y, group]"
+      },
+      {
+        "key": "areas",
+        "label": "Space areas (m2)"
+      },
+      {
+        "key": "nodes",
+        "label": "Node points"
+      },
+      {
+        "key": "nodeTypes",
+        "label": "Node type codes"
+      },
+      {
+        "key": "segNodes",
+        "label": "Edge node indices [ia, ib]"
+      },
+      {
+        "key": "nodeVals",
+        "label": "Node object params"
+      },
+      {
+        "key": "nodeHas",
+        "label": "Node params present (1/0)"
+      },
+      {
+        "key": "segVals",
+        "label": "Edge object params"
+      },
+      {
+        "key": "segHas",
+        "label": "Edge params present (1/0)"
+      },
+      {
+        "key": "unresolvedEnds",
+        "label": "Unresolved endpoints"
+      },
+      {
+        "key": "segmentCount",
+        "label": "Segments"
+      },
+      {
+        "key": "spaceCount",
+        "label": "Spaces"
+      },
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "json",
+      "kind": "text",
+      "label": "Canvas JSON",
+      "default": "",
+      "help": "The payload from the Geometry node's Canvas JSON output. Usually wired rather than pasted."
+    },
+    {
+      "key": "typeNames",
+      "kind": "text",
+      "label": "Type names (JSON array)",
+      "default": "[\"wall\", \"door\", \"window\"]",
+      "help": "Names for the `types` code column, 1-based. A segment matches on its own type or on an attached object id that begins with the name; the LAST match wins, so an opening reads as door/window rather than as the wall band it also carries."
+    },
+    {
+      "key": "nodeParams",
+      "kind": "text",
+      "label": "Node parameter keys",
+      "default": "",
+      "help": "Parameter keys to read off each NODE's attached object, as `a, b, c` or a JSON array. Publishes `nodeVals` (one row per node, one column per key, row-aligned with `nodes`) and `nodeHas`, the 1/0 mask saying which were actually present."
+    },
+    {
+      "key": "segParams",
+      "kind": "text",
+      "label": "Segment parameter keys",
+      "default": "",
+      "help": "The same for each SEGMENT's attached object. Publishes `segVals` and `segHas`, row-aligned with `a` / `b`."
+    }
+  ]
+}

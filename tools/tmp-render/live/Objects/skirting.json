@@ -1,0 +1,625 @@
+{
+  "version": 1,
+  "id": "skirting-with-math",
+  "title": "Skirting — one Math Engine, four sections, mitred ends and a shadow-gap option",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Skirting",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 20h18",
+        "M3 20v-4h18v4",
+        "M3 16l2-2h14l2 2"
+      ]
+    }
+  },
+  "description": "A parametric SKIRTING on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT with Fit to host set to Exact and it takes the wall's full run. Until now `skirtHeight` existed only as a rate input inside the BOQ generator and drew nothing.\n\nA SECTION IS A STACK OF BANDS. The quad-prism kernel extrudes plan quads vertically, so it cannot make a moulded profile in section. What it can make is two or three bands of decreasing thickness stacked up the height — which is exactly what a chamfered or bullnosed skirting looks like from a metre away, and is honest about being a step rather than a curve.\n\nA MITRE IS STILL ONE QUAD. The wall edge keeps the full run and the front edge is pulled back by that band's own thickness at the mitred end, so a 45° cut is a trapezoid and needs no extra geometry. Each band mitres by its own thickness, which is what keeps a chamfered mitre reading correctly.\n\nTHE SHADOW GAP IS A REAL RECESS, not a missing band. The skirting starts at `gapHeight` and a set-back strip fills the space below it, so the reveal has a back face and `floatsAbove` reports the height it starts at.\n\nSECTION AREA IS SUMMED FROM THE BANDS THAT EXIST, so the volume and the paint area follow the profile automatically instead of assuming a rectangle.\n\nDIMENSIONS AT THE DEFAULTS: a 3.00 m run, 76 mm high, 18 mm thick, one square band, 0.00137 m² of section, 0.28 m² to paint.\n\nWHAT THIS CANNOT DO. No curved or ogee profile — three straight bands is the ceiling. It is one straight run: a skirting turning a corner is two of these, and the mitre flags are what makes them meet.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Run length",
+              "type": "range",
+              "value": 3,
+              "min": 0.1,
+              "max": 30,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Skirting height",
+              "type": "range",
+              "value": 0.076,
+              "min": 0.02,
+              "max": 0.35,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "thickness",
+              "name": "Thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "profile",
+              "name": "Section",
+              "type": "select",
+              "value": "Square",
+              "options": [
+                "Square",
+                "Chamfered",
+                "Bullnose",
+                "Shadow gap"
+              ]
+            },
+            {
+              "id": "topDetail",
+              "name": "Top detail height",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.002,
+              "max": 0.08,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "gapHeight",
+              "name": "Shadow gap height",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.002,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "gapDepth",
+              "name": "Shadow gap setback",
+              "type": "range",
+              "value": 0.008,
+              "min": 0.001,
+              "max": 0.04,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "mitreLeft",
+              "name": "Mitre left end",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "mitreRight",
+              "name": "Mitre right end",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "MDF, ivory satin paint, flush with panel faces",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "slim painted skirting, crisp shadow line, minimal contemporary trim",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Skirting maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Ht = height * _s\n_t = thickness * _s\n_td = min(topDetail * _s, _Ht / 2)\n_gh = min(gapHeight * _s, _Ht / 2)\n_gd = min(gapDepth * _s, _t * 0.8)\n_bodyL = _Ln\n_bodyW = _t\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n# v1 is the WALL face. Every band of the section is a quad from the wall forward by its own\n# thickness, so a section is a STACK of bands in z rather than a shaped profile — that is the\n# one thing the quad-prism kernel cannot do and the one place this object works around it.\n_v1 = _t / 2\n_wall = _v1\n_isSq = profile == 'Square'\n_isCh = profile == 'Chamfered'\n_isBn = profile == 'Bullnose'\n_isGap = profile == 'Shadow gap'\n# A mitre is an ANGLED END IN PLAN, which is still one quad — the wall edge stays full length\n# and the front edge is pulled back by the band's own thickness at that end.\n_mL = mitreLeft > 0\n_mR = mitreRight > 0\n_z0 = _isGap ? _gh : 0\n_zTop = _Ht\n_zMain = (_isCh || _isBn) ? (_Ht - _td) : _Ht\n_d1 = _t\n_d2 = _isBn ? (_t * 0.72) : (_t * 0.5)\n_d3 = _t * 0.38\n_f1 = _wall - _d1\n_f2 = _wall - _d2\n_f3 = _wall - _d3\n_mainA = _mL ? (_u0 + _d1) : _u0\n_mainB = _mR ? (_u1 - _d1) : _u1\n_MAIN = hcat(_u0, _wall, _u1, _wall, _mainB, _f1, _mainA, _f1, _z0, _zMain, 1)\n_t2A = _mL ? (_u0 + _d2) : _u0\n_t2B = _mR ? (_u1 - _d2) : _u1\n_zB1 = _isBn ? (_Ht - _td * 0.45) : _Ht\n_B2 = hcat(_u0, _wall, _u1, _wall, _t2B, _f2, _t2A, _f2, _zMain, _zB1, 1)\n_BAND2 = (_isCh || _isBn) ? _B2 : zeros(0, 11)\n_t3A = _mL ? (_u0 + _d3) : _u0\n_t3B = _mR ? (_u1 - _d3) : _u1\n_B3 = hcat(_u0, _wall, _u1, _wall, _t3B, _f3, _t3A, _f3, _zB1, _zTop, 1)\n_BAND3 = _isBn ? _B3 : zeros(0, 11)\n# The shadow gap is a REAL recessed band under the skirting, set back from the wall face.\n_gf = _wall - (_t - _gd)\n_gA = _mL ? (_u0 + (_t - _gd)) : _u0\n_gB = _mR ? (_u1 - (_t - _gd)) : _u1\n_G1 = hcat(_u0, _wall, _u1, _wall, _gB, _gf, _gA, _gf, 0, _gh, 2)\n_GAP = _isGap ? _G1 : zeros(0, 11)\nQ = vcat(_MAIN, _BAND2, _BAND3, _GAP)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nSkirting3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nShadowGap3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nSkirtingPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nShadowGapPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\n# Metrics\nrunLength = _Ln\nskirtingHeight = _Ht\nskirtingThickness = _t\ntopOfSkirting = _zTop\nbandCount = 1 + (_isCh || _isBn) + _isBn\nsectionArea = _d1 * (_zMain - _z0) + (_isCh || _isBn) * _d2 * (_zB1 - _zMain) + _isBn * _d3 * (_zTop - _zB1)\npaintArea = _Ln * (_Ht - _z0 + _d1)\nvolume = sectionArea * _Ln\nfloatsAbove = _z0\nsquareFlag = _isSq ? 1 : 0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Skirting — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Shadow gap — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Skirting — plan"
+            },
+            {
+              "id": "s4",
+              "label": "Shadow gap — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Run length (m)"
+            },
+            {
+              "id": "s6",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s7",
+              "label": "Thickness (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Top of skirting (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Section bands"
+            },
+            {
+              "id": "s10",
+              "label": "Section area (m²)"
+            },
+            {
+              "id": "s11",
+              "label": "Paint / finish area (m²)"
+            },
+            {
+              "id": "s12",
+              "label": "Volume (m³)"
+            },
+            {
+              "id": "s13",
+              "label": "Floats above floor (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Square section"
+            },
+            {
+              "id": "s15",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_sk",
+              "kind": "polygon",
+              "name": "Skirting",
+              "color": "#d6d3d1",
+              "layer": "Skirting",
+              "show": true
+            },
+            {
+              "id": "p2_gap",
+              "kind": "polygon",
+              "name": "Shadow gap",
+              "color": "#44403c",
+              "layer": "Skirting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_sk",
+              "kind": "polyhedron",
+              "name": "Skirting",
+              "color": "#f1ebdf",
+              "layer": "Skirting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_gap",
+              "kind": "polyhedron",
+              "name": "Shadow gap",
+              "color": "#3f3f46",
+              "layer": "Skirting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_thickness",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-thickness",
+      "targetHandle": "valin-thickness"
+    },
+    {
+      "id": "e_props_math_profile",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-profile",
+      "targetHandle": "valin-profile"
+    },
+    {
+      "id": "e_props_math_topDetail",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-topDetail",
+      "targetHandle": "valin-topDetail"
+    },
+    {
+      "id": "e_props_math_gapHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-gapHeight",
+      "targetHandle": "valin-gapHeight"
+    },
+    {
+      "id": "e_props_math_gapDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-gapDepth",
+      "targetHandle": "valin-gapDepth"
+    },
+    {
+      "id": "e_props_math_mitreLeft",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mitreLeft",
+      "targetHandle": "valin-mitreLeft"
+    },
+    {
+      "id": "e_props_math_mitreRight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mitreRight",
+      "targetHandle": "valin-mitreRight"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Skirting3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ShadowGap3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-SkirtingPlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ShadowGapPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-runLength",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-skirtingHeight",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-skirtingThickness",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topOfSkirting",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bandCount",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sectionArea",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-paintArea",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-volume",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-floatsAbove",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-squareFlag",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_out_r2d_p2_sk",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_sk"
+    },
+    {
+      "id": "e_out_r2d_p2_gap",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_gap"
+    },
+    {
+      "id": "e_out_r3d_p3_sk",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_sk"
+    },
+    {
+      "id": "e_out_r3d_p3_gap",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_gap"
+    }
+  ]
+}

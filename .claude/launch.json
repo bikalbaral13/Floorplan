@@ -2,10 +2,77 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
+      "name": "monica",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "dev-2500",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--host", "--port", "3000", "--strictPort"],
-      "port": 3000,
+      "runtimeArgs": [
+        "vite",
+        "--host",
+        "--port",
+        "2500",
+        "--strictPort"
+      ],
+      "port": 2500,
+      "autoPort": false
+    },
+    {
+      "name": "room-renderer",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "skills-room-renderer",
+        "--port",
+        "2610",
+        "--strictPort"
+      ],
+      "port": 2610,
+      "autoPort": false
+    },
+    {
+      "name": "tracer-scope",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "skills-floorplan-tracer",
+        "--port",
+        "2611",
+        "--strictPort"
+      ],
+      "port": 2611,
+      "autoPort": false
+    },
+    {
+      "name": "single-viewer",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "tools/single-viewer/dist",
+        "--port",
+        "2620",
+        "--strictPort"
+      ],
+      "port": 2620,
+      "autoPort": false
+    },
+    {
+      "name": "dev-2501",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--host",
+        "--port",
+        "2501",
+        "--strictPort"
+      ],
+      "port": 2501,
       "autoPort": false
     }
   ]

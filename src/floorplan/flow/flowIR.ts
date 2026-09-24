@@ -16,7 +16,7 @@
  *  a host can draw them directly. Nodes outside this vocabulary are ignored by the bake; a standalone Circle
  *  (no box form) makes the whole bake bail so evaluateFlow — which can draw it — takes over. */
 
-import { evalRaw, toNum, parseExprDefs, exprInputs, type Scope } from "./eval/expr";
+import { runExprBody, liftScopeValue, serializeValue, toNum, exprInputs, type Scope } from "@builderpluss/engine";
 import { inputProps, type FlowToolType } from "./flowTypes";
 import type { Point, SerializedFlow, SerializedFlowNode, SerializedFlowEdge } from "../types";
 import type { FlowPreviewItem } from "./eval/evaluateFlow";
@@ -31,9 +31,11 @@ type ValueRef =
   | { k: "const"; v: NumStr }
   | { k: "op"; id: string; out: string };
 
-/** An Expression op: an ordered block of `name = expr` definitions (a single expression → one `result`),
- *  evaluated top-to-bottom so a later line sees earlier names. Publishes one value per definition name. */
-interface ExprOp { id: string; kind: "expr"; defs: { name: string; expr: string }[]; deps: boolean; vars: Record<string, ValueRef>; }
+/** An Expression op: the node's raw body, evaluated by the shared `runExprBody` — an ordered block of
+ *  `name = expr` definitions (a single expression → one `result`) read top-to-bottom so a later line sees
+ *  earlier names, plus any `loop … end` blocks. Publishes one value per definition name. The BODY is kept
+ *  verbatim rather than pre-parsed to a def list, because a flat def list cannot represent a loop. */
+interface ExprOp { id: string; kind: "expr"; body: unknown; deps: boolean; vars: Record<string, ValueRef>; }
 interface MathOp { id: string; kind: "math"; a: ValueRef; b: ValueRef; op: string; round: string; }
 interface MatchOp { id: string; kind: "match"; value: ValueRef; match: NumStr; }
 interface CondOp { id: string; kind: "cond"; a: ValueRef; op: string; b: ValueRef; }
@@ -163,7 +165,7 @@ export function bakeFlowToIR(flow: SerializedFlow): FlowIR | null {
       for (const v of exprInputs(p.expr)) {
         if (inEdge(id, `valin-${v}`)) vars[v] = refFor(id, v, 0); // wired input; params also arrive via deps
       }
-      return { id, kind: "expr", defs: parseExprDefs(p.expr), deps, vars };
+      return { id, kind: "expr", body: p.expr, deps, vars };
     }
     if (n.data.tool === "math") {
       return { id, kind: "math", a: refFor(id, "a", num(p.a)), b: refFor(id, "b", num(p.b, 1)),
@@ -251,14 +253,13 @@ export function runFlowIR(ir: FlowIR, overrides?: Record<string, NumStr>): IRRes
   for (const op of ir.valueOps) {
     if (op.kind === "expr") {
       const scope: Scope = op.deps ? { ...env } : { PI: Math.PI };
-      for (const [name, ref] of Object.entries(op.vars)) scope[name] = resolve(ref);
+      // Lift matrix JSON back into real matrices, exactly as evaluateFlow's live path does, so a baked
+      // object flow keeps whatever matrix algebra its Expression nodes used.
+      for (const [name, ref] of Object.entries(op.vars)) scope[name] = liftScopeValue(resolve(ref));
+      // Shared with evaluateFlow's live branch — later defs see earlier names (a matrix stays a matrix),
+      // and `loop … end` iterates here exactly as it does live.
       const out: Record<string, NumStr> = {};
-      for (const d of op.defs) {
-        const raw = evalRaw(d.expr, scope);
-        const v = typeof raw === "boolean" ? (raw ? 1 : 0) : raw;
-        scope[d.name] = v; // later defs see earlier names
-        out[d.name] = v;
-      }
+      for (const [name, raw] of Object.entries(runExprBody(op.body, scope))) out[name] = serializeValue(raw);
       results.set(op.id, out);
       continue;
     }

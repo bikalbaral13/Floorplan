@@ -1,0 +1,67 @@
+{
+  "schema": "lamp/1",
+  "id": "panel-4000k",
+  "name": "LED panel 4000 K 3600 lm",
+  "category": "LED",
+  "description": "A 600 x 600 flat panel, and the generic soft source — the mirror halo and the daylight-looking fill are both this lamp at different sizes. A big emitter with a big `sizeX` is what makes a shadow soft.",
+  "emission": {
+    "sourceType": "Area",
+    "areaShape": "Rectangle",
+    "lumens": 3600,
+    "lumensPerMetre": 0,
+    "wattsElectrical": 32,
+    "efficacy": 112.5,
+    "illuminanceLux": 0,
+    "kelvin": 4000,
+    "cri": 90,
+    "duv": 0
+  },
+  "distribution": {
+    "profile": "Diffuse",
+    "beamAngle": 120,
+    "fieldAngle": 180,
+    "beamBlend": 1,
+    "spread": 180,
+    "ies": {
+      "path": "",
+      "normalise": true
+    }
+  },
+  "shadow": {
+    "lampRadius": 0.3,
+    "castShadow": true,
+    "maxBounces": 1024,
+    "multipleImportance": true,
+    "diffuseFactor": 1,
+    "glossyFactor": 1,
+    "transmissionFactor": 1,
+    "volumeFactor": 1,
+    "visibleToCamera": false,
+    "isPortal": false
+  },
+  "blender": {
+    "type": "AREA",
+    "shape": "RECTANGLE",
+    "energyWatts": 5.270864,
+    "color": {
+      "mode": "blackbody",
+      "kelvin": 4000
+    },
+    "rgb": [
+      1,
+      0.652952,
+      0.377011
+    ],
+    "sizeX": 0.6,
+    "sizeY": 0.6,
+    "radius": 0.3,
+    "spotSizeDeg": 180,
+    "spotBlend": 1,
+    "spread": 180,
+    "angleDeg": 0
+  },
+  "emissive": {
+    "material": "Materials/Emissive/diffuser.json",
+    "luminanceOverride": 0
+  }
+}

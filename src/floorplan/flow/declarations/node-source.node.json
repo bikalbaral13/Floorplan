@@ -2,28 +2,67 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "node-source",
-  "meta": { "label": "Node", "category": "Node", "color": "#4f46e5" },
+  "meta": {
+    "label": "Node",
+    "category": "Node",
+    "color": "#4f46e5"
+  },
   "description": "Pipeline input — selected node(s)/point(s) by id (Select → Node scope, or grab from selection). Emits each as a point; feed into Buffer to get a disk Space.",
-  "instructions": "Pipeline input — emits the selected canvas node(s) (junction points) as single points, scoped by Select → Node. References nodes by display id (e.g. Node001, comma-separated); with 'Grab ID from selection' on, the id stays synced to the node selection. One output handle per node, or a single bundle (`outputMode`).\n\nSTAMP: wire a Footing → Footing-to-Plan / Elevation / 3D-Mesh (or any origin-relative drawing / mesh) into the Stamp input and the node stamps a copy at each of its point(s) — placement by location.\n\nTIP: wire the point output into Bloom / Buffer to grow each point into a Space.",
+  "instructions": "GEOMETRY NODE: this is the single \"Geometry\" node — there is no kind selector, because THE CANVAS SELECTION IS THE SELECTOR. With \"Grab ID from selection\" on, selecting a canvas node makes it a Point source, a segment makes it a Segment source, a graph a Graph source, a space a Space source and a picture an Image source; the node keeps its id, name, position and wires across the change. That is what lets one input carry a host whose TYPE changes — the anchor of a parametric object stays wired while you switch from a node to a wall to a room. Turn the toggle off and type an id to pin it to one element. (Freehand is not selection-driven — its strokes are matched by colour — so it stays its own node.)\n\nEvery kind publishes its geometry in the same anchor-relative metre frame: a point list on `val-points` (Point → one row, Segment → two, Space → its outline) or nodes+links on `val-graph` (Graph, Freehand).\n\nPipeline input — emits the selected canvas node(s) (junction points) as single points, scoped by Select → Node. References nodes by display id (e.g. Node001, comma-separated); with 'Grab ID from selection' on, the id stays synced to the node selection. One output handle per node, or a single bundle (`outputMode`).\n\nSTAMP: wire a Footing → Footing-to-Plan / Elevation / 3D-Mesh (or any origin-relative drawing / mesh) into the Stamp input and the node stamps a copy at each of its point(s) — placement by location.\n\nTIP: wire the point output into Bloom / Buffer to grow each point into a Space.\n\nVALUE OUTPUT: `val-points` publishes this node's position as a ONE-ROW point list, `[[x,y]]` in anchor-relative metres — the same shape and frame every other source publishes (Space → its outline, Segment → its two endpoints), so a Math Engine or a Matrix node reads any source through the identical `points` variable and the Geometry hop is optional. The FIRST referenced node is published. Node Geometry still gives you `val-x` / `val-y` as separate scalars when a plain number is what you want.\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.\n\nID. `val-id` publishes the id of the element this node resolves — `space-…`, `segment-…`, `node-…`, each naming its own kind, and the SAME string the canvas shows, an export writes and this node's own ID field holds. Wire it into a Prompt Builder slot, an Output slot or an Input Properties text parameter to say WHICH element a run was about, rather than describing it by its coordinates. With several elements grabbed it is the comma-separated list, in the order they were selected; with nothing resolved it is empty.",
   "handles": {
     "input": false,
     "output": true,
     "geomInputs": [
-      { "key": "stamp", "label": "Stamp" }
+      {
+        "key": "stamp",
+        "label": "Stamp"
+      }
     ],
-    "outputCount": "outputMode == 'single' ? 1 : max(1, min(60, round(handleCount)))"
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(60, round(handleCount)))",
+    "valueOutputs": [
+      {
+        "key": "id",
+        "label": "ID"
+      },
+      {
+        "key": "points",
+        "label": "Point (list)"
+      },
+      {
+        "key": "canvasJson",
+        "label": "Canvas JSON"
+      }
+    ]
   },
   "parameters": [
-    { "key": "grabFromSelection", "label": "Grab ID from selection", "kind": "checkbox", "default": true },
-    { "key": "id", "label": "ID", "kind": "text", "default": "", "placeholder": "node id (e.g. Node001)", "showWhen": "!grabFromSelection" },
+    {
+      "key": "grabFromSelection",
+      "label": "Grab ID from selection",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "id",
+      "label": "ID",
+      "kind": "text",
+      "default": "",
+      "placeholder": "node id (e.g. Node001)",
+      "showWhen": "!grabFromSelection"
+    },
     {
       "key": "outputMode",
       "label": "Outputs",
       "kind": "select",
       "default": "single",
       "options": [
-        { "value": "single", "label": "Single (all)" },
-        { "value": "perCell", "label": "Per node (one each)" }
+        {
+          "value": "single",
+          "label": "Single (all)"
+        },
+        {
+          "value": "perCell",
+          "label": "Per node (one each)"
+        }
       ]
     }
   ]

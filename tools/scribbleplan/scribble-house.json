@@ -1,0 +1,5171 @@
+{
+ "schemaVersion": 1,
+ "settings": {
+  "library_path": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library",
+  "units": "m",
+  "northbearing": 0,
+  "pixelsPerMeter": 50,
+  "keywords": "36x25 ft house, hand sketch, 9in outer / 4in inner, 12in columns, 4x3 grid, channel gate, verandah openings"
+ },
+ "nodes": [
+  {
+   "id": "n0",
+   "x": -268.605,
+   "y": -184.785,
+   "layer": "0",
+   "label": "C1",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-084",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-085",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n1",
+   "x": -216.82,
+   "y": -184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n2",
+   "x": -171.82,
+   "y": -184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n3",
+   "x": -116.205,
+   "y": -184.785,
+   "layer": "0",
+   "label": "C2",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-086",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-087",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n4",
+   "x": -76.82,
+   "y": -184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n5",
+   "x": -1.82,
+   "y": -184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n6",
+   "x": 43.875,
+   "y": -184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n7",
+   "x": 66.675,
+   "y": -184.785,
+   "layer": "0",
+   "label": "C3",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-088",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-089",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n8",
+   "x": 118.18,
+   "y": -184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n9",
+   "x": 193.18,
+   "y": -184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n10",
+   "x": 268.605,
+   "y": -184.785,
+   "layer": "0",
+   "label": "C4",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-090",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-091",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n11",
+   "x": -268.605,
+   "y": 184.785,
+   "layer": "0",
+   "label": "C9",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-100",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-101",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n12",
+   "x": -251.82,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n13",
+   "x": -131.82,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n14",
+   "x": -116.205,
+   "y": 184.785,
+   "layer": "0",
+   "label": "C10",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-102",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-103",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n15",
+   "x": -71.82,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n16",
+   "x": 3.18,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n17",
+   "x": 43.875,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n18",
+   "x": 66.675,
+   "y": 184.785,
+   "layer": "0",
+   "label": "C11",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-104",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-105",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n19",
+   "x": 80.68,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n20",
+   "x": 110.68,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n21",
+   "x": 122.85,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n22",
+   "x": 130.68,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n23",
+   "x": 180.68,
+   "y": 184.785,
+   "layer": "0"
+  },
+  {
+   "id": "n24",
+   "x": 268.605,
+   "y": 184.785,
+   "layer": "0",
+   "label": "C12",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-106",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-107",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n25",
+   "x": -268.605,
+   "y": -123,
+   "layer": "0"
+  },
+  {
+   "id": "n26",
+   "x": -268.605,
+   "y": -78,
+   "layer": "0"
+  },
+  {
+   "id": "n27",
+   "x": -268.605,
+   "y": -17.145,
+   "layer": "0",
+   "label": "C5",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-092",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-093",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n28",
+   "x": -268.605,
+   "y": 39.5,
+   "layer": "0"
+  },
+  {
+   "id": "n29",
+   "x": -268.605,
+   "y": 129.5,
+   "layer": "0"
+  },
+  {
+   "id": "n30",
+   "x": 268.605,
+   "y": -130.5,
+   "layer": "0"
+  },
+  {
+   "id": "n31",
+   "x": 268.605,
+   "y": -70.5,
+   "layer": "0"
+  },
+  {
+   "id": "n32",
+   "x": 268.605,
+   "y": -17.145,
+   "layer": "0",
+   "label": "C8",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-098",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-099",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n33",
+   "x": 268.605,
+   "y": 54.5,
+   "layer": "0"
+  },
+  {
+   "id": "n34",
+   "x": 268.605,
+   "y": 114.5,
+   "layer": "0"
+  },
+  {
+   "id": "n35",
+   "x": -116.205,
+   "y": -17.145,
+   "layer": "0",
+   "label": "C6",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-094",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-095",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n36",
+   "x": -116.205,
+   "y": -3,
+   "layer": "0"
+  },
+  {
+   "id": "n37",
+   "x": -116.205,
+   "y": 47,
+   "layer": "0"
+  },
+  {
+   "id": "n38",
+   "x": -249.32,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n39",
+   "x": -204.32,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n40",
+   "x": -101.82,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n41",
+   "x": -56.82,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n42",
+   "x": 43.875,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n43",
+   "x": 66.675,
+   "y": -17.145,
+   "layer": "0",
+   "label": "C7",
+   "showLabel": false,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.30479999999999996,
+   "dimY": 0.30479999999999996,
+   "attachments": [
+    {
+     "id": "att-096",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "shape": "Rectangular",
+      "length": 0.30479999999999996,
+      "breadth": 0.30479999999999996,
+      "height": 3,
+      "base": 0,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-097",
+     "objectId": "footing-with-math",
+     "objectPath": "Objects/Structural/footing.json",
+     "params": {
+      "type": "Sloped",
+      "columnWidth": 0.30479999999999996,
+      "columnDepth": 0.30479999999999996,
+      "columnHeight": 1,
+      "baseWidth": 1.2,
+      "baseDepth": 1.2,
+      "rccThickness": 0.3,
+      "frustumTopWidth": 0.5,
+      "frustumTopDepth": 0.5,
+      "frustumHeight": 0.2,
+      "pccThickness": 0.1,
+      "solingThickness": 0.1,
+      "skew": "Center",
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n44",
+   "x": 75.68,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n45",
+   "x": 118.18,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n46",
+   "x": 122.85,
+   "y": -17.145,
+   "layer": "0"
+  },
+  {
+   "id": "n47",
+   "x": 122.85,
+   "y": -7,
+   "layer": "0"
+  },
+  {
+   "id": "n48",
+   "x": 122.85,
+   "y": 38,
+   "layer": "0"
+  },
+  {
+   "id": "n49",
+   "x": 122.85,
+   "y": 62.23,
+   "layer": "0"
+  },
+  {
+   "id": "n50",
+   "x": 43.875,
+   "y": 62.23,
+   "layer": "0"
+  },
+  {
+   "id": "n51",
+   "x": 53.18,
+   "y": 62.23,
+   "layer": "0"
+  },
+  {
+   "id": "n52",
+   "x": 88.18,
+   "y": 62.23,
+   "layer": "0"
+  },
+  {
+   "id": "n53",
+   "x": -262.89,
+   "y": -179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n54",
+   "x": -118.745,
+   "y": -179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n55",
+   "x": -118.745,
+   "y": -19.685,
+   "layer": "0"
+  },
+  {
+   "id": "n56",
+   "x": -262.89,
+   "y": -19.685,
+   "layer": "0"
+  },
+  {
+   "id": "n57",
+   "x": -113.665,
+   "y": -179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n58",
+   "x": 41.335,
+   "y": -179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n59",
+   "x": 41.335,
+   "y": -19.685,
+   "layer": "0"
+  },
+  {
+   "id": "n60",
+   "x": -113.665,
+   "y": -19.685,
+   "layer": "0"
+  },
+  {
+   "id": "n61",
+   "x": 46.415,
+   "y": -179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n62",
+   "x": 262.89,
+   "y": -179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n63",
+   "x": 262.89,
+   "y": -19.685,
+   "layer": "0"
+  },
+  {
+   "id": "n64",
+   "x": 46.415,
+   "y": -19.685,
+   "layer": "0"
+  },
+  {
+   "id": "n65",
+   "x": -262.89,
+   "y": -14.605,
+   "layer": "0"
+  },
+  {
+   "id": "n66",
+   "x": -118.745,
+   "y": -14.605,
+   "layer": "0"
+  },
+  {
+   "id": "n67",
+   "x": -118.745,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n68",
+   "x": -262.89,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n69",
+   "x": 125.39,
+   "y": -14.605,
+   "layer": "0"
+  },
+  {
+   "id": "n70",
+   "x": 262.89,
+   "y": -14.605,
+   "layer": "0"
+  },
+  {
+   "id": "n71",
+   "x": 262.89,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n72",
+   "x": 125.39,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n73",
+   "x": 46.415,
+   "y": 64.77,
+   "layer": "0"
+  },
+  {
+   "id": "n74",
+   "x": 120.31,
+   "y": 64.77,
+   "layer": "0"
+  },
+  {
+   "id": "n75",
+   "x": 120.31,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n76",
+   "x": 46.415,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n77",
+   "x": -113.665,
+   "y": -14.605,
+   "layer": "0"
+  },
+  {
+   "id": "n78",
+   "x": 120.31,
+   "y": -14.605,
+   "layer": "0"
+  },
+  {
+   "id": "n79",
+   "x": 120.31,
+   "y": 59.69,
+   "layer": "0"
+  },
+  {
+   "id": "n80",
+   "x": 41.335,
+   "y": 59.69,
+   "layer": "0"
+  },
+  {
+   "id": "n81",
+   "x": 41.335,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n82",
+   "x": -113.665,
+   "y": 179.07,
+   "layer": "0"
+  },
+  {
+   "id": "n83",
+   "x": -257.905,
+   "y": -21.8775,
+   "layer": "0",
+   "label": "stair/staircase",
+   "showLabel": false,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att-108",
+     "objectId": "staircase-with-math",
+     "objectPath": "Objects/Structural/staircase.json",
+     "params": {
+      "config": "U-shape",
+      "steps": 18,
+      "tread": 0.25,
+      "riser": 0.167,
+      "width": 1.25,
+      "direction": "Left to right",
+      "midSteps": 9,
+      "landingWidth": 0.85,
+      "midSpace": 0.12,
+      "stepStyle": "Solid",
+      "treadThickness": 0.06,
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n84",
+   "x": -39.32,
+   "y": -174.57,
+   "layer": "0",
+   "label": "bed1/curtain",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-109",
+     "objectId": "curtain-with-math",
+     "objectPath": "Objects/Architectural/curtain.json",
+     "params": {
+      "width": 1.5,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n85",
+   "x": -34.32,
+   "y": 174.57,
+   "layer": "0",
+   "label": "hall/curtain",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-110",
+     "objectId": "curtain-with-math",
+     "objectPath": "Objects/Architectural/curtain.json",
+     "params": {
+      "width": 1.5,
+      "rotation": 180
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n86",
+   "x": 95.68,
+   "y": 174.57,
+   "layer": "0",
+   "label": "toilet/curtain",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-111",
+     "objectId": "curtain-with-math",
+     "objectPath": "Objects/Architectural/curtain.json",
+     "params": {
+      "width": 0.6,
+      "rotation": 180
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n87",
+   "x": 155.68,
+   "y": 174.57,
+   "layer": "0",
+   "label": "bed2/curtain",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-112",
+     "objectId": "curtain-with-math",
+     "objectPath": "Objects/Architectural/curtain.json",
+     "params": {
+      "width": 1,
+      "rotation": 180
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n88",
+   "x": 258.39,
+   "y": 84.5,
+   "layer": "0",
+   "label": "bed2/curtain",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-113",
+     "objectId": "curtain-with-math",
+     "objectPath": "Objects/Architectural/curtain.json",
+     "params": {
+      "width": 1.2,
+      "rotation": 90
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n89",
+   "x": -63.665,
+   "y": -128,
+   "layer": "0",
+   "label": "bed1/bed",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-114",
+     "objectId": "bed-with-math",
+     "objectPath": "Objects/Architectural/bed.json",
+     "params": {
+      "length": 2,
+      "width": 1.5,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n90",
+   "x": 26.335,
+   "y": -140.5,
+   "layer": "0",
+   "label": "bed1/wardrobe",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-115",
+     "objectId": "wardrobe-with-math",
+     "objectPath": "Objects/Architectural/wardrobe.json",
+     "params": {
+      "width": 1.2,
+      "depth": 0.6,
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n91",
+   "x": -102.32,
+   "y": -75.5,
+   "layer": "0",
+   "label": "bed1/nightstand",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-116",
+     "objectId": "nightstand-with-math",
+     "objectPath": "Objects/Architectural/nightstand.json",
+     "params": {
+      "rotation": 90
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n92",
+   "x": 3.18,
+   "y": -30.935,
+   "layer": "0",
+   "label": "bed1/dressing-table",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-117",
+     "objectId": "dressing-table-with-math",
+     "objectPath": "Objects/Architectural/dressing-table.json",
+     "params": {
+      "length": 1,
+      "width": 0.45,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n93",
+   "x": -36.17,
+   "y": -99.4,
+   "layer": "0",
+   "label": "bed1/ceiling-fan",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-118",
+     "objectId": "ceiling-fan-with-math",
+     "objectPath": "Objects/Architectural/ceiling-fan.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n94",
+   "x": 61.415,
+   "y": -140.5,
+   "layer": "0",
+   "label": "kitchen/exhaust-hood",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-119",
+     "objectId": "stove-with-math",
+     "objectPath": "Objects/Architectural/stove.json",
+     "params": {
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-120",
+     "objectId": "exhaust-hood-with-math",
+     "objectPath": "Objects/Architectural/exhaust-hood.json",
+     "params": {
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n95",
+   "x": 61.415,
+   "y": -90.5,
+   "layer": "0",
+   "label": "kitchen/kitchen-sink",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-121",
+     "objectId": "kitchen-sink-with-math",
+     "objectPath": "Objects/Architectural/kitchen-sink.json",
+     "params": {
+      "length": 0.9,
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n96",
+   "x": 243.18,
+   "y": -160,
+   "layer": "0",
+   "label": "kitchen/refrigerator",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-122",
+     "objectId": "refrigerator-with-math",
+     "objectPath": "Objects/Architectural/refrigerator.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n97",
+   "x": 175.68,
+   "y": -95.5,
+   "layer": "0",
+   "label": "kitchen/table",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-123",
+     "objectId": "table-with-math",
+     "objectPath": "Objects/Architectural/table.json",
+     "params": {
+      "length": 1.2,
+      "width": 0.8,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n98",
+   "x": 128.18,
+   "y": -95.5,
+   "layer": "0",
+   "label": "kitchen/chair",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-124",
+     "objectId": "chair-with-math",
+     "objectPath": "Objects/Architectural/chair.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n99",
+   "x": 223.18,
+   "y": -95.5,
+   "layer": "0",
+   "label": "kitchen/chair",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-125",
+     "objectId": "chair-with-math",
+     "objectPath": "Objects/Architectural/chair.json",
+     "params": {
+      "rotation": 180
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n100",
+   "x": 175.68,
+   "y": -128,
+   "layer": "0",
+   "label": "kitchen/chair",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-126",
+     "objectId": "chair-with-math",
+     "objectPath": "Objects/Architectural/chair.json",
+     "params": {
+      "rotation": 90
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n101",
+   "x": 175.68,
+   "y": -63,
+   "layer": "0",
+   "label": "kitchen/chair",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-127",
+     "objectId": "chair-with-math",
+     "objectPath": "Objects/Architectural/chair.json",
+     "params": {
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n102",
+   "x": -199.32,
+   "y": 89.5,
+   "layer": "0",
+   "label": "verandah/stool",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-128",
+     "objectId": "stool-with-math",
+     "objectPath": "Objects/Architectural/stool.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n103",
+   "x": -164.32,
+   "y": 89.5,
+   "layer": "0",
+   "label": "verandah/stool",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-129",
+     "objectId": "stool-with-math",
+     "objectPath": "Objects/Architectural/stool.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n104",
+   "x": -186.82,
+   "y": 119.5,
+   "layer": "0",
+   "label": "verandah/planter-box",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-130",
+     "objectId": "planter-box-with-math",
+     "objectPath": "Objects/Architectural/planter-box.json",
+     "params": {
+      "length": 1,
+      "width": 0.4,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n105",
+   "x": -126.82,
+   "y": 79.5,
+   "layer": "0",
+   "label": "verandah/shoe-rack",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-131",
+     "objectId": "shoe-rack-with-math",
+     "objectPath": "Objects/Architectural/shoe-rack.json",
+     "params": {
+      "length": 0.9,
+      "width": 0.32,
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n106",
+   "x": -251.82,
+   "y": 9.5,
+   "layer": "0",
+   "label": "verandah/outdoor-light",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-132",
+     "objectId": "outdoor-light-with-math",
+     "objectPath": "Objects/Architectural/outdoor-light.json",
+     "params": {
+      "style": "Wall",
+      "showSpill": false,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n107",
+   "x": 220.39,
+   "y": 129.07,
+   "layer": "0",
+   "label": "bed2/bed",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-133",
+     "objectId": "bed-with-math",
+     "objectPath": "Objects/Architectural/bed.json",
+     "params": {
+      "length": 2,
+      "width": 1.5,
+      "rotation": 270
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n108",
+   "x": 168.18,
+   "y": 168.5,
+   "layer": "0",
+   "label": "bed2/nightstand",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-134",
+     "objectId": "nightstand-with-math",
+     "objectPath": "Objects/Architectural/nightstand.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n109",
+   "x": 230.68,
+   "y": 0.395,
+   "layer": "0",
+   "label": "bed2/wardrobe",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-135",
+     "objectId": "wardrobe-with-math",
+     "objectPath": "Objects/Architectural/wardrobe.json",
+     "params": {
+      "width": 1.2,
+      "depth": 0.6,
+      "rotation": 180
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n110",
+   "x": 136.64,
+   "y": 114.5,
+   "layer": "0",
+   "label": "bed2/dressing-table",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-136",
+     "objectId": "dressing-table-with-math",
+     "objectPath": "Objects/Architectural/dressing-table.json",
+     "params": {
+      "length": 1,
+      "width": 0.45,
+      "rotation": 90
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n111",
+   "x": 194.18,
+   "y": 82,
+   "layer": "0",
+   "label": "bed2/ceiling-fan",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-137",
+     "objectId": "ceiling-fan-with-math",
+     "objectPath": "Objects/Architectural/ceiling-fan.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n112",
+   "x": 63.915,
+   "y": 154.5,
+   "layer": "0",
+   "label": "toilet/toilet",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-138",
+     "objectId": "toilet-with-math",
+     "objectPath": "Objects/Architectural/toilet.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n113",
+   "x": 109.06,
+   "y": 154.5,
+   "layer": "0",
+   "label": "toilet/washbasin",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-139",
+     "objectId": "washbasin-with-math",
+     "objectPath": "Objects/Architectural/washbasin.json",
+     "params": {
+      "support": "Wall-hung",
+      "rotation": 90
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n114",
+   "x": 83.18,
+   "y": 124.5,
+   "layer": "0",
+   "label": "toilet/floor-drain",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-140",
+     "objectId": "floor-drain-with-math",
+     "objectPath": "Objects/Architectural/floor-drain.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n115",
+   "x": 107.31,
+   "y": 87,
+   "layer": "0",
+   "label": "toilet/water-heater",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-141",
+     "objectId": "water-heater-with-math",
+     "objectPath": "Objects/Architectural/water-heater.json",
+     "params": {
+      "capacity": 25,
+      "mountHeight": 1.8,
+      "rotation": 90
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n116",
+   "x": -11.82,
+   "y": 156.5,
+   "layer": "0",
+   "label": "hall/sofa",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-142",
+     "objectId": "sofa-with-math",
+     "objectPath": "Objects/Architectural/sofa.json",
+     "params": {
+      "length": 2,
+      "depth": 0.9,
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n117",
+   "x": -11.82,
+   "y": -4,
+   "layer": "0",
+   "label": "hall/tv-unit",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-143",
+     "objectId": "tv-unit-with-math",
+     "objectPath": "Objects/Architectural/tv-unit.json",
+     "params": {
+      "length": 1.6,
+      "width": 0.4,
+      "rotation": 180
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n118",
+   "x": -81.82,
+   "y": 89.5,
+   "layer": "0",
+   "label": "hall/armchair",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-144",
+     "objectId": "armchair-with-math",
+     "objectPath": "Objects/Architectural/armchair.json",
+     "params": {
+      "rotation": 217
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n119",
+   "x": -24.32,
+   "y": 89.5,
+   "layer": "0",
+   "label": "hall/ceiling-fan",
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-145",
+     "objectId": "ceiling-fan-with-math",
+     "objectPath": "Objects/Architectural/ceiling-fan.json",
+     "params": {
+      "rotation": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  }
+ ],
+ "segments": [
+  {
+   "id": "seg-001",
+   "fromNodeId": "n0",
+   "toNodeId": "n1",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-018",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-002",
+   "fromNodeId": "n1",
+   "toNodeId": "n2",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-019",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-001",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 0.9,
+      "fitMode": "Fill wall",
+      "sillHeight": 1.2,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Stair window"
+  },
+  {
+   "id": "seg-003",
+   "fromNodeId": "n2",
+   "toNodeId": "n3",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-020",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-004",
+   "fromNodeId": "n3",
+   "toNodeId": "n4",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-021",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-005",
+   "fromNodeId": "n4",
+   "toNodeId": "n5",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-022",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-002",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 1.5,
+      "fitMode": "Fill wall",
+      "sillHeight": 0.9,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Bedroom 1 window"
+  },
+  {
+   "id": "seg-006",
+   "fromNodeId": "n5",
+   "toNodeId": "n6",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-023",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-007",
+   "fromNodeId": "n6",
+   "toNodeId": "n7",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-024",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-008",
+   "fromNodeId": "n7",
+   "toNodeId": "n8",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-025",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-009",
+   "fromNodeId": "n8",
+   "toNodeId": "n9",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-026",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-003",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 1.5,
+      "fitMode": "Fill wall",
+      "sillHeight": 0.9,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Kitchen window"
+  },
+  {
+   "id": "seg-010",
+   "fromNodeId": "n9",
+   "toNodeId": "n10",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-027",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-011",
+   "fromNodeId": "n11",
+   "toNodeId": "n12",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-028",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-012",
+   "fromNodeId": "n12",
+   "toNodeId": "n13",
+   "layer": "door",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-029",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-004",
+     "objectId": "opening-with-math",
+     "objectPath": "Objects/Architectural/opening.json",
+     "params": {
+      "fitMode": "Fill segment",
+      "wallDepth": 0.229,
+      "lintelHeight": 2.1,
+      "lintelDepth": 0.15,
+      "sillHeight": 0
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Verandah front"
+  },
+  {
+   "id": "seg-013",
+   "fromNodeId": "n13",
+   "toNodeId": "n14",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-030",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-014",
+   "fromNodeId": "n14",
+   "toNodeId": "n15",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-031",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-015",
+   "fromNodeId": "n15",
+   "toNodeId": "n16",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-032",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-005",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 1.5,
+      "fitMode": "Fill wall",
+      "sillHeight": 0.9,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Hall window"
+  },
+  {
+   "id": "seg-016",
+   "fromNodeId": "n16",
+   "toNodeId": "n17",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-033",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-017",
+   "fromNodeId": "n17",
+   "toNodeId": "n18",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-034",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-018",
+   "fromNodeId": "n18",
+   "toNodeId": "n19",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-035",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-019",
+   "fromNodeId": "n19",
+   "toNodeId": "n20",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-036",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-006",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 0.6,
+      "fitMode": "Fill wall",
+      "sillHeight": 1.8,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Toilet ventilator"
+  },
+  {
+   "id": "seg-020",
+   "fromNodeId": "n20",
+   "toNodeId": "n21",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-037",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-021",
+   "fromNodeId": "n21",
+   "toNodeId": "n22",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-038",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-022",
+   "fromNodeId": "n22",
+   "toNodeId": "n23",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-039",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-007",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 1,
+      "fitMode": "Fill wall",
+      "sillHeight": 0.9,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Bedroom 2 window"
+  },
+  {
+   "id": "seg-023",
+   "fromNodeId": "n23",
+   "toNodeId": "n24",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-040",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-024",
+   "fromNodeId": "n0",
+   "toNodeId": "n25",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-041",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-025",
+   "fromNodeId": "n25",
+   "toNodeId": "n26",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-042",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-008",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 0.9,
+      "fitMode": "Fill wall",
+      "sillHeight": 1.2,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Stair west window"
+  },
+  {
+   "id": "seg-026",
+   "fromNodeId": "n26",
+   "toNodeId": "n27",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-043",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-027",
+   "fromNodeId": "n27",
+   "toNodeId": "n28",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-044",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-028",
+   "fromNodeId": "n28",
+   "toNodeId": "n29",
+   "layer": "door",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-045",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-009",
+     "objectId": "opening-with-math",
+     "objectPath": "Objects/Architectural/opening.json",
+     "params": {
+      "fitMode": "Fill segment",
+      "wallDepth": 0.229,
+      "lintelHeight": 2.1,
+      "lintelDepth": 0.15,
+      "sillHeight": 0.9
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Verandah side"
+  },
+  {
+   "id": "seg-029",
+   "fromNodeId": "n29",
+   "toNodeId": "n11",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-046",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-030",
+   "fromNodeId": "n10",
+   "toNodeId": "n30",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-047",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-031",
+   "fromNodeId": "n30",
+   "toNodeId": "n31",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-048",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-010",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 1.2,
+      "fitMode": "Fill wall",
+      "sillHeight": 0.9,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Kitchen east window"
+  },
+  {
+   "id": "seg-032",
+   "fromNodeId": "n31",
+   "toNodeId": "n32",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-049",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-033",
+   "fromNodeId": "n32",
+   "toNodeId": "n33",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-050",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-034",
+   "fromNodeId": "n33",
+   "toNodeId": "n34",
+   "layer": "window",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-051",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-011",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 1.2,
+      "fitMode": "Fill wall",
+      "sillHeight": 0.9,
+      "lintelHeight": 2.1,
+      "wallDepth": 0.229,
+      "panes": 2,
+      "operation": "Casement",
+      "showFrame": true
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Bedroom 2 east window"
+  },
+  {
+   "id": "seg-035",
+   "fromNodeId": "n34",
+   "toNodeId": "n24",
+   "layer": "wall",
+   "thickness": 11.43,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-052",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.229,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-036",
+   "fromNodeId": "n3",
+   "toNodeId": "n35",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-053",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-037",
+   "fromNodeId": "n35",
+   "toNodeId": "n36",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-054",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-038",
+   "fromNodeId": "n36",
+   "toNodeId": "n37",
+   "layer": "door",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-055",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-012",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 1,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.102,
+      "lintelHeight": 2.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Main door"
+  },
+  {
+   "id": "seg-039",
+   "fromNodeId": "n37",
+   "toNodeId": "n14",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-056",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-040",
+   "fromNodeId": "n27",
+   "toNodeId": "n38",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-057",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-041",
+   "fromNodeId": "n38",
+   "toNodeId": "n39",
+   "layer": "door",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-058",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-013",
+     "objectId": "channel-gate-with-math",
+     "objectPath": "Objects/Architectural/channel-gate.json",
+     "params": {
+      "fitMode": "Fill segment",
+      "height": 2.1,
+      "panels": 8,
+      "open": 0.25,
+      "stackSide": "Left",
+      "stackDepth": 0.12,
+      "trackDepth": 0.102
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Stair gate"
+  },
+  {
+   "id": "seg-042",
+   "fromNodeId": "n39",
+   "toNodeId": "n35",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-059",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-043",
+   "fromNodeId": "n35",
+   "toNodeId": "n40",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-060",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-044",
+   "fromNodeId": "n40",
+   "toNodeId": "n41",
+   "layer": "door",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-061",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-014",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 0.9,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "right",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.102,
+      "lintelHeight": 2.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Bedroom 1 door"
+  },
+  {
+   "id": "seg-045",
+   "fromNodeId": "n41",
+   "toNodeId": "n42",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-062",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-046",
+   "fromNodeId": "n42",
+   "toNodeId": "n43",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-063",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-047",
+   "fromNodeId": "n43",
+   "toNodeId": "n44",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-064",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-048",
+   "fromNodeId": "n44",
+   "toNodeId": "n45",
+   "layer": "door",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-065",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-015",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 0.85,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "right",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.102,
+      "lintelHeight": 2.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Kitchen door"
+  },
+  {
+   "id": "seg-049",
+   "fromNodeId": "n45",
+   "toNodeId": "n46",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-066",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-050",
+   "fromNodeId": "n46",
+   "toNodeId": "n32",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-067",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-051",
+   "fromNodeId": "n6",
+   "toNodeId": "n42",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-068",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-146",
+     "objectId": "kitchen-counter-with-math",
+     "objectPath": "Objects/Architectural/kitchen-counter.json",
+     "params": {
+      "length": 2.4,
+      "width": 0.6,
+      "fitMode": "Exact"
+     },
+     "t": 0.4431,
+     "flip": true
+    },
+    {
+     "id": "att-147",
+     "objectId": "wall-cabinet-with-math",
+     "objectPath": "Objects/Architectural/wall-cabinet.json",
+     "params": {
+      "length": 1.2,
+      "width": 0.35,
+      "fitMode": "Exact"
+     },
+     "t": 0.2642,
+     "flip": true
+    }
+   ]
+  },
+  {
+   "id": "seg-052",
+   "fromNodeId": "n46",
+   "toNodeId": "n47",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-069",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-053",
+   "fromNodeId": "n47",
+   "toNodeId": "n48",
+   "layer": "door",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-070",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-016",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 0.9,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.102,
+      "lintelHeight": 2.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Bedroom 2 door"
+  },
+  {
+   "id": "seg-054",
+   "fromNodeId": "n48",
+   "toNodeId": "n49",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-071",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-055",
+   "fromNodeId": "n49",
+   "toNodeId": "n21",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-072",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-148",
+     "objectId": "mirror-with-math",
+     "objectPath": "Objects/Architectural/mirror.json",
+     "params": {
+      "length": 0.5,
+      "height": 0.7
+     },
+     "t": 0.7529,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-056",
+   "fromNodeId": "n50",
+   "toNodeId": "n17",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-073",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-149",
+     "objectId": "towel-rack-with-math",
+     "objectPath": "Objects/Architectural/towel-rack.json",
+     "params": {
+      "length": 0.6
+     },
+     "t": 0.8345,
+     "flip": true
+    }
+   ]
+  },
+  {
+   "id": "seg-057",
+   "fromNodeId": "n50",
+   "toNodeId": "n51",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-074",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-058",
+   "fromNodeId": "n51",
+   "toNodeId": "n52",
+   "layer": "door",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-075",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-017",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 0.7,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.102,
+      "lintelHeight": 2.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true,
+   "label": "Toilet door"
+  },
+  {
+   "id": "seg-059",
+   "fromNodeId": "n52",
+   "toNodeId": "n49",
+   "layer": "wall",
+   "thickness": 5.08,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-076",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.102,
+      "height": 2.7,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "obj-60",
+   "fromNodeId": "n83",
+   "toNodeId": "n83",
+   "layer": "staircase",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-61",
+   "fromNodeId": "n84",
+   "toNodeId": "n84",
+   "layer": "curtain",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-62",
+   "fromNodeId": "n85",
+   "toNodeId": "n85",
+   "layer": "curtain",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-63",
+   "fromNodeId": "n86",
+   "toNodeId": "n86",
+   "layer": "curtain",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-64",
+   "fromNodeId": "n87",
+   "toNodeId": "n87",
+   "layer": "curtain",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-65",
+   "fromNodeId": "n88",
+   "toNodeId": "n88",
+   "layer": "curtain",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-66",
+   "fromNodeId": "n89",
+   "toNodeId": "n89",
+   "layer": "bed",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-67",
+   "fromNodeId": "n90",
+   "toNodeId": "n90",
+   "layer": "wardrobe",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-68",
+   "fromNodeId": "n91",
+   "toNodeId": "n91",
+   "layer": "nightstand",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-69",
+   "fromNodeId": "n92",
+   "toNodeId": "n92",
+   "layer": "dressing-table",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-70",
+   "fromNodeId": "n93",
+   "toNodeId": "n93",
+   "layer": "ceiling-fan",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-71",
+   "fromNodeId": "n94",
+   "toNodeId": "n94",
+   "layer": "stove",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-72",
+   "fromNodeId": "n95",
+   "toNodeId": "n95",
+   "layer": "kitchen-sink",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-73",
+   "fromNodeId": "n96",
+   "toNodeId": "n96",
+   "layer": "refrigerator",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-74",
+   "fromNodeId": "n97",
+   "toNodeId": "n97",
+   "layer": "table",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-75",
+   "fromNodeId": "n98",
+   "toNodeId": "n98",
+   "layer": "chair",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-76",
+   "fromNodeId": "n99",
+   "toNodeId": "n99",
+   "layer": "chair",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-77",
+   "fromNodeId": "n100",
+   "toNodeId": "n100",
+   "layer": "chair",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-78",
+   "fromNodeId": "n101",
+   "toNodeId": "n101",
+   "layer": "chair",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-79",
+   "fromNodeId": "n102",
+   "toNodeId": "n102",
+   "layer": "stool",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-80",
+   "fromNodeId": "n103",
+   "toNodeId": "n103",
+   "layer": "stool",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-81",
+   "fromNodeId": "n104",
+   "toNodeId": "n104",
+   "layer": "planter-box",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-82",
+   "fromNodeId": "n105",
+   "toNodeId": "n105",
+   "layer": "shoe-rack",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-83",
+   "fromNodeId": "n106",
+   "toNodeId": "n106",
+   "layer": "outdoor-light",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-84",
+   "fromNodeId": "n107",
+   "toNodeId": "n107",
+   "layer": "bed",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-85",
+   "fromNodeId": "n108",
+   "toNodeId": "n108",
+   "layer": "nightstand",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-86",
+   "fromNodeId": "n109",
+   "toNodeId": "n109",
+   "layer": "wardrobe",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-87",
+   "fromNodeId": "n110",
+   "toNodeId": "n110",
+   "layer": "dressing-table",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-88",
+   "fromNodeId": "n111",
+   "toNodeId": "n111",
+   "layer": "ceiling-fan",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-89",
+   "fromNodeId": "n112",
+   "toNodeId": "n112",
+   "layer": "toilet",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-90",
+   "fromNodeId": "n113",
+   "toNodeId": "n113",
+   "layer": "washbasin",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-91",
+   "fromNodeId": "n114",
+   "toNodeId": "n114",
+   "layer": "floor-drain",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-92",
+   "fromNodeId": "n115",
+   "toNodeId": "n115",
+   "layer": "water-heater",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-93",
+   "fromNodeId": "n116",
+   "toNodeId": "n116",
+   "layer": "sofa",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-94",
+   "fromNodeId": "n117",
+   "toNodeId": "n117",
+   "layer": "tv-unit",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-95",
+   "fromNodeId": "n118",
+   "toNodeId": "n118",
+   "layer": "armchair",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-96",
+   "fromNodeId": "n119",
+   "toNodeId": "n119",
+   "layer": "ceiling-fan",
+   "thickness": 0.5,
+   "color": "#1e293b",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  }
+ ],
+ "spaces": [
+  {
+   "id": "space-stair",
+   "nodeIds": [
+    "n53",
+    "n54",
+    "n55",
+    "n56"
+   ],
+   "layer": "space",
+   "label": "STAIR",
+   "showLabel": true,
+   "roomType": "room",
+   "region": "Staircase",
+   "fill": "rgba(129,140,248,0.25)",
+   "stroke": "#4338ca",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-077",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Blue"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "space-bed1",
+   "nodeIds": [
+    "n57",
+    "n58",
+    "n59",
+    "n60"
+   ],
+   "layer": "space",
+   "label": "BEDROOM 1",
+   "showLabel": true,
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.25)",
+   "stroke": "#475569",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-078",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Grey"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "space-kitchen",
+   "nodeIds": [
+    "n61",
+    "n62",
+    "n63",
+    "n64"
+   ],
+   "layer": "space",
+   "label": "KITCHEN",
+   "showLabel": true,
+   "roomType": "room",
+   "fill": "rgba(251,191,36,0.20)",
+   "stroke": "#b45309",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-079",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Yellow"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "space-verandah",
+   "nodeIds": [
+    "n65",
+    "n66",
+    "n67",
+    "n68"
+   ],
+   "layer": "space",
+   "label": "VERANDAH",
+   "showLabel": true,
+   "roomType": "room",
+   "fill": "rgba(163,230,53,0.22)",
+   "stroke": "#4d7c0f",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-080",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Green"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "space-bed2",
+   "nodeIds": [
+    "n69",
+    "n70",
+    "n71",
+    "n72"
+   ],
+   "layer": "space",
+   "label": "BEDROOM 2",
+   "showLabel": true,
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.25)",
+   "stroke": "#475569",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-081",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Grey"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "space-toilet",
+   "nodeIds": [
+    "n73",
+    "n74",
+    "n75",
+    "n76"
+   ],
+   "layer": "space",
+   "label": "TOILET",
+   "showLabel": true,
+   "roomType": "room",
+   "region": "Toilet",
+   "fill": "rgba(56,189,248,0.22)",
+   "stroke": "#0369a1",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-082",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Blue"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "space-hall",
+   "nodeIds": [
+    "n77",
+    "n78",
+    "n79",
+    "n80",
+    "n81",
+    "n82"
+   ],
+   "layer": "space",
+   "label": "HALL",
+   "showLabel": true,
+   "roomType": "room",
+   "fill": "rgba(244,114,182,0.16)",
+   "stroke": "#9d174d",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-083",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Red"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  }
+ ],
+ "layers": [
+  {
+   "id": "0",
+   "name": "0",
+   "color": "#000000",
+   "visible": true,
+   "locked": false,
+   "order": 0
+  },
+  {
+   "id": "image",
+   "name": "Image",
+   "color": "#a855f7",
+   "visible": true,
+   "locked": false,
+   "order": 1
+  },
+  {
+   "id": "dimension",
+   "name": "Dimension",
+   "color": "#b45309",
+   "visible": true,
+   "locked": false,
+   "order": 2
+  },
+  {
+   "id": "wall",
+   "name": "Wall",
+   "color": "#1e293b",
+   "visible": true,
+   "locked": false,
+   "order": 3
+  },
+  {
+   "id": "door",
+   "name": "Door",
+   "color": "#b91c1c",
+   "visible": true,
+   "locked": false,
+   "order": 4
+  },
+  {
+   "id": "window",
+   "name": "Window",
+   "color": "#0e7490",
+   "visible": true,
+   "locked": false,
+   "order": 5
+  },
+  {
+   "id": "space",
+   "name": "Space",
+   "color": "#16a34a",
+   "visible": true,
+   "locked": false,
+   "order": 6
+  },
+  {
+   "id": "column",
+   "name": "Column",
+   "color": "#7f1d1d",
+   "visible": true,
+   "locked": false,
+   "order": 7
+  },
+  {
+   "id": "footing",
+   "name": "Footing",
+   "color": "#78350f",
+   "visible": true,
+   "locked": false,
+   "order": 8
+  },
+  {
+   "id": "staircase",
+   "name": "Staircase",
+   "color": "#4338ca",
+   "visible": true,
+   "locked": false,
+   "order": 9
+  },
+  {
+   "id": "curtain",
+   "name": "Curtain",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 10
+  },
+  {
+   "id": "bed",
+   "name": "Bed",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 11
+  },
+  {
+   "id": "wardrobe",
+   "name": "Wardrobe",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 12
+  },
+  {
+   "id": "nightstand",
+   "name": "Nightstand",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 13
+  },
+  {
+   "id": "dressing-table",
+   "name": "Dressing table",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 14
+  },
+  {
+   "id": "ceiling-fan",
+   "name": "Ceiling fan",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 15
+  },
+  {
+   "id": "stove",
+   "name": "Stove",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 16
+  },
+  {
+   "id": "exhaust-hood",
+   "name": "Exhaust hood",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 17
+  },
+  {
+   "id": "kitchen-sink",
+   "name": "Kitchen sink",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 18
+  },
+  {
+   "id": "refrigerator",
+   "name": "Refrigerator",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 19
+  },
+  {
+   "id": "table",
+   "name": "Table",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 20
+  },
+  {
+   "id": "chair",
+   "name": "Chair",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 21
+  },
+  {
+   "id": "stool",
+   "name": "Stool",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 22
+  },
+  {
+   "id": "planter-box",
+   "name": "Planter box",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 23
+  },
+  {
+   "id": "shoe-rack",
+   "name": "Shoe rack",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 24
+  },
+  {
+   "id": "outdoor-light",
+   "name": "Outdoor light",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 25
+  },
+  {
+   "id": "toilet",
+   "name": "Toilet",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 26
+  },
+  {
+   "id": "washbasin",
+   "name": "Washbasin",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 27
+  },
+  {
+   "id": "floor-drain",
+   "name": "Floor drain",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 28
+  },
+  {
+   "id": "water-heater",
+   "name": "Water heater",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 29
+  },
+  {
+   "id": "sofa",
+   "name": "Sofa",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 30
+  },
+  {
+   "id": "tv-unit",
+   "name": "Tv unit",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 31
+  },
+  {
+   "id": "armchair",
+   "name": "Armchair",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 32
+  },
+  {
+   "id": "kitchen-counter",
+   "name": "Kitchen counter",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 33
+  },
+  {
+   "id": "wall-cabinet",
+   "name": "Wall cabinet",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 34
+  },
+  {
+   "id": "mirror",
+   "name": "Mirror",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 35
+  },
+  {
+   "id": "towel-rack",
+   "name": "Towel rack",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 36
+  }
+ ],
+ "imageUnderlay": null
+}

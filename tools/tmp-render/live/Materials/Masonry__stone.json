@@ -1,0 +1,40 @@
+{
+  "schema": "material/1",
+  "id": "stone.random-rubble",
+  "title": "Stone — random rubble",
+  "category": "Masonry",
+  "description": "Random rubble stonework. Voronoi cells are the stones, the cell borders the joints.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 6,
+      "detail": 2,
+      "roughness": 0.5,
+      "lacunarity": 2,
+      "randomness": 0.9,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "voronoiDimensions": "3D",
+      "colorA": "#8d8b84",
+      "colorB": "#6f6d66"
+    }
+  },
+  "pbr": {
+    "baseColor": "#7e7c75",
+    "roughness": 0.92,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 9,
+    "angle": 30,
+    "weight": 1,
+    "color": "#7e7c75"
+  },
+  "dxf": {
+    "pattern": "BRSTONE",
+    "scale": 1,
+    "angle": 0
+  }
+}

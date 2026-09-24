@@ -1,0 +1,248 @@
+{
+  "version": 1,
+  "id": "ink-coverage",
+  "title": "Ink coverage",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Ink coverage",
+    "icon": {
+      "paths": [
+        "M4 4h16v16H4z",
+        "M4 14l5-5 4 4 3-3 4 4"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Reports how much of the host PICTURE is ink, and outlines its extent.\n\nThe smallest possible image-hosted object, and its job is to prove the host works: attach it to an imported drawing and the Metrics tab should show a coverage figure that changes when you move the threshold, with a rectangle drawn around the picture at its true size in metres.\n\nWHAT IT READS. `img` is the host — the downsampled luminance matrix, 0..1, low = ink — bound by the image host exactly as the flow's Image node publishes it on `val-matrix`. Beside it arrive `originX`, `originY`, `cellM`, `widthM` and `heightM`, the same placement readings, in anchor-relative metres. A body written against a Vectorise-style flow reads those names unchanged, which is the point: maths ported from the flow editor works here without being rewritten.\n\nTHRESHOLD is the one dial. A cell counts as ink when it is darker than this. 0.5 suits a clean line drawing; lower it for a pale scan, raise it for a drawing on a grey ground. Coverage is the count of inked cells over the total, so it is a proportion of the PICTURE, not of the plan.\n\nTHE MATRIX IS DOWNSAMPLED — at most 128 cells on its long edge, the same limit the flow's Image node uses. `Cell size` reports how wide one cell is in metres. Coverage is therefore a fair estimate rather than a pixel count, and a hairline thinner than a cell may not register at all.\n\nLIMITS. It reads LUMINANCE only, so a coloured line and a black one of the same darkness count alike, and anything pale — hatching, a watermark, a light grey fill — is invisible below the threshold. It is a sanity check on the picture, not a measurement of the drawing.",
+  "nodes": [
+    {
+      "id": "host",
+      "position": {
+        "x": -520,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "channel": "luma",
+          "pooling": "mean",
+          "nodeLabel": "Host — the picture"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -220,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "img",
+              "name": "Host — picture (luminance)",
+              "type": "text",
+              "value": "[[1]]",
+              "min": 0,
+              "max": 1,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "threshold",
+              "name": "Ink threshold (0 = black, 1 = white)",
+              "type": "range",
+              "value": 0.5,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Parameters"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 120,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Count the ink",
+          "expr": "# INK COVERAGE OF THE HOST PICTURE.\n# `img` is the host: the downsampled 0..1 LUMINANCE matrix, LOW = ink, bound by the image host exactly\n# as the flow's Image node publishes it on `val-matrix`. `originX` / `originY` / `cellM` / `widthM` /\n# `heightM` arrive beside it and say where those cells sit, in anchor-relative metres.\n\n# A cell counts as INK when it is darker than the threshold. `le` gives a 0/1 mask, and summing a mask\n# is how this language counts - there is no count() and none is needed.\n_ink = le(img, threshold)\nCells = rows(img) * cols(img)\nInked = sum(_ink)\nCoverage = Cells > 0 ? Inked / Cells : 0\nCoveragePct = Coverage * 100\n\n# THE PICTURE'S OWN EXTENT, as a rectangle in metres - the outline drawn below. Built from the four\n# placement readings rather than from the matrix, so it is exact rather than quantised to a cell.\n# ONE LINE, deliberately: the parser matches `name = expr` per LINE, so a call broken across lines\n# never parses and the name silently publishes 0.\n_i = arange(4)\nExtent = hcat(where(eq(_i,1) + eq(_i,2), originX + widthM, originX), where(eq(_i,2) + eq(_i,3), originY + heightM, originY))\nWidthM = widthM\nHeightM = heightM\nAreaM2 = widthM * heightM\nInkAreaM2 = AreaM2 * Coverage\nCellM = cellM\n",
+          "decode": "",
+          "encode": "",
+          "nodeLabel": "Coverage"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 520,
+        "y": -60
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_extent",
+              "kind": "polygon",
+              "name": "Picture extent",
+              "color": "#0891b2",
+              "layer": "Image · Extent",
+              "lineStyle": "dashed",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            }
+          ],
+          "nodeLabel": "Outline"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 520,
+        "y": 180
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Ink coverage (%)"
+            },
+            {
+              "id": "s2",
+              "label": "Inked cells"
+            },
+            {
+              "id": "s3",
+              "label": "Cells sampled"
+            },
+            {
+              "id": "s4",
+              "label": "Picture width (m)"
+            },
+            {
+              "id": "s5",
+              "label": "Picture height (m)"
+            },
+            {
+              "id": "s6",
+              "label": "Picture area (m²)"
+            },
+            {
+              "id": "s7",
+              "label": "Inked area (m², estimate)"
+            },
+            {
+              "id": "s8",
+              "label": "Cell size (m)"
+            }
+          ],
+          "nodeLabel": "What is on the picture"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_host",
+      "source": "host",
+      "sourceHandle": "val-matrix",
+      "target": "props",
+      "targetHandle": "valin-img"
+    },
+    {
+      "id": "e_img",
+      "source": "props",
+      "sourceHandle": "val-img",
+      "target": "math",
+      "targetHandle": "valin-img"
+    },
+    {
+      "id": "e_th",
+      "source": "props",
+      "sourceHandle": "val-threshold",
+      "target": "math",
+      "targetHandle": "valin-threshold"
+    },
+    {
+      "id": "e_ext",
+      "source": "math",
+      "sourceHandle": "val-Extent",
+      "target": "render",
+      "targetHandle": "valin-pr_extent"
+    },
+    {
+      "id": "m1",
+      "source": "math",
+      "sourceHandle": "val-CoveragePct",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "m2",
+      "source": "math",
+      "sourceHandle": "val-Inked",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "m3",
+      "source": "math",
+      "sourceHandle": "val-Cells",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "m4",
+      "source": "math",
+      "sourceHandle": "val-WidthM",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "m5",
+      "source": "math",
+      "sourceHandle": "val-HeightM",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "m6",
+      "source": "math",
+      "sourceHandle": "val-AreaM2",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "m7",
+      "source": "math",
+      "sourceHandle": "val-InkAreaM2",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "m8",
+      "source": "math",
+      "sourceHandle": "val-CellM",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    }
+  ]
+}

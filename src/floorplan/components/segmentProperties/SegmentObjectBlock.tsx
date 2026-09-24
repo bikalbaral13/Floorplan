@@ -3,7 +3,7 @@ import { Upload, Trash2, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "../../types";
 import { evalParametricRefs, type RefInstance } from "../../flow/eval/parametricObject";
-import { evalTruthy, type Scope } from "../../flow/eval/expr";
+import { evalTruthy, type Scope } from "@builderpluss/engine";
 
 /** Filter a parametric object's parameters to those currently VISIBLE — a param with a `showWhen` expression
  *  is shown only when it evaluates truthy against the object's own current values. Shared by the attachment
@@ -54,7 +54,7 @@ export const ParamField = ({ def, value, onChange }: { def: ParametricObjectPara
   if (def.kind === "checkbox") {
     return (
       <label className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-slate-500">{def.label}</span>
+        <span className="min-w-0 flex-1 break-words text-[10px] text-slate-500" title={def.label}>{def.label}</span>
         <input type="checkbox" className="h-4 w-4" checked={v === true} onChange={(e) => onChange(e.target.checked)} />
       </label>
     );
@@ -62,7 +62,7 @@ export const ParamField = ({ def, value, onChange }: { def: ParametricObjectPara
   if (def.kind === "select") {
     return (
       <label className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-slate-500">{def.label}</span>
+        <span className="min-w-0 flex-1 break-words text-[10px] text-slate-500" title={def.label}>{def.label}</span>
         <select className="h-6 rounded border border-slate-200 bg-white px-1 text-[10px]" value={String(v)} onChange={(e) => onChange(e.target.value)}>
           {(def.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -72,7 +72,7 @@ export const ParamField = ({ def, value, onChange }: { def: ParametricObjectPara
   if (def.kind === "color") {
     return (
       <label className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-slate-500">{def.label}</span>
+        <span className="min-w-0 flex-1 break-words text-[10px] text-slate-500" title={def.label}>{def.label}</span>
         <input type="color" className="h-6 w-10 cursor-pointer rounded border border-slate-200" value={String(v)} onChange={(e) => onChange(e.target.value)} />
       </label>
     );
@@ -80,7 +80,7 @@ export const ParamField = ({ def, value, onChange }: { def: ParametricObjectPara
   if (def.kind === "number") {
     return (
       <label className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-slate-500">{def.label}{def.unit ? ` (${def.unit})` : ""}</span>
+        <span className="min-w-0 flex-1 break-words text-[10px] text-slate-500" title={`${def.label}${def.unit ? ` (${def.unit})` : ""}`}>{def.label}{def.unit ? ` (${def.unit})` : ""}</span>
         <input
           type="number"
           min={def.min}
@@ -95,7 +95,7 @@ export const ParamField = ({ def, value, onChange }: { def: ParametricObjectPara
   }
   return (
     <label className="flex items-center justify-between gap-2">
-      <span className="text-[10px] text-slate-500">{def.label}</span>
+      <span className="min-w-0 flex-1 break-words text-[10px] text-slate-500" title={def.label}>{def.label}</span>
       <input type="text" className="h-6 w-24 rounded border border-slate-200 bg-white px-1.5 text-[10px]" value={String(v)} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
@@ -252,7 +252,7 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
             return (
               <div key={att.id} className="space-y-1.5 rounded border border-slate-100 bg-slate-50 p-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-700">{obj?.meta.name ?? att.objectId}{obj ? "" : " (missing)"}</span>
+                  <span className="min-w-0 flex-1 break-words text-[11px] font-medium text-slate-700" title={obj?.meta.name ?? att.objectId}>{obj?.meta.name ?? att.objectId}{obj ? "" : " (missing)"}</span>
                   <div className="flex items-center gap-0.5">
                     {p.onEditInFlow && hasPipeline && (
                       <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-teal-600 hover:text-teal-700" title="Edit in Flow — explode this object's pipeline (inset / split / optimise …) into editable, connected flow nodes" onClick={() => p.onEditInFlow!(att.id)}>

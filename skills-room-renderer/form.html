@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room brief</title>
+<style>
+  :root{
+    --paper:#EEEBE5; --ivory:#F8F6F1; --ink:#2B2A27; --mute:#6F6B64;
+    --line:#D8D3CA; --oak:#8A6A45; --oak-soft:#E7DCCB; --sage:#7E8B7A;
+    --warn:#B4762A; --block:#A8443A; --r:6px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{transition:none!important}}
+  body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 "DM Sans",system-ui,-apple-system,sans-serif}
+  h1,h2{font-family:Georgia,serif;font-weight:600;margin:0}
+  h1{font-size:2rem;line-height:1.1;letter-spacing:-.01em}
+  h2{font-size:1.4rem;margin-bottom:.3rem}
+  p{margin:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:36px 24px 120px;display:grid;grid-template-columns:300px 1fr;gap:52px}
+  @media (max-width:880px){.wrap{grid-template-columns:1fr;gap:24px}}
+
+  aside{position:sticky;top:20px;align-self:start}
+  @media (max-width:880px){aside{position:static}}
+  .card{background:var(--ivory);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+  .plan svg{width:100%;height:auto;display:block}
+  .plan .zone{fill:transparent;transition:fill .3s}
+  .plan .zone.on{fill:var(--oak-soft)}
+  .plan .wall{stroke:var(--ink);stroke-width:5;fill:none}
+  .plan .thin{stroke:var(--ink);stroke-width:1.2;fill:var(--ivory)}
+  .plan .door{stroke:var(--sage);stroke-width:1.2;fill:none;stroke-dasharray:3 3}
+  .plan .win{stroke:var(--sage);stroke-width:3}
+  .plan text{font:11px system-ui,sans-serif;fill:var(--mute)}
+  .legend{margin-top:12px;font-size:.85rem;color:var(--mute)}
+  .legend strong{color:var(--ink);font-weight:500}
+  .progress{margin-top:14px;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+  .progress i{display:block;height:100%;width:0;background:var(--oak);transition:width .3s}
+  .count{margin-top:6px;font-size:.85rem;color:var(--mute)}
+  .flags{margin-top:14px;display:grid;gap:8px}
+  .flag{font-size:.82rem;border-radius:4px;padding:8px 10px;border-left:3px solid}
+  .flag.blocker{background:#F6E9E7;border-color:var(--block);color:#7A2F27}
+  .flag.warning{background:#F7EEDF;border-color:var(--warn);color:#77501C}
+  .flag b{display:block;font-weight:600;margin-bottom:2px}
+  .flag button{margin-top:6px;font:inherit;font-size:.8rem;cursor:pointer;border:1px solid currentColor;background:transparent;color:inherit;border-radius:4px;padding:3px 9px}
+
+  header{margin-bottom:34px}
+  header p{color:var(--mute);margin-top:10px;max-width:56ch}
+  .loader{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.9rem;color:var(--mute)}
+  section{padding:30px 0;border-top:1px solid var(--line)}
+  section>p.lead{color:var(--mute);margin-bottom:20px;max-width:62ch}
+  .q{margin-bottom:24px}
+  .q.hidden{display:none}
+  .q h3{font-weight:500;font-size:1rem;margin:0 0 8px}
+  .q h3 small{color:var(--mute);font-weight:400;margin-left:8px}
+  .q h3 .tag{font-size:.68rem;color:var(--mute);border:1px solid var(--line);border-radius:3px;padding:1px 5px;margin-left:8px;vertical-align:1px}
+  .opts{display:grid;gap:9px;grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+  .opt{position:relative;display:block;cursor:pointer}
+  .opt input{position:absolute;opacity:0;inset:0;width:100%;height:100%;cursor:pointer;margin:0}
+  .opt .c{background:var(--ivory);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;min-height:58px;display:flex;flex-direction:column;gap:3px;transition:border-color .15s,background .15s}
+  .opt .c b{font-weight:500}
+  .opt .c span{font-size:.81rem;color:var(--mute);line-height:1.35}
+  .opt input:checked+.c{border-color:var(--oak);background:#fff;box-shadow:inset 0 0 0 1px var(--oak)}
+  .opt input:focus-visible+.c{outline:2px solid var(--sage);outline-offset:2px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input[type=number],textarea{font:inherit;color:var(--ink);background:var(--ivory);border:1px solid var(--line);border-radius:var(--r);padding:9px 11px}
+  input[type=number]{width:96px}
+  textarea{width:100%;max-width:620px;min-height:74px;resize:vertical}
+  input:focus-visible,textarea:focus-visible{outline:2px solid var(--sage);outline-offset:1px}
+  .unit{color:var(--mute);font-size:.9rem}
+  .metric{color:var(--mute);font-size:.85rem;margin-left:4px}
+  .summary{background:var(--ink);color:var(--ivory);border-radius:var(--r);padding:24px;margin-top:8px}
+  .summary h2{color:#fff}
+  .summary p{color:#C9C4BA;margin:8px 0 16px;font-size:.92rem}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{font:inherit;font-size:.85rem;cursor:pointer;border:1px solid #5A5750;background:transparent;color:var(--ivory);border-radius:4px;padding:5px 11px}
+  .tabs button[aria-selected=true]{background:var(--oak);border-color:var(--oak);color:#fff}
+  pre{white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;background:#1E1D1B;color:#E6E1D8;padding:14px;border-radius:4px;max-height:360px;overflow:auto;margin:0 0 14px}
+  .btns{display:flex;gap:9px;flex-wrap:wrap}
+  button.act{font:inherit;font-weight:500;cursor:pointer;border-radius:var(--r);padding:10px 16px;border:1px solid transparent}
+  .primary{background:var(--oak);color:#fff}
+  .primary:hover{background:#75583A}
+  .ghost{background:transparent;color:var(--ivory);border-color:#5A5750}
+  .ghost:hover{border-color:#8B877F}
+  .toast{font-size:.9rem;color:#C9C4BA;margin-top:9px;min-height:1.4em}
+  .banner{border-radius:var(--r);padding:12px 14px;margin-bottom:18px;font-size:.9rem}
+  .banner.bad{background:#F6E9E7;border:1px solid var(--block);color:#7A2F27}
+  .banner.good{background:#EDF1EC;border:1px solid var(--sage);color:#44543F}
+  .empty{color:var(--mute);padding:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside>
+    <div class="card plan" id="planCard" hidden>
+      <svg id="planSvg" role="img" aria-label="Room plan, highlighting the part in view"></svg>
+      <div class="legend">In focus: <strong id="focus">—</strong></div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="count" id="count">0 of 0 answered</div>
+      <div class="flags" id="flags"></div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <h1 id="title">Room brief</h1>
+      <p id="sub">Load a questions file to begin. Answers are stored as parameter values, in metres, ready to apply to the object library.</p>
+      <div class="loader">
+        <input type="file" id="file" accept=".json,application/json">
+        <label style="display:inline-flex;gap:6px;align-items:center">measurements from a trace:
+          <input type="file" id="pre" accept=".json,application/json"></label>
+        <button class="act ghost" id="check" style="color:var(--ink);border-color:var(--line)">Check bindings against the library</button>
+      </div>
+      <div id="banner"></div>
+    </header>
+    <div id="body"><p class="empty">No questionnaire loaded. Open this page with <code>?q=rooms/bedroom.questions.json</code>, or pick a file above.</p></div>
+
+    <div class="summary" id="summary" hidden>
+      <h2>What you have answered</h2>
+      <p>The plan JSON is what gets applied. The Markdown is for whoever models it.</p>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="json" aria-selected="true">Plan JSON</button>
+        <button role="tab" data-tab="md" aria-selected="false">Modelling plan</button>
+        <button role="tab" data-tab="params" aria-selected="false">Parameters only</button>
+      </div>
+      <pre id="out"></pre>
+      <div class="btns">
+        <button class="act primary" id="copy">Copy</button>
+        <button class="act ghost" id="dlJson">Download plan JSON</button>
+        <button class="act ghost" id="dlMd">Download .md</button>
+        <button class="act ghost" id="reset">Reset to defaults</button>
+      </div>
+      <div class="toast" id="toast" aria-live="polite"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const el = (t, a = {}, ...k) => { const n = document.createElement(t);
+  for (const [p, v] of Object.entries(a)) p === "class" ? n.className = v : p === "html" ? n.innerHTML = v : n.setAttribute(p, v);
+  k.flat().forEach(c => n.append(c)); return n; };
+
+let DOC = null, answers = {}, overrides = {}, resolved = new Set(), tab = "json";
+/* Prefill from a trace: { questionId: { value, source } }, source being
+   measured | derived | convention | default. Measured and derived are facts and are LOCKED;
+   a convention is the tracer's assumption wearing a number, so it is shown, flagged and left
+   editable — a guess that cannot be told from a decision is the failure this whole thing avoids. */
+let PREFILL = {};
+const LOCKS = new Set(["measured", "derived"]);
+const SOURCE_LABEL = { measured: "from the plan", derived: "worked out from the plan",
+  convention: "assumed — check this", edited: "changed from the trace" };
+
+/* ── units. Everything stored is METRES; ft-in is a display skin on the way in and out. ────── */
+const M_PER_FT = 0.3048, M_PER_IN = 0.0254;
+const toFtIn = m => { const ti = Math.round((m || 0) / M_PER_IN); return [Math.floor(ti / 12), ti % 12]; };
+const fromFtIn = (ft, inch) => +( (+ft || 0) * M_PER_FT + (+inch || 0) * M_PER_IN ).toFixed(4);
+const showLen = m => DOC?.display === "ft-in" ? (([f, i]) => `${f}'${i}"`)(toFtIn(m)) : `${(+m).toFixed(3)} m`;
+
+/* ── predicates. `all` / `any` of leaves; no expression language, no eval. ─────────────────── */
+const cmpValue = v => (v && typeof v === "object" && "q" in v) ? (num(answers[v.q]) + (v.margin || 0)) : v;
+const num = v => typeof v === "number" ? v : (v === true ? 1 : v === false ? 0 : Number(v));
+function testLeaf(p) {
+  const a = answers[p.q];
+  if ("is" in p) return a === cmpValue(p.is);
+  if ("isNot" in p) return a !== cmpValue(p.isNot);
+  if ("includes" in p) return Array.isArray(a) && a.includes(p.includes);
+  if ("lt" in p) return num(a) < num(cmpValue(p.lt));
+  if ("gt" in p) return num(a) > num(cmpValue(p.gt));
+  if ("lte" in p) return num(a) <= num(cmpValue(p.lte));
+  if ("gte" in p) return num(a) >= num(cmpValue(p.gte));
+  return false;
+}
+function test(node) {
+  if (!node) return true;
+  if (Array.isArray(node.all)) return node.all.every(test);
+  if (Array.isArray(node.any)) return node.any.some(test);
+  return testLeaf(node);
+}
+
+const questions = () => DOC.sections.flatMap(s => s.questions);
+const visible = q => test(q.showWhen);
+
+/* ── answers → writes → params ─────────────────────────────────────────────────────────────── */
+function writesFor(q) {
+  const a = answers[q.id];
+  const opt = (q.options || []).find(o => o.value === a);
+  if (opt && opt.writes) return opt.writes;          // an option's own writes REPLACE the question's
+  return q.writes || [];
+}
+function computeParams() {
+  const out = {}, ctx = {}, plan = {}, open = [];
+  for (const q of questions()) {
+    if (!visible(q)) continue;
+    const a = answers[q.id];
+    const blank = a === undefined || a === "" || (Array.isArray(a) && !a.length);
+    if (blank) { if (q.kind !== "derived") open.push(q.id); continue; }
+    if (q.kind === "plan") { plan[q.id] = a; continue; }
+    if (q.kind === "context") ctx[q.id] = a;
+    for (const w of writesFor(q)) {
+      const raw = w.value === "$" ? a : w.value;
+      const v = w.as === "number" ? Number(raw) : raw;
+      (out[w.object] ||= {})[w.param] = v;
+    }
+  }
+  for (const [obj, ps] of Object.entries(overrides)) for (const [p, v] of Object.entries(ps)) (out[obj] ||= {})[p] = v;
+  return { params: out, context: ctx, plan, open };
+}
+const fired = () => (DOC.conflicts || []).filter(c => test(c.when));
+
+/* ── rendering ─────────────────────────────────────────────────────────────────────────────── */
+function fieldChoice(q) {
+  const box = el("div", { class: "opts" });
+  for (const o of q.options || []) {
+    const inp = el("input", { type: "radio", name: q.id, value: o.value });
+    if (answers[q.id] === o.value) inp.checked = true;
+    inp.onchange = () => { answers[q.id] = o.value; redraw(); };
+    box.append(el("label", { class: "opt" }, inp,
+      el("div", { class: "c" }, el("b", {}, o.label), o.hint ? el("span", {}, o.hint) : "")));
+  }
+  return box;
+}
+function fieldMulti(q) {
+  const box = el("div", { class: "opts" });
+  const cur = new Set(answers[q.id] || []);
+  for (const o of q.options || []) {
+    const inp = el("input", { type: "checkbox", value: o.value });
+    if (cur.has(o.value)) inp.checked = true;
+    inp.onchange = () => { inp.checked ? cur.add(o.value) : cur.delete(o.value); answers[q.id] = [...cur]; redraw(); };
+    box.append(el("label", { class: "opt" }, inp,
+      el("div", { class: "c" }, el("b", {}, o.label), o.hint ? el("span", {}, o.hint) : "")));
+  }
+  return box;
+}
+function fieldBool(q) {
+  const box = el("div", { class: "opts" });
+  for (const [label, val] of [["Yes", true], ["No", false]]) {
+    const inp = el("input", { type: "radio", name: q.id });
+    if (answers[q.id] === val) inp.checked = true;
+    inp.onchange = () => { answers[q.id] = val; redraw(); };
+    box.append(el("label", { class: "opt" }, inp, el("div", { class: "c" }, el("b", {}, label))));
+  }
+  return box;
+}
+function fieldLength(q) {
+  const row = el("div", { class: "row" });
+  const m = answers[q.id];
+  if (DOC.display === "ft-in") {
+    const [f, i] = toFtIn(m ?? 0);
+    const ft = el("input", { type: "number", step: "1", min: "0", value: String(f), "aria-label": "feet" });
+    const inch = el("input", { type: "number", step: "0.5", min: "0", max: "11.5", value: String(i), "aria-label": "inches" });
+    const set = () => { answers[q.id] = fromFtIn(ft.value, inch.value); redraw(); };
+    ft.oninput = inch.oninput = set;
+    row.append(ft, el("span", { class: "unit" }, "ft"), inch, el("span", { class: "unit" }, "in"),
+      el("span", { class: "metric" }, `= ${(answers[q.id] ?? 0).toFixed(3)} m`));
+  } else {
+    const mm = el("input", { type: "number", step: "0.001", value: String(m ?? 0) });
+    mm.oninput = () => { answers[q.id] = +mm.value; redraw(); };
+    row.append(mm, el("span", { class: "unit" }, "m"));
+  }
+  return row;
+}
+function fieldNumber(q) {
+  const n = el("input", { type: "number", value: String(answers[q.id] ?? q.default ?? 0) });
+  if (q.min !== undefined) n.min = q.min; if (q.max !== undefined) n.max = q.max; if (q.step) n.step = q.step;
+  n.oninput = () => { answers[q.id] = +n.value; redraw(); };
+  return el("div", { class: "row" }, n);
+}
+function fieldText(q) {
+  const t = el("textarea", { placeholder: q.note || "" });
+  t.value = answers[q.id] ?? "";
+  t.oninput = () => { answers[q.id] = t.value; redraw(); };
+  return t;
+}
+const FIELD = { choice: fieldChoice, multi: fieldMulti, bool: fieldBool, length: fieldLength, number: fieldNumber, text: fieldText };
+
+function build() {
+  const body = $("#body"); body.textContent = "";
+  $("#title").textContent = DOC.name || DOC.id;
+  $("#sub").textContent = `${questions().length} questions. Lengths are shown in ${DOC.display === "ft-in" ? "feet and inches" : "metres"} and stored in metres.`;
+  if (DOC.plan?.svg) {
+    const svg = $("#planSvg");
+    svg.setAttribute("viewBox", DOC.plan.viewBox || "0 0 260 250");
+    svg.innerHTML = Object.entries(DOC.plan.zones || {})
+      .map(([k, [x, y, w, h]]) => `<rect class="zone" data-zone="${k}" x="${x}" y="${y}" width="${w}" height="${h}"/>`).join("") + DOC.plan.svg;
+    $("#planCard").hidden = false;
+  }
+  for (const s of DOC.sections) {
+    const sec = el("section", { "data-zone": s.zone || "", "data-label": s.title });
+    sec.append(el("h2", {}, s.title));
+    if (s.lead) sec.append(el("p", { class: "lead" }, s.lead));
+    for (const q of s.questions) {
+      const wrap = el("div", { class: "q", "data-q": q.id });
+      const h = el("h3", {}, q.ask);
+      if (q.note) h.append(el("small", {}, q.note));
+      if (q.kind === "context") h.append(el("span", { class: "tag" }, "not geometry"));
+      if (q.kind === "plan") h.append(el("span", { class: "tag" }, "for the drawing"));
+      const src = prefilledValue(q.id) === answers[q.id] ? sourceOf(q.id) : (sourceOf(q.id) ? "edited" : null);
+      if (sourceOf(q.id)) h.append(el("span", { class: "tag src-tag", style: src === "convention"
+        ? "color:var(--warn,#B4762A);border-color:currentColor"
+        : src === "edited" ? "color:var(--mute);border-color:currentColor"
+        : "color:var(--sage);border-color:currentColor" },
+        SOURCE_LABEL[src] || src));
+      const field = (FIELD[q.input] || fieldText)(q);
+      if (isLocked(q.id)) {
+        field.querySelectorAll?.("input, textarea").forEach(i => { i.disabled = true; });
+        if (field.tagName === "TEXTAREA" || field.tagName === "INPUT") field.disabled = true;
+        field.style.opacity = ".72";
+      }
+      wrap.append(h, field);
+      sec.append(wrap);
+    }
+    body.append(sec);
+  }
+  $("#summary").hidden = false;
+  observe();
+  redraw();
+}
+
+function redraw() {
+  // showWhen
+  for (const q of questions()) {
+    const n = document.querySelector(`[data-q="${q.id}"]`);
+    if (n) n.classList.toggle("hidden", !visible(q));
+  }
+  // Refresh the provenance badges: a corrected value must stop claiming it came from the trace.
+  for (const q of questions()) {
+    if (!sourceOf(q.id)) continue;
+    const tag = document.querySelector(`[data-q="${q.id}"] h3 .src-tag`);
+    if (!tag) continue;
+    const src = prefilledValue(q.id) === answers[q.id] ? sourceOf(q.id) : "edited";
+    tag.textContent = SOURCE_LABEL[src] || src;
+    tag.style.color = src === "convention" ? "var(--warn,#B4762A)" : src === "edited" ? "var(--mute)" : "var(--sage)";
+    tag.style.borderColor = "currentColor";
+  }
+  const vis = questions().filter(visible);
+  const done = vis.filter(q => { const a = answers[q.id]; return !(a === undefined || a === "" || (Array.isArray(a) && !a.length)); });
+  $("#bar").style.width = (vis.length ? done.length / vis.length * 100 : 0) + "%";
+  $("#count").textContent = `${done.length} of ${vis.length} answered`;
+
+  const fl = $("#flags"); fl.textContent = "";
+  for (const c of fired()) {
+    const box = el("div", { class: "flag " + c.severity }, el("b", {}, c.severity === "blocker" ? "Do not model yet" : "Worth a look"), c.says);
+    if (c.resolution) box.append(el("div", { style: "margin-top:4px" }, c.resolution));
+    if (c.resolve && !resolved.has(c.id)) {
+      const b = el("button", {}, "Apply that");
+      b.onclick = () => { for (const w of c.resolve) (overrides[w.object] ||= {})[w.param] = w.value; resolved.add(c.id); redraw(); };
+      box.append(b);
+    } else if (c.resolve) box.append(el("div", { style: "margin-top:4px;font-style:italic" }, "applied"));
+    fl.append(box);
+  }
+  render();
+}
+
+function planDoc() {
+  const { params, context, plan, open } = computeParams();
+  return {
+    room: DOC.id, answeredAt: new Date().toISOString(),
+    questionnaire: { id: DOC.id, version: DOC.version },
+    answers, params, context, plan, open,
+    // A prefilled answer the user has since changed is no longer that source — reporting it as
+    // `convention` would leave a corrected value wearing an "assumed" tag, and reporting it as
+    // `measured` would be worse. It becomes `edited`, which is the true thing.
+    sources: Object.fromEntries(Object.keys(PREFILL).filter(id => sourceOf(id))
+      .map(id => [id, prefilledValue(id) === answers[id] ? sourceOf(id) : "edited"])),
+    assumed: Object.keys(PREFILL).filter(id => sourceOf(id) === "convention" && prefilledValue(id) === answers[id]),
+    conflicts: fired().map(c => ({ id: c.id, severity: c.severity, says: c.says, resolved: resolved.has(c.id) }))
+  };
+}
+
+/* ── the Markdown, rendered from the plan JSON. Shape documented in plan.template.md ────────── */
+function markdown() {
+  const d = planDoc();
+  const qs = new Map(questions().map(q => [q.id, q]));
+  const label = (q, v) => {
+    if (Array.isArray(v)) return v.map(x => (q.options || []).find(o => o.value === x)?.label ?? x).join(", ");
+    if (q.input === "length") return showLen(v);
+    if (q.input === "bool") return v ? "yes" : "no";
+    return (q.options || []).find(o => o.value === v)?.label ?? String(v);
+  };
+  const L = [];
+  L.push(`# ${DOC.name} — modelling plan`, "");
+  const dims = ["room_length", "room_width", "slab_height"].filter(k => d.answers[k] !== undefined)
+    .map(k => `${qs.get(k).ask.toLowerCase()} ${showLen(d.answers[k])}`);
+  if (dims.length) L.push(dims.join(" · "), "");
+  const blockers = d.conflicts.filter(c => c.severity === "blocker" && !c.resolved);
+  if (blockers.length) {
+    L.push("## Settle before modelling", "");
+    blockers.forEach((c, i) => L.push(`${i + 1}. **${c.says}** ${(DOC.conflicts.find(x => x.id === c.id) || {}).resolution || ""}`));
+    L.push("");
+  }
+  if (d.open.length) {
+    L.push("## Still open", "", d.open.map(id => qs.get(id)?.ask ?? id).join(" · "), "");
+  }
+  for (const s of DOC.sections) {
+    const rows = s.questions.filter(q => visible(q) && d.answers[q.id] !== undefined && d.answers[q.id] !== "" && q.kind !== "derived");
+    if (!rows.length) continue;
+    L.push(`## ${s.title}`, "");
+    if (s.lead) L.push(s.lead, "");
+    L.push("| | |", "|---|---|");
+    rows.forEach(q => L.push(`| ${q.ask} | ${label(q, d.answers[q.id])} |`));
+    L.push("");
+  }
+  L.push("## Parameters to apply", "",
+    "Object id → parameter → value, in metres. This is what the plan JSON carries; the table is here so it can be read.", "",
+    "| Object | Parameter | Value |", "|---|---|---|");
+  for (const [obj, ps] of Object.entries(d.params))
+    for (const [p, v] of Object.entries(ps)) L.push(`| \`${obj}\` | \`${p}\` | ${typeof v === "number" ? +v.toFixed(4) : JSON.stringify(v)} |`);
+  L.push("");
+  if (Object.keys(d.context).length) {
+    L.push("## Character and materials", "", "Carried as text on the objects; no geometry depends on these.", "");
+    for (const [k, v] of Object.entries(d.context)) if (v) L.push(`- **${qs.get(k)?.ask ?? k}** — ${v}`);
+    L.push("");
+  }
+  // Constant, appended verbatim — it describes how to build any room, not this one. See plan.template.md.
+  L.push("## Build order", "",
+    "1. Shell and openings — verify the room against the datum line.",
+    "2. False ceiling, because everything hangs from it.",
+    "3. Joinery against the walls it shares.",
+    "4. Furniture, then fittings.",
+    "5. Floor, skirting, curtains.",
+    "6. Soft items.",
+    "7. Materials, then lights, then cameras.", "");
+  return L.join("\n");
+}
+
+function render() {
+  const d = planDoc();
+  $("#out").textContent = tab === "md" ? markdown()
+    : tab === "params" ? JSON.stringify(d.params, null, 2)
+    : JSON.stringify(d, null, 2);
+}
+
+function observe() {
+  const zones = [...document.querySelectorAll(".plan .zone")];
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    const z = e.target.dataset.zone;
+    zones.forEach(r => r.classList.toggle("on", r.dataset.zone === z));
+    $("#focus").textContent = e.target.dataset.label;
+  }), { rootMargin: "-40% 0px -50% 0px" });
+  document.querySelectorAll("section").forEach(s => io.observe(s));
+}
+
+function seed() {
+  answers = {}; overrides = {}; resolved = new Set();
+  for (const q of questions()) if (q.default !== undefined) answers[q.id] = Array.isArray(q.default) ? [...q.default] : q.default;
+  const known = new Set(questions().map(q => q.id));
+  for (const [id, p] of Object.entries(PREFILL)) {
+    if (!known.has(id)) continue;             // a stale question id is ignored, never invented
+    if (p && typeof p === "object" && "value" in p) answers[id] = p.value;
+    else answers[id] = p;                     // a bare value is treated as `default` provenance
+  }
+}
+const sourceOf = id => { const p = PREFILL[id]; return (p && typeof p === "object" && p.source) || null; };
+const prefilledValue = id => { const p = PREFILL[id]; return (p && typeof p === "object" && "value" in p) ? p.value : p; };
+const isLocked = id => LOCKS.has(sourceOf(id));
+
+/* ── binding check. Only meaningful when served next to the library. ───────────────────────── */
+async function checkBindings() {
+  const b = $("#banner"); b.textContent = "";
+  const objs = DOC.objects || [];
+  const bad = [];
+  let reached = 0;
+  for (const id of objs) {
+    const guess = id.replace(/-with-math$/, "");
+    let j = null;
+    for (const f of ["Architectural", "Furniture", "Structural", "Site", "Hydraulics", "Miscellaneous"]) {
+      try { const r = await fetch(`/Library/Objects/${f}/${guess}.json`); if (r.ok) { const t = await r.json(); if (t.id === id) { j = t; break; } } } catch {}
+    }
+    if (!j) { bad.push(`could not read ${id}`); continue; }
+    reached++;
+    const props = new Map(j.nodes.find(n => n.data?.tool === "input-props").data.params.props.map(p => [p.id, p]));
+    for (const q of questions()) for (const w of [...(q.writes || []), ...(q.options || []).flatMap(o => o.writes || [])]) {
+      if (w.object !== id) continue;
+      const p = props.get(w.param);
+      if (!p) { bad.push(`${q.id} → ${id}.${w.param} does not exist`); continue; }
+      const vals = w.value === "$" ? (q.options || []).filter(o => !o.writes).map(o => o.value) : [w.value];
+      for (const v of vals) {
+        const c = w.as === "number" ? Number(v) : v;
+        if (p.type === "select" && !(p.options || []).includes(c)) bad.push(`${q.id} → ${id}.${w.param} has no option "${c}"`);
+      }
+    }
+  }
+  if (!reached) b.append(el("div", { class: "banner bad" }, "Could not reach the object library from here. Serve this page from the app, or run tools/roomq/validate.mjs."));
+  else if (bad.length) b.append(el("div", { class: "banner bad" }, el("b", {}, `${bad.length} dead binding(s):`), el("div", { html: bad.map(x => `<div>• ${x}</div>`).join("") })));
+  else b.append(el("div", { class: "banner good" }, `All bindings resolve against ${reached} live object${reached === 1 ? "" : "s"}.`));
+}
+
+/* ── load ──────────────────────────────────────────────────────────────────────────────────── */
+function load(doc) { DOC = doc; seed(); build(); }
+$("#file").onchange = e => { const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => { try { load(JSON.parse(t)); } catch (err) { alert("Not a questions file: " + err.message); } }); };
+const applyPrefill = obj => { PREFILL = obj || {}; if (DOC) { seed(); build(); } };
+$("#pre").onchange = e => { const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => { try { applyPrefill(JSON.parse(t)); $("#toast").textContent = `Prefilled ${Object.keys(PREFILL).length} answer(s) from the trace.`; }
+    catch (err) { alert("Not a prefill file: " + err.message); } }); };
+$("#check").onclick = () => DOC && checkBindings();
+$("#reset").onclick = () => { seed(); build(); $("#toast").textContent = "Back to the file's defaults."; };
+$("#copy").onclick = async () => { try { await navigator.clipboard.writeText($("#out").textContent); $("#toast").textContent = "Copied."; }
+  catch { $("#toast").textContent = "Copy blocked — select the text above."; } };
+const save = (name, text, type) => { const a = el("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); };
+$("#dlJson").onclick = () => { save(`${DOC.id}_plan.json`, JSON.stringify(planDoc(), null, 2), "application/json"); $("#toast").textContent = `Saved ${DOC.id}_plan.json`; };
+$("#dlMd").onclick = () => { save(`${DOC.id}_modelling_plan.md`, markdown(), "text/markdown"); $("#toast").textContent = `Saved ${DOC.id}_modelling_plan.md`; };
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+  render();
+});
+
+const params0 = new URLSearchParams(location.search);
+const pf = params0.get("prefill");
+if (pf) fetch(pf).then(r => r.json()).then(o => applyPrefill(o)).catch(() => {});
+const qp = params0.get("q");
+if (qp) fetch(qp).then(r => r.json()).then(load).catch(e => { $("#body").innerHTML = `<p class="empty">Could not load <code>${qp}</code> — ${e.message}. Pick a file above instead.</p>`; });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-to-graph",
+  "meta": {
+    "label": "Points to Graph",
+    "category": "Graph",
+    "color": "#0e7490"
+  },
+  "description": "A pure CALCULATION node — turn point MATRICES into graph JSON. This is the bridge out of the matrix chain: an N×2 matrix has positions but no connectivity, a graph has edges. Wire the result into Network to draw it.",
+  "instructions": "A value-only node: one or two point matrices in, a graph as JSON out. It has no geometry input or output and draws nothing itself — wire `val-graph` into a Network node (or Merge Graph / Graph Reduce / Mitered Join) to see it.\n\nWHY IT EXISTS: every matrix node speaks `[[x,y],…]`, which carries positions but no edges. Network needs { nodes: [{id,x,y}], edges: [{from_node_id,to_node_id}] }. This node adds the connectivity.\n\nINPUTS: wire point lists into valin-a and valin-b — `val-points` from Space Geometry / Polygon / Vertices, or any N×2 `val-matrix` from the Matrix and Vector nodes.\n\nMODES:\n• Pairs (A → B) — one edge per row, from A[i] to B[i]. Both inputs required, and the row count is the shorter of the two. This is the mode for drawing a family of rays or spokes (e.g. each polygon vertex to its offset position).\n• Ring (closed) — A[0]→A[1]→…→A[n-1]→A[0]. Draws a point list as a closed outline.\n• Path (open) — A[0]→A[1]→…→A[n-1], no closing edge.\n• Points only — nodes, no edges.\n\nCOINCIDENT POINTS MERGE: positions are keyed to the millimetre, so two rows landing on the same spot become ONE graph node. That is what makes converging rays read as a connected skeleton rather than a bundle of separate spokes, and it drops any edge whose two ends have collapsed together.\n\nPER-EDGE THICKNESS: wire an N×1 COLUMN into valin-thickness (metres, row i = edge i — the same row that produced the edge) and every edge carries its own `thickness`. A single scalar broadcasts to all edges; leave it empty and no thickness is written at all. This is how one graph holds a 0.23 m exterior wall and a 0.1 m interior wall at once, instead of needing Set Thickness per family.\n\nEDGE TYPE: the optional Edge type param stamps `type` on every edge produced here — \"wall\", \"door\", \"window\" or \"opening\". Merge Graph preserves it, so a wall graph, a door graph and a window graph union into ONE graph whose edges stay distinguishable downstream. Mitered Join and Graph to Matrix SKIP `type: \"opening\"` edges, so use \"door\" / \"window\" when the openings should still be stroked.\n\nOUTPUT: `val-graph` plus `val-nodeCount` / `val-edgeCount` (what actually survived the merge). Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "a",
+        "label": "Points A"
+      },
+      {
+        "key": "b",
+        "label": "Points B"
+      },
+      {
+        "key": "mode",
+        "label": "Mode"
+      },
+      {
+        "key": "thickness",
+        "label": "Thickness (per edge)"
+      },
+      {
+        "key": "types",
+        "label": "Edge type codes (per edge)"
+      },
+      {
+        "key": "type",
+        "label": "Edge type"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "graph",
+        "label": "Graph (JSON)"
+      },
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      },
+      {
+        "key": "edgeCount",
+        "label": "Edges"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "mode",
+      "label": "Mode",
+      "kind": "select",
+      "default": "pairs",
+      "options": [
+        {
+          "value": "pairs",
+          "label": "Pairs (A[i] → B[i])"
+        },
+        {
+          "value": "ring",
+          "label": "Ring (closed outline)"
+        },
+        {
+          "value": "path",
+          "label": "Path (open chain)"
+        },
+        {
+          "value": "points",
+          "label": "Points only (no edges)"
+        }
+      ]
+    },
+    {
+      "key": "a",
+      "label": "Points A (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "b",
+      "label": "Points B (JSON)",
+      "kind": "text",
+      "default": "",
+      "showWhen": "mode == 'pairs'"
+    },
+    {
+      "key": "thickness",
+      "label": "Thickness column (JSON, m)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "type",
+      "label": "Edge type",
+      "kind": "select",
+      "default": "",
+      "options": [
+        {
+          "value": "",
+          "label": "(none)"
+        },
+        {
+          "value": "wall",
+          "label": "Wall"
+        },
+        {
+          "value": "wall-exterior",
+          "label": "Wall — exterior"
+        },
+        {
+          "value": "wall-interior",
+          "label": "Wall — interior"
+        },
+        {
+          "value": "door",
+          "label": "Door"
+        },
+        {
+          "value": "window",
+          "label": "Window"
+        },
+        {
+          "value": "opening",
+          "label": "Opening (skipped by Mitered Join)"
+        }
+      ]
+    },
+    {
+      "key": "types",
+      "label": "Edge type codes (per edge)",
+      "kind": "text",
+      "default": "",
+      "placeholder": "[[1],[1],[2],[3]]"
+    },
+    {
+      "key": "typeNames",
+      "label": "Type names for those codes",
+      "kind": "text",
+      "default": "",
+      "placeholder": "[\"wall-exterior\",\"wall-interior\",\"door\",\"window\"]"
+    }
+  ]
+}

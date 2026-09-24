@@ -1,0 +1,34 @@
+{
+  "schema": "material/1",
+  "category": "Emissive",
+  "id": "emissive.diffuser",
+  "title": "Emissive — opal diffuser",
+  "description": "A lamp lens or a pendant's opal bottom: dimmer per square metre than a strip because it is a bigger surface carrying the same lumens, and warmer because that is what a 2700 K lamp behind opal looks like.",
+  "procedural": {
+    "type": "none",
+    "blenderNode": null,
+    "params": {}
+  },
+  "emission": {
+    "kelvin": 2700,
+    "luminance": 1400,
+    "useAsLight": false
+  },
+  "pbr": {
+    "baseColor": "#1a1a1a",
+    "roughness": 1,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 4,
+    "angle": 0,
+    "weight": 1,
+    "color": "#fef3c7"
+  },
+  "dxf": {
+    "pattern": "TRANS",
+    "scale": 1,
+    "angle": 0
+  }
+}

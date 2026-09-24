@@ -1,0 +1,41 @@
+{
+  "schema": "material/1",
+  "category": "Organic",
+  "id": "organic.bark",
+  "title": "Organic — bark & stem",
+  "description": "Trunks and branches. Bands along Z with heavy distortion — bark runs up a stem, and a scale that reads at 40 mm is the one that matters for a pot plant.",
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "Z",
+      "waveProfile": "SAW",
+      "scale": 40,
+      "distortion": 9,
+      "detail": 4,
+      "detailScale": 1.6,
+      "detailRoughness": 0.7,
+      "phaseOffset": 0,
+      "colorA": "#6b5138",
+      "colorB": "#42301f"
+    }
+  },
+  "pbr": {
+    "baseColor": "#5a4229",
+    "roughness": 0.82,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 4,
+    "angle": 0,
+    "weight": 1,
+    "color": "#5a4229"
+  },
+  "dxf": {
+    "pattern": "NATURAL",
+    "scale": 0.4,
+    "angle": 0
+  }
+}

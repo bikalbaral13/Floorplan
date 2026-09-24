@@ -1,0 +1,40 @@
+{
+  "schema": "material/1",
+  "id": "gravel.20mm",
+  "title": "Gravel — 20 mm",
+  "category": "Site",
+  "description": "20 mm gravel. Voronoi cells are the stones; randomness near 1 keeps them irregular.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 50,
+      "detail": 1,
+      "roughness": 0.5,
+      "lacunarity": 2,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "voronoiDimensions": "3D",
+      "colorA": "#9b968c",
+      "colorB": "#736f67"
+    }
+  },
+  "pbr": {
+    "baseColor": "#87827a",
+    "roughness": 0.95,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#87827a"
+  },
+  "dxf": {
+    "pattern": "GRAVEL",
+    "scale": 1,
+    "angle": 0
+  }
+}

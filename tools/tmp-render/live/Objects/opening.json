@@ -1,0 +1,350 @@
+{
+ "version": 1,
+ "id": "opening-with-math",
+ "title": "Opening — one Math Engine, a dotted line across the gap in plan, nothing in 3D",
+ "category": "Architectural",
+ "object": {
+  "hostKind": "segment",
+  "name": "Opening",
+  "units": "m",
+  "icon": {
+   "paths": [
+    "M3 12h3",
+    "M9 12h3",
+    "M15 12h3"
+   ]
+  }
+ },
+ "description": "A parametric VACANT OPENING on the six-node spine, SEGMENT-hosted like a door or window:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render (no 3D Render)\n\nWHAT IT IS FOR. Any gap in a wall that has nothing in it — an arch between two rooms, a servery, a balcony's open side. It fills its host piece under \"Fill segment\", so it goes on a pre-cut opening piece whose SEGMENT keeps the neighbouring wall's thickness (that is what keeps the mitred wall ends square and what the space label insets by), but which carries NO Wall object: an opening is the absence of wall, so nothing may stand in it — in 2D or in 3D.\n\nWHAT IT DRAWS. One dotted line along the wall centreline across the clear width (`dashLength` / `dashGap` set the pattern), and nothing else. No lintel, no jamb marks, no sill or parapet wall, and nothing at all in 3D — the 3D view must show the gap.\n\nTHICKNESS. `thickness` is the wall depth the gap sits in and should equal the host piece's segment thickness; it is reported as a metric and is not drawn. `wallDepth` is the pre-2026-09 name for the same number and is still read when Thickness is left at 0.\n\nWHAT IT REPORTS. Clear width and height, open area, thickness, and the dash count.\n\nWHAT IT DOES NOT DO. No arch profile, no frame, no grille, no parapet — those are the Window's, the Channel Gate's, and a low Wall's.",
+ "nodes": [
+  {
+   "id": "geo",
+   "position": {
+    "x": -960,
+    "y": 60
+   },
+   "data": {
+    "tool": "source",
+    "params": {
+     "grabFromSelection": true,
+     "id": "",
+     "nodeLabel": "Geometry"
+    }
+   }
+  },
+  {
+   "id": "props",
+   "position": {
+    "x": -640,
+    "y": 60
+   },
+   "data": {
+    "tool": "input-props",
+    "params": {
+     "props": [
+      {
+       "id": "P",
+       "name": "Host — segment [[x, y], [x, y]]",
+       "type": "text",
+       "value": "[[0, 0], [1, 0]]",
+       "options": []
+      },
+      {
+       "id": "width",
+       "name": "Width (own)",
+       "type": "range",
+       "value": 1.2,
+       "options": [],
+       "min": 0.3,
+       "max": 6,
+       "step": 0.05
+      },
+      {
+       "id": "fitMode",
+       "name": "Fit",
+       "type": "select",
+       "value": "Fill segment",
+       "options": [
+        "Fill segment",
+        "Own width (centred)"
+       ]
+      },
+      {
+       "id": "thickness",
+       "name": "Thickness",
+       "type": "range",
+       "value": 0.23,
+       "options": [],
+       "min": 0.02,
+       "max": 0.6,
+       "step": 0.01,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "wallDepth",
+       "name": "Wall depth (legacy alias for Thickness)",
+       "type": "range",
+       "value": 0,
+       "options": [],
+       "min": 0.05,
+       "max": 0.6,
+       "step": 0.01,
+       "editable": false,
+       "necessary": false
+      },
+      {
+       "id": "lintelHeight",
+       "name": "Lintel height (soffit)",
+       "type": "range",
+       "value": 2.1,
+       "options": [],
+       "min": 1.2,
+       "max": 3.5,
+       "step": 0.05
+      },
+      {
+       "id": "dashLength",
+       "name": "Dash length",
+       "type": "range",
+       "value": 0.12,
+       "options": [],
+       "min": 0.03,
+       "max": 0.6,
+       "step": 0.01,
+       "editable": true,
+       "necessary": false
+      },
+      {
+       "id": "dashGap",
+       "name": "Dash gap",
+       "type": "range",
+       "value": 0.08,
+       "options": [],
+       "min": 0.02,
+       "max": 0.4,
+       "step": 0.01,
+       "editable": true,
+       "necessary": false
+      },
+      {
+       "id": "semantics",
+       "name": "Semantics",
+       "type": "text",
+       "value": "open verandah bay, plastered reveals, RCC lintel over, no frame",
+       "options": [],
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "math",
+   "position": {
+    "x": -180,
+    "y": 40
+   },
+   "data": {
+    "tool": "expr",
+    "params": {
+     "name": "Opening maths",
+     "expr": "_e1 = hcat(1, 0)\n_n = rows(P)\n_isSeg = _n == 2\n_isSpace = _n > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_eLen = len(_edges)\n_longest = max(_eLen)\n_mask = eq(_eLen, _longest)\n_sDir = _isSpace ? row(compress(_edges, _mask), 0) : _e1\n_sA = _isSpace ? row(compress(P, _mask), 0) : row(P, 0)\n_segV = _isSeg ? (row(P, 1) - row(P, 0)) : _sDir\n_dir = _isSeg ? _segV : (_isSpace ? _sDir : _e1)\n_dLen = min(len(_dir))\n_u = _dLen > 1e-9 ? normalize(_dir) : _e1\n_ux = sub(_u, 0, 0, 1, 1)\n_uy = sub(_u, 0, 1, 1, 1)\n_vx = 0 - _uy\n_vy = _ux\n_hosted = (_isSeg || _isSpace) && _dLen > 1e-9\n_fill = fitMode == 'Fill segment'\n_W = _hosted ? (_fill ? _dLen : min(max(0.3, width), _dLen)) : max(0.3, width)\n_pA = _isSpace ? _sA : row(P, 0)\n_pax = sub(_pA, 0, 0, 1, 1)\n_pay = sub(_pA, 0, 1, 1, 1)\n_mx = _hosted ? _pax + _ux * _dLen / 2 : _pax\n_my = _hosted ? _pay + _uy * _dLen / 2 : _pay\n_hw = _W / 2\n_cu = _mx * _ux + _my * _uy\n_cv = _mx * _vx + _my * _vy\n# Thickness of the piece — matches the wall it interrupts, so the band does not taper at the reveals.\n# `wallDepth` is the pre-2026-09 name for the same number: honoured when Thickness is left at 0.\n_t = max(0.02, wallDepth > 0.001 ? wallDepth : (thickness > 0.001 ? thickness : 0.23))\n_hd = _t / 2\n_jw = jambWidth\n# An opening is VACANT: it draws one dotted line across the gap on the wall centreline in plan and nothing in\n# 3D — no lintel, no jambs, no sill wall. The host segment keeps the wall thickness (for the mitre at its ends and\n# the space-label inset); this object only marks where the wall is absent.\n_dl = max(0.02, dashLength)\n_dg = max(0.01, dashGap)\n_pitch = _dl + _dg\n_nd = max(1, floor((_W + _dg) / _pitch))\n_run = _nd * _pitch - _dg\n_s0 = 0 - _run / 2\n_k = arange(_nd)\n_u0 = _cu + _s0 + _k * _pitch\n_u1 = _u0 + _dl\nDottedPlan = hcat(_u0 * _ux + _cv * _vx, _u0 * _uy + _cv * _vy, _u1 * _ux + _cv * _vx, _u1 * _uy + _cv * _vy)\n# Metrics\nclearWidth = _W\nclearHeight = lintelHeight\nopenArea = _W * lintelHeight\nopeningThickness = _t\ndashCount = _nd\n"
+    }
+   }
+  },
+  {
+   "id": "out",
+   "position": {
+    "x": 240,
+    "y": 60
+   },
+   "data": {
+    "tool": "output",
+    "params": {
+     "slots": [
+      {
+       "id": "s6",
+       "label": "Opening — dotted line (plan)",
+       "necessary": false
+      },
+      {
+       "id": "s7",
+       "label": "Clear width (m)",
+       "necessary": false
+      },
+      {
+       "id": "s8",
+       "label": "Clear height (m)",
+       "necessary": false
+      },
+      {
+       "id": "s9",
+       "label": "Open area (m²)",
+       "necessary": false
+      },
+      {
+       "id": "s12",
+       "label": "Thickness (m)",
+       "necessary": false
+      },
+      {
+       "id": "s13",
+       "label": "Dashes",
+       "necessary": false
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r2d",
+   "position": {
+    "x": 620,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-2d",
+    "params": {
+     "prims": [
+      {
+       "id": "p2_dots",
+       "kind": "stroke",
+       "name": "Opening — dotted line",
+       "color": "#475569",
+       "layer": "Architectural",
+       "width": 0.012,
+       "show": true
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e1_geo_val-points__props_valin-P",
+   "source": "geo",
+   "sourceHandle": "val-points",
+   "target": "props",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e2_props_val-width__math_valin-width",
+   "source": "props",
+   "sourceHandle": "val-width",
+   "target": "math",
+   "targetHandle": "valin-width"
+  },
+  {
+   "id": "e3_props_val-fitMode__math_valin-fitMode",
+   "source": "props",
+   "sourceHandle": "val-fitMode",
+   "target": "math",
+   "targetHandle": "valin-fitMode"
+  },
+  {
+   "id": "e4_props_val-wallDepth__math_valin-wallDepth",
+   "source": "props",
+   "sourceHandle": "val-wallDepth",
+   "target": "math",
+   "targetHandle": "valin-wallDepth"
+  },
+  {
+   "id": "e4b_props_val-thickness__math_valin-thickness",
+   "source": "props",
+   "sourceHandle": "val-thickness",
+   "target": "math",
+   "targetHandle": "valin-thickness"
+  },
+  {
+   "id": "e5_props_val-lintelHeight__math_valin-lintelHeight",
+   "source": "props",
+   "sourceHandle": "val-lintelHeight",
+   "target": "math",
+   "targetHandle": "valin-lintelHeight"
+  },
+  {
+   "id": "e9_props_val-semantics__math_valin-semantics",
+   "source": "props",
+   "sourceHandle": "val-semantics",
+   "target": "math",
+   "targetHandle": "valin-semantics"
+  },
+  {
+   "id": "e10_props_val-P__math_valin-P",
+   "source": "props",
+   "sourceHandle": "val-P",
+   "target": "math",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e_props_dashLength",
+   "source": "props",
+   "sourceHandle": "val-dashLength",
+   "target": "math",
+   "targetHandle": "valin-dashLength"
+  },
+  {
+   "id": "e_props_dashGap",
+   "source": "props",
+   "sourceHandle": "val-dashGap",
+   "target": "math",
+   "targetHandle": "valin-dashGap"
+  },
+  {
+   "id": "e_math_DottedPlan",
+   "source": "math",
+   "sourceHandle": "val-DottedPlan",
+   "target": "out",
+   "targetHandle": "valin-s6"
+  },
+  {
+   "id": "e_out_s6_r2d",
+   "source": "out",
+   "sourceHandle": "val-s6",
+   "target": "r2d",
+   "targetHandle": "valin-p2_dots"
+  },
+  {
+   "id": "e_math_clearWidth",
+   "source": "math",
+   "sourceHandle": "val-clearWidth",
+   "target": "out",
+   "targetHandle": "valin-s7"
+  },
+  {
+   "id": "e_math_clearHeight",
+   "source": "math",
+   "sourceHandle": "val-clearHeight",
+   "target": "out",
+   "targetHandle": "valin-s8"
+  },
+  {
+   "id": "e_math_openArea",
+   "source": "math",
+   "sourceHandle": "val-openArea",
+   "target": "out",
+   "targetHandle": "valin-s9"
+  },
+  {
+   "id": "e_math_openingThickness",
+   "source": "math",
+   "sourceHandle": "val-openingThickness",
+   "target": "out",
+   "targetHandle": "valin-s12"
+  },
+  {
+   "id": "e_math_dashCount",
+   "source": "math",
+   "sourceHandle": "val-dashCount",
+   "target": "out",
+   "targetHandle": "valin-s13"
+  }
+ ]
+}

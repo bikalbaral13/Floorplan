@@ -1,0 +1,67 @@
+{
+  "schema": "lamp/1",
+  "id": "tape-neutral-4000k",
+  "name": "LED tape 4000 K 1400 lm/m",
+  "category": "LED",
+  "description": "The cooler, brighter tape — mirror halos and task coves, where 2700 K reads yellow against a white basin.",
+  "emission": {
+    "sourceType": "Linear",
+    "areaShape": "Rectangle",
+    "lumens": 1400,
+    "lumensPerMetre": 1400,
+    "wattsElectrical": 14.5,
+    "efficacy": 96.6,
+    "illuminanceLux": 0,
+    "kelvin": 4000,
+    "cri": 95,
+    "duv": 0
+  },
+  "distribution": {
+    "profile": "Diffuse",
+    "beamAngle": 120,
+    "fieldAngle": 180,
+    "beamBlend": 1,
+    "spread": 180,
+    "ies": {
+      "path": "",
+      "normalise": true
+    }
+  },
+  "shadow": {
+    "lampRadius": 0.006,
+    "castShadow": true,
+    "maxBounces": 1024,
+    "multipleImportance": true,
+    "diffuseFactor": 1,
+    "glossyFactor": 1,
+    "transmissionFactor": 1,
+    "volumeFactor": 1,
+    "visibleToCamera": false,
+    "isPortal": false
+  },
+  "blender": {
+    "type": "AREA",
+    "shape": "RECTANGLE",
+    "energyWatts": 2.04978,
+    "color": {
+      "mode": "blackbody",
+      "kelvin": 4000
+    },
+    "rgb": [
+      1,
+      0.652952,
+      0.377011
+    ],
+    "sizeX": 1,
+    "sizeY": 0.012,
+    "radius": 0.006,
+    "spotSizeDeg": 180,
+    "spotBlend": 1,
+    "spread": 180,
+    "angleDeg": 0
+  },
+  "emissive": {
+    "material": "Materials/Emissive/diffuser.json",
+    "luminanceOverride": 0
+  }
+}

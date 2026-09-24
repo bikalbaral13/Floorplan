@@ -1,0 +1,25 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-shift",
+  "meta": { "label": "Shift Rows", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — cyclically roll a matrix's ROWS. This is how you say \"neighbour\" for a vertex list: shift by -1 lines each vertex up with its NEXT one, by +1 with its PREVIOUS. Draws nothing.",
+  "instructions": "A value-only node: a matrix in, the same matrix with its rows rotated, out. It has no geometry input or output and draws nothing on the canvas.\n\nWHY IT EXISTS: anything defined BETWEEN adjacent vertices — edge vectors, turn angles, curvature, corner bisectors — needs each row paired with its neighbour. Rolling the rows lets you express that with plain matrix arithmetic instead of a Loop.\n\nINPUT: wire a matrix into valin-matrix — typically a POINT LIST (`val-points` from Polygon / Space Geometry / Vertices, an N×2 array of [x, y] metre pairs).\n\nSHIFT BY: an integer, wrapping around the ends (the list is treated as a closed ring, which is what a polygon is).\n• -1 → each row holds its NEXT neighbour. `Shift(P, -1) − P` via Matrix Operations (Subtract) is the EDGE-VECTOR list.\n• +1 → each row holds its PREVIOUS neighbour (the edge arriving at that vertex).\n\nOUTPUT: `val-matrix` (same shape as the input) plus `val-rows` / `val-cols`. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "matrix", "label": "Matrix" },
+      { "key": "by", "label": "Shift by" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Matrix (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" }
+    ]
+  },
+  "parameters": [
+    { "key": "by", "label": "Shift by (rows)", "kind": "number", "default": -1, "step": 1 },
+    { "key": "matrix", "label": "Matrix (JSON)", "kind": "text", "default": "" }
+  ]
+}

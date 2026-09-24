@@ -1,0 +1,212 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 33,
+          "vertices": 132,
+          "area": 825.9026,
+          "bbox": [
+            -6,
+            0,
+            6,
+            67.2252
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "23bacb5425076089"
+      },
+      "solids": {
+        "count": 32,
+        "volume": 28066.0897,
+        "hash": "527f14c99e8b9a76"
+      },
+      "metrics": [
+        {
+          "key": "crestWidthOut",
+          "name": "Crest width (m)",
+          "value": "12"
+        },
+        {
+          "key": "designHead",
+          "name": "Design head (m)",
+          "value": "16.7"
+        },
+        {
+          "key": "dischargeCoeff",
+          "name": "Discharge coefficient",
+          "value": "2.2"
+        },
+        {
+          "key": "designDischarge",
+          "name": "Design discharge (m³/s)",
+          "value": "1801.684"
+        },
+        {
+          "key": "unitDischarge",
+          "name": "Unit discharge (m³/s per m)",
+          "value": "150.1403"
+        },
+        {
+          "key": "profileLength",
+          "name": "Profile length (m)",
+          "value": "67.2252"
+        },
+        {
+          "key": "crestCurveLength",
+          "name": "Crest curve length (m)",
+          "value": "23.7992"
+        },
+        {
+          "key": "glacisLength",
+          "name": "Glacis length (m)",
+          "value": "20"
+        },
+        {
+          "key": "bucketRadius",
+          "name": "Bucket radius (m)",
+          "value": "30"
+        },
+        {
+          "key": "bucketAngleDeg",
+          "name": "Bucket angle (deg)",
+          "value": "51.3402"
+        },
+        {
+          "key": "spillwayHeight",
+          "name": "Spillway height (m)",
+          "value": "46.2591"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "28066.0897"
+        },
+        {
+          "key": "approachVelocity",
+          "name": "Approach velocity (m/s)",
+          "value": "5.6232"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 33,
+          "vertices": 132,
+          "area": 825.9026,
+          "bbox": [
+            -6,
+            0,
+            6,
+            67.2252
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "23bacb5425076089"
+      },
+      "solids": {
+        "count": 32,
+        "volume": 28066.0897,
+        "hash": "527f14c99e8b9a76"
+      },
+      "metrics": [
+        {
+          "key": "crestWidthOut",
+          "name": "Crest width (m)",
+          "value": "12"
+        },
+        {
+          "key": "designHead",
+          "name": "Design head (m)",
+          "value": "16.7"
+        },
+        {
+          "key": "dischargeCoeff",
+          "name": "Discharge coefficient",
+          "value": "2.2"
+        },
+        {
+          "key": "designDischarge",
+          "name": "Design discharge (m³/s)",
+          "value": "1801.684"
+        },
+        {
+          "key": "unitDischarge",
+          "name": "Unit discharge (m³/s per m)",
+          "value": "150.1403"
+        },
+        {
+          "key": "profileLength",
+          "name": "Profile length (m)",
+          "value": "67.2252"
+        },
+        {
+          "key": "crestCurveLength",
+          "name": "Crest curve length (m)",
+          "value": "23.7992"
+        },
+        {
+          "key": "glacisLength",
+          "name": "Glacis length (m)",
+          "value": "20"
+        },
+        {
+          "key": "bucketRadius",
+          "name": "Bucket radius (m)",
+          "value": "30"
+        },
+        {
+          "key": "bucketAngleDeg",
+          "name": "Bucket angle (deg)",
+          "value": "51.3402"
+        },
+        {
+          "key": "spillwayHeight",
+          "name": "Spillway height (m)",
+          "value": "46.2591"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "28066.0897"
+        },
+        {
+          "key": "approachVelocity",
+          "name": "Approach velocity (m/s)",
+          "value": "5.6232"
+        }
+      ]
+    }
+  }
+}

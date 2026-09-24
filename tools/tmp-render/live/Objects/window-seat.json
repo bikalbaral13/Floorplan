@@ -1,0 +1,997 @@
+{
+  "version": 1,
+  "id": "window-seat-with-math",
+  "title": "Window Seat — one Math Engine, box carcass, lift-up lid sections, cushion and bolsters",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Window Seat",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 13h18v5H3z",
+        "M3 13V9h18v4",
+        "M6 18v2",
+        "M18 18v2",
+        "M9 13v-4",
+        "M15 13v-4"
+      ]
+    }
+  },
+  "description": "A parametric WINDOW SEAT on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE OR A SEGMENT. Against a wall segment it takes the wall's direction and the back faces it. This is the plan's box seat under the window — `shoe-rack-with-math` with its top set to Seat is a shoe rack, not this.\n\nTHE LID STYLE DECIDES WHETHER THERE IS A FRONT RAIL. With drawers, the drawers ARE the front, so `_FRONT` drops out — one line, and nothing downstream needs to know.\n\nLID SECTIONS AND DRAWERS ARE THE SAME BROADCAST. `arange(n)` over the length gives every board's near edge, with the reveal taken half from each side so the division always fills the seat exactly whatever the count. A fixed or drawered top is just `n = 1` through the identical expression.\n\nTHE BOLSTERS ARE TUBE ROWS, not prisms — they lie across the depth resting on the cushion at `frameHeight + cushionThk + radius`, so raising the cushion lifts them with it.\n\nEND CHEEKS RUN FROM THE FLOOR, not from the plinth, because in the plan the seat's cheek is the wardrobe's end panel carrying through — a panel that started at the plinth would float.\n\nSTORAGE VOLUME IS REPORTED, NOT DRAWN: the clear box inside the carcass above the base and below the lid. It goes to zero honestly when the frame height is all plinth.\n\nDIMENSIONS AT THE DEFAULTS: 1.524 × 0.610 m, frame top 0.356, seat height 0.458 m (level with a 1'6\" sill), three 0.504 m lid sections, 0.238 m³ of storage, two 0.18 m bolsters.\n\nWHAT THIS CANNOT DO. The lid sections do not open — there is no hinge and no lift angle. Drawer fronts are applied plates with no runners or handles. The cushion is a flat-topped box, not a crowned one.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Seat length",
+              "type": "range",
+              "value": 1.524,
+              "min": 0.5,
+              "max": 5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Seat depth",
+              "type": "range",
+              "value": 0.61,
+              "min": 0.3,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "frameHeight",
+              "name": "Frame top height",
+              "type": "range",
+              "value": 0.356,
+              "min": 0.2,
+              "max": 0.7,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "cushionThk",
+              "name": "Cushion thickness",
+              "type": "range",
+              "value": 0.102,
+              "min": 0.02,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "panelThk",
+              "name": "Panel thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.008,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "plinthHeight",
+              "name": "Plinth height",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "lidStyle",
+              "name": "Lid",
+              "type": "select",
+              "value": "Lift-up",
+              "options": [
+                "Lift-up",
+                "Drawers",
+                "Fixed"
+              ]
+            },
+            {
+              "id": "lidSections",
+              "name": "Lid sections",
+              "type": "range",
+              "value": 3,
+              "min": 1,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "drawers",
+              "name": "Drawers",
+              "type": "range",
+              "value": 2,
+              "min": 1,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "reveal",
+              "name": "Reveal between parts",
+              "type": "range",
+              "value": 0.004,
+              "min": 0,
+              "max": 0.02,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "bolsters",
+              "name": "Bolsters",
+              "type": "range",
+              "value": 2,
+              "min": 0,
+              "max": 2,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "bolsterDia",
+              "name": "Bolster diameter",
+              "type": "range",
+              "value": 0.18,
+              "min": 0.08,
+              "max": 0.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "backCushion",
+              "name": "Back cushion",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "backHeight",
+              "name": "Back cushion height",
+              "type": "range",
+              "value": 0.25,
+              "min": 0.1,
+              "max": 0.8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "endPanel",
+              "name": "End cheek",
+              "type": "select",
+              "value": "None",
+              "options": [
+                "None",
+                "Left",
+                "Right",
+                "Both"
+              ]
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "warm-beige linen cushion, light oak veneer carcass, matte",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "built-in window seat, soft linen, daylight reading nook, calm and warm",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Window Seat maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Dp = depth * _s\n_fh = frameHeight * _s\n_cush = cushionThk * _s\n_t = panelThk * _s\n_pl = plinthHeight * _s\n_rv = reveal * _s\n_bodyL = _Ln\n_bodyW = _Dp\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Dp / 2\n_v1 = _Dp / 2\n_isLift = lidStyle == 'Lift-up'\n_isDrw = lidStyle == 'Drawers'\n# Carcass — two cheeks, a back, a base and a front rail. The front rail is dropped when the\n# front is a bank of drawers, because the drawers ARE the front.\n_C1 = hcat(_u0, _v0, _u0 + _t, _v0, _u0 + _t, _v1, _u0, _v1, _pl, _fh, 1)\n_C2 = hcat(_u1 - _t, _v0, _u1, _v0, _u1, _v1, _u1 - _t, _v1, _pl, _fh, 1)\n_C3 = hcat(_u0 + _t, _v1 - _t, _u1 - _t, _v1 - _t, _u1 - _t, _v1, _u0 + _t, _v1, _pl, _fh, 1)\n_C4 = hcat(_u0 + _t, _v0, _u1 - _t, _v0, _u1 - _t, _v1 - _t, _u0 + _t, _v1 - _t, _pl, _pl + _t, 1)\n_C5 = hcat(_u0 + _t, _v0, _u1 - _t, _v0, _u1 - _t, _v0 + _t, _u0 + _t, _v0 + _t, _pl, _fh, 1)\n_FRONT = _isDrw ? zeros(0, 11) : _C5\n_CARC = vcat(_C1, _C2, _C3, _C4, _FRONT)\n_PLr = hcat(_u0 + 0.02, _v0 + 0.02, _u1 - 0.02, _v0 + 0.02, _u1 - 0.02, _v1, _u0 + 0.02, _v1, 0, _pl, 2)\n_PLINTH = _pl > 0.001 ? _PLr : zeros(0, 11)\n# Lid — one board when fixed or drawered, `lidSections` boards when it lifts. One broadcast.\n_nl = _isLift ? max(1, round(lidSections)) : 1\n_lp = _Ln / _nl\n_la0 = _u0 + arange(_nl) * _lp + _rv / 2\n_la1 = _la0 + _lp - _rv\n_LID = hcat(_la0, fill(_nl,1,_v0), _la1, fill(_nl,1,_v0), _la1, fill(_nl,1,_v1), _la0, fill(_nl,1,_v1), fill(_nl,1,_fh - _t), fill(_nl,1,_fh), fill(_nl,1,3))\n# Drawer fronts — applied plates across the open front, same division idea as the lid.\n_nd = max(1, round(drawers))\n_dp = _Ln / _nd\n_dt = 0.018 * _s\n_da0 = _u0 + arange(_nd) * _dp + _rv / 2\n_da1 = _da0 + _dp - _rv\n_DFr = hcat(_da0, fill(_nd,1,_v0 - _dt), _da1, fill(_nd,1,_v0 - _dt), _da1, fill(_nd,1,_v0), _da0, fill(_nd,1,_v0), fill(_nd,1,_pl + _t + _rv), fill(_nd,1,_fh - _t - _rv), fill(_nd,1,4))\n_DF = _isDrw ? _DFr : zeros(0, 11)\n# Cushion\n_CUSH = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _fh, _fh + _cush, 5)\n_bkT = 0.12 * _s\n_BCr = hcat(_u0 + _t, _v1 - _t - _bkT, _u1 - _t, _v1 - _t - _bkT, _u1 - _t, _v1 - _t, _u0 + _t, _v1 - _t, _fh + _cush, _fh + _cush + backHeight * _s, 6)\n_BC = backCushion > 0 ? _BCr : zeros(0, 11)\n# End cheeks — full-height panels that carry into the seat, as the plan's wardrobe end does.\n_epL = endPanel == 'Left' || endPanel == 'Both'\n_epR = endPanel == 'Right' || endPanel == 'Both'\n_epT = _t * 1.6\n_EP1 = hcat(_u0 - _epT, _v0, _u0, _v0, _u0, _v1, _u0 - _epT, _v1, 0, _fh + _cush, 7)\n_EP2 = hcat(_u1, _v0, _u1 + _epT, _v0, _u1 + _epT, _v1, _u1, _v1, 0, _fh + _cush, 7)\n_EPa = _epL ? _EP1 : zeros(0, 11)\n_EPb = _epR ? _EP2 : zeros(0, 11)\n_EPN = vcat(_EPa, _EPb)\nQ = vcat(_CARC, _PLINTH, _LID, _DF, _CUSH, _BC, _EPN)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nCarcass3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nPlinth3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nLid3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nDrawers3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nCushion3D = sub(compress(_W, eq(col(_W,4), 5)), 0, 0, _nw, 4)\nBackCushion3D = sub(compress(_W, eq(col(_W,4), 6)), 0, 0, _nw, 4)\nEndPanels3D = sub(compress(_W, eq(col(_W,4), 7)), 0, 0, _nw, 4)\nCarcassPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nLidPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nDrawersPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\nCushionPlan = sub(compress(_WP, eq(col(_WP,3), 5)), 0, 0, _nwp, 3)\nEndPanelsPlan = sub(compress(_WP, eq(col(_WP,3), 7)), 0, 0, _nwp, 3)\n# Bolsters — round cushions lying across the depth, one at each end, resting on the cushion.\n_br = bolsterDia * _s / 2\n_bz = _fh + _cush + _br\n_bu0 = _u0 + _t + _br\n_bu1 = _u1 - _t - _br\n_bv0 = _v0 + _br * 0.6\n_bv1 = _v1 - _t - _br * 0.6\n_nb = max(0, round(bolsters))\n_B1 = hcat(_bu0, _bv0, _bz, _bu0, _bv1, _bz, _br)\n_B2 = hcat(_bu1, _bv0, _bz, _bu1, _bv1, _bz, _br)\n_BOLl = _nb >= 1 ? _B1 : zeros(0, 7)\n_BOLr = _nb >= 2 ? _B2 : zeros(0, 7)\n_BOL = vcat(_BOLl, _BOLr)\n_t1u = _cu + col(_BOL,0)\n_t1v = _cv + col(_BOL,1)\n_t2u = _cu + col(_BOL,3)\n_t2v = _cv + col(_BOL,4)\nBolsters3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_BOL,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_BOL,5), col(_BOL,6))\n# Metrics\nseatHeight = _fh + _cush\nseatLength = _Ln\nseatDepth = _Dp\nframeTop = _fh\nlidSectionWidth = _lp - _rv\ndrawerWidth = _isDrw ? (_dp - _rv) : 0\nstorageVolume = (_Ln - 2 * _t) * (_Dp - _t) * max(0, _fh - _pl - 2 * _t)\ncushionArea = _Ln * _Dp\nbackTop = backCushion > 0 ? (_fh + _cush + backHeight * _s) : (_fh + _cush)\nbolsterCount = _nb\nfootprint = (_Ln + (_epL + _epR) * _epT) * _Dp"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Carcass — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Plinth — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Lid — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Drawer fronts — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Cushion — solid"
+            },
+            {
+              "id": "s6",
+              "label": "Back cushion — solid"
+            },
+            {
+              "id": "s7",
+              "label": "End cheeks — solid"
+            },
+            {
+              "id": "s8",
+              "label": "Bolsters — tube"
+            },
+            {
+              "id": "s9",
+              "label": "Carcass — plan"
+            },
+            {
+              "id": "s10",
+              "label": "Lid — plan"
+            },
+            {
+              "id": "s11",
+              "label": "Drawer fronts — plan"
+            },
+            {
+              "id": "s12",
+              "label": "Cushion — plan"
+            },
+            {
+              "id": "s13",
+              "label": "End cheeks — plan"
+            },
+            {
+              "id": "s14",
+              "label": "Seat height (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Seat length (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Seat depth (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Frame top (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Lid section width (m)"
+            },
+            {
+              "id": "s19",
+              "label": "Drawer width (m)"
+            },
+            {
+              "id": "s20",
+              "label": "Storage volume (m³)"
+            },
+            {
+              "id": "s21",
+              "label": "Cushion area (m²)"
+            },
+            {
+              "id": "s22",
+              "label": "Back cushion top (m)"
+            },
+            {
+              "id": "s23",
+              "label": "Bolsters"
+            },
+            {
+              "id": "s24",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s25",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_carc",
+              "kind": "polygon",
+              "name": "Carcass",
+              "color": "#78716c",
+              "layer": "Window seat",
+              "show": true
+            },
+            {
+              "id": "p2_lid",
+              "kind": "polygon",
+              "name": "Lid",
+              "color": "#a8a29e",
+              "layer": "Window seat",
+              "show": true
+            },
+            {
+              "id": "p2_drw",
+              "kind": "polygon",
+              "name": "Drawer fronts",
+              "color": "#57534e",
+              "layer": "Window seat",
+              "show": true
+            },
+            {
+              "id": "p2_cush",
+              "kind": "polygon",
+              "name": "Cushion",
+              "color": "#e7dccb",
+              "layer": "Window seat",
+              "show": true
+            },
+            {
+              "id": "p2_ep",
+              "kind": "polygon",
+              "name": "End cheeks",
+              "color": "#8a6a45",
+              "layer": "Window seat",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_carc",
+              "kind": "polyhedron",
+              "name": "Carcass",
+              "color": "#a8a29e",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_pl",
+              "kind": "polyhedron",
+              "name": "Plinth",
+              "color": "#57534e",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lid",
+              "kind": "polyhedron",
+              "name": "Lid",
+              "color": "#c9a87c",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_drw",
+              "kind": "polyhedron",
+              "name": "Drawer fronts",
+              "color": "#b8956a",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cush",
+              "kind": "polyhedron",
+              "name": "Cushion",
+              "color": "#e7dccb",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_bc",
+              "kind": "polyhedron",
+              "name": "Back cushion",
+              "color": "#d9cbb5",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_ep",
+              "kind": "polyhedron",
+              "name": "End cheeks",
+              "color": "#8a6a45",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_bol",
+              "kind": "tube",
+              "name": "Bolsters",
+              "color": "#d9cbb5",
+              "layer": "Window seat",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_depth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-depth",
+      "targetHandle": "valin-depth"
+    },
+    {
+      "id": "e_props_math_frameHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-frameHeight",
+      "targetHandle": "valin-frameHeight"
+    },
+    {
+      "id": "e_props_math_cushionThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cushionThk",
+      "targetHandle": "valin-cushionThk"
+    },
+    {
+      "id": "e_props_math_panelThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-panelThk",
+      "targetHandle": "valin-panelThk"
+    },
+    {
+      "id": "e_props_math_plinthHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-plinthHeight",
+      "targetHandle": "valin-plinthHeight"
+    },
+    {
+      "id": "e_props_math_lidStyle",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lidStyle",
+      "targetHandle": "valin-lidStyle"
+    },
+    {
+      "id": "e_props_math_lidSections",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lidSections",
+      "targetHandle": "valin-lidSections"
+    },
+    {
+      "id": "e_props_math_drawers",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-drawers",
+      "targetHandle": "valin-drawers"
+    },
+    {
+      "id": "e_props_math_reveal",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-reveal",
+      "targetHandle": "valin-reveal"
+    },
+    {
+      "id": "e_props_math_bolsters",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bolsters",
+      "targetHandle": "valin-bolsters"
+    },
+    {
+      "id": "e_props_math_bolsterDia",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bolsterDia",
+      "targetHandle": "valin-bolsterDia"
+    },
+    {
+      "id": "e_props_math_backCushion",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-backCushion",
+      "targetHandle": "valin-backCushion"
+    },
+    {
+      "id": "e_props_math_backHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-backHeight",
+      "targetHandle": "valin-backHeight"
+    },
+    {
+      "id": "e_props_math_endPanel",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-endPanel",
+      "targetHandle": "valin-endPanel"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Carcass3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Plinth3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Lid3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Drawers3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Cushion3D",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BackCushion3D",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-EndPanels3D",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Bolsters3D",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CarcassPlan",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LidPlan",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-DrawersPlan",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CushionPlan",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-EndPanelsPlan",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-seatHeight",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-seatLength",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-seatDepth",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-frameTop",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lidSectionWidth",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-drawerWidth",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-storageVolume",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-cushionArea",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_math_out_s22",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-backTop",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_math_out_s23",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bolsterCount",
+      "targetHandle": "valin-s23"
+    },
+    {
+      "id": "e_math_out_s24",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-footprint",
+      "targetHandle": "valin-s24"
+    },
+    {
+      "id": "e_math_out_s25",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s25"
+    },
+    {
+      "id": "e_out_r2d_p2_carc",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s9",
+      "targetHandle": "valin-p2_carc"
+    },
+    {
+      "id": "e_out_r2d_p2_lid",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s10",
+      "targetHandle": "valin-p2_lid"
+    },
+    {
+      "id": "e_out_r2d_p2_drw",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s11",
+      "targetHandle": "valin-p2_drw"
+    },
+    {
+      "id": "e_out_r2d_p2_cush",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s12",
+      "targetHandle": "valin-p2_cush"
+    },
+    {
+      "id": "e_out_r2d_p2_ep",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s13",
+      "targetHandle": "valin-p2_ep"
+    },
+    {
+      "id": "e_out_r3d_p3_carc",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_carc"
+    },
+    {
+      "id": "e_out_r3d_p3_pl",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_pl"
+    },
+    {
+      "id": "e_out_r3d_p3_lid",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_lid"
+    },
+    {
+      "id": "e_out_r3d_p3_drw",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_drw"
+    },
+    {
+      "id": "e_out_r3d_p3_cush",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_cush"
+    },
+    {
+      "id": "e_out_r3d_p3_bc",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p3_bc"
+    },
+    {
+      "id": "e_out_r3d_p3_ep",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p3_ep"
+    },
+    {
+      "id": "e_out_r3d_p3_bol",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p3_bol"
+    }
+  ]
+}

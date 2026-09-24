@@ -3,9 +3,9 @@ import Konva from "konva";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Point } from "../../types";
-import { computeOptimiseRect } from "../../algorithms/layout/optimiseRect";
-import { classifyRectilinearPolygon, scorePolygonAgainstShape } from "../../algorithms/geometry/rectilinearShapeClassifier";
-import { clipPolygonByHalfPlane } from "../../algorithms/partitioning/voronoi";
+import { computeOptimiseRect } from "@builderpluss/engine";
+import { classifyRectilinearPolygon, scorePolygonAgainstShape } from "@builderpluss/engine";
+import { clipPolygonByHalfPlane } from "@builderpluss/engine";
 
 /** Absolute polygon area (shoelace). */
 const polyAreaAbs = (c: Point[]): number => {

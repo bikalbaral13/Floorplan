@@ -8,7 +8,7 @@
     "color": "#0891b2"
   },
   "description": "2D primitive — an open polyline from a list of points (metres). Draws as a stroke; no fill, no 3D.",
-  "instructions": "A 2D open polyline — a construction / detail line from `points` (a JSON array of [x, y] metre pairs, local to the flow anchor). Drawn as a stroke only (no fill, no 3D), like a `line` rule in a parametric object. Wire `valin-color` to tint it. Used by object decompile to represent a `line` rule (seams, trims, glazing lines).",
+  "instructions": "A 2D open polyline — a construction / detail line from `points` (a JSON array of [x, y] metre pairs, local to the flow anchor). Drawn as a stroke only (no fill, no 3D), like a `line` rule in a parametric object. Wire `valin-color` to tint it. Used by object decompile to represent a `line` rule (seams, trims, glazing lines).\n\nGROUP COLUMN: a flat list whose rows carry a THIRD number splits into one outline per RUN of equal third value. That is how a Math Engine publishes several outlines at once — an Expression can only emit a rectangular matrix, never the nested form — and it lets the outlines differ in length: build them with `Q = vcat(Q, hcat(ring, fill(rows(ring),1,i)))` inside a loop, the same work-list idiom the engine's own loops use, and wire `val-Q` in. A constant third column is a single outline, i.e. unchanged behaviour. See Workflows/Operations/mitered_join_with_math.json.",
   "handles": {
     "input": false,
     "output": true,

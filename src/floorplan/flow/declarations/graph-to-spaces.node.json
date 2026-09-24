@@ -3,6 +3,7 @@
   "version": 2,
   "tool": "graph-to-spaces",
   "materialisesSpace": true,
+  "materialisesSpaceEdges": false,
   "meta": {
     "label": "Graph to Spaces",
     "category": "Graph",
@@ -32,6 +33,10 @@
       {
         "key": "graph",
         "label": "Graph"
+      },
+      {
+        "key": "objectId",
+        "label": "Attach object (id)"
       }
     ]
   },
@@ -41,6 +46,20 @@
       "label": "Graph (JSON)",
       "kind": "text",
       "default": ""
+    },
+    {
+      "key": "objectId",
+      "label": "Attach object (id)",
+      "kind": "text",
+      "default": "",
+      "placeholder": "room-with-math"
+    },
+    {
+      "key": "objectParams",
+      "label": "Object params (JSON)",
+      "kind": "text",
+      "default": "",
+      "placeholder": "{\"roomType\": \"Bedroom\"}"
     },
     {
       "key": "minArea",

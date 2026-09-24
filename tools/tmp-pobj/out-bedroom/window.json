@@ -1,0 +1,870 @@
+{
+  "version": 1,
+  "id": "window-with-math",
+  "title": "Window — one Math Engine, frame, panes and operation",
+  "category": "Building",
+  "object": {
+    "hostKind": "segment",
+    "name": "Window",
+    "symbol": "window"
+  },
+  "description": "2D palette matches floorplan.json: green frame + glazing, operation symbol and reveals off.\n\nA parametric WINDOW on the six-node spine:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nBuilt from Parametric Objects/Architectural/window.pobj.json, whose defaults it keeps: 1.2 m wide, 0.1 m wall, 2 panes, sill 0.9, lintel 2.1. SELECT A WALL SEGMENT and the window fills it end to end; select a Space and it takes the longest edge; select nothing and it draws at the typed width. Switch Fit to wall to \"Own width (centred)\" for a Width-wide window centred on the segment, positioned by Offset.\n\nWHAT THE POBJ SAID, AND WHAT IT ACTUALLY DREW. Its rules are four: one filled box for the whole frame-and-glazing block, one centre line for the glass, `panes − 1` lines for the mullions, and a chevron for casement or awning. That is a competent plan SYMBOL and nothing more — the mullions are zero-width lines, so they divide the drawing without dividing anything, and the block is one solid extrusion between sill and lintel, so in 3D a window is a slab of material filling its own opening.\n\nThree of its eleven parameters were declared and never read by a rule: `height` (the vertical extent came from lintel − sill instead), `shape` (polygon / lines / detailed — nothing branched on it), and `frame` (the checkbox that was meant to turn the frame off). This flow reads all of them or retires them explicitly:\n• `height` is retired — it is exactly lintel − sill, now reported as Opening height so the two can never disagree.\n• `shape` is retired — it was choosing between fill and line work, which is now what a RENDER ROW is for: the frame and glass are filled Polygon rows and the operation symbol is a Stroke row, all at once, no mode.\n• `frame` is WIRED, as Show frame: off drops the frame rings and solids and zeroes the frame volume, leaving the glazing untouched.\n\nTHE FRAME IS NOW MADE OF MEMBERS, not one block. A rectangle table holds each one — offset along the wall, offset across it, length, thickness, a z-range, a colour group, and whether it shows in PLAN — and one loop turns every row into both a plan ring and a solid via `mprism`. Adding a transom is one more row.\n\n  2 jambs        frameWidth × wallDepth, between sill and head       in plan\n  panes − 1 mullions  the same section, at the pane divisions        in plan\n  head + sill    the full opening width × wallDepth                  3D only\n  panes glass    paneWidth × glassThickness                          in plan\n\nHEAD AND SILL ARE 3D-ONLY ON PURPOSE, because a plan is a horizontal CUT: at 1.2 m it passes through the jambs and the glazing, not through the head above it or the sill below. Drawing them in plan would put a band across the opening that no drawing convention has. That is what the table's plan flag is for.\n\nAND THE JAMBS FIT BETWEEN THE HEAD AND SILL, which is both how a window is made and the difference between a frame volume that is right and one that is 5% too big: run the jambs the full height instead and they occupy the same four corners as the head and sill, so the parts double-count. Measured at the defaults, that error is 0.030000 m³ against the true 0.028500.\n\nTHE DIVISION IS EXACT. The clear pane width is `(W − 2·frameWidth − (panes−1)·frameWidth) / panes`, so two jambs plus P panes plus P−1 mullions sum back to the opening to the last digit at every pane count — checked at 1, 2, 3, 5 and 8. Which means the GLAZING RATIO is a real number rather than a guess, and it falls as you add panes: 84.0% at one pane, 80.2% at two, 76.4% at three, 68.7% at five, 57.3% at eight. Mullions cost light, and now the flow says how much.\n\nOPERATION follows the pobj's chevron and extends it. Fixed draws nothing. Casement draws the chevron PER PANE rather than only on the first, since every leaf opens. Awning draws one across the whole opening. Sliding — which the pobj listed but drew nothing for — draws two leaves offset in the wall depth, which is what sliding means.\n\nFIT AND OFFSET, which a segment-hosted symbol needs and the pobj had no way to express: Own width centres the typed width on the wall, Fill wall stretches it end to end, and Offset slides it along, CLAMPED to (wall − window)/2 so it can never overhang. A window wider than its wall is clipped to the wall. Two reveal lines mark where the opening breaks the wall.\n\nVERIFIED THROUGH THE ENGINE at the pobj's defaults: 2 jamb rings + 1 mullion ring + 2 glass panes in plan; every jamb block exactly frameWidth × wallDepth and every glass band paneWidth × glassThickness; the widths summing to 1.200000000 m; pane 0.525 × 1.100 m, glazed area 1.155000 m² of a 1.440000 m² elevation = 80.2%; frame volume 0.028500 m³ matching the mesh to nine figures with no corner counted twice, glass 6.930e-3 m³; five frame solids and two glass solids, each its own CLOSED box; the frame spanning sill 0.9 to lintel 2.1 and the glass inset to 0.95–2.05. Pane counts 1 / 2 / 3 / 5 / 8 all keep the sum exact, produce 2+(P−1) frame rings and P glass rings, and 8 panes glaze less and cost more frame than 1. All four operations draw the right symbol count. Frame off leaves the glazing intact and zeroes the frame volume. Fourteen host cases — own width, fill, offset ±0.8 and clamped ±9, a 1 m wall clipping a 1.2 m window, a wall at 39.99°, a vertical wall reading exactly 90°, a 5×4 space, a bare point, a degenerate segment, a 0.4 m wall, sill 0 to lintel 2.4, and an inverted sill/lintel guarded to a 0.15 m minimum — every one gives a positive opening that never exceeds its wall, closed members, and a frame volume matching its mesh, with no non-finite cell anywhere.\n\nWHAT IT DOES NOT DO. Like the pobj, it draws a window but does not CUT one: the wall is not opened, so use a Segment to Window node (or the Math Engine's `subtract`) to punch the reveal through the wall poché. Rectangular openings only — no arched or circular heads. The glazing is a single plane per pane, so no double glazing, no glazing bars within a pane, and no putty or bead. Casement and awning leaves are indicated by the plan symbol but not modelled open in 3D, unlike the door's leaf. There is no cill projection, no reveal lining and no architrave.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — wall segment / space / point [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0], [3, 0]]",
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.2,
+              "min": 0.3,
+              "max": 4,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to wall",
+              "type": "select",
+              "value": "Fill wall",
+              "options": [
+                "Fill wall",
+                "Own width (centred)"
+              ],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "offset",
+              "name": "Offset along wall",
+              "type": "range",
+              "value": 0,
+              "min": -3,
+              "max": 3,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "sillHeight",
+              "name": "Sill height",
+              "type": "range",
+              "value": 0.9,
+              "min": 0,
+              "max": 3,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "lintelHeight",
+              "name": "Lintel height",
+              "type": "range",
+              "value": 2.1,
+              "min": 0.3,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "wallDepth",
+              "name": "Wall depth",
+              "type": "range",
+              "value": 0.1,
+              "min": 0.02,
+              "max": 0.6,
+              "step": 0.01,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "frameWidth",
+              "name": "Frame member width",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.01,
+              "max": 0.15,
+              "step": 0.005,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "panes",
+              "name": "Panes",
+              "type": "range",
+              "value": 2,
+              "min": 1,
+              "max": 8,
+              "step": 1,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "glassThick",
+              "name": "Glass thickness",
+              "type": "range",
+              "value": 0.006,
+              "min": 0.002,
+              "max": 0.04,
+              "step": 0.002,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "operation",
+              "name": "Operation",
+              "type": "select",
+              "value": "Fixed",
+              "options": [
+                "Fixed",
+                "Casement",
+                "Sliding",
+                "Awning"
+              ],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "showFrame",
+              "name": "Show frame",
+              "type": "checkbox",
+              "value": true,
+              "options": [],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "sillProjection",
+              "name": "Sill projection into room",
+              "type": "range",
+              "value": 0.03,
+              "min": 0,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "sillThk",
+              "name": "Sill thickness",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.008,
+              "max": 0.15,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "sillOverhang",
+              "name": "Sill overhang each side",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "slim aluminium frame, clear double glazing, stone sill",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "modern casement window, clear glazing, slim aluminium frame",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Window maths",
+          "expr": "_e1 = hcat(1, 0)\n_n = rows(P)\n_isSeg = _n == 2\n_isSpace = _n > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_eLen = len(_edges)\n_longest = max(_eLen)\n_mask = eq(_eLen, _longest)\n_sDir = _isSpace ? row(compress(_edges, _mask), 0) : _e1\n_sA = _isSpace ? row(compress(P, _mask), 0) : row(P, 0)\n_segV = _isSeg ? (row(P, 1) - row(P, 0)) : _sDir\n_dir = _isSeg ? _segV : (_isSpace ? _sDir : _e1)\n_dLen = min(len(_dir))\n_u = _dLen > 1e-9 ? normalize(_dir) : _e1\n_ux = sub(_u, 0, 0, 1, 1)\n_uy = sub(_u, 0, 1, 1, 1)\n_px = 0 - _uy\n_py = _ux\n_hosted = (_isSeg || _isSpace) && _dLen > 1e-9\n_fill = fitMode == 'Fill wall'\n_W = _hosted ? (_fill ? _dLen : min(max(0.2, width), _dLen)) : max(0.2, width)\n_pA = _isSpace ? _sA : row(P, 0)\n_pax = sub(_pA, 0, 0, 1, 1)\n_pay = sub(_pA, 0, 1, 1, 1)\n_mx0 = _hosted ? _pax + _ux * _dLen / 2 : _pax\n_my0 = _hosted ? _pay + _uy * _dLen / 2 : _pay\n_room = _hosted ? max(0, (_dLen - _W) / 2) : 0\n_off = max(0 - _room, min(_room, offset))\n_mx = _mx0 + _ux * _off\n_my = _my0 + _uy * _off\n_th = max(0.02, wallDepth)\n_hw = _W / 2\n_fw = max(0.008, min(frameWidth, _W / 6))\n_Pn = max(1, round(panes))\n_sill = max(0, sillHeight)\n_lint = max(_sill + 0.15, lintelHeight)\n_H = _lint - _sill\n_gt = max(0.002, min(glassThick, _th / 2))\n_paneW = max(0.01, (_W - 2 * _fw - (_Pn - 1) * _fw) / _Pn)\n_zJ0 = _sill + _fw\n_zJ1 = max(_zJ0 + 0.01, _lint - _fw)\n_paneH = _zJ1 - _zJ0\n_fr = showFrame > 0\n_gp = max(0.02, _th * 0.6)\n_T = zeros(0, 9)\n_T = _fr ? vcat(_T, hcat(0 - _hw + _fw / 2, 0, _fw, _th, _zJ0, _zJ1, 1, 1, _th)) : _T\n_T = _fr ? vcat(_T, hcat(_hw - _fw / 2, 0, _fw, _th, _zJ0, _zJ1, 1, 1, _th)) : _T\n_T = _fr ? vcat(_T, hcat(0, 0, _W, _th, _sill, _zJ0, 1, 0, _th)) : _T\n_T = _fr ? vcat(_T, hcat(0, 0, _W, _th, _zJ1, _lint, 1, 0, _th)) : _T\n# The sill is a real board, because the window seat next to it is dimensioned LEVEL WITH IT —\n# a sill that is only a number is a dimension nobody can build to.\n_spj = max(0, sillProjection)\n_sth = max(0.005, sillThk)\n_sov = max(0, sillOverhang)\n_sTh = _th + _spj\n_T = vcat(_T, hcat(0, 0 - _spj / 2, _W + 2 * _sov, _sTh, max(0, _sill - _sth), _sill, 3, 1, _sTh))\nloop k in _Pn - 1:\n_mu = 0 - _hw + _fw + (k + 1) * _paneW + (k + 0.5) * _fw\n_T = _fr ? vcat(_T, hcat(_mu, 0, _fw, _th, _zJ0, _zJ1, 1, 1, _th)) : _T\nend\nloop k in _Pn:\n_pu = 0 - _hw + _fw + (k + 0.5) * _paneW + k * _fw\n_T = vcat(_T, hcat(_pu, 0, _paneW, _gt, _zJ0, _zJ1, 2, 1, _gp))\nend\n_S1 = vcat(hcat(-1, -1), hcat(1, -1), hcat(1, 1), hcat(-1, 1))\n_sa = col(_S1, 0)\n_sb = col(_S1, 1)\n_All = zeros(0, 4)\nFrameMesh = zeros(0, 4)\nGlassMesh = zeros(0, 4)\nSillMesh = zeros(0, 4)\nloop i in rows(_T):\n_r = row(_T, i)\n_du = col(_r, 0)\n_dv = col(_r, 1)\n_hL = col(_r, 2) / 2\n_hT = col(_r, 3) / 2\n_z0 = min(col(_r, 4))\n_z1 = min(col(_r, 5))\n_g = min(col(_r, 6))\n_pl = min(col(_r, 7))\n_hP = col(_r, 8) / 2\n_ccx = _mx + _du * _ux + _dv * _px\n_ccy = _my + _du * _uy + _dv * _py\n_cxs = _ccx + _sa * _hL * _ux + _sb * _hT * _px\n_cys = _ccy + _sa * _hL * _uy + _sb * _hT * _py\n_ring = hcat(_cxs, _cys)\n_pxs = _ccx + _sa * _hL * _ux + _sb * _hP * _px\n_pys = _ccy + _sa * _hL * _uy + _sb * _hP * _py\n_pring = hcat(_pxs, _pys)\n_All = _pl > 0 ? vcat(_All, hcat(_pring, fill(4, 1, i), fill(4, 1, _g))) : _All\n_solid = mprism(_ring, _z0, _z1)\nFrameMesh = _g < 1.5 ? vcat(FrameMesh, _solid) : FrameMesh\nGlassMesh = (_g > 1.5 && _g < 2.5) ? vcat(GlassMesh, _solid) : GlassMesh\nSillMesh = _g > 2.5 ? vcat(SillMesh, _solid) : SillMesh\nend\n_nr = rows(_All)\n_gc = col(_All, 3)\nFramePlan = sub(compress(_All, eq(_gc, 1)), 0, 0, _nr, 3)\nGlassPlan = sub(compress(_All, eq(_gc, 2)), 0, 0, _nr, 3)\nSillPlan = sub(compress(_All, eq(_gc, 3)), 0, 0, _nr, 3)\n_isCase = operation == 'Casement'\n_isAwn = operation == 'Awning'\n_isSlide = operation == 'Sliding'\n_Op = zeros(0, 4)\nloop k in _Pn:\n_pu = 0 - _hw + _fw + (k + 0.5) * _paneW + k * _fw\n_pa = _pu - _paneW / 2\n_pb = _pu + _paneW / 2\n_Op = _isCase ? vcat(_Op, hcat(_pa, 0 - _th / 2, _pb, 0), hcat(_pb, 0, _pa, _th / 2)) : _Op\nend\n_Op = _isAwn ? vcat(_Op, hcat(0 - _hw + _fw, 0 - _th / 2, _hw - _fw, 0), hcat(_hw - _fw, 0, 0 - _hw + _fw, _th / 2)) : _Op\n_Op = _isSlide ? vcat(_Op, hcat(0 - _hw + _fw, 0 - _th / 6, _fw, 0 - _th / 6), hcat(0 - _fw, _th / 6, _hw - _fw, _th / 6)) : _Op\n_ou1 = col(_Op, 0)\n_ov1 = col(_Op, 1)\n_ou2 = col(_Op, 2)\n_ov2 = col(_Op, 3)\nOperationPlan = hcat(_mx + _ou1 * _ux + _ov1 * _px, _my + _ou1 * _uy + _ov1 * _py, _mx + _ou2 * _ux + _ov2 * _px, _my + _ou2 * _uy + _ov2 * _py)\n_rvL = hcat(0 - _hw, 0 - _th / 2, 0 - _hw, _th / 2)\n_rvR = hcat(_hw, 0 - _th / 2, _hw, _th / 2)\n_ru1 = col(vcat(_rvL, _rvR), 0)\n_rv1 = col(vcat(_rvL, _rvR), 1)\n_ru2 = col(vcat(_rvL, _rvR), 2)\n_rv2 = col(vcat(_rvL, _rvR), 3)\nRevealPlan = hcat(_mx + _ru1 * _ux + _rv1 * _px, _my + _ru1 * _uy + _rv1 * _py, _mx + _ru2 * _ux + _rv2 * _px, _my + _ru2 * _uy + _rv2 * _py)\nopeningWidth = _W\nopeningHeight = _H\nsillOut = _sill\nlintelOut = _lint\npaneCount = _Pn\npaneWidth = _paneW\npaneHeight = _paneH\nglazedArea = _Pn * _paneW * _paneH\nelevationArea = _W * _H\nglazingRatio = elevationArea > 0 ? glazedArea / elevationArea : 0\nglassVolume = glazedArea * _gt\nframeVolume = _fr ? (_W * _th * (_zJ0 - _sill) + _W * _th * (_lint - _zJ1) + (_Pn + 1) * _fw * _th * (_zJ1 - _zJ0)) : 0\nwallBearing = min(angle(_dir))\nwallLength = _hosted ? _dLen : 0\noffsetApplied = _off\nsillLevel = _sill\nsillProjectsBy = _spj\nsillBoardDepth = _sTh\nsillBoardLength = _W + 2 * _sov\nsillUnderside = max(0, _sill - _sth)"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Frame — plan (jambs + mullions)",
+              "necessary": false
+            },
+            {
+              "id": "s2",
+              "label": "Glazing — plan (panes)",
+              "necessary": false
+            },
+            {
+              "id": "s3",
+              "label": "Operation symbol — plan",
+              "necessary": false
+            },
+            {
+              "id": "s4",
+              "label": "Reveal lines — plan",
+              "necessary": false
+            },
+            {
+              "id": "s5",
+              "label": "Frame — solids",
+              "necessary": false
+            },
+            {
+              "id": "s6",
+              "label": "Glazing — solids",
+              "necessary": false
+            },
+            {
+              "id": "s7",
+              "label": "Opening width (m)",
+              "necessary": false
+            },
+            {
+              "id": "s8",
+              "label": "Opening height (m)",
+              "necessary": false
+            },
+            {
+              "id": "s9",
+              "label": "Sill height (m)",
+              "necessary": false
+            },
+            {
+              "id": "s10",
+              "label": "Lintel height (m)",
+              "necessary": false
+            },
+            {
+              "id": "s11",
+              "label": "Panes",
+              "necessary": false
+            },
+            {
+              "id": "s12",
+              "label": "Pane width (m)",
+              "necessary": false
+            },
+            {
+              "id": "s13",
+              "label": "Pane height (m)",
+              "necessary": false
+            },
+            {
+              "id": "s14",
+              "label": "Glazed area (m²)",
+              "necessary": false
+            },
+            {
+              "id": "s15",
+              "label": "Elevation area (m²)",
+              "necessary": false
+            },
+            {
+              "id": "s16",
+              "label": "Glazing ratio",
+              "necessary": false
+            },
+            {
+              "id": "s17",
+              "label": "Glass volume (m³)",
+              "necessary": false
+            },
+            {
+              "id": "s18",
+              "label": "Frame volume (m³)",
+              "necessary": false
+            },
+            {
+              "id": "s19",
+              "label": "Wall bearing (deg)",
+              "necessary": false
+            },
+            {
+              "id": "s20",
+              "label": "Wall length (m)",
+              "necessary": false
+            },
+            {
+              "id": "s21",
+              "label": "Offset applied (m)",
+              "necessary": false
+            },
+            {
+              "id": "s22",
+              "label": "Sill — solid"
+            },
+            {
+              "id": "s23",
+              "label": "Sill — plan"
+            },
+            {
+              "id": "s24",
+              "label": "Sill level (m)"
+            },
+            {
+              "id": "s25",
+              "label": "Sill projection (m)"
+            },
+            {
+              "id": "s26",
+              "label": "Sill board depth (m)"
+            },
+            {
+              "id": "s27",
+              "label": "Sill board length (m)"
+            },
+            {
+              "id": "s28",
+              "label": "Sill underside (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_frame",
+              "kind": "polygon",
+              "name": "Frame — jambs & mullions",
+              "color": "#16a34a",
+              "layer": "Window",
+              "show": true,
+              "fillMode": "outlined"
+            },
+            {
+              "id": "p2_glass",
+              "kind": "polygon",
+              "name": "Glazing",
+              "color": "#16a34a",
+              "layer": "Window",
+              "show": true
+            },
+            {
+              "id": "p2_op",
+              "kind": "stroke",
+              "name": "Operation symbol",
+              "color": "#0891b2",
+              "layer": "Window",
+              "width": 0.01,
+              "show": false
+            },
+            {
+              "id": "p2_reveal",
+              "kind": "stroke",
+              "name": "Reveal lines",
+              "color": "#94a3b8",
+              "layer": "Window",
+              "width": 0.008,
+              "show": false
+            },
+            {
+              "id": "p2_sill",
+              "kind": "polygon",
+              "name": "Sill",
+              "color": "#e7e5e4",
+              "layer": "Window",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_frame",
+              "kind": "polyhedron",
+              "name": "Frame — jambs, mullions, head & sill",
+              "color": "#0e7490",
+              "layer": "Window",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_glass",
+              "kind": "polyhedron",
+              "name": "Glazing",
+              "color": "#9ec5fe",
+              "layer": "Window",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_sill",
+              "kind": "polyhedron",
+              "name": "Sill",
+              "color": "#e7e5e4",
+              "layer": "Window",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "source",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_width",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_offset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-offset",
+      "targetHandle": "valin-offset"
+    },
+    {
+      "id": "e_props_math_sillHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sillHeight",
+      "targetHandle": "valin-sillHeight"
+    },
+    {
+      "id": "e_props_math_lintelHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lintelHeight",
+      "targetHandle": "valin-lintelHeight"
+    },
+    {
+      "id": "e_props_math_wallDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-wallDepth",
+      "targetHandle": "valin-wallDepth"
+    },
+    {
+      "id": "e_props_math_frameWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-frameWidth",
+      "targetHandle": "valin-frameWidth"
+    },
+    {
+      "id": "e_props_math_panes",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-panes",
+      "targetHandle": "valin-panes"
+    },
+    {
+      "id": "e_props_math_glassThick",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-glassThick",
+      "targetHandle": "valin-glassThick"
+    },
+    {
+      "id": "e_props_math_operation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-operation",
+      "targetHandle": "valin-operation"
+    },
+    {
+      "id": "e_props_math_showFrame",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showFrame",
+      "targetHandle": "valin-showFrame"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-FramePlan",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-GlassPlan",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-OperationPlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-RevealPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-FrameMesh",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-GlassMesh",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-openingWidth",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-openingHeight",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sillOut",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lintelOut",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-paneCount",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-paneWidth",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-paneHeight",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-glazedArea",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-elevationArea",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-glazingRatio",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-glassVolume",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-frameVolume",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wallBearing",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wallLength",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-offsetApplied",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_out_r2d_p2_frame",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p2_frame"
+    },
+    {
+      "id": "e_out_r2d_p2_glass",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p2_glass"
+    },
+    {
+      "id": "e_out_r2d_p2_op",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_op"
+    },
+    {
+      "id": "e_out_r2d_p2_reveal",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_reveal"
+    },
+    {
+      "id": "e_out_r3d_p3_frame",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_frame"
+    },
+    {
+      "id": "e_out_r3d_p3_glass",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p3_glass"
+    },
+    {
+      "id": "e_props_math_sillProjection",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sillProjection",
+      "targetHandle": "valin-sillProjection"
+    },
+    {
+      "id": "e_props_math_sillThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sillThk",
+      "targetHandle": "valin-sillThk"
+    },
+    {
+      "id": "e_props_math_sillOverhang",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sillOverhang",
+      "targetHandle": "valin-sillOverhang"
+    },
+    {
+      "id": "e_math_out_s22",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-SillMesh",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_math_out_s23",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-SillPlan",
+      "targetHandle": "valin-s23"
+    },
+    {
+      "id": "e_math_out_s24",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sillLevel",
+      "targetHandle": "valin-s24"
+    },
+    {
+      "id": "e_math_out_s25",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sillProjectsBy",
+      "targetHandle": "valin-s25"
+    },
+    {
+      "id": "e_math_out_s26",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sillBoardDepth",
+      "targetHandle": "valin-s26"
+    },
+    {
+      "id": "e_math_out_s27",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sillBoardLength",
+      "targetHandle": "valin-s27"
+    },
+    {
+      "id": "e_math_out_s28",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sillUnderside",
+      "targetHandle": "valin-s28"
+    },
+    {
+      "id": "e_out_r3d_p3_sill",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s22",
+      "targetHandle": "valin-p3_sill"
+    },
+    {
+      "id": "e_out_r2d_p2_sill",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s23",
+      "targetHandle": "valin-p2_sill"
+    }
+  ]
+}

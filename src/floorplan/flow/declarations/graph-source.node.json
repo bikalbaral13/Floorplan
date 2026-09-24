@@ -2,25 +2,61 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "graph-source",
-  "meta": { "label": "Graph", "category": "Graph", "color": "#1e3a8a" },
+  "meta": {
+    "label": "Graph",
+    "category": "Graph",
+    "color": "#1e3a8a"
+  },
   "description": "Pipeline input — selected graph(s) by id (Select → Graph scope, or grab from selection). Outputs one handle per graph. Feeds Mitered Join / Graph Smoothing / Graph Metrics.",
-  "instructions": "Pipeline input — emits one or more graphs (connected segment networks) as polylines. References graphs by display id (e.g. Graph001, comma-separated for several); with 'Grab ID from selection' on, the id stays synced to the graph selected via the Select tool (Graph scope). One output handle per graph, or a single bundle (`outputMode`).\n\nThe input endpoint accepts a Schema node to attach Node/Segment/Graph schema properties (geometry still comes from the canvas). Feeds Mitered Join / Graph Smoothing / Graph Metrics / Graph to Spaces.",
+  "instructions": "GEOMETRY NODE: this is the single \"Geometry\" node — there is no kind selector, because THE CANVAS SELECTION IS THE SELECTOR. With \"Grab ID from selection\" on, selecting a canvas node makes it a Point source, a segment makes it a Segment source, a graph a Graph source, a space a Space source and a picture an Image source; the node keeps its id, name, position and wires across the change. That is what lets one input carry a host whose TYPE changes — the anchor of a parametric object stays wired while you switch from a node to a wall to a room. Turn the toggle off and type an id to pin it to one element. (Freehand is not selection-driven — its strokes are matched by colour — so it stays its own node.)\n\nEvery kind publishes its geometry in the same anchor-relative metre frame: a point list on `val-points` (Point → one row, Segment → two, Space → its outline) or nodes+links on `val-graph` (Graph, Freehand).\n\nPipeline input — emits one or more graphs (connected segment networks) as polylines. References graphs by display id (e.g. Graph001, comma-separated for several); with 'Grab ID from selection' on, the id stays synced to the graph selected via the Select tool (Graph scope). One output handle per graph, or a single bundle (`outputMode`).\n\nThe input endpoint accepts a Schema node to attach Node/Segment/Graph schema properties (geometry still comes from the canvas). Feeds Mitered Join / Graph Smoothing / Graph Metrics / Graph to Spaces.\n\nVALUE OUTPUT: `val-graph` publishes the graph as JSON — { nodes: [{id,x,y}], edges: [{from_node_id,to_node_id,thickness}] }, anchor-relative metres, with the canvas graph's REAL node ids and per-edge schema `wall-thickness`. It runs the same code as Graph Geometry's `val-graph`, so the two are interchangeable and the Geometry hop is optional; add Graph Geometry when you also want the node / edge counts, or when you need to restrict the JSON to a sub-graph wired into its input.\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.\n\nID. `val-id` publishes the id of the element this node resolves — `space-…`, `segment-…`, `node-…`, each naming its own kind, and the SAME string the canvas shows, an export writes and this node's own ID field holds. Wire it into a Prompt Builder slot, an Output slot or an Input Properties text parameter to say WHICH element a run was about, rather than describing it by its coordinates. With several elements grabbed it is the comma-separated list, in the order they were selected; with nothing resolved it is empty.",
   "handles": {
     "input": true,
     "output": true,
-    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(handleCount)))"
+    "outputCount": "outputMode == 'single' ? 1 : max(1, min(40, round(handleCount)))",
+    "valueOutputs": [
+      {
+        "key": "id",
+        "label": "ID"
+      },
+      {
+        "key": "graph",
+        "label": "Graph (JSON)"
+      },
+      {
+        "key": "canvasJson",
+        "label": "Canvas JSON"
+      }
+    ]
   },
   "parameters": [
-    { "key": "grabFromSelection", "label": "Grab ID from selection", "kind": "checkbox", "default": true },
-    { "key": "id", "label": "ID", "kind": "text", "default": "", "placeholder": "graph id (e.g. Graph001)", "showWhen": "!grabFromSelection" },
+    {
+      "key": "grabFromSelection",
+      "label": "Grab ID from selection",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "id",
+      "label": "ID",
+      "kind": "text",
+      "default": "",
+      "placeholder": "graph id (e.g. Graph001)",
+      "showWhen": "!grabFromSelection"
+    },
     {
       "key": "outputMode",
       "label": "Outputs",
       "kind": "select",
       "default": "perCell",
       "options": [
-        { "value": "perCell", "label": "Per graph (one each)" },
-        { "value": "single", "label": "Single (all)" }
+        {
+          "value": "perCell",
+          "label": "Per graph (one each)"
+        },
+        {
+          "value": "single",
+          "label": "Single (all)"
+        }
       ]
     }
   ]

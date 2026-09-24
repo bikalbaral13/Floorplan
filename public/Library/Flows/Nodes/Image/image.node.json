@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "kind": "flow-node",
-  "tool": "image",
-  "label": "Image",
-  "category": "Image",
-  "description": "The imported underlay image (auto-connects to the canvas image). Feeds Vectorisation.",
-  "params": {}
-}

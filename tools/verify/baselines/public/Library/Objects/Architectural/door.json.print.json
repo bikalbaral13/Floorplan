@@ -1,0 +1,192 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 28,
+          "vertices": 112,
+          "area": 0.2001,
+          "bbox": [
+            -0.025,
+            -0.075,
+            0.925,
+            0.905
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "ca7357148b1f4536"
+      },
+      "solids": {
+        "count": 4,
+        "volume": 0.1274,
+        "hash": "bfe93da599f1778f"
+      },
+      "metrics": [
+        {
+          "key": "openingWidth",
+          "name": "Opening width (m)",
+          "value": "0.9"
+        },
+        {
+          "key": "openingHeight",
+          "name": "Opening height (m)",
+          "value": "2.1"
+        },
+        {
+          "key": "openAngleOut",
+          "name": "Open angle (deg)",
+          "value": "90"
+        },
+        {
+          "key": "swingRadius",
+          "name": "Swing radius (m)",
+          "value": "0.9"
+        },
+        {
+          "key": "sweptArea",
+          "name": "Swept floor area (m²)",
+          "value": "0.6362"
+        },
+        {
+          "key": "leafArea",
+          "name": "Leaf face area (m²)",
+          "value": "1.89"
+        },
+        {
+          "key": "leafVolume",
+          "name": "Leaf volume (m³)",
+          "value": "0.0756"
+        },
+        {
+          "key": "frameVolume",
+          "name": "Frame volume (m³)",
+          "value": "0.0518"
+        },
+        {
+          "key": "wallAngleDeg",
+          "name": "Wall bearing (deg)",
+          "value": "0"
+        },
+        {
+          "key": "hingeAtEnd",
+          "name": "Hinge end (-1 left / +1 right)",
+          "value": "-1"
+        },
+        {
+          "key": "swingsToSide",
+          "name": "Swing side (+1 left / -1 right)",
+          "value": "1"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 28,
+          "vertices": 112,
+          "area": 2.0721,
+          "bbox": [
+            -5.025,
+            -4.075,
+            5.025,
+            6.005
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "8e59c4b8aab14593"
+      },
+      "solids": {
+        "count": 4,
+        "volume": 1.0965,
+        "hash": "cf4e07f566edba74"
+      },
+      "metrics": [
+        {
+          "key": "openingWidth",
+          "name": "Opening width (m)",
+          "value": "10"
+        },
+        {
+          "key": "openingHeight",
+          "name": "Opening height (m)",
+          "value": "2.1"
+        },
+        {
+          "key": "openAngleOut",
+          "name": "Open angle (deg)",
+          "value": "90"
+        },
+        {
+          "key": "swingRadius",
+          "name": "Swing radius (m)",
+          "value": "10"
+        },
+        {
+          "key": "sweptArea",
+          "name": "Swept floor area (m²)",
+          "value": "78.5398"
+        },
+        {
+          "key": "leafArea",
+          "name": "Leaf face area (m²)",
+          "value": "21"
+        },
+        {
+          "key": "leafVolume",
+          "name": "Leaf volume (m³)",
+          "value": "0.84"
+        },
+        {
+          "key": "frameVolume",
+          "name": "Frame volume (m³)",
+          "value": "0.2565"
+        },
+        {
+          "key": "wallAngleDeg",
+          "name": "Wall bearing (deg)",
+          "value": "0"
+        },
+        {
+          "key": "hingeAtEnd",
+          "name": "Hinge end (-1 left / +1 right)",
+          "value": "-1"
+        },
+        {
+          "key": "swingsToSide",
+          "name": "Swing side (+1 left / -1 right)",
+          "value": "1"
+        }
+      ]
+    }
+  }
+}

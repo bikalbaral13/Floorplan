@@ -1,0 +1,333 @@
+{
+  "version": 1,
+  "id": "detect-windows",
+  "title": "Detect windows",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Detect windows",
+    "icon": {
+      "paths": [
+        "M4 5h16v14H4z",
+        "M12 5v14",
+        "M4 12h16"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Find every WINDOW in the drawing, measure it, and hand the canvas a plan document that carries each one as a real window SEGMENT with the library's window.json attached.\n\n  Geometry (Image kind) → Input Properties → Object Detection [Window] → Math Engine → Output Metrics (+ 2D Render)\n\nTHE ROOT IS THE GEOMETRY NODE, not a separate Image node. Selecting a picture on the canvas retargets a grabbing Geometry node onto its Image kernel, so the same node that would carry a Space or a Segment carries the drawing — one root, whatever is selected. “Grab from selection” is ON: pick the underlay and this node follows it. Turn it off and name an overlay (“render-1”) to read a generated redraw instead.\n\nTHE BRIEF SITS IN THE CHAIN, not beside it. Input Properties is wired between the Geometry node and Object Detection, so the tuning values and the picture travel one chain: the detector resolves its image by walking UPSTREAM through geometry edges, so it still finds the picture through the brief, and the brief is a member of that chain rather than a value node hanging off the side. Three parameters: “Min window length” drops boxes too short to be a window, “Width override” forces one wall depth when the drawing’s own reading is unreliable (0 keeps each box’s short side), and “Pixels per metre” is the scale written into the plan document.\n\nWHAT THE MATHS PUBLISHES. min/max over each row’s four x’s and four y’s recovers the box; the mid-line of the LONGER axis is the window — a wide box gives (x0,cy)→(x1,cy), a tall one (cx,y0)→(cx,y1) — and the short side is its wall depth. Four measures reach Output Metrics: the box POLYGON COORDINATES as a grouped [x, y, box] list, the CENTRE-LINE SEGMENT as [x1, y1, x2, y2, w], the WIDTH (wall depth, per window) and the LENGTH (span along the wall, per window).\n\nTHE PLAN DOCUMENT. The Math Engine’s encode block runs Canvas Encoder after the formulas and publishes `val-json`: each kept centre line becomes a segment of segmentType “window” on the “window” layer, marked as an opening, carrying objectId “window-with-math” and objectPath “Objects/Architectural/window.json” with its sill, lintel, panes and frame params. Per-window wall depth rides on the thickness column, so each segment gets its own measured value rather than one figure for all. Want masonry around each opening as well? Add a wall.json entry to that segment’s `extraObjects` — the shape floorplan.v11 uses.\n\nSHOW IN CANVAS. The plan JSON lands in the last Output Metrics slot, and that node’s “Show in canvas” button imports it by the same path File ▸ Import takes for a plan you picked. Nothing reaches the canvas until you press it — the flow only ever computes the document.\n\nHOW TO RUN: 1) select the drawing on the canvas — the Geometry node binds to it; 2) paste your Gemini API key into the Object Detection node (it ships BLANK on purpose — never save a key into a shared workflow file); 3) press DETECT on that node. Detect bakes its result into the node — nothing detects on its own and re-running the flow does not re-detect, so press it again after changing the image or the rows. Without a key the node produces nothing while the rest still evaluates, which looks exactly like “found none”. If the found count is 0 while “Unclaimed labels” is full, the model used a different word — rename the row rather than raising Max items.\n\n---\nHOSTED ON AN IMAGE. This file now carries an `object` block with `hostKind: \"image\"`, so it lists as a parametric object and attaches to an imported picture from the Properties tab.\n\nWHAT STILL ONLY WORKS IN THE FLOW EDITOR: an attached object is resolved by the spine runner, which evaluates Input Properties, the Math Engine and the Render rows and NOTHING else. It does not run the Object Detection node, and it reads the Math Engine's `decode` block but never its `encode`. Detection is also an async, billed call that has to be pressed and baked — there is no button on an attached object, and an object re-resolves on every parameter change. So attached, this reports nothing until detect-and-bake exists for attachments. Open it in the Flow editor to actually run it.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -760,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "pooling": "ink",
+          "nodeLabel": "Geometry — the drawing"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -450,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "minW",
+              "name": "Min window length (m)",
+              "type": "range",
+              "value": 0.4,
+              "min": 0,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "bandTh",
+              "name": "Width override (m, 0 = box short side)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "ppm",
+              "name": "Pixels per metre (plan JSON)",
+              "type": "range",
+              "value": 50,
+              "min": 10,
+              "max": 200,
+              "step": 1,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Tuning"
+        }
+      }
+    },
+    {
+      "id": "detect",
+      "position": {
+        "x": -120,
+        "y": 0
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 20,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_window",
+              "name": "Window"
+            }
+          ],
+          "nodeLabel": "Window — press Detect"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Boxes → centre lines, sizes, plan JSON",
+          "expr": "# BOXES -> CENTRE LINE, SIZE, AND A PLAN DOCUMENT.\n# A is the detection's `corners` matrix: one row per box, [x0,y0,x1,y1,x2,y2,x3,y3] in metres.\n_X = hcat(hcat(col(A,0), col(A,2)), hcat(col(A,4), col(A,6)))\n_Y = hcat(hcat(col(A,1), col(A,3)), hcat(col(A,5), col(A,7)))\n_x0 = min(_X, 'rows')\n_x1 = max(_X, 'rows')\n_y0 = min(_Y, 'rows')\n_y1 = max(_Y, 'rows')\n_cx = (_x0 + _x1) / 2\n_cy = (_y0 + _y1) / 2\n\n# The window runs along the LONGER axis; the short side is how deep the wall is.\n_wide = gt(_x1 - _x0, _y1 - _y0)\n_S0 = hcat(where(_wide, _x0, _cx), where(_wide, _cy, _y0))\n_E0 = hcat(where(_wide, _x1, _cx), where(_wide, _cy, _y1))\n_T0 = where(_wide, _y1 - _y0, _x1 - _x0)\n_L0 = len(_E0 - _S0)\n\n# Drop anything shorter than the brief's minimum - a stray label box, a mullion read as its own window.\n_keep = ge(_L0, minW)\nS = compress(_S0, _keep)\nE = compress(_E0, _keep)\nTh = compress(_T0, _keep)\n\n# THE FOUR MEASURES the Output Metrics node reports.\nLen = len(E - S)\nWid = bandTh > 0 ? Th * 0 + bandTh : Th\nSeg = hcat(hcat(S, E), Wid)\n_K = compress(A, _keep)\n_n = rows(_K)\nBox = hcat(reshape(_K, 4 * _n, 2), floor(arange(4 * _n) / 4))\n\n# One type code per row (all 1 -> the single `window` entry in the encode map) and the plan's scale.\nK = Wid * 0 + 1\nPPM = ppm\n\nFound = rows(A)\nKept = _n\nDropped = Found - _n\n",
+          "decode": "",
+          "encode": "{\n  \"from\": {\n    \"a\": \"S\",\n    \"b\": \"E\",\n    \"thickness\": \"Wid\",\n    \"types\": \"K\",\n    \"pixelsPerMeter\": \"PPM\"\n  },\n  \"objects\": {\n    \"segments\": {\n      \"window\": {\n        \"segmentType\": \"window\",\n        \"layer\": \"window\",\n        \"thickness\": 0.23,\n        \"mode\": \"line\",\n        \"opening\": true,\n        \"objectId\": \"window-with-math\",\n        \"objectPath\": \"Objects/Architectural/window.json\",\n        \"params\": {\n          \"fitMode\": \"Fill wall\",\n          \"wallDepth\": 0.23,\n          \"sillHeight\": 0.9,\n          \"lintelHeight\": 2.1,\n          \"panes\": 2,\n          \"frameWidth\": 0.05,\n          \"operation\": \"Fixed\",\n          \"showFrame\": true\n        }\n      }\n    },\n    \"points\": {},\n    \"space\": {}\n  },\n  \"pixelsPerMeter\": 50,\n  \"libraryPath\": \"https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library\",\n  \"decimals\": 4\n}",
+          "nodeLabel": "Measure + encode the plan"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_box",
+              "kind": "polygon",
+              "name": "Detected window boxes",
+              "color": "#0ea5e9",
+              "layer": "Detected · Windows",
+              "lineStyle": "dashed",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_seg",
+              "kind": "stroke",
+              "name": "Window centre lines",
+              "color": "#0369a1",
+              "layer": "Detected · Window centre lines",
+              "lineStyle": "solid",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "width": 0.1,
+              "show": true
+            }
+          ],
+          "nodeLabel": "Boxes + centre-line bands"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 620,
+        "y": 240
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Windows — detected"
+            },
+            {
+              "id": "s2",
+              "label": "Windows — kept (≥ min length)"
+            },
+            {
+              "id": "s3",
+              "label": "Dropped as too short"
+            },
+            {
+              "id": "s4",
+              "label": "Unclaimed labels (rename the row if non-empty)"
+            },
+            {
+              "id": "s5",
+              "label": "Polygon coordinates [x, y, box], per corner"
+            },
+            {
+              "id": "s6",
+              "label": "Centre-line segment [x1, y1, x2, y2, w]"
+            },
+            {
+              "id": "s7",
+              "label": "Width (m, per window — wall depth)"
+            },
+            {
+              "id": "s8",
+              "label": "Length (m, per window — span along the wall)"
+            },
+            {
+              "id": "s9",
+              "label": "Plan JSON — window segments + window.json"
+            }
+          ],
+          "nodeLabel": "What was found"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geom_props",
+      "source": "geom",
+      "sourceHandle": null,
+      "target": "props",
+      "targetHandle": null
+    },
+    {
+      "id": "e2_props_detect",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detect",
+      "targetHandle": null
+    },
+    {
+      "id": "e3_props_minw",
+      "source": "props",
+      "sourceHandle": "val-minW",
+      "target": "math",
+      "targetHandle": "valin-minW"
+    },
+    {
+      "id": "e4_props_bandth",
+      "source": "props",
+      "sourceHandle": "val-bandTh",
+      "target": "math",
+      "targetHandle": "valin-bandTh"
+    },
+    {
+      "id": "e5_props_ppm",
+      "source": "props",
+      "sourceHandle": "val-ppm",
+      "target": "math",
+      "targetHandle": "valin-ppm"
+    },
+    {
+      "id": "e6_detect_math",
+      "source": "detect",
+      "sourceHandle": "val-o_window_corners",
+      "target": "math",
+      "targetHandle": "valin-A"
+    },
+    {
+      "id": "e7_math_box",
+      "source": "math",
+      "sourceHandle": "val-Box",
+      "target": "render",
+      "targetHandle": "valin-pr_box"
+    },
+    {
+      "id": "e8_math_seg",
+      "source": "math",
+      "sourceHandle": "val-Seg",
+      "target": "render",
+      "targetHandle": "valin-pr_seg"
+    },
+    {
+      "id": "e9_found",
+      "source": "math",
+      "sourceHandle": "val-Found",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e10_kept",
+      "source": "math",
+      "sourceHandle": "val-Kept",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e11_dropped",
+      "source": "math",
+      "sourceHandle": "val-Dropped",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e12_unmatched",
+      "source": "detect",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e13_poly",
+      "source": "math",
+      "sourceHandle": "val-Box",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e14_seg",
+      "source": "math",
+      "sourceHandle": "val-Seg",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e15_width",
+      "source": "math",
+      "sourceHandle": "val-Wid",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e16_length",
+      "source": "math",
+      "sourceHandle": "val-Len",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e17_planjson",
+      "source": "math",
+      "sourceHandle": "val-json",
+      "target": "metrics",
+      "targetHandle": "valin-s9"
+    }
+  ]
+}

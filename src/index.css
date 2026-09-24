@@ -186,3 +186,13 @@ All colors MUST be HSL.
   scrollbar-width: thin;
   scrollbar-color: #bdbdbd transparent;
 }
+
+/* Properties panel scroller. Radix's ScrollArea viewport child is `display:table; min-width:100%`, and a
+   table inside a scroll container has unlimited inline space — so it grows to MAX-CONTENT. One long
+   parameter label (a 16-param object like the BOQ generator has several) then widens the whole panel and
+   pushes every value input past the column edge. Forcing the child to a plain full-width block caps it at
+   the column and lets the labels wrap. Scoped to this panel: elsewhere the table behaviour is wanted. */
+.props-scroll > div > div {
+  display: block !important;
+  width: 100% !important;
+}

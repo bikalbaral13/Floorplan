@@ -1,0 +1,1476 @@
+{
+  "version": 1,
+  "id": "frame-analysis",
+  "title": "Plane frame analysis — direct stiffness, three methods, in one Math Engine",
+  "category": "Structural",
+  "description": "Draw a frame in elevation, press RUN, and read the analysis off the members and joints themselves.\n\nTHE STRUCTURE IS THE DRAWING. The **Geometry** node's Canvas JSON goes into the **Math Engine**'s `decode` block, which publishes the topology and the PARAMETERS off every attached object: a joint's restraints and nodal loads, a member's E, breadth, depth, span load and end releases. Change a section on a beam and the next run analyses the new frame, because the beam is where that number lives.\n\nTHE CANVAS PLANE IS THE FRAME'S PLANE. Canvas x is structural X; structural Y is UP, which is minus canvas y. That negation happens once, at the top of the body, and nothing downstream repeats it — which is why a joint's `Fy` is positive upwards and gravity is negative.\n\nTHREE METHODS, ONE ASSEMBLY — the `Analysis method` setting picks between them, and they are not three solvers:\n  • **Plane frame (first-order)** — the full 6×6 member stiffness, axial and bending.\n  • **Plane truss (axial only)** — the SAME assembly with the flexural terms switched off and every rotational freedom restrained. A truss is a frame with no bending stiffness and no rotational DOF, so it needs two scalars, not a second code path. Note that a portal frame is a MECHANISM when pin-jointed: an unbraced rectangle has no truss solution, and a solver that returns one for it is wrong.\n  • **Plane frame (P-Δ)** — first-order, then the geometric stiffness Kg built from the axial forces just found, re-solved, repeated for `P-Delta passes`. Second-order effects come from iterating the same assembly. On the benchmark portal it amplifies sway from 5.499 mm to 5.535 mm — small, real, and exactly what the reference package reports.\n\nCONSTRAINTS BY ROW REPLACEMENT, not renumbering. A restrained DOF's row becomes an identity row and its column is cleared from the rest — algebraically the same system as deleting it, without the free-DOF numbering map that the expression language has no cheap way to build. A node no member reaches, and any DOF left with no stiffness at all, is pinned the same way: a zero on the diagonal is a singular matrix, and it would take every number in the model with it rather than failing loudly.\n\nMOMENT RELEASES BY GATED STATIC CONDENSATION — local DOF 2, then DOF 5 from the already-condensed matrix, which is the correct sequential form for a member released at both ends. A member with no release runs the identical arithmetic multiplied by zero, so there is one path through the code regardless.\n\nWHERE THE ANSWER LANDS. Six writers put displacements, rotations and reactions on each **Joint**, and six put the end actions on each **Member**. Those objects then do their own work: a Joint turns its displacement into a deflected position drawn on the canvas and checks its reaction; a Member samples M(x) = −M₁ + V₁x − wx²/2 along the span, DRAWS ITS OWN BENDING MOMENT DIAGRAM, and reports max moment, max shear, combined stress and utilisation. Select a beam and its Metrics tab is its own solved state.\n\nTHE FLOW'S OWN METRICS ARE THE WHOLE-STRUCTURE ANSWER: model size and DOF counts, applied load against reactions with the equilibrium error between them, peak displacement, rotation, axial, shear, moment and reaction, strain energy, and pass/fail on deflection and drift against the limits on the settings node. `Equilibrium OK` is the audit that matters — every applied force must come back out through the supports.\n\nVERIFIED against PyNite (an independent, validated open-source frame FEA) on two benchmarks: a fixed-base portal with a UDL and a lateral load, and a triangulated simple truss. All three methods reproduce its displacements, reactions and member end actions to better than 0.001 mm and 0.005 kN, with zero equilibrium residual. SAP2000 / ETABS were not available to check against directly. See tools/struct/check-frame.mjs.\n\nWHAT THIS CANNOT DO. Plane frames only — no out-of-plane action, no torsion, no plates. Linear elastic and small-displacement apart from the P-Δ geometric term; no buckling check, no plastic hinges, no dynamics, no load combinations (one load case, scaled by `Load factor`), no code checks. The stiffness modifier is a blunt multiplier on I for cracked sections, not a section analysis.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -1240,
+        "y": -40
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "canvas",
+      "position": {
+        "x": -1240,
+        "y": 320
+      },
+      "data": {
+        "tool": "canvas-source",
+        "params": {}
+      }
+    },
+    {
+      "id": "settings",
+      "position": {
+        "x": -1240,
+        "y": -520
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "run",
+              "name": "Run — analyse & apply",
+              "type": "button",
+              "value": 0,
+              "min": 0,
+              "max": 0,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "analysis",
+              "name": "Analysis method",
+              "type": "select",
+              "value": "Plane frame (first-order)",
+              "options": [
+                "Plane frame (first-order)",
+                "Plane truss (axial only)",
+                "Plane frame (P-Delta)"
+              ],
+              "min": 0,
+              "max": 0,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "diagram",
+              "name": "Diagram on every member",
+              "type": "select",
+              "value": "Bending moment",
+              "options": [
+                "None",
+                "Bending moment",
+                "Shear force",
+                "Axial force",
+                "Deflected shape"
+              ],
+              "min": 0,
+              "max": 0,
+              "step": 1,
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "pdeltaIters",
+              "name": "P-Delta passes",
+              "type": "range",
+              "value": 8,
+              "min": 1,
+              "max": 20,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "loadFactor",
+              "name": "Load factor",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "stiffnessFactor",
+              "name": "Stiffness modifier (cracked section)",
+              "type": "range",
+              "value": 1,
+              "min": 0.05,
+              "max": 1,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "deflectionLimit",
+              "name": "Deflection limit (span / n)",
+              "type": "range",
+              "value": 250,
+              "min": 50,
+              "max": 1000,
+              "step": 10,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "driftLimit",
+              "name": "Drift limit (height / n)",
+              "type": "range",
+              "value": 500,
+              "min": 100,
+              "max": 2000,
+              "step": 10,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "solve",
+      "position": {
+        "x": -720,
+        "y": -200
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Plane frame — direct stiffness",
+          "expr": "# ── Shape, indices, identity ───────────────────────────────────────────────────\n_N = rows(nodes)\n_M = rows(a)\n_ND = 3 * _N\n_iN = arange(_N)\n_iM = arange(_M)\n_rowN = T(_iN)\n_rowND = T(arange(_ND))\n_I3 = eye(_ND)\n\n# ── The structural frame. Canvas y runs DOWN the page; structural Y runs UP, so every\n# ── y is negated once, here, and nothing downstream has to remember it again.\n_X = col(nodes, 0)\n_Y = 0 - col(nodes, 1)\n\n# ── Joint data — nodeVals columns: 0 fixX, 1 fixY, 2 fixR, 3 Fx, 4 Fy, 5 Mz ────\n_fixX = gt(col(nodeVals, 0), 0)\n_fixY = gt(col(nodeVals, 1), 0)\n_fixR = gt(col(nodeVals, 2), 0)\n_Fx = col(nodeVals, 3) * loadFactor\n_Fy = col(nodeVals, 4) * loadFactor\n_Mz = col(nodeVals, 5) * loadFactor\n\n# ── Member data — segVals columns: 0 E, 1 b, 2 h, 3 udl, 4 relStart, 5 relEnd,\n# ── 6 density, 7 selfWeight. Only segments carrying a beam or column object are members.\n_isMem = max(eq(col(types, 0), 1), eq(col(types, 0), 2))\n_Ev = max(1, col(segVals, 0)) * 1e6\n_bv = max(0.02, col(segVals, 1) / 1000)\n_hv = max(0.02, col(segVals, 2) / 1000)\n_Av = _bv * _hv\n_Iv = _bv * pow(_hv, 3) / 12 * max(0.01, stiffnessFactor)\n_relS = gt(col(segVals, 4), 0)\n_relE = gt(col(segVals, 5), 0)\n# Self weight is opt-in PER MEMBER and joins the span load, so one number reaches the analysis.\n_swv = gt(col(segVals, 7), 0) * _Av * col(segVals, 6)\n_wv = (col(segVals, 3) + _swv) * loadFactor * _isMem\n_EAv = _Ev * _Av\n_EIv = _Ev * _Iv\n\n# ── Geometry from the incidence the decoder resolved ───────────────────────────\n_na = col(segNodes, 0)\n_nb = col(segNodes, 1)\n_Oa = eq(kron(_na, ones(1, _N)), kron(ones(_M, 1), _rowN))\n_Ob = eq(kron(_nb, ones(1, _N)), kron(ones(_M, 1), _rowN))\n_x1 = _Oa @ _X\n_y1 = _Oa @ _Y\n_x2 = _Ob @ _X\n_y2 = _Ob @ _Y\n_dxv = _x2 - _x1\n_dyv = _y2 - _y1\n_Lv = max(1e-6, sqrt(_dxv * _dxv + _dyv * _dyv))\n_csv = _dxv / _Lv\n_snv = _dyv / _Lv\n_DOFv = hcat(3 * _na, 3 * _na + 1, 3 * _na + 2, 3 * _nb, 3 * _nb + 1, 3 * _nb + 2)\n\n# ── Which algorithm ────────────────────────────────────────────────────────────\n_isTruss = analysis == 'Plane truss (axial only)'\n_isPD = analysis == 'Plane frame (P-Delta)'\n_bend = _isTruss ? 0 : 1\n# A comparison yields a BOOLEAN, and multiplying a matrix by one gives an empty matrix rather than a\n# scaled copy — every mask that meets a matrix has to be a number first.\n_trussN = _isTruss ? 1 : 0\n_pdN = _isPD ? 1 : 0\n\n# ── Restrained DOFs. reshape is row-major, so node i's three freedoms land at 3i, 3i+1, 3i+2.\n_pinJ = reshape(hcat(_fixX, _fixY, _fixR), _ND, 1)\n# A truss has no rotational freedom at all.\n_rotAll = reshape(hcat(zeros(_N, 1), zeros(_N, 1), ones(_N, 1)), _ND, 1)\n_pin0 = max(_pinJ, _trussN * _rotAll)\n# A node no member reaches would leave three empty rows.\n_degN = T(_Oa) @ _isMem + T(_Ob) @ _isMem\n_isoN = eq(_degN, 0)\n_pin1 = max(_pin0, reshape(hcat(_isoN, _isoN, _isoN), _ND, 1))\n\n_Fjoint = reshape(hcat(_Fx, _Fy, _Mz), _ND, 1)\n\n# ── Solve ──────────────────────────────────────────────────────────────────────\n# The RUN GATE: no presses, no iterations, no work. A P-Delta run repeats the whole assembly with\n# the axial forces from the pass before; first-order runs it once.\n_outer = run > 0 ? (_isPD ? max(1, min(20, round(pdeltaIters))) : 1) : 0\n_Pax = zeros(_M, 1)\n_D = zeros(_ND, 1)\n_Fv = zeros(_ND, 1)\n_K = zeros(_ND, _ND)\n_MF = zeros(_M, 6)\n_MD = zeros(_M, 6)\n\nloop it in _outer:\n  _K = zeros(_ND, _ND)\n  _Fv = _Fjoint\n  loop i in _M:\n    _Li = row(_Lv, i)\n    _ci = row(_csv, i)\n    _si = row(_snv, i)\n    _mi = row(_isMem, i)\n    _ea = row(_EAv, i) / _Li * _mi\n    _ei = row(_EIv, i) * _bend * _mi\n    _e1 = 12 * _ei / pow(_Li, 3)\n    _e2 = 6 * _ei / pow(_Li, 2)\n    _e3 = 4 * _ei / _Li\n    _e4 = 2 * _ei / _Li\n    _k = vcat( hcat(_ea, 0, 0, 0 - _ea, 0, 0), hcat(0, _e1, _e2, 0, 0 - _e1, _e2), hcat(0, _e2, _e3, 0, 0 - _e2, _e4), hcat(0 - _ea, 0, 0, _ea, 0, 0), hcat(0, 0 - _e1, 0 - _e2, 0, _e1, 0 - _e2), hcat(0, _e2, _e4, 0, 0 - _e2, _e3))\n    # Geometric stiffness — the only structural difference a second-order analysis makes. Built from\n    # the axial force of the PREVIOUS pass, which is zero on the first, so pass 1 is first-order.\n    _Pi = row(_Pax, i) * _pdN\n    _g = _Pi / _Li\n    _Kg = _g * vcat( hcat(0, 0, 0, 0, 0, 0), hcat(0, 1.2, _Li / 10, 0, 0 - 1.2, _Li / 10), hcat(0, _Li / 10, 2 * _Li * _Li / 15, 0, 0 - _Li / 10, 0 - _Li * _Li / 30), hcat(0, 0, 0, 0, 0, 0), hcat(0, 0 - 1.2, 0 - _Li / 10, 0, 1.2, 0 - _Li / 10), hcat(0, _Li / 10, 0 - _Li * _Li / 30, 0, 0 - _Li / 10, 2 * _Li * _Li / 15))\n    _k = _k + _Kg * _bend\n    # Span load, resolved from GLOBAL gravity onto the member's own axes: a load of w per metre\n    # acting down has a transverse component w·cos and an axial component w·sin, so an inclined\n    # member takes its share of both instead of being loaded perpendicular to itself.\n    _wi = row(_wv, i)\n    _qt = 0 - _wi * _ci\n    _qa = 0 - _wi * _si\n    _fef = vcat( hcat(0 - _qa * _Li / 2), hcat(0 - _qt * _Li / 2), hcat(0 - _qt * _Li * _Li / 12), hcat(0 - _qa * _Li / 2), hcat(0 - _qt * _Li / 2), hcat(_qt * _Li * _Li / 12))\n    # Moment releases, by gated static condensation — local DOF 2 (start), then DOF 5 (end) from the\n    # already-condensed matrix. A member with no release multiplies by zero and is untouched.\n    _r1 = row(_relS, i) * _bend\n    _c2 = sub(_k, 0, 2, 6, 1)\n    _r2 = sub(_k, 2, 0, 1, 6)\n    _d2 = max(abs(sub(_k, 2, 2, 1, 1)), 1e-12)\n    _f2 = sub(_fef, 2, 0, 1, 1)\n    _k = _k - _r1 * (_c2 @ _r2) / _d2\n    _fef = _fef - _r1 * _c2 * _f2 / _d2\n    _r5 = row(_relE, i) * _bend\n    _c5 = sub(_k, 0, 5, 6, 1)\n    _r5r = sub(_k, 5, 0, 1, 6)\n    _d5 = max(abs(sub(_k, 5, 5, 1, 1)), 1e-12)\n    _f5 = sub(_fef, 5, 0, 1, 1)\n    _k = _k - _r5 * (_c5 @ _r5r) / _d5\n    _fef = _fef - _r5 * _c5 * _f5 / _d5\n    # Local → global, and scatter into the structure by a one-hot selection matrix.\n    _Tm = vcat( hcat(_ci, _si, 0, 0, 0, 0), hcat(0 - _si, _ci, 0, 0, 0, 0), hcat(0, 0, 1, 0, 0, 0), hcat(0, 0, 0, _ci, _si, 0), hcat(0, 0, 0, 0 - _si, _ci, 0), hcat(0, 0, 0, 0, 0, 1))\n    _Lsel = eq(kron(T(row(_DOFv, i)), ones(1, _ND)), kron(ones(6, 1), _rowND))\n    _K = _K + T(_Lsel) @ (T(_Tm) @ _k @ _Tm) @ _Lsel\n    _Fv = _Fv - T(_Lsel) @ (T(_Tm) @ _fef)\n  end\n  # A DOF with no stiffness at all — every member at it released, or an orphan — is pinned rather\n  # than left to make the matrix singular.\n  _pin = max(_pin1, le(abs(diag(_K)), 1e-9))\n  _pr = kron(_pin, ones(1, _ND))\n  _pc = kron(ones(_ND, 1), T(_pin))\n  _Kc = _K * (1 - _pr) * (1 - _pc) + _I3 * _pr\n  _D = solve(_Kc, _Fv * (1 - _pin))\n  # Member end actions, and the axial force the next P-Delta pass needs.\n  _MF = zeros(0, 6)\n  _MD = zeros(0, 6)\n  loop i in _M:\n    _Li = row(_Lv, i)\n    _ci = row(_csv, i)\n    _si = row(_snv, i)\n    _mi = row(_isMem, i)\n    _ea = row(_EAv, i) / _Li * _mi\n    _ei = row(_EIv, i) * _bend * _mi\n    _e1 = 12 * _ei / pow(_Li, 3)\n    _e2 = 6 * _ei / pow(_Li, 2)\n    _e3 = 4 * _ei / _Li\n    _e4 = 2 * _ei / _Li\n    _k = vcat( hcat(_ea, 0, 0, 0 - _ea, 0, 0), hcat(0, _e1, _e2, 0, 0 - _e1, _e2), hcat(0, _e2, _e3, 0, 0 - _e2, _e4), hcat(0 - _ea, 0, 0, _ea, 0, 0), hcat(0, 0 - _e1, 0 - _e2, 0, _e1, 0 - _e2), hcat(0, _e2, _e4, 0, 0 - _e2, _e3))\n    # The SAME geometric stiffness the assembly used. Recovering member actions from the elastic\n    # matrix alone would contradict the reactions, which come from the assembled K.\n    _Pi = row(_Pax, i) * _pdN\n    _g = _Pi / _Li\n    _Kg = _g * vcat( hcat(0, 0, 0, 0, 0, 0), hcat(0, 1.2, _Li / 10, 0, 0 - 1.2, _Li / 10), hcat(0, _Li / 10, 2 * _Li * _Li / 15, 0, 0 - _Li / 10, 0 - _Li * _Li / 30), hcat(0, 0, 0, 0, 0, 0), hcat(0, 0 - 1.2, 0 - _Li / 10, 0, 1.2, 0 - _Li / 10), hcat(0, _Li / 10, 0 - _Li * _Li / 30, 0, 0 - _Li / 10, 2 * _Li * _Li / 15))\n    _k = _k + _Kg * _bend\n    _wi = row(_wv, i)\n    _qt = 0 - _wi * _ci\n    _qa = 0 - _wi * _si\n    _fef = vcat( hcat(0 - _qa * _Li / 2), hcat(0 - _qt * _Li / 2), hcat(0 - _qt * _Li * _Li / 12), hcat(0 - _qa * _Li / 2), hcat(0 - _qt * _Li / 2), hcat(_qt * _Li * _Li / 12))\n    _r1 = row(_relS, i) * _bend\n    _c2 = sub(_k, 0, 2, 6, 1)\n    _r2 = sub(_k, 2, 0, 1, 6)\n    _d2 = max(abs(sub(_k, 2, 2, 1, 1)), 1e-12)\n    _f2 = sub(_fef, 2, 0, 1, 1)\n    _k = _k - _r1 * (_c2 @ _r2) / _d2\n    _fef = _fef - _r1 * _c2 * _f2 / _d2\n    _r5 = row(_relE, i) * _bend\n    _c5 = sub(_k, 0, 5, 6, 1)\n    _r5r = sub(_k, 5, 0, 1, 6)\n    _d5 = max(abs(sub(_k, 5, 5, 1, 1)), 1e-12)\n    _f5 = sub(_fef, 5, 0, 1, 1)\n    _k = _k - _r5 * (_c5 @ _r5r) / _d5\n    _fef = _fef - _r5 * _c5 * _f5 / _d5\n    _Tm = vcat( hcat(_ci, _si, 0, 0, 0, 0), hcat(0 - _si, _ci, 0, 0, 0, 0), hcat(0, 0, 1, 0, 0, 0), hcat(0, 0, 0, _ci, _si, 0), hcat(0, 0, 0, 0 - _si, _ci, 0), hcat(0, 0, 0, 0, 0, 1))\n    _Lsel = eq(kron(T(row(_DOFv, i)), ones(1, _ND)), kron(ones(6, 1), _rowND))\n    _dloc = _Tm @ (_Lsel @ _D)\n    _fi = _k @ _dloc + _fef\n    _MF = vcat(_MF, T(_fi))\n    _MD = vcat(_MD, T(_dloc))\n  end\n  # Axial, TENSION POSITIVE: the local x action at the far end. Feeds the next P-Delta pass.\n  _Pax = col(_MF, 3)\nend\n\n# ── Results ────────────────────────────────────────────────────────────────────\n_pin = max(_pin1, le(abs(diag(_K)), 1e-9))\n_Dn = reshape(_D, _N, 3)\n_ux = col(_Dn, 0)\n_uy = col(_Dn, 1)\n_rz = col(_Dn, 2)\n# Reactions are the residual of the UNCONSTRAINED system, and are meaningful only where restrained.\n_Rall = _K @ _D - _Fv\n_Rn = reshape(_Rall * _pin, _N, 3)\n_Rx = col(_Rn, 0)\n_Ry = col(_Rn, 1)\n_Rz = col(_Rn, 2)\n_isSup = gt(_fixX + _fixY + _fixR, 0)\n\n_N1 = col(_MF, 0)\n_V1 = col(_MF, 1)\n_M1 = col(_MF, 2)\n_N2 = col(_MF, 3)\n_V2 = col(_MF, 4)\n_M2 = col(_MF, 5)\n\nDisplacements = _Dn\nMemberActions = _MF\n\n# ── Assignment matrices for the Set Object Param writers ───────────────────────\n# Displacements in mm and rotations in mrad, because that is what a joint reports; the analysis\n# works in m and rad and converts once, here, rather than in six places downstream.\nJointUx = hcat(_iN, _ux * 1000)\nJointUy = hcat(_iN, _uy * 1000)\nJointRot = hcat(_iN, _rz * 1000)\nJointRx = hcat(_iN, _Rx)\nJointRy = hcat(_iN, _Ry)\nJointRz = hcat(_iN, _Rz)\nMemN1 = compress(hcat(_iM, _N1), _isMem)\nMemV1 = compress(hcat(_iM, _V1), _isMem)\nMemM1 = compress(hcat(_iM, _M1), _isMem)\nMemN2 = compress(hcat(_iM, _N2), _isMem)\nMemV2 = compress(hcat(_iM, _V2), _isMem)\nMemM2 = compress(hcat(_iM, _M2), _isMem)\n# Local end displacements, mm and mrad.\nMemDu1 = compress(hcat(_iM, col(_MD, 0) * 1000), _isMem)\nMemDv1 = compress(hcat(_iM, col(_MD, 1) * 1000), _isMem)\nMemDr1 = compress(hcat(_iM, col(_MD, 2) * 1000), _isMem)\nMemDu2 = compress(hcat(_iM, col(_MD, 3) * 1000), _isMem)\nMemDv2 = compress(hcat(_iM, col(_MD, 4) * 1000), _isMem)\nMemDr2 = compress(hcat(_iM, col(_MD, 5) * 1000), _isMem)\n# One diagram choice for the whole model, written onto every member so a single control switches them\n# all. The writer maps the code back to the member object's own select.\n_dgc = diagram == 'Bending moment' ? 1 : (diagram == 'Shear force' ? 2 : (diagram == 'Axial force' ? 3 : (diagram == 'Deflected shape' ? 4 : 0)))\nMemDiagram = compress(hcat(_iM, _dgc * ones(_M, 1)), _isMem)\n# Each joint's height above the lowest support, so it can report a DRIFT RATIO rather than millimetres.\nJointHeight = hcat(_iN, _Y - min(_Y))\n\n# ── Global metrics ─────────────────────────────────────────────────────────────\nnodesRead = _N\nsegmentsRead = _M\nmemberCount = sum(_isMem)\nbeamCount = sum(eq(col(types, 0), 1))\ncolumnCount = sum(eq(col(types, 0), 2))\nsupportCount = sum(_isSup)\nrestrainedDofs = sum(_pin)\nfreeDofs = _ND - sum(_pin)\ntotalDofs = _ND\ndanglingEnds = unresolvedEnds\nisolatedNodes = sum(_isoN)\nsolved = _outer > 0 ? 1 : 0\niterationsRun = _outer\nanalysisCode = _isTruss ? 2 : (_isPD ? 3 : 1)\n\n_span = sum(_Lv * _isMem)\ntotalMemberLength = _span\nstructureWeight = sum(_swv * _Lv * _isMem)\ntotalSpanLoad = sum(_wv * _Lv * _isMem)\nappliedFx = sum(_Fx)\nappliedFy = sum(_Fy)\nreactionFx = sum(_Rx)\nreactionFy = sum(_Ry)\n# The analysis's own audit: every applied force must come back out through the supports.\nequilibriumX = abs(sum(_Fx) + sum(_Rx))\nequilibriumY = abs(appliedFy - sum(_wv * _Lv * _isMem) + sum(_Ry))\nverticalCheck = abs(appliedFy - sum(_wv * _Lv * _isMem) + reactionFy)\n\nmaxDispX = max(abs(_ux)) * 1000\nmaxDispY = max(abs(_uy)) * 1000\nmaxDisplacement = max(sqrt(_ux * _ux + _uy * _uy)) * 1000\nmaxRotation = max(abs(_rz)) * 1000\nmaxAxialTension = max(_N2)\nmaxAxialCompression = max(0 - _N2)\nmaxShear = max(abs(_V1)) > max(abs(_V2)) ? max(abs(_V1)) : max(abs(_V2))\nmaxEndMoment = max(abs(_M1)) > max(abs(_M2)) ? max(abs(_M1)) : max(abs(_M2))\nmaxReaction = max(sqrt(_Rx * _Rx + _Ry * _Ry))\nstrainEnergy = 0.5 * sum(_D * (_K @ _D))\n\n# ── Serviceability, against the global limits ──────────────────────────────────\n_lim = max(1, deflectionLimit)\nallowableDeflection = _span > 0 ? max(_Lv * _isMem) / _lim * 1000 : 0\ndeflectionOk = maxDisplacement <= allowableDeflection ? 1 : 0\n_dlim = max(1, driftLimit)\n_height = max(_Y) - min(_Y)\nallowableDrift = _height / _dlim * 1000\nstoreyDrift = maxDispX\ndriftOk = maxDispX <= (_height / _dlim * 1000) ? 1 : 0\n# Sway at the TOP of the structure, which is what a drift limit is written against — the largest\n# horizontal displacement anywhere can belong to a mid-height node on a soft storey.\n_topMask = eq(_Y, max(_Y))\ntopSway = max(abs(_ux) * _topMask) * 1000\nswayIndex = topSway > 1e-9 ? _height / (topSway / 1000) : 0\nswayRatio = _height > 1e-9 ? (topSway / 1000) / _height : 0\nbaseShear = abs(sum(_Rx))\noverturningMoment = abs(sum(_Rx * (_Y - min(_Y))))\nequilibriumOk = (abs(sum(_Fx) + sum(_Rx)) < 0.001 * max(1, abs(sum(_Fx)))) ? 1 : 0\nanalysisOk = (solved > 0 && isolatedNodes == 0 && danglingEnds == 0) ? 1 : 0",
+          "decode": "{\n \"from\": \"canvasJson\",\n \"typeNames\": [\n  \"frame-beam\",\n  \"frame-column\",\n  \"frame-joint\"\n ],\n \"nodeParams\": [\n  \"fixX\",\n  \"fixY\",\n  \"fixR\",\n  \"Fx\",\n  \"Fy\",\n  \"Mz\"\n ],\n \"segParams\": [\n  \"E\",\n  \"b\",\n  \"h\",\n  \"udl\",\n  \"releaseStart\",\n  \"releaseEnd\",\n  \"density\",\n  \"selfWeight\"\n ]\n}",
+          "encode": ""
+        }
+      }
+    },
+    {
+      "id": "summary",
+      "position": {
+        "x": -120,
+        "y": -560
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Nodes read",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s2",
+              "label": "Segments read",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s3",
+              "label": "Members",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s4",
+              "label": "Beams",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s5",
+              "label": "Columns",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s6",
+              "label": "Supports",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s7",
+              "label": "Total DOF",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s8",
+              "label": "Free DOF",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s9",
+              "label": "Restrained DOF",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s10",
+              "label": "Isolated nodes",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s11",
+              "label": "Unresolved member ends",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s12",
+              "label": "Method (1 frame, 2 truss, 3 P-Δ)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s13",
+              "label": "Solved",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s14",
+              "label": "Passes",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s15",
+              "label": "Total member length (m)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s16",
+              "label": "Self weight included (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s17",
+              "label": "Total span load (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s18",
+              "label": "Applied Fx (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s19",
+              "label": "Applied Fy (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s20",
+              "label": "Reaction Fx (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s21",
+              "label": "Reaction Fy (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s22",
+              "label": "Horizontal equilibrium error (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s23",
+              "label": "Vertical equilibrium error (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s24",
+              "label": "Vertical residual (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s25",
+              "label": "Max displacement X (mm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s26",
+              "label": "Max displacement Y (mm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s27",
+              "label": "Max displacement (mm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s28",
+              "label": "Max rotation (mrad)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s29",
+              "label": "Max axial tension (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s30",
+              "label": "Max axial compression (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s31",
+              "label": "Max shear (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s32",
+              "label": "Max end moment (kNm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s33",
+              "label": "Max reaction (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s34",
+              "label": "Strain energy (kNm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s35",
+              "label": "Allowable deflection (mm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s36",
+              "label": "Deflection OK",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s37",
+              "label": "Drift (mm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s38",
+              "label": "Allowable drift (mm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s39",
+              "label": "Drift OK",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s40",
+              "label": "Top sway (mm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s41",
+              "label": "Sway = height / n",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s42",
+              "label": "Sway ratio",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s43",
+              "label": "Base shear (kN)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s44",
+              "label": "Overturning moment (kNm)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s45",
+              "label": "Equilibrium OK",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s46",
+              "label": "Analysis OK",
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "w_ux",
+      "position": {
+        "x": -120,
+        "y": 140
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "ux",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Joint — displacement X"
+        }
+      }
+    },
+    {
+      "id": "w_uy",
+      "position": {
+        "x": -120,
+        "y": 280
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "uy",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Joint — displacement Y"
+        }
+      }
+    },
+    {
+      "id": "w_rot",
+      "position": {
+        "x": -120,
+        "y": 420
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "rotZ",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Joint — rotation"
+        }
+      }
+    },
+    {
+      "id": "w_rx",
+      "position": {
+        "x": -120,
+        "y": 560
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "Rx",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Joint — reaction X"
+        }
+      }
+    },
+    {
+      "id": "w_ry",
+      "position": {
+        "x": -120,
+        "y": 700
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "Ry",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Joint — reaction Y"
+        }
+      }
+    },
+    {
+      "id": "w_rz",
+      "position": {
+        "x": -120,
+        "y": 840
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "Rz",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Joint — reaction moment"
+        }
+      }
+    },
+    {
+      "id": "w_n1",
+      "position": {
+        "x": -120,
+        "y": 980
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "N1",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — axial at start"
+        }
+      }
+    },
+    {
+      "id": "w_v1",
+      "position": {
+        "x": -120,
+        "y": 1120
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "V1",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — shear at start"
+        }
+      }
+    },
+    {
+      "id": "w_m1",
+      "position": {
+        "x": -120,
+        "y": 1260
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "M1",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — moment at start"
+        }
+      }
+    },
+    {
+      "id": "w_n2",
+      "position": {
+        "x": -120,
+        "y": 1400
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "N2",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — axial at end"
+        }
+      }
+    },
+    {
+      "id": "w_v2",
+      "position": {
+        "x": -120,
+        "y": 1540
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "V2",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — shear at end"
+        }
+      }
+    },
+    {
+      "id": "w_m2",
+      "position": {
+        "x": -120,
+        "y": 1680
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "M2",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — moment at end"
+        }
+      }
+    },
+    {
+      "id": "w_h",
+      "position": {
+        "x": -120,
+        "y": 1820
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "height",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Joint — height above base"
+        }
+      }
+    },
+    {
+      "id": "w_du1",
+      "position": {
+        "x": -120,
+        "y": 1960
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "u1",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — axial disp at start"
+        }
+      }
+    },
+    {
+      "id": "w_dv1",
+      "position": {
+        "x": -120,
+        "y": 2100
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "v1",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — transverse disp at start"
+        }
+      }
+    },
+    {
+      "id": "w_dr1",
+      "position": {
+        "x": -120,
+        "y": 2240
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "r1",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — rotation at start"
+        }
+      }
+    },
+    {
+      "id": "w_du2",
+      "position": {
+        "x": -120,
+        "y": 2380
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "u2",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — axial disp at end"
+        }
+      }
+    },
+    {
+      "id": "w_dv2",
+      "position": {
+        "x": -120,
+        "y": 2520
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "v2",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — transverse disp at end"
+        }
+      }
+    },
+    {
+      "id": "w_dr2",
+      "position": {
+        "x": -120,
+        "y": 2660
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "r2",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Member — rotation at end"
+        }
+      }
+    },
+    {
+      "id": "w_diag",
+      "position": {
+        "x": -120,
+        "y": 2800
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "diagram",
+          "valueMap": "None,Bending moment,Shear force,Axial force,Deflected shape",
+          "template": "",
+          "nodeLabel": "Member — diagram"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_solve",
+      "source": "geo",
+      "target": "solve",
+      "sourceHandle": "val-canvasJson",
+      "targetHandle": "valin-canvasJson"
+    },
+    {
+      "id": "e_set_run",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-run",
+      "targetHandle": "valin-run"
+    },
+    {
+      "id": "e_set_analysis",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-analysis",
+      "targetHandle": "valin-analysis"
+    },
+    {
+      "id": "e_set_diagram",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-diagram",
+      "targetHandle": "valin-diagram"
+    },
+    {
+      "id": "e_set_pdeltaIters",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-pdeltaIters",
+      "targetHandle": "valin-pdeltaIters"
+    },
+    {
+      "id": "e_set_loadFactor",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-loadFactor",
+      "targetHandle": "valin-loadFactor"
+    },
+    {
+      "id": "e_set_stiffnessFactor",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-stiffnessFactor",
+      "targetHandle": "valin-stiffnessFactor"
+    },
+    {
+      "id": "e_set_deflectionLimit",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-deflectionLimit",
+      "targetHandle": "valin-deflectionLimit"
+    },
+    {
+      "id": "e_set_driftLimit",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-driftLimit",
+      "targetHandle": "valin-driftLimit"
+    },
+    {
+      "id": "e_out_nodesRead",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-nodesRead",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_out_segmentsRead",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-segmentsRead",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_out_memberCount",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-memberCount",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_out_beamCount",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-beamCount",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_out_columnCount",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-columnCount",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_out_supportCount",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-supportCount",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_out_totalDofs",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-totalDofs",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_out_freeDofs",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-freeDofs",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_out_restrainedDofs",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-restrainedDofs",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_out_isolatedNodes",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-isolatedNodes",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_out_danglingEnds",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-danglingEnds",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_out_analysisCode",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-analysisCode",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_out_solved",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-solved",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_out_iterationsRun",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-iterationsRun",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_out_totalMemberLength",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-totalMemberLength",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_out_structureWeight",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-structureWeight",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_out_totalSpanLoad",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-totalSpanLoad",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_out_appliedFx",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-appliedFx",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_out_appliedFy",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-appliedFy",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_out_reactionFx",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-reactionFx",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_reactionFy",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-reactionFy",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_out_equilibriumX",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-equilibriumX",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_out_equilibriumY",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-equilibriumY",
+      "targetHandle": "valin-s23"
+    },
+    {
+      "id": "e_out_verticalCheck",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-verticalCheck",
+      "targetHandle": "valin-s24"
+    },
+    {
+      "id": "e_out_maxDispX",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxDispX",
+      "targetHandle": "valin-s25"
+    },
+    {
+      "id": "e_out_maxDispY",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxDispY",
+      "targetHandle": "valin-s26"
+    },
+    {
+      "id": "e_out_maxDisplacement",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxDisplacement",
+      "targetHandle": "valin-s27"
+    },
+    {
+      "id": "e_out_maxRotation",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxRotation",
+      "targetHandle": "valin-s28"
+    },
+    {
+      "id": "e_out_maxAxialTension",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxAxialTension",
+      "targetHandle": "valin-s29"
+    },
+    {
+      "id": "e_out_maxAxialCompression",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxAxialCompression",
+      "targetHandle": "valin-s30"
+    },
+    {
+      "id": "e_out_maxShear",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxShear",
+      "targetHandle": "valin-s31"
+    },
+    {
+      "id": "e_out_maxEndMoment",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxEndMoment",
+      "targetHandle": "valin-s32"
+    },
+    {
+      "id": "e_out_maxReaction",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxReaction",
+      "targetHandle": "valin-s33"
+    },
+    {
+      "id": "e_out_strainEnergy",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-strainEnergy",
+      "targetHandle": "valin-s34"
+    },
+    {
+      "id": "e_out_allowableDeflection",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-allowableDeflection",
+      "targetHandle": "valin-s35"
+    },
+    {
+      "id": "e_out_deflectionOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-deflectionOk",
+      "targetHandle": "valin-s36"
+    },
+    {
+      "id": "e_out_storeyDrift",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-storeyDrift",
+      "targetHandle": "valin-s37"
+    },
+    {
+      "id": "e_out_allowableDrift",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-allowableDrift",
+      "targetHandle": "valin-s38"
+    },
+    {
+      "id": "e_out_driftOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-driftOk",
+      "targetHandle": "valin-s39"
+    },
+    {
+      "id": "e_out_topSway",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-topSway",
+      "targetHandle": "valin-s40"
+    },
+    {
+      "id": "e_out_swayIndex",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-swayIndex",
+      "targetHandle": "valin-s41"
+    },
+    {
+      "id": "e_out_swayRatio",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-swayRatio",
+      "targetHandle": "valin-s42"
+    },
+    {
+      "id": "e_out_baseShear",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-baseShear",
+      "targetHandle": "valin-s43"
+    },
+    {
+      "id": "e_out_overturningMoment",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-overturningMoment",
+      "targetHandle": "valin-s44"
+    },
+    {
+      "id": "e_out_equilibriumOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-equilibriumOk",
+      "targetHandle": "valin-s45"
+    },
+    {
+      "id": "e_out_analysisOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-analysisOk",
+      "targetHandle": "valin-s46"
+    },
+    {
+      "id": "e_bundle_w_ux",
+      "source": "canvas",
+      "target": "w_ux",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_ux",
+      "source": "solve",
+      "target": "w_ux",
+      "sourceHandle": "val-JointUx",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_uy",
+      "source": "canvas",
+      "target": "w_uy",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_uy",
+      "source": "solve",
+      "target": "w_uy",
+      "sourceHandle": "val-JointUy",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_rot",
+      "source": "canvas",
+      "target": "w_rot",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_rot",
+      "source": "solve",
+      "target": "w_rot",
+      "sourceHandle": "val-JointRot",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_rx",
+      "source": "canvas",
+      "target": "w_rx",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_rx",
+      "source": "solve",
+      "target": "w_rx",
+      "sourceHandle": "val-JointRx",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_ry",
+      "source": "canvas",
+      "target": "w_ry",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_ry",
+      "source": "solve",
+      "target": "w_ry",
+      "sourceHandle": "val-JointRy",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_rz",
+      "source": "canvas",
+      "target": "w_rz",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_rz",
+      "source": "solve",
+      "target": "w_rz",
+      "sourceHandle": "val-JointRz",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_n1",
+      "source": "canvas",
+      "target": "w_n1",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_n1",
+      "source": "solve",
+      "target": "w_n1",
+      "sourceHandle": "val-MemN1",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_v1",
+      "source": "canvas",
+      "target": "w_v1",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_v1",
+      "source": "solve",
+      "target": "w_v1",
+      "sourceHandle": "val-MemV1",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_m1",
+      "source": "canvas",
+      "target": "w_m1",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_m1",
+      "source": "solve",
+      "target": "w_m1",
+      "sourceHandle": "val-MemM1",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_n2",
+      "source": "canvas",
+      "target": "w_n2",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_n2",
+      "source": "solve",
+      "target": "w_n2",
+      "sourceHandle": "val-MemN2",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_v2",
+      "source": "canvas",
+      "target": "w_v2",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_v2",
+      "source": "solve",
+      "target": "w_v2",
+      "sourceHandle": "val-MemV2",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_m2",
+      "source": "canvas",
+      "target": "w_m2",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_m2",
+      "source": "solve",
+      "target": "w_m2",
+      "sourceHandle": "val-MemM2",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_h",
+      "source": "canvas",
+      "target": "w_h",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_h",
+      "source": "solve",
+      "target": "w_h",
+      "sourceHandle": "val-JointHeight",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_du1",
+      "source": "canvas",
+      "target": "w_du1",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_du1",
+      "source": "solve",
+      "target": "w_du1",
+      "sourceHandle": "val-MemDu1",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_dv1",
+      "source": "canvas",
+      "target": "w_dv1",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_dv1",
+      "source": "solve",
+      "target": "w_dv1",
+      "sourceHandle": "val-MemDv1",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_dr1",
+      "source": "canvas",
+      "target": "w_dr1",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_dr1",
+      "source": "solve",
+      "target": "w_dr1",
+      "sourceHandle": "val-MemDr1",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_du2",
+      "source": "canvas",
+      "target": "w_du2",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_du2",
+      "source": "solve",
+      "target": "w_du2",
+      "sourceHandle": "val-MemDu2",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_dv2",
+      "source": "canvas",
+      "target": "w_dv2",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_dv2",
+      "source": "solve",
+      "target": "w_dv2",
+      "sourceHandle": "val-MemDv2",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_dr2",
+      "source": "canvas",
+      "target": "w_dr2",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_dr2",
+      "source": "solve",
+      "target": "w_dr2",
+      "sourceHandle": "val-MemDr2",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_diag",
+      "source": "canvas",
+      "target": "w_diag",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_diag",
+      "source": "solve",
+      "target": "w_diag",
+      "sourceHandle": "val-MemDiagram",
+      "targetHandle": "valin-values"
+    }
+  ]
+}

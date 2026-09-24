@@ -1,0 +1,38 @@
+[
+  {
+    "path": "Photometry/LED/cob-spot-3000k.json",
+    "file": "LED__cob-spot-3000k.json"
+  },
+  {
+    "path": "Photometry/LED/tape-warm-2700k.json",
+    "file": "LED__tape-warm-2700k.json"
+  },
+  {
+    "path": "Photometry/LED/tape-neutral-4000k.json",
+    "file": "LED__tape-neutral-4000k.json"
+  },
+  {
+    "path": "Photometry/LED/panel-4000k.json",
+    "file": "LED__panel-4000k.json"
+  },
+  {
+    "path": "Photometry/LED/gu10-spot-3000k.json",
+    "file": "LED__gu10-spot-3000k.json"
+  },
+  {
+    "path": "Photometry/LED/e27-globe-2700k.json",
+    "file": "LED__e27-globe-2700k.json"
+  },
+  {
+    "path": "Photometry/LED/linear-darklight-3000k.json",
+    "file": "LED__linear-darklight-3000k.json"
+  },
+  {
+    "path": "Photometry/Daylight/sky-overcast-6500k.json",
+    "file": "Daylight__sky-overcast-6500k.json"
+  },
+  {
+    "path": "Photometry/Daylight/sun-clear-noon.json",
+    "file": "Daylight__sun-clear-noon.json"
+  }
+]

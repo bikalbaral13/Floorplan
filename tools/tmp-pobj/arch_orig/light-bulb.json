@@ -1,0 +1,740 @@
+{
+  "version": 1,
+  "id": "light-bulb-with-math",
+  "title": "Light Bulb — one Math Engine, revolved envelope, cap and filament",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Light Bulb",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M9 18h6",
+        "M10 21h4",
+        "M12 3a6 6 0 00-3 11c.5.5 1 1.2 1 2h4c0-.8.5-1.5 1-2a6 6 0 00-3-11z"
+      ]
+    }
+  },
+  "description": "A parametric LIGHT BULB on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE. Pendant hangs it on a cord below the mount elevation, Ceiling and Wall fix it at the mount, and Table stands it the other way up — one variable, `_up`, carries that through every part.\n\nTHE ENVELOPE IS A REVOLVE, AND IT HAS TO BE. A Sphere row is DIMENSIONED: its radius lives in a field on the row, so nothing the Math Engine computes can drive it — and the attached-object runtime resolves only Polyhedron, Loft, Tube and Ring. A bulb driven by sliders therefore has to be `mlathe`, a profile swept about the lamp axis, which is parametric and renders identically in the flow overlay and once attached.\n\nTHE SILHOUETTE IS ONE FORMULA. The glass is `r = R·sin(theta)` swept from a starting angle to pi. That angle is not a guess: it is `asin(neckRadius / bulbRadius)`, so the bulb MEETS the neck at exactly the neck's radius and closes to a point at the tip. There is no asin builtin, so it is written as `atan2(x, sqrt(1 - x²))`, which is the same number. The t-coordinate is normalised by `(cos θ0 − cos θ) / (cos θ0 + 1)` so the sweep spans exactly the glass height whatever the angle worked out to.\n\nTHREE ENVELOPES, ONE BODY. Standard, Globe and Candle are not three shapes — they are three (radius, height) pairs fed to that one sweep. Everything downstream, including the profile, is unchanged.\n\nWHY THE PROFILE STARTS AT (0, 0). A lathe profile must close on the axis at both ends or the result is a surface, not a solid: the first point is on the axis at the cap end, the last is the tip. The neck is the two flat points between them.\n\nTHE CAP, CORD AND FILAMENT ARE TUBES along the same axis — a capped cylinder is exactly a Tube row, so none of them needs a mesh. The filament is five segments forming a supported loop, which is what makes the bulb read as a bulb at close range.\n\nDIMENSIONS AT THE DEFAULTS: a 60 mm envelope 76 mm tall over a 26 mm E26-scale cap, hanging 528 mm below a 2.70 m mount, lamp centre at 2.16 m.\n\nWHAT THIS CANNOT DO. The glass is opaque geometry — there is no transparency, no emission and no light cast; this is a fitting, not a luminaire. The cap is a plain cylinder with no thread, and there is no shade.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "mount",
+              "name": "Mount",
+              "type": "select",
+              "value": "Pendant",
+              "options": [
+                "Pendant",
+                "Ceiling",
+                "Wall",
+                "Table"
+              ]
+            },
+            {
+              "id": "mountHeight",
+              "name": "Mount elevation",
+              "type": "range",
+              "value": 2.7,
+              "min": 0,
+              "max": 6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "cordLength",
+              "name": "Cord / pendant drop",
+              "type": "range",
+              "value": 0.5,
+              "min": 0,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "cordRadius",
+              "name": "Cord radius",
+              "type": "range",
+              "value": 0.005,
+              "min": 0.002,
+              "max": 0.03,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "shape",
+              "name": "Envelope",
+              "type": "select",
+              "value": "Standard",
+              "options": [
+                "Standard",
+                "Globe",
+                "Candle"
+              ]
+            },
+            {
+              "id": "bulbRadius",
+              "name": "Bulb radius",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.01,
+              "max": 0.12,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "glassHeight",
+              "name": "Glass height",
+              "type": "range",
+              "value": 0.062,
+              "min": 0.02,
+              "max": 0.25,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "neckRadius",
+              "name": "Neck radius",
+              "type": "range",
+              "value": 0.011,
+              "min": 0.004,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "neckHeight",
+              "name": "Neck height",
+              "type": "range",
+              "value": 0.014,
+              "min": 0.004,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "capRadius",
+              "name": "Cap radius",
+              "type": "range",
+              "value": 0.013,
+              "min": 0.005,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "capHeight",
+              "name": "Cap height",
+              "type": "range",
+              "value": 0.028,
+              "min": 0.008,
+              "max": 0.09,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "sides",
+              "name": "Facets",
+              "type": "range",
+              "value": 24,
+              "min": 8,
+              "max": 64,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "profileSteps",
+              "name": "Profile samples",
+              "type": "range",
+              "value": 14,
+              "min": 4,
+              "max": 40,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "filament",
+              "name": "Filament",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Light Bulb maths",
+          "expr": "_natL = 2 * bulbRadius\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_isPend = mount == 'Pendant'\n_isCeil = mount == 'Ceiling'\n_isWall = mount == 'Wall'\n_up = (mount == 'Table') ? 1 : -1\n_mz = mountHeight * _s\n_cord = _isPend ? cordLength * _s : 0\n_cordR = cordRadius * _s\n_rg = bulbRadius * _s\n_hg = glassHeight * _s\n_rn = neckRadius * _s\n_hn = neckHeight * _s\n_rb = capRadius * _s\n_hb = capHeight * _s\n_sd = max(8, round(sides))\n_ns = max(4, round(profileSteps))\n# Envelope shape — the bulb silhouette is one sine sweep; the three named shapes are just\n# different (radius, height) pairs fed to it, not three bodies.\n_isGlobe = shape == 'Globe'\n_isCand = shape == 'Candle'\n_rgE = _isGlobe ? _rg * 1.25 : (_isCand ? _rg * 0.62 : _rg)\n_hgE = _isGlobe ? _rg * 2.5 : (_isCand ? _hg * 1.7 : _hg)\n_span = 2 * _rgE\n_bodyL = _span\n_bodyW = _span\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# The lamp axis. Pendant / Ceiling / Wall hang DOWN from the mount; Table stands up from it.\n_capZ = _mz - _cord\n_axZ = _capZ\n# The revolve profile [t, r], t measured along the axis from its start (the cap end).\n# The bulb is r = R·sin(theta) swept from the neck angle to pi, so it MEETS the neck at the\n# right radius and closes to a point at the tip — which is what makes it a solid at all.\n_ratio = min(0.98, _rn / _rgE)\n_th0 = atan2(_ratio, sqrt(max(0.0001, 1 - _ratio * _ratio)))\n_kk = arange(_ns) + 1\n_thk = _th0 + (PI - _th0) * _kk / _ns\n_rk = _rgE * sin(_thk)\n_tk = _hn + _hgE * (cos(_th0) - cos(_thk)) / (cos(_th0) + 1)\n_prof = vcat(hcat(0, 0), hcat(0, _rn), hcat(_hn, _rn), hcat(_tk, _rk))\n_gseg = hcat(_wcx, _wcy, _axZ, _wcx, _wcy, _axZ + _up)\nGlass3D = mlathe(_gseg, _prof, _sd)\n# Cap, cord and filament — capped cylinders along the same axis\n_CAP = hcat(_wcx, _wcy, _axZ, _wcx, _wcy, _axZ - _up * _hb, _rb)\n_CORD = hcat(_wcx, _wcy, _axZ - _up * _hb, _wcx, _wcy, _mz, _cordR)\nCap3D = _CAP\nCord3D = (_cord > 0.001 || _isCeil || _isWall) ? _CORD : zeros(0, 7)\n_fz0 = _axZ + _up * (_hn + _hgE * 0.18)\n_fz1 = _axZ + _up * (_hn + _hgE * 0.62)\n_fr = _rgE * 0.28\n_FIL = vcat(hcat(_wcx - _fr, _wcy, _fz0, _wcx - _fr * 0.3, _wcy, _fz1, _rgE * 0.035), hcat(_wcx - _fr * 0.3, _wcy, _fz1, _wcx + _fr * 0.3, _wcy, _fz1, _rgE * 0.035), hcat(_wcx + _fr * 0.3, _wcy, _fz1, _wcx + _fr, _wcy, _fz0, _rgE * 0.035), hcat(_wcx - _fr, _wcy, _axZ + _up * _hn, _wcx - _fr, _wcy, _fz0, _rgE * 0.03), hcat(_wcx + _fr, _wcy, _axZ + _up * _hn, _wcx + _fr, _wcy, _fz0, _rgE * 0.03))\nFilament3D = filament > 0 ? _FIL : zeros(0, 7)\n# Plan symbol\nBulbPlan = hcat(_wcx, _wcy, _rgE)\nCapPlan = hcat(_wcx, _wcy, _rb)\n# Metrics\nenvelopeDiameter = 2 * _rgE\nenvelopeHeight = _hn + _hgE\noverallHeight = _hb + _hn + _hgE\ncapDiameter = 2 * _rb\nlampElevation = _axZ + _up * (_hn + _hgE / 2)\ntipElevation = _axZ + _up * (_hn + _hgE)\nmountElevation = _mz\ndropFromMount = _isPend ? (_cord + _hb) : _hb\nfacets = _sd"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Envelope — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Cap — tube"
+            },
+            {
+              "id": "s3",
+              "label": "Cord — tube"
+            },
+            {
+              "id": "s4",
+              "label": "Filament — tube"
+            },
+            {
+              "id": "s5",
+              "label": "Envelope — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Cap — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Envelope diameter (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Envelope height (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Overall height (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Cap diameter (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Lamp elevation (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Tip elevation (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Mount elevation (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Drop from mount (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Facets"
+            },
+            {
+              "id": "s16",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_bulb",
+              "kind": "circle",
+              "name": "Envelope",
+              "color": "#fef08a",
+              "layer": "Light Bulb",
+              "radius": 0.03,
+              "show": true
+            },
+            {
+              "id": "p2_cap",
+              "kind": "circle",
+              "name": "Cap",
+              "color": "#78716c",
+              "layer": "Light Bulb",
+              "radius": 0.013,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_glass",
+              "kind": "polyhedron",
+              "name": "Envelope",
+              "color": "#fef9c3",
+              "layer": "Light Bulb",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cap",
+              "kind": "tube",
+              "name": "Cap",
+              "color": "#a8a29e",
+              "layer": "Light Bulb",
+              "radius": 0.013,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cord",
+              "kind": "tube",
+              "name": "Cord",
+              "color": "#292524",
+              "layer": "Light Bulb",
+              "radius": 0.005,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_fil",
+              "kind": "tube",
+              "name": "Filament",
+              "color": "#f59e0b",
+              "layer": "Light Bulb",
+              "radius": 0.001,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_mount",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mount",
+      "targetHandle": "valin-mount"
+    },
+    {
+      "id": "e_props_math_mountHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mountHeight",
+      "targetHandle": "valin-mountHeight"
+    },
+    {
+      "id": "e_props_math_cordLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cordLength",
+      "targetHandle": "valin-cordLength"
+    },
+    {
+      "id": "e_props_math_cordRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cordRadius",
+      "targetHandle": "valin-cordRadius"
+    },
+    {
+      "id": "e_props_math_shape",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-shape",
+      "targetHandle": "valin-shape"
+    },
+    {
+      "id": "e_props_math_bulbRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bulbRadius",
+      "targetHandle": "valin-bulbRadius"
+    },
+    {
+      "id": "e_props_math_glassHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-glassHeight",
+      "targetHandle": "valin-glassHeight"
+    },
+    {
+      "id": "e_props_math_neckRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-neckRadius",
+      "targetHandle": "valin-neckRadius"
+    },
+    {
+      "id": "e_props_math_neckHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-neckHeight",
+      "targetHandle": "valin-neckHeight"
+    },
+    {
+      "id": "e_props_math_capRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-capRadius",
+      "targetHandle": "valin-capRadius"
+    },
+    {
+      "id": "e_props_math_capHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-capHeight",
+      "targetHandle": "valin-capHeight"
+    },
+    {
+      "id": "e_props_math_sides",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sides",
+      "targetHandle": "valin-sides"
+    },
+    {
+      "id": "e_props_math_profileSteps",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-profileSteps",
+      "targetHandle": "valin-profileSteps"
+    },
+    {
+      "id": "e_props_math_filament",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-filament",
+      "targetHandle": "valin-filament"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Glass3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Cap3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Cord3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Filament3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BulbPlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CapPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-envelopeDiameter",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-envelopeHeight",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallHeight",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-capDiameter",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampElevation",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-tipElevation",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mountElevation",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-dropFromMount",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-facets",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_out_r2d_p2_bulb",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_bulb"
+    },
+    {
+      "id": "e_out_r2d_p2_cap",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_cap"
+    },
+    {
+      "id": "e_out_r3d_p3_glass",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_glass"
+    },
+    {
+      "id": "e_out_r3d_p3_cap",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_cap"
+    },
+    {
+      "id": "e_out_r3d_p3_cord",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_cord"
+    },
+    {
+      "id": "e_out_r3d_p3_fil",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_fil"
+    }
+  ]
+}

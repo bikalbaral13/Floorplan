@@ -1,0 +1,257 @@
+{
+  "version": 1,
+  "id": "plot-boundary-with-math",
+  "title": "Plot boundary — a coloured boundary line with its measured length",
+  "category": "Site",
+  "object": {
+    "hostKind": "segment",
+    "name": "Plot boundary"
+  },
+  "description": "Attach to a segment and it reads as one run of plot boundary: a coloured line in plan, and its length as a number. Six nodes: Geometry -> Input Properties -> Math Engine -> Output metrics, with a 2D Render node and a 3D Render node alongside — the same shape as road.json and plot.json, hosted on a SEGMENT rather than a Space.\n\n  WHAT YOU DECLARE. One property travels with the segment and is not derived from it: Colour. It is EDITABLE — it is the point of the object. Host is EDITABLE: FALSE, because it is fed by the wire from the Geometry node: it is the segment as drawn, not a field to type into, and hand-editing it would put the readout out of step with what is on the canvas.\n\n  WHAT IS MEASURED. Length, as the straight distance between the segment's two endpoints, in metres. A boundary run is a straight line by construction, so there is no polyline sum to do here — a chain of runs is a chain of segments, each carrying its own instance of this object and its own length.\n\n  NOTHING HOSTED IS NOT AN ERROR. Fewer than two host points is not a segment at all; the maths falls back to a degenerate stub and every published figure is gated on that test, so the readout shows zero and the canvas nothing, rather than throwing or drawing a phantom line at the origin. Only the FIRST TWO host points are read, so attaching to a Space (which arrives with more) measures its first edge instead of failing.\n\n  THE HOST PARAMETER DEFAULTS TO AN EMPTY LIST, not to a sample two-point run. wall.json seeds its own with [[0, 0], [3, 0]] so that an UNHOSTED wall still previews at a sensible size — reasonable for a thing with intrinsic dimensions. A boundary has none: unhosted it has no length and no position, and a default run would draw a 3 m line at the origin that measures 3 m and means nothing. That is precisely the phantom shape the paragraph above rules out, so the default is [] and an unhosted instance draws nothing at all.\n\n  COLOUR IS A SELECT, NOT A SWATCH, AND THAT IS FORCED BY THE RENDER NODE. A 2D Render row's colour is a property OF THE ROW: the evaluator reads it off the row and there is no per-row colour endpoint, so a Math Engine — which can only put numbers on a wire — cannot tint a row, and neither can a free-form colour parameter. What CAN vary is WHICH ROW RECEIVES THE GEOMETRY. So the node carries one Stroke row per colour, the Math Engine sends the segment to the row whose name matches the Colour parameter, and every other row is fed an empty list and skipped outright (2D Render drops a row with no geometry). Exactly one colour is ever drawn and two can never stack. Nothing hosted fills none of them.\n\n  Adding a boundary colour therefore means two edits, not one: a new option on the Colour parameter, and a matching row + `Boundary<Name>` line. That is the cost of the constraint, and it is why the palette is deliberately short.\n\n  THE ROWS ARE STROKE, NOT POLYGON. A 2D Render row can only be Polygon, Circle or Stroke, and the first two draw a CLOSED ring — a boundary run is an open two-point line, so Stroke is the only kind that draws it. Stroke thickens the segment into a band of the row's Width about its centreline; the rows use 0.05 m so the boundary reads as a drawn line rather than a hairline or a strip.\n\n  THE 3D RENDER NODE IS DELIBERATELY INERT. It carries one hidden row with nothing wired into it, so the object contributes no solid — a boundary is a survey line, not a built thing. The node is present so the file keeps the six-node shape and so giving it a job later (a fence, a kerb, a hoarding extruded to a height) is a matter of wiring the row up rather than restructuring the object.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1180,
+        "y": 40
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry — hosted segment"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -880,
+        "y": 0
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — boundary segment [[x1, y1], [x2, y2]]",
+              "type": "text",
+              "value": "[]",
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "select",
+              "value": "Black",
+              "options": [
+                "Black",
+                "Red",
+                "Blue",
+                "Green",
+                "Orange"
+              ],
+              "editable": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "surveyed site boundary, precise demarcation, legal",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -460,
+        "y": 0
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Boundary metrics",
+          "expr": "# Plot boundary metrics. P arrives as the host segment's endpoints [[x1, y1], [x2, y2]] in metres,\n# local to the flow anchor.\n\n_n = rows(P)\n_ok = _n >= 2 ? 1 : 0\n# Fewer than two points is not a segment: fall back to a degenerate stub so the row maths below is\n# always well formed. Every published figure is gated on _ok, so the readout is zero rather than a\n# crash or a phantom line at the origin.\n# Only the FIRST TWO rows are read, so a host that arrives with more (a Space) measures its first\n# edge instead of failing outright.\n_Q = _ok > 0 ? sub(P, 0, 0, 2, 2) : vcat(hcat(0, 0), hcat(0, 0))\n_a = row(_Q, 0)\n_b = row(_Q, 1)\n\n# `len` of a 1 x 2 row gives a 1 x 1 matrix; `min` reduces it to the scalar the Output slot wants —\n# the same idiom wall.json uses for its host length.\nlength = _ok * min(len(_b - _a))\n\n# COLOUR -> WHICH 2D ROW GETS THE SEGMENT.\n# A 2D Render row's colour is a property OF THE ROW, not of the geometry: a Math Engine can only put\n# numbers on a wire, never a colour, so one row cannot change hue on a condition. Five rows can — one\n# per colour — and the switch becomes a question of WHICH ROW GETS THE GEOMETRY. The chosen row\n# receives the segment and draws the boundary; every other row receives an empty list and is skipped\n# outright, because 2D Render drops a row with no geometry rather than drawing nothing visible on top\n# of it. Exactly one colour is ever on screen and two can never stack.\n# A Stroke row reads `[[x1, y1, x2, y2], ...]`, which is what hcat of the two endpoints builds.\n# `color` arrives from the select as its option string, and the expression language compares strings\n# with == directly. Nothing hosted (_ok = 0) fills no row at all.\n_Seg = _ok > 0 ? hcat(_a, _b) : zeros(0, 4)\nBoundaryBlack = color == 'Black' ? _Seg : zeros(0, 4)\nBoundaryRed = color == 'Red' ? _Seg : zeros(0, 4)\nBoundaryBlue = color == 'Blue' ? _Seg : zeros(0, 4)\nBoundaryGreen = color == 'Green' ? _Seg : zeros(0, 4)\nBoundaryOrange = color == 'Orange' ? _Seg : zeros(0, 4)\n"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 40,
+        "y": 0
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Length (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 460,
+        "y": -160
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pb_black",
+              "kind": "stroke",
+              "name": "Boundary — black",
+              "color": "#000000",
+              "layer": "",
+              "width": 0.05,
+              "show": true
+            },
+            {
+              "id": "pb_red",
+              "kind": "stroke",
+              "name": "Boundary — red",
+              "color": "#dc2626",
+              "layer": "",
+              "width": 0.05,
+              "show": true
+            },
+            {
+              "id": "pb_blue",
+              "kind": "stroke",
+              "name": "Boundary — blue",
+              "color": "#2563eb",
+              "layer": "",
+              "width": 0.05,
+              "show": true
+            },
+            {
+              "id": "pb_green",
+              "kind": "stroke",
+              "name": "Boundary — green",
+              "color": "#16a34a",
+              "layer": "",
+              "width": 0.05,
+              "show": true
+            },
+            {
+              "id": "pb_orange",
+              "kind": "stroke",
+              "name": "Boundary — orange",
+              "color": "#ea580c",
+              "layer": "",
+              "width": 0.05,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 460,
+        "y": 160
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_none",
+              "kind": "polyhedron",
+              "name": "Unused — a boundary contributes no solid",
+              "color": "#94a3b8",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_source_points_props_P",
+      "source": "source",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_P_math",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_color_math",
+      "source": "props",
+      "sourceHandle": "val-color",
+      "target": "math",
+      "targetHandle": "valin-color"
+    },
+    {
+      "id": "e_math_length_out_s1",
+      "source": "math",
+      "sourceHandle": "val-length",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_BoundaryBlack_r2d_pb_black",
+      "source": "math",
+      "sourceHandle": "val-BoundaryBlack",
+      "target": "r2d",
+      "targetHandle": "valin-pb_black"
+    },
+    {
+      "id": "e_math_BoundaryRed_r2d_pb_red",
+      "source": "math",
+      "sourceHandle": "val-BoundaryRed",
+      "target": "r2d",
+      "targetHandle": "valin-pb_red"
+    },
+    {
+      "id": "e_math_BoundaryBlue_r2d_pb_blue",
+      "source": "math",
+      "sourceHandle": "val-BoundaryBlue",
+      "target": "r2d",
+      "targetHandle": "valin-pb_blue"
+    },
+    {
+      "id": "e_math_BoundaryGreen_r2d_pb_green",
+      "source": "math",
+      "sourceHandle": "val-BoundaryGreen",
+      "target": "r2d",
+      "targetHandle": "valin-pb_green"
+    },
+    {
+      "id": "e_math_BoundaryOrange_r2d_pb_orange",
+      "source": "math",
+      "sourceHandle": "val-BoundaryOrange",
+      "target": "r2d",
+      "targetHandle": "valin-pb_orange"
+    }
+  ]
+}

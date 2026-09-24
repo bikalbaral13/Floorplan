@@ -1,0 +1,41 @@
+{
+  "schema": "material/1",
+  "id": "wood.oak",
+  "title": "Wood — oak",
+  "category": "Finishes",
+  "description": "Oak with a directional grain: banded wave along the length, noise distortion for the figure.",
+  "procedural": {
+    "type": "wave",
+    "blenderNode": "ShaderNodeTexWave",
+    "params": {
+      "waveType": "BANDS",
+      "bandsDirection": "X",
+      "waveProfile": "SIN",
+      "scale": 2.5,
+      "distortion": 12,
+      "detail": 3,
+      "detailScale": 1.4,
+      "detailRoughness": 0.55,
+      "phaseOffset": 0,
+      "colorA": "#a8743f",
+      "colorB": "#7d5228"
+    }
+  },
+  "pbr": {
+    "baseColor": "#96663a",
+    "roughness": 0.45,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#96663a"
+  },
+  "dxf": {
+    "pattern": "AR-PARQ1",
+    "scale": 1,
+    "angle": 0
+  }
+}

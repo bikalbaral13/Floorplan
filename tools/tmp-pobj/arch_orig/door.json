@@ -1,0 +1,694 @@
+{
+  "version": 1,
+  "id": "door-with-math",
+  "title": "Door — one Math Engine, frame, leaf and swing",
+  "category": "Building",
+  "object": {
+    "hostKind": "segment",
+    "name": "Door",
+    "symbol": "door"
+  },
+  "description": "2D palette matches floorplan.json: red leaf, swing arc and jambs.\n\nA parametric DOOR in a wall opening, rebuilt on the six-node spine:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nSELECT A WALL SEGMENT on canvas and the door fills it. Select a SPACE and it takes the longest edge. Select a node, or nothing at all, and it falls back to the typed Door width — so the flow always draws something.\n\nWHAT THIS REPLACES. The old version was fifteen nodes and fifty-seven edges: a Segment source, a Segment Geometry hop and a Point node to get at the wall's x / y / angle / length; a Math Engine; then ONE NODE PER SHAPE — three Rectangles and an Arc for the plan, four Cuboids and a Transform 3D for the model — each wired individually to the values that positioned it. Sixteen of those edges existed only to push a centre and a rotation into a rectangle. It drew the same door.\n\nSix nodes and thirty-five edges now, and the reason it collapses is that a RENDER ROW IS A STYLE GROUP, not a shape. The two jambs and the head are three rings on one Polygon row; the leaf is one ring on another; the swing arc is twenty-four chords on a Stroke row. Nothing needs its own node because nothing needs its own colour.\n\nWHAT THE MATH ENGINE NOW OWNS. Everything the geometry hops used to supply. The wall's direction, length, midpoint and bearing all come from `P` — two rows for a segment, its longest edge for a space — so the Segment Geometry and Point nodes are gone and the brief sits inline instead of hanging off the root. Then one RECTANGLE TABLE does the work: each row is a centre, a unit long axis, a length, a thickness, a z-range and a colour group, and one loop turns each into both a plan ring and a solid. Adding a threshold or a stop bead is one more row.\n\n  jamb L / jamb R — axis along the wall, jambWidth × frameDepth, z 0 → lintel\n  head          — axis along the wall, the full opening × frameDepth, z lintel → lintel + headDepth\n  leaf          — axis along the OPEN LEAF, the full opening × leafThickness, z 0 → lintel\n\nThe corners come from the axis and its perpendicular, so a rotated wall needs no trigonometry beyond the one `normalize`. The solids come from `mprism` — the Math Engine's own extrusion — which is why the four Cuboids and the Transform 3D are gone too: a prism is built at its rotation, so nothing needs rotating afterwards.\n\nTHE LEAF NOW OPENS TO ANY ANGLE. The old flow drew it at a fixed 90°. Because the closed direction and the swing perpendicular are ORTHONORMAL, rotating between them is exact and needs no matrix: `dir = cosθ·closed + sinθ·perp`. So Open angle is a real slider from 0° (shut, the leaf lying in the opening) to 170° (flat against the wall), the swing arc sweeps exactly that far, and the SWEPT FLOOR AREA is reported — which is the number that actually matters, since it is the clearance a door demands of the room.\n\nHINGE and SWING stay two selects and remain independent: hinge picks which end the leaf pivots about, swing which side of the wall it opens to, and all four combinations are checked below.\n\nLEAVES makes it a PAIR. \"Double\" is the entrance door: the opening is halved, one leaf hinges at each jamb, both swing to the same side, and each gets its own arc at its own radius. It is not a second door bolted on — the leaf construction is now written once against a HINGE SIGN, +1 for the right jamb and −1 for the left, and a single leaf is just that construction with the sign the Hinge select asks for and the full opening as its width. So the rectangle table grows by one row and the arc by one sweep, and nothing else in the file knows the difference. Hinge is meaningless for a pair (both jambs hinge) and is ignored there, which is why its label says so.\n\nAND A PAIR HALVES THE CLEARANCE, which is the whole reason to draw one: two leaves of W/2 sweep 2 × (θ/360)·π·(W/2)², half of a single leaf's (θ/360)·π·W². On a 1.8 m opening at 90° that is 1.2723 m² instead of 2.5447 m² — a metre and a quarter of floor handed back to the room, and the number the Swept floor area metric now reports.\n\nTHE AGENT NODE IS KEPT, wired into Input Properties, so the brief can still be set in words — \"right-hinged door swinging into the room, 45° open\" — rather than by dragging sliders. It no longer stamps geometry through the source; it only tunes the parameters, which is what it was really doing.\n\nVERIFIED THROUGH THE ENGINE on a 0.9 m opening (left hinge, left swing, 90°, 50 mm jambs, 150 mm frame, 2.1 m lintel): the plan is exactly 3 frame rings + 1 leaf ring, jamb rings 0.007500 m² each = jambWidth × frameDepth, the head 0.135000 m² = W × frameDepth, the leaf 0.036000 m² = W × thickness; jamb centres exactly W apart at x = 0 and x = 0.9; the leaf centre 0.45 m perpendicular from the hinged jamb; all 24 arc chords exactly 0.9 m from the hinge, starting at the closed leaf tip and ending at the open one; swept area 0.636173 m² = a quarter disc of radius W. In 3D the frame is 0.051750 m³ (two jambs + head) and the leaf 0.075600 m³ = W × t × H, both matching their reported metrics and both CLOSED — 0 unpaired edges — spanning z 0–2.25 and 0–2.1. All four hinge/swing combinations pivot about the right jamb and open to the right side. Open angle 0 / 30 / 45 / 90 / 120 / 170 puts the leaf at that exact bearing, scales the swept area with it, and leaves the leaf's volume unchanged; at 0° the shut leaf lies within half its own thickness of the wall line. Hosts: segments of 0.9 / 1.0 / 1.2 / 1.1 m, one at 30°, one reversed (bearing 180°), one vertical (exactly 90°), a 4×3 space (takes the 4 m edge), a bare point at the typed width, and a degenerate zero-length segment — every one gives a positive opening, 3 + 1 rings, closed meshes and a leaf volume that tracks the opening, with no non-finite cell anywhere. A tilted host gives identical volumes to a flat one: the door is rigid, only its frame turns.\n\nWHAT IT STILL DOES NOT DO. It draws a door, it does not CUT one — the wall is not opened, so use a Segment to Door node (or the Math Engine's new `subtract`) if you need the reveal punched through the wall poché. Single leaf only: no double doors, no sliding or folding, no threshold, and the leaf is a plain slab with no panels, no lipping and no ironmongery. The frame is square-cut, with no architrave and no mitre at the head.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "agent",
+      "position": {
+        "x": -1040,
+        "y": 420
+      },
+      "data": {
+        "tool": "agent",
+        "params": {
+          "instructions": "You are an architectural detailing assistant. Set the parameters of the Door (the Input Properties node on your output): hinge (which end the leaf pivots about), swing (which side of the wall it opens to), open angle in degrees (0 = shut, 90 = square to the wall, up to 170 = flat back against it), leaf thickness, jamb width, frame depth (the wall thickness), lintel height and head depth. Fit to segment decides the width: on \"Fill segment\" (the default) the door spans its host wall whole and Width is only the fallback used when nothing is hosted; on \"Own width (centred)\" it is Width wide, centred on the segment and clamped to it. Reason about clearance: the swept floor area reported by the flow is the room area the door demands, so prefer a smaller open angle in a tight space and say so in your rationale.",
+          "prompt": "Right-hinged door swinging into the room",
+          "rounds": 1,
+          "props": [],
+          "rationale": "",
+          "inputHash": ""
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — wall segment / space / point [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0], [0.9, 0]]",
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "leaves",
+              "name": "Leaves",
+              "type": "select",
+              "value": "Single",
+              "options": [
+                "Single",
+                "Double"
+              ],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "hinge",
+              "name": "Hinge (single leaf only)",
+              "type": "select",
+              "value": "left",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": [
+                "left",
+                "right"
+              ],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "swing",
+              "name": "Swing direction",
+              "type": "select",
+              "value": "left",
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": [
+                "left",
+                "right"
+              ],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "openAngle",
+              "name": "Open angle (deg)",
+              "type": "range",
+              "value": 90,
+              "min": 0,
+              "max": 170,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to segment",
+              "type": "select",
+              "value": "Fill segment",
+              "options": [
+                "Fill segment",
+                "Own width (centred)"
+              ],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "width",
+              "name": "Width (own / unhosted)",
+              "type": "range",
+              "value": 0.9,
+              "min": 0.6,
+              "max": 4,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "leafThickness",
+              "name": "Leaf thickness",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.02,
+              "max": 0.08,
+              "step": 0.005,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "jambWidth",
+              "name": "Jamb width",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.03,
+              "max": 0.12,
+              "step": 0.005,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "frameDepth",
+              "name": "Frame depth (wall)",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.1,
+              "max": 0.3,
+              "step": 0.01,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "lintelHeight",
+              "name": "Lintel height",
+              "type": "range",
+              "value": 2.1,
+              "min": 1.8,
+              "max": 2.4,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "headDepth",
+              "name": "Head / lintel depth",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.05,
+              "max": 0.4,
+              "step": 0.01,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "arcSteps",
+              "name": "Swing arc segments",
+              "type": "range",
+              "value": 24,
+              "min": 4,
+              "max": 64,
+              "step": 2,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Door maths",
+          "expr": "_e1 = hcat(1, 0)\n_n = rows(P)\n_isSeg = _n == 2\n_isSpace = _n > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_eLen = len(_edges)\n_longest = max(_eLen)\n_mask = eq(_eLen, _longest)\n_sDir = _isSpace ? row(compress(_edges, _mask), 0) : _e1\n_sA = _isSpace ? row(compress(P, _mask), 0) : row(P, 0)\n_segV = _isSeg ? (row(P, 1) - row(P, 0)) : _sDir\n_dir = _isSeg ? _segV : (_isSpace ? _sDir : _e1)\n_dLen = min(len(_dir))\n_u = _dLen > 1e-9 ? normalize(_dir) : _e1\n_ux = sub(_u, 0, 0, 1, 1)\n_uy = sub(_u, 0, 1, 1, 1)\n_hosted = (_isSeg || _isSpace) && _dLen > 1e-9\n_fill = fitMode == 'Fill segment'\n_W = _hosted ? (_fill ? _dLen : min(max(0.4, width), _dLen)) : max(0.4, width)\n_pA = _isSpace ? _sA : row(P, 0)\n_pax = sub(_pA, 0, 0, 1, 1)\n_pay = sub(_pA, 0, 1, 1, 1)\n_mx = _hosted ? _pax + _ux * _dLen / 2 : _pax\n_my = _hosted ? _pay + _uy * _dLen / 2 : _pay\n_hw = _W / 2\n_hgn = hinge == 'right' ? 1 : -1\n_sgn = swing == 'right' ? -1 : 1\n_jLx = _mx - _hw * _ux\n_jLy = _my - _hw * _uy\n_jRx = _mx + _hw * _ux\n_jRy = _my + _hw * _uy\n_dbl = leaves == 'Double'\n_nl = _dbl ? 2 : 1\n_lw = _W / _nl\n_qx = 0 - _uy * _sgn\n_qy = _ux * _sgn\n_oa = max(0, min(170, openAngle)) * PI / 180\n_g1 = _dbl ? -1 : _hgn\n_h1x = _mx + _g1 * _hw * _ux\n_h1y = _my + _g1 * _hw * _uy\n_c1x = 0 - _g1 * _ux\n_c1y = 0 - _g1 * _uy\n_l1x = cos(_oa) * _c1x + sin(_oa) * _qx\n_l1y = cos(_oa) * _c1y + sin(_oa) * _qy\n_lc1x = _h1x + _lw / 2 * _l1x\n_lc1y = _h1y + _lw / 2 * _l1y\n_h2x = _mx + _hw * _ux\n_h2y = _my + _hw * _uy\n_c2x = 0 - _ux\n_c2y = 0 - _uy\n_l2x = cos(_oa) * _c2x + sin(_oa) * _qx\n_l2y = cos(_oa) * _c2y + sin(_oa) * _qy\n_lc2x = _h2x + _lw / 2 * _l2x\n_lc2y = _h2y + _lw / 2 * _l2y\n_hd = max(0.02, headDepth)\n_R1 = hcat(_jLx, _jLy, _ux, _uy, jambWidth, frameDepth, 0, lintelHeight, 1)\n_R2 = hcat(_jRx, _jRy, _ux, _uy, jambWidth, frameDepth, 0, lintelHeight, 1)\n_R3 = hcat(_mx, _my, _ux, _uy, _W, frameDepth, lintelHeight, lintelHeight + _hd, 1)\n_R4 = hcat(_lc1x, _lc1y, _l1x, _l1y, _lw, leafThickness, 0, lintelHeight, 2)\n_R5 = hcat(_lc2x, _lc2y, _l2x, _l2y, _lw, leafThickness, 0, lintelHeight, 2)\n_Rects = _dbl ? vcat(_R1, _R2, _R3, _R4, _R5) : vcat(_R1, _R2, _R3, _R4)\n_S1 = vcat(hcat(-1, -1), hcat(1, -1), hcat(1, 1), hcat(-1, 1))\n_sa = col(_S1, 0)\n_sb = col(_S1, 1)\n_All = zeros(0, 4)\nFrameMesh = zeros(0, 4)\nLeafMesh = zeros(0, 4)\nloop i in rows(_Rects):\n_r = row(_Rects, i)\n_rcx = col(_r, 0)\n_rcy = col(_r, 1)\n_rax = col(_r, 2)\n_ray = col(_r, 3)\n_rL = col(_r, 4) / 2\n_rT = col(_r, 5) / 2\n_z0 = min(col(_r, 6))\n_z1 = min(col(_r, 7))\n_g = min(col(_r, 8))\n_cxs = _rcx + _sa * _rL * _rax - _sb * _rT * _ray\n_cys = _rcy + _sa * _rL * _ray + _sb * _rT * _rax\n_ring = hcat(_cxs, _cys)\n_All = vcat(_All, hcat(_ring, fill(4, 1, i), fill(4, 1, _g)))\n_solid = mprism(_ring, _z0, _z1)\nFrameMesh = _g < 1.5 ? vcat(FrameMesh, _solid) : FrameMesh\nLeafMesh = _g > 1.5 ? vcat(LeafMesh, _solid) : LeafMesh\nend\n_nr = rows(_All)\n_gc = col(_All, 3)\nFramePlan = sub(compress(_All, eq(_gc, 1)), 0, 0, _nr, 3)\nLeafPlan = sub(compress(_All, eq(_gc, 2)), 0, 0, _nr, 3)\n_na = max(4, round(arcSteps))\n_th = arange(_na + 1) * _oa / _na\n_a1x = _h1x + _lw * (cos(_th) * _c1x + sin(_th) * _qx)\n_a1y = _h1y + _lw * (cos(_th) * _c1y + sin(_th) * _qy)\n_A1 = hcat(sub(_a1x, 0, 0, _na, 1), sub(_a1y, 0, 0, _na, 1), sub(_a1x, 1, 0, _na, 1), sub(_a1y, 1, 0, _na, 1))\n_a2x = _h2x + _lw * (cos(_th) * _c2x + sin(_th) * _qx)\n_a2y = _h2y + _lw * (cos(_th) * _c2y + sin(_th) * _qy)\n_A2 = hcat(sub(_a2x, 0, 0, _na, 1), sub(_a2y, 0, 0, _na, 1), sub(_a2x, 1, 0, _na, 1), sub(_a2y, 1, 0, _na, 1))\nArcPlan = _dbl ? vcat(_A1, _A2) : _A1\nJambCentres = vcat(hcat(_jLx, _jLy), hcat(_jRx, _jRy))\nopeningWidth = _W\nopeningHeight = lintelHeight\nopenAngleOut = max(0, min(170, openAngle))\nleafCount = _nl\nleafWidth = _lw\nswingRadius = _lw\nsweptArea = _nl * openAngleOut / 360 * PI * _lw * _lw\nleafArea = _W * lintelHeight\nleafVolume = _W * lintelHeight * leafThickness\nframeVolume = 2 * jambWidth * frameDepth * lintelHeight + _W * frameDepth * _hd\nwallAngleDeg = min(angle(_dir))\nhingeAtEnd = _hgn\nswingsToSide = _sgn"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Frame — plan (jambs + head)",
+              "necessary": false
+            },
+            {
+              "id": "s2",
+              "label": "Leaf — plan",
+              "necessary": false
+            },
+            {
+              "id": "s3",
+              "label": "Swing arc — plan",
+              "necessary": false
+            },
+            {
+              "id": "s4",
+              "label": "Frame — solid",
+              "necessary": false
+            },
+            {
+              "id": "s5",
+              "label": "Leaf — solid",
+              "necessary": false
+            },
+            {
+              "id": "s6",
+              "label": "Jamb centres",
+              "necessary": false
+            },
+            {
+              "id": "s7",
+              "label": "Opening width (m)",
+              "necessary": false
+            },
+            {
+              "id": "s8",
+              "label": "Opening height (m)",
+              "necessary": false
+            },
+            {
+              "id": "s9",
+              "label": "Open angle (deg)",
+              "necessary": false
+            },
+            {
+              "id": "s10",
+              "label": "Swing radius (m)",
+              "necessary": false
+            },
+            {
+              "id": "s11",
+              "label": "Swept floor area (m²)",
+              "necessary": false
+            },
+            {
+              "id": "s12",
+              "label": "Leaf face area (m²)",
+              "necessary": false
+            },
+            {
+              "id": "s13",
+              "label": "Leaf volume (m³)",
+              "necessary": false
+            },
+            {
+              "id": "s14",
+              "label": "Frame volume (m³)",
+              "necessary": false
+            },
+            {
+              "id": "s15",
+              "label": "Wall bearing (deg)",
+              "necessary": false
+            },
+            {
+              "id": "s16",
+              "label": "Hinge end (-1 left / +1 right)",
+              "necessary": false
+            },
+            {
+              "id": "s17",
+              "label": "Swing side (+1 left / -1 right)",
+              "necessary": false
+            },
+            {
+              "id": "s18",
+              "label": "Leaves",
+              "necessary": false
+            },
+            {
+              "id": "s19",
+              "label": "Leaf width (m)",
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_frame",
+              "kind": "polygon",
+              "name": "Frame — jambs & head",
+              "color": "#dc2626",
+              "layer": "Door",
+              "show": true,
+              "fillMode": "outlined"
+            },
+            {
+              "id": "p2_leaf",
+              "kind": "polygon",
+              "name": "Leaf",
+              "color": "#dc2626",
+              "layer": "Door",
+              "show": true
+            },
+            {
+              "id": "p2_arc",
+              "kind": "stroke",
+              "name": "Swing arc",
+              "color": "#dc2626",
+              "layer": "Door",
+              "width": 0.01,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_frame",
+              "kind": "polyhedron",
+              "name": "Frame — jambs & head",
+              "color": "#a1866f",
+              "layer": "Door",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_leaf",
+              "kind": "polyhedron",
+              "name": "Leaf",
+              "color": "#7a5230",
+              "layer": "Door",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "source",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_agent_props",
+      "source": "agent",
+      "target": "props",
+      "sourceHandle": null,
+      "targetHandle": null
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_leaves",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-leaves",
+      "targetHandle": "valin-leaves"
+    },
+    {
+      "id": "e_props_math_hinge",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-hinge",
+      "targetHandle": "valin-hinge"
+    },
+    {
+      "id": "e_props_math_swing",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-swing",
+      "targetHandle": "valin-swing"
+    },
+    {
+      "id": "e_props_math_openAngle",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-openAngle",
+      "targetHandle": "valin-openAngle"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_width",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e_props_math_leafThickness",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-leafThickness",
+      "targetHandle": "valin-leafThickness"
+    },
+    {
+      "id": "e_props_math_jambWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-jambWidth",
+      "targetHandle": "valin-jambWidth"
+    },
+    {
+      "id": "e_props_math_frameDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-frameDepth",
+      "targetHandle": "valin-frameDepth"
+    },
+    {
+      "id": "e_props_math_lintelHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lintelHeight",
+      "targetHandle": "valin-lintelHeight"
+    },
+    {
+      "id": "e_props_math_headDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-headDepth",
+      "targetHandle": "valin-headDepth"
+    },
+    {
+      "id": "e_props_math_arcSteps",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-arcSteps",
+      "targetHandle": "valin-arcSteps"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-FramePlan",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LeafPlan",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ArcPlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-FrameMesh",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LeafMesh",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-JambCentres",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-openingWidth",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-openingHeight",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-openAngleOut",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-swingRadius",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sweptArea",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-leafArea",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-leafVolume",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-frameVolume",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wallAngleDeg",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-hingeAtEnd",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-swingsToSide",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-leafCount",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-leafWidth",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_out_r2d_p2_frame",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p2_frame"
+    },
+    {
+      "id": "e_out_r2d_p2_leaf",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p2_leaf"
+    },
+    {
+      "id": "e_out_r2d_p2_arc",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_arc"
+    },
+    {
+      "id": "e_out_r3d_p3_frame",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_frame"
+    },
+    {
+      "id": "e_out_r3d_p3_leaf",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_leaf"
+    }
+  ]
+}

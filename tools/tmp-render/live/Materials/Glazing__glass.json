@@ -1,0 +1,32 @@
+{
+  "schema": "material/1",
+  "id": "glass.clear",
+  "title": "Glass — clear float",
+  "category": "Glazing",
+  "description": "Clear float glass. No texture by design — the only material here with an empty procedural slot, which is what makes `type: none` worth having in the schema.",
+  "procedural": {
+    "type": "none",
+    "blenderNode": null,
+    "params": {}
+  },
+  "pbr": {
+    "baseColor": "#cfe4ea",
+    "roughness": 0.05,
+    "metallic": 0,
+    "transmission": 0.92,
+    "ior": 1.52,
+    "opacity": 0.25
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 8,
+    "angle": 0,
+    "weight": 1,
+    "color": "#cfe4ea"
+  },
+  "dxf": {
+    "pattern": "TRANS",
+    "scale": 1,
+    "angle": 0
+  }
+}

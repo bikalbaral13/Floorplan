@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
-import { computeVisibilityPolygon, sampleSegmentInside } from "../../algorithms/geometry/visibilityPolygon";
-import { monteCarloLightSegments } from "../../algorithms/geometry/monteCarloLight";
+import { computeVisibilityPolygon, sampleSegmentInside } from "@builderpluss/engine";
+import { monteCarloLightSegments } from "@builderpluss/engine";
 
 export type VisibilityMode = "point" | "segment";
 export type VisibilityRay = { x1: number; y1: number; x2: number; y2: number; energy: number };

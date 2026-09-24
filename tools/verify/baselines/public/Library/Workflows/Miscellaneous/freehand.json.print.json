@@ -1,0 +1,62 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 8,
+  "edgeCount": 6,
+  "items": [
+    {
+      "nodeId": "freehand-geometry_1",
+      "tool": "freehand-geometry",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "graph-clip_2",
+      "tool": "graph-clip",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "graph-simplify_1",
+      "tool": "graph-simplify",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "network_3",
+      "tool": "network",
+      "polygons": {
+        "rings": 303,
+        "vertices": 606,
+        "area": 0,
+        "bbox": [
+          -9.1341,
+          -4.191,
+          10.3057,
+          4.5793
+        ],
+        "nonFinite": 0
+      },
+      "hash": "693fe828b7e820bf"
+    }
+  ],
+  "hash": "4eae13edc4c00f07"
+}

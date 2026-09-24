@@ -1,0 +1,67 @@
+{
+  "schema": "lamp/1",
+  "id": "sun-clear-noon",
+  "name": "Clear sun, noon 5500 K 100 000 lx",
+  "category": "Daylight",
+  "description": "The only lamp here with an angular diameter instead of a size. 0.526 degrees is the real sun's, and it is the reason a sunbeam edge is nearly sharp but not quite — widen it and the scene goes hazy.",
+  "emission": {
+    "sourceType": "Sun",
+    "areaShape": "",
+    "lumens": 0,
+    "lumensPerMetre": 0,
+    "wattsElectrical": 0,
+    "efficacy": 0,
+    "illuminanceLux": 100000,
+    "kelvin": 5500,
+    "cri": 100,
+    "duv": 0
+  },
+  "distribution": {
+    "profile": "Narrow",
+    "beamAngle": 0.526,
+    "fieldAngle": 0.526,
+    "beamBlend": 0,
+    "spread": 180,
+    "ies": {
+      "path": "",
+      "normalise": true
+    }
+  },
+  "shadow": {
+    "lampRadius": 0,
+    "castShadow": true,
+    "maxBounces": 1024,
+    "multipleImportance": true,
+    "diffuseFactor": 1,
+    "glossyFactor": 1,
+    "transmissionFactor": 1,
+    "volumeFactor": 1,
+    "visibleToCamera": false,
+    "isPortal": false
+  },
+  "blender": {
+    "type": "SUN",
+    "shape": "",
+    "energyWatts": 146.412884,
+    "color": {
+      "mode": "blackbody",
+      "kelvin": 5500
+    },
+    "rgb": [
+      1,
+      0.849643,
+      0.754693
+    ],
+    "sizeX": 0,
+    "sizeY": 0,
+    "radius": 0,
+    "spotSizeDeg": 0.526,
+    "spotBlend": 0,
+    "spread": 180,
+    "angleDeg": 0.526
+  },
+  "emissive": {
+    "material": "",
+    "luminanceOverride": 0
+  }
+}

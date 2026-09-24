@@ -1,0 +1,29 @@
+{
+  "schema": "material/1",
+  "id": "metal.steel-brushed",
+  "title": "Metal — brushed steel",
+  "category": "Metal",
+  "description": "Brushed steel. No procedural colour texture by design — the brush is anisotropic ROUGHNESS, not a pattern, so the recipe is a pbr one and the procedural slot stays empty.",
+  "procedural": {
+    "type": "none",
+    "blenderNode": null,
+    "params": {}
+  },
+  "pbr": {
+    "baseColor": "#b8bcc0",
+    "roughness": 0.35,
+    "metallic": 1
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 4,
+    "angle": 45,
+    "weight": 1,
+    "color": "#b8bcc0"
+  },
+  "dxf": {
+    "pattern": "ANSI32",
+    "scale": 1,
+    "angle": 0
+  }
+}

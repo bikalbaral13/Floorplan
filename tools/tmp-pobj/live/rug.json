@@ -1,0 +1,648 @@
+{
+  "version": 1,
+  "id": "rug-with-math",
+  "title": "Rug — one Math Engine, field, border, fringe",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "space",
+    "name": "Rug",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 6h18v12H3z",
+        "M6 6v12",
+        "M18 6v12",
+        "M3 9h18",
+        "M3 15h18"
+      ]
+    }
+  },
+  "description": "A parametric RUG on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nSPACE-HOSTED AND FITTED BY DEFAULT. A rug belongs to a room, so this one ships with Fit to host on Max and a 400 mm margin: drop it on a Space and it lands centred with a border of floor showing, which is what a rug is for. Every other object in this library ships with fit Off, because every other object has a size of its own; a rug's size is the room's.\n\nTHE BORDER IS FOUR BARS AROUND A FIELD, not a rectangle with a thicker line. That is what lets the field and the border carry different colours and different published areas — and the field area, not the rug area, is the figure that matters when the border is 120 mm and the rug is 2.4 m.\n\nTHREE SHAPES. Rectangular and Runner are the same construction with the width pinched to 35% of the length; Round abandons the quad table for a 36-point ring, and empties the border and fringe with it — a round rug with a mitred border would be a lie about how rugs are made.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 2.4,
+              "min": 0.6,
+              "max": 6,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.6,
+              "min": 0.4,
+              "max": 4,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Pile thickness",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.002,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "borderWidth",
+              "name": "Border width",
+              "type": "range",
+              "value": 0.12,
+              "min": 0,
+              "max": 0.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "fringeLength",
+              "name": "Fringe length",
+              "type": "range",
+              "value": 0.08,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "shape",
+              "name": "Shape",
+              "type": "select",
+              "value": "Rectangular",
+              "options": [
+                "Rectangular",
+                "Runner",
+                "Round"
+              ]
+            },
+            {
+              "id": "showBorder",
+              "name": "Show border",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Max",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0.4,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "hand-knotted wool rug, deep indigo field, ivory border, short fringe",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Rug maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Wd = width * _s\n_Ht = height * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_isRunner = shape == 'Runner' ? 1 : 0\n_isRound = shape == 'Round' ? 1 : 0\n_rw = _isRunner > 0 ? min(_Wd, _Ln * 0.35) : _Wd\n_rv0 = 0 - _rw / 2\n_rv1 = _rw / 2\n_bW = min(borderWidth * _s, min(_Ln, _rw) * 0.4)\n_fL = fringeLength * _s\n_hasB = (showBorder > 0 && _bW > 0) ? 1 : 0\n_iu0 = _u0 + _bW\n_iu1 = _u1 - _bW\n_iv0 = _rv0 + _bW\n_iv1 = _rv1 - _bW\n_rR = min(_Ln, _rw) / 2\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_FLD = hcat(_iu0, _iv0, _iu1, _iv0, _iu1, _iv1, _iu0, _iv1, 0, _Ht, 1)\n_FULL = hcat(_u0, _rv0, _u1, _rv0, _u1, _rv1, _u0, _rv1, 0, _Ht, 1)\n_FIELD = _isRound > 0 ? zeros(0, 11) : (_hasB > 0 ? _FLD : _FULL)\n_B1 = hcat(_u0, _rv0, _u1, _rv0, _u1, _iv0, _u0, _iv0, 0, _Ht, 2)\n_B2 = hcat(_u0, _iv1, _u1, _iv1, _u1, _rv1, _u0, _rv1, 0, _Ht, 2)\n_B3 = hcat(_u0, _iv0, _iu0, _iv0, _iu0, _iv1, _u0, _iv1, 0, _Ht, 2)\n_B4 = hcat(_iu1, _iv0, _u1, _iv0, _u1, _iv1, _iu1, _iv1, 0, _Ht, 2)\n_BORD = (_hasB > 0 && _isRound < 1) ? vcat(vcat(_B1, _B2), vcat(_B3, _B4)) : zeros(0, 11)\n_F1 = hcat(_u0 - _fL, _rv0, _u0, _rv0, _u0, _rv1, _u0 - _fL, _rv1, 0, _Ht * 0.5, 3)\n_F2 = hcat(_u1, _rv0, _u1 + _fL, _rv0, _u1 + _fL, _rv1, _u1, _rv1, 0, _Ht * 0.5, 3)\n_FRG = (_fL > 0 && _isRound < 1) ? vcat(_F1, _F2) : zeros(0, 11)\nQ = vcat(vcat(_FIELD, _BORD), _FRG)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nField3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nFieldPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nBorder3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nBorderPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nFringe3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nFringePlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\n_rk = arange(36)\n_rt = _rk * 2 * PI / 36\n_rL = hcat(_rR * cos(_rt), _rR * sin(_rt))\n_rW2 = hcat((_cu + col(_rL,0)) * _ux + (_cv + col(_rL,1)) * _vx, (_cu + col(_rL,0)) * _uy + (_cv + col(_rL,1)) * _vy)\nRoundPlan = _isRound > 0 ? _rW2 : zeros(0, 2)\nRound3D = _isRound > 0 ? mprism(_rW2, 0, _Ht) : zeros(0, 4)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\nrugArea = _isRound > 0 ? PI * _rR * _rR : _Ln * _rw\nfieldArea = _isRound > 0 ? PI * _rR * _rR : max(0, _iu1 - _iu0) * max(0, _iv1 - _iv0)\npileLevel = _Ht"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Field — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Border — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Fringe — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Round rug — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Field — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Border — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Fringe — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Round rug — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Rug area (m²)"
+            },
+            {
+              "id": "s14",
+              "label": "Field area (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Pile level (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_field",
+              "kind": "polygon",
+              "name": "Field",
+              "color": "#1e3a8a",
+              "layer": "Furnishing",
+              "show": true
+            },
+            {
+              "id": "p2_border",
+              "kind": "polygon",
+              "name": "Border",
+              "color": "#e7e5e4",
+              "layer": "Furnishing",
+              "show": true
+            },
+            {
+              "id": "p2_fringe",
+              "kind": "polygon",
+              "name": "Fringe",
+              "color": "#d6d3d1",
+              "layer": "Furnishing",
+              "show": true
+            },
+            {
+              "id": "p2_round",
+              "kind": "polygon",
+              "name": "Round rug",
+              "color": "#1e3a8a",
+              "layer": "Furnishing",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_field",
+              "kind": "polyhedron",
+              "name": "Field",
+              "color": "#1e3a8a",
+              "layer": "Furnishing",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_border",
+              "kind": "polyhedron",
+              "name": "Border",
+              "color": "#e7e5e4",
+              "layer": "Furnishing",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_fringe",
+              "kind": "polyhedron",
+              "name": "Fringe",
+              "color": "#d6d3d1",
+              "layer": "Furnishing",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_round",
+              "kind": "polyhedron",
+              "name": "Round rug",
+              "color": "#1e3a8a",
+              "layer": "Furnishing",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-length__math_valin-length",
+      "source": "props",
+      "sourceHandle": "val-length",
+      "target": "math",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-height__math_valin-height",
+      "source": "props",
+      "sourceHandle": "val-height",
+      "target": "math",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e6_props_val-borderWidth__math_valin-borderWidth",
+      "source": "props",
+      "sourceHandle": "val-borderWidth",
+      "target": "math",
+      "targetHandle": "valin-borderWidth"
+    },
+    {
+      "id": "e7_props_val-fringeLength__math_valin-fringeLength",
+      "source": "props",
+      "sourceHandle": "val-fringeLength",
+      "target": "math",
+      "targetHandle": "valin-fringeLength"
+    },
+    {
+      "id": "e8_props_val-shape__math_valin-shape",
+      "source": "props",
+      "sourceHandle": "val-shape",
+      "target": "math",
+      "targetHandle": "valin-shape"
+    },
+    {
+      "id": "e9_props_val-showBorder__math_valin-showBorder",
+      "source": "props",
+      "sourceHandle": "val-showBorder",
+      "target": "math",
+      "targetHandle": "valin-showBorder"
+    },
+    {
+      "id": "e10_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e11_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e12_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e13_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e14_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e15_math_val-Field3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Field3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e16_out_val-s1__r3d_valin-p3_field",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_field"
+    },
+    {
+      "id": "e17_math_val-Border3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Border3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e18_out_val-s2__r3d_valin-p3_border",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_border"
+    },
+    {
+      "id": "e19_math_val-Fringe3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Fringe3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e20_out_val-s3__r3d_valin-p3_fringe",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_fringe"
+    },
+    {
+      "id": "e21_math_val-Round3D__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-Round3D",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e22_out_val-s4__r3d_valin-p3_round",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r3d",
+      "targetHandle": "valin-p3_round"
+    },
+    {
+      "id": "e23_math_val-FieldPlan__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-FieldPlan",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e24_out_val-s5__r2d_valin-p2_field",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r2d",
+      "targetHandle": "valin-p2_field"
+    },
+    {
+      "id": "e25_math_val-BorderPlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-BorderPlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e26_out_val-s6__r2d_valin-p2_border",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_border"
+    },
+    {
+      "id": "e27_math_val-FringePlan__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-FringePlan",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e28_out_val-s7__r2d_valin-p2_fringe",
+      "source": "out",
+      "sourceHandle": "val-s7",
+      "target": "r2d",
+      "targetHandle": "valin-p2_fringe"
+    },
+    {
+      "id": "e29_math_val-RoundPlan__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-RoundPlan",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e30_out_val-s8__r2d_valin-p2_round",
+      "source": "out",
+      "sourceHandle": "val-s8",
+      "target": "r2d",
+      "targetHandle": "valin-p2_round"
+    },
+    {
+      "id": "e31_math_val-overallLength__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e32_math_val-overallWidth__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e33_math_val-overallHeight__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e34_math_val-footprint__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e35_math_val-rugArea__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-rugArea",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e36_math_val-fieldArea__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-fieldArea",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e37_math_val-pileLevel__out_valin-s15",
+      "source": "math",
+      "sourceHandle": "val-pileLevel",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    }
+  ]
+}

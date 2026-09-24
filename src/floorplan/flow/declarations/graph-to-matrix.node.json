@@ -1,0 +1,37 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "graph-to-matrix",
+  "meta": { "label": "Graph to Points", "category": "Graph", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — the inverse of Points to Graph. Graph JSON in, point MATRICES out: every edge as its start point, its end point and its thickness, plus the node positions. This is the bridge INTO the matrix chain.",
+  "instructions": "A value-only node: a graph as JSON in, matrices out. It has no geometry input or output and draws nothing — wire the outputs into a Math Engine, or into Matrix / Vector nodes.\n\nWHY IT EXISTS: Points to Graph is the bridge OUT of the matrix chain (positions → connectivity). This is the way back IN. A graph JSON is an OBJECT, so wiring it into a Math Engine variable gives you an inert string — nothing to compute with. Split into matrices, an edge list is ordinary linear algebra: `Gb - Ga` is the edge-vector list, `normalize(Gb - Ga)` its directions, `len(Gb - Ga)` its lengths, and a pairwise test on `vcat(Ga, Gb)` recovers which endpoints are the same node.\n\nOUTPUTS, all in the same anchor-relative METRES as Space Geometry's val-points, so they wire straight back into Polygon / Network:\n• `a` — M×2, each edge's START point (from_node_id).\n• `b` — M×2, each edge's END point (to_node_id). Row i of a and b is edge i, which is exactly what Points to Graph's Pairs mode consumes, so the pair round-trips.\n• `thickness` — M×1 metres per edge, 0 where the edge carries none. Set Thickness / Merge Graph / Graph Geometry publish it; a flow can then stroke each edge at its own width.\n• `nodes` — N×2, the node positions in the graph's own order.\n• `nodeCount` / `edgeCount` — the two counts, for driving a loop bound or a numeric param.\nAn edge naming a node the graph doesn't define is skipped, so the three edge outputs always agree row for row.\n\nSKIP OPENINGS (on by default): edges tagged `type: \"opening\"` — what Graph to Openings carves for a door or a window — are left out, matching what Mitered Join does with them. Turn it off to get every edge including the openings.\n\nNODE IDENTITY is NOT carried: matrices hold numbers, not ids. Two edges meeting at a node have IDENTICAL coordinates in their a/b rows, so recover the junction with a coordinate test — `min(where(le(D2, tol*tol), T(k), BIG), 'rows')` over the pairwise distance matrix of `vcat(a, b)` gives every endpoint the row index of its first coincident partner, i.e. a canonical node id per endpoint. See Workflows/Operations/mitered_join_with_math.json.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "graph", "label": "Graph (JSON)" }
+    ],
+    "valueOutputs": [
+      { "key": "a", "label": "Edge start points" },
+      { "key": "b", "label": "Edge end points" },
+      { "key": "thickness", "label": "Edge thickness (m)" },
+      { "key": "nodes", "label": "Node points" },
+      { "key": "nodeCount", "label": "Nodes" },
+      { "key": "edgeCount", "label": "Edges" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "graph",
+      "label": "Graph (JSON)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "skipOpenings",
+      "label": "Skip opening edges",
+      "kind": "checkbox",
+      "default": true
+    }
+  ]
+}

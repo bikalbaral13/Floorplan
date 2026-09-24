@@ -1,0 +1,808 @@
+{
+  "version": 1,
+  "id": "linear-profile-with-math",
+  "title": "Linear Profile — a trimless plaster-in run, in modules, with a real cut-off",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Linear Profile",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 6h18v3H3z",
+        "M5 9v2",
+        "M9 9v2",
+        "M13 9v2",
+        "M17 9v2",
+        "M21 9v2"
+      ]
+    }
+  },
+  "description": "A parametric LINEAR PROFILE on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. A plaster-in run with no visible trim: the slot, the carrier above it and the lens set back inside.\n\nA LONG RUN IS NOT ONE EXTRUSION. It is modules with joints, and the joints are visible from the floor. Rounding the count and dividing the run back out is what keeps every module the same length — which is what a trimless detail has to be, because an odd short piece at one end is the thing that gives it away.\n\nCUT-OFF FROM NADIR IS TWO NUMBERS. How wide the slot is and how deep the lens sits. The limiting sight line runs from the far edge of the aperture to the near edge of the lens, so `atan2(slot width, recess)` is the angle at which the lens disappears behind the aperture edge, and it is the entire reason to set a lens back. `Darklight` at 60 mm gives 28.8°; a flush opal lens gives 90°, which means visible from everywhere.\n\nTHE OPTIC IS REPORTED, NOT MODELLED. Opal, darklight, microprism and asymmetric are four different photometric distributions and one identical extrusion. The distribution belongs to the lamp file; the extrusion belongs here.\n\nDIMENSIONS AT THE DEFAULTS: a 3 m run of 35 mm slot, 75 mm deep, lens 60 mm back, in three 999 mm modules with 2 mm joints — 28.8° cut-off, 3300 lm.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Run length",
+              "type": "range",
+              "value": 3,
+              "min": 0.2,
+              "max": 40,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "profileWidth",
+              "name": "Aperture width",
+              "type": "range",
+              "value": 0.035,
+              "min": 0.012,
+              "max": 0.15,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "profileDepth",
+              "name": "Profile depth",
+              "type": "range",
+              "value": 0.075,
+              "min": 0.03,
+              "max": 0.25,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "recessDepth",
+              "name": "Lens set back from the aperture",
+              "type": "range",
+              "value": 0.06,
+              "min": 0,
+              "max": 0.2,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "moduleLength",
+              "name": "Module length",
+              "type": "range",
+              "value": 1,
+              "min": 0.25,
+              "max": 4,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "jointGap",
+              "name": "Joint gap",
+              "type": "range",
+              "value": 0.002,
+              "min": 0,
+              "max": 0.02,
+              "step": 0.0005,
+              "options": []
+            },
+            {
+              "id": "optic",
+              "name": "Optic",
+              "type": "select",
+              "value": "Darklight",
+              "options": [
+                "Opal",
+                "Darklight",
+                "Microprism",
+                "Asymmetric"
+              ]
+            },
+            {
+              "id": "mountHeight",
+              "name": "Ceiling soffit",
+              "type": "range",
+              "value": 2.7,
+              "min": 1.8,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "lumensPerMetre",
+              "name": "Output per metre",
+              "type": "range",
+              "value": 1100,
+              "min": 100,
+              "max": 4000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 3000,
+              "min": 1800,
+              "max": 8000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.008,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Photometry/…)",
+              "type": "text",
+              "value": "Photometry/LED/linear-darklight-3000k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "linear",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "extruded aluminium carrier, plaster-in flange, darklight louvre",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "seamless recessed line of light, trimless, architectural",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Linear Profile maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_pw = profileWidth * _s\n_pd = profileDepth * _s\n_rd = min(recessDepth * _s, _pd - 0.008)\n_mz = mountHeight * _s\n_bodyL = _Ln\n_bodyW = _pw\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# A long run is not one extrusion — it is modules with a joint between them, and the joint is\n# visible from the floor. Rounding the count and then dividing the run back out is what keeps\n# the modules equal, which is what a trimless detail has to be.\n_mL = max(0.1, moduleLength * _s)\n_nMod = max(1, round(_Ln / _mL))\n_jg = min(jointGap * _s, _mL / 4)\n_modL = (_Ln - (_nMod - 1) * _jg) / _nMod\n_mk = arange(_nMod)\n_mu0 = 0 - _Ln / 2 + _mk * (_modL + _jg)\n_mu1 = _mu0 + _modL\n_one = ones(_nMod, 1)\n_z0 = _mz\n_z1 = _mz + _pd\n_lz0 = _mz + _rd\n_lz1 = _lz0 + 0.004 * _s\n_hw = _pw / 2\n_lw = max(0.002, _hw - 0.002 * _s)\n_PROF = hcat(_mu0, 0 - _hw * _one, _mu1, 0 - _hw * _one, _mu1, _hw * _one, _mu0, _hw * _one, _z0 * _one, _z1 * _one, 1 * _one)\n_LENS = hcat(_mu0, 0 - _lw * _one, _mu1, 0 - _lw * _one, _mu1, _lw * _one, _mu0, _lw * _one, _lz0 * _one, _lz1 * _one, 2 * _one)\nQ = vcat(_PROF, _LENS)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nProfile3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nLens3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nProfilePlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nLensPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\n# ── Lamp block ─────────────────────────────────────────────────────────────────────────────\n# The photometry a renderer needs and a drawing cannot show. Arithmetic on the inputs only:\n# nothing here lights anything, and `lamp` names the Photometry file that carries the rest.\n_lbDim = max(0, min(100, dimLevel)) / 100\n_lbLm = lumensPerMetre * _Ln\nlampDimmed = _lbLm * _lbDim\n# 683 lm/W is the same constant material/1 uses for emission.luminance. Writing it in both\n# places is the point: a lit diffuser and the lamp behind it have to be reconcilable, and they\n# can only be reconciled through one number.\nlampWatts = lampDimmed / 683\nlampSoftSize = lampRadius\nlampEmits = emitsLight > 0 ? 1 : 0\nlampCri = cri\nlampKelvin = kelvin\n# Cut-off from nadir: stand under it and walk away, and this is the angle at which the lens\n# disappears behind the aperture edge. It is the entire reason to set a lens back, and it is\n# two numbers — how wide the slot is and how deep the lens sits — and nothing else. The\n# limiting ray runs from the FAR aperture edge to the NEAR lens edge, so it is the full width.\ncutoffNadir = atan2(_hw + _lw, max(0.001, _rd)) * 180 / PI\nopticCode = optic == 'Opal' ? 0 : (optic == 'Darklight' ? 1 : (optic == 'Microprism' ? 2 : 3))\nmoduleCount = _nMod\nmoduleUsed = _modL\njointCount = _nMod - 1\nrunLength = _Ln\napertureArea = _Ln * _pw\napertureLuminance = apertureArea > 0.0001 ? (lampDimmed / (PI * apertureArea)) : 0\nmountElevation = _mz\nlensElevation = _lz0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Profile — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Lens — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Profile — plan"
+            },
+            {
+              "id": "s4",
+              "label": "Lens — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Run length (m)"
+            },
+            {
+              "id": "s6",
+              "label": "Modules"
+            },
+            {
+              "id": "s7",
+              "label": "Module length used (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Joints"
+            },
+            {
+              "id": "s9",
+              "label": "Cut-off from nadir (°)"
+            },
+            {
+              "id": "s10",
+              "label": "Optic"
+            },
+            {
+              "id": "s11",
+              "label": "Aperture area (m²)"
+            },
+            {
+              "id": "s12",
+              "label": "Aperture luminance (cd/m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Mount elevation (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Lens elevation (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Dimmed output (lm)"
+            },
+            {
+              "id": "s16",
+              "label": "Blender watts (W)"
+            },
+            {
+              "id": "s17",
+              "label": "Lamp radius (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Emits light"
+            },
+            {
+              "id": "s19",
+              "label": "CRI"
+            },
+            {
+              "id": "s20",
+              "label": "Colour temperature (K)"
+            },
+            {
+              "id": "s21",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_prof",
+              "kind": "polygon",
+              "name": "Profile",
+              "color": "#a8a29e",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_lens",
+              "kind": "polygon",
+              "name": "Lens",
+              "color": "#fef9c3",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_prof",
+              "kind": "polyhedron",
+              "name": "Profile",
+              "color": "#a8a29e",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lens",
+              "kind": "polyhedron",
+              "name": "Lens",
+              "color": "#fef9c3",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_profileWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-profileWidth",
+      "targetHandle": "valin-profileWidth"
+    },
+    {
+      "id": "e_props_math_profileDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-profileDepth",
+      "targetHandle": "valin-profileDepth"
+    },
+    {
+      "id": "e_props_math_recessDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-recessDepth",
+      "targetHandle": "valin-recessDepth"
+    },
+    {
+      "id": "e_props_math_moduleLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-moduleLength",
+      "targetHandle": "valin-moduleLength"
+    },
+    {
+      "id": "e_props_math_jointGap",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-jointGap",
+      "targetHandle": "valin-jointGap"
+    },
+    {
+      "id": "e_props_math_optic",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-optic",
+      "targetHandle": "valin-optic"
+    },
+    {
+      "id": "e_props_math_mountHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mountHeight",
+      "targetHandle": "valin-mountHeight"
+    },
+    {
+      "id": "e_props_math_lumensPerMetre",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lumensPerMetre",
+      "targetHandle": "valin-lumensPerMetre"
+    },
+    {
+      "id": "e_props_math_kelvin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-kelvin",
+      "targetHandle": "valin-kelvin"
+    },
+    {
+      "id": "e_props_math_cri",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cri",
+      "targetHandle": "valin-cri"
+    },
+    {
+      "id": "e_props_math_dimLevel",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-dimLevel",
+      "targetHandle": "valin-dimLevel"
+    },
+    {
+      "id": "e_props_math_lampRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lampRadius",
+      "targetHandle": "valin-lampRadius"
+    },
+    {
+      "id": "e_props_math_emitsLight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-emitsLight",
+      "targetHandle": "valin-emitsLight"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Profile3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Lens3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ProfilePlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LensPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-runLength",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-moduleCount",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-moduleUsed",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-jointCount",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-cutoffNadir",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-opticCode",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-apertureArea",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-apertureLuminance",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mountElevation",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lensElevation",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampDimmed",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampWatts",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampSoftSize",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampEmits",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampCri",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampKelvin",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_out_r2d_p2_prof",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_prof"
+    },
+    {
+      "id": "e_out_r2d_p2_lens",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_lens"
+    },
+    {
+      "id": "e_out_r3d_p3_prof",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_prof"
+    },
+    {
+      "id": "e_out_r3d_p3_lens",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_lens"
+    }
+  ]
+}

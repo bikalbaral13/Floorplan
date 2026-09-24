@@ -1,0 +1,339 @@
+{
+  "version": 1,
+  "id": "detect-boundary",
+  "title": "Detect boundary",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Detect boundary",
+    "icon": {
+      "paths": [
+        "M3 3h18v18H3z",
+        "M7 7h10v10H7z"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Read the floorplan's overall boundary as ONE RECTANGLE and hand the canvas a plan document carrying it as a single SPACE with the library's room.json attached.\n\n  Geometry → Input Properties → Object Detection [Boundary] → Math Engine → Output Metrics (+ 2D Render)\n\nONE RECTANGLE, NOT A LIST AND NOT A POLYGON. Every other flow in this family reports many items; this one reports the single envelope that contains the plan. It is deliberately axis-aligned and four-cornered — the overall extent, the sheet the work sits on, the outline you set a site or a plot against — not a traced footprint. If you need the real shape of an L-shaped building, trace it with Vectorisation and Fit Lines; a rectangle is the honest answer to “how big is this plan, and where is it”.\n\nWHY NO BRIDGE NODE. Reading a true ring would need the detection's `val-graph` and a Graph to Points hop, because the `corners` endpoint keeps only four corners per box. A rectangle needs nothing but extents, and `corners` carries those exactly — every x sits in columns 0, 2, 4, 6 and every y in 1, 3, 5, 7, so ONE full reduction over each half is the envelope of every box at once. Six nodes, same as the rest of the family.\n\nFRAGMENTATION IS NOT A PROBLEM HERE, which is the quiet advantage of the envelope. If the model returns the boundary as several pieces, or boxes a wing separately, every piece still widens the same four numbers — so nothing depends on getting exactly one ring back, and Max items can stay generous instead of being pinned to 1.\n\nTWO SOURCES, AND THE SELECTION DECIDES. The Geometry node is one node whose kind follows what you select. Select the PICTURE and it becomes the Image kernel: the detector reads it and the rectangle is the envelope of what it found. Select a SPACE and it becomes the Space kernel, publishing that space's outline on `val-points` — also wired into the Math Engine — and the rectangle becomes that space's exact extents. An exact outline beats an approximated detection, so it wins whenever it exists and “Prefer canvas selection” is on. Turn that off to force the detected envelope even with a space selected. A wire into an endpoint the current kind lacks simply reads as unwired, which is what lets one node carry both cases without a switch.\n\nMARGIN pushes all four sides outward — a site setback, or breathing room around a footprint the model read tight to the ink. 0 is the envelope itself.\n\nTHE RING IS BUILT FROM THE NUMBERS, not carried through from the detection, so the rectangle drawn on the overlay, the width and depth reported, and the space written into the plan are one rectangle rather than three calculations of it. Corners go round in order — (X0,Y0) (X1,Y0) (X1,Y1) (X0,Y1) — assembled by broadcasting each scalar against a 4-row index column, which is how four numbers become a 4 × 2 ring in a language with no literal matrices.\n\nTHE PLAN DOCUMENT. The Math Engine's encode block runs Canvas Encoder after the formulas and publishes `val-json`: the rectangle becomes ONE space carrying objectId “room-with-math” and objectPath “Objects/Architectural/room.json”, with identifyingType “boundary” so it reads as the extent rather than as another room. A space references NODE IDS, so the four corners are written as nodes — deduplicated by position, so a corner that coincides with something already on canvas reuses its node.\n\nSHOW IN CANVAS. The plan JSON lands in the last Output Metrics slot, and that node's “Show in canvas” button imports it by the same path File ▸ Import takes for a plan you picked. Nothing reaches the canvas until you press it — the flow only ever computes the document.\n\nRENAME THE ROW TO CHANGE THE ASK. It says “Building boundary” today; “Plot boundary”, “Site boundary” or “Compound wall” all work the same way, since the row name IS the prompt. Matching is case-insensitive and bidirectional containment, so “Building boundary” also claims a reply labelled simply “building”.\n\nHOW TO RUN: 1) select the drawing on the canvas — the Geometry node binds to it — or select a Space to use its exact extents instead; 2) paste your Gemini API key into the Object Detection node (it ships BLANK on purpose — never save a key into a shared workflow file); 3) press DETECT on that node. Detect bakes its result into the node — nothing detects on its own and re-running the flow does not re-detect, so press it again after changing the image. Without a key the node produces nothing while the rest still evaluates, which looks exactly like “found none”. With a Space selected the detection is not needed at all: the extents come straight from the canvas and every measurement below is exact.\n\n---\nHOSTED ON AN IMAGE. This file now carries an `object` block with `hostKind: \"image\"`, so it lists as a parametric object and attaches to an imported picture from the Properties tab.\n\nWHAT STILL ONLY WORKS IN THE FLOW EDITOR: an attached object is resolved by the spine runner, which evaluates Input Properties, the Math Engine and the Render rows and NOTHING else. It does not run the Object Detection node, and it reads the Math Engine's `decode` block but never its `encode`. Detection is also an async, billed call that has to be pressed and baked — there is no button on an attached object, and an object re-resolves on every parameter change. So attached, this reports nothing until detect-and-bake exists for attachments. Open it in the Flow editor to actually run it.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -760,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "pooling": "ink",
+          "nodeLabel": "Geometry — picture, or a Space"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -450,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "useCanvas",
+              "name": "Prefer canvas selection when a Space is selected",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "margin",
+              "name": "Margin outward (m)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 10,
+              "step": 0.1,
+              "options": []
+            },
+            {
+              "id": "ppm",
+              "name": "Pixels per metre (plan JSON)",
+              "type": "range",
+              "value": 50,
+              "min": 10,
+              "max": 200,
+              "step": 1,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Tuning"
+        }
+      }
+    },
+    {
+      "id": "detect",
+      "position": {
+        "x": -120,
+        "y": 0
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 6,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_boundary",
+              "name": "Building boundary"
+            }
+          ],
+          "nodeLabel": "Boundary — press Detect"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Extents → one rectangle + plan JSON",
+          "expr": "# THE EXTENTS, FROM WHICHEVER SOURCE HAS THEM.\n# A is the detection's `corners` matrix - one row per box, [x0,y0,x1,y1,x2,y2,x3,y3] in metres. Every\n# x sits in columns 0,2,4,6 and every y in 1,3,5,7, so ONE full reduction over each half is the\n# envelope of every box at once: a fragmented boundary makes the answer better, not worse, which is\n# why nothing here needs the model to return exactly one ring.\n_AX = hcat(hcat(col(A,0), col(A,2)), hcat(col(A,4), col(A,6)))\n_AY = hcat(hcat(col(A,1), col(A,3)), hcat(col(A,5), col(A,7)))\n_ax0 = min(_AX)\n_ax1 = max(_AX)\n_ay0 = min(_AY)\n_ay1 = max(_AY)\n\n# G is the Geometry node's own outline, non-empty only when a SPACE is selected on canvas rather than\n# a picture. Its extents are exact where a detection's are approximate, so they win when they exist\n# and the preference is on.\n_hasG = ge(rows(G), 3)\n_useG = useCanvas > 0 && _hasG > 0\nSrc = _useG ? 1 : 0\n_gx0 = min(col(G,0))\n_gx1 = max(col(G,0))\n_gy0 = min(col(G,1))\n_gy1 = max(col(G,1))\n\n# ONE RECTANGLE. Margin pushes all four sides outward - a site setback, or breathing room around a\n# footprint read tight to the ink.\nX0 = (_useG ? _gx0 : _ax0) - margin\nX1 = (_useG ? _gx1 : _ax1) + margin\nY0 = (_useG ? _gy0 : _ay0) - margin\nY1 = (_useG ? _gy1 : _ay1) + margin\n\nWidth = X1 - X0\nDepth = Y1 - Y0\nArea = Width * Depth\nPerim = 2 * (Width + Depth)\nCx = (X0 + X1) / 2\nCy = (Y0 + Y1) / 2\n\n# THE RING, built from those four numbers rather than carried through from the detection - so the\n# rectangle drawn on the overlay, the width and depth reported, and the space written into the plan\n# are one rectangle rather than three calculations of it. Corners go round in order:\n# (X0,Y0) (X1,Y0) (X1,Y1) (X0,Y1). `where` broadcasts a scalar against the 4-row index column, which\n# is how four numbers become a 4 x 2 ring with no literal matrix in the language.\n_i = arange(4)\n_rx = where(eq(_i,1) + eq(_i,2), X1, X0)\n_ry = where(eq(_i,2) + eq(_i,3), Y1, Y0)\nRect = hcat(_rx, _ry)\n\n# `[x, y, group]` with a single group is what a 2D Render polygon row reads as one ring AND what the\n# encoder reads as one space boundary.\nSpaces = hcat(Rect, col(Rect,0) * 0)\nPPM = ppm\n",
+          "decode": "",
+          "encode": "{\n  \"from\": {\n    \"spaces\": \"Spaces\",\n    \"pixelsPerMeter\": \"PPM\"\n  },\n  \"objects\": {\n    \"segments\": {},\n    \"points\": {},\n    \"space\": {\n      \"objectId\": \"room-with-math\",\n      \"objectPath\": \"Objects/Architectural/room.json\",\n      \"params\": {\n        \"identifyingType\": \"boundary\",\n        \"color\": \"Teal\"\n      }\n    }\n  },\n  \"pixelsPerMeter\": 50,\n  \"libraryPath\": \"https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library\",\n  \"decimals\": 4\n}",
+          "nodeLabel": "Measure + encode the plan"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_bnd",
+              "kind": "polygon",
+              "name": "Boundary rectangle",
+              "color": "#0891b2",
+              "layer": "Detected · Boundary",
+              "lineStyle": "solid",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            }
+          ],
+          "nodeLabel": "The boundary rectangle"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 620,
+        "y": 220
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Boundary boxes detected (any number — all are enveloped)"
+            },
+            {
+              "id": "s2",
+              "label": "Source (1 = canvas selection, 0 = detected envelope)"
+            },
+            {
+              "id": "s3",
+              "label": "Width (m)"
+            },
+            {
+              "id": "s4",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s5",
+              "label": "Enclosed area (m²)"
+            },
+            {
+              "id": "s6",
+              "label": "Perimeter (m)"
+            },
+            {
+              "id": "s7",
+              "label": "Centroid X (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Centroid Y (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Boundary rectangle [[x, y], …]"
+            },
+            {
+              "id": "s10",
+              "label": "Unclaimed labels (rename the row if non-empty)"
+            },
+            {
+              "id": "s11",
+              "label": "Plan JSON — one space + room.json"
+            }
+          ],
+          "nodeLabel": "The boundary, measured"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geom_props",
+      "source": "geom",
+      "sourceHandle": null,
+      "target": "props",
+      "targetHandle": null
+    },
+    {
+      "id": "e2_props_detect",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detect",
+      "targetHandle": null
+    },
+    {
+      "id": "e3_detect_math",
+      "source": "detect",
+      "sourceHandle": "val-o_boundary_corners",
+      "target": "math",
+      "targetHandle": "valin-A"
+    },
+    {
+      "id": "e4_geom_math",
+      "source": "geom",
+      "sourceHandle": "val-points",
+      "target": "math",
+      "targetHandle": "valin-G"
+    },
+    {
+      "id": "e5_props_use",
+      "source": "props",
+      "sourceHandle": "val-useCanvas",
+      "target": "math",
+      "targetHandle": "valin-useCanvas"
+    },
+    {
+      "id": "e6_props_margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e7_props_ppm",
+      "source": "props",
+      "sourceHandle": "val-ppm",
+      "target": "math",
+      "targetHandle": "valin-ppm"
+    },
+    {
+      "id": "e8_math_render",
+      "source": "math",
+      "sourceHandle": "val-Rect",
+      "target": "render",
+      "targetHandle": "valin-pr_bnd"
+    },
+    {
+      "id": "e9_boxes",
+      "source": "detect",
+      "sourceHandle": "val-o_boundary_count",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e10_src",
+      "source": "math",
+      "sourceHandle": "val-Src",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e11_width",
+      "source": "math",
+      "sourceHandle": "val-Width",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e12_depth",
+      "source": "math",
+      "sourceHandle": "val-Depth",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e13_area",
+      "source": "math",
+      "sourceHandle": "val-Area",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e14_perim",
+      "source": "math",
+      "sourceHandle": "val-Perim",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e15_cx",
+      "source": "math",
+      "sourceHandle": "val-Cx",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e16_cy",
+      "source": "math",
+      "sourceHandle": "val-Cy",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e17_rect",
+      "source": "math",
+      "sourceHandle": "val-Rect",
+      "target": "metrics",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e18_unmatched",
+      "source": "detect",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e19_planjson",
+      "source": "math",
+      "sourceHandle": "val-json",
+      "target": "metrics",
+      "targetHandle": "valin-s11"
+    }
+  ]
+}

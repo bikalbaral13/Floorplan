@@ -12,8 +12,8 @@
  *  Node-to-Staircase plan. This is the one reusable reader: ANY definition flows through it, no per-object
  *  TypeScript. */
 import type { Point } from "../../types";
-import type { FlowMeshPrism } from "./meshTypes";
-import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
+import type { FlowMeshPrism } from "@builderpluss/engine";
+import { computeInsetPolygon } from "@builderpluss/engine";
 // The package ships an ESM bundle whose only export is `default`, but its .d.ts declares named
 // exports — so resolve the callable object defensively across bundler/interop modes.
 import * as PolygonClippingNS from "polygon-clipping";
@@ -21,7 +21,11 @@ import * as PolygonClippingNS from "polygon-clipping";
 // Flow editor dispatches to, so an object renders identically to the flow it was authored from.
 import { evalInset, evalOptimise, evalSplit, evalCorridoor, evalCoreRacking } from "./evalNodes";
 // Safe expression engine (shared with the node-declaration schema loader) — see ./expr.
-import { evalNum, evalRaw, evalTruthy, toNum, type Scope } from "./expr";
+import { evalNum, evalRaw, evalTruthy, toNum, type Scope } from "@builderpluss/engine";
+// SPINE objects: the same (definition, host, params) → (plan, solids, metrics) contract, produced by running a
+// six-node flow instead of these rules. Imported at RUNTIME here while spineObject imports only TYPES back,
+// so the pair forms no cycle.
+import { resolveSpineObject, spinePrisms } from "./spineObject";
 
 // Boolean-ops handle for the optional per-rule `clip` (intersect a closed shape with the host footprint).
 type ClipRing = [number, number][];
@@ -1021,10 +1025,82 @@ const placer = (anchor: Point, ppm: number, rotDeg: number) => {
   return (x: number, y: number): Point => ({ x: anchor.x + (x * cs - y * sn) * ppm, y: anchor.y + (x * sn + y * cs) * ppm });
 };
 
+/** Does this object produce REAL geometry, as opposed to only a `meta.symbol` placeholder?
+ *
+ *  Two providers now answer yes: the rules DSL (`geometry`) and a six-node spine flow (`spine`). Every
+ *  "has geometry" gate in the editor must ask this rather than testing `geometry` directly — one that tests
+ *  the field falls through to the placeholder branch, which is how an imported Bike drew as a STAIRCASE. */
+export const objHasGeometry = (o?: { geometry?: unknown; spine?: unknown } | null): boolean =>
+  !!o && (!!o.geometry || !!o.spine);
+
+/** Is this object a SPINE (it computes its own placement from the host points)? A pobj is authored in local
+ *  coordinates and positioned — stretched, rotated, host-aligned — by the renderer afterwards; a spine has
+ *  already done all of that inside its Math Engine, so its output must be drawn as-is and it must be GIVEN the
+ *  host points. Callers use this to decide both. */
+export const objIsSpine = (o?: { spine?: unknown } | null): boolean => !!o?.spine;
+
+/** The `showInCanvas` parameters of a placed instance, resolved to their LIVE values and formatted for the
+ *  plan label. The instance's own `params` win over the file's defaults — the same precedence every other
+ *  reader of an attachment uses. Empty when the object marks nothing for the canvas, which is the default,
+ *  so callers can render the result unconditionally. */
+export const canvasLabelLines = (
+  obj: { parameters?: { key: string; label?: string; showInCanvas?: boolean }[] } | null | undefined,
+  params: Record<string, unknown> | undefined,
+): string[] => {
+  const out: string[] = [];
+  for (const p of obj?.parameters ?? []) {
+    if (!p.showInCanvas) continue;
+    const v = params?.[p.key] ?? (p as { default?: unknown }).default;
+    // A blank value would render as a bare "Number:" — drop the row instead. `false` is a real value.
+    if (v == null || v === "") continue;
+    const text = typeof v === "number" ? String(Number(v.toFixed(3))) : String(v);
+    out.push(p.label ? `${p.label}: ${text}` : text);
+  }
+  return out;
+};
+
+/** Does any Output-node slot on this object's spine ask to be drawn? A cheap structural test, so the render
+ *  path can skip {@link evalParametricOutputs} entirely for the overwhelming majority of objects that mark
+ *  nothing — evaluating a spine per attachment per frame just to discover there is nothing to label would
+ *  cost more than everything else the label pass does. */
+export const objHasCanvasMetrics = (obj?: { spine?: unknown } | null): boolean => {
+  const nodes = asArr((asObj(obj?.spine) ?? {}).nodes);
+  for (const n of nodes) {
+    const data = asObj(asObj(n)?.data);
+    if (asObj(data)?.tool !== "output") continue;
+    for (const s of asArr(asObj(asObj(data)?.params)?.slots)) {
+      if (asObj(s)?.showInCanvas === true) return true;
+    }
+  }
+  return false;
+};
+
+/** The MEASURED counterpart of {@link canvasLabelLines}: the Output-node metrics an object marks
+ *  `showInCanvas`, resolved against this instance's params + host and formatted for the plan. */
+export const canvasMetricLines = (
+  obj: object | null | undefined,
+  params: Record<string, unknown> | undefined,
+  host: Point[] | undefined,
+  resolve?: ObjectResolver,
+): string[] => {
+  if (!objHasCanvasMetrics(obj as { spine?: unknown })) return [];
+  const out = evalParametricOutputs(JSON.stringify(obj), params, host, resolve);
+  if (!out.ok) return [];
+  return out.declared
+    .filter((r) => r.showInCanvas && r.value !== "")
+    .map((r) => `${r.name}: ${r.value}${r.unit ? ` ${r.unit}` : ""}`);
+};
+
 /** Parse + evaluate a parametric definition into canvas polylines anchored at `anchor` (the top-down PLAN
  *  projection). Closed shapes fill + outline; open shapes only stroke. Empty on parse error.
  *  `childParams` = per-instance overrides for nested `ref` components (keyed by instance path). */
 export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): ParametricGeometry {
+  // A SPINE object produces its plan by running its own Math Engine instead of these rules. Branching here
+  // rather than at the call sites is deliberate: all 20-odd consumers of an attached object — the canvas
+  // layers, hit-testing, the wall carve, exports — keep working without knowing which kind of definition they
+  // are looking at.
+  const spine = resolveSpineObject(defText, anchor, ppm, overrides, host);
+  if (spine) return spine.geometry;
   const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams });
   if (!built) return { fill: [], lines: [], color: "#0f766e", refLines: [] };
   const xf = placer(anchor, ppm, built.rotationDeg);
@@ -1076,6 +1152,11 @@ export function evalParametricPipelineSteps(defText: string, anchor: Point, ppm:
  *  CLOSED shape with a non-zero height span (footprint extruded h0→h1 metres). Open shapes / flat shapes are
  *  skipped. Same shape stack as the plan, so 3D is driven by the SAME parameters. Empty on parse error. */
 export function evalParametricPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): FlowMeshPrism[] {
+  // A SPINE object's solids arrive as face lists; the prismatic ones (everything `mprism` builds, which is
+  // every architectural member) convert exactly, and a rounded or booleaned solid is skipped rather than
+  // approximated — see spinePrisms.
+  const spineP = resolveSpineObject(defText, anchor, ppm, overrides, host);
+  if (spineP) return spinePrisms(spineP.meshes, anchor, ppm);
   const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams });
   if (!built) return [];
   const xf = placer(anchor, ppm, built.rotationDeg);
@@ -1297,10 +1378,50 @@ export function inspectParametricGeometry(defText: string, overrides?: Record<st
 // + geometry vars (the object's own published metrics); (2) DERIVED — geometry the evaluator already
 // produces (shape count, overall bounding W×D×H, footprint area, volume), so the node is useful even for
 // objects that declare no outputs. Read-only.
-export interface ParamOutputRow { name: string; value: string; unit?: string; }
+export interface ParamOutputRow { name: string; value: string; unit?: string;
+  /** The object's own declared `key` for this output, when it has one — preferred over the label for the
+   *  `val-<key>` endpoint id, so renaming a label never moves a wire. */
+  key?: string;
+  /** Carried from the Output node's slot: draw this metric on the plan at the host's anchor. Absent ⇒ no. */
+  showInCanvas?: boolean;
+  /** Carried from the slot: whether the metric is required. Absent ⇒ required. */
+  necessary?: boolean; }
 export interface ParamOutputs { ok: boolean; declared: ParamOutputRow[]; derived: ParamOutputRow[]; }
 
+/** One wireable output metric: the `val-<key>` endpoint id, the display name, and the value both formatted
+ *  and (where the formatting is a plain number) numeric. */
+export interface ParamOutputEntry { key: string; name: string; value: string; num?: number; unit?: string; group: "declared" | "derived"; }
+
+/** Flatten {@link ParamOutputs} into wireable entries — declared metrics first, then derived. The key is the
+ *  metric's name reduced to an identifier (so "Built-up area" publishes on `val-Built_up_area`), deduplicated
+ *  with a numeric suffix when two names collapse onto one. SHARED by the node's inline readout, its dynamic
+ *  output handles and the flow evaluator, so all three agree on which key carries which metric — the same
+ *  reason the graph-JSON builder is shared between a source and its Geometry node. */
+export const paramOutputEntries = (out: ParamOutputs | undefined): ParamOutputEntry[] => {
+  if (!out?.ok) return [];
+  const used = new Map<string, number>();
+  const entries: ParamOutputEntry[] = [];
+  for (const group of ["declared", "derived"] as const) {
+    for (const r of out[group]) {
+      // The object's declared `key` wins — an author renaming a label must not move the endpoint. Derived
+      // metrics have none, so their name (Width, Footprint, …) is reduced to an identifier instead.
+      let key = String(r.key || r.name || "").trim().replace(/[^A-Za-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+      if (!key || /^[0-9]/.test(key)) key = `m_${key}`;
+      const n = used.get(key) ?? 0;
+      used.set(key, n + 1);
+      if (n > 0) key = `${key}_${n + 1}`;
+      const num = Number(r.value);
+      entries.push({ key, name: r.name, value: r.value, num: Number.isFinite(num) && r.value.trim() !== "" ? num : undefined, unit: r.unit, group });
+    }
+  }
+  return entries;
+};
+
 export function evalParametricOutputs(defText: string, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): ParamOutputs {
+  // Metrics are frame-independent, so the anchor / scale passed here are immaterial — `host` is already in
+  // anchor-relative metres and the scalars the Output slots carry are metres, degrees and areas.
+  const spineO = resolveSpineObject(defText, { x: 0, y: 0 }, 1, overrides, host);
+  if (spineO) return spineO.outputs;
   const empty: ParamOutputs = { ok: false, declared: [], derived: [] };
   let parsed: unknown;
   try { parsed = JSON.parse(defText); } catch { return empty; }
@@ -1339,7 +1460,8 @@ export function evalParametricOutputs(defText: string, overrides?: Record<string
     const e = asObj(o);
     if (!e) continue;
     const name = typeof e.label === "string" && e.label ? e.label : typeof e.key === "string" ? e.key : "output";
-    declared.push({ name, value: valStr(evalRaw(e.expr ?? e.value, scope)), unit: typeof e.unit === "string" ? e.unit : undefined });
+    declared.push({ name, value: valStr(evalRaw(e.expr ?? e.value, scope)), unit: typeof e.unit === "string" ? e.unit : undefined,
+      key: typeof e.key === "string" && e.key ? e.key : undefined });
   }
 
   // Derived metrics from the evaluated shape stack (local metres) — bounding box, footprint area, volume.

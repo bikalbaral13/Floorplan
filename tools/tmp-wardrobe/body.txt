@@ -1,0 +1,373 @@
+
+# ===========================================================================
+# THE WARDROBE IN ITS OWN FRAME — u along the width, v FRONT (-) to back (+),
+# z up. Fronts face -v; the back is at +v, which is what the plan tools' BACK
+# table measures for this object at rotation 0.
+# ===========================================================================
+_W = width * _s
+_D = depth * _s
+_H = height * _s
+_t = panelThk * _s
+_pl = plinthHeight * _s
+_g = max(0.001, doorGap) * _s
+_dT = 0.019 * _s
+_u0 = 0 - _W / 2
+_u1 = _W / 2
+_v0 = 0 - _D / 2
+_v1 = _D / 2
+# loft: cabinets (or a plain filler) from the top of the tall section to the ceiling
+_loftOn = topFiller > 0 && fillerTo * _s > _H + 0.1 * _s
+_FT = _loftOn ? fillerTo * _s : _H
+# a loft too shallow for a door (under 0.3 m) is a filler, whatever was asked
+_loftCab = _loftOn && loftStyle == 'Cabinets' && (_FT - _H) >= 0.3 * _s
+# the visible oak band between the tall doors and the loft, and above the loft
+_rail = _loftOn ? 0.035 * _s : 0
+_topBand = _loftOn ? 0.03 * _s : 0
+
+# -- dials --
+_dB = detail == 'Blocky'
+_dM = detail == 'Medium'
+_dF = detail == 'Fine'
+_kA = _dB ? 1 : (_dM ? 2 : (_dF ? 3 : 5))
+_ecC = edgeCharacter == 'Crisp'
+_ecP = edgeCharacter == 'Plump'
+_rE = (_ecC ? 0.0012 : (_ecP ? 0.005 : 0.0025)) * _s
+# finish scheme: which fronts are oak (group 2) and which white (group 3)
+_allW = frontFinish == 'All white'
+_allO = frontFinish == 'All oak'
+_gMain = _allW ? 3 : 2
+_gBayUp = _allO ? 2 : 3
+_gDrw = _allW ? 3 : 2
+_gLoft = _allO ? 2 : 3
+_gEnd = _allO ? 1 : 3
+
+# ===========================================================================
+# STEP 1 — THE FRONTS TABLE: every door, drawer and loft leaf is one row
+# ===========================================================================
+# columns: 0 a0, 1 a1 (u) | 2 z0, 3 z1 | 4 vf (face), 5 vb (back) | 6 group
+#          7 is drawer | 8 handle (0 none, 1 long bar, 2 short bar, 3 horizontal)
+#          9 handle u | 10 handle z0 | 11 handle z1 | 12 is main leaf (mirror-able)
+# LEFT AND RIGHT ARE AS SEEN STANDING IN FRONT OF THE DOORS. The fronts face
+# -v, so the viewer's right is -u: a "Right" bay sits at the LOW end of u.
+# Taking "Right" as +u put the reference's drawer bank on the wrong side.
+_bayOn = drawerBay != 'None'
+_bayR = _bayOn && drawerBay == 'Left'
+_bw = _bayOn ? min(bayWidth * _s, 0.6 * _W) : 0
+_mu0 = (_bayOn && !_bayR) ? (_u0 + _bw) : _u0
+_mu1 = _bayR ? (_u1 - _bw) : _u1
+_ba0 = _bayR ? (_u1 - _bw) : _u0
+_ba1 = _bayR ? _u1 : (_u0 + _bw)
+_zd0 = _pl + _g
+_zd1 = _H - (_loftOn ? _rail : _g)
+_hsty = handles < 0.5 ? 0 : (handleStyle == 'Long bar' ? 1 : (handleStyle == 'Short bar' ? 2 : 0))
+_hsSh = handles < 0.5 ? 0 : (handleStyle == 'None' ? 0 : 2)
+_hin = 0.045 * _s
+_isSl = doorStyle == 'Sliding' ? 1 : 0
+_lap = 0.025 * _s
+
+# main section leaves — pairs meet at a handle, an odd last leaf takes its own
+_nd = max(1, round(doors))
+_mp = (_mu1 - _mu0) / _nd
+_di = arange(_nd)
+# Pairs are counted from the end AWAY from the bay, so an odd leaf lands next to
+# the bay — as in the reference — rather than at the far end of the run.
+_rv = _bayOn && !_bayR
+_pk = _rv ? (_nd - 1 - _di) : _di
+_par = _pk % 2
+_pa = _mu0 + _di * _mp + _g / 2 - _isSl * _lap * gt(_di, 0)
+_pb = _mu0 + (_di + 1) * _mp - _g / 2 + _isSl * _lap * lt(_di, _nd - 1)
+# sliding leaves run in two planes, alternating by index
+_pvf = where(eq(_par, 1), fill(_nd, 1, _v0 - _dT - 0.002 * _s), fill(_nd, 1, _v0 - (1 + _isSl) * _dT - (0.002 + 0.004 * _isSl) * _s))
+_hu = _rv ? where(eq(_par, 0), _pa + _hin, _pb - _hin) : where(eq(_par, 0), _pb - _hin, _pa + _hin)
+_hL = _zd1 - _zd0
+_hz0 = _hsty == 1 ? (_zd0 + 0.24 * _hL) : (_zd0 + 0.43 * _hL)
+_hz1 = _hsty == 1 ? (_zd0 + 0.71 * _hL) : (_zd0 + 0.53 * _hL)
+_o = ones(_nd, 1)
+_FR = hcat(_pa, _pb, _zd0 * _o, _zd1 * _o, _pvf, _pvf + _dT, _gMain * _o, 0 * _o, _hsty * _o, _hu, _hz0 * _o, _hz1 * _o, _o)
+
+# drawer bay: uppers over a drawer bank
+_nDr = _bayOn ? max(1, round(drawers)) : 0
+_dz = _pl + min(drawerZone * _s, 0.6 * (_zd1 - _pl))
+_bvf = _v0 - _dT - 0.002 * _s
+_bmid = (_ba0 + _ba1) / 2
+_bUpA = vcat(_ba0 + _g / 2, _bmid + _g / 2)
+_bUpB = vcat(_bmid - _g / 2, _ba1 - _g / 2)
+_bUpH = vcat(_bmid - _hin * 0.8, _bmid + _hin * 0.8)
+_o2 = ones(2, 1)
+_bz0 = _dz + _g
+_BUP = hcat(_bUpA, _bUpB, _bz0 * _o2, _zd1 * _o2, _bvf * _o2, (_bvf + _dT) * _o2, _gBayUp * _o2, 0 * _o2, _hsSh * _o2, _bUpH, (_bz0 + 0.07 * _s) * _o2, (_bz0 + 0.33 * _s) * _o2, 0 * _o2)
+_FR = _bayOn ? vcat(_FR, _BUP) : _FR
+_nDrS = max(1, _nDr)
+_drP = (_dz - _pl) / _nDrS
+_drI = arange(_nDrS)
+_drZ0 = _pl + _drI * _drP + _g
+_drZ1 = _pl + (_drI + 1) * _drP
+_o3 = ones(_nDrS, 1)
+_drHz = _drZ0 + 0.62 * (_drZ1 - _drZ0)
+_DRW = hcat((_ba0 + _g / 2) * _o3, (_ba1 - _g / 2) * _o3, _drZ0, _drZ1, _bvf * _o3, (_bvf + _dT) * _o3, _gDrw * _o3, _o3, (_hsSh > 0 ? 3 : 0) * _o3, _bmid * _o3, _drHz, _drHz, 0 * _o3)
+_FR = _bayOn ? vcat(_FR, _DRW) : _FR
+
+# loft leaves — pairs across the full width, a short bar low on each
+_nL = _loftCab ? max(1, round(loftDoors)) : 0
+_nLS = max(1, _nL)
+_lp = (_u1 - _u0) / _nLS
+_li = arange(_nLS)
+_lpar = _li % 2
+_la = _u0 + _li * _lp + _g / 2
+_lb = _u0 + (_li + 1) * _lp - _g / 2
+_lz0 = _H + _g
+_lz1 = _FT - _topBand
+_o4 = ones(_nLS, 1)
+_lhu = where(eq(_lpar, 0), _lb - _hin, _la + _hin)
+_LFT = hcat(_la, _lb, _lz0 * _o4, _lz1 * _o4, _bvf * _o4, (_bvf + _dT) * _o4, _gLoft * _o4, 0 * _o4, _hsSh * _o4, _lhu, (_lz0 + 0.05 * _s) * _o4, (_lz0 + 0.19 * _s) * _o4, 0 * _o4)
+_FR = _loftCab ? vcat(_FR, _LFT) : _FR
+_nFR = rows(_FR)
+
+# ===========================================================================
+# STEP 2 — FRONTS TO BOXES, by door face
+# ===========================================================================
+# BOX TABLE, the one format every part is written in:
+#   0 a0, 1 a1, 2 b0, 3 b1, 4 e0, 5 e1 | 6 radius | 7 axis | 8 group
+# axis 0: a = u, b = v, e = z (a vertical part, its vertical arrises eased)
+# axis 1: a = v, b = z, e = u (a part running along the width: rail, drawer bar)
+_fA0 = col(_FR, 0)
+_fA1 = col(_FR, 1)
+_fZ0 = col(_FR, 2)
+_fZ1 = col(_FR, 3)
+_fVf = col(_FR, 4)
+_fVb = col(_FR, 5)
+_fG = col(_FR, 6)
+_fDr = col(_FR, 7)
+_oF = ones(_nFR, 1)
+_BXflat = hcat(_fA0, _fA1, _fVf, _fVb, _fZ0, _fZ1, _rE * _oF, 0 * _oF, _fG)
+_faceSh = doorFace == 'Shaker'
+_faceFl = doorFace == 'Fluted'
+# drawers are always slab fronts; the face style applies to doors only
+_isD = eq(_fDr, 0)
+_DF = compress(_FR, _isD)
+_DRf = compress(_BXflat, 1 - _isD)
+_nD = rows(_DF)
+_oD = ones(max(1, _nD), 1)
+_dA0 = col(_DF, 0)
+_dA1 = col(_DF, 1)
+_dZ0 = col(_DF, 2)
+_dZ1 = col(_DF, 3)
+_dVf = col(_DF, 4)
+_dVb = col(_DF, 5)
+_dG = col(_DF, 6)
+# SHAKER: two stiles, two rails at full thickness, a panel set back from the face
+_fw = min(doorFrameWidth * _s, 0.3 * min(_mp, _zd1 - _zd0))
+_pIn = min(doorPanelInset * _s, 0.6 * _dT)
+_SHK = vcat(hcat(_dA0, _dA0 + _fw, _dVf, _dVb, _dZ0, _dZ1, _rE * _oD, 0 * _oD, _dG), hcat(_dA1 - _fw, _dA1, _dVf, _dVb, _dZ0, _dZ1, _rE * _oD, 0 * _oD, _dG), hcat(_dA0 + _fw, _dA1 - _fw, _dVf, _dVb, _dZ0, _dZ0 + _fw, _rE * _oD, 0 * _oD, _dG), hcat(_dA0 + _fw, _dA1 - _fw, _dVf, _dVb, _dZ1 - _fw, _dZ1, _rE * _oD, 0 * _oD, _dG), hcat(_dA0 + _fw, _dA1 - _fw, _dVf + _pIn, _dVb, _dZ0 + _fw, _dZ1 - _fw, _rE * _oD, 0 * _oD, _dG))
+# FLUTED: a thin backer and N half-round flutes standing on it, every leaf at once
+_nFl = max(2, round(doorFlutes))
+_flG = doorFluteGap * _s
+_bkr = 0.4 * _dT
+_flI = kron(_oD, arange(_nFl))
+_KA0 = kron(_dA0, ones(_nFl, 1))
+_KA1 = kron(_dA1, ones(_nFl, 1))
+_flW = (_KA1 - _KA0 - (_nFl - 1) * _flG) / _nFl
+_flA = _KA0 + _flI * (_flW + _flG)
+_flDp = _dT - _bkr
+_flR = 0.95 * min(_flW / 2, fill(rows(_flW), 1, _flDp / 2))
+_oK = ones(rows(_flI), 1)
+_FLT = vcat(hcat(_dA0, _dA1, _dVb - _bkr, _dVb, _dZ0, _dZ1, _rE * _oD, 0 * _oD, _dG), hcat(_flA, _flA + _flW, kron(_dVf, ones(_nFl, 1)), kron(_dVb - _bkr + 0.001 * _s, ones(_nFl, 1)), kron(_dZ0, ones(_nFl, 1)), kron(_dZ1, ones(_nFl, 1)), _flR, 0 * _oK, kron(_dG, ones(_nFl, 1))))
+_DOORbx = _faceSh ? _SHK : (_faceFl ? _FLT : compress(_BXflat, _isD))
+_BX = vcat(_DOORbx, _DRf)
+
+# mirror on the chosen main leaves, proud of the face by its own thickness
+_mIn = 0.06 * _s
+_mSel = mirrorPanel == 'All panels' ? ones(_nd, 1) : (mirrorPanel == 'First panel' ? eq(_di, 0) : (mirrorPanel == 'Last panel' ? eq(_di, _nd - 1) : zeros(_nd, 1)))
+_MF = compress(sub(_FR, 0, 0, _nd, 13), _mSel)
+_nMr = rows(_MF)
+_oM = ones(max(1, _nMr), 1)
+_MRbx = hcat(col(_MF, 0) + _mIn, col(_MF, 1) - _mIn, col(_MF, 4) - 0.005 * _s, col(_MF, 4) + 0.001 * _s, col(_MF, 2) + _mIn, col(_MF, 3) - _mIn, 0.001 * _s * _oM, 0 * _oM, 8 * _oM)
+_BX = _nMr > 0 ? vcat(_BX, _MRbx) : _BX
+
+# ===========================================================================
+# STEP 3 — HANDLES: a rounded bar on two stand-off posts
+# ===========================================================================
+_hw = 0.012 * _s
+_hd = 0.012 * _s
+_so = 0.026 * _s
+_pw = 0.009 * _s
+_hr = 0.0045 * _s
+_hT = col(_FR, 8)
+_VH = compress(_FR, gt(_hT, 0.5) * lt(_hT, 2.5))
+_nVH = rows(_VH)
+_oV = ones(max(1, _nVH), 1)
+_vhu = col(_VH, 9)
+_vz0 = col(_VH, 10)
+_vz1 = col(_VH, 11)
+_vvf = col(_VH, 4)
+_postL = 0.035 * _s
+_HV = vcat(hcat(_vhu - _hw / 2, _vhu + _hw / 2, _vvf - _so - _hd, _vvf - _so, _vz0, _vz1, _hr * _oV, 0 * _oV, 4 * _oV), hcat(_vhu - _pw / 2, _vhu + _pw / 2, _vvf - _so - 0.002 * _s, _vvf + 0.001 * _s, _vz0 + _postL, _vz0 + _postL + _pw, 0.004 * _s * _oV, 0 * _oV, 4 * _oV), hcat(_vhu - _pw / 2, _vhu + _pw / 2, _vvf - _so - 0.002 * _s, _vvf + 0.001 * _s, _vz1 - _postL - _pw, _vz1 - _postL, 0.004 * _s * _oV, 0 * _oV, 4 * _oV))
+_BX = _nVH > 0 ? vcat(_BX, _HV) : _BX
+_HH = compress(_FR, gt(_hT, 2.5))
+_nHH = rows(_HH)
+_oH = ones(max(1, _nHH), 1)
+_hhu = col(_HH, 9)
+_hhz = col(_HH, 10)
+_hhv = col(_HH, 4)
+_hLn = min(0.26 * _s, 0.6 * _bw)
+# the bar runs along u, so it is an axis-1 box: a = v, b = z, e = u
+_HB = vcat(hcat(_hhv - _so - _hd, _hhv - _so, _hhz - _hw / 2, _hhz + _hw / 2, _hhu - _hLn / 2, _hhu + _hLn / 2, _hr * _oH, 1 * _oH, 4 * _oH), hcat(_hhu - _hLn / 2 + _postL - _pw / 2, _hhu - _hLn / 2 + _postL + _pw / 2, _hhv - _so - 0.002 * _s, _hhv + 0.001 * _s, _hhz - _pw / 2, _hhz + _pw / 2, 0.004 * _s * _oH, 0 * _oH, 4 * _oH), hcat(_hhu + _hLn / 2 - _postL - _pw / 2, _hhu + _hLn / 2 - _postL + _pw / 2, _hhv - _so - 0.002 * _s, _hhv + 0.001 * _s, _hhz - _pw / 2, _hhz + _pw / 2, 0.004 * _s * _oH, 0 * _oH, 4 * _oH))
+_BX = _nHH > 0 ? vcat(_BX, _HB) : _BX
+
+# ===========================================================================
+# STEP 4 — CARCASS, PLINTH, LOFT, END PANELS, LIGHT, INTERIOR
+# ===========================================================================
+_rC = _rE
+_ztop = _FT
+# sides, top, bottom, back, bay divider — the carcass the fronts overlay
+_CAR = vcat(hcat(_u0, _u0 + _t, _v0, _v1, _pl, _ztop, _rC, 0, 1), hcat(_u1 - _t, _u1, _v0, _v1, _pl, _ztop, _rC, 0, 1), hcat(_u0 + _t, _u1 - _t, _v0, _v1, _ztop - _t, _ztop, _rC, 0, 1), hcat(_u0 + _t, _u1 - _t, _v0, _v1, _pl, _pl + _t, _rC, 0, 1), hcat(_u0 + _t, _u1 - _t, _v1 - 0.008 * _s, _v1, _pl + _t, _ztop - _t, 0, 0, 1))
+_divU = _bayR ? _ba0 : _ba1
+_CAR = _bayOn ? vcat(_CAR, hcat(_divU - _t / 2, _divU + _t / 2, _v0, _v1 - 0.008 * _s, _pl + _t, _zd1, _rC, 0, 1)) : _CAR
+# the rail between tall doors and loft: a shelf whose front edge is the oak band in the picture,
+# set back half a door so it reads as a reveal, not a second front
+_railV0 = _v0 - 0.5 * _dT
+_CAR = _loftOn ? vcat(_CAR, hcat(_u0 + _t, _u1 - _t, _railV0, _v1, _zd1, _H, _rC, 0, 1)) : _CAR
+# top band above the loft doors, the same reveal
+_CAR = _loftOn ? vcat(_CAR, hcat(_u0 + _t, _u1 - _t, _railV0, _v1, _FT - _topBand, _FT - _t, _rC, 0, 1)) : _CAR
+_BX = vcat(_BX, _CAR)
+# a plain filler instead of loft cabinets
+_BX = (_loftOn && !_loftCab) ? vcat(_BX, hcat(_u0, _u1, _bvf, _v1, _H, _FT, _rE, 0, _gLoft)) : _BX
+# plinth: recessed and dark, so the doors read as floating
+_BX = _pl > 0.005 * _s ? vcat(_BX, hcat(_u0 + 0.01 * _s, _u1 - 0.01 * _s, _v0 + 0.05 * _s, _v1 - 0.02 * _s, 0, _pl, 0.002 * _s, 0, 5)) : _BX
+# end panels: full height, flush with the door faces
+_epT = 0.018 * _s
+# low-u panel = the viewer's RIGHT (fronts face -v), high-u panel = the viewer's LEFT
+_epL = endPanel == 'Right' || endPanel == 'Both'
+_epR = endPanel == 'Left' || endPanel == 'Both'
+_epV0 = _v0 - (1 + _isSl) * _dT - 0.006 * _s
+_BX = _epL ? vcat(_BX, hcat(_u0 - _epT, _u0, _epV0, _v1, 0, _ztop, _rE, 0, _gEnd)) : _BX
+_BX = _epR ? vcat(_BX, hcat(_u1, _u1 + _epT, _epV0, _v1, 0, _ztop, _rE, 0, _gEnd)) : _BX
+# LED strip in the rail's underside, just behind its front edge: it washes down the tall doors
+_ledOn = ledStrip > 0 && _loftOn
+_BX = _ledOn ? vcat(_BX, hcat(_railV0 + 0.004 * _s, _railV0 + 0.016 * _s, _zd1 - 0.003 * _s, _zd1 + 0.002 * _s, _u0 + _t + 0.02 * _s, _u1 - _t - 0.02 * _s, 0.002 * _s, 1, 9)) : _BX
+# interior: shelves across the main section and a hanging rail — hidden behind closed doors,
+# drawn because a plan and an open-door render are both asked to show them
+_nsh = max(0, round(shelves))
+_shP = (_zd1 - _pl - _t) / (_nsh + 1)
+_shZ = _pl + _t + (arange(max(1, _nsh)) + 1) * _shP
+_o5 = ones(max(1, _nsh), 1)
+_SHb = hcat((_mu0 + _t) * _o5, (_mu1 - _t) * _o5, (_v0 + 0.02 * _s) * _o5, (_v1 - 0.01 * _s) * _o5, _shZ, _shZ + _t, _rE * _o5, 0 * _o5, 6 * _o5)
+_BX = _nsh > 0 ? vcat(_BX, _SHb) : _BX
+_rlZ = _zd1 - railDrop * _s
+_rlV = (_v0 + _v1) / 2
+_BX = hangingRail > 0 ? vcat(_BX, hcat(_rlV - 0.0125 * _s, _rlV + 0.0125 * _s, _rlZ - 0.0125 * _s, _rlZ + 0.0125 * _s, _mu0 + _t, _mu1 - _t, 0.0124 * _s, 1, 7)) : _BX
+
+# ===========================================================================
+# STEP 5 — THE ROUNDED-BOX KERNEL: every part above, in ONE broadcast pass
+# ===========================================================================
+# Each box becomes a rounded-rectangle ring (four quarter arcs of radius r in
+# its a-b plane) swept from e0 to e1: N side quads and two caps. No Solid.*
+# call per part — a wardrobe is 150+ boxes, and one vectorised pass is what
+# keeps it under a second where 150 SoftBox calls would not be.
+# A radius of 0 is a true cuboid; ids stride by N + 2 per box so no two faces
+# share a run; the ring is counter-clockwise in (a, b), and both axis
+# mappings are cyclic permutations of (x, y, z), so every box faces outward.
+_nb = rows(_BX)
+_N = 4 * _kA
+_jT = arange(_N)
+_cc = floor(_jT / _kA)
+_kk = _jT - _cc * _kA
+_ang = (_cc - 1) * PI / 2 + (_kA > 1 ? (_kk / (_kA - 1)) : 0.5) * PI / 2
+_oN = ones(_N, 1)
+_oB = ones(_nb, 1)
+_X0 = kron(col(_BX, 0), _oN)
+_X1 = kron(col(_BX, 1), _oN)
+_Y0 = kron(col(_BX, 2), _oN)
+_Y1 = kron(col(_BX, 3), _oN)
+_E0 = kron(col(_BX, 4), _oN)
+_E1 = kron(col(_BX, 5), _oN)
+_Rr = kron(col(_BX, 6), _oN)
+_Rr = max(0, min(_Rr, 0.499 * min(_X1 - _X0, _Y1 - _Y0)))
+_Ax = kron(col(_BX, 7), _oN)
+_Gp = kron(col(_BX, 8), _oN)
+_Bi = kron(arange(_nb), _oN)
+_Cc = kron(_oB, _cc)
+_An = kron(_oB, _ang)
+_Jt = kron(_oB, _jT)
+_isRt = le(_Cc, 1)
+_isTp = eq(_Cc, 1) + eq(_Cc, 2)
+_pa = where(_isRt, _X1 - _Rr, _X0 + _Rr) + _Rr * cos(_An)
+_pb = where(_isTp, _Y1 - _Rr, _Y0 + _Rr) + _Rr * sin(_An)
+_last = eq(_Jt, _N - 1)
+_na = where(_last, shift(_pa, _N - 1), shift(_pa, -1))
+_nbb = where(_last, shift(_pb, _N - 1), shift(_pb, -1))
+_M = rows(_pa)
+_fid = _Bi * (_N + 2) + _Jt
+_SIDE = reshape(hcat(_pa, _pb, _E0, _na, _nbb, _E0, _na, _nbb, _E1, _pa, _pb, _E1), 4 * _M, 3)
+_o4r = ones(4, 1)
+_sAx = kron(_Ax, _o4r)
+_sId = kron(_fid, _o4r)
+_sG = kron(_Gp, _o4r)
+_TOP = hcat(_pa, _pb, _E1)
+_rev = _Bi * _N + (_N - 1 - _Jt)
+_BOT = sortby(hcat(_pa, _pb, _E0, _Bi * (_N + 2) + _N + 1, _Ax, _Gp), _rev)
+_LAB = vcat(_SIDE, _TOP, sub(_BOT, 0, 0, _M, 3))
+_LID = vcat(_sId, _Bi * (_N + 2) + _N, col(_BOT, 3))
+_LAX = vcat(_sAx, _Ax, col(_BOT, 4))
+_LGP = vcat(_sG, _Gp, col(_BOT, 5))
+# (a, b, e) -> (u, v, z): axis 0 is (a, b, e); axis 1 is (e, a, b)
+_la = col(_LAB, 0)
+_lb = col(_LAB, 1)
+_le = col(_LAB, 2)
+_isA1 = gt(_LAX, 0.5)
+_lu = where(_isA1, _le, _la)
+_lv = where(_isA1, _la, _lb)
+_lz = where(_isA1, _lb, _le)
+# the frame rule, once for every box
+_wu = _cu + _lu
+_wv = _cv + _lv
+_ALL = hcat(_wu * _ux + _wv * _vx, _wu * _uy + _wv * _vy, _lz, _LID, _LGP)
+_nAll = rows(_ALL)
+Carcass3D = sub(compress(_ALL, eq(_LGP, 1)), 0, 0, _nAll, 4)
+FrontsOak3D = sub(compress(_ALL, eq(_LGP, 2)), 0, 0, _nAll, 4)
+FrontsWhite3D = sub(compress(_ALL, eq(_LGP, 3)), 0, 0, _nAll, 4)
+Handles3D = sub(compress(_ALL, eq(_LGP, 4)), 0, 0, _nAll, 4)
+Plinth3D = sub(compress(_ALL, eq(_LGP, 5)), 0, 0, _nAll, 4)
+Shelves3D = sub(compress(_ALL, eq(_LGP, 6)), 0, 0, _nAll, 4)
+Rail3D = sub(compress(_ALL, eq(_LGP, 7)), 0, 0, _nAll, 4)
+Mirror3D = sub(compress(_ALL, eq(_LGP, 8)), 0, 0, _nAll, 4)
+Led3D = sub(compress(_ALL, eq(_LGP, 9)), 0, 0, _nAll, 4)
+
+# ===========================================================================
+# PLAN — carcass, door line, end panels, rail
+# ===========================================================================
+_r4u = vcat(0, 1, 1, 0)
+_r4v = vcat(0, 0, 1, 1)
+_cpU = _cu + _u0 + _r4u * _W
+_cpV = _cv + _v0 + _r4v * _D
+CarcassPlan = hcat(_cpU * _ux + _cpV * _vx, _cpU * _uy + _cpV * _vy, fill(4, 1, 1))
+_dpV0 = _v0 - (1 + _isSl) * _dT - 0.006 * _s
+_dpU = _cu + _u0 + _r4u * _W
+_dpV = _cv + _dpV0 + _r4v * (_v0 - _dpV0)
+DoorsPlan = hcat(_dpU * _ux + _dpV * _vx, _dpU * _uy + _dpV * _vy, fill(4, 1, 1))
+_eU = _cu + vcat(_u0 - _epT + _r4u * _epT, _u1 + _r4u * _epT)
+_eV = _cv + _epV0 + vcat(_r4v, _r4v) * (_v1 - _epV0)
+_eG = vcat(fill(4, 1, 1), fill(4, 1, 2))
+_eM = vcat(fill(4, 1, _epL ? 1 : 0), fill(4, 1, _epR ? 1 : 0))
+EndPanelsPlan = (_epL || _epR) ? compress(hcat(_eU * _ux + _eV * _vx, _eU * _uy + _eV * _vy, _eG), _eM) : zeros(0, 3)
+_rpU = _cu + _mu0 + _t + _r4u * (_mu1 - _mu0 - 2 * _t)
+_rpV = _cv + _rlV - 0.0125 * _s + _r4v * 0.025 * _s
+RailPlan = hangingRail > 0 ? hcat(_rpU * _ux + _rpV * _vx, _rpU * _uy + _rpV * _vy, fill(4, 1, 1)) : zeros(0, 3)
+
+# ===========================================================================
+# METRICS — from the parameters and the tables, never from the mesh columns
+# ===========================================================================
+overallWidth = _W + (_epL ? _epT : 0) + (_epR ? _epT : 0)
+overallDepth = _v1 - min(_epV0, _v0 - (1 + _isSl) * _dT - _so - _hd)
+totalHeight = _FT
+tallHeight = _H
+doorLeaves = _nd
+doorWidth = _mp
+drawerCount = _nDr
+loftLeaves = _nL
+handleCount = _nVH + _nHH
+mirroredLeaves = _nMr
+internalVolume = (_W - 2 * _t) * (_D - _t) * (_zd1 - _pl - _t)
+footprint = overallWidth * overallDepth
+boxCount = _nb
+meshFaces = _nb * (_N + 2)

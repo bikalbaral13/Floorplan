@@ -1,0 +1,36 @@
+{
+  "schema": "material/1",
+  "category": "Organic",
+  "id": "organic.foliage",
+  "title": "Organic — foliage",
+  "description": "The crown of an indoor plant, treated as one solid rather than as leaves. The two-tone noise does the work a leaf mesh would: without the variation a canopy reads as a green boulder.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 26,
+      "detail": 6,
+      "roughness": 0.65,
+      "distortion": 1.4,
+      "colorA": "#4d6b3a",
+      "colorB": "#2f4a27"
+    }
+  },
+  "pbr": {
+    "baseColor": "#3f5c31",
+    "roughness": 0.62,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#3f5c31"
+  },
+  "dxf": {
+    "pattern": "GRASS",
+    "scale": 0.5,
+    "angle": 0
+  }
+}

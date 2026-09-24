@@ -1,0 +1,37 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "vector-product",
+  "meta": { "label": "Vector Product", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — row-wise Dot, Cross and Angle Between for two vector lists. Dot measures alignment; the 2D cross is a SIGNED scalar whose sign is the left/right turn test. Draws nothing.",
+  "instructions": "A value-only node: two LISTS OF VECTORS in, one result column out. Row i of A is paired with row i of B, so a whole polygon is processed in one pass. Shapes BROADCAST, so a single vector (1×2) can be measured against an entire list. It has no geometry input or output and draws nothing on the canvas.\n\nOPERATIONS:\n• Dot (a · b) = |a||b|cos θ → an N×1 column. Alignment and projection: positive means the two point the same way, 0 means perpendicular, negative means opposing. This is the workhorse — closest point on a wall, decomposing a force along/across an axis, and solar incidence (a facade normal dotted with the sun direction).\n• Cross (a × b) — in 2D the SIGNED scalar aₓb_y − a_yb_x → an N×1 column. Its magnitude is the parallelogram area, but the useful part is the SIGN: positive = left turn, negative = right turn. That single fact gives you polygon winding (sum it around a ring), convex vs reflex at each vertex, and which side of a wall a point falls on. In 3D it returns the N×3 normal vector instead.\n• Angle Between — atan2(cross, dot) in DEGREES → an N×1 column. SIGNED in 2D (so it carries the turn direction) and unsigned in 3D. Preferred over acos(dot), which loses precision near 0° and 180° and throws away the sign.\n\nINPUTS: wire vector lists into valin-a and valin-b — a point list (`val-points`), an edge-vector list (Shift Rows → Matrix Operations Subtract), or normals from Vector Ops.\n\nOUTPUT: `val-matrix` plus `val-rows` / `val-cols`. An N×1 result feeds straight back into Matrix Operations as a PER-ROW scalar (broadcasting). Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "a", "label": "Vectors A" },
+      { "key": "b", "label": "Vectors B" },
+      { "key": "op", "label": "Operation" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Matrix (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "op",
+      "label": "Operation",
+      "kind": "select",
+      "default": "dot",
+      "options": [
+        { "value": "dot", "label": "Dot (a · b)" },
+        { "value": "cross", "label": "Cross (a × b)" },
+        { "value": "angle", "label": "Angle Between (degrees)" }
+      ]
+    },
+    { "key": "a", "label": "Vectors A (JSON)", "kind": "text", "default": "" },
+    { "key": "b", "label": "Vectors B (JSON)", "kind": "text", "default": "" }
+  ]
+}

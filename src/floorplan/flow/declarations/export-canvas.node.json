@@ -1,0 +1,33 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "export-canvas",
+  "meta": { "label": "Export to Canvas", "category": "Output", "color": "#0f766e" },
+  "description": "Write the incoming 2D geometry onto the canvas as ordinary Spaces and segments — the drawing counterpart of Export DXF, writing to the plan instead of to a file. Previews live while the eye is open; Commit makes it permanent.",
+  "instructions": "A SINK with a button. Wire any 2D geometry into its input and the node shows what it would write, ON THE CANVAS, as real Spaces and segments — no Flow Live toggle involved. Press COMMIT to make that geometry permanent.\n\nTHE EYE IS THE PREVIEW. While the eye in the node's title bar is open, the incoming geometry is materialised on the plan and tracks the flow: change a parameter upstream and it follows. It is still preview — it belongs to the flow, is not part of the drawing's history, and vanishes the moment you close the eye or delete the node. Close the eye to see the plan without it.\n\nCOMMIT HANDS IT OVER. Pressing Commit writes the same geometry as ORDINARY canvas data the flow no longer owns: it stops tracking the flow, becomes an undoable step in the drawing, and the live preview for that node steps aside so you are not looking at two copies. Move it, edit it, delete it — the flow will not fight you.\n\nHOW IT DIFFERS FROM THE OTHER TWO ROUTES. Flow Live materialises tracked geometry for the whole graph at once. Run Flow replays recipe OPERATIONS (inset, split, optimise) against a selected Space. This node does neither — it takes the geometry as it stands and puts it down, so nodes with no recipe equivalent (Boolean 2D, Mitered Join, Graph to Openings, a Math-Engine result) can reach the canvas at all.\n\nWIRE A 2D RENDER NODE IN and each row is written separately, keeping the row's colour and its Layer field (Layers from → Render row). Any other 2D node writes its single output instead.\n\nRE-COMMITTING replaces what the previous Commit wrote (matched by a stamp id on the target layer) rather than piling up duplicates — hand-drawn geometry sharing the layer is left alone. Switch Mode to Append to keep every press.\n\nOPEN geometry (skeletons, graph centrelines, dimension lines) has no interior, so it becomes segments only; closed rings become a Space with its boundary segments, and a ring nested inside another becomes a hole.",
+  "handles": {
+    "input": true,
+    "output": false
+  },
+  "parameters": [
+    {
+      "key": "layerMode", "label": "Layers from", "kind": "select", "default": "single",
+      "options": [
+        { "value": "single", "label": "One layer" },
+        { "value": "row", "label": "Render row layer" }
+      ]
+    },
+    { "key": "layerName", "label": "Layer name", "kind": "text", "default": "Flow Export", "placeholder": "Flow Export", "showWhen": "layerMode == 'single'" },
+    {
+      "key": "mode", "label": "Mode", "kind": "select", "default": "replace",
+      "options": [
+        { "value": "replace", "label": "Replace previous" },
+        { "value": "append", "label": "Append" }
+      ]
+    },
+    { "key": "makeSpaces", "label": "Create Spaces", "kind": "checkbox", "default": true },
+    { "key": "makeWalls", "label": "Create segments", "kind": "checkbox", "default": true },
+    { "key": "thickness", "label": "Segment thickness (m)", "kind": "number", "default": 0.1, "min": 0.01, "max": 2, "step": 0.01, "showWhen": "makeWalls == true" },
+    { "key": "showLabel", "label": "Show Space labels", "kind": "checkbox", "default": false, "showWhen": "makeSpaces == true" }
+  ]
+}

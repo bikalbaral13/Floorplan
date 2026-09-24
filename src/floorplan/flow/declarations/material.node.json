@@ -1,0 +1,29 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "material",
+  "meta": {
+    "label": "Material",
+    "category": "3d primitives",
+    "color": "#7c3aed"
+  },
+  "description": "A LINK to one material file in Library/Materials. Wire it into a 3D Render row's green endpoint to give that primitive a material.",
+  "instructions": "The material twin of the Parametric Object node: it holds no geometry and computes nothing — it names a FILE and publishes that name, so a material is edited in one place and referenced from many.\n\nWIRING. Every 3D Render row grows a second, GREEN target endpoint (`matin-<rowId>`) beside its amber geometry one. Amber carries the row's face list, green carries its material. They are separate planes on purpose: the same material feeds a dozen rows across a dozen objects, while a face list belongs to exactly one row.\n\nPATH is Library-relative and includes the folder — \"Materials/Masonry/brick.json\". The file is resolved by whoever renders: nothing is inlined into the object, so retuning brick.json restyles every row that points at it without touching a single .pobj.\n\nWHAT A MATERIAL FILE HOLDS (schema `material/1`) — one flat recipe per renderer, never a serialised shader graph:\n• `procedural` — Blender's own texture-node vocabulary (brick / checker / noise / voronoi / wave / gradient / magic / white-noise) plus that node's inputs, in metres. The Blender importer expands the recipe into whatever node tree it wants; the file never describes the tree.\n• `pbr` — base colour, roughness, metallic (plus transmission / IOR for glazing). The fallback for any viewer that cannot evaluate a procedural — the 3D viewport and glTF export.\n• `plan2d` — the canvas hatch the 2D Render row draws: none / diagonal / dots, with spacing, angle and weight.\n• `dxf` — the ACAD pattern name the DXF export writes (AR-B816, AR-CONC, GRASS …), with scale and angle.\n\nSo one name resolves to a procedural shader in Blender, a PBR colour in the viewport, a poché hatch in plan and a real hatch pattern in the drawing — the four places a material has to appear, kept in step because they are four fields of one file rather than four unrelated settings.\n\nWITH NOTHING WIRED a row keeps its own flat colour, exactly as before. A material is additive: it never removes the row's colour, it supersedes it where a renderer can do better.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueOutputs": [{ "key": "material", "label": "Material" }]
+  },
+  "defaults": {
+    "path": "Materials/Masonry/brick.json"
+  },
+  "parameters": [
+    {
+      "key": "path",
+      "label": "File",
+      "kind": "text",
+      "default": "Materials/Masonry/brick.json",
+      "hint": "Library-relative path, e.g. Materials/Finishes/wood.json"
+    }
+  ]
+}

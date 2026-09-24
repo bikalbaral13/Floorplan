@@ -1,9 +1,0 @@
-{
-  "kind": "flow-node",
-  "tool": "expr",
-  "label": "Footing maths",
-  "params": {
-    "name": "Footing maths",
-    "expr": "cxBase = skew=='left' ? (columnWidth-baseWidth)/2 : (skew=='right' ? (baseWidth-columnWidth)/2 : 0)\ncolPosY = -columnHeight\nv1 = columnHeight + rccThickness\nrccPosY = -v1\nv2 = v1 + pccThickness\npccPosY = -v2\nv3 = v2 + solingThickness\nsolPosY = -v3\ndepth = columnHeight + rccThickness + pccThickness + solingThickness\nbaseArea = baseWidth * baseDepth"
-  }
-}

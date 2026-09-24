@@ -1,0 +1,637 @@
+{
+  "version": 1,
+  "id": "faucet-with-math",
+  "title": "Faucet — one Math Engine, body, spout, handles",
+  "category": "Sanitary",
+  "object": {
+    "hostKind": "node",
+    "name": "Faucet",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M9 21h6",
+        "M12 21v-8",
+        "M12 13H8V9a4 4 0 018 0",
+        "M16 9h3"
+      ]
+    }
+  },
+  "description": "A parametric FAUCET on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nA TAP EXISTS SEPARATELY because the basin and the sink each carry one, and neither can serve a wall mixer, a bath filler or a second tap on a double bowl. This is that object: a body, a spout that reaches, and one or two handles.\n\nMOUNT MOVES THE SPOUT, not the shape. A Deck mixer puts the spout at the top of the body; a Wall mixer drops it to a fifth of the way up and shortens the body to a wall plate; a Pillar tap adds the second handle. One ternary each, no second flow.\n\nSPOUT REACH AND LEVEL ARE PUBLISHED because they are the two numbers that decide whether a tap clears the bowl it is over — and neither is legible in a plan, where a tap is a few centimetres of nothing.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Spout reach",
+              "type": "range",
+              "value": 0.16,
+              "min": 0.05,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Body width",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.02,
+              "max": 0.2,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Height above deck",
+              "type": "range",
+              "value": 0.28,
+              "min": 0.08,
+              "max": 0.7,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bodyRadius",
+              "name": "Body radius",
+              "type": "range",
+              "value": 0.025,
+              "min": 0.01,
+              "max": 0.08,
+              "step": 0.0025,
+              "options": []
+            },
+            {
+              "id": "spoutThk",
+              "name": "Spout thickness",
+              "type": "range",
+              "value": 0.025,
+              "min": 0.01,
+              "max": 0.08,
+              "step": 0.0025,
+              "options": []
+            },
+            {
+              "id": "deckHeight",
+              "name": "Deck level",
+              "type": "range",
+              "value": 0.9,
+              "min": 0,
+              "max": 1.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "handleLength",
+              "name": "Handle length",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.03,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "mount",
+              "name": "Mount",
+              "type": "select",
+              "value": "Deck mixer",
+              "options": [
+                "Deck mixer",
+                "Wall mixer",
+                "Pillar tap"
+              ]
+            },
+            {
+              "id": "showHandle",
+              "name": "Show handle",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "brushed chrome single-lever mixer, gooseneck spout",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Faucet maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Wd = width * _s\n_Ht = height * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_bR = bodyRadius * _s\n_spT = spoutThk * _s\n_hL = handleLength * _s\n_deck = deckHeight * _s\n_wall = mount == 'Wall mixer' ? 1 : 0\n_pillar = mount == 'Pillar tap' ? 1 : 0\n_z0 = _deck\n_z1 = _deck + _Ht\n_spoutZ = _wall > 0 ? _z0 + _Ht * 0.2 : _z1 - _spT\n_bodyZ1 = _wall > 0 ? _z0 + _Ht * 0.35 : _z1\n_su0 = 0 - _bR\n_su1 = _Ln\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_BODY = hcat(0 - _bR, 0 - _bR, _bR, 0 - _bR, _bR, _bR, 0 - _bR, _bR, _z0, _bodyZ1, 1)\n_SPT = hcat(_su0, 0 - _spT / 2, _su1, 0 - _spT / 2, _su1, _spT / 2, _su0, _spT / 2, _spoutZ, _spoutZ + _spT, 2)\n_HDL = hcat(0 - _bR, 0 - _spT / 2, 0 - _bR - _hL, 0 - _spT / 2, 0 - _bR - _hL, _spT / 2, 0 - _bR, _spT / 2, _bodyZ1 - _spT, _bodyZ1, 3)\n_H2 = hcat(_bR, 0 - _spT / 2, _bR + _hL, 0 - _spT / 2, _bR + _hL, _spT / 2, _bR, _spT / 2, _bodyZ1 - _spT, _bodyZ1, 3)\n_HAND = showHandle > 0 ? (_pillar > 0 ? vcat(_HDL, _H2) : _HDL) : zeros(0, 11)\nQ = vcat(vcat(_BODY, _SPT), _HAND)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBody3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nBodyPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nSpout3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nSpoutPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nHandles3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nHandlesPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\nspoutReach = _Ln\nspoutLevel = _spoutZ\ndeckLevel = _deck\nhandleCount = showHandle > 0 ? (_pillar > 0 ? 2 : 1) : 0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Body — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Spout — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Handles — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Body — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Spout — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Handles — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s11",
+              "label": "Spout reach (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Spout level (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Deck level (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Handles"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_body",
+              "kind": "polygon",
+              "name": "Body",
+              "color": "#94a3b8",
+              "layer": "Sanitary",
+              "show": true
+            },
+            {
+              "id": "p2_spout",
+              "kind": "polygon",
+              "name": "Spout",
+              "color": "#cbd5e1",
+              "layer": "Sanitary",
+              "show": true
+            },
+            {
+              "id": "p2_handles",
+              "kind": "polygon",
+              "name": "Handles",
+              "color": "#64748b",
+              "layer": "Sanitary",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_body",
+              "kind": "polyhedron",
+              "name": "Body",
+              "color": "#94a3b8",
+              "layer": "Sanitary",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_spout",
+              "kind": "polyhedron",
+              "name": "Spout",
+              "color": "#cbd5e1",
+              "layer": "Sanitary",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_handles",
+              "kind": "polyhedron",
+              "name": "Handles",
+              "color": "#64748b",
+              "layer": "Sanitary",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-length__math_valin-length",
+      "source": "props",
+      "sourceHandle": "val-length",
+      "target": "math",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-height__math_valin-height",
+      "source": "props",
+      "sourceHandle": "val-height",
+      "target": "math",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e6_props_val-bodyRadius__math_valin-bodyRadius",
+      "source": "props",
+      "sourceHandle": "val-bodyRadius",
+      "target": "math",
+      "targetHandle": "valin-bodyRadius"
+    },
+    {
+      "id": "e7_props_val-spoutThk__math_valin-spoutThk",
+      "source": "props",
+      "sourceHandle": "val-spoutThk",
+      "target": "math",
+      "targetHandle": "valin-spoutThk"
+    },
+    {
+      "id": "e8_props_val-deckHeight__math_valin-deckHeight",
+      "source": "props",
+      "sourceHandle": "val-deckHeight",
+      "target": "math",
+      "targetHandle": "valin-deckHeight"
+    },
+    {
+      "id": "e9_props_val-handleLength__math_valin-handleLength",
+      "source": "props",
+      "sourceHandle": "val-handleLength",
+      "target": "math",
+      "targetHandle": "valin-handleLength"
+    },
+    {
+      "id": "e10_props_val-mount__math_valin-mount",
+      "source": "props",
+      "sourceHandle": "val-mount",
+      "target": "math",
+      "targetHandle": "valin-mount"
+    },
+    {
+      "id": "e11_props_val-showHandle__math_valin-showHandle",
+      "source": "props",
+      "sourceHandle": "val-showHandle",
+      "target": "math",
+      "targetHandle": "valin-showHandle"
+    },
+    {
+      "id": "e12_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e13_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e14_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e15_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e16_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e17_math_val-Body3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Body3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e18_out_val-s1__r3d_valin-p3_body",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_body"
+    },
+    {
+      "id": "e19_math_val-Spout3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Spout3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e20_out_val-s2__r3d_valin-p3_spout",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_spout"
+    },
+    {
+      "id": "e21_math_val-Handles3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Handles3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e22_out_val-s3__r3d_valin-p3_handles",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_handles"
+    },
+    {
+      "id": "e23_math_val-BodyPlan__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-BodyPlan",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e24_out_val-s4__r2d_valin-p2_body",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r2d",
+      "targetHandle": "valin-p2_body"
+    },
+    {
+      "id": "e25_math_val-SpoutPlan__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-SpoutPlan",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e26_out_val-s5__r2d_valin-p2_spout",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r2d",
+      "targetHandle": "valin-p2_spout"
+    },
+    {
+      "id": "e27_math_val-HandlesPlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-HandlesPlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e28_out_val-s6__r2d_valin-p2_handles",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_handles"
+    },
+    {
+      "id": "e29_math_val-overallLength__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e30_math_val-overallWidth__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e31_math_val-overallHeight__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e32_math_val-footprint__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e33_math_val-spoutReach__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-spoutReach",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e34_math_val-spoutLevel__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-spoutLevel",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e35_math_val-deckLevel__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-deckLevel",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e36_math_val-handleCount__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-handleCount",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    }
+  ]
+}

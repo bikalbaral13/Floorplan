@@ -11,7 +11,7 @@ export interface ToolInfo {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Agent-family tools (Orchestrator / Design / Parametric).
+// Agent-family tools (Global Agent / Design / Parametric).
 // Names + membership MIRROR agentChat.ts (`allTools` + `SUBSETS`); keep in sync when tools change.
 // Descriptions here are intentionally SHORT — the full descriptions live on the tool definitions.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,6 +21,7 @@ const AGENT_TOOLS: Record<string, ToolInfo> = {
   get_plan:           { name: "get_plan",           group: "Read & inspect",          desc: "Full plan JSON: walls, openings and furniture." },
   get_selection:      { name: "get_selection",      group: "Read & inspect",          desc: "What is currently selected on the canvas." },
   list_spaces:        { name: "list_spaces",        group: "Read & inspect",          desc: "Every space with its label, area and centroid." },
+  list_layers:        { name: "list_layers",        group: "Read & inspect",          desc: "The layer table — name, colour, visibility, lock, and what sits on each." },
   snapshot_canvas:    { name: "snapshot_canvas",    group: "Read & inspect",          desc: "Render the canvas to an image the agent can see." },
   // Draw & edit canvas
   draw_segment:       { name: "draw_segment",       group: "Draw & edit canvas",      desc: "Draw one typed wall / line segment between two points." },
@@ -30,6 +31,8 @@ const AGENT_TOOLS: Record<string, ToolInfo> = {
   attach_space_object:{ name: "attach_space_object",group: "Draw & edit canvas",      desc: "Attach a Floor / Massing / Site / Core object to a space." },
   set_flow_live:      { name: "set_flow_live",      group: "Draw & edit canvas",      desc: "Turn Flow Live on/off — materialise attached pipeline objects as real Spaces." },
   merge_spaces:       { name: "merge_spaces",       group: "Draw & edit canvas",      desc: "Merge adjacent spaces into one." },
+  create_layer:       { name: "create_layer",       group: "Draw & edit canvas",      desc: "Create a layer and make it active — anything drawn next lands on it." },
+  move_to_layer:      { name: "move_to_layer",      group: "Draw & edit canvas",      desc: "Move spaces / segments / nodes onto another layer (or the selection)." },
   apply_model:        { name: "apply_model",        group: "Draw & edit canvas",      desc: "Replace the whole plan with edited JSON (primary write)." },
   clear_canvas:       { name: "clear_canvas",       group: "Draw & edit canvas",      desc: "Wipe walls / rooms / objects (keeps the image underlay)." },
   // Image underlay & tracing
@@ -52,10 +55,17 @@ const AGENT_TOOLS: Record<string, ToolInfo> = {
   flow_apply:         { name: "flow_apply",         group: "Flow engine",             desc: "Load & live-evaluate a Flow graph (nothing committed yet)." },
   flow_commit:        { name: "flow_commit",        group: "Flow engine",             desc: "Commit the applied Flow into real canvas entities." },
   open_workflow:      { name: "open_workflow",      group: "Flow engine",             desc: "Open a saved workflow, apply it, and return its graph to tune." },
+  run_detect:         { name: "run_detect",         group: "Flow engine",             desc: "Press Detect on the flow's Object Detection node and await what it found." },
+  // Delegation — granted only to the Orchestration Agent (see Agents/Orchestration.agent.json).
+  list_agents:        { name: "list_agents",        group: "Delegation",              desc: "The agent roster this app can run — id, label, runner, description." },
+  delegate:           { name: "delegate",           group: "Delegation",              desc: "Run another agent to completion on one task and get its report." },
 };
 
-/** Orchestrator = every agent-family tool, in the grouped order declared above. */
-const AGENT_ORDER: string[] = Object.keys(AGENT_TOOLS);
+/** Delegation is opt-in per agent file, never a mode default — the Global Agent is self-contained. */
+const DELEGATION_NAMES = new Set(["list_agents", "delegate"]);
+
+/** Global Agent = every agent-family tool EXCEPT delegation, in the grouped order declared above. */
+const AGENT_ORDER: string[] = Object.keys(AGENT_TOOLS).filter((n) => !DELEGATION_NAMES.has(n));
 
 /** Design mode subset — mirrors SUBSETS.design in agentChat.ts. */
 const DESIGN_NAMES = new Set([
@@ -68,6 +78,7 @@ const DESIGN_NAMES = new Set([
 /** Parametric mode subset — mirrors SUBSETS.parametric in agentChat.ts. */
 const PARAMETRIC_NAMES = new Set([
   "get_state", "list_objects", "get_object", "save_object", "delete_object", "import_objects",
+  "snapshot_canvas",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,9 +88,10 @@ const FLOW_TOOLS: Record<string, ToolInfo> = {
   get_flow:            { name: "get_flow",            group: "Read & inspect",  desc: "The current Flow graph as JSON. Call first." },
   list_flow_tools:     { name: "list_flow_tools",     group: "Read & inspect",  desc: "Node-type catalog — the only nodes / params allowed." },
   compile_flow:        { name: "compile_flow",        group: "Read & inspect",  desc: "Validate & compile the live graph (errors, order)." },
+  snapshot_canvas:     { name: "snapshot_canvas",     group: "Read & inspect",  desc: "See the canvas + the flow's live preview as an image — the refine loop." },
   replace_flow:        { name: "replace_flow",        group: "Build graph",     desc: "Replace the whole graph with new JSON." },
   import_node:         { name: "import_node",         group: "Build graph",     desc: "Add one node (from a template or by type) to the canvas." },
-  list_node_files:     { name: "list_node_files",     group: "Node templates",  desc: "List saved node templates under Flows/Nodes." },
+  list_node_files:     { name: "list_node_files",     group: "Node templates",  desc: "List saved tools / node templates under Tools/." },
   read_node_file:      { name: "read_node_file",      group: "Node templates",  desc: "Read one node-template file's JSON." },
   save_node_file:      { name: "save_node_file",      group: "Node templates",  desc: "Create or overwrite a reusable node template." },
   delete_node_file:    { name: "delete_node_file",    group: "Node templates",  desc: "Delete a node-template file." },
@@ -101,6 +113,6 @@ export function toolCatalogForMode(mode: ChatAIMode): ToolInfo[] {
   const names =
     mode === "design"     ? AGENT_ORDER.filter((n) => DESIGN_NAMES.has(n))
     : mode === "parametric" ? AGENT_ORDER.filter((n) => PARAMETRIC_NAMES.has(n))
-    : AGENT_ORDER; // "agent" = Orchestrator = all
+    : AGENT_ORDER; // "agent" = Global Agent = all
   return names.map((n) => AGENT_TOOLS[n]);
 }

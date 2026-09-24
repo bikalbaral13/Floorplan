@@ -1,0 +1,92 @@
+[TITLE]
+ EPANET Example Network 1 - gravity variant
+ Derived from Net1.inp: pump 9 and reservoir 9 removed; tank 2 replaced by a
+ fixed-head reservoir at its initial water surface (850 elev + 120 level = 970 ft).
+ Single-period steady state, no controls, no patterns, no quality.
+
+[JUNCTIONS]
+;ID              	Elev        	Demand      	Pattern
+ 10              	710         	0           	                	;
+ 11              	710         	150         	                	;
+ 12              	700         	150         	                	;
+ 13              	695         	100         	                	;
+ 21              	700         	150         	                	;
+ 22              	695         	200         	                	;
+ 23              	690         	150         	                	;
+ 31              	700         	100         	                	;
+ 32              	710         	100         	                	;
+
+[RESERVOIRS]
+;ID              	Head        	Pattern
+ 2               	970         	                	;
+
+[TANKS]
+;ID              	Elevation   	InitLevel   	MinLevel    	MaxLevel    	Diameter    	MinVol      	VolCurve
+
+[PIPES]
+;ID              	Node1           	Node2           	Length      	Diameter    	Roughness   	MinorLoss   	Status
+ 10              	10              	11              	10530       	18          	100         	0           	Open  	;
+ 11              	11              	12              	5280        	14          	100         	0           	Open  	;
+ 12              	12              	13              	5280        	10          	100         	0           	Open  	;
+ 21              	21              	22              	5280        	10          	100         	0           	Open  	;
+ 22              	22              	23              	5280        	12          	100         	0           	Open  	;
+ 31              	31              	32              	5280        	6           	100         	0           	Open  	;
+ 110             	2               	12              	200         	18          	100         	0           	Open  	;
+ 111             	11              	21              	5280        	10          	100         	0           	Open  	;
+ 112             	12              	22              	5280        	12          	100         	0           	Open  	;
+ 113             	13              	23              	5280        	8           	100         	0           	Open  	;
+ 121             	21              	31              	5280        	8           	100         	0           	Open  	;
+ 122             	22              	32              	5280        	6           	100         	0           	Open  	;
+
+[PUMPS]
+[VALVES]
+[PATTERNS]
+[CURVES]
+[CONTROLS]
+[RULES]
+
+[EMITTERS]
+[QUALITY]
+[SOURCES]
+[REACTIONS]
+[MIXING]
+
+[TIMES]
+ Duration           	0
+ Hydraulic Timestep 	1:00
+ Pattern Timestep   	1:00
+ Report Timestep    	1:00
+ Report Start       	0:00
+
+[REPORT]
+ Status             	Yes
+ Summary            	No
+ Page               	0
+
+[OPTIONS]
+ Units              	GPM
+ Headloss           	H-W
+ Specific Gravity   	1.0
+ Viscosity          	1.0
+ Trials             	100
+ Accuracy           	0.00001
+ Unbalanced         	Continue 10
+ Demand Multiplier  	1.0
+ Emitter Exponent   	0.5
+
+[COORDINATES]
+;Node            	X-Coord         	Y-Coord
+ 10              	20.00           	70.00
+ 11              	30.00           	70.00
+ 12              	50.00           	70.00
+ 13              	70.00           	70.00
+ 21              	30.00           	40.00
+ 22              	50.00           	40.00
+ 23              	70.00           	40.00
+ 31              	30.00           	10.00
+ 32              	50.00           	10.00
+ 2               	50.00           	90.00
+
+[VERTICES]
+[LABELS]
+[END]

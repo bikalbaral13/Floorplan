@@ -1,0 +1,39 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.wool",
+  "title": "Fabric — wool rug",
+  "description": "A cut-pile rug. Voronoi at ~8 mm cells is the tuft, not the weave: a rug has no warp reading at eye level, it has clumps.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 120,
+      "detail": 1,
+      "roughness": 0.5,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "colorA": "#3d4a72",
+      "colorB": "#26304f"
+    }
+  },
+  "pbr": {
+    "baseColor": "#33406b",
+    "roughness": 0.98,
+    "metallic": 0,
+    "sheen": 0.3
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#33406b"
+  },
+  "dxf": {
+    "pattern": "NET3",
+    "scale": 0.08,
+    "angle": 0
+  }
+}

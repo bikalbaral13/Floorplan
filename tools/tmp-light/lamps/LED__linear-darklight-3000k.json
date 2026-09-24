@@ -1,0 +1,67 @@
+{
+  "schema": "lamp/1",
+  "id": "linear-darklight-3000k",
+  "name": "Linear darklight 3000 K 1100 lm/m",
+  "category": "LED",
+  "description": "A trimless plaster-in run with a deep-set optic. `Asymmetric` and a 60 degree field is the whole difference from tape — it cuts off rather than washing, which is why it can face a seating position.",
+  "emission": {
+    "sourceType": "Linear",
+    "areaShape": "Rectangle",
+    "lumens": 1100,
+    "lumensPerMetre": 1100,
+    "wattsElectrical": 11,
+    "efficacy": 100,
+    "illuminanceLux": 0,
+    "kelvin": 3000,
+    "cri": 95,
+    "duv": 0
+  },
+  "distribution": {
+    "profile": "Asymmetric",
+    "beamAngle": 40,
+    "fieldAngle": 60,
+    "beamBlend": 0.35,
+    "spread": 90,
+    "ies": {
+      "path": "",
+      "normalise": true
+    }
+  },
+  "shadow": {
+    "lampRadius": 0.008,
+    "castShadow": true,
+    "maxBounces": 1024,
+    "multipleImportance": true,
+    "diffuseFactor": 1,
+    "glossyFactor": 1,
+    "transmissionFactor": 1,
+    "volumeFactor": 1,
+    "visibleToCamera": false,
+    "isPortal": false
+  },
+  "blender": {
+    "type": "AREA",
+    "shape": "RECTANGLE",
+    "energyWatts": 1.610542,
+    "color": {
+      "mode": "blackbody",
+      "kelvin": 3000
+    },
+    "rgb": [
+      1,
+      0.478526,
+      0.154317
+    ],
+    "sizeX": 1,
+    "sizeY": 0.022,
+    "radius": 0.008,
+    "spotSizeDeg": 60,
+    "spotBlend": 0.35,
+    "spread": 90,
+    "angleDeg": 0
+  },
+  "emissive": {
+    "material": "Materials/Emissive/diffuser.json",
+    "luminanceOverride": 0
+  }
+}

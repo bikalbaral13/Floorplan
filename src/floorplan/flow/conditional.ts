@@ -5,7 +5,7 @@
  *  (evalConditional in eval/evalNodes.ts) and the committed recipe op (the "conditional" handler in
  *  FloorPlanEditor), so what you see routed in the canvas is what Run Flow executes. */
 import type { Point } from "../types";
-import { polygonArea } from "../algorithms/geometry/polygon";
+import { polygonArea } from "@builderpluss/engine";
 
 export type ConditionMetric = "area" | "perimeter" | "vertices" | "width" | "height" | "aspect" | "value";
 export type ConditionOp = "gt" | "gte" | "eq" | "lte" | "lt" | "ne";

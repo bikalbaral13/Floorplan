@@ -1,0 +1,906 @@
+{
+  "version": 1,
+  "id": "camera-with-math",
+  "title": "Camera — one Math Engine, body, lens, tripod and a wireframe frustum",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Camera",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 7h4l2-2h6l2 2h4v12H3z",
+        "M12 16a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"
+      ]
+    }
+  },
+  "description": "A parametric CAMERA on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE where the camera stands. Rotation aims it; the object is the viewpoint, not a picture of one.\n\nIT DOES NOT RENDER. There is no exposure, no depth of field and no image. What it carries is where the camera is, where it looks, and the arithmetic that falls out of a focal length — which is exactly the part a plan, a shot list and a coordination drawing need, and exactly the part the renderer will not tell you until after it has run.\n\nTHE FOUR VIEW TYPES DIFFER IN TWO NUMBERS. Whether the cone converges to the eye (`_nearHW`, zero for perspective and the full half-width for orthographic) and whether the tilt survives (`_tiltDeg`, forced to zero for Two-point). Two-point is not a different camera — it is a perspective holding its verticals straight, which IS a tilt of zero, and writing it as a separate body would let the two drift.\n\nTHE FIELD OF VIEW IS ONE RIGHT TRIANGLE. `atan2(sensorWidth / 2, focalLength)` is the half-angle, and every other number here — frame width at the subject, the wedge in plan, the far rectangle in 3D — is that angle times a distance. Change the sensor and the 35 mm equivalent moves with it.\n\nTHE FRUSTUM IS A WIREFRAME, NOT A SOLID. Eight tube edges for a perspective cone, twelve for an orthographic box. A solid cone would hide the room it is pointed at, which is the one thing a camera object must never do.\n\nTHE PLAN WEDGE IS THE CONVENTIONAL SYMBOL — a triangle from the eye to the two far corners — built as a quad with two coincident points, which the kernel already accepts as a triangle. A panorama has no wedge because it has no direction, so it draws its reach as a circle instead.\n\nDIMENSIONS AT THE DEFAULTS: a 24 mm lens on a 36 mm sensor — 73.7° horizontal, 45.9° vertical, framing 5.99 × 3.37 m at 4 m, eye at 1.372 m (4'6\"), a 3 m cone.\n\nWHAT THIS CANNOT DO. No lens distortion, no shift, no depth of field, no exposure — the renderer owns all of it. Tilt is a single axis: there is no roll. The orthographic box is framed on the subject distance rather than on a separate ortho width.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "view",
+              "name": "View type",
+              "type": "select",
+              "value": "Perspective",
+              "options": [
+                "Perspective",
+                "Two-point",
+                "Orthographic",
+                "Panorama 360"
+              ]
+            },
+            {
+              "id": "focalLength",
+              "name": "Focal length",
+              "type": "range",
+              "value": 24,
+              "min": 8,
+              "max": 200,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "sensorWidth",
+              "name": "Sensor width",
+              "type": "range",
+              "value": 36,
+              "min": 8,
+              "max": 70,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "aspect",
+              "name": "Aspect",
+              "type": "select",
+              "value": "16:9",
+              "options": [
+                "16:9",
+                "3:2",
+                "4:3",
+                "1:1",
+                "2:1"
+              ]
+            },
+            {
+              "id": "eyeHeight",
+              "name": "Camera height",
+              "type": "range",
+              "value": 1.372,
+              "min": 0.1,
+              "max": 6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "tilt",
+              "name": "Tilt",
+              "type": "range",
+              "value": 0,
+              "min": -60,
+              "max": 60,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "targetDistance",
+              "name": "Distance to subject",
+              "type": "range",
+              "value": 4,
+              "min": 0.3,
+              "max": 40,
+              "step": 0.1,
+              "options": []
+            },
+            {
+              "id": "showFrustum",
+              "name": "Draw the view cone",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "frustumLength",
+              "name": "View cone length",
+              "type": "range",
+              "value": 3,
+              "min": 0.3,
+              "max": 30,
+              "step": 0.1,
+              "options": []
+            },
+            {
+              "id": "bodyLength",
+              "name": "Body length",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.05,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bodyWidth",
+              "name": "Body width",
+              "type": "range",
+              "value": 0.1,
+              "min": 0.04,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bodyHeight",
+              "name": "Body height",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.03,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "lensLength",
+              "name": "Lens length",
+              "type": "range",
+              "value": 0.08,
+              "min": 0.02,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "lensRadius",
+              "name": "Lens radius",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.01,
+              "max": 0.12,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "tripod",
+              "name": "Tripod",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "tripodSpread",
+              "name": "Tripod spread",
+              "type": "range",
+              "value": 0.35,
+              "min": 0.1,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "edgeRadius",
+              "name": "Frustum edge thickness",
+              "type": "range",
+              "value": 0.006,
+              "min": 0.002,
+              "max": 0.03,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "matte black body, brushed aluminium lens barrel",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "architectural interior camera, eye-level hero shot, verticals held straight",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Camera maths",
+          "expr": "_natL = bodyLength\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n# The four view types differ in TWO numbers and nothing else: whether the cone converges to the\n# eye, and whether the tilt is allowed to survive. Two-point is a perspective that holds its\n# verticals straight, which IS a tilt of zero — not a different camera.\n_isTwoPt = view == 'Two-point'\n_isOrtho = view == 'Orthographic'\n_isPano = view == 'Panorama 360'\n_tiltDeg = _isTwoPt ? 0 : tilt\n_tiltR = _tiltDeg * PI / 180\n_eye = eyeHeight * _s\n_bL = bodyLength * _s\n_bW = bodyWidth * _s\n_bH = bodyHeight * _s\n_lensL = lensLength * _s\n_lensR = lensRadius * _s\n_bodyL = _bL + _lensL\n_bodyW = max(_bW, tripod > 0 ? (2 * tripodSpread * _s) : _bW)\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# Field of view from the focal length — the one piece of optics here, and it is a right triangle.\n_halfFov = atan2(sensorWidth / 2, focalLength)\n_tanH = tan(_halfFov)\n_ar = aspect == '16:9' ? (16 / 9) : (aspect == '3:2' ? 1.5 : (aspect == '4:3' ? (4 / 3) : (aspect == '1:1' ? 1 : 2)))\n_fL = frustumLength * _s\n_dTgt = targetDistance * _s\n# An orthographic cone does not converge: it is framed on the subject and stays that width the\n# whole way, so the near rectangle is the far one rather than a point.\n_farHW = _isOrtho ? (_dTgt * _tanH) : (_fL * _tanH)\n_farHH = _farHW / _ar\n_nearHW = _isOrtho ? _farHW : 0\n_nearHH = _isOrtho ? _farHH : 0\n_farZ = _eye + _fL * tan(_tiltR)\n# Body and lens. The body sits BEHIND the eye point, so the lens leaves from the origin and the\n# frustum starts there too — otherwise the drawn cone and the drawn camera disagree by a body.\n_BODY = hcat(0 - _bL, 0 - _bW / 2, 0, 0 - _bW / 2, 0, _bW / 2, 0 - _bL, _bW / 2, _eye - _bH / 2, _eye + _bH / 2, 1)\nQ = _BODY\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBody3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nBodyPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\n# Lens — a cylinder leaving the eye point along the tilted view axis.\n_lensEndU = _lensL * cos(_tiltR)\n_lensEndZ = _eye + _lensL * sin(_tiltR)\n_LENS = hcat(0, 0, _eye, _lensEndU, 0, _lensEndZ, _lensR)\n_t1u = _cu + col(_LENS,0)\n_t1v = _cv + col(_LENS,1)\n_t2u = _cu + col(_LENS,3)\n_t2v = _cv + col(_LENS,4)\nLens3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_LENS,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_LENS,5), col(_LENS,6))\n# Tripod — three legs from under the body to the floor, splayed on a circle.\n_legK = arange(3)\n_legA = _legK * 2 * PI / 3 + PI\n_spread = tripodSpread * _s\n_legZ = _eye - _bH / 2\n_legR = 0.012 * _s\n_LEGr = hcat(fill(3,1,0), fill(3,1,0), fill(3,1,_legZ), _spread * cos(_legA), _spread * sin(_legA), fill(3,1,0), fill(3,1,_legR))\n_LEGS = tripod > 0 ? _LEGr : zeros(0, 7)\n_t1u = _cu + col(_LEGS,0)\n_t1v = _cv + col(_LEGS,1)\n_t2u = _cu + col(_LEGS,3)\n_t2v = _cv + col(_LEGS,4)\nTripod3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_LEGS,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_LEGS,5), col(_LEGS,6))\n# The frustum is a WIREFRAME, not a solid — eight edges for a perspective cone, twelve for an\n# orthographic box. A solid cone would hide the room it is pointed at, which is the one thing a\n# camera object must never do.\n_eR = edgeRadius * _s\n_f1u = _fL\n_fzLo = _farZ - _farHH\n_fzHi = _farZ + _farHH\n_nzLo = _eye - _nearHH\n_nzHi = _eye + _nearHH\n_R1 = hcat(0, 0 - _nearHW, _nzLo, _f1u, 0 - _farHW, _fzLo, _eR)\n_R2 = hcat(0, _nearHW, _nzLo, _f1u, _farHW, _fzLo, _eR)\n_R3 = hcat(0, _nearHW, _nzHi, _f1u, _farHW, _fzHi, _eR)\n_R4 = hcat(0, 0 - _nearHW, _nzHi, _f1u, 0 - _farHW, _fzHi, _eR)\n_F1 = hcat(_f1u, 0 - _farHW, _fzLo, _f1u, _farHW, _fzLo, _eR)\n_F2 = hcat(_f1u, _farHW, _fzLo, _f1u, _farHW, _fzHi, _eR)\n_F3 = hcat(_f1u, _farHW, _fzHi, _f1u, 0 - _farHW, _fzHi, _eR)\n_F4 = hcat(_f1u, 0 - _farHW, _fzHi, _f1u, 0 - _farHW, _fzLo, _eR)\n_N1 = hcat(0, 0 - _nearHW, _nzLo, 0, _nearHW, _nzLo, _eR)\n_N2 = hcat(0, _nearHW, _nzLo, 0, _nearHW, _nzHi, _eR)\n_N3 = hcat(0, _nearHW, _nzHi, 0, 0 - _nearHW, _nzHi, _eR)\n_N4 = hcat(0, 0 - _nearHW, _nzHi, 0, 0 - _nearHW, _nzLo, _eR)\n_RAYS = vcat(_R1, _R2, _R3, _R4, _F1, _F2, _F3, _F4)\n_NEAR = _isOrtho ? vcat(_N1, _N2, _N3, _N4) : zeros(0, 7)\n_FRUSTr = vcat(_RAYS, _NEAR)\n_FRUST = (showFrustum > 0 && _isPano == 0) ? _FRUSTr : zeros(0, 7)\n_t1u = _cu + col(_FRUST,0)\n_t1v = _cv + col(_FRUST,1)\n_t2u = _cu + col(_FRUST,3)\n_t2v = _cv + col(_FRUST,4)\nFrustum3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_FRUST,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_FRUST,5), col(_FRUST,6))\n# Plan symbols. The wedge is the conventional camera symbol — a triangle from the eye to the two\n# far corners — built as a quad with two coincident points, which the kernel already accepts.\n_wU = _cu\n_wV = _cv\n_pe = hcat(_wcx, _wcy)\n_pLu = _wU + _f1u\n_pLv = _wV - _farHW\n_pRv = _wV + _farHW\n_wx1 = _wU * _ux + _wV * _vx\n_wy1 = _wU * _uy + _wV * _vy\n_wx2 = _pLu * _ux + _pLv * _vx\n_wy2 = _pLu * _uy + _pLv * _vy\n_wx3 = _pLu * _ux + _pRv * _vx\n_wy3 = _pLu * _uy + _pRv * _vy\n_WEDGEr = vcat(hcat(_wx1, _wy1, 1), hcat(_wx2, _wy2, 1), hcat(_wx3, _wy3, 1))\nWedgePlan = (showFrustum > 0 && _isPano == 0) ? _WEDGEr : zeros(0, 3)\nPanoPlan = _isPano ? hcat(_wcx, _wcy, _fL) : zeros(0, 3)\nEyePlan = hcat(_wcx, _wcy, max(_lensR, 0.04 * _s))\n# Metrics — everything a shot list needs, and nothing the renderer owns.\nhorizontalFov = 2 * _halfFov * 180 / PI\nverticalFov = 2 * atan2(_tanH / _ar, 1) * 180 / PI\nframeWidth = 2 * _dTgt * _tanH\nframeHeight = frameWidth / _ar\neyeLevel = _eye\ntiltUsed = _tiltDeg\naspectRatio = _ar\nfocal35mm = focalLength * 36 / sensorWidth\nconeLength = _fL\nsubjectDistance = _dTgt\nisPanorama = _isPano ? 1 : 0\nisOrthographic = _isOrtho ? 1 : 0\nfootprintRadius = _isPano ? _fL : _farHW"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Body — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Body — plan"
+            },
+            {
+              "id": "s3",
+              "label": "Lens — tube"
+            },
+            {
+              "id": "s4",
+              "label": "Tripod — tube"
+            },
+            {
+              "id": "s5",
+              "label": "View cone — tube"
+            },
+            {
+              "id": "s6",
+              "label": "View wedge — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Panorama circle — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Eye point — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Horizontal FOV (°)"
+            },
+            {
+              "id": "s10",
+              "label": "Vertical FOV (°)"
+            },
+            {
+              "id": "s11",
+              "label": "Frame width at subject (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Frame height at subject (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Eye level (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Tilt applied (°)"
+            },
+            {
+              "id": "s15",
+              "label": "Aspect ratio"
+            },
+            {
+              "id": "s16",
+              "label": "35 mm equivalent (mm)"
+            },
+            {
+              "id": "s17",
+              "label": "View cone length (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Subject distance (m)"
+            },
+            {
+              "id": "s19",
+              "label": "Panorama"
+            },
+            {
+              "id": "s20",
+              "label": "Orthographic"
+            },
+            {
+              "id": "s21",
+              "label": "Half-width at cone end (m)"
+            },
+            {
+              "id": "s22",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_wedge",
+              "kind": "polygon",
+              "name": "View wedge",
+              "color": "#dbeafe",
+              "layer": "Camera",
+              "show": true
+            },
+            {
+              "id": "p2_pano",
+              "kind": "circle",
+              "name": "Panorama",
+              "color": "#dbeafe",
+              "layer": "Camera",
+              "show": true
+            },
+            {
+              "id": "p2_body",
+              "kind": "polygon",
+              "name": "Body",
+              "color": "#334155",
+              "layer": "Camera",
+              "show": true
+            },
+            {
+              "id": "p2_eye",
+              "kind": "circle",
+              "name": "Eye point",
+              "color": "#1d4ed8",
+              "layer": "Camera",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_body",
+              "kind": "polyhedron",
+              "name": "Body",
+              "color": "#334155",
+              "layer": "Camera",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lens",
+              "kind": "tube",
+              "name": "Lens",
+              "color": "#0f172a",
+              "layer": "Camera",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tripod",
+              "kind": "tube",
+              "name": "Tripod",
+              "color": "#64748b",
+              "layer": "Camera",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_frustum",
+              "kind": "tube",
+              "name": "View cone",
+              "color": "#3b82f6",
+              "layer": "Camera",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_view",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-view",
+      "targetHandle": "valin-view"
+    },
+    {
+      "id": "e_props_math_focalLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-focalLength",
+      "targetHandle": "valin-focalLength"
+    },
+    {
+      "id": "e_props_math_sensorWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sensorWidth",
+      "targetHandle": "valin-sensorWidth"
+    },
+    {
+      "id": "e_props_math_aspect",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-aspect",
+      "targetHandle": "valin-aspect"
+    },
+    {
+      "id": "e_props_math_eyeHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-eyeHeight",
+      "targetHandle": "valin-eyeHeight"
+    },
+    {
+      "id": "e_props_math_tilt",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tilt",
+      "targetHandle": "valin-tilt"
+    },
+    {
+      "id": "e_props_math_targetDistance",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-targetDistance",
+      "targetHandle": "valin-targetDistance"
+    },
+    {
+      "id": "e_props_math_showFrustum",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showFrustum",
+      "targetHandle": "valin-showFrustum"
+    },
+    {
+      "id": "e_props_math_frustumLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-frustumLength",
+      "targetHandle": "valin-frustumLength"
+    },
+    {
+      "id": "e_props_math_bodyLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bodyLength",
+      "targetHandle": "valin-bodyLength"
+    },
+    {
+      "id": "e_props_math_bodyWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bodyWidth",
+      "targetHandle": "valin-bodyWidth"
+    },
+    {
+      "id": "e_props_math_bodyHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bodyHeight",
+      "targetHandle": "valin-bodyHeight"
+    },
+    {
+      "id": "e_props_math_lensLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lensLength",
+      "targetHandle": "valin-lensLength"
+    },
+    {
+      "id": "e_props_math_lensRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lensRadius",
+      "targetHandle": "valin-lensRadius"
+    },
+    {
+      "id": "e_props_math_tripod",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tripod",
+      "targetHandle": "valin-tripod"
+    },
+    {
+      "id": "e_props_math_tripodSpread",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tripodSpread",
+      "targetHandle": "valin-tripodSpread"
+    },
+    {
+      "id": "e_props_math_edgeRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-edgeRadius",
+      "targetHandle": "valin-edgeRadius"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Body3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BodyPlan",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Lens3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Tripod3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Frustum3D",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-WedgePlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-PanoPlan",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-EyePlan",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-horizontalFov",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-verticalFov",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-frameWidth",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-frameHeight",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-eyeLevel",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-tiltUsed",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-aspectRatio",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-focal35mm",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-coneLength",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-subjectDistance",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-isPanorama",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-isOrthographic",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-footprintRadius",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_math_out_s22",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_out_r2d_p2_wedge",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_wedge"
+    },
+    {
+      "id": "e_out_r2d_p2_pano",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p2_pano"
+    },
+    {
+      "id": "e_out_r2d_p2_body",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p2_body"
+    },
+    {
+      "id": "e_out_r2d_p2_eye",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p2_eye"
+    },
+    {
+      "id": "e_out_r3d_p3_body",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_body"
+    },
+    {
+      "id": "e_out_r3d_p3_lens",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_lens"
+    },
+    {
+      "id": "e_out_r3d_p3_tripod",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_tripod"
+    },
+    {
+      "id": "e_out_r3d_p3_frustum",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_frustum"
+    }
+  ]
+}

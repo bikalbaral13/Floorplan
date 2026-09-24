@@ -1,0 +1,808 @@
+{
+  "version": 1,
+  "id": "wardrobe-with-math",
+  "title": "Wardrobe — one Math Engine, carcass, doors, shelves and rail",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Wardrobe",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 3h16v18H4z",
+        "M12 3v18",
+        "M10 11v2",
+        "M14 11v2",
+        "M4 21v1",
+        "M20 21v1"
+      ]
+    }
+  },
+  "description": "A parametric WARDROBE on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE, A SEGMENT OR A SPACE. On a wall segment it takes the wall's direction and the doors face into the room; Flip side turns it round.\n\nTHE CARCASS IS FIVE PANELS, NOT A BLOCK — two sides, a top, a bottom and a back, each its own quad. That is why the internal volume metric means something and why the shelves have somewhere to land: a solid slab would report the same outline and describe nothing.\n\nSLIDING DOORS ARE THE SAME LINE AS HINGED ONES. A sliding leaf must be wide enough to LAP its neighbour, and it must sit in a different plane from it. Both fall out of two expressions: `_lap` doubles the leaf width, and `(_di % 2) * _dT` steps the odd leaves forward by one door thickness. The alternating plane comes from the door INDEX, so it is right at any leaf count without a special case.\n\nTHE DOOR, SHELF AND HANDLE RUNS ARE ALL ONE BROADCAST. `arange(n)` gives every leaf's near edge, every shelf's height and every handle's position at once. Shelves divide the clear internal height into n+1 equal bays, which is what makes a shelf count read as spacing rather than as a stack.\n\nHANDLES FOLLOW THE DOORS, not the carcass: `_hu = _db - 0.05` is the leading edge of whichever leaf it belongs to, so changing the door count moves every handle with it.\n\nTHE PLAN IS DERIVED from the same quads with z dropped. Shelves and the rail draw in plan because that is what a wardrobe's plan is asked to show; each is its own 2D row, since a grouped outline list is read EVEN-ODD and a shelf inside the carcass would otherwise void it.\n\nDIMENSIONS AT THE DEFAULTS: 1.20 × 0.60 × 2.10 m, two 0.596 m hinged leaves, three shelves, a 1.164 m rail, 1.34 m³ internal.\n\nWHAT THIS CANNOT DO. Doors are flat plates in the closed position — there is no swing, no hinge side and no open state. Internal divisions are full-width shelves only: no drawer bank, no vertical partition.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.2,
+              "min": 0.4,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "depth",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.3,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Height",
+              "type": "range",
+              "value": 2.1,
+              "min": 1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "panelThk",
+              "name": "Panel thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.008,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "doors",
+              "name": "Doors",
+              "type": "range",
+              "value": 2,
+              "min": 0,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "doorGap",
+              "name": "Door gap",
+              "type": "range",
+              "value": 0.004,
+              "min": 0,
+              "max": 0.02,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "doorStyle",
+              "name": "Door style",
+              "type": "select",
+              "value": "Hinged",
+              "options": [
+                "Hinged",
+                "Sliding"
+              ]
+            },
+            {
+              "id": "plinthHeight",
+              "name": "Plinth height",
+              "type": "range",
+              "value": 0.08,
+              "min": 0,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "shelves",
+              "name": "Internal shelves",
+              "type": "range",
+              "value": 3,
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "hangingRail",
+              "name": "Hanging rail",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "railDrop",
+              "name": "Rail drop from top",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.05,
+              "max": 0.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "handles",
+              "name": "Handles",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Wardrobe maths",
+          "expr": "_natL = width\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Wd = width * _s\n_Dp = depth * _s\n_Ht = height * _s\n_t = panelThk * _s\n_pl = plinthHeight * _s\n_gap = doorGap * _s\n_u0 = 0 - _Wd / 2\n_u1 = _Wd / 2\n_v0 = 0 - _Dp / 2\n_v1 = _Dp / 2\n_cz0 = _pl\n_cz1 = _Ht\n_bodyL = _Wd\n_bodyW = _Dp\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n# Carcass — two sides, top, bottom and back, so the box is HOLLOW, not a solid slab\n_S1 = hcat(_u0, _v0, _u0 + _t, _v0, _u0 + _t, _v1, _u0, _v1, _cz0, _cz1, 1)\n_S2 = hcat(_u1 - _t, _v0, _u1, _v0, _u1, _v1, _u1 - _t, _v1, _cz0, _cz1, 1)\n_TP = hcat(_u0 + _t, _v0, _u1 - _t, _v0, _u1 - _t, _v1, _u0 + _t, _v1, _cz1 - _t, _cz1, 1)\n_BT = hcat(_u0 + _t, _v0, _u1 - _t, _v0, _u1 - _t, _v1, _u0 + _t, _v1, _cz0, _cz0 + _t, 1)\n_BK = hcat(_u0 + _t, _v1 - _t, _u1 - _t, _v1 - _t, _u1 - _t, _v1, _u0 + _t, _v1, _cz0 + _t, _cz1 - _t, 1)\n_PLr = hcat(_u0, _v0 + 0.02 * _s, _u1, _v0 + 0.02 * _s, _u1, _v1, _u0, _v1, 0, _pl, 3)\n_PL0 = _pl > 0.001 ? _PLr : zeros(0, 11)\n# Internal shelves — one broadcast up the clear internal height\n_nsh = max(0, round(shelves))\n_iz0 = _cz0 + _t\n_iz1 = _cz1 - _t\n_shz = _iz0 + (arange(_nsh) + 1) * (_iz1 - _iz0) / (_nsh + 1)\n_SH = hcat(fill(_nsh,1,_u0 + _t), fill(_nsh,1,_v0 + _t), fill(_nsh,1,_u1 - _t), fill(_nsh,1,_v0 + _t), fill(_nsh,1,_u1 - _t), fill(_nsh,1,_v1 - _t), fill(_nsh,1,_u0 + _t), fill(_nsh,1,_v1 - _t), _shz, _shz + _t, fill(_nsh,1,5))\n# Hanging rail — a flat bar, so it reads in plan as well as in section\n_rz = _iz1 - railDrop * _s\n_rr = 0.016 * _s\n_RLr = hcat(_u0 + _t, 0 - _rr, _u1 - _t, 0 - _rr, _u1 - _t, _rr, _u0 + _t, _rr, _rz - _rr, _rz + _rr, 6)\n_RL = hangingRail > 0 ? _RLr : zeros(0, 11)\n# Doors — divided across the full width; Sliding doubles the leaf and laps it in two planes\n_ndr = max(0, round(doors))\n_isSlide = doorStyle == 'Sliding'\n_dT = 0.018 * _s\n_lap = _isSlide ? 2 : 1\n_dpitch = _Wd / max(1, _ndr)\n_dw = _dpitch * _lap - _gap\n_di = arange(_ndr)\n_da = _u0 + _di * _dpitch + _gap / 2\n_db = min(_da + _dw, _u1)\n_dv0 = _isSlide ? (_v0 - _dT + (_di % 2) * _dT) : fill(_ndr, 1, _v0 - _dT)\n_dv1 = _dv0 + _dT\n_DR = hcat(_da, _dv0, _db, _dv0, _db, _dv1, _da, _dv1, fill(_ndr,1,_cz0), fill(_ndr,1,_cz1), fill(_ndr,1,2))\n# Handles — a vertical bar on the leading edge of every leaf\n_hw = 0.02 * _s\n_hz = (_cz0 + _cz1) / 2\n_hl = min(0.16 * _s, (_cz1 - _cz0) / 3)\n_hu = _db - 0.05 * _s\n_HDr = hcat(_hu, _dv0 - _hw, _hu + _hw, _dv0 - _hw, _hu + _hw, _dv0, _hu, _dv0, fill(_ndr,1,_hz - _hl), fill(_ndr,1,_hz + _hl), fill(_ndr,1,4))\n_HD = (handles > 0 && _ndr > 0) ? _HDr : zeros(0, 11)\nQ = vcat(_S1, _S2, _TP, _BT, _BK, _PL0, _SH, _RL, _DR, _HD)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nCarcass3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nDoors3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nPlinth3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nHandles3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nShelves3D = sub(compress(_W, eq(col(_W,4), 5)), 0, 0, _nw, 4)\nRail3D = sub(compress(_W, eq(col(_W,4), 6)), 0, 0, _nw, 4)\nCarcassPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nDoorsPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nShelvesPlan = sub(compress(_WP, eq(col(_WP,3), 5)), 0, 0, _nwp, 3)\nRailPlan = sub(compress(_WP, eq(col(_WP,3), 6)), 0, 0, _nwp, 3)\n# Metrics\noverallWidth = _Wd\noverallDepth = _Dp\noverallHeight = _Ht\ndoorLeaves = _ndr\ndoorWidth = _ndr > 0 ? _dw : 0\nshelfRun = _nsh * (_Wd - 2 * _t)\nrailLength = hangingRail > 0 ? (_Wd - 2 * _t) : 0\ninternalVolume = (_Wd - 2 * _t) * (_Dp - _t) * (_iz1 - _iz0)\nfootprint = _Wd * _Dp"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Carcass — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Doors — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Plinth — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Handles — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Shelves — solid"
+            },
+            {
+              "id": "s6",
+              "label": "Hanging rail — solid"
+            },
+            {
+              "id": "s7",
+              "label": "Carcass — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Doors — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Shelves — plan"
+            },
+            {
+              "id": "s10",
+              "label": "Rail — plan"
+            },
+            {
+              "id": "s11",
+              "label": "Overall width (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Overall depth (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Overall height (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Door leaves"
+            },
+            {
+              "id": "s15",
+              "label": "Door width (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Shelf run (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Rail length (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Internal volume (m³)"
+            },
+            {
+              "id": "s19",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s20",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_carc",
+              "kind": "polygon",
+              "name": "Carcass",
+              "color": "#78716c",
+              "layer": "Wardrobe",
+              "show": true
+            },
+            {
+              "id": "p2_doors",
+              "kind": "polygon",
+              "name": "Doors",
+              "color": "#44403c",
+              "layer": "Wardrobe",
+              "show": true
+            },
+            {
+              "id": "p2_shelf",
+              "kind": "polygon",
+              "name": "Shelves",
+              "color": "#d6d3d1",
+              "layer": "Wardrobe",
+              "show": true
+            },
+            {
+              "id": "p2_rail",
+              "kind": "polygon",
+              "name": "Hanging rail",
+              "color": "#94a3b8",
+              "layer": "Wardrobe",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_carc",
+              "kind": "polyhedron",
+              "name": "Carcass",
+              "color": "#a8a29e",
+              "layer": "Wardrobe",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_doors",
+              "kind": "polyhedron",
+              "name": "Doors",
+              "color": "#57534e",
+              "layer": "Wardrobe",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_plinth",
+              "kind": "polyhedron",
+              "name": "Plinth",
+              "color": "#44403c",
+              "layer": "Wardrobe",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_handles",
+              "kind": "polyhedron",
+              "name": "Handles",
+              "color": "#e2e8f0",
+              "layer": "Wardrobe",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_shelf",
+              "kind": "polyhedron",
+              "name": "Shelves",
+              "color": "#d6d3d1",
+              "layer": "Wardrobe",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_rail",
+              "kind": "polyhedron",
+              "name": "Hanging rail",
+              "color": "#94a3b8",
+              "layer": "Wardrobe",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_width",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e_props_math_depth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-depth",
+      "targetHandle": "valin-depth"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_panelThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-panelThk",
+      "targetHandle": "valin-panelThk"
+    },
+    {
+      "id": "e_props_math_doors",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-doors",
+      "targetHandle": "valin-doors"
+    },
+    {
+      "id": "e_props_math_doorGap",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-doorGap",
+      "targetHandle": "valin-doorGap"
+    },
+    {
+      "id": "e_props_math_doorStyle",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-doorStyle",
+      "targetHandle": "valin-doorStyle"
+    },
+    {
+      "id": "e_props_math_plinthHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-plinthHeight",
+      "targetHandle": "valin-plinthHeight"
+    },
+    {
+      "id": "e_props_math_shelves",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-shelves",
+      "targetHandle": "valin-shelves"
+    },
+    {
+      "id": "e_props_math_hangingRail",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-hangingRail",
+      "targetHandle": "valin-hangingRail"
+    },
+    {
+      "id": "e_props_math_railDrop",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-railDrop",
+      "targetHandle": "valin-railDrop"
+    },
+    {
+      "id": "e_props_math_handles",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-handles",
+      "targetHandle": "valin-handles"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Carcass3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Doors3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Plinth3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Handles3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Shelves3D",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Rail3D",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CarcassPlan",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-DoorsPlan",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ShelvesPlan",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-RailPlan",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallWidth",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallDepth",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallHeight",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-doorLeaves",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-doorWidth",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-shelfRun",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-railLength",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-internalVolume",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-footprint",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_r2d_p2_carc",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p2_carc"
+    },
+    {
+      "id": "e_out_r2d_p2_doors",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p2_doors"
+    },
+    {
+      "id": "e_out_r2d_p2_shelf",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s9",
+      "targetHandle": "valin-p2_shelf"
+    },
+    {
+      "id": "e_out_r2d_p2_rail",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s10",
+      "targetHandle": "valin-p2_rail"
+    },
+    {
+      "id": "e_out_r3d_p3_carc",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_carc"
+    },
+    {
+      "id": "e_out_r3d_p3_doors",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_doors"
+    },
+    {
+      "id": "e_out_r3d_p3_plinth",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_plinth"
+    },
+    {
+      "id": "e_out_r3d_p3_handles",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_handles"
+    },
+    {
+      "id": "e_out_r3d_p3_shelf",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_shelf"
+    },
+    {
+      "id": "e_out_r3d_p3_rail",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p3_rail"
+    }
+  ]
+}

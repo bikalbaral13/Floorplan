@@ -2,10 +2,19 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "input-props",
-  "meta": { "label": "Input Properties", "category": "Space", "color": "#9333ea" },
+  "meta": {
+    "label": "Input Properties",
+    "category": "Space",
+    "color": "#9333ea"
+  },
   "description": "Define adjustable parameters (slider / options / checkbox / text / colour); each exposes its value as an output.",
-  "instructions": "Takes a Space (forwarded unchanged on the main output) and exposes user-defined adjustable parameters — each renders its own control (slider / options / checkbox / textbox / colour swatch) and publishes its current value as a `val-<propId>` output endpoint on the right. The value-output handles are DYNAMIC (built from the `props` list edited on the node), not fixed.\n\nAn Options param takes a comma-separated list (`equal, front-remaining`); a Colour param publishes its `#rrggbb` string, so wire it into a `valin-color` endpoint (Rectangle / Circle …) to drive a node's tint.\n\nTIP: use it as a control panel — define a param once and wire its value into several nodes (e.g. an offset that drives Inset AND Split).",
-  "handles": { "input": true, "output": true },
-  "defaults": { "props": [] },
+  "instructions": "Takes a Space (forwarded unchanged on the main output) and exposes user-defined adjustable parameters — each renders its own control (slider / options / checkbox / textbox / colour swatch) and publishes its current value as a `val-<propId>` output endpoint on the right. The value-output handles are DYNAMIC (built from the `props` list edited on the node), not fixed.\n\nAn Options param takes a comma-separated list (`equal, front-remaining`); a Colour param publishes its `#rrggbb` string, so wire it into a `valin-color` endpoint (Rectangle / Circle …) to drive a node's tint.\n\nTIP: use it as a control panel — define a param once and wire its value into several nodes (e.g. an offset that drives Inset AND Split).\n\nEVERY PARAMETER IS ALSO AN INPUT. Each parameter grows a matching endpoint on the LEFT (`valin-<propId>`, on the same row as its `val-<propId>` output), and a value wired in OVERRIDES that parameter's own control — so a brief can be driven from upstream just as every op's params can: a computed number from a Math Engine, a value from another params node, an Agent's suggestion. Add a parameter and both endpoints appear; delete it and both go.\n• The control is REPLACED by a read-only \"wired\" readout of the incoming value while a wire is attached. The stored value is left untouched, so unplugging the wire restores it — nothing is baked over.\n• A SELECT parameter resolves its option across the wire by value, label or INDEX, so wiring the number 2 into a three-option parameter selects the third; a CHECKBOX takes any non-zero number as on.\n• Unwired parameters behave exactly as before.\n\nGEOMETRY THROUGH A PARAMETER. There is no dedicated geometry endpoint — a parameter of type TEXT is the pass-through. Wire a source's `val-points` (Space / Node / Segment) or `val-graph` (Graph / Freehand) into that parameter's `valin-<id>` and it comes back out on `val-<id>` unchanged, ready for a Math Engine (which lifts anything that parses as a rectangular array into a real matrix). That is what lets the brief sit INLINE — Space → Input Properties → Math Engine → Polygon — instead of hanging off the root on a backwards association edge. Name the parameter after the expression variable it feeds (`P`) and the wire reads as one line. See Workflows/Operations/inset_with_math.json.\n\nONE WIRE INSTEAD OF MANY: a Math Engine's `deps` endpoint merges this node's whole value set into scope BY NAME — the geometry parameter included — so `Input Properties → deps` can replace one wire per value, provided the expression names its variables after the parameter ids. An explicit `valin-<var>` wire still overrides deps, so mix the two freely.\n\nFOLDING: value endpoints are hidden while a node is collapsed — a parameter's own and any declared one alike; only the main geometry in / out handles stay on the title bar. Folding a params node therefore un-anchors its value wires visually. The graph keeps them and the flow still evaluates.\n\nPROPERTIES TAB: this node still surfaces as the component's brief when it sits immediately downstream of the root (the panel's fallback path collects the nodes a root FEEDS), so the inline shape needs no association edge to show its sliders on the Space.",
+  "handles": {
+    "input": true,
+    "output": true
+  },
+  "defaults": {
+    "props": []
+  },
   "parameters": []
 }

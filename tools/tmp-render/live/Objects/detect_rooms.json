@@ -1,0 +1,361 @@
+{
+  "version": 1,
+  "id": "detect-rooms",
+  "title": "Detect rooms",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Detect rooms",
+    "icon": {
+      "paths": [
+        "M3 3h8v8H3z",
+        "M13 3h8v5h-8z",
+        "M13 10h8v11h-8z",
+        "M3 13h8v8H3z"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Find every ROOM in the drawing, measure it, and hand the canvas a plan document that carries each one as a real SPACE with the library's room.json attached.\n\n  Geometry (Image kind) → Input Properties → Object Detection [Room] → Math Engine → Output Metrics (+ 2D Render)\n\nThe same six-node shape as detect_walls.json, detect_doors.json and detect_windows.json — but where those three write SEGMENTS and detect_objects.json writes NODES, a room is neither. It is an AREA, so this one writes spaces.\n\nTHE ROOT IS THE GEOMETRY NODE, not a separate Image node. Selecting a picture on the canvas retargets a grabbing Geometry node onto its Image kernel, so the same node that would carry a Space or a Segment carries the drawing. “Grab from selection” is ON: pick the underlay and this node follows it.\n\nTHE BRIEF SITS IN THE CHAIN, not beside it. Input Properties is wired between the Geometry node and Object Detection, so the tuning values and the picture travel one chain: the detector resolves its image by walking UPSTREAM through geometry edges, so it still finds the picture through the brief.\n\nWHAT THE MATHS PUBLISHES. min/max over each row's four x's and four y's recovers the rectangle. A room is an area, so the keep test is on AREA — one test, rather than a length rule and a breadth rule that disagree about a corridor. Out come the ROOM RECTANGLES as a grouped [x, y, room] coordinate list, the CENTROID, the LENGTH (long side), the BREADTH (short side) and the FLOOR AREA, one row per room, plus the total.\n\nTHE RECTANGLE IS REBUILT, NOT PASSED THROUGH. Reading the detection's raw quad straight out would let the drawn outline, the reported size and the written space boundary disagree the moment a box came back tilted — the measurements above are axis-aligned, so the ring is rebuilt to match them. One matrix then serves both consumers: `[x, y, group]` is exactly what a 2D Render polygon row reads as one ring per group AND what the encoder reads as one space boundary per group, so the rectangle you see on the overlay and the space written into the plan are the same numbers rather than two calculations of them.\n\nCOVERAGE, the reading worth checking before you trust the rest. Total room area against the area of the box that holds every room. Near 1 is a clean partition. Well under 1 means rooms were missed — raise Max items or lower Min room area. Over 1 means two boxes overlap, usually a corridor counted inside a room as well as beside it.\n\nTHE PLAN DOCUMENT. The Math Engine's encode block runs Canvas Encoder after the formulas and publishes `val-json`: each kept rectangle becomes a space carrying objectId “room-with-math” and objectPath “Objects/Architectural/room.json”. A space references NODE IDS rather than raw coordinates, so its four corners are written as nodes — and because nodes are DEDUPLICATED BY POSITION, two rooms sharing a corner share that node instead of stacking two on the same point.\n\nNAMES ARE THE THING ONLY THIS FLOW GIVES YOU. A geometric trace produces closed faces but has no idea which is the kitchen; “Room names” in Output Metrics is the only channel carrying that. It is a READING, not a placement: the encode map is one static entry for every space, so every room imports as room.json with identifyingType “room” and no individual name. Read the names off that slot and apply them, or match each detected rectangle against the faces from Graph to Spaces by overlap and name the traced Space instead — which is also how you get exact edges, since these boxes are axis-aligned approximations and a room boundary here is never a wall line.\n\nSHOW IN CANVAS. The plan JSON lands in the last Output Metrics slot, and that node's “Show in canvas” button imports it by the same path File ▸ Import takes for a plan you picked. Nothing reaches the canvas until you press it — the flow only ever computes the document.\n\nHOW TO RUN: 1) select the drawing on the canvas — the Geometry node binds to it; 2) paste your Gemini API key into the Object Detection node (it ships BLANK on purpose — never save a key into a shared workflow file); 3) press DETECT on that node. Detect bakes its result into the node — nothing detects on its own and re-running the flow does not re-detect, so press it again after changing the image or the rows. Without a key the node produces nothing while the rest still evaluates, which looks exactly like “found none”. Raise Max items above the real room count only if rooms are missing; a 6-room plan does not need 50. If the found count is 0 while “Unclaimed labels” is full, the model used a different word — rename the row rather than raising Max items.\n\n---\nHOSTED ON AN IMAGE. This file now carries an `object` block with `hostKind: \"image\"`, so it lists as a parametric object and attaches to an imported picture from the Properties tab.\n\nWHAT STILL ONLY WORKS IN THE FLOW EDITOR: an attached object is resolved by the spine runner, which evaluates Input Properties, the Math Engine and the Render rows and NOTHING else. It does not run the Object Detection node, and it reads the Math Engine's `decode` block but never its `encode`. Detection is also an async, billed call that has to be pressed and baked — there is no button on an attached object, and an object re-resolves on every parameter change. So attached, this reports nothing until detect-and-bake exists for attachments. Open it in the Flow editor to actually run it.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -760,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "pooling": "ink",
+          "nodeLabel": "Geometry — the drawing"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -450,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "minArea",
+              "name": "Min room area (m²)",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 20,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "ppm",
+              "name": "Pixels per metre (plan JSON)",
+              "type": "range",
+              "value": 50,
+              "min": 10,
+              "max": 200,
+              "step": 1,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Tuning"
+        }
+      }
+    },
+    {
+      "id": "detect",
+      "position": {
+        "x": -120,
+        "y": 0
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 20,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_room",
+              "name": "Room"
+            }
+          ],
+          "nodeLabel": "Room — press Detect"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Boxes → room rectangles, sizes, plan JSON",
+          "expr": "# BOXES -> ROOM RECTANGLES, SIZE, AND A PLAN DOCUMENT.\n# A is the detection's `corners` matrix: one row per box, [x0,y0,x1,y1,x2,y2,x3,y3] in metres.\n# min/max of each row's four x's and four y's recovers the rectangle.\n_X = hcat(hcat(col(A,0), col(A,2)), hcat(col(A,4), col(A,6)))\n_Y = hcat(hcat(col(A,1), col(A,3)), hcat(col(A,5), col(A,7)))\n_x0 = min(_X, 'rows')\n_x1 = max(_X, 'rows')\n_y0 = min(_Y, 'rows')\n_y1 = max(_Y, 'rows')\n_w = _x1 - _x0\n_h = _y1 - _y0\n\n# A room is an AREA, so the keep test is one on area rather than a length rule and a breadth rule that\n# disagree about a corridor. Long side is the length, short side the breadth.\n_A0 = _w * _h\n_keep = ge(_A0, minArea)\n_X0 = compress(_x0, _keep)\n_X1 = compress(_x1, _keep)\n_Y0 = compress(_y0, _keep)\n_Y1 = compress(_y1, _keep)\nCen = hcat((_X0 + _X1) / 2, (_Y0 + _Y1) / 2)\n_W = _X1 - _X0\n_H = _Y1 - _Y0\nLen = max(hcat(_W, _H), 'rows')\nBrd = min(hcat(_W, _H), 'rows')\nArea = _W * _H\n\n# THE RECTANGLE IS REBUILT, NOT PASSED THROUGH. Reading the detection's raw quad would let the drawn\n# outline, the reported size and the written space boundary disagree the moment a box came back tilted:\n# the numbers above are axis-aligned, so the ring below is too, and all three describe one rectangle.\n# Corners go round in order - (x0,y0) (x1,y0) (x1,y1) (x0,y1) - because reshape is ROW-MAJOR, so an\n# N x 8 of ring-ordered pairs becomes 4N x 2 walking each room's boundary.\n_RR = hcat(hcat(hcat(_X0, _Y0), hcat(_X1, _Y0)), hcat(hcat(_X1, _Y1), hcat(_X0, _Y1)))\n_n = rows(_RR)\nRect = hcat(reshape(_RR, 4 * _n, 2), floor(arange(4 * _n) / 4))\n\n# ONE MATRIX, TWO CONSUMERS. `[x, y, group]` is exactly what a 2D Render polygon row reads as one ring\n# per group AND what the encoder reads as one space boundary per group - so the rectangle drawn on the\n# overlay and the space written into the plan are the same numbers, not two calculations of them.\nSpaces = Rect\n\n# COVERAGE - do the rooms tile the plan? Their total area against the area of the box that holds them\n# all. Near 1 is a clean partition; well under 1 means rooms were missed; over 1 means two boxes\n# overlap, usually a corridor counted inside a room as well as beside it.\nPPM = ppm\nFound = rows(A)\nKept = _n\nDropped = Found - _n\nTotalArea = sum(Area)\n_bx = max(_X1) - min(_X0)\n_by = max(_Y1) - min(_Y0)\nCoverage = _bx * _by > 0 ? TotalArea / (_bx * _by) : 0\n",
+          "decode": "",
+          "encode": "{\n  \"from\": {\n    \"spaces\": \"Spaces\",\n    \"pixelsPerMeter\": \"PPM\"\n  },\n  \"objects\": {\n    \"segments\": {},\n    \"points\": {},\n    \"space\": {\n      \"objectId\": \"room-with-math\",\n      \"objectPath\": \"Objects/Architectural/room.json\",\n      \"params\": {\n        \"identifyingType\": \"room\",\n        \"color\": \"Grey\"\n      }\n    }\n  },\n  \"pixelsPerMeter\": 50,\n  \"libraryPath\": \"https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library\",\n  \"decimals\": 4\n}",
+          "nodeLabel": "Measure + encode the plan"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_room",
+              "kind": "polygon",
+              "name": "Room rectangles",
+              "color": "#16a34a",
+              "layer": "Detected · Rooms",
+              "lineStyle": "solid",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_ctr",
+              "kind": "circle",
+              "name": "Room centroids",
+              "color": "#15803d",
+              "layer": "Detected · Room centroids",
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "radius": 0.12,
+              "show": true
+            }
+          ],
+          "nodeLabel": "Rectangles + centroids"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 620,
+        "y": 240
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Rooms — detected"
+            },
+            {
+              "id": "s2",
+              "label": "Rooms — kept (≥ min area)"
+            },
+            {
+              "id": "s3",
+              "label": "Dropped as too small"
+            },
+            {
+              "id": "s4",
+              "label": "Room names (the reading only this flow gives)"
+            },
+            {
+              "id": "s5",
+              "label": "Unclaimed labels (rename the row if non-empty)"
+            },
+            {
+              "id": "s6",
+              "label": "Coverage (room area ÷ their bounding box — 1 = clean tiling)"
+            },
+            {
+              "id": "s7",
+              "label": "Room rectangles [x, y, room], per corner"
+            },
+            {
+              "id": "s8",
+              "label": "Centroid [[x, y], …]"
+            },
+            {
+              "id": "s9",
+              "label": "Length (m, per room — long side)"
+            },
+            {
+              "id": "s10",
+              "label": "Breadth (m, per room — short side)"
+            },
+            {
+              "id": "s11",
+              "label": "Floor area (m², per room)"
+            },
+            {
+              "id": "s12",
+              "label": "Total floor area (m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Plan JSON — spaces + room.json"
+            }
+          ],
+          "nodeLabel": "What was found"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geom_props",
+      "source": "geom",
+      "sourceHandle": null,
+      "target": "props",
+      "targetHandle": null
+    },
+    {
+      "id": "e2_props_detect",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detect",
+      "targetHandle": null
+    },
+    {
+      "id": "e3_props_area",
+      "source": "props",
+      "sourceHandle": "val-minArea",
+      "target": "math",
+      "targetHandle": "valin-minArea"
+    },
+    {
+      "id": "e4_props_ppm",
+      "source": "props",
+      "sourceHandle": "val-ppm",
+      "target": "math",
+      "targetHandle": "valin-ppm"
+    },
+    {
+      "id": "e5_detect_math",
+      "source": "detect",
+      "sourceHandle": "val-o_room_corners",
+      "target": "math",
+      "targetHandle": "valin-A"
+    },
+    {
+      "id": "e6_math_rect",
+      "source": "math",
+      "sourceHandle": "val-Rect",
+      "target": "render",
+      "targetHandle": "valin-pr_room"
+    },
+    {
+      "id": "e7_math_ctr",
+      "source": "math",
+      "sourceHandle": "val-Cen",
+      "target": "render",
+      "targetHandle": "valin-pr_ctr"
+    },
+    {
+      "id": "e8_found",
+      "source": "math",
+      "sourceHandle": "val-Found",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e9_kept",
+      "source": "math",
+      "sourceHandle": "val-Kept",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e10_dropped",
+      "source": "math",
+      "sourceHandle": "val-Dropped",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e11_names",
+      "source": "detect",
+      "sourceHandle": "val-o_room_labels",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e12_unmatched",
+      "source": "detect",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e13_coverage",
+      "source": "math",
+      "sourceHandle": "val-Coverage",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e14_rect",
+      "source": "math",
+      "sourceHandle": "val-Rect",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e15_centroid",
+      "source": "math",
+      "sourceHandle": "val-Cen",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e16_length",
+      "source": "math",
+      "sourceHandle": "val-Len",
+      "target": "metrics",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e17_breadth",
+      "source": "math",
+      "sourceHandle": "val-Brd",
+      "target": "metrics",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e18_area",
+      "source": "math",
+      "sourceHandle": "val-Area",
+      "target": "metrics",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e19_total",
+      "source": "math",
+      "sourceHandle": "val-TotalArea",
+      "target": "metrics",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e20_planjson",
+      "source": "math",
+      "sourceHandle": "val-json",
+      "target": "metrics",
+      "targetHandle": "valin-s13"
+    }
+  ]
+}

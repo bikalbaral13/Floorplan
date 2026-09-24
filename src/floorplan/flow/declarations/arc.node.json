@@ -8,7 +8,7 @@
     "color": "#ca8a04"
   },
   "description": "A 2D arc (open polyline): centre (x, y), radius, from Start angle to End angle (degrees).",
-  "instructions": "Draws a circular arc as an OPEN polyline — centred at (centerX, centerY) in metres, of the given radius, sweeping from Start angle to End angle (degrees, the short way). Every field can be wired from a Math / Expression node, so it's ideal for a door swing (centre = hinge, radius = leaf width, Start = closed, End = open). It has no fill.",
+  "instructions": "Draws a circular arc as an OPEN polyline — centred at (centerX, centerY) in metres, of the given radius, sweeping from Start angle to End angle (degrees, the short way). Every field can be wired from a Math or Math Engine node, so it's ideal for a door swing (centre = hinge, radius = leaf width, Start = closed, End = open). It has no fill.",
   "handles": {
     "input": false,
     "output": true,

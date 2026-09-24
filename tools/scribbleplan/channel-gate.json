@@ -1,0 +1,593 @@
+{
+ "version": 1,
+ "id": "channel-gate-with-math",
+ "title": "Channel Gate — one Math Engine, scissor lattice on a floor track",
+ "category": "Architectural",
+ "object": {
+  "hostKind": "segment",
+  "name": "Channel Gate",
+  "units": "m",
+  "icon": {
+   "paths": [
+    "M3 4v16",
+    "M21 4v16",
+    "M3 8l4 4-4 4",
+    "M7 8l4 4-4 4",
+    "M11 8l4 4-4 4",
+    "M15 8l4 4-4 4"
+   ]
+  }
+ },
+ "description": "A parametric COLLAPSIBLE CHANNEL GATE on the six-node spine, SEGMENT-hosted like a door:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nDROP IT ON AN OPENING. It fills the host piece under \"Fill segment\" exactly as the Door does, so it goes on a pre-cut opening piece beside the Wall object and the wall shows a real gap. Where a door needs a leaf's worth of floor to swing over, a channel gate needs NONE — it folds along its own track — which is why it is the right closure in front of a staircase that fills its bay (see place-staircase-in-plan).\n\nWHAT IT DRAWS. A floor track the width of the opening, a post at each jamb, a top rail, and the scissor lattice as a run of bars standing on the track. `open` is the fraction folded back: the bars of the closed run are spread evenly and the plan symbol is the zigzag between them; the stack sits at `stackSide`. At the defaults a 0.9 m gate is 2.1 m high, 16 bars, a quarter open.\n\nWHAT IT REPORTS. Opening width, the clear opening at the current fold, the closed run, bar count, height and an estimated weight at 14 kg/m² — the number the fixing screws and the track have to carry.\n\nWHAT IT DOES NOT DO. No lock box, no wheels, no wicket; the lattice is drawn as bars and a zigzag, not as the true pantograph.",
+ "nodes": [
+  {
+   "id": "geo",
+   "position": {
+    "x": -960,
+    "y": 60
+   },
+   "data": {
+    "tool": "source",
+    "params": {
+     "grabFromSelection": true,
+     "id": "",
+     "nodeLabel": "Geometry"
+    }
+   }
+  },
+  {
+   "id": "props",
+   "position": {
+    "x": -640,
+    "y": 60
+   },
+   "data": {
+    "tool": "input-props",
+    "params": {
+     "props": [
+      {
+       "id": "P",
+       "name": "Host — segment [[x, y], [x, y]]",
+       "type": "text",
+       "value": "[[0, 0], [1, 0]]",
+       "options": []
+      },
+      {
+       "id": "width",
+       "name": "Width (own)",
+       "type": "range",
+       "value": 0.9,
+       "options": [],
+       "min": 0.3,
+       "max": 4,
+       "step": 0.05
+      },
+      {
+       "id": "fitMode",
+       "name": "Fit",
+       "type": "select",
+       "value": "Fill segment",
+       "options": [
+        "Fill segment",
+        "Own width (centred)"
+       ]
+      },
+      {
+       "id": "height",
+       "name": "Height",
+       "type": "range",
+       "value": 2.1,
+       "options": [],
+       "min": 1,
+       "max": 3,
+       "step": 0.05
+      },
+      {
+       "id": "panels",
+       "name": "Scissor panels",
+       "type": "range",
+       "value": 8,
+       "options": [],
+       "min": 2,
+       "max": 30,
+       "step": 1
+      },
+      {
+       "id": "open",
+       "name": "Open fraction",
+       "type": "range",
+       "value": 0.25,
+       "options": [],
+       "min": 0,
+       "max": 0.95,
+       "step": 0.05
+      },
+      {
+       "id": "stackDepth",
+       "name": "Lattice depth",
+       "type": "range",
+       "value": 0.12,
+       "options": [],
+       "min": 0.04,
+       "max": 0.3,
+       "step": 0.01
+      },
+      {
+       "id": "barSize",
+       "name": "Bar size",
+       "type": "range",
+       "value": 0.02,
+       "options": [],
+       "min": 0.01,
+       "max": 0.05,
+       "step": 0.002
+      },
+      {
+       "id": "postSize",
+       "name": "Post size",
+       "type": "range",
+       "value": 0.05,
+       "options": [],
+       "min": 0.03,
+       "max": 0.12,
+       "step": 0.005
+      },
+      {
+       "id": "trackDepth",
+       "name": "Track depth",
+       "type": "range",
+       "value": 0.05,
+       "options": [],
+       "min": 0.02,
+       "max": 0.12,
+       "step": 0.005
+      },
+      {
+       "id": "stackSide",
+       "name": "Stacks at",
+       "type": "select",
+       "value": "Left",
+       "options": [
+        "Left",
+        "Right"
+       ]
+      },
+      {
+       "id": "semantics",
+       "name": "Semantics",
+       "type": "text",
+       "value": "mild steel collapsible channel gate, powder-coated, floor track, scissor lattice",
+       "options": [],
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "math",
+   "position": {
+    "x": -180,
+    "y": 40
+   },
+   "data": {
+    "tool": "expr",
+    "params": {
+     "name": "Channel Gate maths",
+     "expr": "_e1 = hcat(1, 0)\n_n = rows(P)\n_isSeg = _n == 2\n_isSpace = _n > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_eLen = len(_edges)\n_longest = max(_eLen)\n_mask = eq(_eLen, _longest)\n_sDir = _isSpace ? row(compress(_edges, _mask), 0) : _e1\n_sA = _isSpace ? row(compress(P, _mask), 0) : row(P, 0)\n_segV = _isSeg ? (row(P, 1) - row(P, 0)) : _sDir\n_dir = _isSeg ? _segV : (_isSpace ? _sDir : _e1)\n_dLen = min(len(_dir))\n_u = _dLen > 1e-9 ? normalize(_dir) : _e1\n_ux = sub(_u, 0, 0, 1, 1)\n_uy = sub(_u, 0, 1, 1, 1)\n_vx = 0 - _uy\n_vy = _ux\n_hosted = (_isSeg || _isSpace) && _dLen > 1e-9\n_fill = fitMode == 'Fill segment'\n_W = _hosted ? (_fill ? _dLen : min(max(0.3, width), _dLen)) : max(0.3, width)\n_pA = _isSpace ? _sA : row(P, 0)\n_pax = sub(_pA, 0, 0, 1, 1)\n_pay = sub(_pA, 0, 1, 1, 1)\n_mx = _hosted ? _pax + _ux * _dLen / 2 : _pax\n_my = _hosted ? _pay + _uy * _dLen / 2 : _pay\n_hw = _W / 2\n_cu = _mx * _ux + _my * _uy\n_cv = _mx * _vx + _my * _vy\n# The closed run of lattice and the folded stack. Bars stand where the lattice is; the stack is a\n# short dense run of the same bars at whichever jamb the gate folds to.\n_sl = _W * open\n_cl = _W - _sl\n_left = stackSide == 'Left' ? 1 : 0\n_u0c = _left > 0 ? (0 - _hw + _sl) : (0 - _hw)\n_u1c = _left > 0 ? _hw : (_hw - _sl)\n_nb = max(2, round(panels) * 2)\n_a = stackDepth / 2\n_bs = barSize / 2\n_ps = postSize / 2\n_tdh = trackDepth\n_rail = 0.05\n# Track along the floor, top rail, two posts, the bars.\n_TRK = hcat(0 - _hw, 0 - _tdh / 2, _hw, 0 - _tdh / 2, _hw, _tdh / 2, 0 - _hw, _tdh / 2, 0, 0.03, 1)\n_RAIL = hcat(0 - _hw, 0 - _bs, _hw, 0 - _bs, _hw, _bs, 0 - _hw, _bs, height - _rail, height, 2)\n_PL1 = hcat(0 - _hw, 0 - _ps, 0 - _hw + postSize, 0 - _ps, 0 - _hw + postSize, _ps, 0 - _hw, _ps, 0, height, 3)\n_PL2 = hcat(_hw - postSize, 0 - _ps, _hw, 0 - _ps, _hw, _ps, _hw - postSize, _ps, 0, height, 3)\n_BARS = zeros(0, 11)\nloop i in _nb:\n  _bu = _u0c + i * (_u1c - _u0c) / (_nb - 1)\n  _bv = _a * cos(i * PI)\n  _BARS = vcat(_BARS, hcat(_bu - _bs, _bv - _bs, _bu + _bs, _bv - _bs, _bu + _bs, _bv + _bs, _bu - _bs, _bv + _bs, 0.03, height - _rail, 4))\nend\nQ = vcat(vcat(_TRK, _RAIL), vcat(vcat(_PL1, _PL2), _BARS))\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_WD = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_WD)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nTrack3D = sub(compress(_WD, eq(col(_WD,4), 1)), 0, 0, _nw, 4)\nRail3D = sub(compress(_WD, eq(col(_WD,4), 2)), 0, 0, _nw, 4)\nPosts3D = sub(compress(_WD, eq(col(_WD,4), 3)), 0, 0, _nw, 4)\nBars3D = sub(compress(_WD, eq(col(_WD,4), 4)), 0, 0, _nw, 4)\nTrackPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nPostsPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\n# Plan symbol: the lattice as a zigzag between the bars, where the gate is closed.\n_zk = arange(_nb)\n_zu = _cu + _u0c + _zk * (_u1c - _u0c) / (_nb - 1)\n_zv = _cv + _a * cos(_zk * PI)\nLatticePlan = hcat(_zu * _ux + _zv * _vx, _zu * _uy + _zv * _vy)\n# Metrics\nopeningWidth = _W\nclearOpening = _sl\nclosedRun = _cl\nbarCount = _nb\ngateHeight = height\ngateWeight = 14 * _W * height\nstackLength = _sl"
+    }
+   }
+  },
+  {
+   "id": "out",
+   "position": {
+    "x": 240,
+    "y": 60
+   },
+   "data": {
+    "tool": "output",
+    "params": {
+     "slots": [
+      {
+       "id": "s1",
+       "label": "Track — solid"
+      },
+      {
+       "id": "s2",
+       "label": "Top rail — solid"
+      },
+      {
+       "id": "s3",
+       "label": "Posts — solid"
+      },
+      {
+       "id": "s4",
+       "label": "Lattice bars — solid"
+      },
+      {
+       "id": "s5",
+       "label": "Track — plan"
+      },
+      {
+       "id": "s6",
+       "label": "Posts — plan"
+      },
+      {
+       "id": "s7",
+       "label": "Lattice — plan"
+      },
+      {
+       "id": "s8",
+       "label": "Opening width (m)"
+      },
+      {
+       "id": "s9",
+       "label": "Clear opening (m)"
+      },
+      {
+       "id": "s10",
+       "label": "Closed run (m)"
+      },
+      {
+       "id": "s11",
+       "label": "Bars"
+      },
+      {
+       "id": "s12",
+       "label": "Height (m)"
+      },
+      {
+       "id": "s13",
+       "label": "Weight (kg)"
+      },
+      {
+       "id": "s14",
+       "label": "Stack length (m)"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r2d",
+   "position": {
+    "x": 620,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-2d",
+    "params": {
+     "prims": [
+      {
+       "id": "p2_track",
+       "kind": "polygon",
+       "name": "Track",
+       "color": "#94a3b8",
+       "layer": "Architectural",
+       "show": true
+      },
+      {
+       "id": "p2_posts",
+       "kind": "polygon",
+       "name": "Posts",
+       "color": "#334155",
+       "layer": "Architectural",
+       "show": true
+      },
+      {
+       "id": "p2_lattice",
+       "kind": "stroke",
+       "name": "Lattice",
+       "color": "#334155",
+       "layer": "Architectural",
+       "show": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r3d",
+   "position": {
+    "x": 900,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-3d",
+    "params": {
+     "prims": [
+      {
+       "id": "p3_track",
+       "kind": "polyhedron",
+       "name": "Track",
+       "color": "#475569",
+       "layer": "Architectural",
+       "show": true,
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      {
+       "id": "p3_rail",
+       "kind": "polyhedron",
+       "name": "Top rail",
+       "color": "#475569",
+       "layer": "Architectural",
+       "show": true,
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      {
+       "id": "p3_posts",
+       "kind": "polyhedron",
+       "name": "Posts",
+       "color": "#334155",
+       "layer": "Architectural",
+       "show": true,
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      {
+       "id": "p3_bars",
+       "kind": "polyhedron",
+       "name": "Lattice bars",
+       "color": "#64748b",
+       "layer": "Architectural",
+       "show": true,
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e1_geo_val-points__props_valin-P",
+   "source": "geo",
+   "sourceHandle": "val-points",
+   "target": "props",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e2_props_val-width__math_valin-width",
+   "source": "props",
+   "sourceHandle": "val-width",
+   "target": "math",
+   "targetHandle": "valin-width"
+  },
+  {
+   "id": "e3_props_val-fitMode__math_valin-fitMode",
+   "source": "props",
+   "sourceHandle": "val-fitMode",
+   "target": "math",
+   "targetHandle": "valin-fitMode"
+  },
+  {
+   "id": "e4_props_val-height__math_valin-height",
+   "source": "props",
+   "sourceHandle": "val-height",
+   "target": "math",
+   "targetHandle": "valin-height"
+  },
+  {
+   "id": "e5_props_val-panels__math_valin-panels",
+   "source": "props",
+   "sourceHandle": "val-panels",
+   "target": "math",
+   "targetHandle": "valin-panels"
+  },
+  {
+   "id": "e6_props_val-open__math_valin-open",
+   "source": "props",
+   "sourceHandle": "val-open",
+   "target": "math",
+   "targetHandle": "valin-open"
+  },
+  {
+   "id": "e7_props_val-stackDepth__math_valin-stackDepth",
+   "source": "props",
+   "sourceHandle": "val-stackDepth",
+   "target": "math",
+   "targetHandle": "valin-stackDepth"
+  },
+  {
+   "id": "e8_props_val-barSize__math_valin-barSize",
+   "source": "props",
+   "sourceHandle": "val-barSize",
+   "target": "math",
+   "targetHandle": "valin-barSize"
+  },
+  {
+   "id": "e9_props_val-postSize__math_valin-postSize",
+   "source": "props",
+   "sourceHandle": "val-postSize",
+   "target": "math",
+   "targetHandle": "valin-postSize"
+  },
+  {
+   "id": "e10_props_val-trackDepth__math_valin-trackDepth",
+   "source": "props",
+   "sourceHandle": "val-trackDepth",
+   "target": "math",
+   "targetHandle": "valin-trackDepth"
+  },
+  {
+   "id": "e11_props_val-stackSide__math_valin-stackSide",
+   "source": "props",
+   "sourceHandle": "val-stackSide",
+   "target": "math",
+   "targetHandle": "valin-stackSide"
+  },
+  {
+   "id": "e12_props_val-semantics__math_valin-semantics",
+   "source": "props",
+   "sourceHandle": "val-semantics",
+   "target": "math",
+   "targetHandle": "valin-semantics"
+  },
+  {
+   "id": "e13_props_val-P__math_valin-P",
+   "source": "props",
+   "sourceHandle": "val-P",
+   "target": "math",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e14_math_val-Track3D__out_valin-s1",
+   "source": "math",
+   "sourceHandle": "val-Track3D",
+   "target": "out",
+   "targetHandle": "valin-s1"
+  },
+  {
+   "id": "e15_out_val-s1__r3d_valin-p3_track",
+   "source": "out",
+   "sourceHandle": "val-s1",
+   "target": "r3d",
+   "targetHandle": "valin-p3_track"
+  },
+  {
+   "id": "e16_math_val-Rail3D__out_valin-s2",
+   "source": "math",
+   "sourceHandle": "val-Rail3D",
+   "target": "out",
+   "targetHandle": "valin-s2"
+  },
+  {
+   "id": "e17_out_val-s2__r3d_valin-p3_rail",
+   "source": "out",
+   "sourceHandle": "val-s2",
+   "target": "r3d",
+   "targetHandle": "valin-p3_rail"
+  },
+  {
+   "id": "e18_math_val-Posts3D__out_valin-s3",
+   "source": "math",
+   "sourceHandle": "val-Posts3D",
+   "target": "out",
+   "targetHandle": "valin-s3"
+  },
+  {
+   "id": "e19_out_val-s3__r3d_valin-p3_posts",
+   "source": "out",
+   "sourceHandle": "val-s3",
+   "target": "r3d",
+   "targetHandle": "valin-p3_posts"
+  },
+  {
+   "id": "e20_math_val-Bars3D__out_valin-s4",
+   "source": "math",
+   "sourceHandle": "val-Bars3D",
+   "target": "out",
+   "targetHandle": "valin-s4"
+  },
+  {
+   "id": "e21_out_val-s4__r3d_valin-p3_bars",
+   "source": "out",
+   "sourceHandle": "val-s4",
+   "target": "r3d",
+   "targetHandle": "valin-p3_bars"
+  },
+  {
+   "id": "e22_math_val-TrackPlan__out_valin-s5",
+   "source": "math",
+   "sourceHandle": "val-TrackPlan",
+   "target": "out",
+   "targetHandle": "valin-s5"
+  },
+  {
+   "id": "e23_out_val-s5__r2d_valin-p2_track",
+   "source": "out",
+   "sourceHandle": "val-s5",
+   "target": "r2d",
+   "targetHandle": "valin-p2_track"
+  },
+  {
+   "id": "e24_math_val-PostsPlan__out_valin-s6",
+   "source": "math",
+   "sourceHandle": "val-PostsPlan",
+   "target": "out",
+   "targetHandle": "valin-s6"
+  },
+  {
+   "id": "e25_out_val-s6__r2d_valin-p2_posts",
+   "source": "out",
+   "sourceHandle": "val-s6",
+   "target": "r2d",
+   "targetHandle": "valin-p2_posts"
+  },
+  {
+   "id": "e26_math_val-LatticePlan__out_valin-s7",
+   "source": "math",
+   "sourceHandle": "val-LatticePlan",
+   "target": "out",
+   "targetHandle": "valin-s7"
+  },
+  {
+   "id": "e27_out_val-s7__r2d_valin-p2_lattice",
+   "source": "out",
+   "sourceHandle": "val-s7",
+   "target": "r2d",
+   "targetHandle": "valin-p2_lattice"
+  },
+  {
+   "id": "e28_math_val-openingWidth__out_valin-s8",
+   "source": "math",
+   "sourceHandle": "val-openingWidth",
+   "target": "out",
+   "targetHandle": "valin-s8"
+  },
+  {
+   "id": "e29_math_val-clearOpening__out_valin-s9",
+   "source": "math",
+   "sourceHandle": "val-clearOpening",
+   "target": "out",
+   "targetHandle": "valin-s9"
+  },
+  {
+   "id": "e30_math_val-closedRun__out_valin-s10",
+   "source": "math",
+   "sourceHandle": "val-closedRun",
+   "target": "out",
+   "targetHandle": "valin-s10"
+  },
+  {
+   "id": "e31_math_val-barCount__out_valin-s11",
+   "source": "math",
+   "sourceHandle": "val-barCount",
+   "target": "out",
+   "targetHandle": "valin-s11"
+  },
+  {
+   "id": "e32_math_val-gateHeight__out_valin-s12",
+   "source": "math",
+   "sourceHandle": "val-gateHeight",
+   "target": "out",
+   "targetHandle": "valin-s12"
+  },
+  {
+   "id": "e33_math_val-gateWeight__out_valin-s13",
+   "source": "math",
+   "sourceHandle": "val-gateWeight",
+   "target": "out",
+   "targetHandle": "valin-s13"
+  },
+  {
+   "id": "e34_math_val-stackLength__out_valin-s14",
+   "source": "math",
+   "sourceHandle": "val-stackLength",
+   "target": "out",
+   "targetHandle": "valin-s14"
+  }
+ ]
+}

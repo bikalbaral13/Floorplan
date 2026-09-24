@@ -1,0 +1,232 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 5,
+          "vertices": 20,
+          "area": 0.078,
+          "bbox": [
+            0.9,
+            -0.05,
+            2.1,
+            0.05
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "113b7a435e525666"
+      },
+      "solids": {
+        "count": 7,
+        "volume": 0.0354,
+        "hash": "f909c09534c96354"
+      },
+      "metrics": [
+        {
+          "key": "openingWidth",
+          "name": "Opening width (m)",
+          "value": "1.2"
+        },
+        {
+          "key": "openingHeight",
+          "name": "Opening height (m)",
+          "value": "1.2"
+        },
+        {
+          "key": "sillOut",
+          "name": "Sill height (m)",
+          "value": "0.9"
+        },
+        {
+          "key": "lintelOut",
+          "name": "Lintel height (m)",
+          "value": "2.1"
+        },
+        {
+          "key": "paneCount",
+          "name": "Panes",
+          "value": "2"
+        },
+        {
+          "key": "paneWidth",
+          "name": "Pane width (m)",
+          "value": "0.525"
+        },
+        {
+          "key": "paneHeight",
+          "name": "Pane height (m)",
+          "value": "1.1"
+        },
+        {
+          "key": "glazedArea",
+          "name": "Glazed area (m²)",
+          "value": "1.155"
+        },
+        {
+          "key": "elevationArea",
+          "name": "Elevation area (m²)",
+          "value": "1.44"
+        },
+        {
+          "key": "glazingRatio",
+          "name": "Glazing ratio",
+          "value": "0.8021"
+        },
+        {
+          "key": "glassVolume",
+          "name": "Glass volume (m³)",
+          "value": "0.0069"
+        },
+        {
+          "key": "frameVolume",
+          "name": "Frame volume (m³)",
+          "value": "0.0285"
+        },
+        {
+          "key": "wallBearing",
+          "name": "Wall bearing (deg)",
+          "value": "0"
+        },
+        {
+          "key": "wallLength",
+          "name": "Wall length (m)",
+          "value": "3"
+        },
+        {
+          "key": "offsetApplied",
+          "name": "Offset applied (m)",
+          "value": "0"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 5,
+          "vertices": 20,
+          "area": 0.078,
+          "bbox": [
+            -0.6,
+            -4.05,
+            0.6,
+            -3.95
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "35263c67fa55e887"
+      },
+      "solids": {
+        "count": 7,
+        "volume": 0.0354,
+        "hash": "caa04bba69463b1f"
+      },
+      "metrics": [
+        {
+          "key": "openingWidth",
+          "name": "Opening width (m)",
+          "value": "1.2"
+        },
+        {
+          "key": "openingHeight",
+          "name": "Opening height (m)",
+          "value": "1.2"
+        },
+        {
+          "key": "sillOut",
+          "name": "Sill height (m)",
+          "value": "0.9"
+        },
+        {
+          "key": "lintelOut",
+          "name": "Lintel height (m)",
+          "value": "2.1"
+        },
+        {
+          "key": "paneCount",
+          "name": "Panes",
+          "value": "2"
+        },
+        {
+          "key": "paneWidth",
+          "name": "Pane width (m)",
+          "value": "0.525"
+        },
+        {
+          "key": "paneHeight",
+          "name": "Pane height (m)",
+          "value": "1.1"
+        },
+        {
+          "key": "glazedArea",
+          "name": "Glazed area (m²)",
+          "value": "1.155"
+        },
+        {
+          "key": "elevationArea",
+          "name": "Elevation area (m²)",
+          "value": "1.44"
+        },
+        {
+          "key": "glazingRatio",
+          "name": "Glazing ratio",
+          "value": "0.8021"
+        },
+        {
+          "key": "glassVolume",
+          "name": "Glass volume (m³)",
+          "value": "0.0069"
+        },
+        {
+          "key": "frameVolume",
+          "name": "Frame volume (m³)",
+          "value": "0.0285"
+        },
+        {
+          "key": "wallBearing",
+          "name": "Wall bearing (deg)",
+          "value": "0"
+        },
+        {
+          "key": "wallLength",
+          "name": "Wall length (m)",
+          "value": "10"
+        },
+        {
+          "key": "offsetApplied",
+          "name": "Offset applied (m)",
+          "value": "0"
+        }
+      ]
+    }
+  }
+}

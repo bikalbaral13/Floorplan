@@ -1,0 +1,301 @@
+{
+ "schemaVersion": 1,
+ "settings": {
+  "library_path": "/Library/",
+  "units": "m",
+  "northbearing": 0,
+  "pixelsPerMeter": 40,
+  "keywords": "structural, plane frame, portal frame",
+  "frame": {
+   "note": "The canvas plane IS the frame's plane: canvas x is structural X, structural Y is UP (minus canvas y). Member length is the drawn length — a frame elevation is a scale drawing, not a schematic.",
+   "generator": "tools/struct/make-plan.mjs"
+  }
+ },
+ "nodes": [
+  {
+   "id": "N1",
+   "x": 60,
+   "y": 220,
+   "layer": "frame",
+   "label": "N1",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_N1",
+     "objectId": "frame-joint-with-math",
+     "objectPath": "Objects/Structural/frame-joint.json",
+     "t": 0,
+     "params": {
+      "fixX": true,
+      "fixY": true,
+      "fixR": true,
+      "Fx": 0,
+      "Fy": 0,
+      "Mz": 0,
+      "markerSize": 0.35,
+      "dispScale": 200,
+      "ux": 0,
+      "uy": 0,
+      "rotZ": 0,
+      "Rx": 0,
+      "Ry": 0,
+      "Rz": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "N2",
+   "x": 60,
+   "y": 60,
+   "layer": "frame",
+   "label": "N2",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_N2",
+     "objectId": "frame-joint-with-math",
+     "objectPath": "Objects/Structural/frame-joint.json",
+     "t": 0,
+     "params": {
+      "fixX": false,
+      "fixY": false,
+      "fixR": false,
+      "Fx": 30,
+      "Fy": 0,
+      "Mz": 0,
+      "markerSize": 0.35,
+      "dispScale": 200,
+      "ux": 0,
+      "uy": 0,
+      "rotZ": 0,
+      "Rx": 0,
+      "Ry": 0,
+      "Rz": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "N3",
+   "x": 300,
+   "y": 60,
+   "layer": "frame",
+   "label": "N3",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_N3",
+     "objectId": "frame-joint-with-math",
+     "objectPath": "Objects/Structural/frame-joint.json",
+     "t": 0,
+     "params": {
+      "fixX": false,
+      "fixY": false,
+      "fixR": false,
+      "Fx": 0,
+      "Fy": 0,
+      "Mz": 0,
+      "markerSize": 0.35,
+      "dispScale": 200,
+      "ux": 0,
+      "uy": 0,
+      "rotZ": 0,
+      "Rx": 0,
+      "Ry": 0,
+      "Rz": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "N4",
+   "x": 300,
+   "y": 220,
+   "layer": "frame",
+   "label": "N4",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_N4",
+     "objectId": "frame-joint-with-math",
+     "objectPath": "Objects/Structural/frame-joint.json",
+     "t": 0,
+     "params": {
+      "fixX": true,
+      "fixY": true,
+      "fixR": true,
+      "Fx": 0,
+      "Fy": 0,
+      "Mz": 0,
+      "markerSize": 0.35,
+      "dispScale": 200,
+      "ux": 0,
+      "uy": 0,
+      "rotZ": 0,
+      "Rx": 0,
+      "Ry": 0,
+      "Rz": 0
+     }
+    }
+   ]
+  }
+ ],
+ "segments": [
+  {
+   "id": "mem_C1",
+   "fromNodeId": "N1",
+   "toNodeId": "N2",
+   "layer": "frame",
+   "thickness": 12,
+   "color": "#0f766e",
+   "segmentType": "column",
+   "label": "C1",
+   "attachments": [
+    {
+     "id": "att_C1",
+     "objectId": "frame-column-with-math",
+     "objectPath": "Objects/Structural/frame-column.json",
+     "t": 0.5,
+     "params": {
+      "E": 25,
+      "b": 300,
+      "h": 300,
+      "fy": 12,
+      "density": 25,
+      "selfWeight": false,
+      "udl": 0,
+      "releaseStart": false,
+      "releaseEnd": false,
+      "spanMode": "Fill segment",
+      "ownLength": 4,
+      "N1": 0,
+      "V1": 0,
+      "M1": 0,
+      "N2": 0,
+      "V2": 0,
+      "M2": 0,
+      "showBmd": true,
+      "bmdScale": 0.02
+     }
+    }
+   ]
+  },
+  {
+   "id": "mem_B1",
+   "fromNodeId": "N2",
+   "toNodeId": "N3",
+   "layer": "frame",
+   "thickness": 20,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "B1",
+   "attachments": [
+    {
+     "id": "att_B1",
+     "objectId": "frame-beam-with-math",
+     "objectPath": "Objects/Structural/frame-beam.json",
+     "t": 0.5,
+     "params": {
+      "E": 25,
+      "b": 300,
+      "h": 500,
+      "fy": 12,
+      "density": 25,
+      "selfWeight": false,
+      "udl": 20,
+      "releaseStart": false,
+      "releaseEnd": false,
+      "spanMode": "Fill segment",
+      "ownLength": 4,
+      "N1": 0,
+      "V1": 0,
+      "M1": 0,
+      "N2": 0,
+      "V2": 0,
+      "M2": 0,
+      "showBmd": true,
+      "bmdScale": 0.02
+     }
+    }
+   ]
+  },
+  {
+   "id": "mem_C2",
+   "fromNodeId": "N4",
+   "toNodeId": "N3",
+   "layer": "frame",
+   "thickness": 12,
+   "color": "#0f766e",
+   "segmentType": "column",
+   "label": "C2",
+   "attachments": [
+    {
+     "id": "att_C2",
+     "objectId": "frame-column-with-math",
+     "objectPath": "Objects/Structural/frame-column.json",
+     "t": 0.5,
+     "params": {
+      "E": 25,
+      "b": 300,
+      "h": 300,
+      "fy": 12,
+      "density": 25,
+      "selfWeight": false,
+      "udl": 0,
+      "releaseStart": false,
+      "releaseEnd": false,
+      "spanMode": "Fill segment",
+      "ownLength": 4,
+      "N1": 0,
+      "V1": 0,
+      "M1": 0,
+      "N2": 0,
+      "V2": 0,
+      "M2": 0,
+      "showBmd": true,
+      "bmdScale": 0.02
+     }
+    }
+   ]
+  }
+ ],
+ "spaces": [],
+ "layers": [
+  {
+   "id": "0",
+   "name": "0",
+   "color": "#94a3b8",
+   "visible": true,
+   "locked": false,
+   "order": 0
+  },
+  {
+   "id": "frame",
+   "name": "Frame",
+   "color": "#0f766e",
+   "visible": true,
+   "locked": false,
+   "order": 1
+  }
+ ],
+ "imageUnderlay": null,
+ "customSegmentTypes": {
+  "beam": {
+   "id": "beam",
+   "displayName": "Beam",
+   "fill": "#b45309",
+   "params": []
+  },
+  "column": {
+   "id": "column",
+   "displayName": "Column",
+   "fill": "#0f766e",
+   "params": []
+  }
+ }
+}

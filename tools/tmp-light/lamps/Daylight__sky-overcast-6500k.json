@@ -1,0 +1,67 @@
+{
+  "schema": "lamp/1",
+  "id": "sky-overcast-6500k",
+  "name": "Overcast sky 6500 K 10 000 lx",
+  "category": "Daylight",
+  "description": "What a window is on a grey day: a big, even, cool area source at the glazing. Stated in LUX, not lumens — a sky has no output, it has an illuminance, and a portal's lumens depend on how big the hole is.",
+  "emission": {
+    "sourceType": "Area",
+    "areaShape": "Rectangle",
+    "lumens": 0,
+    "lumensPerMetre": 0,
+    "wattsElectrical": 0,
+    "efficacy": 0,
+    "illuminanceLux": 10000,
+    "kelvin": 6500,
+    "cri": 100,
+    "duv": 0
+  },
+  "distribution": {
+    "profile": "Diffuse",
+    "beamAngle": 180,
+    "fieldAngle": 180,
+    "beamBlend": 1,
+    "spread": 180,
+    "ies": {
+      "path": "",
+      "normalise": true
+    }
+  },
+  "shadow": {
+    "lampRadius": 0.5,
+    "castShadow": true,
+    "maxBounces": 1024,
+    "multipleImportance": true,
+    "diffuseFactor": 1,
+    "glossyFactor": 1,
+    "transmissionFactor": 1,
+    "volumeFactor": 1,
+    "visibleToCamera": true,
+    "isPortal": true
+  },
+  "blender": {
+    "type": "AREA",
+    "shape": "RECTANGLE",
+    "energyWatts": 14.641288,
+    "color": {
+      "mode": "blackbody",
+      "kelvin": 6500
+    },
+    "rgb": [
+      1,
+      0.943558,
+      0.992755
+    ],
+    "sizeX": 1,
+    "sizeY": 1,
+    "radius": 0.5,
+    "spotSizeDeg": 180,
+    "spotBlend": 1,
+    "spread": 180,
+    "angleDeg": 0
+  },
+  "emissive": {
+    "material": "Materials/Emissive/diffuser.json",
+    "luminanceOverride": 0
+  }
+}

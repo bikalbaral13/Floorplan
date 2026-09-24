@@ -1,0 +1,114 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "canvas-encoder",
+  "meta": {
+    "label": "Canvas Encoder",
+    "category": "Graph",
+    "color": "#be123c"
+  },
+  "description": "A pure CALCULATION node — matrices in, a whole PLAN DOCUMENT out. The inverse of Graph Interpreter: takes a typed edge list from a Math Engine and writes the standard plan JSON, objects and their parameters attached, ready to import. Draws nothing on canvas.",
+  "instructions": "THE WRITE HALF OF THE CODEC. Graph Interpreter reads the canvas into matrices; this writes matrices back out as a plan. Between them a flow can read a drawing, compute over it and emit a new one without ever materialising anything.\n\nIt is NOT Points to Graph. That node emits a GRAPH — nodes, edges, thickness, type — which still needs a Network node to become canvas segments, and a graph has nowhere to carry an attachment. This emits the full document: `schemaVersion`, `settings`, `nodes`, `segments`, `spaces`, `layers`, with each segment carrying its parametric object, that object's PARAMS and its library PATH. The result is the same shape the canvas exports, so it imports straight back.\n\nINPUTS — one row per edge, all row-aligned, all in anchor-relative METRES (the frame every value output speaks):\n• a / b — edge start and end points (N x 2)\n• thickness — per edge (N x 1); falls back to the type's own thickness where 0\n• types — an integer CODE per edge, 1-based into `typeNames`\n• spaces — OPTIONAL space boundaries as one flat [x, y, groupIndex] matrix. Leave it unwired and the canvas derives rooms from the wall loops on import, which is usually what you want: a space references NODE IDS, so its corners have to coincide with real segment endpoints to be worth writing.\n\nNODES ARE DEDUPLICATED BY POSITION, so a junction where four walls meet becomes ONE node with four segments on it rather than eight loose endpoints — the same rule the canvas's own exporter follows. Points are compared after rounding to `decimals`, because two endpoints a ten-thousandth of a millimetre apart are the same junction and would otherwise write two nodes that never join.\n\n`typeMap` is where the parametric objects live: a JSON object keyed by type name, each entry naming the `segmentType` the canvas should use, the `layer`, and the object to attach — `objectId`, `objectPath` (the library link) and `params`. Anything omitted is simply left off that segment. An `opening: true` entry marks the segment as a door/window gap.\n\nCOORDINATES GO OUT IN PIXELS, metres x `pixelsPerMeter`, because that is what a plan document stores; `settings.pixelsPerMeter` is written alongside so the reader can convert back.\n\nNODE-HOSTED OBJECTS — furniture and anything else that sits at a POINT rather than along a segment. Wire `points` (N x 2 metres), `pointTypes` (the code column) and optionally `pointRotation`, and name the objects in `pointTypeMap`. Each point becomes a node carrying its object.\n\nEach one also gets a DEGENERATE MARKER SEGMENT, from that node back to itself, and it is not decoration: the plan reader rebuilds node metadata under a key derived from the segment ends meeting at the node, so a node no segment touches has no key and its attachments are silently DROPPED on import. The marker is what gives the node a key. It is the same thing the canvas's own exporter writes for a node-hosted object.\n\nONE MAP, NOT FIVE. `objects` holds `segments`, `points` and `space`. A code column indexes its map by KEY ORDER — JSON preserves insertion order, so the map's own ordering is the code table and no parallel array of names is needed. Params are OVERRIDES only: the editor fills every parameter from the object's own defaults before applying an attachment's, so an entry needs to name only what differs.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "a",
+        "label": "Edge start points"
+      },
+      {
+        "key": "b",
+        "label": "Edge end points"
+      },
+      {
+        "key": "thickness",
+        "label": "Edge thickness (m)"
+      },
+      {
+        "key": "types",
+        "label": "Edge type codes"
+      },
+      {
+        "key": "spaces",
+        "label": "Space boundaries [x, y, group]"
+      },
+      {
+        "key": "points",
+        "label": "Object points"
+      },
+      {
+        "key": "pointTypes",
+        "label": "Object type codes"
+      },
+      {
+        "key": "pointRotation",
+        "label": "Object rotation (deg)"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "json",
+        "label": "Plan (JSON)"
+      },
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      },
+      {
+        "key": "segmentCount",
+        "label": "Segments"
+      },
+      {
+        "key": "spaceCount",
+        "label": "Spaces"
+      },
+      {
+        "key": "pointCount",
+        "label": "Node objects"
+      },
+      {
+        "key": "objectCount",
+        "label": "Objects attached"
+      },
+      {
+        "key": "bytes",
+        "label": "JSON size",
+        "unit": "B"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "objects",
+      "kind": "text",
+      "label": "Objects (JSON)",
+      "default": "{\n  \"segments\": {},\n  \"points\": {},\n  \"space\": {}\n}",
+      "help": "Everything the plan attaches, in one map. `segments` keyed by edge-type name in CODE ORDER, `points` keyed by object-type name in code order, `space` the object every space carries. Each entry names its objectId, its objectPath and any params that differ from the object's own defaults."
+    },
+    {
+      "key": "pixelsPerMeter",
+      "kind": "number",
+      "label": "Pixels per metre",
+      "default": 50,
+      "min": 1,
+      "max": 1000,
+      "step": 1
+    },
+    {
+      "key": "libraryPath",
+      "kind": "text",
+      "label": "Library path",
+      "default": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library"
+    },
+    {
+      "key": "decimals",
+      "kind": "number",
+      "label": "Coordinate decimals",
+      "default": 4,
+      "min": 0,
+      "max": 6,
+      "step": 1
+    }
+  ]
+}

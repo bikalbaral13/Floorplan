@@ -1,0 +1,74 @@
+Oak3D = sub(compress(_ALL, eq(_LGP, 1)), 0, 0, _nAll, 4)
+Fronts3D = sub(compress(_ALL, eq(_LGP, 2)), 0, 0, _nAll, 4)
+Marble3D = sub(compress(_ALL, eq(_LGP, 3)), 0, 0, _nAll, 4)
+BackPanel3D = sub(compress(_ALL, eq(_LGP, 4)), 0, 0, _nAll, 4)
+Led3D = sub(compress(_ALL, eq(_LGP, 5)), 0, 0, _nAll, 4)
+Screen3D = sub(compress(_ALL, eq(_LGP, 6)), 0, 0, _nAll, 4)
+Pulls3D = sub(compress(_ALL, eq(_LGP, 7)), 0, 0, _nAll, 4)
+
+# ===========================================================================
+# STEP 5 — DECOR: small turned pieces on the tower shelves (a lathe per
+# piece): a white ceramic vase and a brass sphere, alternating bay by bay
+# ===========================================================================
+_nR = _dB ? 10 : (_dM ? 16 : 24)
+_th = arange(_nR) / _nR * 2 * PI
+_cth = cos(_th)
+_sth = sin(_th)
+_oR = ones(_nR, 1)
+# vase profile (r, z) for a 0.2 m piece; sphere profile from a half circle
+_vR = vcat(0, 0.035, 0.05, 0.062, 0.058, 0.04, 0.022, 0.026, 0) * _s
+_vZ = vcat(0, 0, 0.01, 0.06, 0.12, 0.16, 0.185, 0.2, 0.2) * _s
+_ha = arange(9) / 8 * PI
+_bR = 0.055 * _s * sin(_ha)
+_bZ = 0.055 * _s * (1 - cos(_ha))
+_CER = zeros(0, 4)
+_BRS = zeros(0, 4)
+_nDec = (decor > 0 && _twOn) ? 2 * _nS : 0
+loop k in _nDec:
+  _side = k < _nS ? 0 : 1
+  _bi = k - _side * _nS
+  _cxu = _side < 1 ? (_u0 + _tw / 2) : (_u1 - _tw / 2)
+  _zb = _zc1 + (_bi < 1 ? 0 : _bi * _bay + _t)
+  _cyv = _tv0 + _tD * 0.55
+  _isV = (_bi + _side) % 2 < 1
+  _pr = _isV ? _vR : _bR
+  _pz = _isV ? _vZ : _bZ
+  _np = rows(_pr)
+  _sec = hcat(_cxu + kron(_pr, _cth), _cyv + kron(_pr, _sth), _zb + kron(_pz, _oR), kron(arange(_np), _oR))
+  _sk = Solid.Skin(_sec, k * 100000)
+  _CER = _isV ? vcat(_CER, _sk) : _CER
+  _BRS = _isV ? _BRS : vcat(_BRS, _sk)
+end
+_eU = _cu + col(_CER, 0)
+_eV = _cv + col(_CER, 1)
+DecorCeramic3D = rows(_CER) > 0 ? hcat(_eU * _ux + _eV * _vx, _eU * _uy + _eV * _vy, col(_CER, 2), col(_CER, 3)) : zeros(0, 4)
+_eU = _cu + col(_BRS, 0)
+_eV = _cv + col(_BRS, 1)
+DecorBrass3D = rows(_BRS) > 0 ? hcat(_eU * _ux + _eV * _vx, _eU * _uy + _eV * _vy, col(_BRS, 2), col(_BRS, 3)) : zeros(0, 4)
+
+# ===========================================================================
+# PLAN — console footprint and the tower footprints
+# ===========================================================================
+_r4u = vcat(0, 1, 1, 0)
+_r4v = vcat(0, 0, 1, 1)
+_pu = _cu + _u0 + _r4u * _L
+_pv = _cv + _vF - 0.02 * _s + _r4v * (_D + 0.02 * _s)
+ConsolePlan = hcat(_pu * _ux + _pv * _vx, _pu * _uy + _pv * _vy, fill(4, 1, 1))
+_tu = _cu + vcat(_u0 + _r4u * _tw, _u1 - _tw + _r4u * _tw)
+_tvp = _cv + _tv0 + vcat(_r4v, _r4v) * _tD
+TowersPlan = _twOn ? hcat(_tu * _ux + _tvp * _vx, _tu * _uy + _tvp * _vy, vcat(fill(4, 1, 1), fill(4, 1, 2))) : zeros(0, 3)
+
+# ===========================================================================
+# METRICS
+# ===========================================================================
+overallWidth = _L
+overallDepth = _D + 0.02 * _s + (_pOn ? 0.04 * _s : 0)
+overallHeight = _twOn ? _zT1 : max(_zc1, _mOn ? (_mz + _mH / 2) : _zc1)
+consoleTop = _zc1
+screenWidth = showScreen > 0 ? _scW : 0
+screenLevel = _mz
+drawerCount = _nDr
+towerShelfCount = _twOn ? 2 * _nS : 0
+footprint = _L * (_D + 0.02 * _s)
+boxCount = _nb
+meshFaces = _nb * (_N + 2) + rows(_CER) / 4 + rows(_BRS) / 4

@@ -1,0 +1,910 @@
+{
+  "version": 1,
+  "id": "car-with-math",
+  "title": "Car — one Math Engine, two lofts and four wheels",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Car",
+    "icon": {
+      "paths": [
+        "M3 14h18v3H3z",
+        "M5 14l2-5h10l2 5",
+        "M7 20a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
+        "M17 20a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
+      ]
+    }
+  },
+  "description": "A parametric CAR on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render — modelled as two lofted volumes on four wheels, not as a box.\n\nSELECT A NODE, A SEGMENT OR A SPACE on canvas (a parking bay, a driveway edge, a road centreline), or leave nothing selected and the car is built at the flow anchor.\n\nTHE PROBLEM A CAR POSES. A car is a CURVED BODY: nose, bonnet, windscreen, roof, rear glass, boot, tail — one continuous surface whose cross-section changes at every station along its length. None of the existing rows can state that. Cuboid and Cylinder are axis-aligned boxes positioned by a point. Polyhedron can draw it, but only if the Math Engine enumerates every FACE, which means hand-writing the same quad-stitching loop — k → k+1 around each ring, section i → i+1 along the body, the wrap-around at the last vertex, the two end caps — inside the flow. That loop is identical for every lofted thing, and it is not what makes a car a car.\n\nSO THE 3D RENDER NODE GAINED A LOFT ROW. It reads the SAME grouped point list a Polyhedron row does — `[[x,y,z,s],…]`, one run per equal group value — but a run is a CROSS-SECTION rather than a finished face: consecutive sections are stitched and both ends capped. So what this flow authors is only what actually varies, the sections; the stitching lives in the node. Switching a row between Polyhedron and Loft reinterprets the same wire.\n\nTWO VOLUMES, NOT ONE. The body is a loft from nose to tail whose top edge follows the real silhouette — bumper, bonnet, beltline, boot, tail — and stops at the BELTLINE. The greenhouse is a second, shorter loft that starts there and rises to the roof, inset from the body sides, in glass. That is how a car reads at a glance: a lower body with a glasshouse sitting on it. Faking windows as decals on a single blob does not, and there is no boolean to cut them.\n\nEACH SECTION IS A SUPERELLIPSE, which is what gives the body soft corners without a fillet operation: `v = hw·sign(cosθ)·|cosθ|^(2/n)`, `z = zc + hz·sign(sinθ)·|sinθ|^(2/n)`. Corner rounding n = 2 is an ellipse, 4 is a soft-cornered rectangle, and 1.2 is nearly sharp — one slider from a sports car's tight shoulders to a van's slab sides. It is expressible only because the scalar functions LIFT element-wise over a matrix, so the whole ring is one line rather than a loop over vertices.\n\nTHE PROFILE IS PIECEWISE, AND THAT IS WHY THERE IS A LOOP. The silhouette is five blends — nose→bonnet, bonnet→beltline, the flat cabin run, beltline→boot, boot→tail — chosen by where the station falls. A ternary cannot pick per-row inside a broadcast expression, but INSIDE the bounded loop the station `t` is a scalar, so ordinary `?:` works and each blend is a smoothstep (3t²−2t³) instead of a crease. The loop that was added for accumulators turns out to be what makes a piecewise profile expressible at all.\n\nBODY STYLE is one select and it moves the roofline: Sedan ends the glass at 0.66 of the length, leaving a boot deck; Hatchback 0.76; Estate 0.86, glass almost to the tail; SUV 0.78 with the height and wheels up 9% and the ground clearance from 0.14 m to 0.20 m. Everything else follows from the same body.\n\nTHE WHEELS ARE PROPER TYRES, built from the two AXIS-SEGMENT rows added alongside the loft. A Tube row is a capped cylinder along a wired `[[x1,y1,z1,x2,y2,z2],…]` segment; a Ring row is a torus whose AXIS is that segment, centred on its midpoint. So each tyre is a cylinder at the FULL outer radius spanning the tread, with a torus rounding each shoulder — flat tread, radiused edges, exact overall width — and the rim is a second, shorter cylinder inside it. The axle segment IS the wheel's axis, which is the honest description of a wheel; a Cylinder row could not be turned on its side at all, since it is fixed vertical and exposes no rotation for a wire to reach.\n\nONE LIST, EIGHT GROUPS. Every tube, ring and plan band is authored in the car's own frame (u along its length, v across, z up) as a nine-column record — `hcat(u1, v1, z1, u2, v2, z2, a, b, g)`, where `a` and `b` carry whichever two numbers the row kind wants and `g` names the group: 1 tyres, 2 tread shoulders, 3 rims, 4 front lamps, 5 rear lamps, 6 details (axles, mirrors, exhaust), 7 tyre plan bands, 8 mirror plan bands. The four wheels come from a loop over a 4×2 position table, so a wheel is written once. The list is mapped to world ONCE — two dot products per endpoint against the host frame's axes — then split with `compress(_MW, eq(_g, k))`, `sub(…, _nr, 7)` trimming the group column for a Tube row and `…, 8` keeping the section radius for a Ring row. Adding a part is one line.\n\nTHIS NEEDED hcat AND vcat TO BE VARIADIC, which they now are. A nine-column record written pairwise is eight levels of nesting with the operands reading backwards; the wheel loop alone assembles five of them per pass.\n\nTHE PLAN IS DERIVED FROM THE SAME SECTIONS. The body outline is the station list walked down one side and back up the other — the second pass reads `row(M, _SB−1−i)`, a GATHER BY A COMPUTED INDEX, which is the other thing the loop makes possible; a row mask cannot reverse an order, since compress returns rows in index order. The greenhouse outline is built the same way from its own stations, so the plan shows body and glasshouse as two nested outlines exactly where the model has them, and the two cannot drift apart. Tyres and mirrors go down as Stroke bands — the 2D row that thickens a segment list, added because Polygon and Circle can only fill a closed ring.\n\nHOST-AWARE FITTING. The host arrives on `val-points` as one row (a node), two (a segment) or many (a space outline); the opening block turns it into a frame — a segment's direction, or a space's LONGEST edge — and a bounding box in it. A car is rigid, so Fit is a single UNIFORM scale: Max shrinks it into the host's long axis and never enlarges, Exact fills that axis, Off leaves it at its typed size. Clamped to 0.2–4×. Anchor Direction places it by any of nine box points; Flip side mirrors it across the host axis, which is which way the car faces.\n\nROTATION, 0–360°, turns the car about its host. It is applied where the frame is DERIVED, not to the finished geometry: the host axis is rotated once and the body, glass, tyres, treads, rims, lamps and both plan rows are all expressed in that frame, so one `hcat` of a 2×2 rotation moves every one of them and nothing can be left behind. On a node — the usual case — the host projects to a point, so the car simply spins on the spot; on a segment or a space the angle is RELATIVE to the host's own direction, and the fit box is re-measured in the turned frame, so Fit and Anchor keep meaning what they meant. Because it is a change of basis rather than a transform of points it is exactly rigid: verified below.\n\nROTATION IS VERIFIED AS A RIGID MOTION, which is the only thing worth checking about one. Over 0 / 30 / 45 / 90 / 135 / 180 / 270 / 359 / 360° on a node host the farthest vertex from the node stays at 2.31468 m — a spread of 4.5e-13, floating-point noise — the solid keeps its z range of 0 → 1.450 m, and the ring and mesh counts never move off 8 and 8. The plan bounding box turns as it must: 4.44 × 2.02 at 0° and 180°, swapped to 2.02 × 4.44 at 90° and 270°, and 4.06 square on both diagonals. 0° and 360° agree to 0.000e+0, and mapping the 0° geometry through (x, y) → (−y, x) reproduces the 90° geometry to 0.000e+0 — so it is that exact rotation, not merely some displacement. Every metric — length, width, height, wheelbase, overhangs, track, clearance, footprint, fit scale — is unchanged at 0°, 90° and 217°, as a rigid motion requires. On a 5 m segment host the same angles turn the car relative to the segment.\n\nVERIFIED THROUGH THE ENGINE at the defaults (Sedan, 4.44 × 1.82 × 1.45 m, 2.65 m wheelbase): the body loft is 15 sections of 16 points skinning to 226 faces and the greenhouse 9 of 16 to 130; the body spans exactly 4.440 × 1.820 m with its underside at the 0.140 m ground clearance and its beltline at 0.874 m; the greenhouse runs 0.874 → 1.450 m, so its roof IS the overall height, and its half-width stays inside the body's; wheelbase plus both overhangs equals the length to the last digit (2.650 + 0.860 + 0.930 = 4.440); track 1.540 m sits inside the body width; all four tread cylinders are at radius 0.330 m with each shoulder torus's ring-plus-section also 0.330, so the tyres touch z = 0 exactly; and the plan outline encloses 7.504 m² of the 8.081 m² bounding box. Re-checked with no host, a point, a segment, an axis-aligned space, a space rotated 40°, every anchor, a margin, flipped, all four styles, at 6×6 and 40×40 section resolution and at corner rounding 1.2 — no non-finite cell anywhere, including a degenerate zero-area space.\n\nWHAT THIS CANNOT DO. The section TOPOLOGY is authored, so wheel arches, door lines, a grille recess and a spoiler are not sliders — they would need either a boolean (there is none in the Math Engine) or their own volumes. Nothing is mitred or filleted between volumes: the greenhouse sits on the beltline rather than blending into it. The wheels do not steer and the body does not roll.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — point / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "bodyStyle",
+              "name": "Body style",
+              "type": "select",
+              "value": "Sedan",
+              "options": [
+                "Sedan",
+                "Hatchback",
+                "Estate",
+                "SUV"
+              ]
+            },
+            {
+              "id": "length",
+              "name": "Overall length",
+              "type": "range",
+              "value": 4.44,
+              "min": 3.2,
+              "max": 5.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Overall width",
+              "type": "range",
+              "value": 1.82,
+              "min": 1.5,
+              "max": 2.1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Overall height",
+              "type": "range",
+              "value": 1.45,
+              "min": 1.2,
+              "max": 1.9,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "wheelbase",
+              "name": "Wheelbase",
+              "type": "range",
+              "value": 2.65,
+              "min": 2,
+              "max": 3.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "frontOverhang",
+              "name": "Front overhang",
+              "type": "range",
+              "value": 0.86,
+              "min": 0.5,
+              "max": 1.3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "wheelR",
+              "name": "Wheel radius",
+              "type": "range",
+              "value": 0.33,
+              "min": 0.25,
+              "max": 0.42,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "tyreW",
+              "name": "Tyre width",
+              "type": "range",
+              "value": 0.22,
+              "min": 0.14,
+              "max": 0.34,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "cornerRound",
+              "name": "Corner rounding",
+              "type": "range",
+              "value": 2.6,
+              "min": 1.2,
+              "max": 6,
+              "step": 0.1,
+              "options": []
+            },
+            {
+              "id": "glassInset",
+              "name": "Glasshouse inset",
+              "type": "range",
+              "value": 0.07,
+              "min": 0,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bodySections",
+              "name": "Body sections",
+              "type": "range",
+              "value": 15,
+              "min": 6,
+              "max": 40,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "glassSections",
+              "name": "Glasshouse sections",
+              "type": "range",
+              "value": 9,
+              "min": 4,
+              "max": 24,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "sectionPts",
+              "name": "Points per section",
+              "type": "range",
+              "value": 16,
+              "min": 6,
+              "max": 40,
+              "step": 2,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Max",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "modern compact sedan, metallic silver, clean lines, urban",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -220,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Car maths",
+          "expr": "_e1 = hcat(1, 0)\n_n = rows(P)\n_isSeg = _n == 2\n_isSpace = _n > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _n > 0 ? min(_Qu) : 0\n_hu1 = _n > 0 ? max(_Qu) : 0\n_hv0 = _n > 0 ? min(_Qv) : 0\n_hv1 = _n > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = length > 0 ? _availL / length : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.2, min(4, _sFit))\n_s = scale\n_isSuv = bodyStyle == 'SUV'\n_isHatch = bodyStyle == 'Hatchback'\n_isEstate = bodyStyle == 'Estate'\n_L = length * _s\n_Wd = width * _s\n_W2 = _Wd / 2\n_Ht = height * _s * (_isSuv ? 1.09 : 1)\n_clr = (_isSuv ? 0.2 : 0.14) * _s\n_R = wheelR * _s * (_isSuv ? 1.09 : 1)\n_TW = tyreW * _s\n_WB = min(wheelbase, length * 0.72) * _s\n_FO = min(frontOverhang * _s, 0.7 * (_L - _WB))\n_RO = _L - _WB - _FO\n_uf = _L / 2 - _FO\n_ur = 0 - _L / 2 + _RO\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _L / 2\n_cv = _hav - _ay * _Wd / 2\n_hz0 = _Ht - _clr\n_zNose = _clr + 0.3 * _hz0\n_zBonnet = _clr + 0.51 * _hz0\n_zBelt = _clr + 0.56 * _hz0\n_zBoot = _clr + ((_isHatch || _isEstate) ? 0.63 : 0.52) * _hz0\n_zTail = _clr + 0.35 * _hz0\n_zRoof = _Ht\n_tb1 = 0.22\n_tw1 = 0.34\n_tr1 = _isEstate ? 0.86 : (_isSuv ? 0.78 : (_isHatch ? 0.76 : 0.66))\n_tk1 = min(0.96, _tr1 + 0.16)\n_tws = min(_tr1 - 0.04, _tw1 + 0.2)\n_tg1 = min(0.97, _tr1 + 0.1)\n_K = max(6, floor(sectionPts))\n_ang = arange(_K) * 2 * PI / _K\n_cs = cos(_ang)\n_sn = sin(_ang)\n_ce = 2 / max(1.2, cornerRound)\n_pC = sign(_cs) * abs(_cs) ^ _ce\n_pS = sign(_sn) * abs(_sn) ^ _ce\n_SB = max(6, floor(bodySections))\n_SG = max(4, floor(glassSections))\n_Body = zeros(0, 4)\n_Ustn = zeros(0, 1)\n_Hw = zeros(0, 1)\nloop i in _SB:\n_t = i / (_SB - 1)\n_q = abs(2 * _t - 1)\n_hw = _W2 * (1 - 0.28 * _q ^ 3)\n_zb = _clr + 0.05 * _s * _q ^ 2\n_a1 = _t / _tb1\n_a2 = (_t - _tb1) / (_tw1 - _tb1)\n_a3 = (_t - _tr1) / (_tk1 - _tr1)\n_a4 = (_t - _tk1) / (1 - _tk1)\n_m1 = 3 * _a1 ^ 2 - 2 * _a1 ^ 3\n_m2 = 3 * _a2 ^ 2 - 2 * _a2 ^ 3\n_m3 = 3 * _a3 ^ 2 - 2 * _a3 ^ 3\n_m4 = 3 * _a4 ^ 2 - 2 * _a4 ^ 3\n_zt = _t < _tb1 ? (_zNose + (_zBonnet - _zNose) * _m1) : (_t < _tw1 ? (_zBonnet + (_zBelt - _zBonnet) * _m2) : (_t < _tr1 ? _zBelt : (_t < _tk1 ? (_zBelt + (_zBoot - _zBelt) * _m3) : (_zBoot + (_zTail - _zBoot) * _m4))))\n_zc = (_zb + _zt) / 2\n_hh = (_zt - _zb) / 2\n_u = 0 - _L / 2 + _t * _L\n_Body = vcat(_Body, hcat(fill(_K, 1, _u), _hw * _pC, _zc + _hh * _pS, fill(_K, 1, i)))\n_Ustn = vcat(_Ustn, hcat(_u))\n_Hw = vcat(_Hw, hcat(_hw))\nend\n_Glass = zeros(0, 4)\n_GU = zeros(0, 1)\n_GHw = zeros(0, 1)\nloop i in _SG:\n_gt = _tw1 + (_tg1 - _tw1) * i / (_SG - 1)\n_gq = abs(2 * _gt - 1)\n_ghw = max(0.2 * _W2, _W2 * (1 - 0.28 * _gq ^ 3) - glassInset * _s)\n_b1 = (_gt - _tw1) / (_tws - _tw1)\n_b2 = (_gt - _tr1) / (_tg1 - _tr1)\n_n1 = 3 * _b1 ^ 2 - 2 * _b1 ^ 3\n_n2 = 3 * _b2 ^ 2 - 2 * _b2 ^ 3\n_gzr = _gt < _tws ? (_zBelt + (_zRoof - _zBelt) * _n1) : (_gt < _tr1 ? _zRoof : (_zRoof + (_zBelt - _zRoof) * _n2))\n_gzt = max(_gzr, _zBelt + 0.06 * _s)\n_gzc = (_zBelt + _gzt) / 2\n_ghh = (_gzt - _zBelt) / 2\n_gu = 0 - _L / 2 + _gt * _L\n_Glass = vcat(_Glass, hcat(fill(_K, 1, _gu), _ghw * _pC, _gzc + _ghh * _pS, fill(_K, 1, i)))\n_GU = vcat(_GU, hcat(_gu))\n_GHw = vcat(_GHw, hcat(_ghw))\nend\n_Out = zeros(0, 2)\nloop i in _SB:\n_Out = vcat(_Out, hcat(row(_Ustn, i), 0 - row(_Hw, i)))\nend\nloop i in _SB:\n_j = _SB - 1 - i\n_Out = vcat(_Out, hcat(row(_Ustn, _j), row(_Hw, _j)))\nend\n_GOut = zeros(0, 2)\nloop i in _SG:\n_GOut = vcat(_GOut, hcat(row(_GU, i), 0 - row(_GHw, i)))\nend\nloop i in _SG:\n_j = _SG - 1 - i\n_GOut = vcat(_GOut, hcat(row(_GU, _j), row(_GHw, _j)))\nend\n_tsec = 0.18 * _TW\n_Rc = _R - _tsec\n_Rrim = 0.62 * _R\n_trk = _W2 - _TW / 2 - 0.03 * _s\n_WS = vcat(hcat(_uf, 0 - _trk), hcat(_uf, _trk), hcat(_ur, 0 - _trk), hcat(_ur, _trk))\n_M = zeros(0, 9)\nloop i in 4:\n_wu = sub(_WS, i, 0, 1, 1)\n_wv = sub(_WS, i, 1, 1, 1)\n_sh0 = _wv - _TW / 2 + _tsec\n_sh1 = _wv + _TW / 2 - _tsec\n_M = vcat(_M, hcat(_wu, _sh0, _R, _wu, _sh1, _R, _R, 0, 1))\n_M = vcat(_M, hcat(_wu, _sh0 - 0.01, _R, _wu, _sh0 + 0.01, _R, _Rc, _tsec, 2))\n_M = vcat(_M, hcat(_wu, _sh1 - 0.01, _R, _wu, _sh1 + 0.01, _R, _Rc, _tsec, 2))\n_M = vcat(_M, hcat(_wu, _wv - 0.52 * _TW, _R, _wu, _wv + 0.52 * _TW, _R, _Rrim, 0, 3))\n_M = vcat(_M, hcat(_wu - _R, _wv, _R, _wu + _R, _wv, _R, _TW / 2, 0, 7))\nend\n_zlF = _clr + 0.62 * (_zBonnet - _clr)\n_zlR = _clr + 0.72 * (_zBoot - _clr)\n_lvF = 0.62 * _W2\n_lvR = 0.64 * _W2\n_um = 0 - _L / 2 + _tw1 * _L\n_M = vcat(_M, hcat(_L / 2 - 0.19 * _s, 0 - _lvF, _zlF, _L / 2 - 0.03 * _s, 0 - _lvF, _zlF, 0.075 * _s, 0, 4))\n_M = vcat(_M, hcat(_L / 2 - 0.19 * _s, _lvF, _zlF, _L / 2 - 0.03 * _s, _lvF, _zlF, 0.075 * _s, 0, 4))\n_M = vcat(_M, hcat(0 - _L / 2 + 0.03 * _s, 0 - _lvR, _zlR, 0 - _L / 2 + 0.19 * _s, 0 - _lvR, _zlR, 0.07 * _s, 0, 5))\n_M = vcat(_M, hcat(0 - _L / 2 + 0.03 * _s, _lvR, _zlR, 0 - _L / 2 + 0.19 * _s, _lvR, _zlR, 0.07 * _s, 0, 5))\n_M = vcat(_M, hcat(_um, 0 - 1.11 * _W2, _zBelt, _um, 0 - 0.95 * _W2, _zBelt, 0.035 * _s, 0, 6))\n_M = vcat(_M, hcat(_um, 0.95 * _W2, _zBelt, _um, 1.11 * _W2, _zBelt, 0.035 * _s, 0, 6))\n_M = vcat(_M, hcat(_uf, 0 - _trk, _R, _uf, _trk, _R, 0.03 * _s, 0, 6))\n_M = vcat(_M, hcat(_ur, 0 - _trk, _R, _ur, _trk, _R, 0.03 * _s, 0, 6))\n_M = vcat(_M, hcat(0 - _L / 2 - 0.03 * _s, 0 - 0.55 * _W2, _clr * 0.85, 0 - _L / 2 + 0.22 * _s, 0 - 0.55 * _W2, _clr * 0.85, 0.032 * _s, 0, 6))\n_M = vcat(_M, hcat(_um, 0 - 1.11 * _W2, _zBelt, _um, 0 - 0.95 * _W2, _zBelt, 0.05 * _s, 0, 8))\n_M = vcat(_M, hcat(_um, 0.95 * _W2, _zBelt, _um, 1.11 * _W2, _zBelt, 0.05 * _s, 0, 8))\n_bu = _cu + col(_Body, 0)\n_bv = _cv + col(_Body, 1)\n_gu2 = _cu + col(_Glass, 0)\n_gv2 = _cv + col(_Glass, 1)\n_ou = _cu + col(_Out, 0)\n_ov = _cv + col(_Out, 1)\n_qu = _cu + col(_GOut, 0)\n_qv = _cv + col(_GOut, 1)\n_U1 = _cu + col(_M, 0)\n_V1 = _cv + col(_M, 1)\n_U2 = _cu + col(_M, 3)\n_V2 = _cv + col(_M, 4)\n_MW = hcat(_U1 * _ux + _V1 * _vx, _U1 * _uy + _V1 * _vy, col(_M, 2), _U2 * _ux + _V2 * _vx, _U2 * _uy + _V2 * _vy, col(_M, 5), col(_M, 6), col(_M, 7), col(_M, 8))\n_g = col(_MW, 8)\n_nr = rows(_MW)\nBodyLoft = hcat(_bu * _ux + _bv * _vx, _bu * _uy + _bv * _vy, col(_Body, 2), col(_Body, 3))\nGlassLoft = hcat(_gu2 * _ux + _gv2 * _vx, _gu2 * _uy + _gv2 * _vy, col(_Glass, 2), col(_Glass, 3))\nBodyPlan = hcat(_ou * _ux + _ov * _vx, _ou * _uy + _ov * _vy)\nGlassPlan = hcat(_qu * _ux + _qv * _vx, _qu * _uy + _qv * _vy)\nTyres3D = sub(compress(_MW, eq(_g, 1)), 0, 0, _nr, 7)\nTread3D = sub(compress(_MW, eq(_g, 2)), 0, 0, _nr, 8)\nRims3D = sub(compress(_MW, eq(_g, 3)), 0, 0, _nr, 7)\nLampsF3D = sub(compress(_MW, eq(_g, 4)), 0, 0, _nr, 7)\nLampsR3D = sub(compress(_MW, eq(_g, 5)), 0, 0, _nr, 7)\nDetails3D = sub(compress(_MW, eq(_g, 6)), 0, 0, _nr, 7)\n_tp = compress(_MW, eq(_g, 7))\n_mp = compress(_MW, eq(_g, 8))\nTyresPlan = hcat(col(_tp, 0), col(_tp, 1), col(_tp, 3), col(_tp, 4), 2 * col(_tp, 6))\nMirrorsPlan = hcat(col(_mp, 0), col(_mp, 1), col(_mp, 3), col(_mp, 4), 2 * col(_mp, 6))\noverallLength = _L\noverallWidth = _Wd\noverallHeight = _Ht\nwheelbaseOut = _WB\nfrontOverhangOut = _FO\nrearOverhangOut = _RO\ntrackWidth = 2 * _trk\ngroundClearance = _clr\nfootprint = _L * _Wd"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Body — loft sections"
+            },
+            {
+              "id": "s2",
+              "label": "Glasshouse — loft sections"
+            },
+            {
+              "id": "s3",
+              "label": "Tyres — tubes"
+            },
+            {
+              "id": "s4",
+              "label": "Tread shoulders — rings"
+            },
+            {
+              "id": "s5",
+              "label": "Rims — tubes"
+            },
+            {
+              "id": "s6",
+              "label": "Front lamps — tubes"
+            },
+            {
+              "id": "s7",
+              "label": "Rear lamps — tubes"
+            },
+            {
+              "id": "s8",
+              "label": "Axles, mirrors, exhaust — tubes"
+            },
+            {
+              "id": "s9",
+              "label": "Body — plan outline"
+            },
+            {
+              "id": "s10",
+              "label": "Glasshouse — plan outline"
+            },
+            {
+              "id": "s11",
+              "label": "Tyres — plan"
+            },
+            {
+              "id": "s12",
+              "label": "Mirrors — plan"
+            },
+            {
+              "id": "s13",
+              "label": "Overall length (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Overall width (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Overall height (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Wheelbase (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Front overhang (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Rear overhang (m)"
+            },
+            {
+              "id": "s19",
+              "label": "Track width (m)"
+            },
+            {
+              "id": "s20",
+              "label": "Ground clearance (m)"
+            },
+            {
+              "id": "s21",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s22",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -100
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_body",
+              "kind": "polygon",
+              "name": "Body",
+              "color": "#1e40af",
+              "layer": "Car",
+              "show": true
+            },
+            {
+              "id": "p2_glass",
+              "kind": "polygon",
+              "name": "Glasshouse",
+              "color": "#93c5fd",
+              "layer": "Car",
+              "show": true
+            },
+            {
+              "id": "p2_tyre",
+              "kind": "stroke",
+              "name": "Tyres",
+              "color": "#111827",
+              "layer": "Car",
+              "width": 0.22,
+              "show": true
+            },
+            {
+              "id": "p2_mirror",
+              "kind": "stroke",
+              "name": "Mirrors",
+              "color": "#334155",
+              "layer": "Car",
+              "width": 0.1,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -100
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_body",
+              "kind": "loft",
+              "name": "Body",
+              "color": "#1e40af",
+              "layer": "Car",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_glass",
+              "kind": "loft",
+              "name": "Glasshouse",
+              "color": "#9ec5fe",
+              "layer": "Car",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tyre",
+              "kind": "tube",
+              "name": "Tyres",
+              "color": "#111827",
+              "layer": "Car",
+              "radius": 0.33,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tread",
+              "kind": "ring",
+              "name": "Tread shoulders",
+              "color": "#1f2937",
+              "layer": "Car",
+              "radius": 0.29,
+              "tubeRadius": 0.04,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_rim",
+              "kind": "tube",
+              "name": "Rims",
+              "color": "#cbd5e1",
+              "layer": "Car",
+              "radius": 0.2,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lampf",
+              "kind": "tube",
+              "name": "Front lamps",
+              "color": "#fde68a",
+              "layer": "Car",
+              "radius": 0.075,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lampr",
+              "kind": "tube",
+              "name": "Rear lamps",
+              "color": "#b91c1c",
+              "layer": "Car",
+              "radius": 0.07,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_det",
+              "kind": "tube",
+              "name": "Axles, mirrors & exhaust",
+              "color": "#334155",
+              "layer": "Car",
+              "radius": 0.035,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_bodyStyle",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bodyStyle",
+      "targetHandle": "valin-bodyStyle"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_width",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_wheelbase",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-wheelbase",
+      "targetHandle": "valin-wheelbase"
+    },
+    {
+      "id": "e_props_math_frontOverhang",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-frontOverhang",
+      "targetHandle": "valin-frontOverhang"
+    },
+    {
+      "id": "e_props_math_wheelR",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-wheelR",
+      "targetHandle": "valin-wheelR"
+    },
+    {
+      "id": "e_props_math_tyreW",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tyreW",
+      "targetHandle": "valin-tyreW"
+    },
+    {
+      "id": "e_props_math_cornerRound",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cornerRound",
+      "targetHandle": "valin-cornerRound"
+    },
+    {
+      "id": "e_props_math_glassInset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-glassInset",
+      "targetHandle": "valin-glassInset"
+    },
+    {
+      "id": "e_props_math_bodySections",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bodySections",
+      "targetHandle": "valin-bodySections"
+    },
+    {
+      "id": "e_props_math_glassSections",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-glassSections",
+      "targetHandle": "valin-glassSections"
+    },
+    {
+      "id": "e_props_math_sectionPts",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sectionPts",
+      "targetHandle": "valin-sectionPts"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BodyLoft",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-GlassLoft",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Tyres3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Tread3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Rims3D",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LampsF3D",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-LampsR3D",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Details3D",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BodyPlan",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-GlassPlan",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-TyresPlan",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-MirrorsPlan",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallLength",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallWidth",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallHeight",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wheelbaseOut",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-frontOverhangOut",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-rearOverhangOut",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-trackWidth",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-groundClearance",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-footprint",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_math_out_s22",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_out_r2d_p2_body",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s9",
+      "targetHandle": "valin-p2_body"
+    },
+    {
+      "id": "e_out_r2d_p2_glass",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s10",
+      "targetHandle": "valin-p2_glass"
+    },
+    {
+      "id": "e_out_r2d_p2_tyre",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s11",
+      "targetHandle": "valin-p2_tyre"
+    },
+    {
+      "id": "e_out_r2d_p2_mirror",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s12",
+      "targetHandle": "valin-p2_mirror"
+    },
+    {
+      "id": "e_out_r3d_p3_body",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_body"
+    },
+    {
+      "id": "e_out_r3d_p3_glass",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_glass"
+    },
+    {
+      "id": "e_out_r3d_p3_tyre",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_tyre"
+    },
+    {
+      "id": "e_out_r3d_p3_tread",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_tread"
+    },
+    {
+      "id": "e_out_r3d_p3_rim",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_rim"
+    },
+    {
+      "id": "e_out_r3d_p3_lampf",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p3_lampf"
+    },
+    {
+      "id": "e_out_r3d_p3_lampr",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p3_lampr"
+    },
+    {
+      "id": "e_out_r3d_p3_det",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p3_det"
+    }
+  ]
+}

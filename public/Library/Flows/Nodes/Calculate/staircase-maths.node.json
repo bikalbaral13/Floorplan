@@ -1,9 +1,0 @@
-{
-  "kind": "flow-node",
-  "tool": "expr",
-  "label": "Staircase maths",
-  "params": {
-    "name": "Staircase maths",
-    "expr": "dir = direction == 'ltr' ? 1 : -1\nn1 = (midSteps>0 && midSteps<steps) ? midSteps : floor(steps/2)\nmid = (midSteps>0 && midSteps<steps-1) ? midSteps : max(1, round(steps/3))\naF = ceil(max(2, steps-mid)/2)\ns2 = tread/2*dir\nw2 = width/2\ntd = tread*dir\ntdn = -tread*dir\ncntS = (config=='straight')*steps\ncLS = (steps*tread + landingWidth/2)*dir\ngLS = (config=='straight') && landingWidth>0 ? 1 : 0\nnR = steps*riser\nnt = steps*tread\nmU = config=='u-shape' ? 1 : 0\nmM = config=='u-shape-mid' ? 1 : 0\ncntU1 = (config=='u-shape')*n1\ncntU2 = (config=='u-shape')*(steps-n1)\ncXU = (n1*tread + landingWidth/2)*dir\nbWG = 2*width + midSpace\nbwh = width + midSpace/2\ncX2 = (n1*tread - tread/2)*dir\ny2c = 1.5*width + midSpace\nn1R = n1*riser\nh2S = (n1+1)*riser\ncntM1 = (config=='u-shape-mid')*aF\ncntM2 = (config=='u-shape-mid')*mid\ncntM3 = (config=='u-shape-mid')*(max(2,steps-mid)-aF)\ncL1 = (aF*tread + width/2)*dir\nyF2 = width + tread/2\ncy2 = width + mid*tread + width/2\ncX3 = (aF*tread - tread/2)*dir\naR = aF*riser\napR = (aF+1)*riser\namR = (aF+mid)*riser\namR1 = (aF+mid+1)*riser"
-  }
-}

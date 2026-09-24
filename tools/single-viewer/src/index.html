@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Master bedroom — moodboard &amp; parametric viewer</title>
+<style>/*__FONT__*/</style>
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<div class="app">
+  <main class="stage" id="stage" aria-label="3D view of the master bedroom. Drag to orbit, scroll to zoom, shift-drag to pan, click a surface to edit it.">
+    <div class="boot" id="boot">Building the room…</div>
+    <div class="readout" aria-live="polite">
+      <h1 id="readoutMain">—</h1>
+      <p id="readoutSub"></p>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="shots" id="shots" role="toolbar" aria-label="Camera shots"></div>
+  </main>
+
+  <aside class="panel" aria-label="Configuration">
+    <div class="tabs" role="tablist">
+      <button id="btn-mood"  role="tab" aria-selected="true"  aria-controls="tab-mood">Moodboard</button>
+      <button id="btn-obj"   role="tab" aria-selected="false" aria-controls="tab-obj">Object</button>
+      <button id="btn-scene" role="tab" aria-selected="false" aria-controls="tab-scene">Scene</button>
+      <button id="btn-exp"   role="tab" aria-selected="false" aria-controls="tab-exp">Export</button>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────── moodboard -->
+    <div class="tabbody" id="tab-mood" role="tabpanel" aria-labelledby="btn-mood">
+      <div class="head">
+        <div class="eyebrow" id="mbEyebrow"></div>
+        <h2 id="mbTitle"></h2>
+        <p id="mbIntro"></p>
+      </div>
+      <section class="section">
+        <h3>01 · Colour palette</h3>
+        <div class="pal" id="mbPalette"></div>
+      </section>
+      <section class="section">
+        <h3>02 · Materials &amp; finishes</h3>
+        <div class="fin" id="mbFinishes"></div>
+        <p class="note">A finish with a library file behind it resolves through <code>Materials/…</code> and stays
+          in step with Blender and the DXF hatch. The rest are viewer-local until a Material node is wired
+          into the object. Change which finish a surface uses under <b>Scene → Finishes</b>.</p>
+      </section>
+      <section class="section">
+        <h3>03 · Zones</h3>
+        <div id="mbZones"></div>
+      </section>
+      <section class="section">
+        <h3>04 · Lighting layers</h3>
+        <div class="lit" id="mbLighting"></div>
+        <p class="note">Each layer switches the real lights derived from the luminaire objects in the plan —
+          their own lumens, colour temperature and beam angle. Dim them under <b>Scene</b>.</p>
+      </section>
+      <div class="foot"><span id="mbSource"></span></div>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────── object -->
+    <div class="tabbody" id="tab-obj" role="tabpanel" aria-labelledby="btn-obj" hidden>
+      <div class="head" id="objHead"></div>
+      <div id="objBody"></div>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────────── scene -->
+    <div class="tabbody" id="tab-scene" role="tabpanel" aria-labelledby="btn-scene" hidden>
+      <div class="head">
+        <h2>Scene</h2>
+        <p>Light, finish and what is drawn.</p>
+      </div>
+      <section class="section">
+        <h3>Lighting layers</h3>
+        <div class="fields" id="scTiers"></div>
+      </section>
+      <section class="section">
+        <h3>Daylight &amp; exposure</h3>
+        <div class="fields" id="scDay"></div>
+      </section>
+      <section class="section">
+        <h3>View</h3>
+        <div class="fields" id="scView"></div>
+      </section>
+      <section class="section">
+        <h3>Finishes</h3>
+        <div class="fields" id="scFinishes"></div>
+      </section>
+      <section class="section">
+        <h3>What is drawn</h3>
+        <div class="fields" id="scLayers"></div>
+      </section>
+    </div>
+
+    <!-- ──────────────────────────────────────────────────────────────── export -->
+    <div class="tabbody" id="tab-exp" role="tabpanel" aria-labelledby="btn-exp" hidden>
+      <div class="head">
+        <h2>Export</h2>
+        <p>Everything here is evaluated live. Nothing is baked into this file but the definitions.</p>
+      </div>
+      <section class="section">
+        <h3>Back to the canvas</h3>
+        <div class="row">
+          <button class="btn primary" id="expPlan">Download plan JSON</button>
+          <button class="btn" id="expCopy">Copy plan JSON</button>
+        </div>
+        <p class="note">The plan with every change folded into the attachment it belongs to. Same shape in
+          as out, so the canvas editor opens it unchanged.</p>
+      </section>
+      <section class="section">
+        <h3>Baked geometry</h3>
+        <div class="row">
+          <button class="btn" id="expBaked">Download baked JSON</button>
+        </div>
+        <p class="note">Every attachment's evaluated face list, anchor-relative metres, z up — the frame the
+          Blender importer reads. For a consumer that owns no evaluator.</p>
+      </section>
+      <section class="section">
+        <h3>Start again</h3>
+        <div class="row"><button class="btn" id="expReset">Reset every parameter</button></div>
+        <div class="status" id="expStatus" role="status"></div>
+      </section>
+      <section class="section">
+        <h3>Plan JSON</h3>
+        <textarea class="json" id="expJson" spellcheck="false" aria-label="Plan JSON"></textarea>
+      </section>
+      <div class="foot" id="expCount"></div>
+    </div>
+  </aside>
+</div>
+
+<script>/*__THREE__*/</script>
+<script>/*__ENGINE__*/</script>
+<script>window.VIEWER_DATA = /*__DATA__*/;</script>
+<script>/*__APP__*/</script>
+</body>
+</html>

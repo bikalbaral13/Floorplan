@@ -1,0 +1,485 @@
+{
+  "schema": "finishes/1",
+  "id": "interior.warm-neutral",
+  "title": "Interior — warm neutral",
+  "note": "Maps every 3D Render row of the interior half of library/Objects/Architectural to a library material. Rules are matched in order and the FIRST hit wins, so put the specific rows (Mirror, Pulls, Glazing) above the catch-all for the same object. `mesh` matches a case-insensitive substring of the row name; a leading ! negates it; omit it to take every row of that object. `tint` overrides the material's own base colour — one lacquer file serves a cream shutter and a charcoal shadow gap. `tint: \"auto\"` keeps the row's own baked colour, which is what a frame whose colour is part of the design wants.",
+  "emissive": {
+    "note": "A row whose name matches this is a lit surface, and the fixture's own kelvin overrides the material's. Checked BEFORE the surface rules, so no rule needs to say `!LED` — the LED rows are already gone by then.",
+    "match": "\\b(led|lens|emitter|globe|glow|halo|bias|diffuser|ring light|light kit)\\b",
+    "material": "Materials/Emissive/led-warm.json"
+  },
+  "helpers": {
+    "note": "Drawing aids the canvas needs and a render must not show: camera bodies and their blue view cones, the light objects' amber aim tubes. They stay in the .blend (and keep their custom props) with hide_render set, so the scene still documents where the shot was framed from.",
+    "match": [
+      {
+        "object": "camera"
+      },
+      {
+        "object": "light"
+      },
+      {
+        "mesh": "view cone"
+      },
+      {
+        "mesh": "beam / aim"
+      },
+      {
+        "mesh": "footprint"
+      }
+    ]
+  },
+  "surfaces": [
+    {
+      "id": "floor",
+      "label": "Floor",
+      "material": "Materials/Finishes/marble.json",
+      "match": [
+        {
+          "object": "room"
+        }
+      ]
+    },
+    {
+      "id": "walls",
+      "label": "Walls",
+      "material": "Materials/Finishes/plaster.json",
+      "match": [
+        {
+          "object": "wall"
+        }
+      ]
+    },
+    {
+      "id": "ceiling",
+      "label": "False ceiling",
+      "material": "Materials/Finishes/plaster.json",
+      "match": [
+        {
+          "object": "false-ceiling"
+        }
+      ]
+    },
+    {
+      "id": "skirting-gap",
+      "label": "Skirting shadow gap",
+      "material": "Materials/Finishes/lacquer.json",
+      "tint": "#3f3f46",
+      "match": [
+        {
+          "object": "skirting",
+          "mesh": "gap"
+        }
+      ]
+    },
+    {
+      "id": "skirting",
+      "label": "Skirting",
+      "material": "Materials/Finishes/lacquer.json",
+      "tint": "#f1ebdf",
+      "match": [
+        {
+          "object": "skirting"
+        }
+      ]
+    },
+    {
+      "id": "mirror",
+      "label": "Wardrobe mirror",
+      "material": "Materials/Glazing/mirror.json",
+      "match": [
+        {
+          "object": "wardrobe",
+          "mesh": "mirror"
+        }
+      ]
+    },
+    {
+      "id": "rail",
+      "label": "Hanging rail",
+      "material": "Materials/Metal/steel.json",
+      "match": [
+        {
+          "object": "wardrobe",
+          "mesh": "rail"
+        }
+      ]
+    },
+    {
+      "id": "groove",
+      "label": "Shutter grooves",
+      "material": "Materials/Finishes/lacquer.json",
+      "tint": "#44403c",
+      "match": [
+        {
+          "object": "wardrobe",
+          "mesh": "grooves"
+        }
+      ]
+    },
+    {
+      "id": "endpanel",
+      "label": "Wardrobe end panels",
+      "material": "Materials/Finishes/walnut.json",
+      "match": [
+        {
+          "object": "wardrobe",
+          "mesh": "end panel"
+        }
+      ]
+    },
+    {
+      "id": "wardrobe",
+      "label": "Wardrobe shutters",
+      "material": "Materials/Finishes/lacquer.json",
+      "tint": "#d9c7ae",
+      "match": [
+        {
+          "object": "wardrobe"
+        }
+      ]
+    },
+    {
+      "id": "pulls",
+      "label": "Pulls & trims",
+      "material": "Materials/Metal/brass.json",
+      "match": [
+        {
+          "object": "nightstand",
+          "mesh": "pulls"
+        },
+        {
+          "object": "curtain-track",
+          "mesh": "cap"
+        },
+        {
+          "object": "upholstered-panel",
+          "mesh": "lip"
+        },
+        {
+          "object": "pendant",
+          "mesh": "shade"
+        },
+        {
+          "object": "pendant",
+          "mesh": "canopy"
+        },
+        {
+          "object": "ceiling-fan",
+          "mesh": "hub"
+        }
+      ]
+    },
+    {
+      "id": "casework-top",
+      "label": "Casework tops",
+      "material": "Materials/Finishes/wood.json",
+      "match": [
+        {
+          "object": "nightstand",
+          "mesh": "top"
+        },
+        {
+          "object": "tv-unit",
+          "mesh": "top"
+        },
+        {
+          "object": "window-seat",
+          "mesh": "lid"
+        },
+        {
+          "object": "tv-unit",
+          "mesh": "front"
+        },
+        {
+          "object": "nightstand",
+          "mesh": "front"
+        }
+      ]
+    },
+    {
+      "id": "casework",
+      "label": "Casework carcasses",
+      "material": "Materials/Finishes/walnut.json",
+      "match": [
+        {
+          "object": "nightstand"
+        },
+        {
+          "object": "tv-unit"
+        },
+        {
+          "object": "window-seat",
+          "mesh": "carc"
+        },
+        {
+          "object": "fluted-panel",
+          "mesh": "back"
+        }
+      ]
+    },
+    {
+      "id": "fluting",
+      "label": "Fluted panel",
+      "material": "Materials/Finishes/wood.json",
+      "match": [
+        {
+          "object": "fluted-panel"
+        }
+      ]
+    },
+    {
+      "id": "plinth",
+      "label": "Plinths",
+      "material": "Materials/Finishes/lacquer.json",
+      "tint": "#57534e",
+      "match": [
+        {
+          "object": "window-seat",
+          "mesh": "plinth"
+        }
+      ]
+    },
+    {
+      "id": "upholstery",
+      "label": "Upholstery",
+      "material": "Materials/Fabric/linen.json",
+      "match": [
+        {
+          "object": "upholstered-panel",
+          "mesh": "pad"
+        },
+        {
+          "object": "window-seat",
+          "mesh": "cushion"
+        },
+        {
+          "object": "window-seat",
+          "mesh": "bolster"
+        },
+        {
+          "object": "bed",
+          "mesh": "divan"
+        },
+        {
+          "object": "bed",
+          "mesh": "board"
+        },
+        {
+          "object": "bed",
+          "mesh": "leg"
+        }
+      ]
+    },
+    {
+      "id": "panel-back",
+      "label": "Panel backers",
+      "material": "Materials/Finishes/walnut.json",
+      "match": [
+        {
+          "object": "upholstered-panel"
+        }
+      ]
+    },
+    {
+      "id": "bedding",
+      "label": "Bedding",
+      "material": "Materials/Fabric/cotton.json",
+      "match": [
+        {
+          "object": "bed"
+        }
+      ]
+    },
+    {
+      "id": "rug",
+      "label": "Rug",
+      "material": "Materials/Fabric/wool.json",
+      "match": [
+        {
+          "object": "rug"
+        }
+      ]
+    },
+    {
+      "id": "blackout",
+      "label": "Blackout liner",
+      "material": "Materials/Fabric/blackout.json",
+      "match": [
+        {
+          "object": "curtain",
+          "mesh": "blackout"
+        }
+      ]
+    },
+    {
+      "id": "drape",
+      "label": "Drape",
+      "material": "Materials/Fabric/velvet.json",
+      "match": [
+        {
+          "object": "curtain",
+          "mesh": "drape"
+        }
+      ]
+    },
+    {
+      "id": "track",
+      "label": "Curtain track",
+      "material": "Materials/Metal/steel.json",
+      "match": [
+        {
+          "object": "curtain-track"
+        },
+        {
+          "object": "curtain",
+          "mesh": "rail"
+        }
+      ]
+    },
+    {
+      "id": "glazing",
+      "label": "Glazing",
+      "material": "Materials/Glazing/glass.json",
+      "match": [
+        {
+          "object": "window",
+          "mesh": "glaz"
+        }
+      ]
+    },
+    {
+      "id": "sill",
+      "label": "Window sill",
+      "material": "Materials/Finishes/marble.json",
+      "match": [
+        {
+          "object": "window",
+          "mesh": "sill"
+        }
+      ]
+    },
+    {
+      "id": "joinery",
+      "label": "Frames & leaves",
+      "material": "Materials/Finishes/lacquer.json",
+      "tint": "auto",
+      "match": [
+        {
+          "object": "window"
+        },
+        {
+          "object": "door",
+          "mesh": "frame"
+        }
+      ]
+    },
+    {
+      "id": "door-leaf",
+      "label": "Door leaf",
+      "material": "Materials/Finishes/walnut.json",
+      "match": [
+        {
+          "object": "door"
+        }
+      ]
+    },
+    {
+      "id": "screen",
+      "label": "Screen",
+      "material": "Materials/Glazing/screen.json",
+      "match": [
+        {
+          "object": "tv",
+          "mesh": "screen"
+        }
+      ]
+    },
+    {
+      "id": "tv-body",
+      "label": "TV body",
+      "material": "Materials/Finishes/lacquer.json",
+      "tint": "#1e293b",
+      "match": [
+        {
+          "object": "tv"
+        }
+      ]
+    },
+    {
+      "id": "art",
+      "label": "Artwork & mounts",
+      "material": "Materials/Finishes/paper.json",
+      "tint": "auto",
+      "match": [
+        {
+          "object": "wall-art",
+          "mesh": "art"
+        },
+        {
+          "object": "wall-art",
+          "mesh": "mat"
+        }
+      ]
+    },
+    {
+      "id": "frames",
+      "label": "Picture frames",
+      "material": "Materials/Finishes/walnut.json",
+      "match": [
+        {
+          "object": "wall-art"
+        }
+      ]
+    },
+    {
+      "id": "crown",
+      "label": "Foliage",
+      "material": "Materials/Organic/foliage.json",
+      "match": [
+        {
+          "object": "plant",
+          "mesh": "crown"
+        }
+      ]
+    },
+    {
+      "id": "stem",
+      "label": "Trunk & branches",
+      "material": "Materials/Organic/bark.json",
+      "match": [
+        {
+          "object": "plant"
+        }
+      ]
+    },
+    {
+      "id": "fan-blade",
+      "label": "Fan blades",
+      "material": "Materials/Finishes/lacquer.json",
+      "match": [
+        {
+          "object": "ceiling-fan",
+          "mesh": "blade"
+        }
+      ],
+      "tint": "#2f2d2b"
+    },
+    {
+      "id": "fixtures",
+      "label": "Light fittings",
+      "material": "Materials/Metal/powder-coat.json",
+      "tint": "auto",
+      "match": [
+        {
+          "object": "downlight"
+        },
+        {
+          "object": "pendant"
+        },
+        {
+          "object": "ceiling-fan"
+        }
+      ]
+    }
+  ]
+}

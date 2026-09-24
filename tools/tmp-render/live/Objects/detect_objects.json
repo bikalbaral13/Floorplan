@@ -1,0 +1,480 @@
+{
+  "version": 1,
+  "id": "detect-objects",
+  "title": "Detect objects",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Detect objects",
+    "icon": {
+      "paths": [
+        "M4 8h6v6H4z",
+        "M14 6h6v4h-6z",
+        "M12 14h8v6h-8z"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Find every tangible OBJECT in the drawing - furniture, sanitaryware, appliances - measure each one, and hand the canvas a plan document that places it as a NODE carrying a parametric object.\n\n  Geometry (Image kind) → Input Properties → Object Detection [12 rows] → Math Engine → Output Metrics (+ 2D Render)\n\nThe same six-node shape as detect_doors.json and detect_windows.json, aimed at what those two deliberately exclude. NOT doors, NOT windows, NOT openings: none of the rows names one, so the prompt never asks for them — those two flows own that half of the drawing and place SEGMENTS, because a door is a gap in a wall. An object is a THING standing in a room, so this one places nodes.\n\nRELEVANT OBJECT IF PRESENT, DEFAULT OTHERWISE — and the mechanism is worth knowing, because it is what lets one flow cover a library it does not enumerate. Every detection reaches the maths twice: once through the aggregate `corners` endpoint, which carries EVERYTHING the model returned, and once through its own row's `corners` if a row claimed it. The aggregate is the geometry; the rows only decide the CODE. A code the map has no entry for falls back to the map's FIRST entry, so \"other\" sits at the head of the list pointing at bed.json and anything unrecognised lands there rather than vanishing. Ten classes carry their own object today — bed, sofa, chair, table, desk, wardrobe, cabinet, toilet, washbasin, refrigerator. Adding an eleventh is two edits and no new wire: add a detection row, add an entry to the encode map's `points` in the same position as the code you assign it.\n\nTWO ROWS DETECT NOTHING OF THEIR OWN. \"Furniture\" and \"Appliance\" are not wired into the maths; they exist to widen the PROMPT. Row names ARE the ask — all of them go into one call — so without a broad term the model is asked for exactly ten things and returns exactly ten kinds. With them it returns the lamp, the rug and the washing machine as well, and those arrive through the aggregate and take the default object. Delete them to tighten the ask; add your own to widen it further.\n\nTHE QUAD, NOT ITS BOUNDING BOX. The maths reads each detection's own two edges rather than the min/max of its corners. For an axis-aligned box the two agree; for a tilted one they do not, and min/max would report the axis-aligned envelope of a rotated bed as its size. So: CENTROID is the mean of the four corners, LENGTH the longer edge, BREADTH the shorter, and ROTATION the bearing of the long edge in degrees — which is written onto each object as its `rotation`, so a bed detected at 30° imports at 30°.\n\nWHAT REACHES OUTPUT METRICS. Counts (detected / kept / dropped / typed), the unclaimed labels, then centroid, length, breadth, rotation and footprint area — one row per object — plus the boxes as polygon coordinates and the plan document itself.\n\nTUNING. \"Min footprint area\" drops specks and stray label boxes in ONE test, rather than a length rule and a breadth rule that disagree about a long thin rug. \"Class-match tolerance\" is how close a row's centroid must be to an aggregate centroid to claim it — they come from the same box, so the default is tight and only wants loosening if you rewire the class inputs from somewhere else. \"Pixels per metre\" is the scale written into the plan document.\n\nWHAT THE SIZES DO NOT DO. The encode map is ONE static entry per class, so every bed imports at bed.json's own default 2.0 × 1.5 m. The measured length and breadth are reported, not applied — position and rotation come from the detection, size comes from the object. Resize on canvas, or set each class's `params` in the encode block to the size you actually build.\n\nSHOW IN CANVAS. The plan JSON lands in the last Output Metrics slot, and that node's \"Show in canvas\" button imports it by the same path File ▸ Import takes for a plan you picked. Every object also gets a degenerate marker segment at its node — that is not decoration: the plan reader keys node metadata off the segments meeting at a node, so a node no segment touches would have its attachment silently dropped on import.\n\nHOW TO RUN: 1) select the drawing on the canvas — the Geometry node binds to it; 2) paste your Gemini API key into the Object Detection node (it ships BLANK on purpose — never save a key into a shared workflow file); 3) press DETECT on that node. Detect bakes its result into the node — nothing detects on its own and re-running the flow does not re-detect, so press it again after changing the image or the rows. Max items is PER ROW, so twelve rows at 12 is a ceiling of 144 objects, not 12. Without a key the node produces nothing while the rest still evaluates, which looks exactly like \"found none\". Matching is case-insensitive and bidirectional containment, so \"Chair\" claims \"armchair\" and \"Table\" claims \"dressing table\"; check \"Unclaimed labels\" to see what no row named — those objects are still placed, with the default attachment.\n\n---\nHOSTED ON AN IMAGE. This file now carries an `object` block with `hostKind: \"image\"`, so it lists as a parametric object and attaches to an imported picture from the Properties tab.\n\nWHAT STILL ONLY WORKS IN THE FLOW EDITOR: an attached object is resolved by the spine runner, which evaluates Input Properties, the Math Engine and the Render rows and NOTHING else. It does not run the Object Detection node, and it reads the Math Engine's `decode` block but never its `encode`. Detection is also an async, billed call that has to be pressed and baked — there is no button on an attached object, and an object re-resolves on every parameter change. So attached, this reports nothing until detect-and-bake exists for attachments. Open it in the Flow editor to actually run it.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -820,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "pooling": "ink",
+          "nodeLabel": "Geometry — the drawing"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -520,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "minArea",
+              "name": "Min footprint area (m²)",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "tol",
+              "name": "Class-match tolerance (m)",
+              "type": "range",
+              "value": 0.02,
+              "min": 0.001,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "ppm",
+              "name": "Pixels per metre (plan JSON)",
+              "type": "range",
+              "value": 50,
+              "min": 10,
+              "max": 200,
+              "step": 1,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Tuning"
+        }
+      }
+    },
+    {
+      "id": "detect",
+      "position": {
+        "x": -200,
+        "y": 0
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 12,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_bed",
+              "name": "Bed"
+            },
+            {
+              "id": "o_sofa",
+              "name": "Sofa"
+            },
+            {
+              "id": "o_chair",
+              "name": "Chair"
+            },
+            {
+              "id": "o_table",
+              "name": "Table"
+            },
+            {
+              "id": "o_desk",
+              "name": "Desk"
+            },
+            {
+              "id": "o_wardrobe",
+              "name": "Wardrobe"
+            },
+            {
+              "id": "o_cabinet",
+              "name": "Cabinet"
+            },
+            {
+              "id": "o_toilet",
+              "name": "Toilet"
+            },
+            {
+              "id": "o_washbasin",
+              "name": "Washbasin"
+            },
+            {
+              "id": "o_refrigerator",
+              "name": "Refrigerator"
+            },
+            {
+              "id": "o_furniture",
+              "name": "Furniture"
+            },
+            {
+              "id": "o_appliance",
+              "name": "Appliance"
+            }
+          ],
+          "nodeLabel": "Objects — press Detect"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 200,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Boxes → centroid, size, rotation, plan JSON",
+          "expr": "# THE QUAD, NOT ITS BOUNDING BOX.\n# A is the detection's aggregate `corners` matrix - EVERY object it returned, one row per box,\n# [x0,y0,x1,y1,x2,y2,x3,y3] in metres. Reading the quad's own two edges rather than min/max keeps a\n# ROTATED detection honest: min/max would report the axis-aligned envelope of a tilted bed as its size.\nCen = hcat((col(A,0) + col(A,2) + col(A,4) + col(A,6)) / 4, (col(A,1) + col(A,3) + col(A,5) + col(A,7)) / 4)\n_e1 = hcat(col(A,2) - col(A,0), col(A,3) - col(A,1))\n_e2 = hcat(col(A,6) - col(A,0), col(A,7) - col(A,1))\n_l1 = len(_e1)\n_l2 = len(_e2)\n_long = gt(_l1, _l2)\n_L0 = where(_long, _l1, _l2)\n_B0 = where(_long, _l2, _l1)\n_ax = hcat(where(_long, col(_e1,0), col(_e2,0)), where(_long, col(_e1,1), col(_e2,1)))\n_R0 = angle(_ax)\n\n# KEEP FILTER - footprint area, which drops specks and stray label boxes in one test rather than\n# needing a length rule and a breadth rule that disagree on a long thin rug.\n_A0 = _L0 * _B0\n_keep = ge(_A0, minArea)\nC = compress(Cen, _keep)\nLen = compress(_L0, _keep)\nBrd = compress(_B0, _keep)\nRot = compress(_R0, _keep)\nArea = Len * Brd\n\n# Bed -> code 2\n_c1 = hcat((col(A1,0) + col(A1,2) + col(A1,4) + col(A1,6)) / 4, (col(A1,1) + col(A1,3) + col(A1,5) + col(A1,7)) / 4)\n_p1 = vcat(_c1, fill(1, 2, -1000000))\n_m1 = le(min((col(C,0) - T(col(_p1,0)))^2 + (col(C,1) - T(col(_p1,1)))^2, 'rows'), tol * tol)\n\n# Sofa -> code 3\n_c2 = hcat((col(A2,0) + col(A2,2) + col(A2,4) + col(A2,6)) / 4, (col(A2,1) + col(A2,3) + col(A2,5) + col(A2,7)) / 4)\n_p2 = vcat(_c2, fill(1, 2, -1000000))\n_m2 = le(min((col(C,0) - T(col(_p2,0)))^2 + (col(C,1) - T(col(_p2,1)))^2, 'rows'), tol * tol)\n\n# Chair -> code 4\n_c3 = hcat((col(A3,0) + col(A3,2) + col(A3,4) + col(A3,6)) / 4, (col(A3,1) + col(A3,3) + col(A3,5) + col(A3,7)) / 4)\n_p3 = vcat(_c3, fill(1, 2, -1000000))\n_m3 = le(min((col(C,0) - T(col(_p3,0)))^2 + (col(C,1) - T(col(_p3,1)))^2, 'rows'), tol * tol)\n\n# Table -> code 5\n_c4 = hcat((col(A4,0) + col(A4,2) + col(A4,4) + col(A4,6)) / 4, (col(A4,1) + col(A4,3) + col(A4,5) + col(A4,7)) / 4)\n_p4 = vcat(_c4, fill(1, 2, -1000000))\n_m4 = le(min((col(C,0) - T(col(_p4,0)))^2 + (col(C,1) - T(col(_p4,1)))^2, 'rows'), tol * tol)\n\n# Desk -> code 6\n_c5 = hcat((col(A5,0) + col(A5,2) + col(A5,4) + col(A5,6)) / 4, (col(A5,1) + col(A5,3) + col(A5,5) + col(A5,7)) / 4)\n_p5 = vcat(_c5, fill(1, 2, -1000000))\n_m5 = le(min((col(C,0) - T(col(_p5,0)))^2 + (col(C,1) - T(col(_p5,1)))^2, 'rows'), tol * tol)\n\n# Wardrobe -> code 7\n_c6 = hcat((col(A6,0) + col(A6,2) + col(A6,4) + col(A6,6)) / 4, (col(A6,1) + col(A6,3) + col(A6,5) + col(A6,7)) / 4)\n_p6 = vcat(_c6, fill(1, 2, -1000000))\n_m6 = le(min((col(C,0) - T(col(_p6,0)))^2 + (col(C,1) - T(col(_p6,1)))^2, 'rows'), tol * tol)\n\n# Cabinet -> code 8\n_c7 = hcat((col(A7,0) + col(A7,2) + col(A7,4) + col(A7,6)) / 4, (col(A7,1) + col(A7,3) + col(A7,5) + col(A7,7)) / 4)\n_p7 = vcat(_c7, fill(1, 2, -1000000))\n_m7 = le(min((col(C,0) - T(col(_p7,0)))^2 + (col(C,1) - T(col(_p7,1)))^2, 'rows'), tol * tol)\n\n# Toilet -> code 9\n_c8 = hcat((col(A8,0) + col(A8,2) + col(A8,4) + col(A8,6)) / 4, (col(A8,1) + col(A8,3) + col(A8,5) + col(A8,7)) / 4)\n_p8 = vcat(_c8, fill(1, 2, -1000000))\n_m8 = le(min((col(C,0) - T(col(_p8,0)))^2 + (col(C,1) - T(col(_p8,1)))^2, 'rows'), tol * tol)\n\n# Washbasin -> code 10\n_c9 = hcat((col(A9,0) + col(A9,2) + col(A9,4) + col(A9,6)) / 4, (col(A9,1) + col(A9,3) + col(A9,5) + col(A9,7)) / 4)\n_p9 = vcat(_c9, fill(1, 2, -1000000))\n_m9 = le(min((col(C,0) - T(col(_p9,0)))^2 + (col(C,1) - T(col(_p9,1)))^2, 'rows'), tol * tol)\n\n# Refrigerator -> code 11\n_c10 = hcat((col(A10,0) + col(A10,2) + col(A10,4) + col(A10,6)) / 4, (col(A10,1) + col(A10,3) + col(A10,5) + col(A10,7)) / 4)\n_p10 = vcat(_c10, fill(1, 2, -1000000))\n_m10 = le(min((col(C,0) - T(col(_p10,0)))^2 + (col(C,1) - T(col(_p10,1)))^2, 'rows'), tol * tol)\n\n# THE CODE COLUMN. 1 is \"other\" - the default attachment - and every named class overwrites\n# it where its centroid coincides with a kept row. LAST WRITE WINS, so a label two rows both\n# claim (\"bedside table\" is matched by Bed and by Table) ends on the more specific one below.\nK = where(_m1, 2, 1)\nK = where(_m2, 3, K)\nK = where(_m3, 4, K)\nK = where(_m4, 5, K)\nK = where(_m5, 6, K)\nK = where(_m6, 7, K)\nK = where(_m7, 8, K)\nK = where(_m8, 9, K)\nK = where(_m9, 10, K)\nK = where(_m10, 11, K)\n\n# WHAT THE RENDER DRAWS: the kept boxes as a grouped [x, y, box] outline list, and a centre marker\n# per object with its own radius in the third column.\n_K = compress(A, _keep)\n_n = rows(_K)\nBox = hcat(reshape(_K, 4 * _n, 2), floor(arange(4 * _n) / 4))\nCtr = hcat(C, col(C,0) * 0 + 0.1)\n\nPPM = ppm\nFound = rows(A)\nKept = _n\nDropped = Found - _n\nTyped = sum(gt(K, 1))\n",
+          "decode": "",
+          "encode": "{\n  \"from\": {\n    \"points\": \"C\",\n    \"pointTypes\": \"K\",\n    \"pointRotation\": \"Rot\",\n    \"pixelsPerMeter\": \"PPM\"\n  },\n  \"objects\": {\n    \"segments\": {},\n    \"points\": {\n      \"other\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"bed-with-math\",\n        \"objectPath\": \"Objects/Architectural/bed.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"bed\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"bed-with-math\",\n        \"objectPath\": \"Objects/Architectural/bed.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"sofa\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"sofa-with-math\",\n        \"objectPath\": \"Objects/Architectural/sofa.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"chair\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"chair-with-math\",\n        \"objectPath\": \"Objects/Architectural/chair.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"table\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"table-with-math\",\n        \"objectPath\": \"Objects/Architectural/table.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"desk\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"desk-with-math\",\n        \"objectPath\": \"Objects/Architectural/desk.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"wardrobe\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"wardrobe-with-math\",\n        \"objectPath\": \"Objects/Architectural/wardrobe.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"cabinet\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"cabinet-with-math\",\n        \"objectPath\": \"Objects/Architectural/cabinet.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"toilet\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"toilet-with-math\",\n        \"objectPath\": \"Objects/Architectural/toilet.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"washbasin\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"washbasin-with-math\",\n        \"objectPath\": \"Objects/Architectural/washbasin.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"refrigerator\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"refrigerator-with-math\",\n        \"objectPath\": \"Objects/Architectural/refrigerator.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      }\n    },\n    \"space\": {}\n  },\n  \"pixelsPerMeter\": 50,\n  \"libraryPath\": \"https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library\",\n  \"decimals\": 4\n}",
+          "nodeLabel": "Measure + encode the plan"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 620,
+        "y": -120
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_box",
+              "kind": "polygon",
+              "name": "Boundary box",
+              "color": "#7c3aed",
+              "layer": "Detected · Objects",
+              "lineStyle": "dashed",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_ctr",
+              "kind": "circle",
+              "name": "Centroid",
+              "color": "#4c1d95",
+              "layer": "Detected · Object centroids",
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "radius": 0.1,
+              "show": true
+            }
+          ],
+          "nodeLabel": "Boundary boxes + centroids"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 620,
+        "y": 260
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Objects — detected"
+            },
+            {
+              "id": "s2",
+              "label": "Objects — kept (≥ min area)"
+            },
+            {
+              "id": "s3",
+              "label": "Dropped as too small"
+            },
+            {
+              "id": "s4",
+              "label": "Typed (matched a named class)"
+            },
+            {
+              "id": "s5",
+              "label": "Unclaimed labels (placed with the default object)"
+            },
+            {
+              "id": "s6",
+              "label": "Centroid [[x, y], …]"
+            },
+            {
+              "id": "s7",
+              "label": "Length (m, per object — long edge)"
+            },
+            {
+              "id": "s8",
+              "label": "Breadth (m, per object — short edge)"
+            },
+            {
+              "id": "s9",
+              "label": "Rotation (deg, per object)"
+            },
+            {
+              "id": "s10",
+              "label": "Footprint area (m², per object)"
+            },
+            {
+              "id": "s11",
+              "label": "Polygon coordinates [x, y, box], per corner"
+            },
+            {
+              "id": "s12",
+              "label": "Plan JSON — nodes + parametric attachments"
+            }
+          ],
+          "nodeLabel": "What was found"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geom_props",
+      "source": "geom",
+      "sourceHandle": null,
+      "target": "props",
+      "targetHandle": null
+    },
+    {
+      "id": "e2_props_detect",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detect",
+      "targetHandle": null
+    },
+    {
+      "id": "e3_props_area",
+      "source": "props",
+      "sourceHandle": "val-minArea",
+      "target": "math",
+      "targetHandle": "valin-minArea"
+    },
+    {
+      "id": "e4_props_tol",
+      "source": "props",
+      "sourceHandle": "val-tol",
+      "target": "math",
+      "targetHandle": "valin-tol"
+    },
+    {
+      "id": "e5_props_ppm",
+      "source": "props",
+      "sourceHandle": "val-ppm",
+      "target": "math",
+      "targetHandle": "valin-ppm"
+    },
+    {
+      "id": "e6_detect_all",
+      "source": "detect",
+      "sourceHandle": "val-corners",
+      "target": "math",
+      "targetHandle": "valin-A"
+    },
+    {
+      "id": "e7_1_bed",
+      "source": "detect",
+      "sourceHandle": "val-o_bed_corners",
+      "target": "math",
+      "targetHandle": "valin-A1"
+    },
+    {
+      "id": "e7_2_sofa",
+      "source": "detect",
+      "sourceHandle": "val-o_sofa_corners",
+      "target": "math",
+      "targetHandle": "valin-A2"
+    },
+    {
+      "id": "e7_3_chair",
+      "source": "detect",
+      "sourceHandle": "val-o_chair_corners",
+      "target": "math",
+      "targetHandle": "valin-A3"
+    },
+    {
+      "id": "e7_4_table",
+      "source": "detect",
+      "sourceHandle": "val-o_table_corners",
+      "target": "math",
+      "targetHandle": "valin-A4"
+    },
+    {
+      "id": "e7_5_desk",
+      "source": "detect",
+      "sourceHandle": "val-o_desk_corners",
+      "target": "math",
+      "targetHandle": "valin-A5"
+    },
+    {
+      "id": "e7_6_wardrobe",
+      "source": "detect",
+      "sourceHandle": "val-o_wardrobe_corners",
+      "target": "math",
+      "targetHandle": "valin-A6"
+    },
+    {
+      "id": "e7_7_cabinet",
+      "source": "detect",
+      "sourceHandle": "val-o_cabinet_corners",
+      "target": "math",
+      "targetHandle": "valin-A7"
+    },
+    {
+      "id": "e7_8_toilet",
+      "source": "detect",
+      "sourceHandle": "val-o_toilet_corners",
+      "target": "math",
+      "targetHandle": "valin-A8"
+    },
+    {
+      "id": "e7_9_washbasin",
+      "source": "detect",
+      "sourceHandle": "val-o_washbasin_corners",
+      "target": "math",
+      "targetHandle": "valin-A9"
+    },
+    {
+      "id": "e7_10_refrigerator",
+      "source": "detect",
+      "sourceHandle": "val-o_refrigerator_corners",
+      "target": "math",
+      "targetHandle": "valin-A10"
+    },
+    {
+      "id": "e8_math_box",
+      "source": "math",
+      "sourceHandle": "val-Box",
+      "target": "render",
+      "targetHandle": "valin-pr_box"
+    },
+    {
+      "id": "e9_math_ctr",
+      "source": "math",
+      "sourceHandle": "val-Ctr",
+      "target": "render",
+      "targetHandle": "valin-pr_ctr"
+    },
+    {
+      "id": "e10_found",
+      "source": "math",
+      "sourceHandle": "val-Found",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e11_kept",
+      "source": "math",
+      "sourceHandle": "val-Kept",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e12_dropped",
+      "source": "math",
+      "sourceHandle": "val-Dropped",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e13_typed",
+      "source": "math",
+      "sourceHandle": "val-Typed",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e14_unmatched",
+      "source": "detect",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e15_centroid",
+      "source": "math",
+      "sourceHandle": "val-C",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e16_length",
+      "source": "math",
+      "sourceHandle": "val-Len",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e17_breadth",
+      "source": "math",
+      "sourceHandle": "val-Brd",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e18_rotation",
+      "source": "math",
+      "sourceHandle": "val-Rot",
+      "target": "metrics",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e19_area",
+      "source": "math",
+      "sourceHandle": "val-Area",
+      "target": "metrics",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e20_poly",
+      "source": "math",
+      "sourceHandle": "val-Box",
+      "target": "metrics",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e21_planjson",
+      "source": "math",
+      "sourceHandle": "val-json",
+      "target": "metrics",
+      "targetHandle": "valin-s12"
+    }
+  ]
+}

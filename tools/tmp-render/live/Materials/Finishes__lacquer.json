@@ -1,0 +1,36 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "paint.lacquer",
+  "title": "Paint — matte lacquer",
+  "description": "Sprayed MDF: the shutter, the door frame, the skirting. No pattern at furniture scale, so the recipe is a barely-there noise that only breaks the dead-flat specular — take it out and every shutter in the room reads as plastic.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 140,
+      "detail": 2,
+      "roughness": 0.5,
+      "distortion": 0,
+      "colorA": "#dcd0bd",
+      "colorB": "#d4c7b3"
+    }
+  },
+  "pbr": {
+    "baseColor": "#d9c7ae",
+    "roughness": 0.62,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#d9c7ae"
+  },
+  "dxf": {
+    "pattern": "PLAST",
+    "scale": 1,
+    "angle": 0
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-ops",
+  "meta": { "label": "Matrix Operations", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — combine TWO matrices into one: A+B, A−B, A·B (matrix product), A∘B (element-wise ×) or A/B. Element-wise ops BROADCAST, so a scalar or an N×1 column combines with an N×2 vector list. Draws nothing.",
+  "instructions": "A value-only node: two matrices as JSON in, one matrix as JSON out. It has no geometry input or output and draws nothing on the canvas.\n\nINPUTS: wire a matrix into valin-a and valin-b — Grid Geometry's `val-matrix` (a bare rows×cols 2D array `[[…],…]`), another Matrix / Vector node's output, or a POINT LIST such as Space Geometry's / Polygon's `val-points` (an N×2 list IS an N-row matrix — that is how this reaches real geometry). A val-grid `{ \"values\": [[…]] }` is accepted too. A bare NUMBER wired in (e.g. an Input Properties slider) is read as a 1×1 matrix so it broadcasts.\n\nOPERATIONS:\n• Add (A+B) / Subtract (A−B) — element-wise.\n• Multiply (A·B) — the MATRIX PRODUCT (rows of A dotted with columns of B). Requires A's cols = B's rows; the result is A.rows × B.cols. Order matters — A·B ≠ B·A. NOT broadcast.\n• Multiply element-wise (A∘B) — the Hadamard product, cell-by-cell.\n• Divide (A/B) — element-wise. Division by ≈0 yields 0 rather than Infinity, so one degenerate cell can't poison the whole list.\n\nBROADCASTING (all element-wise ops): a dimension must MATCH or be 1, in which case it stretches. So N×2 with 1×1 scales every component by a scalar, and N×2 with N×1 applies a PER-ROW scalar (exactly the miter-vector divide B / (1 + n̂·n̂ₚ)).\n\nIncompatible shapes, a ragged matrix, or empty input return an EMPTY matrix — check `val-rows` > 0.\n\nOUTPUT: `val-matrix` — the result; plus `val-rows` / `val-cols`. Transpose → Matrix Operations (A·B) gives AᵀA, and feeding that to Inverse builds the least-squares normal equations x = (AᵀA)⁻¹Aᵀb. An N×2 result can be wired straight into a Polygon node's `valin-points` to DRAW it. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "a", "label": "Matrix A" },
+      { "key": "b", "label": "Matrix B" },
+      { "key": "op", "label": "Operation" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Matrix (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" },
+      { "key": "value", "label": "Value" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "op",
+      "label": "Operation",
+      "kind": "select",
+      "default": "multiply",
+      "options": [
+        { "value": "add", "label": "Add (A + B)" },
+        { "value": "subtract", "label": "Subtract (A − B)" },
+        { "value": "multiply", "label": "Multiply (A · B)" },
+        { "value": "hadamard", "label": "Multiply element-wise (A ∘ B)" },
+        { "value": "divide", "label": "Divide element-wise (A / B)" }
+      ]
+    },
+    { "key": "a", "label": "Matrix A (JSON)", "kind": "text", "default": "" },
+    { "key": "b", "label": "Matrix B (JSON)", "kind": "text", "default": "" }
+  ]
+}

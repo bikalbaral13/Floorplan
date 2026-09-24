@@ -1,4 +1,4 @@
-import { generateFloorPlan, type GenerateConfig, type RoomRectOutput } from "./floorplanAlgorithms";
+import { generateFloorPlan, type GenerateConfig, type RoomRectOutput } from "@builderpluss/engine";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

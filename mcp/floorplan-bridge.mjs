@@ -20,14 +20,21 @@ const queue = [];          // commands waiting for the browser to pick up
 const waiters = [];        // pending long-poll responders waiting for a command
 const pending = new Map(); // command id → { resolve, reject, timer }
 
-function enqueueCommand(tool, args) {
+// A `checkpoint` blocks on a HUMAN reading the canvas, so it gets its own budget — the 60s that suits a
+// draw call would abandon the user mid-review.
+const DEFAULT_TIMEOUT_MS = 60000;
+const CHECKPOINT_TIMEOUT_MS = Number(process.env.FP_CHECKPOINT_TIMEOUT_MS || 30 * 60 * 1000);
+
+function enqueueCommand(tool, args, timeoutMs = tool === "checkpoint" ? CHECKPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS) {
   const id = `c${++seq}`;
   const cmd = { id, tool, args };
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
-      reject(new Error("browser did not respond in 60s — is the app open with the agent bridge enabled (localStorage bp.agentBridge=\"1\" or ?agent=1)?"));
-    }, 60000);
+      reject(new Error(tool === "checkpoint"
+        ? `no answer in ${Math.round(timeoutMs / 60000)} min — the checkpoint card is still open in the app; ask the user to answer it, or re-run the step.`
+        : "browser did not respond in 60s — is the app open with the agent bridge enabled (localStorage bp.agentBridge=\"1\" or ?agent=1)?"));
+    }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
     const w = waiters.shift();
     if (w) w(cmd);        // hand straight to a waiting poller
@@ -40,7 +47,7 @@ let latchedClient = null;
 const lastSeen = new Map(); // client id → last poll ms
 const LATCH_STALE_MS = 30000;
 
-// ── HTTP channel for the browser tab (long-poll /next, POST /result). CORS-open for the :2000 dev origin. ──
+// ── HTTP channel for the browser tab (long-poll /next, POST /result). CORS-open for the :3000 dev origin. ──
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type",
@@ -98,7 +105,7 @@ http.createServer((req, res) => {
         return;
       }
       try {
-        const result = await enqueueCommand(tool, args ?? {});
+        const result = await callTool(tool, args ?? {});
         res.writeHead(200, { ...CORS, "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, result }));
       } catch (e) {
@@ -146,11 +153,24 @@ const TOOLS = [
   { name: "place_opening", description: "Cut a Door or Window PARAMETRIC OBJECT into the nearest wall at a point (METRES). Splits the host wall into wall·opening·wall and drops the object into the gap (renders the leaf/swing or glazing), keeping the host wall's identity. `object` is an id (door.single.v1 / window.standard.v1) or a symbol (\"door\"/\"window\"). widthM optional (defaults to the object's width). This is the PROPER way to add doors/windows.", inputSchema: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, object: { type: "string", description: "object id or symbol: door | window | door.single.v1 | window.standard.v1" }, widthM: { type: "number", description: "opening width in metres (default = object default)" }, flip: { type: "boolean", description: "mirror the object to the other side" }, params: { type: "object", description: "override object params (e.g. height, hinge, swing)" } }, required: ["x", "y", "object"] } },
   { name: "place_object", description: "Place a PARAMETRIC OBJECT as an object node at a point (METRES) — furniture/fixtures/columns/staircase (e.g. bed.v2, sofa.v2, table.dining.v1, wardrobe.v2, footing.column.v1, staircase.straight.v1). Attaches the object's real parametric geometry (NOT a generic symbol) with graphAttrs node-type \"object\". `object` is the object id. Pass params to override the object's defaults, and rotation (degrees).", inputSchema: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, object: { type: "string", description: "object id, e.g. bed.v2 / sofa.v2 / footing.column.v1" }, rotation: { type: "number", description: "rotation in degrees (default 0)" }, params: { type: "object", description: "override object params keyed by param key" } }, required: ["x", "y", "object"] } },
 
+  // ── Stepwise collaboration: pause after each step, let the user edit/reply, then read back what they
+  //    changed. `checkpoint` is the gate; `get_changes_since` is the reverse channel it reports through. ──
+  { name: "begin_step", description: "OPEN the next step of a stepwise job and arm the step gate. While a step is open you may draw; the moment you checkpoint it closes, and every drawing tool is REFUSED until you call begin_step again. You cannot open a step while one is still open — checkpoint first. One step per turn: declare it, do only that step's work, hand it to the user. Before drawing, read get_changes_since so you build on the user's hand edits rather than over them.", inputSchema: { type: "object", properties: { step: { type: "string", description: 'the step label, e.g. "2/6 — exterior walls"' }, of: { type: "number", description: "total steps in the run (optional, for the card)" } }, required: ["step"] } },
+  { name: "checkpoint", description: "PAUSE and hand control to the user. Call this after EVERY step of a multi-step job (trace, layout, detailing) and never run two steps in one turn. Shows a card in the live app summarising what you just did; the call BLOCKS until the user picks an option — they can edit the canvas by hand and/or type a note first. Returns { decision, notes, userEdits, rev }. `userEdits` are the changes THEY made while the card was open: treat that geometry as ground truth, re-fit around it, never revert it. Re-do the step on \"redo step\"; stop and ask on \"reject\". Closes the step opened by begin_step (\"redo step\" keeps it open so you can redo it); pass final:true on the last one to end the run.", inputSchema: { type: "object", properties: { step: { type: "string", description: 'where you are, e.g. "2/6 — exterior walls"' }, summary: { type: "string", description: "what you just did, one or two lines" }, ask: { type: "string", description: "what you want from the user (default: edit or note, then choose)" }, options: { type: "array", items: { type: "string" }, description: 'decision buttons; first is primary (default ["continue","redo step","reject"])' }, final: { type: "boolean", description: "true on the last step — ends the run and disarms the step gate" } }, required: ["step"] } },
+  { name: "delete_entities", description: "REMOVE geometry by id: `segments` (wall / opening piece ids from get_plan or a place_opening result's openingId), `objects` (canvas object ids), `furniture`. Removing an opening piece leaves a hole where it sat - the neighbouring wall pieces stay - so redraw the span you want healed with draw_segment afterwards. This is the retraction tool: a door cut into the wrong wall comes OUT with this before the right one goes in. Returns { removed, missing }.", inputSchema: { type: "object", properties: { segments: { type: "array", items: { type: "string" }, description: "segment ids to delete" }, objects: { type: "array", items: { type: "string" }, description: "canvas object ids to delete" }, furniture: { type: "array", items: { type: "string" }, description: "furniture ids to delete" } } } },
+  { name: "export_plan", description: "Return the design as the STANDARD plan-format JSON string - the exact bytes the app's own Export JSON writes (schemaVersion, settings incl. pixelsPerMeter / library_path, nodes, segments, spaces, layers, imageUnderlay, graphAttrs, with each attachment's evaluated result baked on). Read-only. This is how a stepwise run DELIVERS: take the string, point imageUnderlay.src at the Library image if it was passed inline, and save it to library/Designs/<Name>.json.", inputSchema: { type: "object", properties: {} } },
+  { name: "style_segments", description: "Restyle EXISTING wall segments in place - thickness and hatch - without redrawing them (so cut openings keep their hosts). Target `ids`, or `all: true` for every segment. `thicknessM` sets an absolute thickness; `thicknessScale` multiplies each segment's current thickness (use this after the user rescales the canvas so the bands match the picture). `hatch` true/false with optional hatchStyle (diagonal | dots), hatchSpacing (world px, default 8), hatchAngle (deg, default 45), hatchWeight. Returns the count changed.", inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, all: { type: "boolean" }, thicknessM: { type: "number" }, thicknessScale: { type: "number" }, hatch: { type: "boolean" }, hatchStyle: { type: "string" }, hatchSpacing: { type: "number" }, hatchAngle: { type: "number" }, hatchWeight: { type: "number" } } } },
+  { name: "attach_segment_object", description: "Attach a SEGMENT-hosted parametric object (the Wall object wall-with-math, a kitchen counter, a railing …) along EXISTING segments without cutting them - the object spans the whole segment, seeded with its default params merged with `params`. Target `ids`, or `all: true` for every plain wall segment (opening pieces and segments that already carry the object are skipped). This is how a traced plan gets its Wall object on every wall, as the headless route's plans have. Returns { attached, skipped }.", inputSchema: { type: "object", properties: { object: { type: "string", description: "object id, e.g. wall-with-math / kitchen-counter-with-math" }, ids: { type: "array", items: { type: "string" } }, all: { type: "boolean" }, params: { type: "object", description: "param overrides, e.g. { hatch: true }" }, thicknessFromSegment: { type: "boolean", description: "set the object's `thickness` param from each segment's own thickness (default true)" } }, required: ["object"] } },
+  { name: "get_changes_since", description: "Return every plan revision after `rev`, each tagged source \"agent\" (a bridge tool call of yours) or \"user\" (a hand edit), with the entities added / removed / modified and their geometry in METRES. Get a starting `rev` from get_state or a previous call. Read this before each step so you build on the user's hand edits instead of overwriting them — it is far cheaper than re-reading the whole plan with get_plan.", inputSchema: { type: "object", properties: { rev: { type: "number", description: "return revisions after this one (default 0 = everything logged)" }, limit: { type: "number", description: "max revisions to return, newest kept (default 50)" } } } },
+
   // ── Read / inspect (parity with the in-app agents' read tools). ──
   { name: "get_plan", description: "Return the current plan as the slim FloorPlanModel JSON the agents use (serializeForAI) — walls, rooms, objects, furniture, nodeMeta, graphAttrs, layers, objectLibrary. Read this before an apply_model edit so you can keep everything you aren't changing. Coordinates are in PIXELS (metres × ppm; get ppm from get_state).", inputSchema: { type: "object", properties: {} } },
   { name: "list_spaces", description: "List every visible space (auto-detected rooms + manual rooms) with its display label (SpaceNNN or its name), roomType, area (m²), boundary polygon in PIXELS, and the names of objects attached to it. Auto-detected rooms are NOT in get_plan — this is how you discover them and their labels for merge_spaces / attach_space_object.", inputSchema: { type: "object", properties: {} } },
   { name: "get_selection", description: "Return what the user has SELECTED on the live canvas (segments, spaces, object nodes, furniture, wall junction). Use this to ground instructions like 'this room' / 'these walls' / 'the selected space'. Empty when nothing is selected — then resolve targets by label via list_spaces.", inputSchema: { type: "object", properties: {} } },
   { name: "merge_spaces", description: "Union ≥2 spaces into one: interior divider walls between them are dissolved, the perimeter is kept. Pass space labels (from list_spaces) in `spaces`, or omit to merge the user's current canvas selection. Optional `label` names the merged space.", inputSchema: { type: "object", properties: { spaces: { type: "array", items: { type: "string" }, description: "≥2 space labels to merge (omit to use the live selection)" }, label: { type: "string", description: "optional name for the merged space" } } } },
+  { name: "list_layers", description: "Return the canvas LAYER table — every layer's id, name, colour, visible/locked state and paint order, how many segments / spaces / objects sit on each, and which layer is ACTIVE (newly drawn entities land there). The source of the ids and names create_layer / move_to_layer accept.", inputSchema: { type: "object", properties: {} } },
+  { name: "create_layer", description: "Create a canvas layer and make it ACTIVE, so anything drawn next lands on it. Idempotent: an existing id or name is returned untouched (created:false) instead of duplicated. The id is slugified from `name` unless given. Use move_to_layer to put EXISTING geometry on it.", inputSchema: { type: "object", properties: { name: { type: "string", description: 'display name, e.g. "Site Boundary"' }, id: { type: "string", description: "stable layer id (default: slugified name)" }, color: { type: "string", description: 'hex colour for ByLayer entities, e.g. "#22c55e"' }, visible: { type: "boolean", description: "start hidden with false (default true)" }, locked: { type: "boolean", description: "start locked (default false)" }, activate: { type: "boolean", description: "make it the active layer (default true)" } }, required: ["name"] } },
+  { name: "move_to_layer", description: "Move EXISTING geometry onto another layer. `layer` is an id or name from list_layers and must already exist (call create_layer first). Name what to move, or omit all four lists to move the user's current canvas selection. Spaces go by list_spaces label, segments / objects by the ids get_selection reports, nodes by nodeKey — a node has no layer of its own, so moving one moves the segments meeting at it. Auto-detected spaces are promoted to real spaces so the move sticks.", inputSchema: { type: "object", properties: { layer: { type: "string", description: "target layer id or name (see list_layers)" }, spaces: { type: "array", items: { type: "string" }, description: "space labels (see list_spaces)" }, segments: { type: "array", items: { type: "string" }, description: "segment/wall ids (see get_selection / get_plan)" }, nodes: { type: "array", items: { type: "string" }, description: "node keys (nodeKey from get_selection)" }, objects: { type: "array", items: { type: "string" }, description: "placed object / furniture ids" } }, required: ["layer"] } },
   { name: "attach_space_object", description: "Attach a SPACE-hosted parametric object (Floor / Massing / Site / Core / Floor Plate / Corridoor …) to a space by label. `object` is an object id / name / symbol; `space` is a label from list_spaces. Pass params to override the object's defaults. Space objects drive the space's floor slab, massing tower, setbacks, etc.", inputSchema: { type: "object", properties: { object: { type: "string", description: "space object id/name/symbol, e.g. floor.slab.v1 / massing.block.v1 / core.v1" }, space: { type: "string", description: "target space label (see list_spaces)" }, params: { type: "object", description: "override object params" } }, required: ["object", "space"] } },
 
   // ── Parametric object library (read-only over the bridge; save/delete are intentionally NOT exposed). ──
@@ -179,6 +199,137 @@ function send(msg) { process.stdout.write(JSON.stringify(msg) + "\n"); }
 function reply(id, result) { send({ jsonrpc: "2.0", id, result }); }
 function replyErr(id, code, message) { send({ jsonrpc: "2.0", id, error: { code, message } }); }
 
+// ── Server → client requests (elicitation). Our own id space, prefixed so it can never collide with the
+//    client's. Responses arrive on stdin as messages carrying an id but no method. ──
+const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
+let clientCaps = {};
+let outSeq = 0;
+const outPending = new Map();
+
+function request(method, params, timeoutMs) {
+  const id = `s${++outSeq}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { outPending.delete(id); reject(new Error(`${method} timed out`)); }, timeoutMs);
+    outPending.set(id, { resolve, reject, timer, method });
+    send({ jsonrpc: "2.0", id, method, params });
+  });
+}
+
+function cancelRequest(id, reason) {
+  const p = outPending.get(id);
+  if (!p) return;
+  clearTimeout(p.timer);
+  outPending.delete(id);
+  send({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: id, reason } });
+}
+
+// ── Step gate ───────────────────────────────────────────────────────────────────────────────────────
+// Telling a model in a skill file to "checkpoint after every step" does not hold: it will merge three
+// steps into one turn and check in at the end, which is exactly the behaviour stepwise mode exists to
+// prevent. So the rule is enforced here, where every tool call passes.
+//
+//   begin_step  → a step is OPEN; writes are allowed and tagged with it
+//   checkpoint  → the step CLOSES; writes are refused until the next begin_step
+//
+// A model can still do too much inside one step, but it cannot do it unlabelled: every write belongs to a
+// declared step, and every step ends at the user. The gate stays DISARMED until the first begin_step, so
+// one-shot use of the bridge is completely unaffected.
+const WRITE_TOOLS = new Set([
+  "clear_canvas", "draw_wall", "apply_model", "draw_segment", "draw_freehand", "place_opening",
+  "place_object", "merge_spaces", "create_layer", "move_to_layer", "attach_space_object",
+  "set_image_underlay", "align_underlay", "fit_plan_to_rect", "flow_apply", "flow_commit",
+  "delete_entities", "style_segments", "attach_segment_object",
+]);
+// `import_objects` is deliberately NOT gated: it loads the object library and every skill is told to call
+// it first, so gating it would refuse the one call that must precede a step rather than sit inside one.
+
+const run = { armed: false, step: null, index: 0, of: null, completed: [] };
+
+function stepState() {
+  return { armed: run.armed, openStep: run.step, stepIndex: run.index, of: run.of, completed: run.completed.slice(-20) };
+}
+
+function beginStep(args) {
+  const step = String(args.step ?? "").trim();
+  if (!step) throw new Error("begin_step needs a `step` label, e.g. \"2/6 — exterior walls\"");
+  if (run.step) {
+    throw new Error(`step "${run.step}" is still open — call checkpoint to hand it to the user before starting "${step}". One step per turn.`);
+  }
+  run.armed = true;
+  run.step = step;
+  run.index += 1;
+  if (args.of != null) run.of = Number(args.of);
+  return { ...stepState(), note: "Writes are open for this step. Close it with checkpoint before starting the next one." };
+}
+
+function assertWritable(tool) {
+  if (!run.armed || !WRITE_TOOLS.has(tool)) return;
+  if (run.step) return;
+  const last = run.completed[run.completed.length - 1];
+  throw new Error(`stepwise mode: no step is open, so "${tool}" was refused.${last ? ` "${last.step}" was closed at the last checkpoint.` : ""} Call begin_step with the next step's label first — and read get_changes_since to pick up the user's edits before you draw over them.`);
+}
+
+/** A checkpoint is answerable from TWO places: the card in the app (which also carries the user's canvas
+ *  edits) and — when the client supports elicitation — the chat itself. Offer both and take the first.
+ *  A chat answer is then pushed INTO the app so the card closes and we still collect the edits: the app's
+ *  result is always the payload returned to the model. */
+async function runCheckpoint(args) {
+  const app = enqueueCommand("checkpoint", { ...args, step: args.step ?? run.step ?? "checkpoint" });
+  if (!clientCaps.elicitation) return app;
+
+  const options = Array.isArray(args.options) && args.options.length ? args.options.map(String) : ["continue", "redo step", "reject"];
+  const lines = [String(args.step ?? "checkpoint"), args.summary ? String(args.summary) : "", args.ask ? String(args.ask) : "Edit the canvas in the app, or answer here."];
+  const elicitId = `s${outSeq + 1}`; // the id `request` is about to mint — needed to cancel it if the app wins
+  const chat = request("elicitation/create", {
+    message: lines.filter(Boolean).join("\n\n"),
+    requestedSchema: {
+      type: "object",
+      properties: {
+        decision: { type: "string", title: "Decision", enum: options },
+        notes: { type: "string", title: "Notes", description: "anything the agent should know (optional)" },
+      },
+      required: ["decision"],
+    },
+  }, CHECKPOINT_TIMEOUT_MS);
+
+  // Only an ACCEPTED elicitation counts as an answer. A decline/cancel (or a client that auto-declines)
+  // must not end the checkpoint — the user is probably about to use the card instead — so those branches
+  // hand back a promise that never settles, leaving the app as the only live channel.
+  const never = () => new Promise(() => {});
+  const viaChat = chat.then((r) => (r && r.action === "accept" ? { kind: "chat", r } : never())).catch(never);
+  const viaApp = app.then((r) => ({ kind: "app", r }));
+
+  const first = await Promise.race([viaApp, viaChat]);
+  if (first.kind === "app") {
+    cancelRequest(elicitId, "answered in the app");
+    return first.r;
+  }
+  const content = first.r.content ?? {};
+  await enqueueCommand("checkpoint_resolve", { decision: String(content.decision ?? options[0]), notes: String(content.notes ?? "") }).catch(() => {});
+  return app; // resolves now that the card is closed — with the user's canvas edits attached
+}
+
+/** Every tool call — MCP `tools/call` and the plain-HTTP `/enqueue` alike — goes through here, so the
+ *  step gate and the checkpoint's two answer channels apply whichever way a tool is driven. */
+async function callTool(name, args) {
+  if (name === "begin_step") return beginStep(args);
+  assertWritable(name);
+  // A resumed session's first question is "where was I" — answer it in the digest it already reads.
+  if (name === "get_state") return { ...(await enqueueCommand(name, args)), stepState: stepState() };
+  if (name !== "checkpoint") return enqueueCommand(name, args);
+
+  const step = run.step;
+  const result = await runCheckpoint(args);
+  // The step closes on the user's answer, not on the model's say-so. "redo step" keeps it open: the model
+  // is being sent back to redo the SAME step, and making it re-declare one would just invite a new label.
+  if (step && result?.decision !== "redo step") {
+    run.completed.push({ step, decision: result?.decision ?? "continue", at: Date.now() });
+    run.step = null;
+    if (args.final) { run.armed = false; run.index = 0; run.of = null; }
+  }
+  return { ...result, step, stepState: stepState() };
+}
+
 let buf = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", async (chunk) => {
@@ -191,8 +342,19 @@ process.stdin.on("data", async (chunk) => {
     let msg;
     try { msg = JSON.parse(line); } catch { continue; }
     const { id, method, params } = msg;
+    // A message with an id but no method is the client ANSWERING one of our requests (elicitation).
+    if (method === undefined && id != null) {
+      const p = outPending.get(id);
+      if (p) { clearTimeout(p.timer); outPending.delete(id); msg.error ? p.reject(new Error(msg.error.message || "request failed")) : p.resolve(msg.result); }
+      continue;
+    }
     if (method === "initialize") {
-      reply(id, { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "floorplan-bridge", version: "0.1.0" } });
+      clientCaps = params?.capabilities ?? {};
+      // Echo the client's protocol version when we recognise it — elicitation needs 2025-06-18 or later,
+      // and pinning ourselves to 2024-11-05 would negotiate that capability away.
+      const wanted = params?.protocolVersion;
+      const protocolVersion = PROTOCOL_VERSIONS.includes(wanted) ? wanted : "2024-11-05";
+      reply(id, { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "floorplan-bridge", version: "0.2.0" } });
     } else if (method === "notifications/initialized") {
       // no response for notifications
     } else if (method === "ping") {
@@ -203,12 +365,17 @@ process.stdin.on("data", async (chunk) => {
       const name = params?.name;
       const args = params?.arguments ?? {};
       if (!TOOLS.some((t) => t.name === name)) { replyErr(id, -32602, `unknown tool: ${name}`); continue; }
-      try {
-        const r = await enqueueCommand(name, args);
-        reply(id, { content: [{ type: "text", text: typeof r === "string" ? r : JSON.stringify(r) }] });
-      } catch (e) {
-        reply(id, { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true });
-      }
+      // Run DETACHED: awaiting here would stall the parse loop for the life of the call, and a checkpoint
+      // lives for up to 30 min — the elicitation answer that ends it arrives on this very stream. JSON-RPC
+      // matches replies by id, so out-of-order completion is fine.
+      void (async () => {
+        try {
+          const r = await callTool(name, args);
+          reply(id, { content: [{ type: "text", text: typeof r === "string" ? r : JSON.stringify(r) }] });
+        } catch (e) {
+          reply(id, { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true });
+        }
+      })();
     } else if (id != null) {
       replyErr(id, -32601, `method not found: ${method}`);
     }

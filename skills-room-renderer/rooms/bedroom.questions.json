@@ -1,0 +1,904 @@
+{
+  "id": "bedroom",
+  "name": "Master bedroom",
+  "version": 1,
+  "display": "ft-in",
+  "objects": [
+    "false-ceiling-with-math", "beam-with-math", "bed-with-math", "upholstered-panel-with-math",
+    "nightstand-with-math", "light-bulb-with-math", "wardrobe-with-math", "window-with-math",
+    "window-seat-with-math", "curtain-with-math", "curtain-track-with-math", "tv-with-math",
+    "fluted-panel-with-math", "tv-unit-with-math", "wall-art-with-math", "ceiling-fan-with-math",
+    "chandelier-with-math", "downlight-with-math", "led-strip-with-math", "tessellation-with-math",
+    "skirting-with-math", "rug-with-math"
+  ],
+  "plan": {
+    "viewBox": "0 0 260 250",
+    "zones": {
+      "bed": [58, 20, 182, 70],
+      "wardrobe": [20, 20, 38, 110],
+      "seat": [20, 130, 38, 100],
+      "tv": [58, 188, 140, 42],
+      "ceiling": [20, 20, 220, 210],
+      "floor": [70, 100, 150, 80],
+      "room": [20, 20, 220, 210]
+    },
+    "svg": "<rect class='wall' x='20' y='20' width='220' height='210'/><rect class='thin' x='22' y='22' width='34' height='106'/><text x='39' y='80' text-anchor='middle' transform='rotate(-90 39 80)'>wardrobe</text><rect class='thin' x='22' y='130' width='34' height='98'/><text x='39' y='180' text-anchor='middle' transform='rotate(-90 39 180)'>seat</text><line class='win' x1='20' y1='140' x2='20' y2='220'/><rect class='thin' x='95' y='24' width='108' height='86'/><rect class='thin' x='70' y='24' width='22' height='22'/><rect class='thin' x='206' y='24' width='22' height='22'/><rect class='thin' x='80' y='208' width='110' height='18'/><path class='door' d='M240 60 A30 30 0 0 1 210 90'/><line class='door' x1='240' y1='60' x2='240' y2='90' style='stroke-dasharray:none'/><path class='door' d='M205 230 A30 30 0 0 1 235 200'/><line class='door' x1='205' y1='230' x2='235' y2='230' style='stroke-dasharray:none'/><text x='228' y='52' text-anchor='end'>door A</text><text x='200' y='244' text-anchor='end'>door B</text>"
+  },
+
+  "sections": [
+    {
+      "id": "setup",
+      "title": "Room setup",
+      "zone": "room",
+      "lead": "These settle the shell before any furniture is modelled.",
+      "questions": [
+        {
+          "id": "room_length", "kind": "plan", "ask": "Room length, wall to wall",
+          "note": "the long side", "input": "length", "default": 3.962
+        },
+        {
+          "id": "room_width", "kind": "plan", "ask": "Room width, wall to wall",
+          "input": "length", "default": 3.734
+        },
+        {
+          "id": "slab_height", "kind": "param", "ask": "Floor-to-slab height",
+          "note": "the finished ceiling will be lower", "input": "length", "default": 3.353,
+          "writes": [{ "object": "false-ceiling-with-math", "param": "slabHeight", "value": "$" }]
+        },
+        {
+          "id": "ceiling_type", "kind": "param", "ask": "Cove band runs on",
+          "note": "for a flat ceiling, turn the cove LED off and set the panel soffit equal to the band",
+          "input": "choice", "default": "All four",
+          "options": [
+            { "label": "All four walls", "hint": "panel in the middle", "value": "All four" },
+            { "label": "The long walls", "hint": "panel runs to the end walls", "value": "Long sides" },
+            { "label": "The short walls", "value": "Short sides" },
+            { "label": "Three walls", "hint": "one wall left open", "value": "Three sides" }
+          ],
+          "writes": [{ "object": "false-ceiling-with-math", "param": "bandSides", "value": "$" }]
+        },
+        {
+          "id": "cove_soffit", "kind": "param", "ask": "Cove band soffit height",
+          "note": "the lowest ceiling line", "input": "length", "default": 2.972,
+          "writes": [{ "object": "false-ceiling-with-math", "param": "bandSoffit", "value": "$" }]
+        },
+        {
+          "id": "panel_soffit", "kind": "param", "ask": "Central panel soffit height",
+          "note": "the difference between this and the band is the cove", "input": "length", "default": 3.124,
+          "writes": [{ "object": "false-ceiling-with-math", "param": "panelSoffit", "value": "$" }]
+        },
+        {
+          "id": "band_width", "kind": "param", "ask": "Cove band width",
+          "input": "length", "default": 0.305,
+          "writes": [{ "object": "false-ceiling-with-math", "param": "bandWidth", "value": "$" }]
+        },
+        {
+          "id": "beams", "kind": "plan", "ask": "Any beams crossing the room?",
+          "input": "choice", "default": "none",
+          "options": [
+            { "label": "No beams", "hint": "flat slab, free ceiling design", "value": "none" },
+            { "label": "Along the bed wall", "hint": "can hide in the headboard drop", "value": "bed_wall" },
+            { "label": "Across the middle", "hint": "the ceiling panel works around it", "value": "middle" },
+            { "label": "Not sure", "hint": "a flat slab is assumed", "value": "unknown" }
+          ]
+        },
+        {
+          "id": "beam_soffit", "kind": "param", "ask": "Beam soffit height",
+          "note": "the height you can walk under", "input": "length", "default": 2.7,
+          "showWhen": { "any": [{ "q": "beams", "is": "bed_wall" }, { "q": "beams", "is": "middle" }] },
+          "writes": [{ "object": "beam-with-math", "param": "soffitHeight", "value": "$" }]
+        },
+        {
+          "id": "beam_depth", "kind": "param", "ask": "Beam depth",
+          "input": "length", "default": 0.35,
+          "showWhen": { "any": [{ "q": "beams", "is": "bed_wall" }, { "q": "beams", "is": "middle" }] },
+          "writes": [{ "object": "beam-with-math", "param": "depth", "value": "$" }]
+        },
+        {
+          "id": "entry_door", "kind": "plan", "ask": "Which door is the room entry?",
+          "note": "see plan", "input": "choice", "default": "B",
+          "options": [
+            { "label": "Door A", "hint": "right wall, near the bed", "value": "A" },
+            { "label": "Door B", "hint": "bottom-right corner", "value": "B" }
+          ]
+        },
+        {
+          "id": "other_door", "kind": "plan", "ask": "The other door opens to…",
+          "input": "choice", "default": "bathroom",
+          "options": [
+            { "label": "Bathroom", "value": "bathroom" },
+            { "label": "Balcony", "hint": "adds a second light source", "value": "balcony" },
+            { "label": "Dressing room", "value": "dressing" },
+            { "label": "Corridor", "value": "corridor" }
+          ]
+        },
+        {
+          "id": "clear_span", "kind": "plan", "ask": "Clear span on the bed wall",
+          "note": "wardrobe face to the far wall — the headboard has to fit inside this",
+          "input": "length", "default": 3.353
+        }
+      ]
+    },
+
+    {
+      "id": "bed",
+      "title": "Bed wall",
+      "zone": "bed",
+      "lead": "The hero wall. Headboard, pendants and floating tables.",
+      "questions": [
+        {
+          "id": "bed_size", "kind": "param", "ask": "Bed size", "input": "choice", "default": "king",
+          "options": [
+            { "label": "King", "hint": "6'0\" × 6'6\"", "value": "king", "writes": [
+              { "object": "bed-with-math", "param": "width", "value": 1.829 },
+              { "object": "bed-with-math", "param": "length", "value": 1.981 }] },
+            { "label": "Queen", "hint": "5'0\" × 6'6\"", "value": "queen", "writes": [
+              { "object": "bed-with-math", "param": "width", "value": 1.524 },
+              { "object": "bed-with-math", "param": "length", "value": 1.981 }] },
+            { "label": "Super king", "hint": "6'6\" × 6'6\"", "value": "superking", "writes": [
+              { "object": "bed-with-math", "param": "width", "value": 1.981 },
+              { "object": "bed-with-math", "param": "length", "value": 1.981 }] }
+          ]
+        },
+        {
+          "id": "mattress_top", "kind": "param", "ask": "Mattress top height",
+          "input": "length", "default": 0.61,
+          "writes": [{ "object": "bed-with-math", "param": "baseHeight", "value": "$" }]
+        },
+        {
+          "id": "bed_base", "kind": "param", "ask": "Bed base", "input": "choice", "default": "Plinth",
+          "options": [
+            { "label": "Recessed plinth", "hint": "reads as a solid block", "value": "Plinth" },
+            { "label": "Legs", "hint": "light, floor visible under", "value": "Legs" },
+            { "label": "Floating", "hint": "cantilevered, shadow gap under", "value": "Floating" }
+          ],
+          "writes": [{ "object": "bed-with-math", "param": "baseStyle", "value": "$" }]
+        },
+        {
+          "id": "headboard_source", "kind": "param", "ask": "Where does the headboard come from?",
+          "note": "a wall panel survives the bed being moved; a board does not",
+          "input": "choice", "default": "wall_panel",
+          "options": [
+            { "label": "Upholstered wall panel", "hint": "floor-to-cove, its own object", "value": "wall_panel",
+              "writes": [{ "object": "bed-with-math", "param": "headboardStyle", "value": "None" }] },
+            { "label": "Attached to the bed", "hint": "board the width of the bed", "value": "attached",
+              "writes": [{ "object": "bed-with-math", "param": "headboardStyle", "value": "Attached" }] },
+            { "label": "Wide board on the bed", "hint": "overhangs each side", "value": "wide",
+              "writes": [{ "object": "bed-with-math", "param": "headboardStyle", "value": "Wide panel" }] }
+          ]
+        },
+        {
+          "id": "headboard_pattern", "kind": "param", "ask": "Upholstered panel pattern",
+          "input": "choice", "default": "Vertical channels",
+          "showWhen": { "all": [{ "q": "headboard_source", "is": "wall_panel" }] },
+          "options": [
+            { "label": "Vertical channels", "hint": "tall, calm, makes the wall feel higher", "value": "Vertical channels" },
+            { "label": "Horizontal channels", "hint": "wider, hotel-like", "value": "Horizontal channels" },
+            { "label": "Soft square grid", "hint": "large padded panels", "value": "Square grid" },
+            { "label": "Plain", "hint": "one smooth panel", "value": "Plain" }
+          ],
+          "writes": [{ "object": "upholstered-panel-with-math", "param": "pattern", "value": "$" }]
+        },
+        {
+          "id": "headboard_width", "kind": "param", "ask": "How wide should the panel run?",
+          "input": "length", "default": 2.743,
+          "showWhen": { "all": [{ "q": "headboard_source", "is": "wall_panel" }] },
+          "writes": [{ "object": "upholstered-panel-with-math", "param": "length", "value": "$" }]
+        },
+        {
+          "id": "headboard_height", "kind": "param", "ask": "Panel height",
+          "note": "usually up to the cove band soffit", "input": "length", "default": 2.972,
+          "showWhen": { "all": [{ "q": "headboard_source", "is": "wall_panel" }] },
+          "writes": [{ "object": "upholstered-panel-with-math", "param": "height", "value": "$" }]
+        },
+        {
+          "id": "channel_pitch", "kind": "param", "ask": "Channel pitch",
+          "input": "length", "default": 0.102,
+          "showWhen": { "all": [{ "q": "headboard_source", "is": "wall_panel" }] },
+          "writes": [{ "object": "upholstered-panel-with-math", "param": "channelPitch", "value": "$" }]
+        },
+        {
+          "id": "headboard_halo", "kind": "param", "ask": "LED halo behind the panel",
+          "input": "bool", "default": true,
+          "showWhen": { "all": [{ "q": "headboard_source", "is": "wall_panel" }] },
+          "writes": [{ "object": "upholstered-panel-with-math", "param": "haloLed", "value": "$" }]
+        },
+        {
+          "id": "headboard_fabric", "kind": "context", "ask": "Panel upholstery",
+          "input": "text", "default": "ivory bouclé upholstery, light oak veneer lip, matte",
+          "writes": [{ "object": "upholstered-panel-with-math", "param": "material", "value": "$" }]
+        },
+        {
+          "id": "nightstand_mount", "kind": "param", "ask": "Bedside tables", "input": "choice", "default": "floating",
+          "options": [
+            { "label": "Floating", "hint": "wall-hung, nothing on the floor", "value": "floating",
+              "writes": [{ "object": "nightstand-with-math", "param": "base", "value": "Wall-hung" }] },
+            { "label": "On legs", "value": "legs",
+              "writes": [{ "object": "nightstand-with-math", "param": "base", "value": "Legs" }] },
+            { "label": "On a plinth", "value": "plinth",
+              "writes": [{ "object": "nightstand-with-math", "param": "base", "value": "Plinth" }] }
+          ]
+        },
+        {
+          "id": "nightstand_top", "kind": "param", "ask": "Bedside table top height",
+          "input": "length", "default": 0.558,
+          "showWhen": { "all": [{ "q": "nightstand_mount", "is": "floating" }] },
+          "writes": [{ "object": "nightstand-with-math", "param": "mountHeight", "value": "$" }]
+        },
+        {
+          "id": "nightstand_led", "kind": "param", "ask": "LED under the bedside tables",
+          "input": "bool", "default": true,
+          "writes": [{ "object": "nightstand-with-math", "param": "underLed", "value": "$" }]
+        },
+        {
+          "id": "nightstand_pull", "kind": "param", "ask": "Drawer pull", "input": "choice", "default": "Push",
+          "options": [
+            { "label": "Push to open", "hint": "no hardware visible", "value": "Push" },
+            { "label": "Recessed groove", "value": "Groove" },
+            { "label": "Handle", "value": "Handle" }
+          ],
+          "writes": [{ "object": "nightstand-with-math", "param": "pullType", "value": "$" }]
+        },
+        {
+          "id": "pendant_style", "kind": "param", "ask": "Pendant lights beside the bed",
+          "input": "choice", "default": "Cylinder",
+          "options": [
+            { "label": "Slim cylinder", "hint": "narrow metal drop", "value": "Cylinder" },
+            { "label": "Fabric drum", "hint": "soft, matches upholstery", "value": "Drum" },
+            { "label": "Cone", "hint": "tapered shade", "value": "Cone" },
+            { "label": "Bare bulb", "hint": "no shade", "value": "None" }
+          ],
+          "writes": [
+            { "object": "light-bulb-with-math", "param": "shadeStyle", "value": "$" },
+            { "object": "light-bulb-with-math", "param": "mount", "value": "Pendant" }
+          ]
+        },
+        {
+          "id": "pendant_bottom", "kind": "param", "ask": "Pendant bottom height from floor",
+          "note": "the cord is worked out from this", "input": "length", "default": 1.168,
+          "writes": [{ "object": "light-bulb-with-math", "param": "dropTo", "value": "$" }]
+        }
+      ]
+    },
+
+    {
+      "id": "wardrobe",
+      "title": "Wardrobe wall",
+      "zone": "wardrobe",
+      "lead": "Full height, matte shutters, mirrors and grooves.",
+      "questions": [
+        {
+          "id": "wardrobe_width", "kind": "param", "ask": "Wardrobe run length",
+          "input": "length", "default": 2.235,
+          "writes": [{ "object": "wardrobe-with-math", "param": "width", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_depth", "kind": "param", "ask": "Wardrobe depth",
+          "note": "sliding shutters need 2'0\"", "input": "length", "default": 0.61,
+          "writes": [{ "object": "wardrobe-with-math", "param": "depth", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_height", "kind": "param", "ask": "Wardrobe height",
+          "input": "length", "default": 2.972,
+          "writes": [{ "object": "wardrobe-with-math", "param": "height", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_shutter", "kind": "param", "ask": "Shutter type", "input": "choice", "default": "Sliding",
+          "options": [
+            { "label": "Sliding", "hint": "2–3 wide panels, no swing space needed", "value": "Sliding" },
+            { "label": "Hinged", "hint": "swing doors, more panels", "value": "Hinged" }
+          ],
+          "writes": [{ "object": "wardrobe-with-math", "param": "doorStyle", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_leaves", "kind": "param", "ask": "Number of leaves",
+          "input": "number", "default": 3, "min": 1, "max": 6, "step": 1,
+          "writes": [{ "object": "wardrobe-with-math", "param": "doors", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_mirror", "kind": "param", "ask": "Where should the mirror go?",
+          "input": "choice", "default": "Last panel",
+          "options": [
+            { "label": "One panel, seat end", "hint": "away from the bed, bounces daylight", "value": "Last panel" },
+            { "label": "One panel, bed end", "value": "First panel" },
+            { "label": "Every panel", "value": "All panels" },
+            { "label": "No mirror", "value": "None" }
+          ],
+          "writes": [{ "object": "wardrobe-with-math", "param": "mirrorPanel", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_groove", "kind": "param", "ask": "Groove detail", "input": "choice", "default": "Handle only",
+          "options": [
+            { "label": "Only as handles", "hint": "one recessed pull line per leaf", "value": "Handle only" },
+            { "label": "Vertical", "value": "Vertical" },
+            { "label": "Horizontal", "value": "Horizontal" },
+            { "label": "None", "value": "None" }
+          ],
+          "writes": [{ "object": "wardrobe-with-math", "param": "grooveStyle", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_filler", "kind": "param", "ask": "Fill above the wardrobe up to the ceiling?",
+          "note": "no dust shelf", "input": "bool", "default": false,
+          "writes": [{ "object": "wardrobe-with-math", "param": "topFiller", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_filler_to", "kind": "param", "ask": "Fill up to",
+          "input": "length", "default": 2.972,
+          "showWhen": { "all": [{ "q": "wardrobe_filler", "is": true }] },
+          "writes": [{ "object": "wardrobe-with-math", "param": "fillerTo", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_endpanel", "kind": "param", "ask": "End panel",
+          "note": "an end panel can form the back of the window seat",
+          "input": "choice", "default": "Right",
+          "options": [
+            { "label": "At the seat end", "value": "Right" },
+            { "label": "At the bed end", "value": "Left" },
+            { "label": "Both ends", "value": "Both" },
+            { "label": "None", "value": "None" }
+          ],
+          "writes": [{ "object": "wardrobe-with-math", "param": "endPanel", "value": "$" }]
+        },
+        {
+          "id": "wardrobe_finish", "kind": "context", "ask": "Shutter finish",
+          "input": "text", "default": "light oak veneer, matte lacquer, bronze-tinted mirror panel",
+          "writes": [{ "object": "wardrobe-with-math", "param": "material", "value": "$" }]
+        }
+      ]
+    },
+
+    {
+      "id": "seat",
+      "title": "Window seat",
+      "zone": "seat",
+      "lead": "Window on the left wall, seat below it.",
+      "questions": [
+        {
+          "id": "window_width", "kind": "param", "ask": "Window width",
+          "input": "length", "default": 1.524,
+          "writes": [{ "object": "window-with-math", "param": "width", "value": "$" }]
+        },
+        {
+          "id": "sill_height", "kind": "param", "ask": "Window sill height from floor",
+          "note": "a low sill lets the seat cushion meet it", "input": "length", "default": 0.457,
+          "writes": [{ "object": "window-with-math", "param": "sillHeight", "value": "$" }]
+        },
+        {
+          "id": "sill_projection", "kind": "param", "ask": "Sill projection into the room",
+          "input": "length", "default": 0.03,
+          "writes": [{ "object": "window-with-math", "param": "sillProjection", "value": "$" }]
+        },
+        {
+          "id": "seat_style", "kind": "param", "ask": "Seat style", "input": "choice", "default": "lift",
+          "options": [
+            { "label": "Box seat, lift-up lid", "hint": "storage under", "value": "lift", "writes": [
+              { "object": "window-seat-with-math", "param": "lidStyle", "value": "Lift-up" },
+              { "object": "window-seat-with-math", "param": "backCushion", "value": false }] },
+            { "label": "Box seat with drawers", "hint": "pull-out under the seat", "value": "drawers", "writes": [
+              { "object": "window-seat-with-math", "param": "lidStyle", "value": "Drawers" },
+              { "object": "window-seat-with-math", "param": "backCushion", "value": false }] },
+            { "label": "Daybed with padded back", "hint": "fixed top, cushioned back", "value": "daybed", "writes": [
+              { "object": "window-seat-with-math", "param": "lidStyle", "value": "Fixed" },
+              { "object": "window-seat-with-math", "param": "backCushion", "value": true }] }
+          ]
+        },
+        {
+          "id": "seat_length", "kind": "param", "ask": "Seat length",
+          "input": "length", "default": 1.524,
+          "writes": [{ "object": "window-seat-with-math", "param": "length", "value": "$" }]
+        },
+        {
+          "id": "seat_depth", "kind": "param", "ask": "Seat depth",
+          "input": "length", "default": 0.61,
+          "writes": [{ "object": "window-seat-with-math", "param": "depth", "value": "$" }]
+        },
+        {
+          "id": "seat_frame_top", "kind": "param", "ask": "Seat frame top",
+          "note": "plus the cushion, this should land level with the sill",
+          "input": "length", "default": 0.356,
+          "writes": [{ "object": "window-seat-with-math", "param": "frameHeight", "value": "$" }]
+        },
+        {
+          "id": "seat_cushion", "kind": "param", "ask": "Cushion thickness",
+          "input": "length", "default": 0.102,
+          "writes": [{ "object": "window-seat-with-math", "param": "cushionThk", "value": "$" }]
+        },
+        {
+          "id": "seat_fabric", "kind": "context", "ask": "Seat fabric",
+          "input": "text", "default": "warm-beige linen cushion, light oak veneer carcass, matte",
+          "writes": [{ "object": "window-seat-with-math", "param": "material", "value": "$" }]
+        },
+        {
+          "id": "curtain_layers", "kind": "param", "ask": "Curtains", "input": "choice", "default": "Sheer + blackout",
+          "options": [
+            { "label": "Sheer + blackout", "hint": "two layers on two tracks", "value": "Sheer + blackout",
+              "writes": [
+                { "object": "curtain-with-math", "param": "layers", "value": "Sheer + blackout" },
+                { "object": "curtain-track-with-math", "param": "tracks", "value": 2 }] },
+            { "label": "Sheer only", "value": "Sheer only", "writes": [
+              { "object": "curtain-with-math", "param": "layers", "value": "Sheer only" },
+              { "object": "curtain-track-with-math", "param": "tracks", "value": 1 }] },
+            { "label": "Blackout only", "value": "Blackout only", "writes": [
+              { "object": "curtain-with-math", "param": "layers", "value": "Blackout only" },
+              { "object": "curtain-track-with-math", "param": "tracks", "value": 1 }] }
+          ]
+        },
+        {
+          "id": "curtain_mount", "kind": "param", "ask": "How are they hung?", "input": "choice", "default": "recessed",
+          "options": [
+            { "label": "Recessed ceiling track", "hint": "hidden in the cove band", "value": "recessed", "writes": [
+              { "object": "curtain-with-math", "param": "mount", "value": "Recessed track" },
+              { "object": "curtain-track-with-math", "param": "mount", "value": "Recessed" }] },
+            { "label": "Surface ceiling track", "value": "ceiling", "writes": [
+              { "object": "curtain-with-math", "param": "mount", "value": "Ceiling track" },
+              { "object": "curtain-track-with-math", "param": "mount", "value": "Ceiling" }] },
+            { "label": "Rod on the wall", "value": "rod", "writes": [
+              { "object": "curtain-with-math", "param": "mount", "value": "Rod" },
+              { "object": "curtain-track-with-math", "param": "mount", "value": "Wall" }] }
+          ]
+        },
+        {
+          "id": "curtain_stack", "kind": "param", "ask": "Which way do they stack back?",
+          "note": "stack away from anything the fabric would block",
+          "input": "choice", "default": "Left",
+          "options": [
+            { "label": "To the left", "value": "Left" },
+            { "label": "To the right", "value": "Right" },
+            { "label": "Both ends", "value": "Both" }
+          ],
+          "writes": [
+            { "object": "curtain-with-math", "param": "stackSide", "value": "$" },
+            { "object": "curtain-track-with-math", "param": "stackSide", "value": "$" }
+          ]
+        },
+        {
+          "id": "curtain_hem", "kind": "param", "ask": "Hem above the floor",
+          "input": "length", "default": 0.006,
+          "writes": [{ "object": "curtain-with-math", "param": "hemClearance", "value": "$" }]
+        }
+      ]
+    },
+
+    {
+      "id": "tv",
+      "title": "TV wall",
+      "zone": "tv",
+      "lead": "Opposite the bed, fluted panels and ambient light.",
+      "questions": [
+        {
+          "id": "tv_size", "kind": "param", "ask": "TV size", "input": "choice", "default": "43",
+          "options": [
+            { "label": "43\"", "value": "43", "writes": [{ "object": "tv-with-math", "param": "diagonal", "value": 1.092 }] },
+            { "label": "55\"", "value": "55", "writes": [{ "object": "tv-with-math", "param": "diagonal", "value": 1.397 }] },
+            { "label": "65\"", "value": "65", "writes": [{ "object": "tv-with-math", "param": "diagonal", "value": 1.651 }] }
+          ]
+        },
+        {
+          "id": "tv_centre", "kind": "param", "ask": "Screen centre height",
+          "input": "length", "default": 1.372,
+          "writes": [{ "object": "tv-with-math", "param": "centreHeight", "value": "$" }]
+        },
+        {
+          "id": "tv_standoff", "kind": "param", "ask": "Standoff from the panel face",
+          "input": "length", "default": 0.038,
+          "writes": [{ "object": "tv-with-math", "param": "standoff", "value": "$" }]
+        },
+        {
+          "id": "tv_bias", "kind": "param", "ask": "Bias light behind the set",
+          "input": "bool", "default": true,
+          "writes": [{ "object": "tv-with-math", "param": "backLed", "value": "$" }]
+        },
+        {
+          "id": "flute_profile", "kind": "param", "ask": "Fluted panel profile",
+          "input": "choice", "default": "Half-round",
+          "options": [
+            { "label": "Half-round", "hint": "soft, catches light", "value": "Half-round" },
+            { "label": "Square", "hint": "crisp, graphic", "value": "Square" },
+            { "label": "Tapered", "value": "Tapered" },
+            { "label": "V-groove", "value": "V-groove" }
+          ],
+          "writes": [{ "object": "fluted-panel-with-math", "param": "profile", "value": "$" }]
+        },
+        {
+          "id": "flute_width", "kind": "param", "ask": "Fluted panel width",
+          "input": "length", "default": 2.032,
+          "writes": [{ "object": "fluted-panel-with-math", "param": "length", "value": "$" }]
+        },
+        {
+          "id": "flute_height", "kind": "param", "ask": "Fluted panel height",
+          "input": "length", "default": 2.972,
+          "writes": [{ "object": "fluted-panel-with-math", "param": "height", "value": "$" }]
+        },
+        {
+          "id": "flute_pitch", "kind": "param", "ask": "Flute pitch",
+          "note": "redivided to fill the run exactly", "input": "length", "default": 0.051,
+          "writes": [{ "object": "fluted-panel-with-math", "param": "flutePitch", "value": "$" }]
+        },
+        {
+          "id": "flute_cutout", "kind": "param", "ask": "Cut the panel around the TV?",
+          "note": "off means the set sits proud of unbroken fluting",
+          "input": "bool", "default": false,
+          "writes": [{ "object": "fluted-panel-with-math", "param": "cutout", "value": "$" }]
+        },
+        {
+          "id": "flute_finish", "kind": "context", "ask": "Fluted panel finish",
+          "input": "text", "default": "light oak veneer, matte lacquer, half-round flutes",
+          "writes": [{ "object": "fluted-panel-with-math", "param": "material", "value": "$" }]
+        },
+        {
+          "id": "console_mount", "kind": "param", "ask": "Console under the TV",
+          "input": "choice", "default": "floating",
+          "options": [
+            { "label": "Floating", "hint": "wall-hung, LED underneath", "value": "floating",
+              "writes": [{ "object": "tv-unit-with-math", "param": "base", "value": "Wall-hung" }] },
+            { "label": "On a plinth", "value": "plinth",
+              "writes": [{ "object": "tv-unit-with-math", "param": "base", "value": "Plinth" }] },
+            { "label": "On legs", "value": "legs",
+              "writes": [{ "object": "tv-unit-with-math", "param": "base", "value": "Legs" }] }
+          ]
+        },
+        {
+          "id": "console_top", "kind": "param", "ask": "Console top height",
+          "input": "length", "default": 0.66,
+          "showWhen": { "all": [{ "q": "console_mount", "is": "floating" }] },
+          "writes": [{ "object": "tv-unit-with-math", "param": "mountHeight", "value": "$" }]
+        },
+        {
+          "id": "console_length", "kind": "param", "ask": "Console length",
+          "input": "length", "default": 1.829,
+          "writes": [{ "object": "tv-unit-with-math", "param": "length", "value": "$" }]
+        },
+        {
+          "id": "console_bays", "kind": "param", "ask": "Drawers across the console",
+          "input": "number", "default": 2, "min": 1, "max": 6, "step": 1,
+          "writes": [{ "object": "tv-unit-with-math", "param": "bays", "value": "$" }]
+        },
+        {
+          "id": "console_pull", "kind": "param", "ask": "Console pull", "input": "choice", "default": "Push",
+          "options": [
+            { "label": "Push to open", "value": "Push" },
+            { "label": "Recessed groove", "value": "Groove" },
+            { "label": "Handle", "value": "Handle" }
+          ],
+          "writes": [{ "object": "tv-unit-with-math", "param": "pullType", "value": "$" }]
+        },
+        {
+          "id": "console_led", "kind": "param", "ask": "LED under the console",
+          "input": "bool", "default": true,
+          "writes": [{ "object": "tv-unit-with-math", "param": "underLed", "value": "$" }]
+        },
+        {
+          "id": "wall_art", "kind": "param", "ask": "Art on the wall beside the fluting",
+          "input": "choice", "default": "Pair",
+          "options": [
+            { "label": "A pair", "value": "Pair" },
+            { "label": "One piece", "value": "Single" },
+            { "label": "Triptych", "value": "Triptych" },
+            { "label": "A grid", "value": "Grid" }
+          ],
+          "writes": [{ "object": "wall-art-with-math", "param": "arrangement", "value": "$" }]
+        },
+        {
+          "id": "wall_art_centre", "kind": "param", "ask": "Art centre height",
+          "input": "length", "default": 1.5,
+          "writes": [{ "object": "wall-art-with-math", "param": "centreHeight", "value": "$" }]
+        }
+      ]
+    },
+
+    {
+      "id": "ceiling",
+      "title": "Ceiling and lighting",
+      "zone": "ceiling",
+      "lead": "Cove, spotlights and what hangs at the centre.",
+      "questions": [
+        {
+          "id": "ceiling_fitting", "kind": "param", "ask": "What hangs at the centre of the room?",
+          "note": "a small room has one centre, not two",
+          "input": "choice", "default": "fan_ring",
+          "options": [
+            { "label": "Fan with a ring light", "hint": "one fitting does both", "value": "fan_ring", "writes": [
+              { "object": "ceiling-fan-with-math", "param": "ringLight", "value": true },
+              { "object": "ceiling-fan-with-math", "param": "lightKit", "value": false }] },
+            { "label": "Fan only", "value": "fan", "writes": [
+              { "object": "ceiling-fan-with-math", "param": "ringLight", "value": false }] },
+            { "label": "Chandelier only", "value": "chandelier", "writes": [
+              { "object": "ceiling-fan-with-math", "param": "ringLight", "value": false }] },
+            { "label": "Both a fan and a chandelier", "hint": "they will fight for the centre", "value": "both", "writes": [
+              { "object": "ceiling-fan-with-math", "param": "ringLight", "value": false }] }
+          ]
+        },
+        {
+          "id": "chandelier_style", "kind": "param", "ask": "Chandelier style", "input": "choice", "default": "Tiered rings",
+          "showWhen": { "any": [{ "q": "ceiling_fitting", "is": "chandelier" }, { "q": "ceiling_fitting", "is": "both" }] },
+          "options": [
+            { "label": "Tiered rings", "hint": "one ring per tier", "value": "Tiered rings" },
+            { "label": "Linear bar", "hint": "a long bar of lamps", "value": "Linear bar" },
+            { "label": "Globe cluster", "hint": "organic, staggered drops", "value": "Globe cluster" },
+            { "label": "Arms", "hint": "classic radial", "value": "Arms" },
+            { "label": "Flush", "hint": "no drop, keeps height", "value": "Flush" }
+          ],
+          "writes": [{ "object": "chandelier-with-math", "param": "style", "value": "$" }]
+        },
+        {
+          "id": "fan_ceiling_height", "kind": "param", "ask": "Fan mounting ceiling height",
+          "note": "the central panel soffit", "input": "length", "default": 3.124,
+          "writes": [{ "object": "ceiling-fan-with-math", "param": "ceilingHeight", "value": "$" }]
+        },
+        {
+          "id": "spot_trim", "kind": "param", "ask": "Recessed spot trim", "input": "choice", "default": "Flush",
+          "options": [
+            { "label": "Flush", "hint": "lens level with the soffit", "value": "Flush" },
+            { "label": "Recessed", "hint": "lens set up inside, less glare", "value": "Recessed" },
+            { "label": "Gimbal", "hint": "aimable", "value": "Gimbal" },
+            { "label": "Surface", "hint": "hangs below the soffit", "value": "Surface" }
+          ],
+          "writes": [{ "object": "downlight-with-math", "param": "trim", "value": "$" }]
+        },
+        {
+          "id": "spot_beam", "kind": "param", "ask": "Spot beam angle",
+          "input": "number", "default": 36, "min": 8, "max": 120, "step": 2,
+          "writes": [{ "object": "downlight-with-math", "param": "beamAngle", "value": "$" }]
+        },
+        {
+          "id": "spot_ceiling", "kind": "param", "ask": "Spot mounting soffit height",
+          "input": "length", "default": 3.124,
+          "writes": [{ "object": "downlight-with-math", "param": "ceilingHeight", "value": "$" }]
+        },
+        {
+          "id": "spot_count", "kind": "plan", "ask": "How many recessed spots?",
+          "note": "placement is a separate step; this is the count for the plan",
+          "input": "number", "default": 6, "min": 0, "max": 24, "step": 1
+        },
+        {
+          "id": "led_kelvin", "kind": "param", "ask": "Concealed LED warmth", "input": "choice", "default": "2700",
+          "options": [
+            { "label": "Warm", "hint": "2700 K, cosy", "value": "2700" },
+            { "label": "Soft warm", "hint": "3000 K, balanced", "value": "3000" },
+            { "label": "Neutral", "hint": "4000 K, crisp", "value": "4000" }
+          ],
+          "writes": [{ "object": "led-strip-with-math", "param": "kelvin", "value": "$", "as": "number" }]
+        },
+        {
+          "id": "spot_kelvin", "kind": "param", "ask": "Spotlight warmth",
+          "note": "slightly cooler than the LEDs makes the cove read as a glow",
+          "input": "choice", "default": "3000",
+          "options": [
+            { "label": "Warm", "hint": "2700 K", "value": "2700" },
+            { "label": "Soft warm", "hint": "3000 K", "value": "3000" },
+            { "label": "Neutral", "hint": "4000 K", "value": "4000" }
+          ],
+          "writes": [{ "object": "downlight-with-math", "param": "kelvin", "value": "$", "as": "number" }]
+        },
+        {
+          "id": "cove_led", "kind": "param", "ask": "LED in the cove band",
+          "input": "bool", "default": true,
+          "writes": [{ "object": "false-ceiling-with-math", "param": "coveLed", "value": "$" }]
+        },
+        {
+          "id": "metal_finish", "kind": "context", "ask": "Metal finish across the room",
+          "input": "text", "default": "brushed brass",
+          "writes": [
+            { "object": "light-bulb-with-math", "param": "material", "value": "$" },
+            { "object": "curtain-track-with-math", "param": "material", "value": "$" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "floor",
+      "title": "Floor and finishes",
+      "zone": "floor",
+      "questions": [
+        {
+          "id": "floor_pattern", "kind": "param", "ask": "Floor pattern", "input": "choice", "default": "Square",
+          "options": [
+            { "label": "Slabs, aligned", "hint": "grid joints", "value": "Square" },
+            { "label": "Slabs, brick bond", "hint": "staggered joints", "value": "Brick" },
+            { "label": "Hexagon", "value": "Hexagon" },
+            { "label": "Rhombus", "value": "Rhombus" }
+          ],
+          "writes": [{ "object": "tessellation-with-math", "param": "pattern", "value": "$" }]
+        },
+        {
+          "id": "slab_size", "kind": "param", "ask": "Tile / slab size", "input": "choice", "default": "4x8",
+          "options": [
+            { "label": "4' × 8'", "hint": "large format, few joints", "value": "4x8", "writes": [
+              { "object": "tessellation-with-math", "param": "cellSize", "value": 1.219 },
+              { "object": "tessellation-with-math", "param": "cellLength", "value": 2.438 }] },
+            { "label": "4' × 4'", "value": "4x4", "writes": [
+              { "object": "tessellation-with-math", "param": "cellSize", "value": 1.219 },
+              { "object": "tessellation-with-math", "param": "cellLength", "value": 1.219 }] },
+            { "label": "2' × 4'", "value": "2x4", "writes": [
+              { "object": "tessellation-with-math", "param": "cellSize", "value": 0.61 },
+              { "object": "tessellation-with-math", "param": "cellLength", "value": 1.219 }] }
+          ]
+        },
+        {
+          "id": "floor_origin", "kind": "param", "ask": "Lay the slabs starting from",
+          "input": "choice", "default": "NW",
+          "options": [
+            { "label": "North-west corner", "value": "NW" },
+            { "label": "North-east corner", "value": "NE" },
+            { "label": "South-west corner", "value": "SW" },
+            { "label": "South-east corner", "value": "SE" }
+          ],
+          "writes": [{ "object": "tessellation-with-math", "param": "originCorner", "value": "$" }]
+        },
+        {
+          "id": "grout", "kind": "param", "ask": "Joint width",
+          "input": "length", "default": 0.001,
+          "writes": [{ "object": "tessellation-with-math", "param": "joint", "value": "$" }]
+        },
+        {
+          "id": "floor_finish", "kind": "context", "ask": "Floor finish",
+          "input": "text", "default": "ivory marble-look porcelain, matt, matching grout",
+          "writes": [{ "object": "tessellation-with-math", "param": "material", "value": "$" }]
+        },
+        {
+          "id": "skirting_height", "kind": "param", "ask": "Skirting height",
+          "input": "length", "default": 0.076,
+          "writes": [{ "object": "skirting-with-math", "param": "height", "value": "$" }]
+        },
+        {
+          "id": "skirting_profile", "kind": "param", "ask": "Skirting section", "input": "choice", "default": "Square",
+          "options": [
+            { "label": "Square", "hint": "flush with the panel faces", "value": "Square" },
+            { "label": "Shadow gap", "hint": "floats above the floor", "value": "Shadow gap" },
+            { "label": "Chamfered", "value": "Chamfered" },
+            { "label": "Bullnose", "value": "Bullnose" }
+          ],
+          "writes": [{ "object": "skirting-with-math", "param": "profile", "value": "$" }]
+        },
+        {
+          "id": "skirting_finish", "kind": "context", "ask": "Skirting finish",
+          "input": "text", "default": "MDF, ivory satin paint",
+          "writes": [{ "object": "skirting-with-math", "param": "material", "value": "$" }]
+        },
+        {
+          "id": "rug", "kind": "param", "ask": "Rug under the bed", "input": "bool", "default": true,
+          "writes": [{ "object": "rug-with-math", "param": "showBorder", "value": false }]
+        },
+        {
+          "id": "rug_finish", "kind": "context", "ask": "Rug",
+          "input": "text", "default": "grey wool, flat weave, plain",
+          "showWhen": { "all": [{ "q": "rug", "is": true }] },
+          "writes": [{ "object": "rug-with-math", "param": "material", "value": "$" }]
+        },
+        {
+          "id": "extras", "kind": "plan", "ask": "Extras to include", "input": "multi", "default": ["plants", "art"],
+          "options": [
+            { "label": "Indoor plants", "value": "plants" },
+            { "label": "Wall art / panels", "value": "art" },
+            { "label": "Bench at the foot of the bed", "value": "bench" },
+            { "label": "Dressing mirror", "value": "mirror" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "output",
+      "title": "Render output",
+      "zone": "room",
+      "questions": [
+        {
+          "id": "views", "kind": "plan", "ask": "Camera views", "input": "multi",
+          "default": ["entry_to_bed", "bed_to_tv"],
+          "options": [
+            { "label": "Entry → bed", "hint": "hero shot", "value": "entry_to_bed" },
+            { "label": "Bed → TV wall", "value": "bed_to_tv" },
+            { "label": "Window seat corner", "value": "seat_corner" },
+            { "label": "Wardrobe wall", "value": "wardrobe_wall" },
+            { "label": "Ceiling detail", "value": "ceiling_detail" }
+          ]
+        },
+        {
+          "id": "time_of_day", "kind": "plan", "ask": "Lighting mood", "input": "choice", "default": "daylight",
+          "options": [
+            { "label": "Bright daylight", "value": "daylight" },
+            { "label": "Soft overcast", "hint": "even, shows finishes", "value": "overcast" },
+            { "label": "Evening with LEDs on", "value": "evening" },
+            { "label": "Both day and evening", "value": "both" }
+          ]
+        },
+        {
+          "id": "resolution", "kind": "plan", "ask": "Output resolution", "input": "choice", "default": "1920x1080",
+          "options": [
+            { "label": "Full HD", "hint": "1920 × 1080", "value": "1920x1080" },
+            { "label": "4K", "hint": "3840 × 2160", "value": "3840x2160" },
+            { "label": "Print A3", "hint": "300 dpi", "value": "a3_300" }
+          ]
+        },
+        {
+          "id": "notes", "kind": "context", "ask": "Anything else",
+          "note": "reference images, brands, must-haves", "input": "text", "default": ""
+        }
+      ]
+    }
+  ],
+
+  "conflicts": [
+    {
+      "id": "two_things_at_centre",
+      "severity": "blocker",
+      "when": { "all": [{ "q": "ceiling_fitting", "is": "both" }] },
+      "says": "A fan and a chandelier both want the centre of the room, and this room has one centre.",
+      "resolution": "Use a fan with an integrated ring light, which is one fitting doing both jobs.",
+      "resolve": [
+        { "object": "ceiling-fan-with-math", "param": "ringLight", "value": true },
+        { "object": "ceiling-fan-with-math", "param": "lightKit", "value": false }
+      ]
+    },
+    {
+      "id": "sliding_needs_depth",
+      "severity": "blocker",
+      "when": { "all": [{ "q": "wardrobe_shutter", "is": "Sliding" }, { "q": "wardrobe_depth", "lt": 0.61 }] },
+      "says": "Sliding shutters need 2'0\" of carcass depth to lap and still close; this wardrobe is shallower.",
+      "resolution": "Take the wardrobe to 2'0\", or use hinged shutters.",
+      "resolve": [{ "object": "wardrobe-with-math", "param": "depth", "value": 0.61 }]
+    },
+    {
+      "id": "headboard_leaves_a_sliver",
+      "severity": "warning",
+      "when": { "all": [
+        { "q": "headboard_source", "is": "wall_panel" },
+        { "q": "headboard_width", "gt": { "q": "clear_span", "margin": -0.3 } }
+      ] },
+      "says": "The panel comes within 6\" of each end of the clear span, which reads as a mistake rather than a margin.",
+      "resolution": "Either take the panel the full width of the wall, or pull it back so at least 1'0\" of painted wall shows each side."
+    },
+    {
+      "id": "seat_not_level_with_sill",
+      "severity": "warning",
+      "when": { "all": [{ "q": "sill_height", "gt": { "q": "seat_frame_top", "margin": 0.16 } }] },
+      "says": "The sill sits well above the cushion, so the seat will not read as built into the window.",
+      "resolution": "Lower the sill, or raise the seat frame so frame plus cushion lands at sill height."
+    },
+    {
+      "id": "nothing_to_recess_into",
+      "severity": "warning",
+      "when": { "all": [{ "q": "curtain_mount", "is": "recessed" }, { "q": "band_width", "lt": 0.15 }] },
+      "says": "A recessed track has to hide inside the cove band, and this band is narrower than the track plus its curtain stack.",
+      "resolution": "Widen the band to at least 6\", or use a surface ceiling track."
+    },
+    {
+      "id": "panel_taller_than_ceiling",
+      "severity": "blocker",
+      "when": { "all": [
+        { "q": "headboard_source", "is": "wall_panel" },
+        { "q": "headboard_height", "gt": { "q": "cove_soffit", "margin": 0.01 } }
+      ] },
+      "says": "The upholstered panel is taller than the cove band soffit it has to die into.",
+      "resolution": "Take the panel to the band soffit height."
+    },
+    {
+      "id": "filler_below_ceiling",
+      "severity": "warning",
+      "when": { "all": [
+        { "q": "wardrobe_filler", "is": true },
+        { "q": "wardrobe_filler_to", "lt": { "q": "cove_soffit", "margin": -0.01 } }
+      ] },
+      "says": "The wardrobe filler stops below the ceiling line, which leaves the dust shelf it was meant to remove.",
+      "resolution": "Fill up to the cove band soffit."
+    },
+    {
+      "id": "cove_inverted",
+      "severity": "blocker",
+      "when": { "all": [{ "q": "cove_led", "is": true }, { "q": "panel_soffit", "lte": { "q": "cove_soffit" } }] },
+      "says": "The central panel is at or below the cove band, so there is no cove and nothing for the LED to wash.",
+      "resolution": "Put the central panel above the band soffit — 6\" is a usual reveal."
+    },
+    {
+      "id": "ceiling_below_beam",
+      "severity": "warning",
+      "when": { "all": [
+        { "q": "beams", "isNot": "none" },
+        { "q": "cove_soffit", "gt": { "q": "beam_soffit" } }
+      ] },
+      "says": "The cove band soffit is above the beam soffit, so the beam will hang below the finished ceiling.",
+      "resolution": "Drop the band to the beam soffit, or box the beam into the band."
+    }
+  ]
+}

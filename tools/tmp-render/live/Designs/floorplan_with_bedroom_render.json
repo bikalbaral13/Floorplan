@@ -1,0 +1,2656 @@
+{
+ "schemaVersion": 1,
+ "settings": {
+  "library_path": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library",
+  "units": "m",
+  "northbearing": 0,
+  "pixelsPerMeter": 145.0187,
+  "keywords": "M. Bedroom fit-out, floorplan_with_bedroom.png trace, image-native scale, Manamoondi schematic plan FF; headboard panel rotated 180 so the upholstered pads face the room (was mounted backwards)",
+  "source": {
+   "image": "Images/floorplan_with_bedroom.png",
+   "imagePixels": [
+    3309,
+    2339
+   ],
+   "pxPerFoot": 44.2017,
+   "worldOrigin": "image top-left at world (-1654.5, -1169.5)",
+   "room": "M. BEDROOM 13ft0in x 12ft3in, slab 11ft0in"
+  }
+ },
+ "nodes": [
+  {
+   "id": "n0",
+   "x": -678.5,
+   "y": -858.5,
+   "layer": "wall"
+  },
+  {
+   "id": "n1",
+   "x": -70.88,
+   "y": -858.5,
+   "layer": "wall"
+  },
+  {
+   "id": "n2",
+   "x": -70.88,
+   "y": -749.91,
+   "layer": "wall"
+  },
+  {
+   "id": "n3",
+   "x": -70.88,
+   "y": -639.41,
+   "layer": "wall"
+  },
+  {
+   "id": "n4",
+   "x": -70.88,
+   "y": -284.03,
+   "layer": "wall"
+  },
+  {
+   "id": "n5",
+   "x": -678.5,
+   "y": -284.03,
+   "layer": "wall"
+  },
+  {
+   "id": "n6",
+   "x": -234.72,
+   "y": -284.03,
+   "layer": "wall"
+  },
+  {
+   "id": "n7",
+   "x": -102.11,
+   "y": -284.03,
+   "layer": "wall"
+  },
+  {
+   "id": "n8",
+   "x": -678.5,
+   "y": -532.59,
+   "layer": "wall"
+  },
+  {
+   "id": "n9",
+   "x": -678.5,
+   "y": -311.58,
+   "layer": "wall"
+  },
+  {
+   "id": "n10",
+   "x": -507.29,
+   "y": -800.45,
+   "layer": "wall"
+  },
+  {
+   "id": "n11",
+   "x": -153.68,
+   "y": -800.45,
+   "layer": "wall"
+  },
+  {
+   "id": "n12",
+   "x": -153.68,
+   "y": -358.43,
+   "layer": "wall"
+  },
+  {
+   "id": "n13",
+   "x": -507.29,
+   "y": -358.43,
+   "layer": "wall"
+  },
+  {
+   "id": "n14",
+   "x": -529.39,
+   "y": -842,
+   "layer": "wall"
+  },
+  {
+   "id": "n15",
+   "x": -131.58,
+   "y": -842,
+   "layer": "wall"
+  },
+  {
+   "id": "n16",
+   "x": -558.86,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n17",
+   "x": -264.18,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n18",
+   "x": -480.54,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n19",
+   "x": -342.5,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n20",
+   "x": -87.38,
+   "y": -532.59,
+   "layer": "wall"
+  },
+  {
+   "id": "n21",
+   "x": -87.38,
+   "y": -399.98,
+   "layer": "wall"
+  },
+  {
+   "id": "n22",
+   "x": -639.9,
+   "y": -521.54,
+   "layer": "wall"
+  },
+  {
+   "id": "n23",
+   "x": -639.9,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n24",
+   "x": -573.6,
+   "y": -842,
+   "layer": "wall"
+  },
+  {
+   "id": "n25",
+   "x": -87.38,
+   "y": -842,
+   "layer": "wall"
+  },
+  {
+   "id": "n26",
+   "x": -87.38,
+   "y": -749.91,
+   "layer": "wall"
+  },
+  {
+   "id": "n27",
+   "x": -87.38,
+   "y": -639.41,
+   "layer": "wall"
+  },
+  {
+   "id": "n28",
+   "x": -87.38,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n29",
+   "x": -234.72,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n30",
+   "x": -102.11,
+   "y": -300.53,
+   "layer": "wall"
+  },
+  {
+   "id": "n31",
+   "x": -617.8,
+   "y": -681.77,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01k",
+     "objectId": "wardrobe-with-math",
+     "objectPath": "Objects/Architectural/wardrobe.json",
+     "params": {
+      "rotation": 270,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "width": 2.2098,
+      "depth": 0.6096,
+      "height": 2.9718,
+      "panelThk": 0.018,
+      "doors": 3,
+      "doorGap": 0.004,
+      "doorStyle": "Sliding",
+      "plinthHeight": 0,
+      "shelves": 3,
+      "hangingRail": true,
+      "railDrop": 0.12,
+      "handles": false,
+      "mirrorPanel": "Last panel",
+      "grooveStyle": "Vertical",
+      "grooveWidth": 0.0191,
+      "grooveCount": 1,
+      "topFiller": true,
+      "fillerTo": 2.9718,
+      "endPanel": "Right",
+      "material": "light oak veneer, matte lacquer, bronze-tinted mirror on the south shutter",
+      "semantics": "3-shutter sliding wardrobe, recessed groove pulls, full-height bronze mirror nearest the seat"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n32",
+   "x": -617.8,
+   "y": -412.8,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01m",
+     "objectId": "window-seat-with-math",
+     "objectPath": "Objects/Architectural/window-seat.json",
+     "params": {
+      "rotation": 270,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "length": 1.524,
+      "depth": 0.6096,
+      "frameHeight": 0.3556,
+      "cushionThk": 0.1016,
+      "panelThk": 0.018,
+      "plinthHeight": 0.05,
+      "lidStyle": "Lift-up",
+      "lidSections": 3,
+      "drawers": 0,
+      "reveal": 0.004,
+      "bolsters": 2,
+      "bolsterDia": 0.18,
+      "backCushion": true,
+      "backHeight": 0.25,
+      "endPanel": "None",
+      "material": "warm-beige linen cushion, light oak veneer carcass, matte",
+      "semantics": "built-in window seat level with the sill, lift-up lid in three sections, two bolsters and a lumbar cushion"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n33",
+   "x": -330.49,
+   "y": -679.16,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01o",
+     "objectId": "bed-with-math",
+     "objectPath": "Objects/Architectural/bed.json",
+     "params": {
+      "rotation": 90,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "length": 1.9812,
+      "width": 1.8288,
+      "mattressThk": 0.24,
+      "baseHeight": 0.3696,
+      "legHeight": 0,
+      "headboardStyle": "None",
+      "baseStyle": "Plinth",
+      "duvet": true,
+      "duvetDrop": 0.12,
+      "footboard": false,
+      "pillows": 2,
+      "pillowLength": 0.6,
+      "pillowDepth": 0.4,
+      "pillowThk": 0.14,
+      "material": "ivory boucle upholstery, light oak base, crisp ivory linen",
+      "semantics": "king bed, low oak plinth base, upholstered side rails, crisp linen and a grey wool throw"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n34",
+   "x": -492.56,
+   "y": -793.35,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01q",
+     "objectId": "nightstand-with-math",
+     "objectPath": "Objects/Architectural/nightstand.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "length": 0.508,
+      "width": 0.4064,
+      "height": 0.1524,
+      "topThk": 0.03,
+      "legHeight": 0,
+      "base": "Wall-hung",
+      "drawers": 1,
+      "doorGap": 0.005,
+      "mountHeight": 0.5588,
+      "underLed": true,
+      "pullType": "Groove",
+      "material": "light oak veneer, matte lacquer",
+      "semantics": "floating oak bedside table, single drawer, warm LED under the lip"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n35",
+   "x": -168.41,
+   "y": -793.35,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01s",
+     "objectId": "nightstand-with-math",
+     "objectPath": "Objects/Architectural/nightstand.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "length": 0.508,
+      "width": 0.4064,
+      "height": 0.1524,
+      "topThk": 0.03,
+      "legHeight": 0,
+      "base": "Wall-hung",
+      "drawers": 1,
+      "doorGap": 0.005,
+      "mountHeight": 0.5588,
+      "underLed": true,
+      "pullType": "Groove",
+      "material": "light oak veneer, matte lacquer",
+      "semantics": "floating oak bedside table, single drawer, warm LED under the lip"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n36",
+   "x": -411.52,
+   "y": -330,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01u",
+     "objectId": "tv-unit-with-math",
+     "objectPath": "Objects/Architectural/tv-unit.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "length": 1.8288,
+      "width": 0.4064,
+      "height": 0.3556,
+      "topThk": 0.03,
+      "legHeight": 0,
+      "base": "Wall-hung",
+      "bays": 2,
+      "doorGap": 0.006,
+      "mountHeight": 0.6604,
+      "underLed": true,
+      "pullType": "Push",
+      "showScreen": false,
+      "material": "light oak veneer drawer fronts, ivory stone top, matte",
+      "semantics": "floating oak media console, two push-open drawers, ivory stone top, warm LED underneath"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n37",
+   "x": -643.44,
+   "y": -411.03,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01w",
+     "objectId": "curtain-with-math",
+     "objectPath": "Objects/Architectural/curtain.json",
+     "params": {
+      "rotation": 270,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "width": 1.524,
+      "drop": 2.9658,
+      "railHeight": 2.9718,
+      "panels": 2,
+      "waves": 7,
+      "waveDepth": 0.07,
+      "fabricThk": 0.02,
+      "opening": 0,
+      "railExtend": 0,
+      "layers": "Sheer + blackout",
+      "layerGap": 0.06,
+      "mount": "Recessed track",
+      "stackSide": "Right",
+      "hemClearance": 0.006,
+      "railRadius": 0.016,
+      "subdiv": 4,
+      "material": "sheer linen inner, warm-beige blackout outer",
+      "semantics": "floor-length linen sheer with a warm-beige blackout layer, stacking to the south corner"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n38",
+   "x": -617.8,
+   "y": -466.29,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-01y",
+     "objectId": "plant-with-math",
+     "objectPath": "Objects/Architectural/plant.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "radius": 0.18,
+      "height": 0.45,
+      "trunkHeight": 0.12,
+      "trunkRadius": 0.02,
+      "branches": 4,
+      "branchSpread": 50,
+      "branchTaper": 0.5,
+      "branchReach": 0.55,
+      "canopyShape": "Round",
+      "canopySides": 16,
+      "base": 0.4572,
+      "material": "healthy green foliage, small ivory ceramic pot",
+      "semantics": "small potted plant on the seat at the sill end"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n39",
+   "x": -142.63,
+   "y": -461.87,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-020",
+     "objectId": "plant-with-math",
+     "objectPath": "Objects/Architectural/plant.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "radius": 0.35,
+      "height": 1.5,
+      "trunkHeight": 0.5,
+      "trunkRadius": 0.05,
+      "branches": 5,
+      "branchSpread": 45,
+      "branchTaper": 0.5,
+      "branchReach": 0.55,
+      "canopyShape": "Round",
+      "canopySides": 20,
+      "base": 0,
+      "material": "healthy green foliage, ivory ceramic floor pot",
+      "semantics": "floor plant beside the east wall under the art pair"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n40",
+   "x": -374.69,
+   "y": -569.42,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-022",
+     "objectId": "ceiling-fan-with-math",
+     "objectPath": "Objects/Architectural/ceiling-fan.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "blades": 4,
+      "bladeLength": 0.62,
+      "bladeChord": 0.14,
+      "bladeThk": 0.012,
+      "bladeTaper": 0.7,
+      "pitch": 12,
+      "pitchSteps": 4,
+      "hubRadius": 0.09,
+      "hubHeight": 0.09,
+      "rodLength": 0.3,
+      "rodRadius": 0.015,
+      "ceilingHeight": 3.1242,
+      "lightKit": true,
+      "lightRadius": 0.11,
+      "ringLight": true,
+      "ringDia": 0.35,
+      "ringThk": 0.03,
+      "kelvin": 3000,
+      "material": "matte black blades, brushed brass hub, opal ring diffuser",
+      "semantics": "ceiling fan with an integrated opal ring light at the centre of the false-ceiling panel"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n41",
+   "x": -492.56,
+   "y": -782.33,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-024",
+     "objectId": "downlight-with-math",
+     "objectPath": "Objects/Architectural/downlight.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "aperture": 0.075,
+      "trim": "Flush",
+      "trimWidth": 0.012,
+      "housingDia": 0.09,
+      "housingHeight": 0.09,
+      "ceilingHeight": 3.1242,
+      "tilt": 0,
+      "beamAngle": 36,
+      "kelvin": 3000,
+      "lumens": 650,
+      "showBeam": true,
+      "material": "ivory powder-coated trim, frosted lens, 3000K COB",
+      "semantics": "recessed spot over the table L"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n42",
+   "x": -168.41,
+   "y": -782.33,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-026",
+     "objectId": "downlight-with-math",
+     "objectPath": "Objects/Architectural/downlight.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "aperture": 0.075,
+      "trim": "Flush",
+      "trimWidth": 0.012,
+      "housingDia": 0.09,
+      "housingHeight": 0.09,
+      "ceilingHeight": 3.1242,
+      "tilt": 0,
+      "beamAngle": 36,
+      "kelvin": 3000,
+      "lumens": 650,
+      "showBeam": true,
+      "material": "ivory powder-coated trim, frosted lens, 3000K COB",
+      "semantics": "recessed spot over the table R"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n43",
+   "x": -499.93,
+   "y": -366.83,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-028",
+     "objectId": "downlight-with-math",
+     "objectPath": "Objects/Architectural/downlight.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "aperture": 0.075,
+      "trim": "Flush",
+      "trimWidth": 0.012,
+      "housingDia": 0.09,
+      "housingHeight": 0.09,
+      "ceilingHeight": 3.1242,
+      "tilt": 0,
+      "beamAngle": 36,
+      "kelvin": 3000,
+      "lumens": 650,
+      "showBeam": true,
+      "material": "ivory powder-coated trim, frosted lens, 3000K COB",
+      "semantics": "recessed spot over the TV W"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n44",
+   "x": -323.12,
+   "y": -366.83,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02a",
+     "objectId": "downlight-with-math",
+     "objectPath": "Objects/Architectural/downlight.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "aperture": 0.075,
+      "trim": "Flush",
+      "trimWidth": 0.012,
+      "housingDia": 0.09,
+      "housingHeight": 0.09,
+      "ceilingHeight": 3.1242,
+      "tilt": 0,
+      "beamAngle": 36,
+      "kelvin": 3000,
+      "lumens": 650,
+      "showBeam": true,
+      "material": "ivory powder-coated trim, frosted lens, 3000K COB",
+      "semantics": "recessed spot over the TV E"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n45",
+   "x": -595.7,
+   "y": -411.03,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02c",
+     "objectId": "downlight-with-math",
+     "objectPath": "Objects/Architectural/downlight.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "aperture": 0.075,
+      "trim": "Flush",
+      "trimWidth": 0.012,
+      "housingDia": 0.09,
+      "housingHeight": 0.09,
+      "ceilingHeight": 3.1242,
+      "tilt": 0,
+      "beamAngle": 36,
+      "kelvin": 3000,
+      "lumens": 650,
+      "showBeam": true,
+      "material": "ivory powder-coated trim, frosted lens, 3000K COB",
+      "semantics": "recessed spot over the seat"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n46",
+   "x": -595.7,
+   "y": -681.77,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02e",
+     "objectId": "downlight-with-math",
+     "objectPath": "Objects/Architectural/downlight.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "aperture": 0.075,
+      "trim": "Flush",
+      "trimWidth": 0.012,
+      "housingDia": 0.09,
+      "housingHeight": 0.09,
+      "ceilingHeight": 3.1242,
+      "tilt": 0,
+      "beamAngle": 36,
+      "kelvin": 3000,
+      "lumens": 650,
+      "showBeam": true,
+      "material": "ivory powder-coated trim, frosted lens, 3000K COB",
+      "semantics": "recessed spot over the wardrobe"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n47",
+   "x": -492.56,
+   "y": -785.98,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02g",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "diameter": 0.0508,
+      "bodyLength": 0.3048,
+      "bottomHeight": 1.1684,
+      "ceilingHeight": 2.9718,
+      "cordRadius": 0.003,
+      "canopyRadius": 0.035,
+      "canopyHeight": 0.012,
+      "shade": "Cylinder",
+      "openBottom": true,
+      "wallThk": 0.0012,
+      "kelvin": 2700,
+      "lumens": 320,
+      "showCord": true,
+      "material": "brushed brass tube, opal diffuser at the base",
+      "semantics": "slim brushed-brass cylinder pendant over the bedside table, warm 2700K downward wash"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n48",
+   "x": -168.41,
+   "y": -785.98,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02i",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "diameter": 0.0508,
+      "bodyLength": 0.3048,
+      "bottomHeight": 1.1684,
+      "ceilingHeight": 2.9718,
+      "cordRadius": 0.003,
+      "canopyRadius": 0.035,
+      "canopyHeight": 0.012,
+      "shade": "Cylinder",
+      "openBottom": true,
+      "wallThk": 0.0012,
+      "kelvin": 2700,
+      "lumens": 320,
+      "showCord": true,
+      "material": "brushed brass tube, opal diffuser at the base",
+      "semantics": "slim brushed-brass cylinder pendant over the bedside table, warm 2700K downward wash"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n49",
+   "x": -732.72,
+   "y": -422.08,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02k",
+     "objectId": "light-with-math",
+     "objectPath": "Objects/Architectural/light.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "type": "Directional",
+      "power": 120,
+      "lumens": 18000,
+      "kelvin": 5200,
+      "cri": 98,
+      "mountHeight": 1.8288,
+      "aimTilt": -22,
+      "reach": 4.8768,
+      "coneAngle": 80,
+      "sizeLength": 1.524,
+      "sizeWidth": 2.1336,
+      "housing": 0.09,
+      "showAim": true,
+      "aimRadius": 0.008,
+      "material": "sun proxy",
+      "semantics": "V-Ray Sun through the west window at about 3:30 pm, warm low rake across the porcelain floor; HDRI dome for fill"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n50",
+   "x": -153.68,
+   "y": -355.78,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02m",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "rotation": 249.15,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "view": "Perspective",
+      "focalLength": 24,
+      "sensorWidth": 36,
+      "aspect": "16:9",
+      "eyeHeight": 1.3716,
+      "tilt": 0,
+      "targetDistance": 3.425,
+      "showFrustum": true,
+      "frustumLength": 3,
+      "bodyLength": 0.14,
+      "bodyWidth": 0.1,
+      "bodyHeight": 0.09,
+      "lensLength": 0.08,
+      "lensRadius": 0.03,
+      "tripod": true,
+      "tripodSpread": 0.35,
+      "material": "matte black body, brushed aluminium lens barrel",
+      "semantics": "01 Entry to bed - hero shot from just inside Door B; hide the S wall"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n51",
+   "x": -330.49,
+   "y": -734.41,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02o",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "rotation": 100.58,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "view": "Perspective",
+      "focalLength": 24,
+      "sensorWidth": 36,
+      "aspect": "16:9",
+      "eyeHeight": 1.3716,
+      "tilt": 0,
+      "targetDistance": 3.044,
+      "showFrustum": true,
+      "frustumLength": 3,
+      "bodyLength": 0.14,
+      "bodyWidth": 0.1,
+      "bodyHeight": 0.09,
+      "lensLength": 0.08,
+      "lensRadius": 0.03,
+      "tripod": true,
+      "tripodSpread": 0.35,
+      "material": "matte black body, brushed aluminium lens barrel",
+      "semantics": "02 Bed to TV wall - centred on the bed, 2ft south of the headboard face; hide the N wall"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n52",
+   "x": -131.58,
+   "y": -797.8,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02q",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "rotation": 141.5,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "view": "Perspective",
+      "focalLength": 24,
+      "sensorWidth": 36,
+      "aspect": "16:9",
+      "eyeHeight": 1.3716,
+      "tilt": 0,
+      "targetDistance": 4.284,
+      "showFrustum": true,
+      "frustumLength": 3,
+      "bodyLength": 0.14,
+      "bodyWidth": 0.1,
+      "bodyHeight": 0.09,
+      "lensLength": 0.08,
+      "lensRadius": 0.03,
+      "tripod": true,
+      "tripodSpread": 0.35,
+      "material": "matte black body, brushed aluminium lens barrel",
+      "semantics": "03 Window seat - NE corner looking SW - seat, curtains and the mirror shutter"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "n53",
+   "x": -109.48,
+   "y": -571.26,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "att-02s",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "rotation": 180,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "view": "Two-point",
+      "focalLength": 24,
+      "sensorWidth": 36,
+      "aspect": "16:9",
+      "eyeHeight": 1.3716,
+      "tilt": 0,
+      "targetDistance": 3.81,
+      "showFrustum": true,
+      "frustumLength": 3,
+      "bodyLength": 0.14,
+      "bodyWidth": 0.1,
+      "bodyHeight": 0.09,
+      "lensLength": 0.08,
+      "lensRadius": 0.03,
+      "tripod": true,
+      "tripodSpread": 0.35,
+      "material": "matte black body, brushed aluminium lens barrel",
+      "semantics": "04 Wardrobe wall - two-point perspective, verticals held straight"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  }
+ ],
+ "segments": [
+  {
+   "id": "seg-001",
+   "fromNodeId": "n0",
+   "toNodeId": "n1",
+   "layer": "wall",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-002",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-003",
+   "fromNodeId": "n1",
+   "toNodeId": "n2",
+   "layer": "wall",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-004",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-005",
+   "fromNodeId": "n2",
+   "toNodeId": "n3",
+   "layer": "door",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "isObjectOpening": true,
+   "label": "M.Bedroom to bathroom",
+   "attachments": [
+    {
+     "id": "att-006",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-007",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 0.762,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.2276,
+      "leafThickness": 0.04,
+      "jambWidth": 0.05,
+      "lintelHeight": 2.1336,
+      "headDepth": 0.2276,
+      "material": "light oak veneer, matte lacquer",
+      "semantics": "flush oak-veneer door, matte finish, brushed brass lever"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-008",
+   "fromNodeId": "n3",
+   "toNodeId": "n4",
+   "layer": "wall",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-009",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-00a",
+   "fromNodeId": "n5",
+   "toNodeId": "n6",
+   "layer": "wall",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-00b",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-00c",
+   "fromNodeId": "n6",
+   "toNodeId": "n7",
+   "layer": "door",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "isObjectOpening": true,
+   "label": "M.Bedroom entry",
+   "attachments": [
+    {
+     "id": "att-00d",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-00e",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 0.9144,
+      "leaves": "Single",
+      "hinge": "right",
+      "swing": "right",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.2276,
+      "leafThickness": 0.04,
+      "jambWidth": 0.05,
+      "lintelHeight": 2.1336,
+      "headDepth": 0.2276,
+      "material": "light oak veneer, matte lacquer",
+      "semantics": "flush oak-veneer door, matte finish, brushed brass lever"
+     },
+     "t": 0.5,
+     "flip": true
+    }
+   ]
+  },
+  {
+   "id": "seg-00f",
+   "fromNodeId": "n7",
+   "toNodeId": "n4",
+   "layer": "wall",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-00g",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-00h",
+   "fromNodeId": "n0",
+   "toNodeId": "n8",
+   "layer": "wall",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-00i",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-00j",
+   "fromNodeId": "n8",
+   "toNodeId": "n9",
+   "layer": "window",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "isObjectOpening": true,
+   "label": "M.Bedroom window",
+   "attachments": [
+    {
+     "id": "att-00k",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "att-00l",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "width": 1.524,
+      "fitMode": "Fill wall",
+      "sillHeight": 0.4572,
+      "lintelHeight": 2.1336,
+      "wallDepth": 0.2276,
+      "panes": 3,
+      "operation": "Casement",
+      "showFrame": true,
+      "frameWidth": 0.05,
+      "sillProjection": 0.03,
+      "sillThk": 0.03,
+      "sillOverhang": 0.05,
+      "material": "slim aluminium frame, clear double glazing, ivory stone sill",
+      "semantics": "west-facing casement window, warm afternoon rake, clear glazing"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-00m",
+   "fromNodeId": "n9",
+   "toNodeId": "n5",
+   "layer": "wall",
+   "thickness": 33,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "attachments": [
+    {
+     "id": "att-00n",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.2276,
+      "height": 3.3528,
+      "base": 0,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "material": "plastered masonry, warm white matte emulsion",
+      "semantics": "plastered masonry wall, matte painted finish, warm white, calm hotel bedroom"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-00r",
+   "fromNodeId": "n10",
+   "toNodeId": "n11",
+   "layer": "rug",
+   "thickness": 1,
+   "color": "#94a3b8",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false
+  },
+  {
+   "id": "seg-00s",
+   "fromNodeId": "n11",
+   "toNodeId": "n12",
+   "layer": "rug",
+   "thickness": 1,
+   "color": "#94a3b8",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false
+  },
+  {
+   "id": "seg-00t",
+   "fromNodeId": "n12",
+   "toNodeId": "n13",
+   "layer": "rug",
+   "thickness": 1,
+   "color": "#94a3b8",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false
+  },
+  {
+   "id": "seg-00u",
+   "fromNodeId": "n13",
+   "toNodeId": "n10",
+   "layer": "rug",
+   "thickness": 1,
+   "color": "#94a3b8",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false
+  },
+  {
+   "id": "seg-00x",
+   "fromNodeId": "n14",
+   "toNodeId": "n15",
+   "layer": "headboard",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Headboard panel",
+   "attachments": [
+    {
+     "id": "att-00y",
+     "objectId": "upholstered-panel-with-math",
+     "objectPath": "Objects/Architectural/upholstered-panel.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 180,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 2.7432,
+      "height": 2.9718,
+      "baseOffset": 0,
+      "pattern": "Vertical channels",
+      "channelPitch": 0.1016,
+      "paddingDepth": 0.0508,
+      "grooveWidth": 0.008,
+      "backerThk": 0.018,
+      "floatGap": 0.0635,
+      "haloLed": true,
+      "ledInset": 0.02,
+      "trimLip": true,
+      "trimWidth": 0.0127,
+      "material": "ivory boucle upholstery, light oak veneer lip, matte",
+      "semantics": "upholstered headboard wall, 4in vertical channels, light oak reveals, warm 2700K halo behind the float gap"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-00z",
+   "fromNodeId": "n16",
+   "toNodeId": "n17",
+   "layer": "fluting",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Fluted panel",
+   "attachments": [
+    {
+     "id": "att-010",
+     "objectId": "fluted-panel-with-math",
+     "objectPath": "Objects/Architectural/fluted-panel.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 2.032,
+      "height": 2.9718,
+      "baseOffset": 0,
+      "flutePitch": 0.0508,
+      "profile": "Half-round",
+      "fluteDepth": 0.018,
+      "fluteGap": 0.004,
+      "backerThk": 0.018,
+      "shadowGap": 0.012,
+      "cutout": false,
+      "material": "light oak veneer, matte lacquer, half-round flutes",
+      "semantics": "fluted oak feature wall behind the TV, vertical rhythm, hairline shadow gap each side"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-011",
+   "fromNodeId": "n18",
+   "toNodeId": "n19",
+   "layer": "tv",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "TV 43in",
+   "attachments": [
+    {
+     "id": "att-012",
+     "objectId": "tv-with-math",
+     "objectPath": "Objects/Architectural/tv.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Top-Center",
+      "margin": 0,
+      "diagonal": 1.0922,
+      "width": 0.07,
+      "bezel": 0.012,
+      "centreHeight": 1.3716,
+      "standoff": 0.0381,
+      "backLed": true,
+      "mount": "Wall",
+      "showMount": false,
+      "material": "matte black bezel, anti-glare panel",
+      "semantics": "43-inch flat screen flush on the fluted panel, warm LED wash behind"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-013",
+   "fromNodeId": "n20",
+   "toNodeId": "n21",
+   "layer": "art",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Wall art pair",
+   "attachments": [
+    {
+     "id": "att-014",
+     "objectId": "wall-art-with-math",
+     "objectPath": "Objects/Architectural/wall-art.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "width": 0.6,
+      "height": 0.9,
+      "centreHeight": 1.524,
+      "arrangement": "Pair",
+      "count": 2,
+      "spacing": 0.1,
+      "frameWidth": 0.04,
+      "frameDepth": 0.035,
+      "showMat": true,
+      "matWidth": 0.05,
+      "artDepth": 0.008,
+      "material": "stained oak frame, ivory mount board, matte print",
+      "semantics": "pair of decorative panels, neutral tones, gallery hang"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-015",
+   "fromNodeId": "n22",
+   "toNodeId": "n23",
+   "layer": "track",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Curtain track",
+   "attachments": [
+    {
+     "id": "att-016",
+     "objectId": "curtain-track-with-math",
+     "objectPath": "Objects/Architectural/curtain-track.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 1.524,
+      "mountHeight": 2.9718,
+      "mount": "Recessed",
+      "tracks": 2,
+      "trackWidth": 0.02,
+      "trackDepth": 0.025,
+      "trackGap": 0.03,
+      "wallOffset": 0.08,
+      "stackSide": "Right",
+      "stackWidth": 0.3,
+      "brackets": 3,
+      "endCaps": true,
+      "material": "anodised aluminium track, brushed brass end caps",
+      "semantics": "concealed ceiling track recessed in the cove band, clean soffit line"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-017",
+   "fromNodeId": "n24",
+   "toNodeId": "n14",
+   "layer": "skirting",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Skirting N-left",
+   "attachments": [
+    {
+     "id": "att-018",
+     "objectId": "skirting-with-math",
+     "objectPath": "Objects/Architectural/skirting.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 0.3049,
+      "height": 0.0762,
+      "thickness": 0.018,
+      "profile": "Shadow gap",
+      "topDetail": 0.012,
+      "gapHeight": 0.012,
+      "gapDepth": 0.008,
+      "material": "MDF, ivory satin paint, flush with the panel faces",
+      "semantics": "slim ivory skirting, crisp shadow line"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-019",
+   "fromNodeId": "n15",
+   "toNodeId": "n25",
+   "layer": "skirting",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Skirting N-right",
+   "attachments": [
+    {
+     "id": "att-01a",
+     "objectId": "skirting-with-math",
+     "objectPath": "Objects/Architectural/skirting.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 0.3048,
+      "height": 0.0762,
+      "thickness": 0.018,
+      "profile": "Shadow gap",
+      "topDetail": 0.012,
+      "gapHeight": 0.012,
+      "gapDepth": 0.008,
+      "material": "MDF, ivory satin paint, flush with the panel faces",
+      "semantics": "slim ivory skirting, crisp shadow line"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-01b",
+   "fromNodeId": "n25",
+   "toNodeId": "n26",
+   "layer": "skirting",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Skirting E-north",
+   "attachments": [
+    {
+     "id": "att-01c",
+     "objectId": "skirting-with-math",
+     "objectPath": "Objects/Architectural/skirting.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 0.635,
+      "height": 0.0762,
+      "thickness": 0.018,
+      "profile": "Shadow gap",
+      "topDetail": 0.012,
+      "gapHeight": 0.012,
+      "gapDepth": 0.008,
+      "material": "MDF, ivory satin paint, flush with the panel faces",
+      "semantics": "slim ivory skirting, crisp shadow line"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-01d",
+   "fromNodeId": "n27",
+   "toNodeId": "n28",
+   "layer": "skirting",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Skirting E-south",
+   "attachments": [
+    {
+     "id": "att-01e",
+     "objectId": "skirting-with-math",
+     "objectPath": "Objects/Architectural/skirting.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 2.3368,
+      "height": 0.0762,
+      "thickness": 0.018,
+      "profile": "Shadow gap",
+      "topDetail": 0.012,
+      "gapHeight": 0.012,
+      "gapDepth": 0.008,
+      "material": "MDF, ivory satin paint, flush with the panel faces",
+      "semantics": "slim ivory skirting, crisp shadow line"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-01f",
+   "fromNodeId": "n17",
+   "toNodeId": "n29",
+   "layer": "skirting",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Skirting S-gap",
+   "attachments": [
+    {
+     "id": "att-01g",
+     "objectId": "skirting-with-math",
+     "objectPath": "Objects/Architectural/skirting.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 0.2031,
+      "height": 0.0762,
+      "thickness": 0.018,
+      "profile": "Shadow gap",
+      "topDetail": 0.012,
+      "gapHeight": 0.012,
+      "gapDepth": 0.008,
+      "material": "MDF, ivory satin paint, flush with the panel faces",
+      "semantics": "slim ivory skirting, crisp shadow line"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "seg-01h",
+   "fromNodeId": "n30",
+   "toNodeId": "n28",
+   "layer": "skirting",
+   "thickness": 1.5,
+   "color": "#7c3aed",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "showLabel": false,
+   "label": "Skirting S-right",
+   "attachments": [
+    {
+     "id": "att-01i",
+     "objectId": "skirting-with-math",
+     "objectPath": "Objects/Architectural/skirting.json",
+     "params": {
+      "fitMode": "Off",
+      "rotation": 0,
+      "anchorDir": "Center",
+      "margin": 0,
+      "length": 0.1016,
+      "height": 0.0762,
+      "thickness": 0.018,
+      "profile": "Shadow gap",
+      "topDetail": 0.012,
+      "gapHeight": 0.012,
+      "gapDepth": 0.008,
+      "material": "MDF, ivory satin paint, flush with the panel faces",
+      "semantics": "slim ivory skirting, crisp shadow line"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "obj-01j",
+   "fromNodeId": "n31",
+   "toNodeId": "n31",
+   "layer": "wardrobe",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01l",
+   "fromNodeId": "n32",
+   "toNodeId": "n32",
+   "layer": "seat",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01n",
+   "fromNodeId": "n33",
+   "toNodeId": "n33",
+   "layer": "bed",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01p",
+   "fromNodeId": "n34",
+   "toNodeId": "n34",
+   "layer": "nightstand",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01r",
+   "fromNodeId": "n35",
+   "toNodeId": "n35",
+   "layer": "nightstand",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01t",
+   "fromNodeId": "n36",
+   "toNodeId": "n36",
+   "layer": "console",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01v",
+   "fromNodeId": "n37",
+   "toNodeId": "n37",
+   "layer": "curtain",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01x",
+   "fromNodeId": "n38",
+   "toNodeId": "n38",
+   "layer": "plant",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-01z",
+   "fromNodeId": "n39",
+   "toNodeId": "n39",
+   "layer": "plant",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-021",
+   "fromNodeId": "n40",
+   "toNodeId": "n40",
+   "layer": "fan",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-023",
+   "fromNodeId": "n41",
+   "toNodeId": "n41",
+   "layer": "downlight",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-025",
+   "fromNodeId": "n42",
+   "toNodeId": "n42",
+   "layer": "downlight",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-027",
+   "fromNodeId": "n43",
+   "toNodeId": "n43",
+   "layer": "downlight",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-029",
+   "fromNodeId": "n44",
+   "toNodeId": "n44",
+   "layer": "downlight",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02b",
+   "fromNodeId": "n45",
+   "toNodeId": "n45",
+   "layer": "downlight",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02d",
+   "fromNodeId": "n46",
+   "toNodeId": "n46",
+   "layer": "downlight",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02f",
+   "fromNodeId": "n47",
+   "toNodeId": "n47",
+   "layer": "pendant",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02h",
+   "fromNodeId": "n48",
+   "toNodeId": "n48",
+   "layer": "pendant",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02j",
+   "fromNodeId": "n49",
+   "toNodeId": "n49",
+   "layer": "sun",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02l",
+   "fromNodeId": "n50",
+   "toNodeId": "n50",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02n",
+   "fromNodeId": "n51",
+   "toNodeId": "n51",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02p",
+   "fromNodeId": "n52",
+   "toNodeId": "n52",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "obj-02r",
+   "fromNodeId": "n53",
+   "toNodeId": "n53",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  }
+ ],
+ "spaces": [
+  {
+   "id": "space-00q",
+   "nodeIds": [
+    "n0",
+    "n1",
+    "n4",
+    "n5"
+   ],
+   "layer": "space",
+   "label": "M. BEDROOM",
+   "showLabel": true,
+   "roomType": "room",
+   "fill": "rgba(226,232,240,0.5)",
+   "stroke": "#475569",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-00o",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "identifyingType": "room",
+      "color": "Grey",
+      "semantics": "ivory marble-look porcelain floor in 4ft x 8ft slabs laid long-edge east-west from the NW corner, 1 mm ivory grout, warm white walls, calm contemporary hotel bedroom"
+     },
+     "t": 0,
+     "flip": false
+    },
+    {
+     "id": "att-00p",
+     "objectId": "false-ceiling-with-math",
+     "objectPath": "Objects/Architectural/false-ceiling.json",
+     "params": {
+      "slabHeight": 3.3528,
+      "bandSoffit": 2.9718,
+      "panelSoffit": 3.1242,
+      "bandWidth": 0.3048,
+      "bandSides": "All four",
+      "panelInset": 0,
+      "edgeProfile": "Shadow gap",
+      "coveLed": true,
+      "ledInset": 0.05,
+      "opening": false,
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "margin": 0,
+      "material": "gypsum board, warm white matte emulsion, seamless taped joints",
+      "semantics": "two-level cove ceiling, 1ft perimeter band at 9ft9in with concealed 2700K LED washing the 10ft3in central panel"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "space-00w",
+   "nodeIds": [
+    "n10",
+    "n11",
+    "n12",
+    "n13"
+   ],
+   "layer": "space",
+   "label": "RUG",
+   "showLabel": false,
+   "roomType": "area",
+   "fill": "rgba(148,163,184,0.15)",
+   "stroke": "#475569",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "att-00v",
+     "objectId": "rug-with-math",
+     "objectPath": "Objects/Architectural/rug.json",
+     "params": {
+      "length": 3.048,
+      "width": 2.4384,
+      "height": 0.012,
+      "shape": "Rectangular",
+      "showBorder": false,
+      "borderWidth": 0,
+      "fringeLength": 0,
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Max",
+      "margin": 0,
+      "flipSide": false,
+      "material": "grey wool, flat weave, plain",
+      "semantics": "plain grey wool rug, flat weave, no border, soft matte pile"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  }
+ ],
+ "layers": [
+  {
+   "id": "0",
+   "name": "0",
+   "color": "#000000",
+   "visible": true,
+   "locked": false,
+   "order": 0
+  },
+  {
+   "id": "image",
+   "name": "Image",
+   "color": "#a855f7",
+   "visible": true,
+   "locked": false,
+   "order": 1
+  },
+  {
+   "id": "wall",
+   "name": "Wall",
+   "color": "#1e293b",
+   "visible": true,
+   "locked": false,
+   "order": 2
+  },
+  {
+   "id": "door",
+   "name": "Door",
+   "color": "#b91c1c",
+   "visible": true,
+   "locked": false,
+   "order": 3
+  },
+  {
+   "id": "window",
+   "name": "Window",
+   "color": "#0e7490",
+   "visible": true,
+   "locked": false,
+   "order": 4
+  },
+  {
+   "id": "space",
+   "name": "Space",
+   "color": "#16a34a",
+   "visible": true,
+   "locked": false,
+   "order": 5
+  },
+  {
+   "id": "rug",
+   "name": "Rug",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 6
+  },
+  {
+   "id": "headboard",
+   "name": "Headboard Panel",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 7
+  },
+  {
+   "id": "fluting",
+   "name": "Fluted Panel",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 8
+  },
+  {
+   "id": "tv",
+   "name": "TV",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 9
+  },
+  {
+   "id": "art",
+   "name": "Wall Art",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 10
+  },
+  {
+   "id": "track",
+   "name": "Curtain Track",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 11
+  },
+  {
+   "id": "skirting",
+   "name": "Skirting",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 12
+  },
+  {
+   "id": "wardrobe",
+   "name": "Wardrobe",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 13
+  },
+  {
+   "id": "seat",
+   "name": "Window Seat",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 14
+  },
+  {
+   "id": "bed",
+   "name": "Bed",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 15
+  },
+  {
+   "id": "nightstand",
+   "name": "Nightstand R",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 16
+  },
+  {
+   "id": "console",
+   "name": "Media Console",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 17
+  },
+  {
+   "id": "curtain",
+   "name": "Curtains",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 18
+  },
+  {
+   "id": "plant",
+   "name": "Plant (floor)",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 19
+  },
+  {
+   "id": "fan",
+   "name": "Ceiling Fan + Ring Light",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 20
+  },
+  {
+   "id": "downlight",
+   "name": "Downlight wardrobe",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 21
+  },
+  {
+   "id": "pendant",
+   "name": "Pendant R",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 22
+  },
+  {
+   "id": "sun",
+   "name": "Key Light - Sun 3:30pm",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 23
+  },
+  {
+   "id": "camera",
+   "name": "Camera 04 Wardrobe wall",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 24
+  }
+ ],
+ "imageUnderlay": {
+  "id": "image_ry4uhdh0lygr",
+  "src": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/floorplan_with_bedroom.png",
+  "x": -1654.5,
+  "y": -1169.5,
+  "width": 3309,
+  "height": 2339,
+  "opacity": 0.55,
+  "scale": 1,
+  "locked": true,
+  "layerId": "image"
+ },
+ "graphAttrs": {
+  "nodes": {
+   "obj-01j:end|obj-01j:start": {
+    "node-type": "object"
+   },
+   "obj-01l:end|obj-01l:start": {
+    "node-type": "object"
+   },
+   "obj-01n:end|obj-01n:start": {
+    "node-type": "object"
+   },
+   "obj-01p:end|obj-01p:start": {
+    "node-type": "object"
+   },
+   "obj-01r:end|obj-01r:start": {
+    "node-type": "object"
+   },
+   "obj-01t:end|obj-01t:start": {
+    "node-type": "object"
+   },
+   "obj-01v:end|obj-01v:start": {
+    "node-type": "object"
+   },
+   "obj-01x:end|obj-01x:start": {
+    "node-type": "object"
+   },
+   "obj-01z:end|obj-01z:start": {
+    "node-type": "object"
+   },
+   "obj-021:end|obj-021:start": {
+    "node-type": "object"
+   },
+   "obj-023:end|obj-023:start": {
+    "node-type": "object"
+   },
+   "obj-025:end|obj-025:start": {
+    "node-type": "object"
+   },
+   "obj-027:end|obj-027:start": {
+    "node-type": "object"
+   },
+   "obj-029:end|obj-029:start": {
+    "node-type": "object"
+   },
+   "obj-02b:end|obj-02b:start": {
+    "node-type": "object"
+   },
+   "obj-02d:end|obj-02d:start": {
+    "node-type": "object"
+   },
+   "obj-02f:end|obj-02f:start": {
+    "node-type": "object"
+   },
+   "obj-02h:end|obj-02h:start": {
+    "node-type": "object"
+   },
+   "obj-02j:end|obj-02j:start": {
+    "node-type": "object"
+   },
+   "obj-02l:end|obj-02l:start": {
+    "node-type": "object"
+   },
+   "obj-02n:end|obj-02n:start": {
+    "node-type": "object"
+   },
+   "obj-02p:end|obj-02p:start": {
+    "node-type": "object"
+   },
+   "obj-02r:end|obj-02r:start": {
+    "node-type": "object"
+   }
+  },
+  "segments": {}
+ }
+}

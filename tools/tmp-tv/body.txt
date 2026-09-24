@@ -1,0 +1,138 @@
+
+# ===========================================================================
+# THE TV WALL IN ITS OWN FRAME — u across the wall, v FRONT (-) to wall (+),
+# z up. Everything backs onto the wall plane at v = +width/2; fronts face -v,
+# which is what the plan tools' BACK table measures for tv-unit (back +y).
+# ===========================================================================
+_L = length * _s
+_D = width * _s
+_hC = height * _s
+_tT = topThk * _s
+_fl = legHeight * _s
+_g = max(0.001, doorGap) * _s
+_u0 = 0 - _L / 2
+_u1 = _L / 2
+_vW = _D / 2
+_vF = _vW - _D
+_t = 0.022 * _s
+_dB = detail == 'Blocky'
+_dM = detail == 'Medium'
+_dF = detail == 'Fine'
+_kA = _dB ? 1 : (_dM ? 2 : (_dF ? 3 : 5))
+_ecC = edgeCharacter == 'Crisp'
+_ecP = edgeCharacter == 'Plump'
+_rE = (_ecC ? 0.0012 : (_ecP ? 0.005 : 0.0025)) * _s
+# groups: 1 oak · 2 white fronts · 3 marble · 4 back wall panel · 5 LED · 6 screen · 7 pulls
+_BX = zeros(0, 9)
+
+# ===========================================================================
+# STEP 1 — THE FLOATING CONSOLE: an open carcass, drawers, a centre niche
+# ===========================================================================
+_zc0 = _fl
+_zc1 = _fl + _hC
+_nDr = max(0, round(drawers))
+_niW = centreNiche > 0 ? min(nicheWidth * _s, 0.5 * _L) : 0
+_dw = (_L - _niW) / max(1, _nDr)
+_half = floor(_nDr / 2)
+# carcass: top slab, bottom, back, two ends
+_BX = vcat(_BX, hcat(_u0, _u1, _vF, _vW, _zc1 - _tT, _zc1, _rE, 0, 1), hcat(_u0, _u1, _vF + 0.02 * _s, _vW, _zc0, _zc0 + _t, _rE, 0, 1), hcat(_u0 + _t, _u1 - _t, _vW - _t, _vW, _zc0 + _t, _zc1 - _tT, 0, 0, 1), hcat(_u0, _u0 + _t, _vF + 0.02 * _s, _vW, _zc0, _zc1 - _tT, _rE, 0, 1), hcat(_u1 - _t, _u1, _vF + 0.02 * _s, _vW, _zc0, _zc1 - _tT, _rE, 0, 1))
+# drawer fronts, left half then right half, the niche between them
+_di = arange(max(1, _nDr))
+_left = lt(_di, _half)
+_da = where(_left, _u0 + _di * _dw, _u0 + _niW + _di * _dw) + _g / 2
+_db = _da + _dw - _g
+_oD = ones(max(1, _nDr), 1)
+_fz0 = _zc0 + _g
+_fz1 = _zc1 - _tT - _g
+_DRbx = hcat(_da, _db, (_vF - 0.02 * _s) * _oD, _vF * _oD, _fz0 * _oD, _fz1 * _oD, _rE * _oD, 0 * _oD, 2 * _oD)
+_BX = _nDr > 0 ? vcat(_BX, _DRbx, hcat(_da - _g / 2, _db + _g / 2, _vF * _oD, (_vF + 0.02 * _s) * _oD, _zc0 * _oD, (_zc1 - _tT) * _oD, 0 * _oD, 0 * _oD, 1 * _oD)) : _BX
+# the niche: two side cheeks and an inner shelf, open to the room
+_nu0 = _u0 + _half * _dw
+_nu1 = _nu0 + _niW
+_BX = _niW > 0 ? vcat(_BX, hcat(_nu0, _nu0 + _t, _vF, _vW, _zc0, _zc1 - _tT, _rE, 0, 1), hcat(_nu1 - _t, _nu1, _vF, _vW, _zc0, _zc1 - _tT, _rE, 0, 1)) : _BX
+# pulls: brass bars across the top of each drawer, centred (axis 1: a = v, b = z, e = u)
+_pOn = pullType == 'Bar' && _nDr > 0
+_pl = min(0.2 * _s, 0.35 * _dw)
+_pz = _fz1 - 0.06 * _s
+_pc = (_da + _db) / 2
+_BX = _pOn ? vcat(_BX, hcat((_vF - 0.02 * _s - 0.02 * _s) * _oD, (_vF - 0.02 * _s - 0.008 * _s) * _oD, (_pz - 0.005 * _s) * _oD, (_pz + 0.005 * _s) * _oD, _pc - _pl / 2, _pc + _pl / 2, 0.0045 * _s * _oD, 1 * _oD, 7 * _oD)) : _BX
+_BX = (pullType == 'Knob' && _nDr > 0) ? vcat(_BX, hcat(_pc - 0.012 * _s, _pc + 0.012 * _s, (_vF - 0.045 * _s) * _oD, (_vF - 0.02 * _s) * _oD, (_pz - 0.012 * _s) * _oD, (_pz + 0.012 * _s) * _oD, 0.0119 * _s * _oD, 0 * _oD, 7 * _oD)) : _BX
+# under-console LED, just behind the front edge: the glow on the floor in the reference
+_BX = underLed > 0 ? vcat(_BX, hcat(_vF + 0.03 * _s, _vF + 0.045 * _s, _zc0 - 0.004 * _s, _zc0, _u0 + 0.05 * _s, _u1 - 0.05 * _s, 0.002 * _s, 1, 5)) : _BX
+
+# ===========================================================================
+# STEP 2 — TWO SHELF TOWERS, lit shelf by shelf
+# ===========================================================================
+_twOn = towers > 0
+_tw = min(towerWidth * _s, 0.3 * _L)
+_tD = min(towerDepth * _s, _D)
+_zT1 = max(_zc1 + 0.6 * _s, towerHeight * _s)
+_nS = max(1, round(towerShelves))
+_tv0 = _vW - _tD
+_bay = (_zT1 - _zc1 - _t) / _nS
+_sI = arange(max(1, _nS - 1)) + 1
+_oS = ones(max(1, _nS - 1), 1)
+loop k in (_twOn ? 2 : 0):
+  _ta = k < 1 ? _u0 : (_u1 - _tw)
+  _tb = _ta + _tw
+  # sides, top, back
+  _BX = vcat(_BX, hcat(_ta, _ta + _t, _tv0, _vW, _zc1, _zT1, _rE, 0, 1), hcat(_tb - _t, _tb, _tv0, _vW, _zc1, _zT1, _rE, 0, 1), hcat(_ta, _tb, _tv0, _vW, _zT1 - _t, _zT1, _rE, 0, 1), hcat(_ta + _t, _tb - _t, _vW - 0.012 * _s, _vW, _zc1, _zT1 - _t, 0, 0, 1))
+  # shelves, and an LED strip under each shelf and under the top, near the front
+  _shz = _zc1 + _sI * _bay
+  _BX = _nS > 1 ? vcat(_BX, hcat((_ta + _t) * _oS, (_tb - _t) * _oS, (_tv0 + 0.005 * _s) * _oS, (_vW - 0.012 * _s) * _oS, _shz, _shz + _t, _rE * _oS, 0 * _oS, 1 * _oS)) : _BX
+  _lz = vcat(_shz, _zT1 - _t)
+  _oL = ones(rows(_lz), 1)
+  _BX = shelfLed > 0 ? vcat(_BX, hcat((_tv0 + 0.02 * _s) * _oL, (_tv0 + 0.035 * _s) * _oL, _lz - 0.005 * _s, _lz, (_ta + _t + 0.01 * _s) * _oL, (_tb - _t - 0.01 * _s) * _oL, 0.002 * _s * _oL, 1 * _oL, 5 * _oL)) : _BX
+end
+
+# ===========================================================================
+# STEP 3 — THE FEATURE WALL between the towers: back panel, fluted slats,
+# a floating marble panel with an LED halo, the screen, the floating shelf
+# ===========================================================================
+_cu0 = _twOn ? (_u0 + _tw) : _u0
+_cu1 = _twOn ? (_u1 - _tw) : _u1
+_BX = backPanel > 0 ? vcat(_BX, hcat(_cu0, _cu1, _vW - 0.012 * _s, _vW, _zc1, _zT1, 0, 0, 4)) : _BX
+# fluted oak slats up the RIGHT of the feature wall AS SEEN FROM THE FRONT. Fronts face -v, so the
+# viewer's right is -u: the slats run inward from the low-u tower (+u would put them on the left).
+_flOn = flutedWidth * _s > 0.05 * _s
+_flW = min(flutedWidth * _s, 0.45 * (_cu1 - _cu0))
+_fu0 = _cu0
+_fu1 = _cu0 + _flW
+_nFl = max(2, round(_flW / (0.045 * _s)))
+_fp = _flW / _nFl
+_fI = arange(_nFl)
+_oF = ones(_nFl, 1)
+_BX = _flOn ? vcat(_BX, hcat(_fu0 + _fI * _fp + 0.004 * _s, _fu0 + (_fI + 1) * _fp - 0.004 * _s, (_vW - 0.042 * _s) * _oF, (_vW - 0.012 * _s) * _oF, _zc1 * _oF, _zT1 * _oF, 0.009 * _s * _oF, 0 * _oF, 1 * _oF)) : _BX
+# marble panel: floats 30 mm off the wall, overlapping the slats like the reference; halo behind it
+_mOn = tvPanel == 'Marble'
+_mW = min(panelWidth * _s, _cu1 - _cu0 - 0.1 * _s)
+_mH = panelHeight * _s
+_mc = (_fu1 + _cu1) / 2 - (_flOn ? 0.12 * _s : 0)
+_mz = screenHeight * _s
+_mv1 = _vW - 0.03 * _s
+_mv0 = _mv1 - 0.03 * _s
+_BX = _mOn ? vcat(_BX, hcat(_mc - _mW / 2, _mc + _mW / 2, _mv0, _mv1, _mz - _mH / 2, _mz + _mH / 2, _rE, 0, 3)) : _BX
+# halo: an emissive frame just inside the panel edge, on its back face, facing the wall
+_hI = 0.05 * _s
+_BX = (_mOn && panelHalo > 0) ? vcat(_BX, hcat(_mc - _mW / 2 + _hI, _mc + _mW / 2 - _hI, _mv1, _mv1 + 0.008 * _s, _mz + _mH / 2 - _hI - 0.012 * _s, _mz + _mH / 2 - _hI, 0.002 * _s, 0, 5), hcat(_mc - _mW / 2 + _hI, _mc + _mW / 2 - _hI, _mv1, _mv1 + 0.008 * _s, _mz - _mH / 2 + _hI, _mz - _mH / 2 + _hI + 0.012 * _s, 0.002 * _s, 0, 5), hcat(_mc - _mW / 2 + _hI, _mc - _mW / 2 + _hI + 0.012 * _s, _mv1, _mv1 + 0.008 * _s, _mz - _mH / 2 + _hI, _mz + _mH / 2 - _hI, 0.002 * _s, 0, 5), hcat(_mc + _mW / 2 - _hI - 0.012 * _s, _mc + _mW / 2 - _hI, _mv1, _mv1 + 0.008 * _s, _mz - _mH / 2 + _hI, _mz + _mH / 2 - _hI, 0.002 * _s, 0, 5)) : _BX
+# screen: 16:9 from its diagonal, on the panel face
+_scD = screenSize * _s
+_scW = _scD * 16 / sqrt(337)
+_scH = _scD * 9 / sqrt(337)
+_sv1 = _mOn ? _mv0 : (_vW - 0.012 * _s)
+_BX = showScreen > 0 ? vcat(_BX, hcat(_mc - _scW / 2, _mc + _scW / 2, _sv1 - 0.03 * _s, _sv1, _mz - _scH / 2, _mz + _scH / 2, 0.004 * _s, 0, 6)) : _BX
+# floating shelf across the feature wall, lit from below by small downlights
+_shOn = topShelf > 0
+_tsZ = min(_zT1 - 0.2 * _s, max(_mz + _mH / 2 + 0.2 * _s, topShelfHeight * _s))
+_tsD = 0.26 * _s
+_BX = _shOn ? vcat(_BX, hcat(_cu0, _cu1, _vW - _tsD, _vW - 0.012 * _s, _tsZ - 0.045 * _s, _tsZ, _rE, 0, 1)) : _BX
+_nDl = max(0, round(shelfDownlights))
+_dlI = arange(max(1, _nDl))
+_dlU = _cu0 + (_dlI + 0.5) * (_cu1 - _cu0) / max(1, _nDl)
+_oDl = ones(max(1, _nDl), 1)
+_BX = (_shOn && _nDl > 0) ? vcat(_BX, hcat(_dlU - 0.025 * _s, _dlU + 0.025 * _s, (_vW - _tsD / 2 - 0.025 * _s) * _oDl, (_vW - _tsD / 2 + 0.025 * _s) * _oDl, (_tsZ - 0.049 * _s) * _oDl, (_tsZ - 0.044 * _s) * _oDl, 0.0249 * _s * _oDl, 0 * _oDl, 5 * _oDl)) : _BX
+
+# ===========================================================================
+# STEP 4 — THE ROUNDED-BOX KERNEL (same as wardrobe.json): every box above,
+# one broadcast pass. Radius 0 is a true cuboid; ids stride per box.
+# ===========================================================================

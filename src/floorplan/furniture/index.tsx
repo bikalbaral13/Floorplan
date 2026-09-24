@@ -1,7 +1,7 @@
 import type Konva from "konva";
 import { Group } from "react-konva";
 import type { FurnitureItem, Wall } from "../types";
-import { snapPointerToNearestWall } from "../wallSnap";
+import { snapPointerToNearestWall } from "@builderpluss/engine";
 import { BedFurniture } from "./bed.tsx";
 import { ChairFurniture } from "./chair.tsx";
 import { DoorFurniture } from "./door.tsx";

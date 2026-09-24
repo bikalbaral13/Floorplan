@@ -1,0 +1,38 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "vector-ops",
+  "meta": { "label": "Vector Ops", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — row-wise vector maths on an N×2 list: Normalize, Length, Perpendicular, Negate, Angle. An N×2 matrix IS a list of N 2D vectors, so this reuses the matrix type. Draws nothing.",
+  "instructions": "A value-only node: a LIST OF VECTORS in, a list out. Every row is treated as one vector and handled independently, so a whole polygon's worth of edges is processed in one pass — no Loop needed. It has no geometry input or output and draws nothing on the canvas.\n\nTHE TYPE: an N×2 matrix and a list of N 2D vectors are the same thing, so this node consumes anything the Matrix nodes produce — including a point list (`val-points`) or an edge-vector list (Shift Rows → Matrix Operations Subtract). A single vector is just the N = 1 case. N×3 works too where the operation is defined in 3D.\n\nOPERATIONS:\n• Normalize (v̂) — unit length, direction only. A zero-length row stays zero instead of becoming NaN.\n• Length (|v|) — reduces to an N×1 column. Feed it back in as a per-row scalar via Matrix Operations (broadcasting).\n• Perpendicular (CCW) — rotate 90°, (x, y) → (−y, x). For a COUNTER-CLOCKWISE ring this is the INWARD edge normal, which is what offsetting needs. 2D only (reads the first two columns).\n• Perpendicular (CW) — (x, y) → (y, −x); the outward normal for a CCW ring.\n• Negate (−v) — reverse direction.\n• Angle — atan2(y, x) in DEGREES, reduces to an N×1 column.\n\nOUTPUT: `val-matrix` plus `val-rows` / `val-cols`. Chain with Vector Product (dot / cross) and Matrix Operations to build geometric formulas directly in the graph. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "a", "label": "Vectors" },
+      { "key": "op", "label": "Operation" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Matrix (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "op",
+      "label": "Operation",
+      "kind": "select",
+      "default": "normalize",
+      "options": [
+        { "value": "normalize", "label": "Normalize (v̂)" },
+        { "value": "length", "label": "Length (|v|)" },
+        { "value": "perp", "label": "Perpendicular CCW (−y, x)" },
+        { "value": "perp-cw", "label": "Perpendicular CW (y, −x)" },
+        { "value": "negate", "label": "Negate (−v)" },
+        { "value": "angle", "label": "Angle (degrees)" }
+      ]
+    },
+    { "key": "a", "label": "Vectors (JSON)", "kind": "text", "default": "" }
+  ]
+}

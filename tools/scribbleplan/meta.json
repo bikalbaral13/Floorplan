@@ -1,0 +1,809 @@
+{
+ "rooms": {
+  "stair": [
+   0.2286,
+   0.2286,
+   3.1115,
+   3.4163
+  ],
+  "bed1": [
+   3.2131000000000003,
+   0.2286,
+   6.3131,
+   3.4163
+  ],
+  "kitchen": [
+   6.4147,
+   0.2286,
+   10.744200000000001,
+   3.4163
+  ],
+  "verandah": [
+   0.2286,
+   3.5179000000000005,
+   3.1115,
+   7.391400000000001
+  ],
+  "bed2": [
+   7.994199999999999,
+   3.5179000000000005,
+   10.744200000000001,
+   7.391400000000001
+  ],
+  "toilet": [
+   6.4147,
+   5.105400000000001,
+   7.8926,
+   7.391400000000001
+  ]
+ },
+ "hallRing": [
+  [
+   3.2131000000000003,
+   3.5179000000000005
+  ],
+  [
+   7.8926,
+   3.5179000000000005
+  ],
+  [
+   7.8926,
+   5.003800000000002
+  ],
+  [
+   6.3131,
+   5.003800000000002
+  ],
+  [
+   6.3131,
+   7.391400000000001
+  ],
+  [
+   3.2131000000000003,
+   7.391400000000001
+  ]
+ ],
+ "doorZones": [
+  {
+   "label": "Verandah front",
+   "room": "verandah",
+   "rect": [
+    0.45,
+    6.5549,
+    2.85,
+    7.4549
+   ]
+  },
+  {
+   "label": "Verandah side",
+   "room": "verandah",
+   "rect": [
+    0.1651,
+    4.6,
+    1.0651,
+    6.4
+   ]
+  },
+  {
+   "label": "Main door",
+   "room": "verandah",
+   "rect": [
+    2.2115,
+    3.75,
+    3.1115,
+    4.75
+   ]
+  },
+  {
+   "label": "Main door",
+   "room": "hall",
+   "rect": [
+    3.2131,
+    3.75,
+    4.1131,
+    4.75
+   ]
+  },
+  {
+   "label": "Stair gate",
+   "room": "verandah",
+   "rect": [
+    0.5,
+    3.5179,
+    1.4,
+    4.4179
+   ]
+  },
+  {
+   "label": "Bedroom 1 door",
+   "room": "bed1",
+   "rect": [
+    3.45,
+    2.5163,
+    4.35,
+    3.4163
+   ]
+  },
+  {
+   "label": "Bedroom 1 door",
+   "room": "hall",
+   "rect": [
+    3.45,
+    3.5179,
+    4.35,
+    4.4179
+   ]
+  },
+  {
+   "label": "Kitchen door",
+   "room": "kitchen",
+   "rect": [
+    7,
+    2.5163,
+    7.85,
+    3.4163
+   ]
+  },
+  {
+   "label": "Kitchen door",
+   "room": "hall",
+   "rect": [
+    7,
+    3.5179,
+    7.85,
+    4.4179
+   ]
+  },
+  {
+   "label": "Bedroom 2 door",
+   "room": "hall",
+   "rect": [
+    6.9926,
+    3.67,
+    7.8926,
+    4.57
+   ]
+  },
+  {
+   "label": "Bedroom 2 door",
+   "room": "bed2",
+   "rect": [
+    7.9942,
+    3.67,
+    8.8942,
+    4.57
+   ]
+  },
+  {
+   "label": "Toilet door",
+   "room": "hall",
+   "rect": [
+    6.55,
+    4.1038,
+    7.25,
+    5.0038
+   ]
+  },
+  {
+   "label": "Toilet door",
+   "room": "toilet",
+   "rect": [
+    6.55,
+    5.1054,
+    7.25,
+    6.0054
+   ]
+  }
+ ],
+ "doors": [
+  {
+   "label": "Verandah front",
+   "kind": "opening",
+   "axis": "h",
+   "at": 7.505700000000001,
+   "from": 0.44999999999999996,
+   "to": 2.8499999999999996,
+   "span": [
+    0.2286,
+    3.1115
+   ],
+   "rooms": [
+    "verandah",
+    null
+   ]
+  },
+  {
+   "label": "Verandah side",
+   "kind": "opening",
+   "axis": "v",
+   "at": 0.1143,
+   "from": 4.6,
+   "to": 6.4,
+   "span": [
+    3.5179000000000005,
+    7.391400000000001
+   ],
+   "rooms": [
+    null,
+    "verandah"
+   ]
+  },
+  {
+   "label": "Main door",
+   "kind": "door",
+   "axis": "v",
+   "at": 3.1623,
+   "from": 3.75,
+   "to": 4.75,
+   "span": [
+    3.5179000000000005,
+    7.391400000000001
+   ],
+   "rooms": [
+    "verandah",
+    "hall"
+   ]
+  },
+  {
+   "label": "Bedroom 1 door",
+   "kind": "door",
+   "axis": "h",
+   "at": 3.4671000000000003,
+   "from": 3.4499999999999997,
+   "to": 4.35,
+   "span": [
+    3.2131000000000003,
+    6.3131
+   ],
+   "rooms": [
+    "bed1",
+    "hall"
+   ]
+  },
+  {
+   "label": "Kitchen door",
+   "kind": "door",
+   "axis": "h",
+   "at": 3.4671000000000003,
+   "from": 7,
+   "to": 7.85,
+   "span": [
+    6.4147,
+    7.8926
+   ],
+   "rooms": [
+    "kitchen",
+    "hall"
+   ]
+  },
+  {
+   "label": "Bedroom 2 door",
+   "kind": "door",
+   "axis": "v",
+   "at": 7.9434,
+   "from": 3.67,
+   "to": 4.57,
+   "span": [
+    3.5179000000000005,
+    7.391400000000001
+   ],
+   "rooms": [
+    "hall",
+    "bed2"
+   ]
+  },
+  {
+   "label": "Toilet door",
+   "kind": "door",
+   "axis": "h",
+   "at": 5.0546000000000015,
+   "from": 6.550000000000001,
+   "to": 7.25,
+   "span": [
+    6.4147,
+    7.8926
+   ],
+   "rooms": [
+    "hall",
+    "toilet"
+   ]
+  }
+ ],
+ "gates": [
+  {
+   "label": "Stair gate",
+   "kind": "gate",
+   "axis": "h",
+   "at": 3.4671000000000003,
+   "from": 0.49999999999999994,
+   "to": 1.4,
+   "span": [
+    0.2286,
+    3.1115
+   ],
+   "rooms": [
+    null,
+    "verandah"
+   ]
+  }
+ ],
+ "windows": [
+  {
+   "label": "Stair window",
+   "room": "stair",
+   "wall": "N",
+   "centre": [
+    1.6,
+    0.3186
+   ],
+   "width": 0.9,
+   "curtain": false
+  },
+  {
+   "label": "Bedroom 1 window",
+   "room": "bed1",
+   "wall": "N",
+   "centre": [
+    4.7,
+    0.3186
+   ],
+   "width": 1.5,
+   "curtain": true
+  },
+  {
+   "label": "Kitchen window",
+   "room": "kitchen",
+   "wall": "N",
+   "centre": [
+    8.6,
+    0.3186
+   ],
+   "width": 1.5,
+   "curtain": false
+  },
+  {
+   "label": "Hall window",
+   "room": "hall",
+   "wall": "S",
+   "centre": [
+    4.8,
+    7.301400000000001
+   ],
+   "width": 1.5,
+   "curtain": true
+  },
+  {
+   "label": "Toilet ventilator",
+   "room": "toilet",
+   "wall": "S",
+   "centre": [
+    7.4,
+    7.301400000000001
+   ],
+   "width": 0.6,
+   "curtain": true
+  },
+  {
+   "label": "Bedroom 2 window",
+   "room": "bed2",
+   "wall": "S",
+   "centre": [
+    8.6,
+    7.301400000000001
+   ],
+   "width": 1,
+   "curtain": true
+  },
+  {
+   "label": "Stair west window",
+   "room": "stair",
+   "wall": "W",
+   "centre": [
+    0.3186,
+    1.8
+   ],
+   "width": 0.9,
+   "curtain": false
+  },
+  {
+   "label": "Kitchen east window",
+   "room": "kitchen",
+   "wall": "E",
+   "centre": [
+    10.654200000000001,
+    1.8
+   ],
+   "width": 1.2,
+   "curtain": false
+  },
+  {
+   "label": "Bedroom 2 east window",
+   "room": "bed2",
+   "wall": "E",
+   "centre": [
+    10.654200000000001,
+    5.5
+   ],
+   "width": 1.2,
+   "curtain": true
+  }
+ ],
+ "stair": {
+  "room": "stair",
+  "footprint": [
+   2.62,
+   3.1
+  ]
+ },
+ "placements": [
+  {
+   "kind": "curtain",
+   "room": "bed1",
+   "x": 4.7,
+   "y": 0.3186,
+   "band": "high",
+   "back": "N",
+   "rotation": 0
+  },
+  {
+   "kind": "curtain",
+   "room": "hall",
+   "x": 4.8,
+   "y": 7.301400000000001,
+   "band": "high",
+   "back": "S",
+   "rotation": 180
+  },
+  {
+   "kind": "curtain",
+   "room": "toilet",
+   "x": 7.4,
+   "y": 7.301400000000001,
+   "band": "high",
+   "back": "S",
+   "rotation": 180
+  },
+  {
+   "kind": "curtain",
+   "room": "bed2",
+   "x": 8.6,
+   "y": 7.301400000000001,
+   "band": "high",
+   "back": "S",
+   "rotation": 180
+  },
+  {
+   "kind": "curtain",
+   "room": "bed2",
+   "x": 10.654200000000001,
+   "y": 5.5,
+   "band": "high",
+   "back": "E",
+   "rotation": 90
+  },
+  {
+   "kind": "bed",
+   "room": "bed1",
+   "x": 4.2131,
+   "y": 1.25,
+   "band": "floor",
+   "rotation": 0,
+   "back": "W"
+  },
+  {
+   "kind": "wardrobe",
+   "room": "bed1",
+   "x": 6.0131,
+   "y": 1,
+   "band": "floor",
+   "rotation": 270,
+   "back": "E"
+  },
+  {
+   "kind": "nightstand",
+   "room": "bed1",
+   "x": 3.44,
+   "y": 2.3,
+   "band": "floor",
+   "rotation": 90,
+   "back": "W"
+  },
+  {
+   "kind": "dressing-table",
+   "room": "bed1",
+   "x": 5.55,
+   "y": 3.1913,
+   "band": "floor",
+   "rotation": 0,
+   "back": "S"
+  },
+  {
+   "kind": "ceiling-fan",
+   "room": "bed1",
+   "x": 4.763,
+   "y": 1.822,
+   "band": "high",
+   "rotation": 0
+  },
+  {
+   "kind": "stove",
+   "room": "kitchen",
+   "x": 6.7147,
+   "y": 1,
+   "band": "floor",
+   "rotation": 270,
+   "back": "W"
+  },
+  {
+   "kind": "exhaust-hood",
+   "room": "kitchen",
+   "x": 6.7147,
+   "y": 1,
+   "band": "high",
+   "rotation": 270,
+   "back": "W"
+  },
+  {
+   "kind": "kitchen-sink",
+   "room": "kitchen",
+   "x": 6.7147,
+   "y": 2,
+   "band": "floor",
+   "rotation": 270,
+   "back": "W"
+  },
+  {
+   "kind": "refrigerator",
+   "room": "kitchen",
+   "x": 10.35,
+   "y": 0.61,
+   "band": "floor",
+   "rotation": 0,
+   "back": "N"
+  },
+  {
+   "kind": "table",
+   "room": "kitchen",
+   "x": 9,
+   "y": 1.9,
+   "band": "floor",
+   "rotation": 0
+  },
+  {
+   "kind": "chair",
+   "room": "kitchen",
+   "x": 8.05,
+   "y": 1.9,
+   "band": "floor",
+   "rotation": 0,
+   "faceTo": [
+    9,
+    1.9
+   ]
+  },
+  {
+   "kind": "chair",
+   "room": "kitchen",
+   "x": 9.95,
+   "y": 1.9,
+   "band": "floor",
+   "rotation": 180,
+   "faceTo": [
+    9,
+    1.9
+   ]
+  },
+  {
+   "kind": "chair",
+   "room": "kitchen",
+   "x": 9,
+   "y": 1.25,
+   "band": "floor",
+   "rotation": 90,
+   "faceTo": [
+    9,
+    1.9
+   ]
+  },
+  {
+   "kind": "chair",
+   "room": "kitchen",
+   "x": 9,
+   "y": 2.55,
+   "band": "floor",
+   "rotation": 270,
+   "faceTo": [
+    9,
+    1.9
+   ]
+  },
+  {
+   "kind": "stool",
+   "room": "verandah",
+   "x": 1.5,
+   "y": 5.6,
+   "band": "floor",
+   "rotation": 0
+  },
+  {
+   "kind": "stool",
+   "room": "verandah",
+   "x": 2.2,
+   "y": 5.6,
+   "band": "floor",
+   "rotation": 0
+  },
+  {
+   "kind": "planter-box",
+   "room": "verandah",
+   "x": 1.75,
+   "y": 6.2,
+   "band": "floor",
+   "rotation": 0
+  },
+  {
+   "kind": "shoe-rack",
+   "room": "verandah",
+   "x": 2.95,
+   "y": 5.4,
+   "band": "floor",
+   "rotation": 270,
+   "back": "E"
+  },
+  {
+   "kind": "outdoor-light",
+   "room": "verandah",
+   "x": 0.45,
+   "y": 4,
+   "band": "high",
+   "rotation": 0
+  },
+  {
+   "kind": "bed",
+   "room": "bed2",
+   "x": 9.8942,
+   "y": 6.3914,
+   "band": "floor",
+   "rotation": 270,
+   "back": "S"
+  },
+  {
+   "kind": "nightstand",
+   "room": "bed2",
+   "x": 8.85,
+   "y": 7.18,
+   "band": "floor",
+   "rotation": 0,
+   "back": "S"
+  },
+  {
+   "kind": "wardrobe",
+   "room": "bed2",
+   "x": 10.1,
+   "y": 3.8179,
+   "band": "floor",
+   "rotation": 180,
+   "back": "N"
+  },
+  {
+   "kind": "dressing-table",
+   "room": "bed2",
+   "x": 8.2192,
+   "y": 6.1,
+   "band": "floor",
+   "rotation": 90,
+   "back": "W"
+  },
+  {
+   "kind": "ceiling-fan",
+   "room": "bed2",
+   "x": 9.37,
+   "y": 5.45,
+   "band": "high",
+   "rotation": 0
+  },
+  {
+   "kind": "toilet",
+   "room": "toilet",
+   "x": 6.7647,
+   "y": 6.9,
+   "band": "floor",
+   "rotation": 0,
+   "back": "W"
+  },
+  {
+   "kind": "washbasin",
+   "room": "toilet",
+   "x": 7.6676,
+   "y": 6.9,
+   "band": "floor",
+   "rotation": 90,
+   "back": "E"
+  },
+  {
+   "kind": "floor-drain",
+   "room": "toilet",
+   "x": 7.15,
+   "y": 6.3,
+   "band": "surface",
+   "rotation": 0
+  },
+  {
+   "kind": "water-heater",
+   "room": "toilet",
+   "x": 7.6326,
+   "y": 5.55,
+   "band": "wall",
+   "rotation": 90,
+   "back": "E"
+  },
+  {
+   "kind": "sofa",
+   "room": "hall",
+   "x": 5.25,
+   "y": 6.94,
+   "band": "floor",
+   "rotation": 0,
+   "faceTo": [
+    5.25,
+    3.73
+   ]
+  },
+  {
+   "kind": "tv-unit",
+   "room": "hall",
+   "x": 5.25,
+   "y": 3.73,
+   "band": "floor",
+   "rotation": 180,
+   "faceTo": [
+    5.25,
+    6.94
+   ]
+  },
+  {
+   "kind": "armchair",
+   "room": "hall",
+   "x": 3.85,
+   "y": 5.6,
+   "band": "floor",
+   "rotation": 217,
+   "faceTo": [
+    5.25,
+    3.73
+   ]
+  },
+  {
+   "kind": "ceiling-fan",
+   "room": "hall",
+   "x": 5,
+   "y": 5.6,
+   "band": "high",
+   "rotation": 0
+  },
+  {
+   "kind": "kitchen-counter",
+   "room": "kitchen",
+   "host": "pb@1.6",
+   "band": "floor"
+  },
+  {
+   "kind": "wall-cabinet",
+   "room": "kitchen",
+   "host": "pb@1",
+   "band": "wall"
+  },
+  {
+   "kind": "mirror",
+   "room": "toilet",
+   "host": "ph@6.9",
+   "band": "wall"
+  },
+  {
+   "kind": "towel-rack",
+   "room": "toilet",
+   "host": "tw@7.1",
+   "band": "wall"
+  }
+ ]
+}

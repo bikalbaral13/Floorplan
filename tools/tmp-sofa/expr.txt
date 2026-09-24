@@ -1,0 +1,413 @@
+# Natural size — the fit scale is measured against the unscaled length
+_natL = length
+# Host frame — node, segment or space
+_e1 = hcat(1, 0)
+_np = rows(P)
+_isSeg = _np == 2
+_isSpace = _np > 2
+_edges = _isSpace ? (shift(P, -1) - P) : _e1
+_edgeLen = len(_edges)
+_longest = max(_edgeLen)
+_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1
+_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1
+_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)
+_dirLen = len(_dir)
+_axisB = _dirLen > 0 ? normalize(_dir) : _e1
+_rot = rotation * PI / 180
+_crot = cos(_rot)
+_srot = sin(_rot)
+_bx = sub(_axisB, 0, 0, 1, 1)
+_by = sub(_axisB, 0, 1, 1, 1)
+_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)
+_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)
+_ux = sub(_axisU, 0, 0, 1, 1)
+_uy = sub(_axisU, 0, 1, 1, 1)
+_vx = sub(_axisV, 0, 0, 1, 1)
+_vy = sub(_axisV, 0, 1, 1, 1)
+_Qu = col(P, 0) * _ux + col(P, 1) * _uy
+_Qv = col(P, 0) * _vx + col(P, 1) * _vy
+_hu0 = _np > 0 ? min(_Qu) : 0
+_hu1 = _np > 0 ? max(_Qu) : 0
+_hv0 = _np > 0 ? min(_Qv) : 0
+_hv1 = _np > 0 ? max(_Qv) : 0
+_hcu = (_hu0 + _hu1) / 2
+_hcv = (_hv0 + _hv1) / 2
+_hostL = _hu1 - _hu0
+_hostW = _hv1 - _hv0
+# Fit to host — one uniform scale, Max never enlarges
+_availL = max(0, _hostL - 2 * margin)
+_notOff = fitMode != 'Off'
+_exact = fitMode == 'Exact'
+_sRaw = _natL > 0 ? _availL / _natL : 1
+_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1
+scale = max(0.15, min(5, _sFit))
+_s = scale
+# Anchor — place the footprint by any of the nine box points
+_bodyL = length * _s
+_bodyW = depth * _s
+_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'
+_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'
+_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'
+_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'
+_ax = _anchorR - _anchorL
+_ay = _anchorB - _anchorT
+_hau = _hcu + _ax * max(0, _hostL / 2 - margin)
+_hav = _hcv + _ay * max(0, _hostW / 2 - margin)
+_cu = _hau - _ax * _bodyL / 2
+_cv = _hav - _ay * _bodyW / 2
+
+# ===========================================================================
+# THE SOFA IN ITS OWN FRAME — u along the length, v front (-) to BACK (+),
+# z up. The back is at +v, which is what the plan tools' BACK table measures
+# for this object at rotation 0; turning it round faces every placed sofa
+# into its wall.
+# ===========================================================================
+_Ln = length * _s
+_Dp = depth * _s
+_u0 = 0 - _Ln / 2
+_u1 = _Ln / 2
+_v0 = 0 - _Dp / 2
+_v1 = _Dp / 2
+_legH = legHeight * _s
+_seatTop = seatHeight * _s
+_cT = min(cushionThk * _s, _seatTop - _legH - 0.08 * _s)
+_baseTop = _seatTop - _cT
+_armW = armWidth * _s
+_armTop = max(_seatTop + 0.05 * _s, armTop * _s)
+_flare = armFlare * _s
+_bkD = backDepth * _s
+_bkFrame = max(_seatTop + 0.1 * _s, backFrameTop * _s)
+_bkTop = max(_bkFrame, backTop * _s)
+_su0 = _u0 + _armW
+_su1 = _u1 - _armW
+_span = max(0.2 * _s, _su1 - _su0)
+_ns = max(1, round(seats))
+_pitch = _span / _ns
+_sGap = 0.008 * _s
+
+# -- the detail dial sets every sample count --
+_dB = detail == 'Blocky'
+_dM = detail == 'Medium'
+_dF = detail == 'Fine'
+_nR = _dB ? 16 : (_dM ? 32 : (_dF ? 48 : 64))
+_nF = _dB ? 2 : (_dM ? 4 : (_dF ? 6 : 8))
+_nBx = _dB ? 1 : (_dM ? 2 : 3)
+_nPp = _dB ? 6 : (_dM ? 8 : (_dF ? 10 : 12))
+_sbS = _dB ? 5 : (_dM ? 7 : (_dF ? 11 : 15))
+_sbP = _dB ? 16 : (_dM ? 20 : (_dF ? 32 : 44))
+# Edge character: how round the cushion face edges and the frame are
+_ecC = edgeCharacter == 'Crisp'
+_ecP = edgeCharacter == 'Plump'
+_eeBox = _ecC ? 0.3 : (_ecP ? 0.6 : 0.45)
+_ePlan = _ecC ? 0.12 : (_ecP ? 0.28 : 0.2)
+_pipeOn = piping > 0 && !_dB
+_pR = max(0.0015, pipingDia / 2) * _s
+
+# ===========================================================================
+# STEP 1 — THE FRAME: base per seat, flared arms, back frame, feet
+# ===========================================================================
+# The base is split under each seat, as the reference is: a seam between
+# two upholstered decks reads as a sofa; one long block reads as a bench.
+_BASEm = zeros(0, 4)
+loop i in _ns:
+  _ba = _su0 + i * _pitch + (i > 0 ? _sGap / 2 : 0)
+  _bb = _su0 + (i + 1) * _pitch - (i < _ns - 1 ? _sGap / 2 : 0)
+  _bs = Solid.SoftBox(hcat(_ba, _v0 + 0.01 * _s, _legH, _bb, _v1 - _bkD + 0.03 * _s, _baseTop + 0.01 * _s), 0.08, 0.05, 0.12, 5, _sbP)
+  _BASEm = vcat(_BASEm, Solid.Skin(_bs, i * 100000))
+end
+
+# ARMS FLARE: a SoftBox pillow-top arm, then a shear that moves only the
+# OUTER face outward with height (the inner face stays plumb against the
+# seat). The flare is the whole silhouette of a roll-arm sofa from the front.
+_ARMm = zeros(0, 4)
+_armOn = _armW > 0.02 * _s
+loop i in 2:
+  _sd = i < 1 ? -1 : 1
+  _ain = i < 1 ? _su0 : _su1
+  _aout = i < 1 ? _u0 : _u1
+  _aa = min(_ain, _aout)
+  _ab = max(_ain, _aout)
+  _as = Solid.SoftBox(hcat(_aa, _v0, _legH, _ab, _v1, _armTop), _ecC ? 0.18 : (_ecP ? 0.45 : 0.32), 0.04, _ePlan, _sbS, _sbP)
+  _fz = pow(max(0, (col(_as, 2) - _legH) / max(0.01, _armTop - _legH)), 1.6)
+  _fo = abs(col(_as, 0) - _ain) / max(0.01, _armW)
+  _asU = col(_as, 0) + _sd * _flare * _fz * _fo
+  _ARMm = vcat(_ARMm, Solid.Skin(hcat(_asU, col(_as, 1), col(_as, 2), col(_as, 3)), (i + 1) * 100000))
+end
+
+# Back frame: the upholstered panel the back cushions lean on, tucked into the arms.
+_bfS = Solid.SoftBox(hcat(_su0 - 0.5 * _armW, _v1 - _bkD, _legH, _su1 + 0.5 * _armW, _v1, _bkFrame), _ecC ? 0.15 : 0.3, 0.03, 0.12, _sbS, _sbP)
+_BFm = Solid.Skin(_bfS, 0)
+
+# Feet: low tapered blocks, set in from the corners.
+_ftI = 0.06 * _s
+_ftS = 0.05 * _s
+_ftU = vcat(_u0 + _ftI, _u1 - _ftI - _ftS, _u1 - _ftI - _ftS, _u0 + _ftI)
+_ftV = vcat(_v0 + _ftI, _v0 + _ftI, _v1 - _ftI - _ftS, _v1 - _ftI - _ftS)
+_LGm = zeros(0, 4)
+loop i in 4:
+  _fa = sub(_ftU, i, 0, 1, 1)
+  _fb = sub(_ftV, i, 0, 1, 1)
+  _fs = Solid.SoftBox(hcat(_fa, _fb, 0, _fa + _ftS, _fb + _ftS, _legH + 0.01 * _s), 0, 0, 0.1, 2, _dB ? 8 : 16)
+  _tp = 0.85 + 0.15 * (col(_fs, 2) / max(0.001, _legH))
+  _fcu = _fa + _ftS / 2
+  _fcv = _fb + _ftS / 2
+  _LGm = vcat(_LGm, Solid.Skin(hcat(_fcu + (col(_fs, 0) - _fcu) * _tp, _fcv + (col(_fs, 1) - _fcv) * _tp, col(_fs, 2), col(_fs, 3)), (i + 1) * 100000))
+end
+
+# ===========================================================================
+# STEP 2 — THE CUSHION TABLE: every cushion is one row, one generator
+# ===========================================================================
+# A cushion is a face outline (superellipse in its own a-b plane) carried
+# along its thickness axis n:
+#   BOX cushion   — a straight boxing strip between two domed faces, piped
+#                   on both seams (seat and back cushions);
+#   KNIFE cushion — no strip, two domes meeting at one seam (pillows).
+# Each row carries its own frame as two angles — the direction the face
+# looks in plan (phi) and how far it leans back from vertical (lambda) — so
+# a seat lying flat, a back cushion reclining and a pillow propped at 40
+# degrees in a corner are the same code with different numbers.
+#
+# columns: 0 cu, 1 cv, 2 cz (centre) | 3 W, 4 H, 5 D | 6 phi, 7 lambda (rad)
+#          8 box fraction | 9 face roundness | 10 corner exponent | 11 piped
+#          12 output group (1 seat, 2 back, 3 arm pillow, 4 scatter)
+_d2r = PI / 180
+_CT = zeros(0, 13)
+# seat cushions, lying flat: n = up, b = depth
+_scV0 = _v0 + 0.012 * _s
+_scV1 = _v1 - _bkD + 0.01 * _s
+_scW = _pitch - _sGap
+_scCv = (_scV0 + _scV1) / 2
+_scH = _scV1 - _scV0
+_scCz = _baseTop + _cT / 2
+_scCu = _su0 + (arange(_ns) + 0.5) * _pitch
+_CT = vcat(_CT, hcat(_scCu, fill(_ns, 1, _scCv), fill(_ns, 1, _scCz), fill(_ns, 1, _scW), fill(_ns, 1, _scH), fill(_ns, 1, _cT), fill(_ns, 1, -90 * _d2r), fill(_ns, 1, 90 * _d2r), fill(_ns, 1, 0.5), fill(_ns, 1, _eeBox), fill(_ns, 1, 0.16), fill(_ns, 1, 1), fill(_ns, 1, 1)))
+# back cushions: standing on the rear of the seat, leaning back
+_bcOn = backCushions > 0
+_lam = backLean * _d2r
+_bcD = backCushionThk * _s
+_bcZ0 = _seatTop - 0.035 * _s
+_bcV0 = _v1 - _bkD - 0.01 * _s
+_bcH = max(0.12 * _s, (_bkTop - _bcZ0) / cos(_lam) - 0.5 * _bcD * sin(_lam))
+# centre = rear-bottom edge + half the height up b + half the thickness forward along n
+_bcNy = 0 - cos(_lam)
+_bcNz = sin(_lam)
+_bcBy = sin(_lam)
+_bcBz = cos(_lam)
+_bcCv = _bcV0 + _bcBy * _bcH / 2 + _bcNy * _bcD / 2
+_bcCz = _bcZ0 + _bcBz * _bcH / 2 + _bcNz * _bcD / 2
+_nBC = _bcOn ? _ns : 0
+_CT = _bcOn ? vcat(_CT, hcat(_scCu, fill(_ns, 1, _bcCv), fill(_ns, 1, _bcCz), fill(_ns, 1, _scW), fill(_ns, 1, _bcH), fill(_ns, 1, _bcD), fill(_ns, 1, -90 * _d2r), fill(_ns, 1, _lam), fill(_ns, 1, 0.42), fill(_ns, 1, _eeBox + 0.15), fill(_ns, 1, 0.2), fill(_ns, 1, 1), fill(_ns, 1, 2))) : _CT
+# the front face of the back cushions at seat level — where pillows rest
+_bcFrontV = _bcV0 + _bcNy * _bcD
+_restV = _bcOn ? _bcFrontV : (_v1 - _bkD)
+# arm pillows: one in each corner, turned toward the middle and propped back
+_apOn = armPillows > 0 && _armOn
+_apW = 0.52 * _s
+_apH = 0.4 * _s
+_apD = 0.16 * _s
+_apLam = 28 * _d2r
+_apPh0 = -32 * _d2r
+_nAP = _apOn ? 2 : 0
+loop i in _nAP:
+  _sdp = i < 1 ? 1 : -1
+  _php = i < 1 ? _apPh0 : (PI - _apPh0)
+  _pnx = cos(_php) * cos(_apLam)
+  _pny = sin(_php) * cos(_apLam)
+  _pnz = sin(_apLam)
+  _pbx = 0 - cos(_php) * sin(_apLam)
+  _pby = 0 - sin(_php) * sin(_apLam)
+  _pbz = cos(_apLam)
+  _p0u = (i < 1 ? _su0 : _su1) + _sdp * 0.13 * _s
+  _p0v = _restV - 0.02 * _s
+  _p0z = _seatTop - 0.02 * _s
+  _CT = vcat(_CT, hcat(_p0u + _pbx * _apH / 2 + _pnx * _apD / 2, _p0v + _pby * _apH / 2 + _pny * _apD / 2, _p0z + _pbz * _apH / 2 + _pnz * _apD / 2, _apW, _apH, _apD, _php, _apLam, 0, 0.75, 0.3, 0, 3))
+end
+# scatter cushions: square knife-edge pillows in front of the back cushions,
+# each a few degrees off square — identical yaw on every pillow is as obvious
+# as no pillows at all
+_nSc = max(0, min(4, round(scatterCushions)))
+_scS = scatterSize * _s
+_scD = 0.14 * _s
+_scLam = 24 * _d2r
+loop i in _nSc:
+  _fr = (i + 0.5) / max(1, _nSc) - 0.5
+  _su = _fr * _span * (_nSc < 3 ? 0.8 : 1.0)
+  _yaw = (i < 1 ? 7 : (i < 2 ? -6 : (i < 3 ? 4 : -3))) * _d2r
+  _phs = -90 * _d2r + _yaw
+  _snx = cos(_phs) * cos(_scLam)
+  _sny = sin(_phs) * cos(_scLam)
+  _snz = sin(_scLam)
+  _sbx = 0 - cos(_phs) * sin(_scLam)
+  _sby = 0 - sin(_phs) * sin(_scLam)
+  _sbz = cos(_scLam)
+  _s0v = _restV - 0.03 * _s
+  _s0z = _seatTop - 0.015 * _s
+  _CT = vcat(_CT, hcat(_su + _sbx * _scS / 2 + _snx * _scD / 2, _s0v + _sby * _scS / 2 + _sny * _scD / 2, _s0z + _sbz * _scS / 2 + _snz * _scD / 2, _scS, _scS, _scD, _phs, _scLam, 0, 0.8, 0.32, 0, 4))
+end
+
+# ===========================================================================
+# STEP 3 — THE CUSHION GENERATOR, once per row
+# ===========================================================================
+_nCu = rows(_CT)
+_th = arange(_nR * 4) / (_nR * 4) * 2 * PI
+_cth = cos(_th)
+_sth = sin(_th)
+_gmx = PI / 2 * 0.96
+_G1 = zeros(0, 4)
+_G2 = zeros(0, 4)
+_G3 = zeros(0, 4)
+_G4 = zeros(0, 4)
+_PP = zeros(0, 4)
+_pa = arange(_nPp) / _nPp * 2 * PI
+_pc = hcat(_pR * cos(_pa), _pR * sin(_pa))
+loop i in _nCu:
+  _k = sub(_CT, i, 0, 1, 13)
+  _kcu = sub(_k, 0, 0, 1, 1)
+  _kcv = sub(_k, 0, 1, 1, 1)
+  _kcz = sub(_k, 0, 2, 1, 1)
+  _kW = sub(_k, 0, 3, 1, 1)
+  _kH = sub(_k, 0, 4, 1, 1)
+  _kD = sub(_k, 0, 5, 1, 1)
+  _kph = sub(_k, 0, 6, 1, 1)
+  _kla = sub(_k, 0, 7, 1, 1)
+  _kbf = sub(_k, 0, 8, 1, 1)
+  _kee = sub(_k, 0, 9, 1, 1)
+  _kep = sub(_k, 0, 10, 1, 1)
+  _kpp = sub(_k, 0, 11, 1, 1)
+  _kg = sub(_k, 0, 12, 1, 1)
+  # frame: n = face normal, b = up the face, a = across it
+  _knx = cos(_kph) * cos(_kla)
+  _kny = sin(_kph) * cos(_kla)
+  _knz = sin(_kla)
+  _kbx = 0 - cos(_kph) * sin(_kla)
+  _kby = 0 - sin(_kph) * sin(_kla)
+  _kbz = cos(_kla)
+  _kax = 0 - sin(_kph)
+  _kay = cos(_kph)
+  # face outline, resampled by arc length so the corners are not starved
+  _ro = hcat(_kW / 2 * sign(_cth) * pow(abs(_cth), _kep), _kH / 2 * sign(_sth) * pow(abs(_sth), _kep))
+  _rr = resample(vcat(_ro, sub(_ro, 0, 0, 1, 2)), _nR + 1)
+  _rA = sub(_rr, 0, 0, _nR, 1)
+  _rB = sub(_rr, 0, 1, _nR, 1)
+  _rtA = shift(_rA, -1) - shift(_rA, 1)
+  _rtB = shift(_rB, -1) - shift(_rB, 1)
+  _rtl = max(0.000001, sqrt(_rtA * _rtA + _rtB * _rtB))
+  _roA = _rtB / _rtl
+  _roB = 0 - _rtA / _rtl
+  # stations along n: back dome, boxing strip, front dome
+  _hb = _kD / 2 * _kbf
+  _hd = _kD / 2 - _hb
+  _knife = _kbf < 0.01
+  _gm = arange(_nF + 1) / _nF * _gmx
+  _gmR = sortby(_gm, 0 - arange(_nF + 1))
+  _nBk = _knife ? _nF : (_nF + 1)
+  _gB = sub(_gmR, 0, 0, _nBk, 1)
+  _nbx = _knife ? 0 : _nBx
+  _jb = (arange(max(1, _nbx)) + 1) / (_nbx + 1)
+  _stS = vcat(pow(cos(_gB), _kee), 1 + 0.018 * sin(PI * _jb), pow(cos(_gm), _kee))
+  _stT = vcat(0 - _hb - _hd * pow(sin(_gB), _kee), 0 - _hb + 2 * _hb * _jb, _hb + _hd * pow(sin(_gm), _kee))
+  _stS = _knife ? vcat(pow(cos(_gB), _kee), pow(cos(_gm), _kee)) : _stS
+  _stT = _knife ? vcat(0 - _hd * pow(sin(_gB), _kee), _hd * pow(sin(_gm), _kee)) : _stT
+  _nSt = rows(_stS)
+  _o1 = ones(_nR, 1)
+  _KS = kron(_stS, _o1)
+  _KT = kron(_stT, _o1)
+  _Ga = kron(ones(_nSt, 1), _rA) * _KS
+  _Gb = kron(ones(_nSt, 1), _rB) * _KS
+  _px = _kcu + _Ga * _kax + _Gb * _kbx + _KT * _knx
+  _py = _kcv + _Ga * _kay + _Gb * _kby + _KT * _kny
+  _pz = _kcz + _Gb * _kbz + _KT * _knz
+  _sk = Solid.Skin(hcat(_px, _py, _pz, kron(arange(_nSt), _o1)), i * 1000000)
+  _G1 = _kg < 1.5 ? vcat(_G1, _sk) : _G1
+  _G2 = (_kg > 1.5 && _kg < 2.5) ? vcat(_G2, _sk) : _G2
+  _G3 = (_kg > 2.5 && _kg < 3.5) ? vcat(_G3, _sk) : _G3
+  _G4 = _kg > 3.5 ? vcat(_G4, _sk) : _G4
+  # piping on the seam(s): the outline itself, pushed out a little along its own normal
+  _po = 0.35 * _pR
+  _nSeam = _knife ? 1 : 2
+  loop j in _nSeam:
+    _tS = _knife ? 0 : (j < 1 ? (0 - _hb) : _hb)
+    _qa = _rA + _po * _roA
+    _qb = _rB + _po * _roB
+    _rail = hcat(_kcu + _qa * _kax + _qb * _kbx + _tS * _knx, _kcv + _qa * _kay + _qb * _kby + _tS * _kny, _kcz + _qb * _kbz + _tS * _knz)
+    _sw = msweep(_pc, _rail, 1)
+    _PP = _kpp > 0.5 ? vcat(_PP, hcat(sub(_sw, 0, 0, rows(_sw), 3), col(_sw, 3) + i * 1000000 + j * 500000)) : _PP
+  end
+end
+
+# ===========================================================================
+# THE FRAME RULE — local (u, v, z) to the host frame, once per row
+# ===========================================================================
+_wU = _cu + col(_BASEm, 0)
+_wV = _cv + col(_BASEm, 1)
+Base3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_BASEm, 2), col(_BASEm, 3))
+_wU = _cu + col(_ARMm, 0)
+_wV = _cv + col(_ARMm, 1)
+Arms3D = _armOn ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_ARMm, 2), col(_ARMm, 3)) : zeros(0, 4)
+_wU = _cu + col(_BFm, 0)
+_wV = _cv + col(_BFm, 1)
+BackFrame3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_BFm, 2), col(_BFm, 3))
+_wU = _cu + col(_LGm, 0)
+_wV = _cv + col(_LGm, 1)
+Legs3D = _legH > 0.003 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_LGm, 2), col(_LGm, 3)) : zeros(0, 4)
+_wU = _cu + col(_G1, 0)
+_wV = _cv + col(_G1, 1)
+SeatCushions3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_G1, 2), col(_G1, 3))
+_wU = _cu + col(_G2, 0)
+_wV = _cv + col(_G2, 1)
+BackCushions3D = rows(_G2) > 0 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_G2, 2), col(_G2, 3)) : zeros(0, 4)
+_wU = _cu + col(_G3, 0)
+_wV = _cv + col(_G3, 1)
+ArmPillows3D = rows(_G3) > 0 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_G3, 2), col(_G3, 3)) : zeros(0, 4)
+_wU = _cu + col(_G4, 0)
+_wV = _cv + col(_G4, 1)
+Scatter3D = rows(_G4) > 0 ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_G4, 2), col(_G4, 3)) : zeros(0, 4)
+_wU = _cu + col(_PP, 0)
+_wV = _cv + col(_PP, 1)
+Piping3D = (_pipeOn && rows(_PP) > 0) ? hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_PP, 2), col(_PP, 3)) : zeros(0, 4)
+
+# ===========================================================================
+# PLAN — rectangles from the same numbers
+# ===========================================================================
+_r4u = vcat(0, 1, 1, 0)
+_r4v = vcat(0, 0, 1, 1)
+# frame outline (flare included), one ring
+_fu = _cu + (_u0 - _flare) + _r4u * (_Ln + 2 * _flare)
+_fv = _cv + _v0 + _r4v * _Dp
+FramePlan = hcat(_fu * _ux + _fv * _vx, _fu * _uy + _fv * _vy, fill(4, 1, 1))
+# seat cushions, one ring each
+_spU = _cu + kron(_scCu - _scW / 2, ones(4, 1)) + kron(ones(_ns, 1), _r4u) * _scW
+_spV = _cv + _scV0 + kron(ones(_ns, 1), _r4v) * _scH
+SeatPlan = hcat(_spU * _ux + _spV * _vx, _spU * _uy + _spV * _vy, kron(arange(_ns) + 1, ones(4, 1)))
+# back: the frame plus the cushions' footprint, one band
+_bpU = _cu + _su0 + _r4u * _span
+_bpV = _cv + (_bcOn ? _bcFrontV : (_v1 - _bkD)) + _r4v * (_v1 - (_bcOn ? _bcFrontV : (_v1 - _bkD)))
+BackPlan = hcat(_bpU * _ux + _bpV * _vx, _bpU * _uy + _bpV * _vy, fill(4, 1, 1))
+# arms
+_amU = _cu + vcat(_u0 - _flare + _r4u * (_armW + _flare), _su1 + _r4u * (_armW + _flare))
+_amV = _cv + _v0 + vcat(_r4v, _r4v) * _Dp
+ArmsPlan = _armOn ? hcat(_amU * _ux + _amV * _vx, _amU * _uy + _amV * _vy, vcat(fill(4, 1, 1), fill(4, 1, 2))) : zeros(0, 3)
+
+# ===========================================================================
+# METRICS — from the parameters, never from the mesh columns
+# ===========================================================================
+# The rounded arm top never reaches the full flare. The share it does reach was MEASURED on the arm
+# mesh per edge character (0.79 / 0.71 / 0.61) and is stated here, because a max() over even the
+# 2.6k-row arm mesh doubled the evaluation time.
+_flReach = _ecC ? 0.79 : (_ecP ? 0.61 : 0.71)
+overallLength = _Ln + (_armOn ? 2 * _flare * _flReach : 0)
+overallDepth = _Dp
+overallHeight = max(_bkTop, _armTop)
+seatTopHeight = _seatTop
+armTopHeight = _armOn ? _armTop : 0
+seatDepth = _scH
+seatCushions = _ns
+cushionCount = _nCu
+footprint = overallLength * overallDepth
+# counted from the sample counts actually used: a skin of S rings of N points is 2 + (S-1)N faces
+_nBoxC = _ns + _nBC
+_nKnC = _nAP + _nSc
+_fC = _nBoxC * (2 + (2 * _nF + 1 + _nBx) * _nR) + _nKnC * (2 + 2 * _nF * _nR)
+_fP = _pipeOn ? (2 * _nBoxC * (2 + _nR * _nPp)) : 0
+_fF = _ns * (2 + 4 * _sbP) + (_armOn ? 2 * (2 + (_sbS - 1) * _sbP) : 0) + (2 + (_sbS - 1) * _sbP) + (_legH > 0.003 ? 4 * (2 + (_dB ? 8 : 16)) : 0)
+meshFaces = _fC + _fP + _fF

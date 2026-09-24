@@ -1,0 +1,48 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "label-graph",
+  "meta": {
+    "label": "Label Graph",
+    "category": "Graph",
+    "color": "#0d9488"
+  },
+  "description": "A pure CALCULATION node — name each connected component of a graph from a labels array, and optionally stamp an edge type and thickness at the same time. Graph in, graph out; draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a GRAPH as JSON plus a LABELS array, and returns the same graph with `label` stamped on every edge — the name of the component that edge belongs to. It has no geometry input or output and draws nothing.\n\nWHY IT EXISTS: Set Thickness gives a whole graph ONE type and width, which answers \"what kind of thing is this\". It cannot answer \"which one is it\". Object Detection publishes `val-graph` (one closed ring per detected object, in detection order) alongside `val-labels` (the names, same order) — wire both in here and component i takes label i, so a graph of six rectangles becomes \"Bedroom\", \"Bathroom\", \"sofa\", … Together with `type` and `thickness` this turns a raw detection into a fully tagged family in one node.\n\nINPUT: graph takes { \"nodes\": [{ \"id\", \"x\", \"y\" }, ...], \"edges\": [{ \"from_node_id\", \"to_node_id\" }, ...] } — coordinates in metres, local to the anchor. Wire Object Detection val-graph, or any other graph node's val-graph, into valin-graph.\n\nLABELS accepts a JSON array of strings (\"[\\\"Bedroom\\\",\\\"Kitchen\\\"]\") or a bare comma-separated list typed into the field. Components are numbered by the order their first node appears, which is the order the boxes were serialised — that is what keeps label i on box i. A SINGLE label names EVERY component, which is what you want when the whole graph is one family (all walls). A component past the end of the array keeps whatever label it already had.\n\nEDGE TYPE stamps `type` on every edge — \"wall\", \"door\", \"window\", \"room\", \"furniture\" or \"opening\". THICKNESS overwrites `thickness` in metres; leave it at 0 to keep whatever the incoming edges already carry (a detection graph has none, a wall graph usually does).\n\nOUTPUT: val-graph publishes the tagged graph — wire it into Merge Graph to union it with the other families, each keeping its own type, width and label. `val-labelled` reports how many edges actually received a name, which is how you catch a labels array that was shorter than the component count.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "graph", "label": "Graph" },
+      { "key": "labels", "label": "Labels" },
+      { "key": "type", "label": "Edge type" },
+      { "key": "thickness", "label": "Thickness" }
+    ],
+    "valueOutputs": [
+      { "key": "graph", "label": "Graph (JSON)" },
+      { "key": "nodeCount", "label": "Nodes" },
+      { "key": "edgeCount", "label": "Edges" },
+      { "key": "labelled", "label": "Labelled edges" }
+    ]
+  },
+  "parameters": [
+    { "key": "graph", "label": "Graph (JSON)", "kind": "text", "default": "" },
+    { "key": "labels", "label": "Labels (JSON array)", "kind": "text", "default": "", "placeholder": "[\"Bedroom\", \"Kitchen\"]" },
+    {
+      "key": "type",
+      "label": "Edge type",
+      "kind": "select",
+      "default": "",
+      "options": [
+        { "value": "", "label": "(leave unchanged)" },
+        { "value": "wall", "label": "Wall" },
+        { "value": "door", "label": "Door" },
+        { "value": "window", "label": "Window" },
+        { "value": "room", "label": "Room" },
+        { "value": "furniture", "label": "Furniture" },
+        { "value": "opening", "label": "Opening (skipped by Mitered Join)" }
+      ]
+    },
+    { "key": "thickness", "label": "Thickness", "kind": "range", "default": 0, "min": 0, "max": 1, "step": 0.01, "unit": "m" }
+  ]
+}

@@ -1,0 +1,199 @@
+
+# ===========================================================================
+# THE PLANT IN ITS OWN FRAME — centred on the node, z up. It is radially
+# symmetric, so it has no back; Rotation turns the leaf arrangement.
+# ===========================================================================
+_pH = potHeight * _s
+_rT = potTopDia * _s / 2
+_rB = potBottomDia * _s / 2
+_rim = max(0.008, rimThk) * _s
+_zSoil = _pH - soilDrop * _s
+_H = max(_pH + 0.3 * _s, plantHeight * _s)
+_nL = max(3, round(leaves))
+_Lb0 = leafLength * _s
+_W0 = leafWidth * _s
+_spr = spread * _s
+_dB = detail == 'Blocky'
+_dM = detail == 'Medium'
+_dF = detail == 'Fine'
+_nR = _dB ? 12 : (_dM ? 24 : (_dF ? 36 : 48))
+_nSt = _dB ? 5 : (_dM ? 10 : (_dF ? 16 : 22))
+_nX = _dB ? 3 : (_dM ? 5 : (_dF ? 7 : 9))
+_nPipe = _dB ? 5 : (_dM ? 6 : 8)
+_nStem = _dB ? 4 : (_dM ? 7 : 10)
+_th = arange(_nR) / _nR * 2 * PI
+_cth = cos(_th)
+_sth = sin(_th)
+_oR = ones(_nR, 1)
+
+# ===========================================================================
+# STEP 1 — THE PLANTER, A LATHE: a profile in (r, z) revolved into rings
+# ===========================================================================
+# Bottom centre → eased foot → tapered wall with a slight belly → a rim
+# rounded on half its thickness → down the inside to just under the soil →
+# closed across. Each profile point becomes one ring; Solid.Skin stitches
+# ring to ring, so the planter is one closed surface of revolution.
+_nW = _dB ? 3 : 8
+_fw = arange(_nW + 1) / _nW
+_wallR = _rB + (_rT - _rB) * pow(_fw, 0.85) + 0.012 * _s * sin(PI * _fw)
+_wallZ = 0.012 * _s + (_pH - _rim - 0.012 * _s) * _fw
+_nRm = _dB ? 3 : 7
+_ra = arange(_nRm + 1) / _nRm * PI
+_rimR = _rT - _rim + _rim * cos(_ra)
+_rimZ = _pH - _rim + _rim * sin(_ra)
+_rIn = _rT - 2 * _rim
+_profR = vcat(0, _rB - 0.012 * _s, _rB, _wallR, _rimR, _rIn - 0.004 * _s, 0)
+_profZ = vcat(0, 0, 0.012 * _s, _wallZ, _rimZ, _zSoil - 0.015 * _s, _zSoil - 0.015 * _s)
+_nP = rows(_profR)
+_potSec = hcat(kron(_profR, _cth), kron(_profR, _sth), kron(_profZ, _oR), kron(arange(_nP), _oR))
+_POT = Solid.Skin(_potSec, 0)
+# soil: a low mound filling the rim
+_sR = vcat(0, _rIn, _rIn * 0.98, 0)
+_sZ = vcat(_zSoil - 0.02 * _s, _zSoil - 0.02 * _s, _zSoil, _zSoil + 0.012 * _s)
+_SOIL = Solid.Skin(hcat(kron(_sR, _cth), kron(_sR, _sth), kron(_sZ, _oR), kron(arange(4), _oR)), 0)
+
+# ===========================================================================
+# STEP 2 — THE LEAF TABLE: every leaf is one row, laid out by rule
+# ===========================================================================
+# Leaves go round at the GOLDEN ANGLE, so no two stack and the crown never
+# reads as a pinwheel. Index order runs inside → out: early leaves stand near
+# vertical and tall, late ones lean out, drop lower and droop more — which is
+# the silhouette of a Strelitzia. Blades are biggest in the middle of the run.
+# A cheap hash of (index, seed) jitters every angle and length so no two
+# leaves are the same.
+_q = arange(_nL) / max(1, _nL - 1)
+_hsh = sin((arange(_nL) + 1) * 12.9898 + seed * 78.233) * 43758.5453
+_jit = _hsh - floor(_hsh) - 0.5
+_phi = rotation * PI / 180 + arange(_nL) * 137.508 * PI / 180 + _jit * 0.35
+_el = (84 - 44 * _q + 8 * _jit) * PI / 180
+_Lb = _Lb0 * (0.72 + 0.4 * sin(PI * min(1, _q * 1.2)) + 0.12 * _jit)
+_Wb = _W0 * _Lb / _Lb0
+# stem length: the tallest leaf's tip reaches the plant height
+_reach = _H - _zSoil - 0.85 * _Lb0
+_Lp = max(0.12 * _s, _reach * (1 - 0.5 * _q) * (1 + 0.1 * _jit))
+_b0r = 0.015 * _s + 0.035 * _s * _q
+_hx = cos(_phi)
+_hy = sin(_phi)
+_p1x = (_b0r + _Lp * cos(_el) * (_spr / max(0.2, _H))) * _hx
+_p1y = (_b0r + _Lp * cos(_el) * (_spr / max(0.2, _H))) * _hy
+_p1z = _zSoil + _Lp * sin(_el)
+# the blade leaves the stem a little flatter than the stem, and droops by arch
+_elB = _el - (10 + 30 * _q) * PI / 180
+_drop = arch * _Lb * (0.25 + 0.9 * _q)
+
+# ===========================================================================
+# STEP 3 — STEMS AND BLADES, one leaf per pass
+# ===========================================================================
+# Stem: a circle swept along a quadratic Bezier that leaves the soil almost
+# vertical and bends toward the blade. Blade: a loft along its own curved
+# spine. At each station the cross-section is laid across the blade with a
+# V-FOLD (edges lifted off the midrib) and a real thickness, in the frame
+#   T = spine tangent, L = horizontal perpendicular (T x z), N = L x T,
+# so the blade stays flat to the light however far it droops.
+_stR = max(0.004, stemDia / 2) * _s
+_pa = arange(_nPipe) / _nPipe * 2 * PI
+_pc = hcat(_stR * cos(_pa), _stR * sin(_pa))
+_ss = arange(_nSt) / (_nSt - 1)
+_xs = (arange(_nX) / (_nX - 1)) * 2 - 1
+_oS = ones(_nSt, 1)
+_oX = ones(_nX, 1)
+_tk = 0.0025 * _s
+_fold = foldDepth
+_STEM = zeros(0, 4)
+_LEAF = zeros(0, 4)
+loop i in _nL:
+  _hxi = sub(_hx, i, 0, 1, 1)
+  _hyi = sub(_hy, i, 0, 1, 1)
+  _bx0 = sub(_b0r, i, 0, 1, 1) * _hxi
+  _by0 = sub(_b0r, i, 0, 1, 1) * _hyi
+  _x1 = sub(_p1x, i, 0, 1, 1)
+  _y1 = sub(_p1y, i, 0, 1, 1)
+  _z1 = sub(_p1z, i, 0, 1, 1)
+  _ctrl = vcat(hcat(_bx0, _by0, _zSoil - 0.01 * _s), hcat(_bx0 + 0.25 * (_x1 - _bx0), _by0 + 0.25 * (_y1 - _by0), _zSoil + 0.6 * (_z1 - _zSoil)), hcat(_x1, _y1, _z1))
+  _rail = bezier(_ctrl, _nStem)
+  _sw = msweep(_pc, _rail, 0)
+  _STEM = vcat(_STEM, hcat(sub(_sw, 0, 0, rows(_sw), 3), col(_sw, 3) + i * 100000))
+  # blade spine
+  _eb = sub(_elB, i, 0, 1, 1)
+  _Li = sub(_Lb, i, 0, 1, 1)
+  _Wi = sub(_Wb, i, 0, 1, 1)
+  _dr = sub(_drop, i, 0, 1, 1)
+  _spx = _x1 + _Li * _ss * cos(_eb) * _hxi
+  _spy = _y1 + _Li * _ss * cos(_eb) * _hyi
+  _spz = _z1 + _Li * _ss * sin(_eb) - _dr * _ss * _ss
+  _f0 = eq(arange(_nSt), 0)
+  _fL = eq(arange(_nSt), _nSt - 1)
+  _tx = where(_f0, shift(_spx, -1) - _spx, where(_fL, _spx - shift(_spx, 1), shift(_spx, -1) - shift(_spx, 1)))
+  _ty = where(_f0, shift(_spy, -1) - _spy, where(_fL, _spy - shift(_spy, 1), shift(_spy, -1) - shift(_spy, 1)))
+  _tz = where(_f0, shift(_spz, -1) - _spz, where(_fL, _spz - shift(_spz, 1), shift(_spz, -1) - shift(_spz, 1)))
+  _tl = max(0.000001, sqrt(_tx * _tx + _ty * _ty + _tz * _tz))
+  _tx = _tx / _tl
+  _ty = _ty / _tl
+  _tz = _tz / _tl
+  # L = T x z (horizontal), N = L x T
+  _lx = _ty
+  _ly = 0 - _tx
+  _ll = max(0.000001, sqrt(_lx * _lx + _ly * _ly))
+  _lx = _lx / _ll
+  _ly = _ly / _ll
+  _nx = _ly * _tz
+  _ny = 0 - _lx * _tz
+  _nz = _lx * _ty - _ly * _tx
+  # width along the blade: narrow at the stem, full through the middle, pointed tip
+  _wS = _Wi / 2 * max(0.04, pow(sin(PI * min(1, _ss * 0.92 + 0.04)), 0.65)) * (1 - 0.18 * (1 - _ss))
+  # ring: top surface across (x -1 → 1), bottom surface back; the V-fold lifts the edges
+  _xr = vcat(_xs, sortby(_xs, 0 - arange(_nX)))
+  _up = vcat(_oX, 0 - _oX)
+  _nRg = 2 * _nX
+  _Kw = kron(_wS, ones(_nRg, 1))
+  _Kx = kron(_oS, _xr)
+  _Ku = kron(_oS, _up)
+  _off = _Kx * _Kw
+  _lift = _fold * abs(_Kx) * _Kw + _Ku * _tk / 2 * (1 - 0.5 * abs(_Kx))
+  _Pcx = kron(_spx, ones(_nRg, 1)) + _off * kron(_lx, ones(_nRg, 1)) + _lift * kron(_nx, ones(_nRg, 1))
+  _Pcy = kron(_spy, ones(_nRg, 1)) + _off * kron(_ly, ones(_nRg, 1)) + _lift * kron(_ny, ones(_nRg, 1))
+  _Pcz = kron(_spz, ones(_nRg, 1)) + _lift * kron(_nz, ones(_nRg, 1))
+  _LEAF = vcat(_LEAF, Solid.Skin(hcat(_Pcx, _Pcy, _Pcz, kron(arange(_nSt), ones(_nRg, 1))), i * 100000))
+end
+
+# ===========================================================================
+# THE FRAME RULE — the plant sits on the node; columns 2 and 3 ride through
+# ===========================================================================
+_wU = _cu + col(_POT, 0)
+_wV = _cv + col(_POT, 1)
+Pot3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_POT, 2), col(_POT, 3))
+_wU = _cu + col(_SOIL, 0)
+_wV = _cv + col(_SOIL, 1)
+Soil3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_SOIL, 2), col(_SOIL, 3))
+_wU = _cu + col(_STEM, 0)
+_wV = _cv + col(_STEM, 1)
+Stems3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_STEM, 2), col(_STEM, 3))
+_wU = _cu + col(_LEAF, 0)
+_wV = _cv + col(_LEAF, 1)
+Leaves3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_LEAF, 2), col(_LEAF, 3))
+
+# ===========================================================================
+# PLAN — the pot rim and the canopy circle, the drafting symbol a plan wants
+# ===========================================================================
+_c32 = arange(32) / 32 * 2 * PI
+_tipR = sqrt(pow(_p1x + _Lb * cos(_elB) * _hx, 2) + pow(_p1y + _Lb * cos(_elB) * _hy, 2))
+_cR = max(_tipR)
+_pu = _cu + _rT * cos(_c32)
+_pv = _cv + _rT * sin(_c32)
+PotPlan = hcat(_pu * _ux + _pv * _vx, _pu * _uy + _pv * _vy, fill(32, 1, 1))
+_ku = _cu + _cR * cos(_c32)
+_kv = _cv + _cR * sin(_c32)
+CanopyPlan = hcat(_ku * _ux + _kv * _vx, _ku * _uy + _kv * _vy, fill(32, 1, 1))
+
+# ===========================================================================
+# METRICS — from the leaf table (a few dozen numbers), never the mesh
+# ===========================================================================
+_tipZ = _p1z + _Lb * sin(_elB) - _drop
+_topZ = max(_p1z + _Lb * 0.5 * sin(_elB) - 0.25 * _drop)
+overallHeight = max(_topZ, max(_tipZ))
+canopyDiameter = 2 * _cR
+potDiameter = 2 * _rT
+potHeightM = _pH
+leafCount = _nL
+footprint = PI * _cR * _cR
+meshFaces = (2 + (_nP - 1) * _nR) + (2 + 3 * _nR) + _nL * (2 + (_nStem - 1) * _nPipe) + _nL * (2 + (_nSt - 1) * 2 * _nX)

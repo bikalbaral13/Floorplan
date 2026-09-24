@@ -1,0 +1,650 @@
+{
+  "version": 1,
+  "id": "north-arrow-with-math",
+  "title": "North arrow — bearing-driven north symbol in plan and a 3D arrow",
+  "category": "Site",
+  "object": {
+    "hostKind": "node",
+    "name": "North Arrow",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 21V6",
+        "M12 3l5 6H7l5-6z",
+        "M6 21h12"
+      ]
+    }
+  },
+  "description": "A parametric NORTH ARROW on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render — hosted on a NODE. Drop it on a node and the plan gets a proper north symbol; the 3D view gets an arrow lying flat over the model, pointing the same way.\n\n  BEARING IS THE WHOLE OBJECT, and it is applied where the FRAME is derived rather than to finished geometry. Every part — arrow, compass ring, letter, shaft, head — is authored in a local (u, v) frame where u runs along north and v across it, and the whole list is mapped through ONE pair of axes at the very end. That is a change of basis, not a transform of points, so it is exactly rigid and nothing can be left behind when the bearing turns. Clockwise from screen up, matching the editor's own Set North box: 0 deg points up the page, 90 deg to the right. Plan Y runs DOWN, so north is (sin b, -cos b). The bearing is wrapped into [0, 360) by floor division, since the expression language has no modulo operator, so 450 and -270 both read as 90 rather than turning the frame inside out.\n\n  THE HOST IS A PLACEMENT POINT, NOT A BOX TO FIT. A north symbol is a badge at a fixed drawn size — it does not stretch to the thing it sits on, which is why there is no Fit mode here and Size is an absolute figure in metres. A node host gives one point; a segment or a space is accepted too and reduces to the mean of its vertices. Nothing selected builds at the flow anchor rather than failing.\n\n  THREE STYLES. Dart is the surveyor's concave kite — the notch at the tail is exactly what stops it reading as a plain triangle. Triangle is the plain isoceles form. Needle is the two-tone compass needle: its BODY is only the left half, and the right half is published separately and drawn in a fixed pale row, which is the entire point of that style. Every other style leaves that row empty, so it is skipped.\n\n  THE COMPASS RING IS AN ANNULUS, not a stroked circle, and that is a deliberate use of the Polygon row's EVEN-ODD rule: an inner ring nested inside an outer one voids the middle, so the band is a true ring with the drawing showing through it.\n\n  EVEN-ODD CUTS BOTH WAYS, AND IT IS THE ONLY THING THIS OBJECT HAD TO BE CAREFUL ABOUT. The rule that makes the ring hollow also means any two filled outlines that OVERLAP void their intersection — the overlap sits inside two rings, which is even. Two constructions fall into that trap and both are guarded:\n\n  • The ring band must clear the arrow's OUTERMOST VERTEX, and that is measured rather than assumed. On a dart or a triangle the widest point is a TAIL CORNER, at sqrt((S/2)^2 + hw^2) from the centre, which is farther out than the tip — so clearing the tip alone still lets the tail corners cross the band and notch the arrow exactly where the ring passes. The inner radius is driven from the measured body radius, so widening the arrow pushes the ring out with it.\n\n  • The letter's three bars must not overlap each other. The obvious construction — a diagonal offset along its own perpendicular — overlaps both uprights at the junctions, punching a notch out of the glyph precisely where it should be most solid. So the diagonal is cut with VERTICAL end faces landing exactly on the INNER faces of the uprights: contact is edge-to-edge with zero area, which even-odd does not count. Its vertical half-thickness is scaled by sqrt(1 + m^2) so the PERPENDICULAR width still matches the uprights — a sheared quad reads thinner than its vertical measure, and the three strokes of an N have to weigh the same.\n\n  THE LETTER N IS DRAWN, NOT LABELLED. A 2D Render row carries no text, so the glyph is three bars built as filled quads, and they go into the SAME grouped list as the arrow so they take the same colour. A Stroke row would have been fewer lines — and stroke bands are explicitly NOT read even-odd, so the overlap problem above would not have arisen — but it needs a row of its own, and a fixed-colour N against a White arrow is the one combination that must not happen.\n\n  COLOUR IS A SELECT, AND THAT IS FORCED BY THE RENDER NODE. A 2D Render row's colour is a property OF THE ROW: the evaluator reads it off the row and there is no endpoint a wire can reach, so a Math Engine — which can only put numbers on a wire — cannot tint anything, and neither could a free-form colour parameter. What CAN vary is WHICH ROW RECEIVES THE GEOMETRY. So the node carries one row per colour, the Math Engine sends the whole grouped list to the row whose name matches Colour, and every other row is fed an empty list and skipped outright, because 2D Render drops a row with no geometry. Exactly one colour is ever on screen and two can never stack. Slate is the FALLBACK arm rather than an equality test, so an unrecognised colour still draws the symbol instead of making it vanish. Adding a colour is therefore two edits, not one: a new option on Colour and a matching row plus one `North<Name>` line. That is the cost of the constraint, and it is why the palette is deliberately short.\n\n  THE 3D ARROW LIES FLAT at Elevation, pointing north — a marker over the model rather than a signpost standing out of it. The shaft is a TUBE and the head is a LOFT, and neither could be a Cylinder or a Cone row: those are positioned by a point with a FIXED VERTICAL axis and expose no rotation for a wire to reach, so a horizontal arrow is simply unbuildable with them. A Tube takes an axis SEGMENT, so the shaft is tail → head base and needs no special case. The head is two loft sections — a full ring at the base and a near-zero one at the tip — which the row stitches and caps into a cone pointing wherever the bearing points; both sections lie in the plane perpendicular to north, spanned by east and Z. The 3D ring is a RING row, a torus whose AXIS is the wired segment, so a short vertical stub at the centre lays it flat in plan. The 3D letter is the same three bars as the glyph but as tube CENTRELINES, since round bars read better as a solid and one row carries all three.\n\n  VERIFIED THROUGH THE ENGINE at the defaults (Dart, 2 m, bearing 0): the plan list is 144 rows in 6 groups — the 4-point dart, the 64-point outer and inner rings, and three 4-point letter bars — the head lofts 2 sections of 16 points, and no cell anywhere is non-finite.\n\n  BEARING IS VERIFIED AS A RIGID MOTION, which is the only thing worth checking about one. Over 0 / 30 / 45 / 90 / 135 / 180 / 270 / 359 / 360 / 450 / -270 deg the tip stays exactly 1.000000 m from the host, a spread of 0.0e+0; 0 and 360 agree exactly, 450 reads as 90 and -270 as 90; and mapping the 0 deg plan list through the bearing's own rotation reproduces every other angle to 3.1e-16 — so it is that exact rotation, not merely some displacement. The tip lands due north at each: (0, -1) at 0 deg, (1, 0) at 90, (0, 1) at 180, (-1, 0) at 270.\n\n  THE EVEN-ODD GUARDS ARE VERIFIED BY SAMPLING, not by argument: a 221 x 221 grid over the symbol counts, for every point, how many groups contain it. Unintended double-cover is 0 at the defaults and for Needle, Triangle, ring off, bearing 37 and size 0.5 — letter bars pairwise disjoint, and no body vertex inside the ring band. Ring clearance is positive across the extremes (Dart 2 m: inner radius 1.1446 against a farthest body vertex of 1.0846; Triangle and Needle at full width: 1.4742 against 1.4142).\n\n  RE-CHECKED with no host, a point, a segment and a space host, all three styles, all five colours plus an unrecognised one and a blank, both toggles off, at 6 and 48 head facets, at 12 ring segments, at 0.1 m and 12 m size, at minimum and maximum arrow width, and at a negative elevation — every output finite, and exactly one colour row filled in every case.\n\n  WHAT THIS CANNOT DO. The symbol does not scale itself to the drawing or to the sheet, so at very different plan scales Size is the thing to change. There is no declination — Bearing is grid north, not magnetic. The 3D letter is legible from directly above and foreshortens from a low angle, as any flat-lying glyph does.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — point / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "style",
+              "name": "Style",
+              "type": "select",
+              "value": "Dart",
+              "options": [
+                "Dart",
+                "Triangle",
+                "Needle"
+              ],
+              "editable": false,
+              "necessary": true
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "select",
+              "value": "Slate",
+              "options": [
+                "Black",
+                "Slate",
+                "White",
+                "Red",
+                "Blue"
+              ],
+              "editable": false,
+              "necessary": true
+            },
+            {
+              "id": "bearing",
+              "name": "Bearing (deg)",
+              "type": "range",
+              "value": 0,
+              "options": [],
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "editable": false,
+              "necessary": true
+            },
+            {
+              "id": "size",
+              "name": "Size",
+              "type": "range",
+              "value": 2,
+              "options": [],
+              "min": 0.5,
+              "max": 12,
+              "step": 0.05,
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "widthRatio",
+              "name": "Arrow width / size",
+              "type": "range",
+              "value": 0.42,
+              "options": [],
+              "min": 0.1,
+              "max": 1,
+              "step": 0.01,
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "headRatio",
+              "name": "Head length / size",
+              "type": "range",
+              "value": 0.34,
+              "options": [],
+              "min": 0.15,
+              "max": 0.7,
+              "step": 0.01,
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "showCircle",
+              "name": "Show compass ring",
+              "type": "checkbox",
+              "value": true,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "ringWidthRatio",
+              "name": "Ring band / size",
+              "type": "range",
+              "value": 0.035,
+              "options": [],
+              "min": 0.01,
+              "max": 0.15,
+              "step": 0.005,
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "showLetter",
+              "name": "Show letter N",
+              "type": "checkbox",
+              "value": true,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "elevation",
+              "name": "Elevation (m)",
+              "type": "range",
+              "value": 0.05,
+              "options": [],
+              "min": 0,
+              "max": 10,
+              "step": 0.05,
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "shaftRatio",
+              "name": "Shaft radius / size",
+              "type": "range",
+              "value": 0.06,
+              "options": [],
+              "min": 0.02,
+              "max": 0.25,
+              "step": 0.005,
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "sides",
+              "name": "Head facets",
+              "type": "range",
+              "value": 16,
+              "options": [],
+              "min": 6,
+              "max": 48,
+              "step": 2,
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "circleSegs",
+              "name": "Ring segments",
+              "type": "range",
+              "value": 64,
+              "options": [],
+              "min": 12,
+              "max": 128,
+              "step": 4,
+              "editable": false,
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -220,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "North arrow maths",
+          "expr": "# ── THE HOST ─────────────────────────────────────────────────────────────────\n# A node host arrives as one row; a segment as two; a space as many. The symbol is a rigid badge,\n# not something that stretches to fit, so all this needs from the host is a PLACEMENT POINT — the\n# mean of whatever vertices arrived. Nothing selected falls back to the flow anchor rather than\n# failing, the same \"nothing selected is not an error\" rule the rest of this library follows.\n_n = rows(P)\n_ok = _n >= 1 ? 1 : 0\n_Q = _ok > 0 ? P : zeros(1, 2)\n_cx = mean(col(_Q, 0))\n_cy = mean(col(_Q, 1))\n\n# ── THE NORTH FRAME ──────────────────────────────────────────────────────────\n# BEARING IS THE WHOLE OBJECT, so it is applied where the FRAME is derived rather than to finished\n# geometry: every part below is written in (u, v) — u along north, v across it — and mapped through\n# this one pair of axes at the end. That is a change of basis, so the arrow, the ring and the letter\n# cannot drift apart or be left behind, and it is exactly rigid.\n#\n# Clockwise from screen up, matching the editor's own Set North box: 0 deg points up the page,\n# 90 deg to the right. Plan Y runs DOWN, so \"up the page\" is -Y and north is (sin b, -cos b).\n# The bearing is wrapped into [0, 360) first — floor division, since the language has no modulo —\n# so 450 and -270 both read as 90 instead of turning the frame inside out.\n_bd = bearing - 360 * floor(bearing / 360)\n_b = _bd * PI / 180\n_nx = sin(_b)\n_ny = 0 - cos(_b)\n_ex = cos(_b)\n_ey = sin(_b)\n\n# ── PROPORTIONS ──────────────────────────────────────────────────────────────\n# Every dimension is a fraction of Size, so one slider scales the badge and the proportions hold.\n# Each ratio is clamped rather than trusted: a zero width or a head longer than the arrow would\n# make a degenerate outline that renders as a spike or not at all.\n_S = max(0.2, size)\n_hw = _S * min(1, max(0.1, widthRatio)) / 2\n_uTip = _S / 2\n_uTail = 0 - _S / 2\n_headL = _S * min(0.7, max(0.15, headRatio))\n_uHead = _uTip - _headL\n_uNotch = _uTail + _S * 0.22\n\n# ── THE 2D SYMBOL, IN THE LOCAL FRAME ────────────────────────────────────────\n# Three styles, one outline each. Dart is the surveyor's concave kite — the notch at the tail is\n# what stops it reading as a plain triangle. Needle is the two-tone compass needle, so its BODY is\n# only the left half; the right half is published separately and drawn in a fixed pale row, which\n# is the whole point of that style.\n_Dart = vcat(hcat(_uTip, 0), hcat(_uTail, 0 - _hw), hcat(_uNotch, 0), hcat(_uTail, _hw))\n_Tri = vcat(hcat(_uTip, 0), hcat(_uTail, 0 - _hw), hcat(_uTail, _hw))\n_NdL = vcat(hcat(_uTip, 0), hcat(_uTail, 0 - _hw), hcat(_uNotch, 0))\n_NdR = vcat(hcat(_uTip, 0), hcat(_uNotch, 0), hcat(_uTail, _hw))\n_isTri = style == 'Triangle'\n_isNdl = style == 'Needle'\n_Body = _isNdl ? _NdL : (_isTri ? _Tri : _Dart)\n_BodyG = hcat(_Body, fill(rows(_Body), 1, 0))\n\n# THE COMPASS RING is an ANNULUS, and it is one outline pair rather than a stroked circle because a\n# grouped Polygon list is read EVEN-ODD: the inner ring nested in the outer voids the middle, so the\n# band is a true ring with the drawing showing through it.\n#\n# The inner radius is forced clear of the arrow's OUTERMOST VERTEX, and that is measured rather than\n# assumed: on a dart or a triangle the widest point is a TAIL CORNER, at sqrt((S/2)^2 + hw^2) from\n# the centre, which is farther out than the tip — so clearing the tip alone still lets the tail\n# corners cross the band. Any crossing is counted twice by even-odd and voids the overlap, notching\n# the arrow exactly where the ring passes. Widening the arrow now pushes the ring out with it.\n_ringOn = showCircle != 0 ? 1 : 0\n_bodyR = sqrt(_uTip * _uTip + _hw * _hw)\n_R0 = max(_S * 0.52, _bodyR + _S * 0.03)\n_ringW = _S * min(0.15, max(0.01, ringWidthRatio))\n_R1 = _R0 + _ringW\n_KC = max(12, floor(circleSegs))\n_thc = arange(_KC) * 2 * PI / _KC\n_RingFull = vcat(hcat(_R1 * cos(_thc), _R1 * sin(_thc), fill(_KC, 1, 1)), hcat(_R0 * cos(_thc), _R0 * sin(_thc), fill(_KC, 1, 2)))\n_RingG = _ringOn > 0 ? _RingFull : zeros(0, 3)\n\n# THE LETTER N IS DRAWN, NOT LABELLED. A 2D Render row carries no text, so the glyph is three bars\n# built as filled quads — and they go into the SAME grouped list as the arrow so that they take the\n# same colour. A Stroke row would have been fewer lines but would have needed its own row, and a\n# fixed-colour N against a White arrow is the one combination that must not happen.\n#\n# THE BARS MUST NOT OVERLAP, and that is not a tidiness point — it is the even-odd rule again, read\n# the other way. Two filled quads that overlap put their intersection inside TWO rings, which is\n# even, so the overlap renders as a HOLE. On an N the overlaps are exactly at the two junctions, so\n# a diagonal offset along its own perpendicular — the obvious construction — punches a notch out of\n# the glyph precisely where it should be most solid.\n# So the diagonal is cut with VERTICAL end faces instead, landing exactly on the INNER faces of the\n# two uprights: contact is edge-to-edge with zero area, which even-odd does not count. Its vertical\n# half-thickness is scaled by sqrt(1 + m^2) so that the PERPENDICULAR width still matches the\n# uprights — a sheared quad reads thinner than its vertical measure, and the three strokes of an N\n# have to weigh the same. Every term here is a fixed fraction of Size, so the shape is provably the\n# same at every size and the ends can never cross.\n_letOn = showLetter != 0 ? 1 : 0\n_lu0 = (_ringOn > 0 ? _R1 : _uTip) + _S * 0.05\n_lh = _S * 0.18\n_lu1 = _lu0 + _lh\n_lw = _S * 0.085\n_tb = _S * 0.028\n_BarL = vcat(hcat(_lu0, 0 - _lw - _tb), hcat(_lu1, 0 - _lw - _tb), hcat(_lu1, 0 - _lw + _tb), hcat(_lu0, 0 - _lw + _tb))\n_BarR = vcat(hcat(_lu0, _lw - _tb), hcat(_lu1, _lw - _tb), hcat(_lu1, _lw + _tb), hcat(_lu0, _lw + _tb))\n_vL = 0 - _lw + _tb\n_vR = _lw - _tb\n_md = _lh / (2 * _lw - 2 * _tb)\n_tv = _tb * sqrt(1 + _md * _md)\n_BarD = vcat(hcat(_lu1, _vL), hcat(_lu0 + 2 * _tv, _vR), hcat(_lu0, _vR), hcat(_lu1 - 2 * _tv, _vL))\n_LetFull = vcat(hcat(_BarL, fill(4, 1, 3)), hcat(_BarD, fill(4, 1, 4)), hcat(_BarR, fill(4, 1, 5)))\n_LetG = _letOn > 0 ? _LetFull : zeros(0, 3)\n\n# ── LOCAL (u, v) -> WORLD ────────────────────────────────────────────────────\n# The single mapping every 2D part passes through. The group column rides along untouched.\n_MainL = vcat(_BodyG, _RingG, _LetG)\n_mu = col(_MainL, 0)\n_mv = col(_MainL, 1)\n_MainW = hcat(_cx + _mu * _nx + _mv * _ex, _cy + _mu * _ny + _mv * _ey, col(_MainL, 2))\n_qu = col(_NdR, 0)\n_qv = col(_NdR, 1)\nLightHalf = _isNdl ? hcat(_cx + _qu * _nx + _qv * _ex, _cy + _qu * _ny + _qv * _ey) : zeros(0, 2)\n\n# ── COLOUR IS A SELECT, AND THAT IS FORCED BY THE RENDER NODE ────────────────\n# A 2D Render row's colour is a property OF THE ROW: the evaluator reads it off the row and there is\n# no endpoint a wire can reach, so a Math Engine — which can only put numbers on a wire — cannot\n# tint anything. What CAN vary is WHICH ROW GETS THE GEOMETRY. So there is one row per colour, the\n# chosen one receives the whole grouped list and every other receives an empty one and is skipped\n# outright (2D Render drops a row with no geometry). Exactly one colour is ever on screen and two\n# can never stack. Slate is the FALLBACK arm rather than an equality test, so an unrecognised colour\n# still draws the symbol instead of making it vanish.\n_isB = color == 'Black'\n_isS = color == 'Slate'\n_isW = color == 'White'\n_isR = color == 'Red'\n_isU = color == 'Blue'\n_named = _isB || _isS || _isW || _isR || _isU ? 1 : 0\nNorthBlack = _isB ? _MainW : zeros(0, 3)\nNorthSlate = _isS || _named < 1 ? _MainW : zeros(0, 3)\nNorthWhite = _isW ? _MainW : zeros(0, 3)\nNorthRed = _isR ? _MainW : zeros(0, 3)\nNorthBlue = _isU ? _MainW : zeros(0, 3)\n\n# ── THE 3D ARROW ─────────────────────────────────────────────────────────────\n# It lies FLAT in the plan at Elevation, pointing north — a marker over the model, not a signpost\n# standing up out of it.\n#\n# The shaft is a TUBE and the head is a LOFT, and neither could be a Cylinder or a Cone row: those\n# are positioned by a point with a FIXED VERTICAL axis and expose no rotation for a wire to reach,\n# so a horizontal arrow is unbuildable with them. A Tube takes an axis SEGMENT, so the shaft is\n# simply tail -> head base. The head is two loft sections — a full ring at the base and a nearly\n# zero one at the tip — which the row stitches and caps into a cone in whatever direction the\n# bearing points. Both sections lie in the plane perpendicular to north, spanned by east and Z.\n_z0 = max(0, elevation)\n_rSh = _S * min(0.25, max(0.02, shaftRatio))\n_rHd = max(_rSh * 1.8, _hw * 0.85)\n_KH = max(6, floor(sides))\n_thh = arange(_KH) * 2 * PI / _KH\n_ch = cos(_thh)\n_sh = sin(_thh)\n_hbx = _cx + _uHead * _nx\n_hby = _cy + _uHead * _ny\n_htx = _cx + _uTip * _nx\n_hty = _cy + _uTip * _ny\n_rTip = _rHd * 0.02\nShaft3D = hcat(_cx + _uTail * _nx, _cy + _uTail * _ny, _z0, _hbx, _hby, _z0, _rSh)\nHead3D = vcat(hcat(_hbx + _rHd * _ch * _ex, _hby + _rHd * _ch * _ey, _z0 + _rHd * _sh, fill(_KH, 1, 0)), hcat(_htx + _rTip * _ch * _ex, _hty + _rTip * _ch * _ey, _z0 + _rTip * _sh, fill(_KH, 1, 1)))\n\n# The 3D ring is a RING row — a torus whose axis is the wired segment — so a vertical stub at the\n# centre lays it flat in the plan. Its length is free; only direction and midpoint are read.\n_Rmid = (_R0 + _R1) / 2\n_Rsec = max(0.002, (_R1 - _R0) / 2)\nRing3D = _ringOn > 0 ? hcat(_cx, _cy, _z0 + _Rsec, _cx, _cy, _z0 + _Rsec + 0.1, _Rmid, _Rsec) : zeros(0, 8)\n\n# The 3D letter is the same three bars as the plan glyph, but as tube CENTRELINES rather than\n# quads — round bars read better as a solid, and one Tube row carries all three.\n_NL = vcat(hcat(_lu0, 0 - _lw, _lu1, 0 - _lw), hcat(_lu1, 0 - _lw, _lu0, _lw), hcat(_lu0, _lw, _lu1, _lw))\n_na1 = col(_NL, 0)\n_nb1 = col(_NL, 1)\n_na2 = col(_NL, 2)\n_nb2 = col(_NL, 3)\n_L3 = hcat(_cx + _na1 * _nx + _nb1 * _ex, _cy + _na1 * _ny + _nb1 * _ey, fill(3, 1, _z0), _cx + _na2 * _nx + _nb2 * _ex, _cy + _na2 * _ny + _nb2 * _ey, fill(3, 1, _z0), fill(3, 1, _tb))\nLetter3D = _letOn > 0 ? _L3 : zeros(0, 7)\n\n# ── METRICS ──────────────────────────────────────────────────────────────────\n# Numbers only. The metrics collector keeps NUMERIC slots — a string slot is dropped whatever it is\n# wired to — so Style and Colour are deliberately not echoed: they are legible from the drawing and\n# from their own controls, and a wire that provably does nothing is worse than no wire.\nbearingOut = _bd\nsizeOut = _S\narrowLength = _S\narrowWidth = 2 * _hw\nheadLength = _headL\nringOuterR = _ringOn > 0 ? _R1 : 0\nringInnerR = _ringOn > 0 ? _R0 : 0\ntipX = _htx\ntipY = _hty\nelevationOut = _z0\nheadFacets = _KH\n"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s3",
+              "label": "Arrow length (m)",
+              "necessary": false
+            },
+            {
+              "id": "s4",
+              "label": "Arrow width (m)",
+              "necessary": false
+            },
+            {
+              "id": "s5",
+              "label": "Head length (m)",
+              "necessary": false
+            },
+            {
+              "id": "s6",
+              "label": "Ring outer radius (m)",
+              "necessary": false
+            },
+            {
+              "id": "s7",
+              "label": "Ring inner radius (m)",
+              "necessary": false
+            },
+            {
+              "id": "s8",
+              "label": "Tip X (m)",
+              "necessary": false
+            },
+            {
+              "id": "s9",
+              "label": "Tip Y (m)",
+              "necessary": false
+            },
+            {
+              "id": "s10",
+              "label": "Elevation (m)",
+              "necessary": false
+            },
+            {
+              "id": "s11",
+              "label": "Head facets",
+              "necessary": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -100
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_black",
+              "kind": "polygon",
+              "name": "North symbol — black",
+              "color": "#0f172a",
+              "layer": "North",
+              "show": true
+            },
+            {
+              "id": "pr_slate",
+              "kind": "polygon",
+              "name": "North symbol — slate",
+              "color": "#475569",
+              "layer": "North",
+              "show": true
+            },
+            {
+              "id": "pr_white",
+              "kind": "polygon",
+              "name": "North symbol — white",
+              "color": "#f8fafc",
+              "layer": "North",
+              "show": true
+            },
+            {
+              "id": "pr_red",
+              "kind": "polygon",
+              "name": "North symbol — red",
+              "color": "#dc2626",
+              "layer": "North",
+              "show": true
+            },
+            {
+              "id": "pr_blue",
+              "kind": "polygon",
+              "name": "North symbol — blue",
+              "color": "#1d4ed8",
+              "layer": "North",
+              "show": true
+            },
+            {
+              "id": "pr_light",
+              "kind": "polygon",
+              "name": "Needle — pale half",
+              "color": "#e2e8f0",
+              "layer": "North",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": 160
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_shaft",
+              "kind": "tube",
+              "name": "Arrow shaft",
+              "color": "#475569",
+              "layer": "North",
+              "radius": 0.12,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_head",
+              "kind": "loft",
+              "name": "Arrow head",
+              "color": "#dc2626",
+              "layer": "North",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_ring",
+              "kind": "ring",
+              "name": "Compass ring",
+              "color": "#94a3b8",
+              "layer": "North",
+              "radius": 1.1,
+              "tubeRadius": 0.035,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_letter",
+              "kind": "tube",
+              "name": "Letter N",
+              "color": "#0f172a",
+              "layer": "North",
+              "radius": 0.056,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_style",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-style",
+      "targetHandle": "valin-style"
+    },
+    {
+      "id": "e_props_math_color",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-color",
+      "targetHandle": "valin-color"
+    },
+    {
+      "id": "e_props_math_bearing",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bearing",
+      "targetHandle": "valin-bearing"
+    },
+    {
+      "id": "e_props_math_size",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-size",
+      "targetHandle": "valin-size"
+    },
+    {
+      "id": "e_props_math_widthRatio",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-widthRatio",
+      "targetHandle": "valin-widthRatio"
+    },
+    {
+      "id": "e_props_math_headRatio",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-headRatio",
+      "targetHandle": "valin-headRatio"
+    },
+    {
+      "id": "e_props_math_showCircle",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showCircle",
+      "targetHandle": "valin-showCircle"
+    },
+    {
+      "id": "e_props_math_ringWidthRatio",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ringWidthRatio",
+      "targetHandle": "valin-ringWidthRatio"
+    },
+    {
+      "id": "e_props_math_showLetter",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showLetter",
+      "targetHandle": "valin-showLetter"
+    },
+    {
+      "id": "e_props_math_elevation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-elevation",
+      "targetHandle": "valin-elevation"
+    },
+    {
+      "id": "e_props_math_shaftRatio",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-shaftRatio",
+      "targetHandle": "valin-shaftRatio"
+    },
+    {
+      "id": "e_props_math_sides",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-sides",
+      "targetHandle": "valin-sides"
+    },
+    {
+      "id": "e_props_math_circleSegs",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-circleSegs",
+      "targetHandle": "valin-circleSegs"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-arrowLength",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-arrowWidth",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-headLength",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ringOuterR",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ringInnerR",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-tipX",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-tipY",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-elevationOut",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-headFacets",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_r2d_pr_black",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-NorthBlack",
+      "targetHandle": "valin-pr_black"
+    },
+    {
+      "id": "e_math_r2d_pr_slate",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-NorthSlate",
+      "targetHandle": "valin-pr_slate"
+    },
+    {
+      "id": "e_math_r2d_pr_white",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-NorthWhite",
+      "targetHandle": "valin-pr_white"
+    },
+    {
+      "id": "e_math_r2d_pr_red",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-NorthRed",
+      "targetHandle": "valin-pr_red"
+    },
+    {
+      "id": "e_math_r2d_pr_blue",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-NorthBlue",
+      "targetHandle": "valin-pr_blue"
+    },
+    {
+      "id": "e_math_r2d_pr_light",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-LightHalf",
+      "targetHandle": "valin-pr_light"
+    },
+    {
+      "id": "e_math_r3d_p3_shaft",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-Shaft3D",
+      "targetHandle": "valin-p3_shaft"
+    },
+    {
+      "id": "e_math_r3d_p3_head",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-Head3D",
+      "targetHandle": "valin-p3_head"
+    },
+    {
+      "id": "e_math_r3d_p3_ring",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-Ring3D",
+      "targetHandle": "valin-p3_ring"
+    },
+    {
+      "id": "e_math_r3d_p3_letter",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-Letter3D",
+      "targetHandle": "valin-p3_letter"
+    }
+  ]
+}

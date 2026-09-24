@@ -1,0 +1,57 @@
+# Natural size — the fit scale is measured against the unscaled width
+_natL = width
+# Host frame — node, segment or space
+_e1 = hcat(1, 0)
+_np = rows(P)
+_isSeg = _np == 2
+_isSpace = _np > 2
+_edges = _isSpace ? (shift(P, -1) - P) : _e1
+_edgeLen = len(_edges)
+_longest = max(_edgeLen)
+_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1
+_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1
+_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)
+_dirLen = len(_dir)
+_axisB = _dirLen > 0 ? normalize(_dir) : _e1
+_rot = rotation * PI / 180
+_crot = cos(_rot)
+_srot = sin(_rot)
+_bx = sub(_axisB, 0, 0, 1, 1)
+_by = sub(_axisB, 0, 1, 1, 1)
+_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)
+_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)
+_ux = sub(_axisU, 0, 0, 1, 1)
+_uy = sub(_axisU, 0, 1, 1, 1)
+_vx = sub(_axisV, 0, 0, 1, 1)
+_vy = sub(_axisV, 0, 1, 1, 1)
+_Qu = col(P, 0) * _ux + col(P, 1) * _uy
+_Qv = col(P, 0) * _vx + col(P, 1) * _vy
+_hu0 = _np > 0 ? min(_Qu) : 0
+_hu1 = _np > 0 ? max(_Qu) : 0
+_hv0 = _np > 0 ? min(_Qv) : 0
+_hv1 = _np > 0 ? max(_Qv) : 0
+_hcu = (_hu0 + _hu1) / 2
+_hcv = (_hv0 + _hv1) / 2
+_hostL = _hu1 - _hu0
+_hostW = _hv1 - _hv0
+# Fit to host — one uniform scale, Max never enlarges
+_availL = max(0, _hostL - 2 * margin)
+_notOff = fitMode != 'Off'
+_exact = fitMode == 'Exact'
+_sRaw = _natL > 0 ? _availL / _natL : 1
+_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1
+scale = max(0.15, min(5, _sFit))
+_s = scale
+# Anchor — place the footprint by any of the nine box points
+_bodyL = width * _s
+_bodyW = depth * _s
+_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'
+_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'
+_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'
+_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'
+_ax = _anchorR - _anchorL
+_ay = _anchorB - _anchorT
+_hau = _hcu + _ax * max(0, _hostL / 2 - margin)
+_hav = _hcv + _ay * max(0, _hostW / 2 - margin)
+_cu = _hau - _ax * _bodyL / 2
+_cv = _hav - _ay * _bodyW / 2

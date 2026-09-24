@@ -1,0 +1,374 @@
+{
+  "version": 1,
+  "id": "detect-walls",
+  "title": "Detect walls",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Detect walls",
+    "icon": {
+      "paths": [
+        "M3 7h18",
+        "M3 12h18",
+        "M3 17h18",
+        "M8 7v5",
+        "M16 12v5"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Find every WALL in the drawing, measure it, and hand the canvas a plan document that carries each one as a real wall SEGMENT with the library's wall.json attached.\n\n  Geometry (Image kind) → Input Properties → Object Detection [Wall] → Math Engine → Output Metrics (+ 2D Render)\n\nSIX NODES, DOWN FROM TWELVE. The earlier version needed Filter by Label + Graph to Matrix to get the boxes into maths, then Points to Graph + Network to get segments back out, then Mitered Join + Boolean 2D + Polygon to dissolve them into a poché. The BOX-TO-WALL MATHS IS UNCHANGED — it is the same reading, line for line — but Object Detection now publishes `corners` (a flat N×8 matrix, one row per box, per-row twin `val-o_wall_corners`) which the Math Engine lifts directly, and the Math Engine's own encode block writes the plan document at the far end. Same shape as detect_doors.json and detect_windows.json, so all three read as one family.\n\nTHE ROOT IS THE GEOMETRY NODE, not a separate Image node. Selecting a picture on the canvas retargets a grabbing Geometry node onto its Image kernel, so the same node that would carry a Space or a Segment carries the drawing. “Grab from selection” is ON: pick the underlay and this node follows it.\n\nTHE BRIEF SITS IN THE CHAIN, not beside it. Input Properties is wired between the Geometry node and Object Detection, so the tuning values and the picture travel one chain: the detector resolves its image by walking UPSTREAM through geometry edges, so it still finds the picture through the brief.\n\nWHAT THE MATHS PUBLISHES. min/max over each row's four x's and four y's recovers the rectangle; the mid-line of the LONGER axis is the wall — a wide box gives (x0,cy)→(x1,cy), a tall one (cx,y0)→(cx,y1). Four measures reach Output Metrics: the WALL RECTANGLES as a grouped [x, y, box] coordinate list, the CENTRE-LINE SEGMENT as [x1, y1, x2, y2, w], the WIDTH and the LENGTH, one row per wall — plus the total run in metres.\n\nWIDTH IS A REAL READING HERE, and that is the one place walls differ from openings. A door box is the leaf plus its swing arc and a window box is the glazing, so in those flows the short side means little and the override carries a fixed wall depth. A WALL box's short side IS the wall's thickness, off the drawing, per wall — so “Thickness override” defaults to 0 and hands the reading through. Set it only when the drawing's own widths are unreliable and one figure is closer to the truth than many wrong ones.\n\nSUSPECT WALLS. A wall is long and thin. “Suspect aspect ratio” counts the kept boxes whose long side is less than that multiple of the short side — either an angled wall flattened into its axis-aligned envelope, where the thickness comes out overstated, or a junction the model boxed as one object. It changes no geometry; it tells you how many readings to distrust.\n\nTHE PLAN DOCUMENT. The Math Engine's encode block runs Canvas Encoder after the formulas and publishes `val-json`: each kept centre line becomes a segment of segmentType “wall” on the “wall” layer, carrying objectId “wall-with-math” and objectPath “Objects/Architectural/wall.json”. Per-wall thickness rides on the thickness column, so each segment gets its own measured value, and NODES ARE DEDUPLICATED BY POSITION — a junction where four walls meet becomes one node with four segments on it, so the walls import as a connected network rather than loose sticks. The segment spec sets `bufferStyle: flat` and `bufferJoin: mitered-union`, which is load-bearing rather than decorative: without it a wall imports as a centre LINE with no width — correct in 3D, where the extrusion reads the thickness, and invisible in 2D, where the band is what gets drawn. That mitred union is also what the old version's Mitered Join → Boolean 2D → Polygon branch was for; the imported plan now draws it itself, so the three nodes are gone rather than lost.\n\nONE FIGURE THE MAP CANNOT VARY. Each wall SEGMENT carries its own measured thickness, but the attached wall.json is one static entry, so its own `thickness` param is a single figure (0.15 m) for every wall. Set the Thickness override to make the two agree everywhere, or edit that param in the encode block.\n\nSHOW IN CANVAS. The plan JSON lands in the last Output Metrics slot, and that node's “Show in canvas” button imports it by the same path File ▸ Import takes for a plan you picked. Nothing reaches the canvas until you press it — the flow only ever computes the document.\n\nLIMITS, unchanged from the old version and worth reading before trusting a number. The boxes are axis-aligned, so a wall at an angle comes back as its bounding box: the centre line is axis-aligned too and the thickness is overstated — that is what the Suspect count is measuring. Detection also fragments long walls into several boxes; they rejoin on import wherever their endpoints coincide, but a gap in the middle of a run means the model saw two walls there. Use Vectorisation + Fit Lines when the exact geometry matters — this flow is for reading a drawing quickly, and the description of that reading is the count, not the millimetre.\n\nHOW TO RUN: 1) select the drawing on the canvas — the Geometry node binds to it; 2) paste your Gemini API key into the Object Detection node (it ships BLANK on purpose — never save a key into a shared workflow file); 3) press DETECT on that node. Detect bakes its result into the node — nothing detects on its own and re-running the flow does not re-detect, so press it again after changing the image or the rows. Without a key the node produces nothing while the rest still evaluates, which looks exactly like “found none”. If the found count is 0 while “Unclaimed labels” is full, the model used a different word — rename the row rather than raising Max items.\n\n---\nHOSTED ON AN IMAGE. This file now carries an `object` block with `hostKind: \"image\"`, so it lists as a parametric object and attaches to an imported picture from the Properties tab.\n\nWHAT STILL ONLY WORKS IN THE FLOW EDITOR: an attached object is resolved by the spine runner, which evaluates Input Properties, the Math Engine and the Render rows and NOTHING else. It does not run the Object Detection node, and it reads the Math Engine's `decode` block but never its `encode`. Detection is also an async, billed call that has to be pressed and baked — there is no button on an attached object, and an object re-resolves on every parameter change. So attached, this reports nothing until detect-and-bake exists for attachments. Open it in the Flow editor to actually run it.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -760,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "pooling": "ink",
+          "nodeLabel": "Geometry — the drawing"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -450,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "minLen",
+              "name": "Min wall length (m)",
+              "type": "range",
+              "value": 0.3,
+              "min": 0,
+              "max": 5,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "bandTh",
+              "name": "Thickness override (m, 0 = box short side)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "minAspect",
+              "name": "Suspect aspect ratio (long ÷ short below this)",
+              "type": "range",
+              "value": 2,
+              "min": 1,
+              "max": 10,
+              "step": 0.1,
+              "options": []
+            },
+            {
+              "id": "ppm",
+              "name": "Pixels per metre (plan JSON)",
+              "type": "range",
+              "value": 50,
+              "min": 10,
+              "max": 200,
+              "step": 1,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Tuning"
+        }
+      }
+    },
+    {
+      "id": "detect",
+      "position": {
+        "x": -120,
+        "y": 0
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 40,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_wall",
+              "name": "Wall"
+            }
+          ],
+          "nodeLabel": "Wall — press Detect"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Boxes → centre lines, thickness, plan JSON",
+          "expr": "# BOXES -> CENTRE LINE, THICKNESS, AND A PLAN DOCUMENT.\n# A is the detection's `corners` matrix: one row per box, [x0,y0,x1,y1,x2,y2,x3,y3] in metres.\n# min/max of each row's four x's and four y's recovers the rectangle.\n_X = hcat(hcat(col(A,0), col(A,2)), hcat(col(A,4), col(A,6)))\n_Y = hcat(hcat(col(A,1), col(A,3)), hcat(col(A,5), col(A,7)))\n_x0 = min(_X, 'rows')\n_x1 = max(_X, 'rows')\n_y0 = min(_Y, 'rows')\n_y1 = max(_Y, 'rows')\n_w = _x1 - _x0\n_h = _y1 - _y0\n_cx = (_x0 + _x1) / 2\n_cy = (_y0 + _y1) / 2\n\n# THE WALL RUNS ALONG THE LONGER AXIS, and - unlike a door or a window - the SHORT axis is a real\n# reading: a wall box's short side IS the wall's own thickness, straight off the drawing. That is why\n# the override below defaults to 0 here and to a fixed figure in the openings flows.\n_wide = gt(_w, _h)\n_S0 = hcat(where(_wide, _x0, _cx), where(_wide, _cy, _y0))\n_E0 = hcat(where(_wide, _x1, _cx), where(_wide, _cy, _y1))\n_T0 = where(_wide, _h, _w)\n_L0 = len(_E0 - _S0)\n\n# HOW WALL-SHAPED IS THE BOX? A wall is long and thin. A box that is nearly square is either an angled\n# wall reduced to its axis-aligned envelope - which overstates the thickness - or a junction blob the\n# model boxed as one object. Measure it rather than hide it: these rows are reported, not dropped.\n_long = max(hcat(_w, _h), 'rows')\n_short = min(hcat(_w, _h), 'rows')\n_susp = lt(_long, minAspect * _short)\n\n# Drop anything shorter than the brief's minimum - a stub, a label box, a door jamb read as a wall.\n_keep = ge(_L0, minLen)\nS = compress(_S0, _keep)\nE = compress(_E0, _keep)\nTh = compress(_T0, _keep)\n\n# THE FOUR MEASURES the Output Metrics node reports.\nLen = len(E - S)\nWid = bandTh > 0 ? Th * 0 + bandTh : Th\nSeg = hcat(hcat(S, E), Wid)\n_K = compress(A, _keep)\n_n = rows(_K)\nRect = hcat(reshape(_K, 4 * _n, 2), floor(arange(4 * _n) / 4))\n\n# One type code per row (all 1 -> the single `wall` entry in the encode map) and the plan's scale.\nK = Wid * 0 + 1\nPPM = ppm\n\nFound = rows(A)\nKept = _n\nDropped = Found - _n\nSuspect = sum(compress(_susp, _keep))\nTotalLen = sum(Len)\n",
+          "decode": "",
+          "encode": "{\n  \"from\": {\n    \"a\": \"S\",\n    \"b\": \"E\",\n    \"thickness\": \"Wid\",\n    \"types\": \"K\",\n    \"pixelsPerMeter\": \"PPM\"\n  },\n  \"objects\": {\n    \"segments\": {\n      \"wall\": {\n        \"segmentType\": \"wall\",\n        \"layer\": \"wall\",\n        \"thickness\": 0.15,\n        \"mode\": \"fill\",\n        \"bufferStyle\": \"flat\",\n        \"bufferJoin\": \"mitered-union\",\n        \"lineStyle\": \"solid\",\n        \"objectId\": \"wall-with-math\",\n        \"objectPath\": \"Objects/Architectural/wall.json\",\n        \"params\": {\n          \"fitMode\": \"Fill segment\",\n          \"align\": \"Centre\",\n          \"mode\": \"Buffered\",\n          \"thickness\": 0.15,\n          \"height\": 2.7,\n          \"base\": 0,\n          \"hatch\": true\n        }\n      }\n    },\n    \"points\": {},\n    \"space\": {}\n  },\n  \"pixelsPerMeter\": 50,\n  \"libraryPath\": \"https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library\",\n  \"decimals\": 4\n}",
+          "nodeLabel": "Measure + encode the plan"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_box",
+              "kind": "polygon",
+              "name": "Wall rectangles",
+              "color": "#0d9488",
+              "layer": "Detected · Wall boxes",
+              "lineStyle": "dashed",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_seg",
+              "kind": "stroke",
+              "name": "Wall bands (centre line × thickness)",
+              "color": "#0f766e",
+              "layer": "Detected · Wall bands",
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "width": 0.15,
+              "show": true
+            }
+          ],
+          "nodeLabel": "Rectangles + wall bands"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 620,
+        "y": 240
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Walls — detected"
+            },
+            {
+              "id": "s2",
+              "label": "Walls — kept (≥ min length)"
+            },
+            {
+              "id": "s3",
+              "label": "Dropped as too short"
+            },
+            {
+              "id": "s4",
+              "label": "Unclaimed labels (rename the row if non-empty)"
+            },
+            {
+              "id": "s5",
+              "label": "Suspect — near-square box, thickness overstated"
+            },
+            {
+              "id": "s6",
+              "label": "Wall rectangles [x, y, box], per corner"
+            },
+            {
+              "id": "s7",
+              "label": "Centre-line segment [x1, y1, x2, y2, w]"
+            },
+            {
+              "id": "s8",
+              "label": "Width (m, per wall — thickness off the drawing)"
+            },
+            {
+              "id": "s9",
+              "label": "Length (m, per wall)"
+            },
+            {
+              "id": "s10",
+              "label": "Total wall run (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Plan JSON — wall segments + wall.json"
+            }
+          ],
+          "nodeLabel": "What was found"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geom_props",
+      "source": "geom",
+      "sourceHandle": null,
+      "target": "props",
+      "targetHandle": null
+    },
+    {
+      "id": "e2_props_detect",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detect",
+      "targetHandle": null
+    },
+    {
+      "id": "e3_props_minlen",
+      "source": "props",
+      "sourceHandle": "val-minLen",
+      "target": "math",
+      "targetHandle": "valin-minLen"
+    },
+    {
+      "id": "e4_props_bandth",
+      "source": "props",
+      "sourceHandle": "val-bandTh",
+      "target": "math",
+      "targetHandle": "valin-bandTh"
+    },
+    {
+      "id": "e5_props_aspect",
+      "source": "props",
+      "sourceHandle": "val-minAspect",
+      "target": "math",
+      "targetHandle": "valin-minAspect"
+    },
+    {
+      "id": "e6_props_ppm",
+      "source": "props",
+      "sourceHandle": "val-ppm",
+      "target": "math",
+      "targetHandle": "valin-ppm"
+    },
+    {
+      "id": "e7_detect_math",
+      "source": "detect",
+      "sourceHandle": "val-o_wall_corners",
+      "target": "math",
+      "targetHandle": "valin-A"
+    },
+    {
+      "id": "e8_math_rect",
+      "source": "math",
+      "sourceHandle": "val-Rect",
+      "target": "render",
+      "targetHandle": "valin-pr_box"
+    },
+    {
+      "id": "e9_math_seg",
+      "source": "math",
+      "sourceHandle": "val-Seg",
+      "target": "render",
+      "targetHandle": "valin-pr_seg"
+    },
+    {
+      "id": "e10_found",
+      "source": "math",
+      "sourceHandle": "val-Found",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e11_kept",
+      "source": "math",
+      "sourceHandle": "val-Kept",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e12_dropped",
+      "source": "math",
+      "sourceHandle": "val-Dropped",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e13_unmatched",
+      "source": "detect",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e14_suspect",
+      "source": "math",
+      "sourceHandle": "val-Suspect",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e15_rect",
+      "source": "math",
+      "sourceHandle": "val-Rect",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e16_seg",
+      "source": "math",
+      "sourceHandle": "val-Seg",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e17_width",
+      "source": "math",
+      "sourceHandle": "val-Wid",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e18_length",
+      "source": "math",
+      "sourceHandle": "val-Len",
+      "target": "metrics",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e19_total",
+      "source": "math",
+      "sourceHandle": "val-TotalLen",
+      "target": "metrics",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e20_planjson",
+      "source": "math",
+      "sourceHandle": "val-json",
+      "target": "metrics",
+      "targetHandle": "valin-s11"
+    }
+  ]
+}

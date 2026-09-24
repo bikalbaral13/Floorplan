@@ -1,0 +1,640 @@
+{
+  "version": 1,
+  "id": "led-strip-with-math",
+  "title": "LED Strip — one Math Engine, aluminium channel, tape and throw direction",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "LED Strip",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 12h18",
+        "M5 9v6",
+        "M9 9v6",
+        "M13 9v6",
+        "M17 9v6",
+        "M21 9v6"
+      ]
+    }
+  },
+  "description": "A parametric LED STRIP on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT and set Fit to host to Exact and it takes the full run. This is the object behind every concealed line in the bedroom plan: cove band, headboard halo, under the bedside tables, behind the TV and under the console — five uses, one body.\n\nTHROW IS THE SECTION, NOT A SETTING. Up sits the tape on the channel base and opens upward, Down hangs the channel and puts the tape at its ceiling, and Wash turns the whole section on its side so the opening faces along the wall. One flag each, and every later dimension is written in terms of them.\n\nRECESSED VERSUS SURFACE IS ONE LINE. `_rec` moves the channel's base plane relative to the mount elevation; nothing else in the body knows the difference.\n\nTHE CHANNEL IS A BASE AND TWO WALLS, not a filled bar, so it reads as an extrusion in section and the tape sits inside something.\n\nKELVIN AND OUTPUT ARE REPORTED, NOT DRAWN. They are real parameters carried to the Output Metrics node — `lumens = intensity × length` and a load at 90 lm/W — because a render needs them and geometry cannot express them.\n\nDIMENSIONS AT THE DEFAULTS: a 3.00 m run at 2.972 m, 24 × 15 mm recessed channel, 2700 K, 2700 lm, 30 W.\n\nWHAT THIS CANNOT DO. It is straight — a run around a corner is two strips. There is no emissive material and no light is cast; the renderer decides that. The diffuser is not modelled.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Run length",
+              "type": "range",
+              "value": 3,
+              "min": 0.1,
+              "max": 20,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "mountHeight",
+              "name": "Mount elevation",
+              "type": "range",
+              "value": 2.972,
+              "min": 0,
+              "max": 6,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "stripWidth",
+              "name": "Tape width",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "stripThk",
+              "name": "Tape thickness",
+              "type": "range",
+              "value": 0.004,
+              "min": 0.001,
+              "max": 0.02,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "channel",
+              "name": "Channel",
+              "type": "select",
+              "value": "Recessed",
+              "options": [
+                "None",
+                "Surface",
+                "Recessed"
+              ]
+            },
+            {
+              "id": "channelWidth",
+              "name": "Channel width",
+              "type": "range",
+              "value": 0.024,
+              "min": 0.008,
+              "max": 0.08,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "channelDepth",
+              "name": "Channel depth",
+              "type": "range",
+              "value": 0.015,
+              "min": 0.004,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "direction",
+              "name": "Throw",
+              "type": "select",
+              "value": "Up",
+              "options": [
+                "Up",
+                "Down",
+                "Wash"
+              ]
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 2700,
+              "min": 2200,
+              "max": 6500,
+              "step": 100,
+              "options": []
+            },
+            {
+              "id": "lumensPerMetre",
+              "name": "Output per metre",
+              "type": "range",
+              "value": 900,
+              "min": 100,
+              "max": 3000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "anodised aluminium channel, opal diffuser, 2700K warm white tape",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "concealed linear light, warm glow, no visible source, contemporary",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "LED Strip maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_sw = stripWidth * _s\n_st = stripThk * _s\n_cw = max(channelWidth * _s, _sw + 0.002)\n_cd = channelDepth * _s\n_mz = mountHeight\n_bodyL = _Ln\n_bodyW = _cw\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n# Throw direction is the ONLY thing that decides which way the section is built. Up sits the tape\n# on the channel base and opens to the sky; Down hangs it under; Wash turns the section on its side.\n_up = direction == 'Up'\n_dn = direction == 'Down'\n_wash = direction == 'Wash'\n# Recessed buries the channel above the mount plane, Surface hangs it below it.\n_rec = channel == 'Recessed'\n_none = channel == 'None'\n_sgn = _dn ? -1 : 1\n_cz0 = _rec ? (_dn ? _mz : _mz) : (_dn ? _mz - _cd : _mz)\n_cz1 = _cz0 + _cd\n_czA = _rec ? (_dn ? _mz : _mz) : (_dn ? _mz - _cd : _mz)\n# Tape plane — on the channel base, facing the opening.\n_tz0 = _up ? _czA : (_dn ? (_czA + _cd - _st) : _czA)\n_tz1 = _tz0 + _st\n_twz0 = _mz\n_twz1 = _mz + _sw\n_tv0 = 0 - _sw / 2\n_tv1 = _sw / 2\n_TAPEud = hcat(_u0, _tv0, _u1, _tv0, _u1, _tv1, _u0, _tv1, _tz0, _tz1, 2)\n_TAPEw = hcat(_u0, 0, _u1, 0, _u1, _st, _u0, _st, _twz0, _twz1, 2)\n_TAPE = _wash ? _TAPEw : _TAPEud\n# Channel — a base plate and two walls, so it reads as an extrusion and not as a filled bar.\n_wt = max(0.0015, _cw * 0.12)\n_cv0 = 0 - _cw / 2\n_cv1 = _cw / 2\n_CBASE = hcat(_u0, _cv0, _u1, _cv0, _u1, _cv1, _u0, _cv1, _up ? _czA : (_czA + _cd - _wt), _up ? (_czA + _wt) : (_czA + _cd), 1)\n_CW1 = hcat(_u0, _cv0, _u1, _cv0, _u1, _cv0 + _wt, _u0, _cv0 + _wt, _czA, _czA + _cd, 1)\n_CW2 = hcat(_u0, _cv1 - _wt, _u1, _cv1 - _wt, _u1, _cv1, _u0, _cv1, _czA, _czA + _cd, 1)\n_CBASEw = hcat(_u0, 0, _u1, 0, _u1, _wt, _u0, _wt, _mz, _mz + _cw, 1)\n_CW1w = hcat(_u0, 0, _u1, 0, _u1, _cd, _u0, _cd, _mz, _mz + _wt, 1)\n_CW2w = hcat(_u0, 0, _u1, 0, _u1, _cd, _u0, _cd, _mz + _cw - _wt, _mz + _cw, 1)\n_CHud = vcat(_CBASE, _CW1, _CW2)\n_CHw = vcat(_CBASEw, _CW1w, _CW2w)\n_CHr = _wash ? _CHw : _CHud\n_CH = _none ? zeros(0, 11) : _CHr\nQ = vcat(_CH, _TAPE)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nChannel3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nTape3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nChannelPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nTapePlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\n# Metrics\nrunLength = _Ln\ncolourTemp = kelvin\nlumens = lumensPerMetre * _Ln\nloadWatts = lumensPerMetre * _Ln / 90\nmountElevation = _mz\nsectionWidth = _none ? _sw : _cw\nsectionDepth = _none ? _st : _cd\nthrowSign = _sgn\nrecessedFlag = _rec ? 1 : 0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Channel — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Tape — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Channel — plan"
+            },
+            {
+              "id": "s4",
+              "label": "Tape — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Run length (m)"
+            },
+            {
+              "id": "s6",
+              "label": "Colour temperature (K)"
+            },
+            {
+              "id": "s7",
+              "label": "Output (lm)"
+            },
+            {
+              "id": "s8",
+              "label": "Load (W)"
+            },
+            {
+              "id": "s9",
+              "label": "Mount elevation (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Section width (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Section depth (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Throw sign"
+            },
+            {
+              "id": "s13",
+              "label": "Recessed"
+            },
+            {
+              "id": "s14",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_ch",
+              "kind": "polygon",
+              "name": "Channel",
+              "color": "#a8a29e",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_tape",
+              "kind": "polygon",
+              "name": "Tape",
+              "color": "#fbbf24",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_ch",
+              "kind": "polyhedron",
+              "name": "Channel",
+              "color": "#a8a29e",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tape",
+              "kind": "polyhedron",
+              "name": "Tape",
+              "color": "#fde68a",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_mountHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mountHeight",
+      "targetHandle": "valin-mountHeight"
+    },
+    {
+      "id": "e_props_math_stripWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-stripWidth",
+      "targetHandle": "valin-stripWidth"
+    },
+    {
+      "id": "e_props_math_stripThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-stripThk",
+      "targetHandle": "valin-stripThk"
+    },
+    {
+      "id": "e_props_math_channel",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-channel",
+      "targetHandle": "valin-channel"
+    },
+    {
+      "id": "e_props_math_channelWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-channelWidth",
+      "targetHandle": "valin-channelWidth"
+    },
+    {
+      "id": "e_props_math_channelDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-channelDepth",
+      "targetHandle": "valin-channelDepth"
+    },
+    {
+      "id": "e_props_math_direction",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-direction",
+      "targetHandle": "valin-direction"
+    },
+    {
+      "id": "e_props_math_kelvin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-kelvin",
+      "targetHandle": "valin-kelvin"
+    },
+    {
+      "id": "e_props_math_lumensPerMetre",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lumensPerMetre",
+      "targetHandle": "valin-lumensPerMetre"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Channel3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Tape3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ChannelPlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-TapePlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-runLength",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-colourTemp",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lumens",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-loadWatts",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mountElevation",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sectionWidth",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sectionDepth",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-throwSign",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-recessedFlag",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_out_r2d_p2_ch",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_ch"
+    },
+    {
+      "id": "e_out_r2d_p2_tape",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_tape"
+    },
+    {
+      "id": "e_out_r3d_p3_ch",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_ch"
+    },
+    {
+      "id": "e_out_r3d_p3_tape",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_tape"
+    }
+  ]
+}

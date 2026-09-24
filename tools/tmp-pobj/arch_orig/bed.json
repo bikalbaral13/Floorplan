@@ -1,0 +1,765 @@
+{
+  "version": 1,
+  "id": "bed-with-math",
+  "title": "Bed — one Math Engine, divan, mattress, boards and pillows",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Bed",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 18v-6a2 2 0 012-2h14a2 2 0 012 2v6",
+        "M3 18h18",
+        "M3 14h18",
+        "M6 10V7a1 1 0 011-1h3a1 1 0 011 1v3",
+        "M13 10V7a1 1 0 011-1h3a1 1 0 011 1v3"
+      ]
+    }
+  },
+  "description": "A parametric BED on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE, A SEGMENT OR A SPACE. On a node it stands where the node is; on a segment or a space the bed takes the host's own direction (a space uses its LONGEST edge), so a bed placed against a wall lies along it without a rotation being typed.\n\nWHAT IT BUILDS. Four legs, a divan base, a headboard — a footboard when asked — a mattress inset inside the boards, and any number of pillows laid across the head end. Every part is a QUAD swept from z0 to z1, and the whole assembly is ONE table of quads that the shared kernel turns into a face list in a single pass; adding a part is one more row and one more `vcat` operand.\n\nTHE PILLOW ROW IS ONE BROADCAST, not a loop: `(arange(n) + 0.5) * W / n - W/2` is every pillow's centre line at once, and the four corner columns follow from it, so 2 pillows and 6 pillows cost the same.\n\nWHY QUADS AND NOT BOXES. A quad prism takes four ARBITRARY plan corners, so the same six lines that build an axis-aligned divan also build a rotated or tapered part. Nothing in the kernel knows which it is.\n\nTHE PLAN IS DERIVED, NOT DRAWN AGAIN — the 2D outlines are the same quads with z dropped, so plan and model cannot disagree. Each part is its own 2D row because a grouped outline list is read EVEN-ODD: the mattress sits INSIDE the divan outline, and in one row that would void it into a hole instead of drawing over it.\n\nDIMENSIONS AT THE DEFAULTS: 2.00 × 1.50 m, 1.05 m to the top of the headboard, mattress top at 0.62 m, 2.83 m² of sleeping surface.\n\nWHAT THIS CANNOT DO. The frame is a divan — a slatted or four-poster bed is a different body, not a different slider. Nothing is mitred: parts interpenetrate at the joints rather than meeting cleanly. Pillows are rectangular blocks, not soft bodies.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 2,
+              "min": 1.2,
+              "max": 2.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 1.5,
+              "min": 0.8,
+              "max": 2.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "mattressThk",
+              "name": "Mattress thickness",
+              "type": "range",
+              "value": 0.24,
+              "min": 0.1,
+              "max": 0.45,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "baseHeight",
+              "name": "Divan base height",
+              "type": "range",
+              "value": 0.28,
+              "min": 0.1,
+              "max": 0.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "legHeight",
+              "name": "Leg height",
+              "type": "range",
+              "value": 0.1,
+              "min": 0,
+              "max": 0.35,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "headboardHeight",
+              "name": "Headboard height",
+              "type": "range",
+              "value": 0.95,
+              "min": 0.2,
+              "max": 1.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "boardThk",
+              "name": "Board thickness",
+              "type": "range",
+              "value": 0.06,
+              "min": 0.02,
+              "max": 0.15,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "footboard",
+              "name": "Footboard",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "footboardHeight",
+              "name": "Footboard height",
+              "type": "range",
+              "value": 0.45,
+              "min": 0.1,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "pillows",
+              "name": "Pillows",
+              "type": "range",
+              "value": 2,
+              "min": 0,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "pillowLength",
+              "name": "Pillow length",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.3,
+              "max": 1.1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "pillowDepth",
+              "name": "Pillow depth",
+              "type": "range",
+              "value": 0.4,
+              "min": 0.2,
+              "max": 0.7,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "pillowThk",
+              "name": "Pillow thickness",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.05,
+              "max": 0.3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Bed maths",
+          "expr": "# Natural size — the fit scale is measured against the unscaled length\n_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n# Scaled dimensions\n_Ln = length * _s\n_Wd = width * _s\n_legH = legHeight * _s\n_baseH = baseHeight * _s\n_matT = mattressThk * _s\n_bdT = boardThk * _s\n_hbH = headboardHeight * _s\n_fbH = footboardHeight * _s\n_pilL = pillowLength * _s\n_pilD = pillowDepth * _s\n_pilT = pillowThk * _s\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_baseTop = _legH + _baseH\n_matTop = _baseTop + _matT\n_hasFb = footboard > 0\n_bodyL = _Ln\n_bodyW = _Wd\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n# Parts — legs, divan, boards, mattress, pillows\n_lg = 0.07 * _s\n_lgi = 0.015 * _s\n_L1 = hcat(_u0 + _lgi, _v0 + _lgi, _u0 + _lgi + _lg, _v0 + _lgi, _u0 + _lgi + _lg, _v0 + _lgi + _lg, _u0 + _lgi, _v0 + _lgi + _lg, 0, _legH, 5)\n_L2 = hcat(_u1 - _lgi - _lg, _v0 + _lgi, _u1 - _lgi, _v0 + _lgi, _u1 - _lgi, _v0 + _lgi + _lg, _u1 - _lgi - _lg, _v0 + _lgi + _lg, 0, _legH, 5)\n_L3 = hcat(_u1 - _lgi - _lg, _v1 - _lgi - _lg, _u1 - _lgi, _v1 - _lgi - _lg, _u1 - _lgi, _v1 - _lgi, _u1 - _lgi - _lg, _v1 - _lgi, 0, _legH, 5)\n_L4 = hcat(_u0 + _lgi, _v1 - _lgi - _lg, _u0 + _lgi + _lg, _v1 - _lgi - _lg, _u0 + _lgi + _lg, _v1 - _lgi, _u0 + _lgi, _v1 - _lgi, 0, _legH, 5)\n_BASE = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _legH, _baseTop, 1)\n_HB = hcat(_u0, _v0, _u0 + _bdT, _v0, _u0 + _bdT, _v1, _u0, _v1, _legH, _legH + _hbH, 3)\n_FBr = hcat(_u1 - _bdT, _v0, _u1, _v0, _u1, _v1, _u1 - _bdT, _v1, _legH, _legH + _fbH, 3)\n_FB = _hasFb ? _FBr : zeros(0, 11)\n_mu1 = _u1 - (_hasFb ? _bdT : 0)\n_MAT = hcat(_u0 + _bdT, _v0 + 0.02 * _s, _mu1, _v0 + 0.02 * _s, _mu1, _v1 - 0.02 * _s, _u0 + _bdT, _v1 - 0.02 * _s, _baseTop, _matTop, 2)\n# Pillows — one row per pillow, spread across the width in a single broadcast\n_npil = max(0, round(pillows))\n_pvc = (arange(_npil) + 0.5) * _Wd / max(1, _npil) - _Wd / 2\n_pu0 = fill(_npil, 1, _u0 + _bdT + 0.04 * _s)\n_pu1 = _pu0 + _pilD\n_pva = _pvc - _pilL / 2\n_pvb = _pvc + _pilL / 2\n_PIL = hcat(_pu0, _pva, _pu1, _pva, _pu1, _pvb, _pu0, _pvb, fill(_npil,1,_matTop), fill(_npil,1,_matTop + _pilT), fill(_npil,1,4))\nQ = vcat(_L1, _L2, _L3, _L4, _BASE, _HB, _FB, _MAT, _PIL)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nDivan3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nMattress3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nBoards3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nPillows3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nLegs3D = sub(compress(_W, eq(col(_W,4), 5)), 0, 0, _nw, 4)\nDivanPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nMattressPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nBoardsPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nPillowsPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _legH + max(_hbH, _baseH + _matT)\nmattressTop = _matTop\nsleepArea = (_mu1 - _u0 - _bdT) * (_Wd - 0.04 * _s)\nfootprint = _Ln * _Wd"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Divan — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Mattress — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Head / foot board — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Pillows — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Legs — solid"
+            },
+            {
+              "id": "s6",
+              "label": "Divan — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Mattress — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Boards — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Pillows — plan"
+            },
+            {
+              "id": "s10",
+              "label": "Overall length (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Overall width (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Overall height (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Mattress top (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Sleeping area (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s16",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_divan",
+              "kind": "polygon",
+              "name": "Divan",
+              "color": "#78716c",
+              "layer": "Bed",
+              "show": true
+            },
+            {
+              "id": "p2_mat",
+              "kind": "polygon",
+              "name": "Mattress",
+              "color": "#e7e5e4",
+              "layer": "Bed",
+              "show": true
+            },
+            {
+              "id": "p2_boards",
+              "kind": "polygon",
+              "name": "Head / foot board",
+              "color": "#57534e",
+              "layer": "Bed",
+              "show": true
+            },
+            {
+              "id": "p2_pillows",
+              "kind": "polygon",
+              "name": "Pillows",
+              "color": "#f5f5f4",
+              "layer": "Bed",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_divan",
+              "kind": "polyhedron",
+              "name": "Divan",
+              "color": "#78716c",
+              "layer": "Bed",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_mat",
+              "kind": "polyhedron",
+              "name": "Mattress",
+              "color": "#e7e5e4",
+              "layer": "Bed",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_boards",
+              "kind": "polyhedron",
+              "name": "Head / foot board",
+              "color": "#57534e",
+              "layer": "Bed",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_pillows",
+              "kind": "polyhedron",
+              "name": "Pillows",
+              "color": "#f5f5f4",
+              "layer": "Bed",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_legs",
+              "kind": "polyhedron",
+              "name": "Legs",
+              "color": "#44403c",
+              "layer": "Bed",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_width",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e_props_math_mattressThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mattressThk",
+      "targetHandle": "valin-mattressThk"
+    },
+    {
+      "id": "e_props_math_baseHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-baseHeight",
+      "targetHandle": "valin-baseHeight"
+    },
+    {
+      "id": "e_props_math_legHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-legHeight",
+      "targetHandle": "valin-legHeight"
+    },
+    {
+      "id": "e_props_math_headboardHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-headboardHeight",
+      "targetHandle": "valin-headboardHeight"
+    },
+    {
+      "id": "e_props_math_boardThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-boardThk",
+      "targetHandle": "valin-boardThk"
+    },
+    {
+      "id": "e_props_math_footboard",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-footboard",
+      "targetHandle": "valin-footboard"
+    },
+    {
+      "id": "e_props_math_footboardHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-footboardHeight",
+      "targetHandle": "valin-footboardHeight"
+    },
+    {
+      "id": "e_props_math_pillows",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pillows",
+      "targetHandle": "valin-pillows"
+    },
+    {
+      "id": "e_props_math_pillowLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pillowLength",
+      "targetHandle": "valin-pillowLength"
+    },
+    {
+      "id": "e_props_math_pillowDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pillowDepth",
+      "targetHandle": "valin-pillowDepth"
+    },
+    {
+      "id": "e_props_math_pillowThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pillowThk",
+      "targetHandle": "valin-pillowThk"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Divan3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Mattress3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Boards3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Pillows3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Legs3D",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-DivanPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-MattressPlan",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BoardsPlan",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-PillowsPlan",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallLength",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallWidth",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallHeight",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mattressTop",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sleepArea",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-footprint",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_out_r2d_p2_divan",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_divan"
+    },
+    {
+      "id": "e_out_r2d_p2_mat",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p2_mat"
+    },
+    {
+      "id": "e_out_r2d_p2_boards",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p2_boards"
+    },
+    {
+      "id": "e_out_r2d_p2_pillows",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s9",
+      "targetHandle": "valin-p2_pillows"
+    },
+    {
+      "id": "e_out_r3d_p3_divan",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_divan"
+    },
+    {
+      "id": "e_out_r3d_p3_mat",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_mat"
+    },
+    {
+      "id": "e_out_r3d_p3_boards",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_boards"
+    },
+    {
+      "id": "e_out_r3d_p3_pillows",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_pillows"
+    },
+    {
+      "id": "e_out_r3d_p3_legs",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_legs"
+    }
+  ]
+}

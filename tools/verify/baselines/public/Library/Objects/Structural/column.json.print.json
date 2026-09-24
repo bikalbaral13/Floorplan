@@ -1,0 +1,172 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 3,
+          "vertices": 12,
+          "area": 0.1712,
+          "bbox": [
+            -0.28,
+            -0.28,
+            0.28,
+            0.28
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "d8cacf6613e29213"
+      },
+      "solids": {
+        "count": 1,
+        "volume": 0.48,
+        "hash": "af1f083a27927d4a"
+      },
+      "metrics": [
+        {
+          "key": "sectionArea",
+          "name": "Section area (m²)",
+          "value": "0.16"
+        },
+        {
+          "key": "perimeter",
+          "name": "Perimeter (m)",
+          "value": "1.6"
+        },
+        {
+          "key": "volume",
+          "name": "Concrete volume (m³)",
+          "value": "0.48"
+        },
+        {
+          "key": "formworkArea",
+          "name": "Formwork area (m²)",
+          "value": "4.8"
+        },
+        {
+          "key": "selfWeightkN",
+          "name": "Self weight (kN)",
+          "value": "12"
+        },
+        {
+          "key": "columnHeight",
+          "name": "Height (m)",
+          "value": "3"
+        },
+        {
+          "key": "topElevation",
+          "name": "Top elevation (m)",
+          "value": "3"
+        },
+        {
+          "key": "leastDim",
+          "name": "Least dimension (m)",
+          "value": "0.4"
+        },
+        {
+          "key": "slenderness",
+          "name": "Slenderness (h / least dim)",
+          "value": "7.5"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 3,
+          "vertices": 12,
+          "area": 0.1712,
+          "bbox": [
+            -0.28,
+            -0.28,
+            0.28,
+            0.28
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "d8cacf6613e29213"
+      },
+      "solids": {
+        "count": 1,
+        "volume": 0.48,
+        "hash": "af1f083a27927d4a"
+      },
+      "metrics": [
+        {
+          "key": "sectionArea",
+          "name": "Section area (m²)",
+          "value": "0.16"
+        },
+        {
+          "key": "perimeter",
+          "name": "Perimeter (m)",
+          "value": "1.6"
+        },
+        {
+          "key": "volume",
+          "name": "Concrete volume (m³)",
+          "value": "0.48"
+        },
+        {
+          "key": "formworkArea",
+          "name": "Formwork area (m²)",
+          "value": "4.8"
+        },
+        {
+          "key": "selfWeightkN",
+          "name": "Self weight (kN)",
+          "value": "12"
+        },
+        {
+          "key": "columnHeight",
+          "name": "Height (m)",
+          "value": "3"
+        },
+        {
+          "key": "topElevation",
+          "name": "Top elevation (m)",
+          "value": "3"
+        },
+        {
+          "key": "leastDim",
+          "name": "Least dimension (m)",
+          "value": "0.4"
+        },
+        {
+          "key": "slenderness",
+          "name": "Slenderness (h / least dim)",
+          "value": "7.5"
+        }
+      ]
+    }
+  }
+}

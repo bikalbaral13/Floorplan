@@ -1,0 +1,764 @@
+{
+  "version": 1,
+  "id": "detect-all",
+  "title": "Detect all",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "image",
+    "name": "Detect all",
+    "icon": {
+      "paths": [
+        "M4 4h7v7H4z",
+        "M13 4h7v7h-7z",
+        "M4 13h7v7H4z",
+        "M13 13h7v7h-7z"
+      ]
+    },
+    "units": "m"
+  },
+  "description": "Read the WHOLE drawing in one pipeline — doors, windows, rooms, the boundary and the furniture — and hand the canvas ONE plan document carrying all four kinds of element.\n\n  Geometry → Input Properties → Object Detection ×2 → Math Engine → Output Metrics (+ 2D Render)\n\nWHAT IT REPLACES. detect_doors, detect_windows, detect_rooms, detect_boundary and detect_objects each answer one question and each emit their own document, so building a model from all five means five runs and five imports that know nothing about each other. This runs the same maths — family by family, unchanged — through ONE encoder, so the openings, the furniture, the rooms and the boundary land together, sharing a node table. A door that ends where a room corner sits reuses that node instead of stacking two on the same point.\n\nTWO DETECTION CALLS, NOT FIVE AND NOT ONE. Row names ARE the prompt and every row of a node goes into a single call, so five nodes would be five billed passes over the same picture. One node would be sixteen rows in one prompt, which dilutes the architectural ask with the furniture ask. Two is the split that matches the question being asked: **Structure** (Door, Window, Room, Building boundary) and **Objects** (ten named classes plus two broad rows that only widen the ask). Add a row to either and it costs nothing extra.\n\nRUN ONCE. The Input Properties node carries a **Run** button that presses Detect on BOTH detection nodes in order, and reports progress as one line. The brief is where the intent lives — \"read this drawing\" — and pressing two Detect buttons in the right order is bookkeeping, not a decision. The same button appears in the canvas **Properties tab**, so the pipeline can be driven without opening the flow. A detection node with a blank API key falls back to the app's own Gemini key (Preferences ▸ Chat AI), so one key drives both nodes.\n\nWHAT THE MATHS PUBLISHES, family by family:\n• DOORS and WINDOWS — the mid-line of each box's longer axis, as a centre-line segment plus a width. Doors carry type code 1 and windows code 2, which index the encode map's `segments` section in key order, so one segment stream carries both families and the map decides which object each row attaches. Wall depth defaults to a fixed figure for doors (their box is the leaf plus its swing arc, so the short side is not the wall) and to the box's own reading for windows.\n• ROOMS — kept on AREA, then the rectangle is rebuilt from the extents rather than passed through, so the outline drawn, the size reported and the space written are one rectangle.\n• BOUNDARY — the envelope of every boundary box, so a fragmented reading only sharpens the four numbers, plus an outward margin.\n• OBJECTS — the quad's OWN two edges rather than the min/max of its corners, so a tilted detection keeps its true length, breadth and rotation; rotation is written onto each object, so a bed detected at 30° imports at 30°.\n\nONE DOCUMENT, FOUR KINDS OF ELEMENT. The Math Engine's encode block runs Canvas Encoder after the formulas and publishes `val-json`:\n• SEGMENTS — each opening centre line, marked as an opening, carrying door.json or window.json by its type code.\n• NODES — one per kept object, carrying its class's library object with the detected rotation. A code the map has no entry for falls back to the map's FIRST entry, \"other\", which points at bed.json — so nothing detected goes unplaced, whether or not a named row claimed it.\n• SPACES — the rooms take groups 0…n−1 and the boundary takes group n in one [x, y, group] matrix, so the encoder writes n+1 spaces. They share ONE space object, because the encoder's `space` section is a single entry: rooms AND the boundary both come back carrying room.json. If you need the boundary to read differently from the rooms, give it its own identifyingType on canvas afterwards, or run detect_boundary separately.\n\nSHOW ON CANVAS. The plan JSON lands in the last Output Metrics slot, and that node's **Show in canvas** button imports it by the same path File ▸ Import takes. The same button appears in the canvas **Metrics tab**. Nothing reaches the canvas until you press it — the flow only ever computes the document.\n\nWHAT THE STATIC MAPS CANNOT VARY. Each map is one entry per class, so: every door imports hinge LEFT, swing LEFT (a box has no handedness in it); every bed imports at bed.json's own default size, since the measured length and breadth are reported rather than applied; and every space carries the same room object. Position and rotation come from the detection; size and handedness come from the object.\n\nHOW TO RUN: 1) select the drawing on the canvas — the Geometry node binds to it; 2) make sure a Gemini key is set, on the detection nodes or in Preferences ▸ Chat AI; 3) press **Run** on the Input Properties node (or in the Properties tab). Detect bakes its result into each node — nothing detects on its own and re-running the flow does not re-detect, so press Run again after changing the image. Max items is PER ROW, so the Objects node's twelve rows at 12 is a ceiling of 144, not 12. Check both \"Unclaimed labels\" slots: anything listed there was seen but claimed by no row — objects still get placed with the default attachment, but an unclaimed door or room is lost, so rename the row to match.\n\n---\nHOSTED ON AN IMAGE. This file now carries an `object` block with `hostKind: \"image\"`, so it lists as a parametric object and attaches to an imported picture from the Properties tab.\n\nWHAT STILL ONLY WORKS IN THE FLOW EDITOR: an attached object is resolved by the spine runner, which evaluates Input Properties, the Math Engine and the Render rows and NOTHING else. It does not run the Object Detection node, and it reads the Math Engine's `decode` block but never its `encode`. Detection is also an async, billed call that has to be pressed and baked — there is no button on an attached object, and an object re-resolves on every parameter change. So attached, this reports nothing until detect-and-bake exists for attachments. Open it in the Flow editor to actually run it.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -900,
+        "y": 40
+      },
+      "data": {
+        "tool": "image",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "pooling": "ink",
+          "nodeLabel": "Geometry — the drawing"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -600,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "doorMinW",
+              "name": "Door — min width (m)",
+              "type": "range",
+              "value": 0.6,
+              "min": 0,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "doorDepth",
+              "name": "Door — wall depth (m, 0 = box short side)",
+              "type": "range",
+              "value": 0.12,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "winMinW",
+              "name": "Window — min length (m)",
+              "type": "range",
+              "value": 0.4,
+              "min": 0,
+              "max": 3,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "winDepth",
+              "name": "Window — wall depth (m, 0 = box short side)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "roomMinArea",
+              "name": "Room — min area (m²)",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 20,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "objMinArea",
+              "name": "Object — min footprint (m²)",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "tol",
+              "name": "Object class-match tolerance (m)",
+              "type": "range",
+              "value": 0.02,
+              "min": 0.001,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "margin",
+              "name": "Boundary margin outward (m)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 10,
+              "step": 0.1,
+              "options": []
+            },
+            {
+              "id": "ppm",
+              "name": "Pixels per metre (plan JSON)",
+              "type": "range",
+              "value": 50,
+              "min": 10,
+              "max": 200,
+              "step": 1,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Tuning — press Run"
+        }
+      }
+    },
+    {
+      "id": "detA",
+      "position": {
+        "x": -260,
+        "y": -140
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 24,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_door",
+              "name": "Door"
+            },
+            {
+              "id": "o_win",
+              "name": "Window"
+            },
+            {
+              "id": "o_room",
+              "name": "Room"
+            },
+            {
+              "id": "o_bnd",
+              "name": "Building boundary"
+            }
+          ],
+          "nodeLabel": "Structure — doors, windows, rooms, boundary"
+        }
+      }
+    },
+    {
+      "id": "detB",
+      "position": {
+        "x": -260,
+        "y": 220
+      },
+      "data": {
+        "tool": "object-detection",
+        "params": {
+          "api_key": "",
+          "model": "gemini-robotics-er-2-preview",
+          "targets": "",
+          "maxItems": 12,
+          "shape": "polygon",
+          "objects": [
+            {
+              "id": "o_bed",
+              "name": "Bed"
+            },
+            {
+              "id": "o_sofa",
+              "name": "Sofa"
+            },
+            {
+              "id": "o_chair",
+              "name": "Chair"
+            },
+            {
+              "id": "o_table",
+              "name": "Table"
+            },
+            {
+              "id": "o_desk",
+              "name": "Desk"
+            },
+            {
+              "id": "o_wardrobe",
+              "name": "Wardrobe"
+            },
+            {
+              "id": "o_cabinet",
+              "name": "Cabinet"
+            },
+            {
+              "id": "o_toilet",
+              "name": "Toilet"
+            },
+            {
+              "id": "o_washbasin",
+              "name": "Washbasin"
+            },
+            {
+              "id": "o_refrigerator",
+              "name": "Refrigerator"
+            },
+            {
+              "id": "o_furniture",
+              "name": "Furniture"
+            },
+            {
+              "id": "o_appliance",
+              "name": "Appliance"
+            }
+          ],
+          "nodeLabel": "Objects — furniture and fixtures"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": 160,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Everything → one plan document",
+          "expr": "# ONE READING OF THE WHOLE DRAWING.\n# Five families arrive as `corners` matrices - one row per box, [x0,y0,x1,y1,x2,y2,x3,y3] in metres -\n# and leave as ONE plan document: openings as segments, furniture as nodes, rooms and the boundary as\n# spaces. Each family's maths is the one its own flow uses, unchanged; what is new is that they share\n# an encoder, so the four kinds of element land in a single import instead of four.\n\n# DOORS - box to centre line\n_DX = hcat(hcat(col(D,0), col(D,2)), hcat(col(D,4), col(D,6)))\n_DY = hcat(hcat(col(D,1), col(D,3)), hcat(col(D,5), col(D,7)))\n_Dx0 = min(_DX, 'rows')\n_Dx1 = max(_DX, 'rows')\n_Dy0 = min(_DY, 'rows')\n_Dy1 = max(_DY, 'rows')\n_Dcx = (_Dx0 + _Dx1) / 2\n_Dcy = (_Dy0 + _Dy1) / 2\n_Dw = gt(_Dx1 - _Dx0, _Dy1 - _Dy0)\n_DS = hcat(where(_Dw, _Dx0, _Dcx), where(_Dw, _Dcy, _Dy0))\n_DE = hcat(where(_Dw, _Dx1, _Dcx), where(_Dw, _Dcy, _Dy1))\n_DT = where(_Dw, _Dy1 - _Dy0, _Dx1 - _Dx0)\n_Dk = ge(len(_DE - _DS), doorMinW)\nDS = compress(_DS, _Dk)\nDE = compress(_DE, _Dk)\n_DTh = compress(_DT, _Dk)\nDLen = len(DE - DS)\nDWid = doorDepth > 0 ? _DTh * 0 + doorDepth : _DTh\nDK = DWid * 0 + 1\nDN = rows(DS)\n\n# WINDOWS - box to centre line\n_WX = hcat(hcat(col(W,0), col(W,2)), hcat(col(W,4), col(W,6)))\n_WY = hcat(hcat(col(W,1), col(W,3)), hcat(col(W,5), col(W,7)))\n_Wx0 = min(_WX, 'rows')\n_Wx1 = max(_WX, 'rows')\n_Wy0 = min(_WY, 'rows')\n_Wy1 = max(_WY, 'rows')\n_Wcx = (_Wx0 + _Wx1) / 2\n_Wcy = (_Wy0 + _Wy1) / 2\n_Ww = gt(_Wx1 - _Wx0, _Wy1 - _Wy0)\n_WS = hcat(where(_Ww, _Wx0, _Wcx), where(_Ww, _Wcy, _Wy0))\n_WE = hcat(where(_Ww, _Wx1, _Wcx), where(_Ww, _Wcy, _Wy1))\n_WT = where(_Ww, _Wy1 - _Wy0, _Wx1 - _Wx0)\n_Wk = ge(len(_WE - _WS), winMinW)\nWS = compress(_WS, _Wk)\nWE = compress(_WE, _Wk)\n_WTh = compress(_WT, _Wk)\nWLen = len(WE - WS)\nWWid = winDepth > 0 ? _WTh * 0 + winDepth : _WTh\nWK = WWid * 0 + 2\nWN = rows(WS)\n\n# OPENINGS, STACKED. Doors carry type code 1 and windows code 2, which index the encode map's\n# `segments` section in key order - so one segment stream carries both families and the map decides\n# which object each row attaches.\nSegA = vcat(DS, WS)\nSegB = vcat(DE, WE)\nSegTh = vcat(DWid, WWid)\nSegK = vcat(DK, WK)\nOpenSeg = hcat(hcat(SegA, SegB), SegTh)\n\n# ROOMS - a room is an area, so the keep test is on area. The rectangle is REBUILT from the extents\n# rather than passed through, so the outline drawn, the size reported and the space written are one\n# rectangle. reshape is row-major, so an N x 8 of ring-ordered pairs becomes 4N x 2 walking each room.\n_rX = hcat(hcat(col(R,0), col(R,2)), hcat(col(R,4), col(R,6)))\n_rY = hcat(hcat(col(R,1), col(R,3)), hcat(col(R,5), col(R,7)))\n_rx0 = min(_rX, 'rows')\n_rx1 = max(_rX, 'rows')\n_ry0 = min(_rY, 'rows')\n_ry1 = max(_rY, 'rows')\n_rk = ge((_rx1 - _rx0) * (_ry1 - _ry0), roomMinArea)\n_RX0 = compress(_rx0, _rk)\n_RX1 = compress(_rx1, _rk)\n_RY0 = compress(_ry0, _rk)\n_RY1 = compress(_ry1, _rk)\nRoomN = rows(_RX0)\nRoomLen = max(hcat(_RX1 - _RX0, _RY1 - _RY0), 'rows')\nRoomBrd = min(hcat(_RX1 - _RX0, _RY1 - _RY0), 'rows')\nRoomArea = (_RX1 - _RX0) * (_RY1 - _RY0)\nRoomTotal = sum(RoomArea)\n_rr = hcat(hcat(hcat(_RX0, _RY0), hcat(_RX1, _RY0)), hcat(hcat(_RX1, _RY1), hcat(_RX0, _RY1)))\nRoomRect = hcat(reshape(_rr, 4 * RoomN, 2), floor(arange(4 * RoomN) / 4))\n\n# BOUNDARY - the overall envelope of every boundary box, so a fragmented reading only makes the four\n# numbers better. Margin pushes all four sides outward.\n_bX = hcat(hcat(col(B,0), col(B,2)), hcat(col(B,4), col(B,6)))\n_bY = hcat(hcat(col(B,1), col(B,3)), hcat(col(B,5), col(B,7)))\nBX0 = min(_bX) - margin\nBX1 = max(_bX) + margin\nBY0 = min(_bY) - margin\nBY1 = max(_bY) + margin\nBndW = BX1 - BX0\nBndD = BY1 - BY0\nBndArea = BndW * BndD\nCoverage = BndArea > 0 ? RoomTotal / BndArea : 0\n_bi = arange(4)\nBndRect = hcat(where(eq(_bi,1) + eq(_bi,2), BX1, BX0), where(eq(_bi,2) + eq(_bi,3), BY1, BY0))\n\n# SPACES, STACKED. Rooms take groups 0..n-1 and the boundary takes group n, so one [x, y, group]\n# matrix carries both and the encoder writes n+1 spaces. They share ONE space object - the encoder's\n# `space` section is a single entry - which is why rooms and the boundary both come back as room.json.\nSpaces = vcat(RoomRect, hcat(BndRect, col(BndRect,0) * 0 + RoomN))\n\n# OBJECTS - the quad's own edges, not its bounding box, so a tilted detection keeps its true size and\n# its rotation. O is the AGGREGATE corners endpoint: everything the objects call returned, whether or\n# not a named row claimed it.\nObjCen = hcat((col(O,0) + col(O,2) + col(O,4) + col(O,6)) / 4, (col(O,1) + col(O,3) + col(O,5) + col(O,7)) / 4)\n_oe1 = hcat(col(O,2) - col(O,0), col(O,3) - col(O,1))\n_oe2 = hcat(col(O,6) - col(O,0), col(O,7) - col(O,1))\n_ol1 = len(_oe1)\n_ol2 = len(_oe2)\n_olong = gt(_ol1, _ol2)\n_oL = where(_olong, _ol1, _ol2)\n_oB = where(_olong, _ol2, _ol1)\n_oax = hcat(where(_olong, col(_oe1,0), col(_oe2,0)), where(_olong, col(_oe1,1), col(_oe2,1)))\n_oR = angle(_oax)\n_ok = ge(_oL * _oB, objMinArea)\nObjC = compress(ObjCen, _ok)\nObjLen = compress(_oL, _ok)\nObjBrd = compress(_oB, _ok)\nObjRot = compress(_oR, _ok)\nObjN = rows(ObjC)\n_okk = compress(O, _ok)\nObjBox = hcat(reshape(_okk, 4 * ObjN, 2), floor(arange(4 * ObjN) / 4))\nObjCtr = hcat(ObjC, col(ObjC,0) * 0 + 0.1)\n\n# Bed -> code 2\n_c1 = hcat((col(O1,0) + col(O1,2) + col(O1,4) + col(O1,6)) / 4, (col(O1,1) + col(O1,3) + col(O1,5) + col(O1,7)) / 4)\n_p1 = vcat(_c1, fill(1, 2, -1000000))\n_m1 = le(min((col(ObjC,0) - T(col(_p1,0)))^2 + (col(ObjC,1) - T(col(_p1,1)))^2, 'rows'), tol * tol)\n\n# Sofa -> code 3\n_c2 = hcat((col(O2,0) + col(O2,2) + col(O2,4) + col(O2,6)) / 4, (col(O2,1) + col(O2,3) + col(O2,5) + col(O2,7)) / 4)\n_p2 = vcat(_c2, fill(1, 2, -1000000))\n_m2 = le(min((col(ObjC,0) - T(col(_p2,0)))^2 + (col(ObjC,1) - T(col(_p2,1)))^2, 'rows'), tol * tol)\n\n# Chair -> code 4\n_c3 = hcat((col(O3,0) + col(O3,2) + col(O3,4) + col(O3,6)) / 4, (col(O3,1) + col(O3,3) + col(O3,5) + col(O3,7)) / 4)\n_p3 = vcat(_c3, fill(1, 2, -1000000))\n_m3 = le(min((col(ObjC,0) - T(col(_p3,0)))^2 + (col(ObjC,1) - T(col(_p3,1)))^2, 'rows'), tol * tol)\n\n# Table -> code 5\n_c4 = hcat((col(O4,0) + col(O4,2) + col(O4,4) + col(O4,6)) / 4, (col(O4,1) + col(O4,3) + col(O4,5) + col(O4,7)) / 4)\n_p4 = vcat(_c4, fill(1, 2, -1000000))\n_m4 = le(min((col(ObjC,0) - T(col(_p4,0)))^2 + (col(ObjC,1) - T(col(_p4,1)))^2, 'rows'), tol * tol)\n\n# Desk -> code 6\n_c5 = hcat((col(O5,0) + col(O5,2) + col(O5,4) + col(O5,6)) / 4, (col(O5,1) + col(O5,3) + col(O5,5) + col(O5,7)) / 4)\n_p5 = vcat(_c5, fill(1, 2, -1000000))\n_m5 = le(min((col(ObjC,0) - T(col(_p5,0)))^2 + (col(ObjC,1) - T(col(_p5,1)))^2, 'rows'), tol * tol)\n\n# Wardrobe -> code 7\n_c6 = hcat((col(O6,0) + col(O6,2) + col(O6,4) + col(O6,6)) / 4, (col(O6,1) + col(O6,3) + col(O6,5) + col(O6,7)) / 4)\n_p6 = vcat(_c6, fill(1, 2, -1000000))\n_m6 = le(min((col(ObjC,0) - T(col(_p6,0)))^2 + (col(ObjC,1) - T(col(_p6,1)))^2, 'rows'), tol * tol)\n\n# Cabinet -> code 8\n_c7 = hcat((col(O7,0) + col(O7,2) + col(O7,4) + col(O7,6)) / 4, (col(O7,1) + col(O7,3) + col(O7,5) + col(O7,7)) / 4)\n_p7 = vcat(_c7, fill(1, 2, -1000000))\n_m7 = le(min((col(ObjC,0) - T(col(_p7,0)))^2 + (col(ObjC,1) - T(col(_p7,1)))^2, 'rows'), tol * tol)\n\n# Toilet -> code 9\n_c8 = hcat((col(O8,0) + col(O8,2) + col(O8,4) + col(O8,6)) / 4, (col(O8,1) + col(O8,3) + col(O8,5) + col(O8,7)) / 4)\n_p8 = vcat(_c8, fill(1, 2, -1000000))\n_m8 = le(min((col(ObjC,0) - T(col(_p8,0)))^2 + (col(ObjC,1) - T(col(_p8,1)))^2, 'rows'), tol * tol)\n\n# Washbasin -> code 10\n_c9 = hcat((col(O9,0) + col(O9,2) + col(O9,4) + col(O9,6)) / 4, (col(O9,1) + col(O9,3) + col(O9,5) + col(O9,7)) / 4)\n_p9 = vcat(_c9, fill(1, 2, -1000000))\n_m9 = le(min((col(ObjC,0) - T(col(_p9,0)))^2 + (col(ObjC,1) - T(col(_p9,1)))^2, 'rows'), tol * tol)\n\n# Refrigerator -> code 11\n_c10 = hcat((col(O10,0) + col(O10,2) + col(O10,4) + col(O10,6)) / 4, (col(O10,1) + col(O10,3) + col(O10,5) + col(O10,7)) / 4)\n_p10 = vcat(_c10, fill(1, 2, -1000000))\n_m10 = le(min((col(ObjC,0) - T(col(_p10,0)))^2 + (col(ObjC,1) - T(col(_p10,1)))^2, 'rows'), tol * tol)\n\n# THE OBJECT CODE COLUMN. 1 is \"other\" - the default attachment - and each named class overwrites it\n# where its centroid coincides with a kept row. A code the map has no entry for falls back to the\n# map's FIRST entry, which is why nothing detected can go unplaced.\nObjK = where(_m1, 2, 1)\nObjK = where(_m2, 3, ObjK)\nObjK = where(_m3, 4, ObjK)\nObjK = where(_m4, 5, ObjK)\nObjK = where(_m5, 6, ObjK)\nObjK = where(_m6, 7, ObjK)\nObjK = where(_m7, 8, ObjK)\nObjK = where(_m8, 9, ObjK)\nObjK = where(_m9, 10, ObjK)\nObjK = where(_m10, 11, ObjK)\n\n# COUNTS AND SCALE.\nPPM = ppm\nDoorN = DN\nWinN = WN\nObjTyped = sum(gt(ObjK, 1))\n",
+          "decode": "",
+          "encode": "{\n  \"from\": {\n    \"a\": \"SegA\",\n    \"b\": \"SegB\",\n    \"thickness\": \"SegTh\",\n    \"types\": \"SegK\",\n    \"spaces\": \"Spaces\",\n    \"points\": \"ObjC\",\n    \"pointTypes\": \"ObjK\",\n    \"pointRotation\": \"ObjRot\",\n    \"pixelsPerMeter\": \"PPM\"\n  },\n  \"objects\": {\n    \"segments\": {\n      \"door\": {\n        \"segmentType\": \"door\",\n        \"layer\": \"door\",\n        \"thickness\": 0.12,\n        \"mode\": \"line\",\n        \"opening\": true,\n        \"objectId\": \"door-with-math\",\n        \"objectPath\": \"Objects/Architectural/door.json\",\n        \"params\": {\n          \"leaves\": \"Single\",\n          \"hinge\": \"left\",\n          \"swing\": \"left\",\n          \"openAngle\": 90,\n          \"fitMode\": \"Fill segment\",\n          \"width\": 0.9,\n          \"leafThickness\": 0.04,\n          \"jambWidth\": 0.05,\n          \"frameDepth\": 0.12,\n          \"lintelHeight\": 2.1,\n          \"headDepth\": 0.12,\n          \"arcSteps\": 24\n        }\n      },\n      \"window\": {\n        \"segmentType\": \"window\",\n        \"layer\": \"window\",\n        \"thickness\": 0.23,\n        \"mode\": \"line\",\n        \"opening\": true,\n        \"objectId\": \"window-with-math\",\n        \"objectPath\": \"Objects/Architectural/window.json\",\n        \"params\": {\n          \"fitMode\": \"Fill wall\",\n          \"wallDepth\": 0.23,\n          \"sillHeight\": 0.9,\n          \"lintelHeight\": 2.1,\n          \"panes\": 2,\n          \"frameWidth\": 0.05,\n          \"operation\": \"Fixed\",\n          \"showFrame\": true\n        }\n      }\n    },\n    \"points\": {\n      \"other\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"bed-with-math\",\n        \"objectPath\": \"Objects/Architectural/bed.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"bed\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"bed-with-math\",\n        \"objectPath\": \"Objects/Architectural/bed.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"sofa\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"sofa-with-math\",\n        \"objectPath\": \"Objects/Architectural/sofa.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"chair\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"chair-with-math\",\n        \"objectPath\": \"Objects/Architectural/chair.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"table\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"table-with-math\",\n        \"objectPath\": \"Objects/Architectural/table.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"desk\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"desk-with-math\",\n        \"objectPath\": \"Objects/Architectural/desk.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"wardrobe\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"wardrobe-with-math\",\n        \"objectPath\": \"Objects/Architectural/wardrobe.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"cabinet\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"cabinet-with-math\",\n        \"objectPath\": \"Objects/Architectural/cabinet.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"toilet\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"toilet-with-math\",\n        \"objectPath\": \"Objects/Architectural/toilet.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"washbasin\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"washbasin-with-math\",\n        \"objectPath\": \"Objects/Architectural/washbasin.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      },\n      \"refrigerator\": {\n        \"layer\": \"furniture\",\n        \"objectId\": \"refrigerator-with-math\",\n        \"objectPath\": \"Objects/Architectural/refrigerator.json\",\n        \"params\": {\n          \"fitMode\": \"Off\",\n          \"anchorDir\": \"Center\"\n        }\n      }\n    },\n    \"space\": {\n      \"objectId\": \"room-with-math\",\n      \"objectPath\": \"Objects/Architectural/room.json\",\n      \"params\": {\n        \"identifyingType\": \"room\",\n        \"color\": \"Grey\"\n      }\n    }\n  },\n  \"pixelsPerMeter\": 50,\n  \"libraryPath\": \"https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library\",\n  \"decimals\": 4\n}",
+          "nodeLabel": "Measure + encode the plan"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "position": {
+        "x": 620,
+        "y": -180
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_bnd",
+              "kind": "polygon",
+              "name": "Boundary",
+              "color": "#0891b2",
+              "layer": "Detected · Boundary",
+              "lineStyle": "solid",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_room",
+              "kind": "polygon",
+              "name": "Room rectangles",
+              "color": "#16a34a",
+              "layer": "Detected · Rooms",
+              "lineStyle": "solid",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_open",
+              "kind": "stroke",
+              "name": "Opening centre lines",
+              "color": "#b91c1c",
+              "layer": "Detected · Openings",
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "width": 0.12,
+              "show": true
+            },
+            {
+              "id": "pr_obj",
+              "kind": "polygon",
+              "name": "Object boxes",
+              "color": "#7c3aed",
+              "layer": "Detected · Objects",
+              "lineStyle": "dashed",
+              "fillMode": "outlined",
+              "hatch": "none",
+              "show": true
+            },
+            {
+              "id": "pr_ctr",
+              "kind": "circle",
+              "name": "Object centroids",
+              "color": "#4c1d95",
+              "layer": "Detected · Object centroids",
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "radius": 0.1,
+              "show": true
+            }
+          ],
+          "nodeLabel": "Everything, drawn"
+        }
+      }
+    },
+    {
+      "id": "metrics",
+      "position": {
+        "x": 620,
+        "y": 200
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Doors — kept"
+            },
+            {
+              "id": "s2",
+              "label": "Windows — kept"
+            },
+            {
+              "id": "s3",
+              "label": "Rooms — kept"
+            },
+            {
+              "id": "s4",
+              "label": "Objects — kept"
+            },
+            {
+              "id": "s5",
+              "label": "Objects — typed (matched a named class)"
+            },
+            {
+              "id": "s6",
+              "label": "Boundary width (m)"
+            },
+            {
+              "id": "s7",
+              "label": "Boundary depth (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Boundary area (m²)"
+            },
+            {
+              "id": "s9",
+              "label": "Rooms — total area (m²)"
+            },
+            {
+              "id": "s10",
+              "label": "Coverage (rooms ÷ boundary — 1 = clean tiling)"
+            },
+            {
+              "id": "s11",
+              "label": "Unclaimed labels — structure"
+            },
+            {
+              "id": "s12",
+              "label": "Unclaimed labels — objects"
+            },
+            {
+              "id": "s13",
+              "label": "Opening segments [x1, y1, x2, y2, w]"
+            },
+            {
+              "id": "s14",
+              "label": "Room rectangles [x, y, room]"
+            },
+            {
+              "id": "s15",
+              "label": "Object centroids [[x, y], …]"
+            },
+            {
+              "id": "s16",
+              "label": "Object rotation (deg, per object)"
+            },
+            {
+              "id": "s17",
+              "label": "Plan JSON — segments + nodes + spaces"
+            }
+          ],
+          "nodeLabel": "What was found"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "geom",
+      "sourceHandle": null,
+      "target": "props",
+      "targetHandle": null
+    },
+    {
+      "id": "e2",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detA",
+      "targetHandle": null
+    },
+    {
+      "id": "e3",
+      "source": "props",
+      "sourceHandle": null,
+      "target": "detB",
+      "targetHandle": null
+    },
+    {
+      "id": "ep_doorMinW",
+      "source": "props",
+      "sourceHandle": "val-doorMinW",
+      "target": "math",
+      "targetHandle": "valin-doorMinW"
+    },
+    {
+      "id": "ep_doorDepth",
+      "source": "props",
+      "sourceHandle": "val-doorDepth",
+      "target": "math",
+      "targetHandle": "valin-doorDepth"
+    },
+    {
+      "id": "ep_winMinW",
+      "source": "props",
+      "sourceHandle": "val-winMinW",
+      "target": "math",
+      "targetHandle": "valin-winMinW"
+    },
+    {
+      "id": "ep_winDepth",
+      "source": "props",
+      "sourceHandle": "val-winDepth",
+      "target": "math",
+      "targetHandle": "valin-winDepth"
+    },
+    {
+      "id": "ep_roomMinArea",
+      "source": "props",
+      "sourceHandle": "val-roomMinArea",
+      "target": "math",
+      "targetHandle": "valin-roomMinArea"
+    },
+    {
+      "id": "ep_objMinArea",
+      "source": "props",
+      "sourceHandle": "val-objMinArea",
+      "target": "math",
+      "targetHandle": "valin-objMinArea"
+    },
+    {
+      "id": "ep_tol",
+      "source": "props",
+      "sourceHandle": "val-tol",
+      "target": "math",
+      "targetHandle": "valin-tol"
+    },
+    {
+      "id": "ep_margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "ep_ppm",
+      "source": "props",
+      "sourceHandle": "val-ppm",
+      "target": "math",
+      "targetHandle": "valin-ppm"
+    },
+    {
+      "id": "ed_D",
+      "source": "detA",
+      "sourceHandle": "val-o_door_corners",
+      "target": "math",
+      "targetHandle": "valin-D"
+    },
+    {
+      "id": "ed_W",
+      "source": "detA",
+      "sourceHandle": "val-o_win_corners",
+      "target": "math",
+      "targetHandle": "valin-W"
+    },
+    {
+      "id": "ed_R",
+      "source": "detA",
+      "sourceHandle": "val-o_room_corners",
+      "target": "math",
+      "targetHandle": "valin-R"
+    },
+    {
+      "id": "ed_B",
+      "source": "detA",
+      "sourceHandle": "val-o_bnd_corners",
+      "target": "math",
+      "targetHandle": "valin-B"
+    },
+    {
+      "id": "ed_O",
+      "source": "detB",
+      "sourceHandle": "val-corners",
+      "target": "math",
+      "targetHandle": "valin-O"
+    },
+    {
+      "id": "eo_1",
+      "source": "detB",
+      "sourceHandle": "val-o_bed_corners",
+      "target": "math",
+      "targetHandle": "valin-O1"
+    },
+    {
+      "id": "eo_2",
+      "source": "detB",
+      "sourceHandle": "val-o_sofa_corners",
+      "target": "math",
+      "targetHandle": "valin-O2"
+    },
+    {
+      "id": "eo_3",
+      "source": "detB",
+      "sourceHandle": "val-o_chair_corners",
+      "target": "math",
+      "targetHandle": "valin-O3"
+    },
+    {
+      "id": "eo_4",
+      "source": "detB",
+      "sourceHandle": "val-o_table_corners",
+      "target": "math",
+      "targetHandle": "valin-O4"
+    },
+    {
+      "id": "eo_5",
+      "source": "detB",
+      "sourceHandle": "val-o_desk_corners",
+      "target": "math",
+      "targetHandle": "valin-O5"
+    },
+    {
+      "id": "eo_6",
+      "source": "detB",
+      "sourceHandle": "val-o_wardrobe_corners",
+      "target": "math",
+      "targetHandle": "valin-O6"
+    },
+    {
+      "id": "eo_7",
+      "source": "detB",
+      "sourceHandle": "val-o_cabinet_corners",
+      "target": "math",
+      "targetHandle": "valin-O7"
+    },
+    {
+      "id": "eo_8",
+      "source": "detB",
+      "sourceHandle": "val-o_toilet_corners",
+      "target": "math",
+      "targetHandle": "valin-O8"
+    },
+    {
+      "id": "eo_9",
+      "source": "detB",
+      "sourceHandle": "val-o_washbasin_corners",
+      "target": "math",
+      "targetHandle": "valin-O9"
+    },
+    {
+      "id": "eo_10",
+      "source": "detB",
+      "sourceHandle": "val-o_refrigerator_corners",
+      "target": "math",
+      "targetHandle": "valin-O10"
+    },
+    {
+      "id": "er_bnd",
+      "source": "math",
+      "sourceHandle": "val-BndRect",
+      "target": "render",
+      "targetHandle": "valin-pr_bnd"
+    },
+    {
+      "id": "er_room",
+      "source": "math",
+      "sourceHandle": "val-RoomRect",
+      "target": "render",
+      "targetHandle": "valin-pr_room"
+    },
+    {
+      "id": "er_open",
+      "source": "math",
+      "sourceHandle": "val-OpenSeg",
+      "target": "render",
+      "targetHandle": "valin-pr_open"
+    },
+    {
+      "id": "er_obj",
+      "source": "math",
+      "sourceHandle": "val-ObjBox",
+      "target": "render",
+      "targetHandle": "valin-pr_obj"
+    },
+    {
+      "id": "er_ctr",
+      "source": "math",
+      "sourceHandle": "val-ObjCtr",
+      "target": "render",
+      "targetHandle": "valin-pr_ctr"
+    },
+    {
+      "id": "em_1",
+      "source": "math",
+      "sourceHandle": "val-DoorN",
+      "target": "metrics",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "em_2",
+      "source": "math",
+      "sourceHandle": "val-WinN",
+      "target": "metrics",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "em_3",
+      "source": "math",
+      "sourceHandle": "val-RoomN",
+      "target": "metrics",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "em_4",
+      "source": "math",
+      "sourceHandle": "val-ObjN",
+      "target": "metrics",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "em_5",
+      "source": "math",
+      "sourceHandle": "val-ObjTyped",
+      "target": "metrics",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "em_6",
+      "source": "math",
+      "sourceHandle": "val-BndW",
+      "target": "metrics",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "em_7",
+      "source": "math",
+      "sourceHandle": "val-BndD",
+      "target": "metrics",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "em_8",
+      "source": "math",
+      "sourceHandle": "val-BndArea",
+      "target": "metrics",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "em_9",
+      "source": "math",
+      "sourceHandle": "val-RoomTotal",
+      "target": "metrics",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "em_10",
+      "source": "math",
+      "sourceHandle": "val-Coverage",
+      "target": "metrics",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "em_11",
+      "source": "detA",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "em_12",
+      "source": "detB",
+      "sourceHandle": "val-unmatched",
+      "target": "metrics",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "em_13",
+      "source": "math",
+      "sourceHandle": "val-OpenSeg",
+      "target": "metrics",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "em_14",
+      "source": "math",
+      "sourceHandle": "val-RoomRect",
+      "target": "metrics",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "em_15",
+      "source": "math",
+      "sourceHandle": "val-ObjC",
+      "target": "metrics",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "em_16",
+      "source": "math",
+      "sourceHandle": "val-ObjRot",
+      "target": "metrics",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "em_17",
+      "source": "math",
+      "sourceHandle": "val-json",
+      "target": "metrics",
+      "targetHandle": "valin-s17"
+    }
+  ]
+}

@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "kind": "flow-node",
-  "tool": "param-geometry",
-  "label": "Grab Geometry",
-  "category": "Parametric",
-  "description": "Inspect a wired Parametric Object's geometry — each var / box formula with its live computed value. Passes the definition through.",
-  "params": {}
-}

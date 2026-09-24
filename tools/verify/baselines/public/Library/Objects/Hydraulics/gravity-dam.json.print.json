@@ -1,0 +1,222 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 14,
+          "vertices": 56,
+          "area": 7226,
+          "bbox": [
+            -36,
+            -20,
+            21,
+            20
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "e0b10dec426a463f"
+      },
+      "solids": {
+        "count": 13,
+        "volume": 44384,
+        "hash": "041f2a3140009f00"
+      },
+      "metrics": [
+        {
+          "key": "damHeight",
+          "name": "Height (m)",
+          "value": "30"
+        },
+        {
+          "key": "baseWidthOut",
+          "name": "Base width (m)",
+          "value": "22"
+        },
+        {
+          "key": "crestWidthOut",
+          "name": "Crest width (m)",
+          "value": "4"
+        },
+        {
+          "key": "sectionArea",
+          "name": "Section area (m²)",
+          "value": "336"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "13440"
+        },
+        {
+          "key": "selfWeightkN",
+          "name": "Self weight (kN)",
+          "value": "322560"
+        },
+        {
+          "key": "waterForcekN",
+          "name": "Water thrust (kN)",
+          "value": "153820.8"
+        },
+        {
+          "key": "upliftForcekN",
+          "name": "Uplift (kN)",
+          "value": "120859.2"
+        },
+        {
+          "key": "siltForcekN",
+          "name": "Silt thrust (kN)",
+          "value": "440"
+        },
+        {
+          "key": "netVerticalkN",
+          "name": "Net vertical (kN)",
+          "value": "201700.8"
+        },
+        {
+          "key": "slidingFOS",
+          "name": "FOS — sliding",
+          "value": "0.9153"
+        },
+        {
+          "key": "overturningFOS",
+          "name": "FOS — overturning",
+          "value": "1.0301"
+        },
+        {
+          "key": "reservoirVolume",
+          "name": "Reservoir volume drawn (m³)",
+          "value": "28000"
+        },
+        {
+          "key": "freeboard",
+          "name": "Freeboard (m)",
+          "value": "2"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 14,
+          "vertices": 56,
+          "area": 7226,
+          "bbox": [
+            -36,
+            -20,
+            21,
+            20
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "e0b10dec426a463f"
+      },
+      "solids": {
+        "count": 13,
+        "volume": 44384,
+        "hash": "041f2a3140009f00"
+      },
+      "metrics": [
+        {
+          "key": "damHeight",
+          "name": "Height (m)",
+          "value": "30"
+        },
+        {
+          "key": "baseWidthOut",
+          "name": "Base width (m)",
+          "value": "22"
+        },
+        {
+          "key": "crestWidthOut",
+          "name": "Crest width (m)",
+          "value": "4"
+        },
+        {
+          "key": "sectionArea",
+          "name": "Section area (m²)",
+          "value": "336"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "13440"
+        },
+        {
+          "key": "selfWeightkN",
+          "name": "Self weight (kN)",
+          "value": "322560"
+        },
+        {
+          "key": "waterForcekN",
+          "name": "Water thrust (kN)",
+          "value": "153820.8"
+        },
+        {
+          "key": "upliftForcekN",
+          "name": "Uplift (kN)",
+          "value": "120859.2"
+        },
+        {
+          "key": "siltForcekN",
+          "name": "Silt thrust (kN)",
+          "value": "440"
+        },
+        {
+          "key": "netVerticalkN",
+          "name": "Net vertical (kN)",
+          "value": "201700.8"
+        },
+        {
+          "key": "slidingFOS",
+          "name": "FOS — sliding",
+          "value": "0.9153"
+        },
+        {
+          "key": "overturningFOS",
+          "name": "FOS — overturning",
+          "value": "1.0301"
+        },
+        {
+          "key": "reservoirVolume",
+          "name": "Reservoir volume drawn (m³)",
+          "value": "28000"
+        },
+        {
+          "key": "freeboard",
+          "name": "Freeboard (m)",
+          "value": "2"
+        }
+      ]
+    }
+  }
+}

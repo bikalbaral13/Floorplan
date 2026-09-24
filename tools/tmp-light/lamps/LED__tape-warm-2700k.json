@@ -1,0 +1,67 @@
+{
+  "schema": "lamp/1",
+  "id": "tape-warm-2700k",
+  "name": "LED tape 2700 K 900 lm/m",
+  "category": "LED",
+  "description": "Concealed tape behind a diffuser. Output is PER METRE, so a fixture multiplies by its own run length; `lumens` repeats it so a consumer that ignores linear lamps still gets a number.",
+  "emission": {
+    "sourceType": "Linear",
+    "areaShape": "Rectangle",
+    "lumens": 900,
+    "lumensPerMetre": 900,
+    "wattsElectrical": 10,
+    "efficacy": 90,
+    "illuminanceLux": 0,
+    "kelvin": 2700,
+    "cri": 90,
+    "duv": 0
+  },
+  "distribution": {
+    "profile": "Diffuse",
+    "beamAngle": 120,
+    "fieldAngle": 180,
+    "beamBlend": 1,
+    "spread": 180,
+    "ies": {
+      "path": "",
+      "normalise": true
+    }
+  },
+  "shadow": {
+    "lampRadius": 0.006,
+    "castShadow": true,
+    "maxBounces": 1024,
+    "multipleImportance": true,
+    "diffuseFactor": 1,
+    "glossyFactor": 1,
+    "transmissionFactor": 1,
+    "volumeFactor": 1,
+    "visibleToCamera": false,
+    "isPortal": false
+  },
+  "blender": {
+    "type": "AREA",
+    "shape": "RECTANGLE",
+    "energyWatts": 1.317716,
+    "color": {
+      "mode": "blackbody",
+      "kelvin": 2700
+    },
+    "rgb": [
+      1,
+      0.417266,
+      0.100009
+    ],
+    "sizeX": 1,
+    "sizeY": 0.012,
+    "radius": 0.006,
+    "spotSizeDeg": 180,
+    "spotBlend": 1,
+    "spread": 180,
+    "angleDeg": 0
+  },
+  "emissive": {
+    "material": "Materials/Emissive/led-warm.json",
+    "luminanceOverride": 0
+  }
+}

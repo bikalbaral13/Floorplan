@@ -1,0 +1,38 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 4,
+  "edgeCount": 3,
+  "items": [
+    {
+      "nodeId": "agent_9",
+      "tool": "agent",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "network_8",
+      "tool": "network",
+      "polygons": {
+        "rings": 42,
+        "vertices": 84,
+        "area": 0,
+        "bbox": [
+          -7.33,
+          -5.51,
+          6.37,
+          4.39
+        ],
+        "nonFinite": 0
+      },
+      "hash": "3a27acfe82522fe8"
+    }
+  ],
+  "hash": "6f7e5d1a0bf92c14"
+}

@@ -1,0 +1,27 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-solve",
+  "meta": { "label": "Linear Solve", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — solve the linear system K·d = F for d by Gauss–Jordan elimination with partial pivoting. K is an n×n matrix, F an n×m right-hand side (one load column, or several). Matrices in, the solution d out; draws nothing. Singular / non-square / mismatched → empty.",
+  "instructions": "A value-only node: two matrices as JSON in (K and F), the solution d as JSON out. It has no geometry input or output and draws nothing on the canvas.\n\nWHAT IT COMPUTES: d such that K·d = F. This is the classic linear-algebra solve, and the beating heart of the direct-stiffness / finite-element method — the 'solve Kd = F' step where K is the (reduced) global stiffness matrix, F the nodal load vector, and d the unknown nodal displacements.\n\nINPUTS:\n• valin-k — a SQUARE n×n matrix (Grid Geometry's `val-matrix`, or any Matrix node's output — e.g. the assembled, boundary-reduced global stiffness K_ff).\n• valin-f — the right-hand side, n×m. m = 1 is the usual single load case (an n×1 column); m > 1 solves several load cases at once (each column an independent RHS). A bare number is read as a 1×1.\n\nMETHOD: Gauss–Jordan elimination with partial pivoting on the augmented [K | F]. Preferable to forming K⁻¹ with the Inverse node and multiplying — it never builds the inverse, so it is cheaper and better-conditioned. A non-square K, a row-count mismatch (K.rows ≠ F.rows), a ragged matrix, or a singular K (a zero pivot — e.g. an unrestrained mechanism whose stiffness matrix has a rigid-body mode) returns an EMPTY matrix, so check `val-rows` > 0.\n\nOUTPUT: `val-matrix` — the solution d (n×m); plus `val-rows` / `val-cols`, and `val-value` = d[0][0] as a plain NUMBER so a single solved unknown can drive an ordinary numeric param. Wire d onward to recover member forces (k·d) or, for an n×2 result, straight into a Polygon's `valin-points` to draw it. Every parameter is wireable (valin-*)."
+  ,
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "k", "label": "Matrix K" },
+      { "key": "f", "label": "RHS F" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Solution d (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" },
+      { "key": "value", "label": "Value" }
+    ]
+  },
+  "parameters": [
+    { "key": "k", "label": "Matrix K (JSON)", "kind": "text", "default": "" },
+    { "key": "f", "label": "RHS F (JSON)", "kind": "text", "default": "" }
+  ]
+}

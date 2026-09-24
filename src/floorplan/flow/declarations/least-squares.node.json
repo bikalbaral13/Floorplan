@@ -1,0 +1,28 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "least-squares",
+  "meta": { "label": "Least Squares", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — solve an OVER-determined system A·x ≈ b in the least-squares sense by Householder QR (the robust alternative to the normal equations, which square the condition number). A is m×n with m ≥ n, b is m×k. Outputs the best-fit x and the residual. Draws nothing.",
+  "instructions": "A value-only node: two matrices as JSON in (A and b), the best-fit x as JSON out. It has no geometry input or output and draws nothing on the canvas.\n\nWHAT IT COMPUTES: the x that minimises ‖A·x − b‖ — the least-squares solution of A·x ≈ b. Use it whenever there are MORE equations than unknowns: fitting a line / polynomial / plane to many points, regression, calibrating a model against samples, or any over-determined constraint set.\n\nINPUTS:\n• valin-a — the design matrix A, m×n with m ≥ n (Grid Geometry's `val-matrix`, a point list's `val-points`, or another Matrix node). For a straight-line fit y = c₀ + c₁·t, A is the m×2 matrix [1 | t].\n• valin-b — the observations b, m×k. Usually a single m×1 column; several columns solve several right-hand sides (independent fits) at once. A bare number is read as 1×1.\n\nMETHOD: Householder QR. Reflections drive A → R (upper-triangular) and b → Qᵀb without ever forming Q, then R·x = Qᵀb is back-substituted. This is preferable to the textbook normal equations x = (AᵀA)⁻¹Aᵀb (Transpose → Multiply → Inverse → Multiply): forming AᵀA squares the condition number, so QR keeps ~twice the accuracy on ill-scaled data. An UNDER-determined system (m < n — infinitely many solutions, the minimum-norm / SVD case), a row-count mismatch (A.rows ≠ b.rows), ragged input, or a rank-deficient A (a zero pivot in R) returns an EMPTY matrix — check `val-rows` > 0.\n\nOUTPUTS:\n• `val-matrix` — the solution x (n×k); plus `val-rows` / `val-cols`, and `val-value` = x[0][0] as a plain NUMBER.\n• `val-residual` — the residual norm ‖A·x − b‖ (0 for an exact fit), the single-number measure of how well the model fits.\n\nEvery parameter is wireable (valin-*)."
+  ,
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "a", "label": "Matrix A" },
+      { "key": "b", "label": "RHS b" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Solution x (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" },
+      { "key": "value", "label": "Value" },
+      { "key": "residual", "label": "Residual ‖Ax−b‖" }
+    ]
+  },
+  "parameters": [
+    { "key": "a", "label": "Matrix A (JSON)", "kind": "text", "default": "" },
+    { "key": "b", "label": "RHS b (JSON)", "kind": "text", "default": "" }
+  ]
+}

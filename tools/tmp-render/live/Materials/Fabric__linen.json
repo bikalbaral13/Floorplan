@@ -1,0 +1,34 @@
+{
+  "schema": "material/1",
+  "id": "fabric.linen",
+  "title": "Fabric — linen weave",
+  "category": "Fabric",
+  "description": "Upholstery linen. The weave is a fine checker - warp against weft - at a coarse 4 mm pitch, which is what a woven cloth reads as at furniture scale without aliasing.",
+  "procedural": {
+    "type": "checker",
+    "blenderNode": "ShaderNodeTexChecker",
+    "params": {
+      "tileSize": 0.004,
+      "scale": 250,
+      "color1": "#d8d2c6",
+      "color2": "#cec7b9"
+    }
+  },
+  "pbr": {
+    "baseColor": "#d3ccc0",
+    "roughness": 0.92,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 4,
+    "angle": 0,
+    "weight": 1,
+    "color": "#d3ccc0"
+  },
+  "dxf": {
+    "pattern": "NET",
+    "scale": 0.05,
+    "angle": 45
+  }
+}

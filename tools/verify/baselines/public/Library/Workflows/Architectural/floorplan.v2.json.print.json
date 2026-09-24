@@ -1,0 +1,202 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 16,
+  "edgeCount": 86,
+  "items": [
+    {
+      "nodeId": "gAll",
+      "tool": "merge-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "gnDoor",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "gnExt",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "gnInt",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "gnWin",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "nDoor",
+      "tool": "network",
+      "polygons": {
+        "rings": 5,
+        "vertices": 10,
+        "area": 0,
+        "bbox": [
+          -3.2059,
+          -3.5355,
+          2.6438,
+          1.9466
+        ],
+        "nonFinite": 0
+      },
+      "hash": "58c4fae39093bd9e"
+    },
+    {
+      "nodeId": "nExt",
+      "tool": "network",
+      "polygons": {
+        "rings": 17,
+        "vertices": 34,
+        "area": 0,
+        "bbox": [
+          -4.9497,
+          -3.5355,
+          4.9497,
+          3.5355
+        ],
+        "nonFinite": 0
+      },
+      "hash": "891015e7163991f7"
+    },
+    {
+      "nodeId": "nInt",
+      "tool": "network",
+      "polygons": {
+        "rings": 11,
+        "vertices": 22,
+        "area": 0,
+        "bbox": [
+          -4.9497,
+          -3.5355,
+          4.9497,
+          3.5355
+        ],
+        "nonFinite": 0
+      },
+      "hash": "52671fb065f28ca9"
+    },
+    {
+      "nodeId": "nWin",
+      "tool": "network",
+      "polygons": {
+        "rings": 7,
+        "vertices": 14,
+        "area": 0,
+        "bbox": [
+          -4.9497,
+          -3.5355,
+          4.9497,
+          3.5355
+        ],
+        "nonFinite": 0
+      },
+      "hash": "2e4ba4df9b88ad83"
+    },
+    {
+      "nodeId": "out",
+      "tool": "output",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "plan",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "props",
+      "tool": "input-props",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "r2d__p2_rooms",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 5,
+        "vertices": 20,
+        "area": 70,
+        "bbox": [
+          -4.9497,
+          -3.5355,
+          4.9497,
+          3.5355
+        ],
+        "nonFinite": 0
+      },
+      "hash": "b84c5ee6b41a2e2d"
+    },
+    {
+      "nodeId": "wall3d",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    }
+  ],
+  "hash": "a380da46be60de7a"
+}

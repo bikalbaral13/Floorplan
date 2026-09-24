@@ -11,7 +11,8 @@
 import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { listLibraryFiles } from "../libraryFiles";
+import { listLibraryFiles, fetchLibraryJson } from "../libraryFiles";
+import { cloudLibraryBaseUrl } from "../cloudLibrary";
 import type { Detection } from "../algorithms/vision/geminiObjectDetection";
 import type { ParametricObjectFile, ParametricObjectParam } from "../types";
 
@@ -50,6 +51,15 @@ export interface AgentToolApi {
   /** Union ≥2 spaces (by label, or the current selection when none given) into one space; interior
    *  divider walls are dissolved, perimeter walls kept. */
   mergeSpaces: (a: Record<string, unknown>) => unknown;
+  /** The layer table — id, name, colour, visible, locked, order — plus what sits on each layer and
+   *  which one is active. The discovery call `move_to_layer` / `create_layer` resolve names against. */
+  listLayers: () => unknown;
+  /** Create a layer (idempotent: an existing id / name is returned rather than duplicated) and, unless
+   *  told otherwise, make it the active layer so newly drawn entities land on it. */
+  createLayer: (a: Record<string, unknown>) => unknown;
+  /** Move spaces / segments / nodes / placed objects onto a layer — named explicitly, or the user's
+   *  live canvas selection when nothing is named. */
+  moveToLayer: (a: Record<string, unknown>) => unknown;
   /** Drawable segment/node/space types + the parametric-object catalog. */
   listDrawTools: () => unknown;
   /** Draw one typed segment between two METRE points (bridge drawSegment). */
@@ -82,7 +92,7 @@ export interface AgentToolApi {
   applyModelJson: (json: string) => unknown;
   /** Wipe walls / rooms / objects / furniture / nodeMeta. */
   clearCanvas: () => unknown;
-  /** Import the parametric object library (public/Library/Parametric Objects) — all of it, or only the
+  /** Import the parametric object library (Objects/) — all of it, or only the
    *  given category folders (Kitchen / Electrical / Architectural / …). */
   importObjects: (a?: { categories?: string[]; ids?: string[] }) => Promise<unknown> | unknown;
   /** Library-management read side: every object's id / name / hostKind / symbol / category / param count. */
@@ -90,9 +100,9 @@ export interface AgentToolApi {
   /** One object's COMPLETE stored `.pobj` definition (meta + parameters + hostKind + geometry) — for editing. */
   getObjectDefinition: (id: string) => unknown;
   /** Create a new library object or overwrite an existing one (same meta.id) from a complete `.pobj`
-   *  JSON. Also persists the file to public/Library/Parametric Objects via the dev Library bridge. */
-  saveObject: (a: { definitionJson: string; hostKind?: "node" | "segment" | "space" | "canvas" }) => Promise<unknown> | unknown;
-  /** Delete library objects by id (+ their public/Library files); refuses ids with placed instances unless `force`. */
+   *  JSON. Also persists the file to Objects/ via the dev Library bridge. */
+  saveObject: (a: { definitionJson: string; hostKind?: "node" | "segment" | "space" | "canvas" | "image" }) => Promise<unknown> | unknown;
+  /** Delete library objects by id (+ their the shared Library files); refuses ids with placed instances unless `force`. */
   deleteObjects: (a: { ids: string[]; force?: boolean }) => Promise<unknown> | unknown;
   /** The Flow node-type catalog (the algorithm engine's tools: handles + params + defaults). */
   flowNodeCatalog: () => unknown;
@@ -101,9 +111,25 @@ export interface AgentToolApi {
   flowApply: (graphJson: string) => Promise<unknown> | unknown;
   /** Commit the current Flow's evaluated results into real canvas entities (the panel's Run button). */
   flowCommit: () => Promise<unknown> | unknown;
+  /** Press DETECT on the open flow's Object Detection node and await the result. Optional so other
+   *  AgentToolApi implementers (the MCP bridge) stay valid; the tool reports a clear error without it. */
+  runDetect?: (a: { nodeId?: string }) => Promise<unknown> | unknown;
   /** Render the current canvas (fit to the drawn content) to a PNG data URL for the model to SEE —
    *  `{ dataUrl, widthM, heightM }` or `{ error }`. */
-  snapshotCanvas: () => Promise<unknown> | unknown;
+  /** `focusPx` frames a chosen plan-pixel box instead of the whole plan (the Flow Snapshot node's
+   *  "Selected" scope); `padPx` overrides the default margin. Both optional — the agents call it bare for
+   *  the whole-plan zoom-to-extent. */
+  snapshotCanvas: (opts?: { focusPx?: { minX: number; minY: number; maxX: number; maxY: number }; padPx?: number }) => Promise<unknown> | unknown;
+  // ── Delegation (Orchestration Agent only) ──────────────────────────────────────────────────────────
+  // Optional so the MCP bridge and any other AgentToolApi implementer stay valid without them; the two
+  // tools below report a clear error when the host doesn't provide them.
+  /** The agent roster this host can actually run: `[{ id, name, label, runner, description, examples }]`. */
+  listAgents?: () => Promise<unknown> | unknown;
+  /** RUN another agent to completion on `task` and return its final report. The sub-agent runs with its
+   *  OWN instructions and its own tool allow-list against the SAME live canvas, so the delegator sees the
+   *  result by reading the canvas afterwards. Sub-agents cannot delegate again (their allow-lists don't
+   *  carry these tools, and the host enforces a depth cap). */
+  runAgent?: (a: { agent: string; task: string }) => Promise<unknown> | unknown;
 }
 
 /** Streamed to the panel transcript so the user watches the agent work step by step. */
@@ -129,7 +155,7 @@ const P_CANVAS_WORKFLOW = `WORKFLOW (every request):
    • every requested room present as a CLOSED wall loop, sized as asked; realistic proportions;
    • connectivity: a door on every STRICTLY-CONNECTED pair, every room reachable, NO door/adjacency from the STRICTLY-NOT-CONNECTED list;
    • windows on the exterior walls of every habitable room; entrance door placed sensibly;
-   • furniture: right set for each room's function, fully inside its room, rotated to the correct facing, clear of door swings;
+   • furniture: COUNT the objects in every habitable room — each must carry its FULL set (bedroom: bed+wardrobe+shelf; living: sofa+table+shelf; dining: table+4 chairs; kitchen: cabinet+shelf; study: desk+chair+shelf) plus a ceiling fitting, not one token piece. Every piece fully inside its room, rotated to the correct facing, clear of door swings. A room with 0 or 1 objects is a DEFECT to list and fix, not an acceptable result;
    • geometry hygiene: no overlapping/stray walls, no GAPS in a room's wall loop (a Space only auto-detects from a fully closed loop), no rooms swallowed by others;
    • Vastu zoning where the user gave no explicit placement.
 6) REPORT + PROPOSE — 1–3 plain sentences on what changed (no JSON in chat), then a NUMBERED list of the specific defects the image review found, each with its concrete fix (e.g. "1. Kitchen door opens into the toilet wall — move door to the dining side, t≈0.6"). FINISH by asking the user whether to apply them: "Apply these improvements? (yes / list numbers)". DO NOT apply them in this run — stop and wait; the user's reply arrives as your next instruction, then apply exactly the accepted ones. If the review finds nothing wrong, say so and skip the question.`;
@@ -196,6 +222,67 @@ const P_TOOL_NOTES = `TOOL NOTES:
 - paramsJson arguments on the granular tools are a JSON object as a STRING, e.g. "{\\"width\\":1.2}". Granular-tool coordinates are METRES (they convert internally); apply_model JSON is PIXELS.
 - If a tool returns {"error": ...}, adapt — fix the arguments or create the missing prerequisite — instead of repeating the identical call.`;
 
+const P_BHK_RECIPE = `FLOORPLAN RECIPE — "draw a 2BHK", "3BHK", "1BHK", "a floorplan", "a house plan", "an apartment layout" (ANY whole-plan request):
+Build it in FOUR STAGES, in this order. Each stage leaves the canvas in a state the next one reads back, so do not collapse them into one write and do not skip ahead — a plan assembled in one pass hides its own mistakes, and a Space that never formed cannot be attached to.
+
+STAGE 1 — THE SEGMENT GRAPH (walls, doors and windows as GEOMETRY only).
+Design the layout in metres against the DEFAULT DESIGN DOCTRINE and ADJACENCY RULES above, then apply_model ONE complete FloorPlanModel whose walls[] is a plain graph of segments:
+• every room a CLOSED loop; walls that join MUST share IDENTICAL endpoint coordinates, or no Space forms;
+• exterior thickness ≈ 0.25 × ppm, interior ≈ 0.12 × ppm; rooms[] stays EMPTY (Spaces auto-detect);
+• leave the GAPS for doors and windows where the openings will go, but add NO attachments yet.
+This stage is pure topology. Get the loops closed and the rooms the right size first, because every later stage hangs off these segments.
+VERIFY with list_spaces before continuing: one Space per room you intended, each area within ~10% of target. A missing Space means an unclosed loop — fix it HERE, not later, because Stage 4 cannot attach a room object to a Space that does not exist.
+
+STAGE 2 — FURNISH EVERY ROOM WITH THE FLOW place-object SOLVER, ONE ROOM AT A TIME.
+NOT one object per room. EVERY room gets its FULL set. A plan that comes back with a single bed in one bedroom and nothing anywhere else is a FAILURE, not a draft — the most common way to get this wrong is to furnish one room, see objects appear, and stop.
+This stage needs object ids, so run Stage 3's import_objects FIRST (it is idempotent). If you have NO Flow tools in this mode, skip to the fallback at the end of this stage.
+
+THE SET PER ROOM — minimum, using ONLY ids that exist. The furnishable node-hosted objects today are: bed, wardrobe, sofa, table, chair, desk, shelf, cabinet, plant, curtain, ceiling-fan, chandelier, light-bulb, piano, staircase. Read the real ids from the Stage 3 catalog and never reach for one that is not in it:
+• bedroom → bed + wardrobe + shelf; add desk + chair when ≥ 12 m²
+• living / drawing → sofa + table + shelf; add a second sofa and 2 chairs when ≥ 20 m²
+• dining → table + 4 × chair (each chair is its own entry)
+• kitchen → cabinet + shelf (+ table if it is an eat-in kitchen)
+• study / office → desk + chair + shelf
+• bathroom / WC / store / pooja / corridor / balcony → leave to the boundary solver only if the user named something; the library has NO sanitaryware (no toilet, basin, bath), so do not invent ids for it — say so in your report instead of substituting a cabinet for a WC.
+Read the ROOM TYPE from each Space's label and area in list_spaces; where the label is generic (Space004), infer the function from the DOCTRINE's Vastu zoning and the room's size, then furnish it as that type.
+
+CEILING FITTINGS AND CURTAINS ARE NOT BOUNDARY OBJECTS. A ceiling-fan or chandelier belongs at the room's CENTRE and a light-bulb wherever the user wants it — the place-object solver slides things ALONG THE WALL, which is the wrong answer for all three. Give every habitable room a ceiling-fan (or a chandelier in living/dining), and put a curtain on each window wall, by hand-placing them per the FALLBACK at the end of this stage. Keep them OUT of the solver's object list.
+
+FOR EACH ROOM, run this FOUR-CALL CYCLE. Never put two rooms in one graph:
+  a) flow_apply ONE graph — a source pinned to THAT space, feeding a place-object node with ONE ENTRY PER OBJECT in the set:
+     {"version":1,"nodes":[{"id":"source_1","position":{"x":80,"y":200},"data":{"tool":"source","params":{"id":"Space001"}}},{"id":"place-object_1","position":{"x":360,"y":200},"data":{"tool":"place-object","params":{"objects":[{"objectId":"bed-with-math"},{"objectId":"wardrobe-with-math"},{"objectId":"desk-with-math"},{"objectId":"chair-with-math"}],"seed":3}}}],"edges":[{"id":"e1","source":"source_1","target":"place-object_1","sourceHandle":null,"targetHandle":null}]}
+     Entries carry ONLY objectId — the solver measures each object's real footprint itself and slides them ALONG THE BOUNDARY until nothing overlaps and corners stay clear. NEVER invent length/breadth/height for a parametric entry; set position (0–100 along the boundary) or setback (metres) only when the user pinned a spot.
+  b) Read the preview: the polygon count MUST equal the number of entries. Fewer means some did not fit — re-apply with a different seed first, then drop the least important item, and only then reconsider the room size.
+  c) flow_commit — each footprint becomes a REAL node-hosted parametric object on the canvas. This is what creates the marker node and its attachment; you do NOT hand-author either for solver-placed furniture.
+  d) flow_apply the EMPTY graph {"version":1,"nodes":[],"edges":[]} BEFORE starting the next room. Skipping this is the classic bug: the stale place-object node re-fires on the next commit and duplicates the previous room's furniture.
+
+COMPLETION GATE — do not leave this stage until it passes. Call list_spaces (or get_state) and count the node objects in EVERY habitable space. Any bedroom / living / dining / kitchen / study with fewer objects than its set above is UNFINISHED: go back and run its cycle. Report the per-room count in your summary so the gap is visible if one remains.
+
+FALLBACK (Design mode, or a single piece into an existing room) — no Flow tools: hand-author a MARKER WALL per position, a degenerate segment whose start EQUALS its end at the object's centre point:
+  { "id":"n-1", "start":{"x":X,"y":Y}, "end":{"x":X,"y":Y}, "thickness":0.5, "color":"#334155", "mode":"line", "method":"center", "segmentType":"wall" }
+Positions still come from the BOUNDARY, not the middle of the room: back to the wall, set back half the object's own depth, honouring the FURNITURE PLACEMENT doctrine (bed headboard S/E, wardrobe S/W, sofa S/W facing N/E, desk facing E/N), at least half a footprint clear of any corner and clear of every door swing. Stage 4c then attaches the object to each marker. The full SET still applies — hand-placing is not a licence to place one thing.
+
+STAGE 3 — IMPORT THE OBJECT LIBRARY.
+import_objects { "categories": ["Architectural","Furniture"] } (skip if get_state already reports objectsLoaded > 0). Its result IS your catalog. NEVER invent an objectId or a param key: every id and every param in Stage 4 must appear in what this returned, with the kind and range it states.
+
+STAGE 4 — ATTACH THE PARAMETRIC OBJECTS. One apply_model carrying all of the segment/node attachments, then one attach_space_object per Space. Four kinds, and a complete plan wants all four:
+a) WALL — every real wall segment gets the Wall object, which is what gives it 3D height and a hatched band:
+   attachments: [ { "id":"a-1", "objectId":"wall-with-math", "params":{"thickness":0.15,"height":2.7,"base":0,"hatch":true}, "t":0.5, "flip":false } ]
+b) DOOR / WINDOW — an EXTRA attachment on the HOST wall (keep its wall attachment too); never split the wall yourself and never use segmentType "door"/"window". The app cuts the gap at t, sized from the object's width:
+   { "id":"a-2", "objectId":"door-with-math",   "params":{"width":0.9,"height":2.1},  "t":0.5,  "flip":false }
+   { "id":"a-3", "objectId":"window-with-math", "params":{"width":1.2,"sillHeight":0.9,"headHeight":2.1}, "t":0.33, "flip":false }
+   Doors on SHARED walls (one per connected pair, plus one entrance on an exterior wall); windows on EXTERIOR walls only. t 0.25–0.75, never at a corner.
+c) NODE OBJECTS — ONLY for furniture you hand-placed in Stage 2's fallback. Anything the place-object solver committed is ALREADY a real node object with its attachment; re-adding it here duplicates it. For hand-placed pieces, attach to the marker through nodeMeta, keyed "<markerWallId>:end|<markerWallId>:start":
+   nodeMeta["n-1:end|n-1:start"] = { "attachments":[ { "id":"na-1", "objectId":"bed-with-math", "params":{"length":2,"width":1.5,"rotation":90}, "t":0, "flip":false } ] }
+   rotation is degrees and MUST face the piece into the room.
+d) ROOM — attach the Room object to EVERY Space, by its label from list_spaces:
+   attach_space_object { space: "Space001", object: "room-with-math", paramsJson: "{\\"color\\":\\"Blue\\"}" }
+   Do this even when the user did not ask for it. It is what carries identifyingType "room" (which is how downstream tools find rooms) and the room's own semantics, and it costs one call per space.
+
+SET THE "semantics" PARAM ON EVERY OBJECT YOU ATTACH. It is a short free-text line — "modern king bed, upholstered headboard, oak legs" — describing MATERIAL and CHARACTER, never a dimension or a count (those are already parameters, and a typed copy would contradict them). Nothing derives it and nothing checks it; it is what an AI render reads to know how the piece should look, and an object attached without it renders generically. Each library object ships a sensible default, so keep that unless the user asked for something else.
+
+THEN run the WORKFLOW's step 5 SELF-REVIEW as usual — snapshot_canvas and grade the image.`;
+
 const P_CORRIDOR_RECIPE = `SPACE-OBJECT RECIPE — CORRIDOR + CORES IN A FLOORPLATE (requests like "draw a 2 m corridor, horizontal / vertical / cross / L-shape, then n cores both sides / one side of it every 18 m in a floorplate"):
 TWO space objects attached to ONE space solve this; each reads the SPACE's bounding box itself, so you never compute coordinates for them.
 1) Ensure the floorplate SPACE exists: use an existing space from list_spaces, or draw ONE closed rectangle of "wall" segments sized generously for the request (row width ≈ (n−1) × gap + 3 m must fit, e.g. 4 cores @ 18 m → ≥ 57 m long; a 60 × 30 m plate near the origin is a good default), then re-run list_spaces for its label.
@@ -257,10 +344,10 @@ Without a trace request (plain "generate from the attachment"), steps 2, 4 and 5
  *  the parametric agent's instructions (kept in one place so the two never disagree). Mirrors
  *  buildParametricObjectFile (normalisation) + flow/eval/parametricObject.ts (the geometry evaluator). */
 const P_POBJ_FORMAT = `PARAMETRIC OBJECT FILE FORMAT (.pobj JSON — what save_object accepts; ALWAYS pass the complete file):
-{ "kind": "parametric-object", "version": 1, "meta": {…}, "parameters": […], "hostKind": "node"|"segment"|"space"|"canvas", "geometry": {…}, "outputs": […] }
+{ "kind": "parametric-object", "version": 1, "meta": {…}, "parameters": […], "hostKind": "node"|"segment"|"space"|"canvas"|"image", "geometry": {…}, "outputs": […] }
 - meta: { "id": stable unique id (SAME id = overwrite/edit, NEW id = new object; kebab-case + ".v1", e.g. "armchair.v1"), "name": display name, "category"?: e.g. "Furniture/Bedroom", "units"?: "m", "symbol"?: one of door|window|staircase|floor|wall|massing|titleblock|settings (fallback 2D symbol + menu icon when there is no geometry), "icon"?: { "paths": ["M3 8h18v9H3z", …] } (24×24 SVG stroke-path d strings for the Add menu) }
 - parameters: [ { "key", "label", "kind": "number"|"select"|"checkbox"|"text"|"color" (ONLY these five), "default", "min"?/"max"?/"step"?/"unit"? (number), "options"?: [{"value","label"}] (select) } ]. Reserved keys the engine honours when declared: "rotation" (degrees), "color", "wallOffset" (m — shifts the plan along local −Y before rotation), "clearance" (m — the ENGINE lifts every shape's h0/h1 by it: author all heights floor-relative starting at 0 and NEVER add clearance into h0/h1 expressions yourself — it would apply twice; use it for wall-hung / ceiling-mounted objects like TV units or fans).
-- hostKind: which element hosts an instance — "node" (point-placed: furniture, fixtures, stairs), "segment" (on a wall: doors, windows, wall types), "space" (attached to a room polygon: floor, massing, site, core), "canvas" (sheet-level: title block).
+- hostKind: which element hosts an instance — "node" (point-placed: furniture, fixtures, stairs), "segment" (on a wall: doors, windows, wall types), "space" (attached to a room polygon: floor, massing, site, core), "canvas" (sheet-level: title block), "image" (attached to an imported picture, and reads it: tracing and measuring objects).
 - geometry: { "description"?, "emit": "shapes", "vars"?: { name: "expr", … } (ordered — later vars may use earlier ones), "cases": [ { "when"?: "expr" (first truthy case wins; omit for the default case), "vars"?: {…}, "rules": […] } ] } — OR a "pipeline" (below), which takes precedence over cases. Rules MUST sit inside cases[].rules (a single default case is fine) — a bare top-level geometry.rules array is a format error the evaluator ignores. No geometry ⇒ instances draw only the placeholder meta.symbol (a bare marker — never acceptable for a physical object).
 - RULES — geometry in LOCAL METRES, origin at the object's anchor/centre; h0→h1 = vertical span in metres (h0 == h1 ⇒ flat 2D-only shape; different ⇒ extruded 3D prism). RENDER CONTRACT: every CLOSED shape (box / circle / poly / host) draws in the 2D plan (filled + outlined) AND extrudes to a 3D prism when h1 > h0 — ONE well-heighted rule set drives BOTH views, so give every physical element its real height span (an object whose rules are all h0 == h1 is INVISIBLE in 3D) and add flat (h0==h1) or "line" rules only for plan-only symbology (swing arcs, direction marks). Optional per-rule "color": an EXPRESSION — reference a color-kind parameter by KEY (e.g. "band1") or quote a literal ("'#b91c1c'") — overriding the reserved color param for that rule's shapes only (multi-colour objects like resistor bands; ternaries over the repeat index work: "k == 0 ? band1 : k == 1 ? band2 : band3"). Omit it and the shape takes the object's color param; composed "ref" children keep their own. Optional per rule: "comment", "when": "expr" (skip when falsy), "repeat": "expr" + "as": "k" (loop, k = 0…n−1), "vars": {…} (rule-local, re-evaluated each repeat iteration so they may use the loop index — e.g. per-blade angles; NOT visible to that rule's own when/repeat), "clip": "expr" (truthy ⇒ intersect the closed shape with the host footprint). Exactly ONE geometry key per rule:
   · "box": { "x0","x1","y0","y1","h0","h1" } — axis-aligned extruded quad
@@ -275,32 +362,44 @@ const P_POBJ_FORMAT = `PARAMETRIC OBJECT FILE FORMAT (.pobj JSON — what save_o
 - outputs (top level, optional): [ { "key"/"label", "expr": "expression over params + vars", "unit"? } ] — published as Output Metrics in the Properties panel (alongside auto-derived Width/Depth/Height/Footprint/Volume).`;
 
 /** Raster → Spaces auto-trace — the optimised no-hit-and-trial recipe for extracting closed Spaces from
- *  a scanned plan / survey image. Shared by the Orchestrator (actionable via flow_apply/flow_commit) and
- *  the Design agent (knows the recipe; hands execution to Orchestrator/Flow modes). */
+ *  a scanned plan / survey image. Shared by the Global Agent (actionable via flow_apply/flow_commit) and
+ *  the Design agent (knows the recipe; hands execution to the Global Agent / Flow modes). */
 const P_RASTER_SPACES = `RASTER → SPACES (auto-trace a scanned plan / survey sketch into closed Spaces):
-- Pipeline: Image → Vectorisation → Graph to Spaces (+ an Output node for metrics). The bundled flow public/Library/Flows/raster-to-spaces.json IS this graph — the Flow editor's Import dropdown lists it, or (Orchestrator) flow_apply the same graph.
+- Pipeline: Image → Vectorisation → Graph to Spaces (+ an Output node for metrics). The bundled flow Workflows/raster-to-spaces.json IS this graph — the Flow editor's Import dropdown lists it, or (Global Agent) flow_apply the same graph.
 - NO SLIDER HIT-AND-TRIAL: the Vectorisation node's AUTO-TUNE button loops the tracing parameters (colour tolerance, despeckle, gap close, bridge gaps, node snap, spur pruning — plus the line colour itself when "Tune colour too" is on), scores every combo on REAL results (closed spaces found − noise faces − open ends), streams live progress on the node, and bakes the winning values back into the sliders. Always prefer it over manually nudging sliders.
 - READ THE METRICS (Spaces / Open ends / Lines readouts on the Vectorisation node; Spaces / Total area on Graph to Spaces; or the Output node): spaces = 0 usually means the wrong line colour (enable "Tune colour too") or "Min space area" set too high; many open ends = broken loops (raise Gap close / Bridge gaps, or re-run Auto-Tune). Set "Min space area" so text boxes / hatching never count as rooms.
 - Committing the flow (Run / flow_commit) turns each face into a wall loop → real selectable Spaces on the canvas.`;
 
-/** The on-disk Library folder convention — where bundled asset FILES live and where every NEW flow /
- *  design / object file must be saved. Appended to all agent prompts so file-producing answers agree. */
-const P_LIBRARY_PATHS = `LIBRARY FOLDER (repo files under public/Library — served at /Library; the single home for bundled assets):
-- Flows → public/Library/Flows/<name>.json (flow-graph JSON)
-- Designs → public/Library/Designs/<name>.json (exported canvas-design JSON)
-- Parametric objects → public/Library/Parametric Objects/<Category>/<name>.pobj.json — folders are organised by CATEGORY (Kitchen / Furniture / Bathroom / Electrical / Structural / Architectural / Site / System), NOT by hostKind: the hostKind lives INSIDE each file. import_objects loads every .pobj in the whole tree — or ONLY the folders the user asks for via its categories argument ("import the architectural objects" → categories: ["Architectural"]; "kitchen + electrical" → ["Kitchen","Electrical"]); its result's availableCategories names the folders that exist.
-save_object saves to the LIVE in-app library AND writes the file to public/Library/Parametric Objects/<Category>/<meta.id>.pobj.json (category folder derived from meta.category — so ALWAYS give objects a sensible meta.category like "Fixtures/Kitchen" or "MEP/Electrical") — its result's "file" field is the written path (REPORT it to the user); a "fileError" instead means the dev-server bridge is off and the object exists in the app only. delete_object removes the matching Library files too. Whenever a NEW flow, design or parametric object is kept as a FILE, it ALWAYS belongs in the matching public/Library subfolder above — the old public/objects and public/flows folders no longer exist.`;
+/** The shared Library's layout — where asset FILES live and where every NEW flow / design / object file
+ *  must be saved. Appended to all agent prompts so file-producing answers agree.
+ *
+ *  Paths here are LIBRARY-RELATIVE ("Objects/Site/site.json"), not repo paths: the library was published
+ *  to the R2 bucket and `the shared Library` no longer exists, so a prompt that named it was sending the model
+ *  after a folder it could not reach. The bucket's public base is substituted at prompt-build time (see
+ *  {@link libraryPathsPrompt}) so the model can quote a real, fetchable URL back to the user. */
+const libraryPathsPrompt = (base: string) => `SHARED LIBRARY (a Cloudflare R2 bucket — the single home for assets, read by this app and by new_app${base ? `; public base ${base}` : ""}):
+Paths below are LIBRARY-RELATIVE — join them to the base above for a fetchable URL, and give the user that URL when you name a file. The old repo folder the shared Library no longer exists; never tell anyone to look there.
+- Workflows (flow graphs) → Workflows/<Folder>/<name>.json
+- Tools (flow node declarations) → Tools/<Folder>/<name>.node.json
+- Designs → Designs/<name>.json (exported canvas-design JSON)
+- Parametric objects → Objects/<Category>/<name>.pobj.json — folders are organised by CATEGORY (Kitchen / Furniture / Bathroom / Electrical / Structural / Architectural / Site / System), NOT by hostKind: the hostKind lives INSIDE each file. import_objects loads every .pobj in the whole tree — or ONLY the folders the user asks for via its categories argument ("import the architectural objects" → categories: ["Architectural"]; "kitchen + electrical" → ["Kitchen","Electrical"]); its result's availableCategories names the folders that exist.
+save_object saves to the LIVE in-app library AND writes the file to Objects/<Category>/<meta.id>.pobj.json (category folder derived from meta.category — so ALWAYS give objects a sensible meta.category like "Fixtures/Kitchen" or "MEP/Electrical") — its result's "file" field is the written path (REPORT it to the user, as the full URL when you have the base); a "fileError" instead means the write bridge is off and the object exists in the app only. delete_object removes the matching Library files too. Whenever a NEW flow, design or parametric object is kept as a FILE, it ALWAYS belongs in the matching Library folder above.`;
 
-/** How to reuse saved WHOLE-PLAN designs from public/Library/Designs (distinct from the parametric OBJECT
- *  library). For any mode whose toolset includes list_designs + import_design (Design + Orchestrator). */
-const P_DESIGN_LIBRARY = `SAVED DESIGNS (public/Library/Designs — complete exported floor-plans: walls, spaces, openings, furniture, layers and scale in ONE FloorPlanModel JSON — NOT the same as the parametric OBJECT library):
+/** The static form, for the exported prompt constants. The live base is appended per RUN instead (see
+ *  `librarySuffix` in runAgentChat), because these consts are template literals evaluated at module load
+ *  and the bucket's address is only known after the status call answers. */
+const P_LIBRARY_PATHS = libraryPathsPrompt("");
+
+/** How to reuse saved WHOLE-PLAN designs from Designs/ (distinct from the parametric OBJECT
+ *  library). For any mode whose toolset includes list_designs + import_design (Design + Global Agent). */
+const P_DESIGN_LIBRARY = `SAVED DESIGNS (Designs/ — complete exported floor-plans: walls, spaces, openings, furniture, layers and scale in ONE FloorPlanModel JSON — NOT the same as the parametric OBJECT library):
 - WHEN: the user says "open / load / import / reuse / continue the <name> design (or plan / floorplan)", or wants to start from an existing plan rather than draw from scratch.
 - list_designs — lists the saved design files (Designs-relative paths, e.g. "floorplan-2026-07-09.json"). Call it FIRST to discover what exists (match the user's name against the list; if none match, tell them and list what IS there).
 - import_design { path } — loads the chosen file and REPLACES the entire canvas with that plan. Then edit it with apply_model / the granular tools exactly like any other plan.
 - AFTER importing: the plan's placed parametric objects restore by id — if any show as bare markers, call import_objects to load their definitions. Then run get_state + the mandatory snapshot_canvas self-review before continuing.
-- You LOAD designs, you don't write them (the app's Export saves a design to public/Library/Designs/<name>.json). Never invent a filename — always pick a real path from list_designs.`;
+- You LOAD designs, you don't write them (the app's Export saves a design to Designs/<name>.json). Never invent a filename — always pick a real path from list_designs.`;
 
-/** Orchestrator-only section: the library-management tools + when to reach for them. */
+/** Global Agent-only section: the library-management tools + when to reach for them. */
 const P_PARAMETRIC_LIBRARY = `PARAMETRIC OBJECT LIBRARY (create / adjust / delete object DEFINITIONS):
 - list_objects = catalog summary (ids, hostKind, param counts). get_object = one COMPLETE stored definition. save_object = create a NEW object or OVERWRITE an existing one (same meta.id) from a complete .pobj JSON. delete_object = remove definitions (refuses ids with placed instances unless force: true).
 - Reach for these when the user asks for a NEW KIND of object ("make a round dining-table object with a diameter parameter"), wants an object's DEFINITION adjusted ("beds should default to a taller headboard", "add a material select to the sofa"), or wants library entries removed. A saved definition applies immediately — placed instances re-render with it (their per-instance params are kept).
@@ -308,9 +407,9 @@ const P_PARAMETRIC_LIBRARY = `PARAMETRIC OBJECT LIBRARY (create / adjust / delet
 
 ${P_POBJ_FORMAT}`;
 
-/** Orchestrator ("agent" mode) instructions — the full-capability default: canvas design + Flow gateway +
- *  parametric-library management. */
-export const AGENT_SYSTEM_PROMPT = `You are the Orchestrator Agent for a live 2D architectural CAD canvas — the full-capability agent whose toolbox spans all three specialist domains: CANVAS DESIGN (the Design Agent's scope — draw/edit walls, openings, objects, spaces, underlays), the FLOW ENGINE (the Flow Agent's scope — the node-graph Operations Pipeline, via flow_node_catalog / flow_apply / flow_commit) and the PARAMETRIC OBJECT LIBRARY (the Parametric Agent's scope — create / adjust / delete object definitions, via list_objects / get_object / save_object / delete_object). Route each request to whichever domain fits and combine them freely.\n\nSPECIALIST WORKFLOWS — when a request matches one of these intents, handle it the way that specialist agent does: attach the matching compiled Site object to the target Space, set its parameters, then call set_flow_live(true) so it materialises as real Spaces.\n• SITE → BUILDING ENVELOPE (build a buildable envelope / apply setbacks / inset → split → optimise-rectangle): this is the Site → Building Envelope Agent's job — import_objects { "categories": ["Site"], "ids": ["site"] } if needed, then attach the "site" object to the plot Space and set insetMode / frontSetback / remainingSetback and the useInset / useSplit / useOptimise / useMassing toggles + their params.\n• CORES + CIRCULATION (a corridor with fixed-size cores racked along it): this is the Circulation Agent's job — import_objects { "categories": ["Site"], "ids": ["circulation"] } if needed, then attach the "circulation" object to the Space and set the corridor shape / width and the core length / breadth / gap / side / orientation.\nThese two objects run their whole pipeline internally, so prefer attaching them over hand-building a Flow. ${P_JSON_FIRST}
+/** Global Agent ("agent" mode) instructions — the full-capability default: canvas design + Flow gateway +
+ *  saved workflows/designs + parametric-library management. Self-contained: it delegates to nothing. */
+export const AGENT_SYSTEM_PROMPT = `You are the Global Agent for a live 2D architectural CAD canvas — ONE self-contained agent carrying the WHOLE toolbox. You depend on no other agent: never hand work over, never defer to a "specialist", never tell the user to switch tabs or pick a different agent. Whatever the request needs, you do it yourself, end to end, in this run. Your capabilities span CANVAS DESIGN (draw/edit walls, openings, objects, spaces, underlays), the FLOW ENGINE (the node-graph Operations Pipeline, via flow_node_catalog / flow_apply / flow_commit), SAVED WORKFLOWS + DESIGNS (open_workflow, list_designs / import_design) and the PARAMETRIC OBJECT LIBRARY (create / adjust / delete object definitions, via list_objects / get_object / save_object / delete_object). Pick whichever fits the request and combine them freely.\n\nBUILT-IN RECIPES — when a request matches one of these intents, run the recipe YOURSELF: attach the matching compiled Site object to the target Space, set its parameters, then call set_flow_live(true) so it materialises as real Spaces.\n• SITE → BUILDING ENVELOPE (build a buildable envelope / apply setbacks / inset → split → optimise-rectangle): import_objects { "categories": ["Site"], "ids": ["site"] } if needed, then attach the "site" object to the plot Space and set insetMode / frontSetback / remainingSetback and the useInset / useSplit / useOptimise / useMassing toggles + their params.\n• CORES + CIRCULATION (a corridor with fixed-size cores racked along it): import_objects { "categories": ["Site"], "ids": ["circulation"] } if needed, then attach the "circulation" object to the Space and set the corridor shape / width and the core length / breadth / gap / side / orientation.\nThese two objects run their whole pipeline internally, so prefer attaching them over hand-building a Flow. ${P_JSON_FIRST}
 
 ${P_CANVAS_WORKFLOW}
 
@@ -323,6 +422,8 @@ ${P_DOCTRINE}
 ${P_SELECTION}
 
 ${P_TOOL_NOTES}
+
+${P_BHK_RECIPE}
 
 ${P_CORRIDOR_RECIPE}
 
@@ -357,9 +458,11 @@ ${P_SELECTION}
 
 ${P_TOOL_NOTES}
 
+${P_BHK_RECIPE}
+
 ${P_CORRIDOR_RECIPE}
 
-FURNISHING A ROOM (design scope): place furniture piece-by-piece — one place_object call per piece (metre coordinates, rotation facing into the room) — or compose the whole set as nodeMeta entries in ONE apply_model edit. Compute positions from the room polygon yourself: every piece fully inside its room, nothing overlapping, door swings + ≥ 0.9 m circulation kept clear. (The automatic multi-object layout solver is a Flow node — available in the Orchestrator and Flow Agent modes.)
+FURNISHING A ROOM (design scope): place furniture piece-by-piece — one place_object call per piece (metre coordinates, rotation facing into the room) — or compose the whole set as nodeMeta entries in ONE apply_model edit. Compute positions from the room polygon yourself: every piece fully inside its room, nothing overlapping, door swings + ≥ 0.9 m circulation kept clear. (The automatic multi-object layout solver is a Flow node — available in the Global Agent and Flow Agent modes.)
 
 ${P_DESIGN_LIBRARY}
 
@@ -376,14 +479,14 @@ WORKFLOW (every request):
 1) INSPECT — get_state (objectsLoaded count) + list_objects for the current catalog. If the user wants the standard bundled set, import_objects loads it — scope with categories (e.g. ["Kitchen"] or ["Architectural"]) when they ask for one discipline only.
 2) EDIT = READ → MODIFY → WRITE: get_object for the CURRENT definition, change only what the instruction requires (keep meta.id to overwrite in place; keep every parameter/rule you are not changing), then save_object with the COMPLETE definition.
 3) CREATE — design real-world geometry in metres; expose every dimension a user would tune as a parameter with a sensible default/min/max/step; drive the geometry rules from parameters/vars so the 2D plan and the 3D mesh both follow. Model each element as a CLOSED shape with its REAL height span so it exists in 3D (chair: legs 0→0.42, seat 0.42→0.45, backrest 0.45→0.85; ceiling fan: hub 0→0.15 + blades + rod, with the reserved clearance param carrying the 2.4 m mounting height). A NEW meta.id creates a new object.
-4) VERIFY — read save_object's result: action / params / file (the .pobj path written under public/Library) AND the render self-check render: { plan2dShapes, planLines, prisms3d } + renderWarning. A physical object REQUIRES plan2dShapes ≥ 1 AND prisms3d ≥ 1 — any renderWarning means instances show as a bare placeholder in 2D and/or nothing in 3D: fix the geometry (rules inside cases[].rules, real h0→h1 spans, expression typos, when-gates) and save again. On an { error } fix the JSON and save again — never repeat the identical call.
+4) VERIFY — read save_object's result: action / params / file (the .pobj path written under the shared Library) AND the render self-check render: { plan2dShapes, planLines, prisms3d } + renderWarning. A physical object REQUIRES plan2dShapes ≥ 1 AND prisms3d ≥ 1 — any renderWarning means instances show as a bare placeholder in 2D and/or nothing in 3D: fix the geometry (rules inside cases[].rules, real h0→h1 spans, expression typos, when-gates) and save again. On an { error } fix the JSON and save again — never repeat the identical call.
 5) REPORT — 1–3 plain sentences (object id, what changed / was created, the saved file path, and that it renders: N plan shapes / M prisms). Never dump whole definition JSON into the chat.
 DELETE — delete_object only on an explicit user request. It refuses ids that have placed instances on the canvas (returns the usage counts); force: true deletes the definition anyway (placed instances fall back to a placeholder symbol).
 
 ${P_POBJ_FORMAT}
 
 DESIGN GUIDELINES:
-- hostKind picks the toolbar host: "node" = point-placed (furniture, fixtures, stairs), "segment" = on a wall (doors, windows, wall types), "space" = attached to a room polygon (floors, massing, site — use host rules / a pipeline), "canvas" = sheet-level (title block).
+- hostKind picks the toolbar host: "node" = point-placed (furniture, fixtures, stairs), "segment" = on a wall (doors, windows, wall types), "space" = attached to a room polygon (floors, massing, site — use host rules / a pipeline), "canvas" = sheet-level (title block), "image" = attached to an imported picture and reads its pixels.
 - BOTH VIEWS FROM ONE RULE SET: extruded closed shapes (h1 > h0) appear in the 2D plan AND the 3D mesh — never author flat-only geometry for a physical object, and never bake the clearance/mounting height into h0/h1 (the engine adds the clearance param on top).
 - Furniture: centre the plan geometry on the origin; real-world sizes (chair seat ≈ 0.45 × 0.45 m, table height 0.75 m, queen bed 1.52 × 2.03 m …); include rotation + color params; size variants via a select param + ternary vars (like the bundled bed's "size" → mattress dims mapping).
 - Doors/windows (segment): a "width" number param is what the wall-opening cut uses; keep height / sill params for the 3D mesh.
@@ -405,7 +508,7 @@ export type AgentToolset = "orchestrator" | "design" | "parametric";
 
 export interface RunAgentParams {
   apiKey: string;
-  /** Gemini model id (the Preferences aiModel, e.g. "gemini-3-flash-preview"). */
+  /** Gemini model id (the Preferences aiModel, e.g. "gemini-3.8-flash"). */
   model: string;
   prompt: string;
   pixelsPerMeter: number;
@@ -495,13 +598,43 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("merge_spaces", (a: { spaces?: string[]; label?: string }) =>
         p.api.mergeSpaces({ spaces: a.spaces, label: a.label })),
     }),
+    list_layers: tool({
+      description: "The canvas LAYER table: every layer's id, name, colour, visible/locked state and paint order, how many segments / spaces / objects sit on each, and which layer is currently ACTIVE (newly drawn entities land there). Call this before create_layer or move_to_layer — it is where the layer ids and names those two accept come from. Note a layer id is stable while its name is just a label, so prefer the id when you have it.",
+      inputSchema: z.object({}),
+      execute: wrap("list_layers", () => p.api.listLayers()),
+    }),
+    create_layer: tool({
+      description: "Create a new canvas layer and make it ACTIVE, so anything drawn next lands on it. IDEMPOTENT: if a layer with the same id or name already exists it is returned untouched (created:false) rather than duplicated, so it is safe to call before every draw. The id is derived from the name (\"Site Boundary\" → \"site-boundary\") unless you pass one. Use move_to_layer to put EXISTING geometry on it.",
+      inputSchema: z.object({
+        name: z.string().describe('Display name for the layer, e.g. "Site Boundary" or "Furniture — Level 2"'),
+        id: z.string().optional().describe("Stable layer id. Omit to slugify `name`. Reusing an existing id returns that layer instead of creating one."),
+        color: z.string().optional().describe('Hex colour for entities set to "ByLayer", e.g. "#22c55e". Omit for the next palette colour.'),
+        visible: z.boolean().optional().describe("Start hidden by passing false (default true)."),
+        locked: z.boolean().optional().describe("Start locked — entities on a locked layer cannot be selected or edited (default false)."),
+        activate: z.boolean().optional().describe("Make it the active layer (default true). Pass false to create a layer without redirecting what gets drawn next."),
+      }),
+      execute: wrap("create_layer", (a: { name: string; id?: string; color?: string; visible?: boolean; locked?: boolean; activate?: boolean }) =>
+        p.api.createLayer({ name: a.name, id: a.id, color: a.color, visible: a.visible, locked: a.locked, activate: a.activate })),
+    }),
+    move_to_layer: tool({
+      description: "Move EXISTING geometry onto another layer. Name the target layer by id or name (it must already exist — call create_layer first), then either name what to move or OMIT all four lists to move whatever the user has selected on the canvas (the \"put these on …\" case). Spaces go by their list_spaces label, segments and objects by the id get_selection reports, nodes by nodeKey. A NODE has no layer of its own — it is derived from the segments meeting at it — so moving one moves those segments, which is the same thing on screen. An auto-detected space is promoted to a real space so the move sticks. Use this rather than editing layerId by hand through apply_model.",
+      inputSchema: z.object({
+        layer: z.string().describe('Target layer id or name, from list_layers, e.g. "site-boundary" or "Site Boundary"'),
+        spaces: z.array(z.string()).optional().describe('Space labels from list_spaces / get_selection, e.g. ["Space001","Kitchen"]'),
+        segments: z.array(z.string()).optional().describe("Segment (wall) ids from get_selection / get_plan"),
+        nodes: z.array(z.string()).optional().describe("Node keys (nodeKey) from get_selection — moves the segments meeting at each node"),
+        objects: z.array(z.string()).optional().describe("Placed object / furniture ids from get_selection"),
+      }),
+      execute: wrap("move_to_layer", (a: { layer: string; spaces?: string[]; segments?: string[]; nodes?: string[]; objects?: string[] }) =>
+        p.api.moveToLayer({ layer: a.layer, spaces: a.spaces, segments: a.segments, nodes: a.nodes, objects: a.objects })),
+    }),
     list_draw_tools: tool({
       description: "What can be drawn: segment/node/space type lists plus the parametric-object catalog (id, name, symbol, hostKind, parameters with defaults). Call before placing objects.",
       inputSchema: z.object({}),
       execute: wrap("list_draw_tools", () => p.api.listDrawTools()),
     }),
     import_objects: tool({
-      description: "Load parametric objects from public/Library/Parametric Objects (bundled + agent-saved). Scope it: `categories` imports whole CATEGORY folders (Kitchen, Furniture, Architectural, Site, …), case-insensitive; `ids` imports ONLY the objects with those exact meta.ids (a single file / a few objects). Combine them to import one object efficiently, e.g. { categories: [\"Site\"], ids: [\"site\"] } loads just the Site object. Omit both to load EVERYTHING. The result's availableCategories lists the folders; call when objectsLoaded is 0 or the needed object isn't loaded — returns the detailed catalog (ids + params) to place from.",
+      description: "Load parametric objects from Objects/ (bundled + agent-saved). Scope it: `categories` imports whole CATEGORY folders (Kitchen, Furniture, Architectural, Site, …), case-insensitive; `ids` imports ONLY the objects with those exact meta.ids (a single file / a few objects). Combine them to import one object efficiently, e.g. { categories: [\"Site\"], ids: [\"site\"] } loads just the Site object. Omit both to load EVERYTHING. The result's availableCategories lists the folders; call when objectsLoaded is 0 or the needed object isn't loaded — returns the detailed catalog (ids + params) to place from.",
       inputSchema: z.object({
         categories: z.array(z.string()).optional().describe('Library category folders to import, e.g. ["Architectural"] — omit for ALL'),
         ids: z.array(z.string()).optional().describe('Import ONLY objects with these exact meta.ids, e.g. ["site"]. Pair with `categories` to scan just that folder.'),
@@ -509,7 +642,7 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("import_objects", (a: { categories?: string[]; ids?: string[] }) => p.api.importObjects(a)),
     }),
     list_designs: tool({
-      description: "List saved DESIGN files under public/Library/Designs — each is a complete exported floor-plan (FloorPlanModel JSON: walls, spaces, openings, furniture, layers, scale). Returns Designs-relative paths, e.g. \"floorplan-2026-07-09.json\". Call before import_design to discover what's available.",
+      description: "List saved DESIGN files under Designs/ — each is a complete exported floor-plan (FloorPlanModel JSON: walls, spaces, openings, furniture, layers, scale). Returns Designs-relative paths, e.g. \"floorplan-2026-07-09.json\". Call before import_design to discover what's available.",
       inputSchema: z.object({}),
       execute: wrap("list_designs", async () => {
         const files = await listLibraryFiles("Designs");
@@ -517,17 +650,14 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       }),
     }),
     import_design: tool({
-      description: "Load a saved DESIGN from public/Library/Designs and REPLACE the whole canvas with it (walls, spaces, openings, furniture, layers, scale). `path` is Designs-relative (from list_designs), e.g. \"floorplan-2026-07-09.json\". This is how you reuse or continue a previously exported plan. The file's parametric objects are restored by id — run import_objects too if placed objects render as bare markers. After loading, VERIFY with get_state / snapshot_canvas, then edit with apply_model as usual.",
+      description: "Load a saved DESIGN from Designs/ and REPLACE the whole canvas with it (walls, spaces, openings, furniture, layers, scale). `path` is Designs-relative (from list_designs), e.g. \"floorplan-2026-07-09.json\". This is how you reuse or continue a previously exported plan. The file's parametric objects are restored by id — run import_objects too if placed objects render as bare markers. After loading, VERIFY with get_state / snapshot_canvas, then edit with apply_model as usual.",
       inputSchema: z.object({
         path: z.string().describe('Designs-relative file, e.g. "floorplan-2026-07-09.json" or "Designs/foo.json"'),
       }),
       execute: wrap("import_design", async (a: { path: string }) => {
         const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/").replace(/^Designs\//i, "");
-        const res = await fetch(encodeURI(`/Library/Designs/${rel}`));
-        if (!res.ok) throw new Error(`design not found: ${rel} (HTTP ${res.status}) — check list_designs`);
-        const json = await res.text();
-        let parsed: unknown;
-        try { parsed = JSON.parse(json); } catch { throw new Error(`design ${rel} is not valid JSON`); }
+        const parsed = await fetchLibraryJson<unknown>(`Designs/${rel}`);
+        if (parsed == null) throw new Error(`design not found: ${rel} — check list_designs`);
         if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { walls?: unknown }).walls)) {
           throw new Error(`design ${rel} is not a FloorPlanModel (no walls[])`);
         }
@@ -548,12 +678,12 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       execute: wrap("get_object", (a: { id: string }) => p.api.getObjectDefinition(a.id)),
     }),
     save_object: tool({
-      description: "CREATE a new parametric object or OVERWRITE an existing one (same meta.id): pass the COMPLETE .pobj definition as a JSON string (kind \"parametric-object\" + meta + parameters + optional geometry/outputs — see PARAMETRIC OBJECT FILE FORMAT in your instructions). Optional hostKind picks the Add menu that hosts it (default: kept for an existing id, else derived from meta.symbol). The saved definition applies immediately — placed instances re-render with it — and the file is written to public/Library/Parametric Objects/<Category>/<meta.id>.pobj.json, the folder derived from meta.category (the result's \"file\"). The result's render self-check { plan2dShapes, planLines, prisms3d } + renderWarning tells you whether it actually draws in 2D and 3D — fix the geometry and re-save while a renderWarning remains.",
+      description: "CREATE a new parametric object or OVERWRITE an existing one (same meta.id): pass the COMPLETE .pobj definition as a JSON string (kind \"parametric-object\" + meta + parameters + optional geometry/outputs — see PARAMETRIC OBJECT FILE FORMAT in your instructions). Optional hostKind picks the Add menu that hosts it (default: kept for an existing id, else derived from meta.symbol). The saved definition applies immediately — placed instances re-render with it — and the file is written to Objects/<Category>/<meta.id>.pobj.json, the folder derived from meta.category (the result's \"file\"). The result's render self-check { plan2dShapes, planLines, prisms3d } + renderWarning tells you whether it actually draws in 2D and 3D — fix the geometry and re-save while a renderWarning remains.",
       inputSchema: z.object({
         definitionJson: z.string().describe("The complete .pobj file as a JSON string"),
-        hostKind: z.enum(["node", "segment", "space", "canvas"]).optional().describe("Which host element instances attach to (drives the Add Node / Segment / Space menus)"),
+        hostKind: z.enum(["node", "segment", "space", "canvas", "image"]).optional().describe("Which host element instances attach to (drives the Add Node / Segment / Space menus)"),
       }),
-      execute: wrap("save_object", (a: { definitionJson: string; hostKind?: "node" | "segment" | "space" | "canvas" }) =>
+      execute: wrap("save_object", (a: { definitionJson: string; hostKind?: "node" | "segment" | "space" | "canvas" | "image" }) =>
         p.api.saveObject({ definitionJson: a.definitionJson, hostKind: a.hostKind })),
     }),
     delete_object: tool({
@@ -691,24 +821,30 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       inputSchema: z.object({}),
       execute: wrap("flow_commit", () => p.api.flowCommit()),
     }),
-    open_workflow: tool({
-      description: "OPEN a saved WORKFLOW (a complete, pre-wired Flow graph) from public/Library/Flows and live-evaluate it — then RETURN its full graph ({version,nodes,edges}) so you can tune node params and re-apply. Prefer this over composing a graph by hand when a workflow for the task exists: it preserves the exact nodes AND wiring (so nothing is dropped). `path` is Flows-relative, e.g. \"Workflows/site_to_building_envelope.json\". Typical loop: open_workflow → edit the returned graph's node params → flow_apply(edited graph) → flow_commit.",
+    run_detect: tool({
+      description: "PRESS DETECT on the Object Detection node of the currently-open flow and WAIT for the result — the button's own Gemini call, run for you. This is the ONLY way detection happens: it is a manual, asynchronous action that BAKES its boxes into the node, so applying or re-applying the graph never re-detects. Order: open_workflow (or flow_apply) the detection flow → set the \"Add object\" rows to the classes asked for → run_detect → read the returned per-row tally. The call is billed PER IMAGE, so put every class you need in one flow's rows and call this ONCE rather than once per class. Returns { detected, rows:[{name,found}], unmatched, labels } — a row at 0 with `unmatched` non-zero means the model used a different word, so rename the row and run again. Detection is a READING (approximate, axis-aligned) — never treat a box edge as a wall line, and nothing is committed by it.",
       inputSchema: z.object({
-        path: z.string().describe('Flows-relative workflow file, e.g. "Workflows/site_to_building_envelope.json"'),
+        nodeId: z.string().optional().describe("Which Object Detection node — omit when the flow has only one"),
+      }),
+      execute: wrap("run_detect", (a: { nodeId?: string }) =>
+        (p.api.runDetect ? p.api.runDetect({ nodeId: a.nodeId }) : { error: "this host cannot press Detect — ask the user to press it on the node" })),
+    }),
+    open_workflow: tool({
+      description: "OPEN a saved WORKFLOW (a complete, pre-wired Flow graph) from Workflows/ and live-evaluate it — then RETURN its full graph ({version,nodes,edges}) so you can tune node params and re-apply. Prefer this over composing a graph by hand when a workflow for the task exists: it preserves the exact nodes AND wiring (so nothing is dropped). `path` is Workflows-relative, e.g. \"Workflows/site_to_building_envelope.json\". Typical loop: open_workflow → edit the returned graph's node params → flow_apply(edited graph) → flow_commit.",
+      inputSchema: z.object({
+        path: z.string().describe('Workflows-relative file, e.g. "Architectural/site_to_building_envelope.json"'),
       }),
       execute: wrap("open_workflow", async (a: { path: string }) => {
-        const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/").replace(/^Flows\//i, "");
-        const res = await fetch(encodeURI(`/Library/Flows/${rel}`));
-        if (!res.ok) throw new Error(`workflow not found: ${rel} (HTTP ${res.status}) — check the Flows folder`);
-        let parsed: unknown;
-        try { parsed = JSON.parse(await res.text()); } catch { throw new Error(`workflow ${rel} is not valid JSON`); }
+        const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/").replace(/^(Flows|Workflows)\//i, "");
+        const parsed = await fetchLibraryJson<unknown>(`Workflows/${rel}`);
+        if (parsed == null) throw new Error(`workflow not found: ${rel} — check the Workflows folder`);
         if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { nodes?: unknown }).nodes)) {
           throw new Error(`workflow ${rel} has no nodes[] — not a Flow graph`);
         }
         const p2 = parsed as { version?: number; nodes: unknown[]; edges?: unknown[] };
         const graph = { version: p2.version ?? 1, nodes: p2.nodes, edges: p2.edges ?? [] };
         const applied = (await p.api.flowApply(JSON.stringify(graph))) as Record<string, unknown>;
-        return { ...applied, path: `Flows/${rel}`, graph };
+        return { ...applied, path: `Workflows/${rel}`, graph };
       }),
     }),
     snapshot_canvas: tool({
@@ -739,10 +875,25 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       }),
       execute: wrap("apply_model", (a: { modelJson: string }) => p.api.applyModelJson(a.modelJson)),
     }),
+    // ── Delegation — only the Orchestration Agent lists these in its accessibleTools ──────────────────
+    list_agents: tool({
+      description: "The agent ROSTER this app can actually run — id, name, label, runner, description and examples for each. Call it BEFORE delegate so you route by what an agent really does, not by a guessed name.",
+      inputSchema: z.object({}),
+      execute: wrap("list_agents", () => (p.api.listAgents ? p.api.listAgents() : { error: "this host cannot list agents — do the work yourself" })),
+    }),
+    delegate: tool({
+      description: "RUN another agent to completion on one task and get its final report back. The sub-agent works with its OWN instructions and tool allow-list on the SAME live canvas, so its result is simply on the canvas when it returns — VERIFY that yourself (snapshot_canvas / list_spaces) rather than trusting the report. One task per call; give the sub-agent everything it needs, because it does NOT see this conversation. A sub-agent cannot delegate onward.",
+      inputSchema: z.object({
+        agent: z.string().describe('Which agent — its label, name or id from list_agents (e.g. "Floorplan", "Vectorisation")'),
+        task: z.string().describe("The COMPLETE self-contained instruction for that agent, including every number, name and constraint it needs"),
+      }),
+      execute: wrap("delegate", (a: { agent: string; task: string }) =>
+        (p.api.runAgent ? p.api.runAgent({ agent: a.agent, task: a.task }) : { error: "this host cannot run other agents — do the work yourself" })),
+    }),
   };
 
   // Tool subsets per chat mode. The Design agent gets the canvas tools (no Flow gateway, no library
-  // management); the Parametric agent gets only the library tools; the Orchestrator gets everything.
+  // management); the Parametric agent gets only the library tools; the Global Agent gets everything.
   const toolset: AgentToolset = p.toolset ?? "orchestrator";
   const SUBSETS: Record<Exclude<AgentToolset, "orchestrator">, readonly (keyof typeof allTools)[]> = {
     design: [
@@ -751,13 +902,20 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
       "attach_space_object", "set_image_underlay", "align_underlay", "analyze_underlay", "fit_plan_to_rect",
       "clear_canvas", "snapshot_canvas", "apply_model",
     ],
-    parametric: ["get_state", "list_objects", "get_object", "save_object", "delete_object", "import_objects"],
+    // snapshot_canvas is here so an object the user has PLACED can be judged by how it draws, not only by
+    // its .pobj JSON — the same look-then-refine loop the Design agent gets.
+    parametric: ["get_state", "list_objects", "get_object", "save_object", "delete_object", "import_objects", "snapshot_canvas"],
   };
   type AnyAgentTool = (typeof allTools)[keyof typeof allTools];
-  // An explicit toolNames allow-list (imported agent) wins; else the mode's subset; else all (orchestrator).
+  // Delegation is OPT-IN, never part of a mode default. The built-in Global Agent is deliberately
+  // self-contained — it must do the work itself, not spawn other agents — so "everything" below means
+  // everything EXCEPT these. Only an agent file that names them in `accessibleTools` gets them (today
+  // just Orchestration.agent.json), which is also what keeps a delegated sub-agent from delegating on.
+  const DELEGATION_TOOLS = new Set<string>(["list_agents", "delegate"]);
+  // An explicit toolNames allow-list (imported agent) wins; else the mode's subset; else all-but-delegation.
   const toolNameList: readonly (keyof typeof allTools)[] =
     p.toolNames?.length ? (p.toolNames.filter((n) => n in allTools) as (keyof typeof allTools)[])
-    : toolset === "orchestrator" ? (Object.keys(allTools) as (keyof typeof allTools)[])
+    : toolset === "orchestrator" ? (Object.keys(allTools).filter((n) => !DELEGATION_TOOLS.has(n)) as (keyof typeof allTools)[])
     : SUBSETS[toolset];
   const tools: Record<string, AnyAgentTool> = Object.fromEntries(toolNameList.map((n) => [n, allTools[n]]));
 
@@ -793,7 +951,16 @@ export async function runAgentChat(p: RunAgentParams): Promise<{ text: string; s
     : (p.objectCatalog?.trim()
         ? `\n\nAVAILABLE PARAMETRIC OBJECTS (live library — the ONLY objectIds you may reference, with their exact params):\n${p.objectCatalog}`
         : `\n\n(The object library is EMPTY — call import_objects first; it loads the bundled objects and returns this catalog.)`);
-  const system = (p.systemPrompt?.trim() ? p.systemPrompt : defaultSystemPrompt) + catalogSuffix;
+  // The Library's LIVE address, appended per run rather than baked into the prompt constants: it is only
+  // known once the status call answers, and a user-edited system prompt must still carry it. With it the
+  // model can hand back a URL that actually opens instead of a path relative to nothing.
+  const libraryBase = await cloudLibraryBaseUrl().catch(() => "");
+  const librarySuffix = libraryBase
+    ? `
+
+LIBRARY BASE URL: ${libraryBase} — join any Library-relative path to it ("Objects/Site/site.json" → "${libraryBase}/Objects/Site/site.json") and give the user that link whenever you name a Library file.`
+    : "";
+  const system = (p.systemPrompt?.trim() ? p.systemPrompt : defaultSystemPrompt) + catalogSuffix + librarySuffix;
   const result = await generateText({
     model: google(p.model.trim()),
     system,

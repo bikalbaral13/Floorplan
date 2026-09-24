@@ -1,0 +1,582 @@
+{
+  "version": 1,
+  "id": "wall-with-math",
+  "title": "Wall — one Math Engine, band, poché and prism",
+  "category": "Building",
+  "object": {
+    "hostKind": "segment",
+    "name": "Wall",
+    "symbol": "wall"
+  },
+  "description": "Wall — parameters and metrics for a canvas wall segment. It draws NOTHING itself: the canvas owns both\nthe 2D band (mitred union + poché hatch, set on the Network row or in Segment Properties → Display) and\nthe 3D extrusion, because only the canvas can see the mitred polygon that makes corners join. This object\nwould have to guess a plain rectangle from its two host points, which fought the canvas solid at every\njunction.\n\nWhat it does own: Thickness and Display mode stay in sync with the segment in both directions, Height\ndrives the segment's 3D extrusion, and the Math Engine publishes 15 metrics (length, plan area, volume,\nface / end / exposed area, bearing, elevations) for the Output block.\n\nRe-enable any Render 2D / 3D row to have the object draw again — the geometry is still computed.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — wall segment / space / point [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0], [3, 0]]",
+              "options": [],
+              "editable": false,
+              "necessary": true
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to segment",
+              "type": "select",
+              "value": "Fill segment",
+              "options": [
+                "Fill segment",
+                "Own length (centred)"
+              ],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "length",
+              "name": "Length (unhosted / own)",
+              "type": "range",
+              "value": 3,
+              "min": 0.1,
+              "max": 40,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": true
+            },
+            {
+              "id": "offset",
+              "name": "Offset along run",
+              "type": "range",
+              "value": 0,
+              "min": -10,
+              "max": 10,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "align",
+              "name": "Alignment across run",
+              "type": "select",
+              "value": "Centre",
+              "options": [
+                "Centre",
+                "Left of run",
+                "Right of run"
+              ],
+              "editable": false,
+              "necessary": true
+            },
+            {
+              "id": "mode",
+              "name": "Display mode",
+              "type": "select",
+              "value": "Buffered",
+              "options": [
+                "Buffered",
+                "Line"
+              ],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "thickness",
+              "name": "Thickness",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.05,
+              "max": 0.6,
+              "step": 0.01,
+              "options": [],
+              "editable": true,
+              "necessary": true
+            },
+            {
+              "id": "height",
+              "name": "Wall height",
+              "type": "range",
+              "value": 2.7,
+              "min": 0.1,
+              "max": 12,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": true
+            },
+            {
+              "id": "base",
+              "name": "Base elevation",
+              "type": "range",
+              "value": 0,
+              "min": -5,
+              "max": 30,
+              "step": 0.05,
+              "options": [],
+              "editable": false,
+              "necessary": false
+            },
+            {
+              "id": "hatch",
+              "name": "Poché hatch",
+              "type": "checkbox",
+              "value": true,
+              "options": [],
+              "editable": true,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Wall maths",
+          "expr": "_e1 = hcat(1, 0)\n_n = rows(P)\n_isSeg = _n == 2\n_isSpace = _n > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_eLen = len(_edges)\n_longest = max(_eLen)\n_mask = eq(_eLen, _longest)\n_sDir = _isSpace ? row(compress(_edges, _mask), 0) : _e1\n_sA = _isSpace ? row(compress(P, _mask), 0) : row(P, 0)\n_segV = _isSeg ? (row(P, 1) - row(P, 0)) : _sDir\n_dir = _isSeg ? _segV : (_isSpace ? _sDir : _e1)\n_dLen = min(len(_dir))\n_u = _dLen > 1e-9 ? normalize(_dir) : _e1\n_ux = sub(_u, 0, 0, 1, 1)\n_uy = sub(_u, 0, 1, 1, 1)\n_px = 0 - _uy\n_py = _ux\n_hosted = (_isSeg || _isSpace) && _dLen > 1e-9\n_fill = fitMode == 'Fill segment'\n_L = _hosted ? (_fill ? _dLen : min(max(0.1, length), _dLen)) : max(0.1, length)\n_t = max(0.02, thickness)\n_h = max(0.05, height)\n_b = base\n_pA = _isSpace ? _sA : row(P, 0)\n_pax = sub(_pA, 0, 0, 1, 1)\n_pay = sub(_pA, 0, 1, 1, 1)\n_cx0 = _hosted ? _pax + _ux * _dLen / 2 : _pax\n_cy0 = _hosted ? _pay + _uy * _dLen / 2 : _pay\n_room = _hosted ? max(0, (_dLen - _L) / 2) : 0\n_off = max(0 - _room, min(_room, offset))\n_alLeft = align == 'Left of run'\n_alRight = align == 'Right of run'\n_dv = _alLeft ? (0 - _t / 2) : (_alRight ? _t / 2 : 0)\n_mx = _cx0 + _ux * _off + _px * _dv\n_my = _cy0 + _uy * _off + _py * _dv\n_hw = _L / 2\n_ht = _t / 2\n_S1 = vcat(hcat(-1, -1), hcat(1, -1), hcat(1, 1), hcat(-1, 1))\n_sa = col(_S1, 0)\n_sb = col(_S1, 1)\n_show = mode != 'Line'\n_ring = hcat(_mx + _sa * _hw * _ux + _sb * _ht * _px, _my + _sa * _hw * _uy + _sb * _ht * _py)\nBandPlan = _show ? _ring : zeros(0, 2)\nWallMesh = _show ? mprism(_ring, _b, _b + _h) : zeros(0, 4)\n_hs = max(0.08, _t * 0.75)\n_hn = hatch > 0 ? max(0, floor((_L - 3 * _t) / _hs) + 1) : 0\n_hx0 = 0 - _hw + _t\n_k = arange(_hn)\n_u1 = _hx0 + _k * _hs\n_u2 = _u1 + _t\nHatchPlan = hcat(_mx + _u1 * _ux - _ht * _px, _my + _u1 * _uy - _ht * _py, _mx + _u2 * _ux + _ht * _px, _my + _u2 * _uy + _ht * _py)\nCentrePlan = hcat(_mx - _hw * _ux, _my - _hw * _uy, _mx + _hw * _ux, _my + _hw * _uy)\nEnds = vcat(hcat(_mx - _hw * _ux, _my - _hw * _uy), hcat(_mx + _hw * _ux, _my + _hw * _uy))\nwallLength = _L\nwallThickness = _t\nwallHeight = _h\nbaseElevation = _b\ntopElevation = _b + _h\nplanArea = _L * _t\nvolume = _L * _t * _h\nfaceArea = 2 * _L * _h\nendArea = 2 * _t * _h\nexposedArea = 2 * _L * _h + 2 * _t * _h + _L * _t\nbearing = min(angle(_dir))\nhostLength = _hosted ? _dLen : 0\nhatchLines = _hn\noffsetApplied = _off\ncentrelineShift = _dv"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Wall band — plan"
+            },
+            {
+              "id": "s2",
+              "label": "Poché hatch — plan"
+            },
+            {
+              "id": "s3",
+              "label": "Centreline — plan"
+            },
+            {
+              "id": "s4",
+              "label": "End centres"
+            },
+            {
+              "id": "s5",
+              "label": "Wall — solid"
+            },
+            {
+              "id": "s6",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s7",
+              "label": "Thickness (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Base elevation (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Top elevation (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Plan area (m²)"
+            },
+            {
+              "id": "s12",
+              "label": "Volume (m³)"
+            },
+            {
+              "id": "s13",
+              "label": "Face area, both sides (m²)"
+            },
+            {
+              "id": "s14",
+              "label": "End area, both ends (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Exposed area (m²)"
+            },
+            {
+              "id": "s16",
+              "label": "Bearing (deg)"
+            },
+            {
+              "id": "s17",
+              "label": "Host length (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Hatch lines"
+            },
+            {
+              "id": "s19",
+              "label": "Offset applied (m)"
+            },
+            {
+              "id": "s20",
+              "label": "Centreline shift (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_band",
+              "kind": "polygon",
+              "name": "Wall band (poché)",
+              "color": "#000000",
+              "layer": "Wall",
+              "show": false,
+              "fillMode": "outlined",
+              "hatch": "diagonal",
+              "hatchSpacing": 7,
+              "hatchWeight": 0.8
+            },
+            {
+              "id": "p2_hatch",
+              "kind": "stroke",
+              "name": "Poché hatch (45°)",
+              "color": "#64748b",
+              "layer": "Wall",
+              "width": 0.008,
+              "show": false
+            },
+            {
+              "id": "p2_centre",
+              "kind": "stroke",
+              "name": "Centreline",
+              "color": "#cbd5e1",
+              "layer": "Wall",
+              "width": 0.006,
+              "show": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_wall",
+              "kind": "polyhedron",
+              "name": "Wall",
+              "color": "#94a3b8",
+              "layer": "Wall",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "source",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_offset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-offset",
+      "targetHandle": "valin-offset"
+    },
+    {
+      "id": "e_props_math_align",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-align",
+      "targetHandle": "valin-align"
+    },
+    {
+      "id": "e_props_val-mode_math_valin-mode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mode",
+      "targetHandle": "valin-mode"
+    },
+    {
+      "id": "e_props_math_thickness",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-thickness",
+      "targetHandle": "valin-thickness"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_base",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-base",
+      "targetHandle": "valin-base"
+    },
+    {
+      "id": "e_props_math_hatch",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-hatch",
+      "targetHandle": "valin-hatch"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BandPlan",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-HatchPlan",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CentrePlan",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Ends",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-WallMesh",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wallLength",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wallThickness",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wallHeight",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-baseElevation",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topElevation",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-planArea",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-volume",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-faceArea",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-endArea",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-exposedArea",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bearing",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-hostLength",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-hatchLines",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-offsetApplied",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-centrelineShift",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_r2d_p2_band",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p2_band"
+    },
+    {
+      "id": "e_out_r2d_p2_hatch",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p2_hatch"
+    },
+    {
+      "id": "e_out_r2d_p2_centre",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p2_centre"
+    },
+    {
+      "id": "e_out_r3d_p3_wall",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_wall"
+    }
+  ]
+}

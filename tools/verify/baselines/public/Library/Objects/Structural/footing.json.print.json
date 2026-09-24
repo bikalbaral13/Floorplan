@@ -1,0 +1,192 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 11,
+          "vertices": 44,
+          "area": 12.0516,
+          "bbox": [
+            -0.75,
+            -0.75,
+            0.75,
+            0.75
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "1e484319d4b9506a"
+      },
+      "solids": {
+        "count": 12,
+        "volume": 1.2238,
+        "hash": "47bfa383d0888353"
+      },
+      "metrics": [
+        {
+          "key": "baseArea",
+          "name": "Base area (m²)",
+          "value": "2.25"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "0.7738"
+        },
+        {
+          "key": "stemVolume",
+          "name": "Stem volume (m³)",
+          "value": "0.09"
+        },
+        {
+          "key": "pccVolume",
+          "name": "PCC volume (m³)",
+          "value": "0.225"
+        },
+        {
+          "key": "solingVolume",
+          "name": "Soling volume (m³)",
+          "value": "0.225"
+        },
+        {
+          "key": "excavationDepth",
+          "name": "Excavation depth (m)",
+          "value": "1.6"
+        },
+        {
+          "key": "excavationVolume",
+          "name": "Excavation volume (m³)",
+          "value": "3.6"
+        },
+        {
+          "key": "formworkArea",
+          "name": "Formwork area (m²)",
+          "value": "3.6"
+        },
+        {
+          "key": "selfWeightkN",
+          "name": "Self weight (kN)",
+          "value": "19.3447"
+        },
+        {
+          "key": "foundingDepth",
+          "name": "Founding depth (m)",
+          "value": "1.4"
+        },
+        {
+          "key": "tiers",
+          "name": "Tiers",
+          "value": "8"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 11,
+          "vertices": 44,
+          "area": 12.0516,
+          "bbox": [
+            -0.75,
+            -0.75,
+            0.75,
+            0.75
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "1e484319d4b9506a"
+      },
+      "solids": {
+        "count": 12,
+        "volume": 1.2238,
+        "hash": "47bfa383d0888353"
+      },
+      "metrics": [
+        {
+          "key": "baseArea",
+          "name": "Base area (m²)",
+          "value": "2.25"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "0.7738"
+        },
+        {
+          "key": "stemVolume",
+          "name": "Stem volume (m³)",
+          "value": "0.09"
+        },
+        {
+          "key": "pccVolume",
+          "name": "PCC volume (m³)",
+          "value": "0.225"
+        },
+        {
+          "key": "solingVolume",
+          "name": "Soling volume (m³)",
+          "value": "0.225"
+        },
+        {
+          "key": "excavationDepth",
+          "name": "Excavation depth (m)",
+          "value": "1.6"
+        },
+        {
+          "key": "excavationVolume",
+          "name": "Excavation volume (m³)",
+          "value": "3.6"
+        },
+        {
+          "key": "formworkArea",
+          "name": "Formwork area (m²)",
+          "value": "3.6"
+        },
+        {
+          "key": "selfWeightkN",
+          "name": "Self weight (kN)",
+          "value": "19.3447"
+        },
+        {
+          "key": "foundingDepth",
+          "name": "Founding depth (m)",
+          "value": "1.4"
+        },
+        {
+          "key": "tiers",
+          "name": "Tiers",
+          "value": "8"
+        }
+      ]
+    }
+  }
+}

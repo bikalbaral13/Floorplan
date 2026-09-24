@@ -1,0 +1,29 @@
+{
+  "schema": "material/1",
+  "category": "Glazing",
+  "id": "glass.mirror",
+  "title": "Glass — silvered mirror",
+  "description": "A wardrobe mirror. Metallic 1 at roughness 0.02 is a mirror in a path tracer; the faint blue-green in the base colour is the float glass in front of the silver, which is what stops it reading as chrome.",
+  "procedural": {
+    "type": "none",
+    "blenderNode": null,
+    "params": {}
+  },
+  "pbr": {
+    "baseColor": "#dfe7e9",
+    "roughness": 0.02,
+    "metallic": 1
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 8,
+    "angle": 0,
+    "weight": 1,
+    "color": "#dfe7e9"
+  },
+  "dxf": {
+    "pattern": "GLASS",
+    "scale": 1,
+    "angle": 0
+  }
+}

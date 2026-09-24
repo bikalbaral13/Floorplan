@@ -4,7 +4,7 @@ import type { Point } from "../../types";
 // algorithms folder so the UI stays in lock-step with the underlying primitives.
 // Heavy lifting is delegated to the per-stage runners on FloorPlanEditor, which
 // themselves call into these same algorithm modules.
-import type { OptimiseRectShape, OptimiseRectReference } from "../../algorithms/layout/optimiseRect";
+import type { OptimiseRectShape, OptimiseRectReference } from "@builderpluss/engine";
 
 export interface SiteToolsBlockProps {
   selectedRoom: { id: string; points: Point[]; roomType?: string };

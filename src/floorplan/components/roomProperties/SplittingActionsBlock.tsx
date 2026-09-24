@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
-import { computePolygonPrincipalAxes } from "../../algorithms/geometry/principalAxes";
-import type { PrincipalAxesMethod, PrincipalAxesShow } from "../../algorithms/geometry/principalAxes";
-import { computeSplitPolygons } from "../../algorithms/geometry/splitPolygons";
+import { computePolygonPrincipalAxes } from "@builderpluss/engine";
+import type { PrincipalAxesMethod, PrincipalAxesShow } from "@builderpluss/engine";
+import { computeSplitPolygons } from "@builderpluss/engine";
 
 export type SplitMode = "equal" | "ratio" | "target" | "length";
 

@@ -1,0 +1,37 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "filter-by-type",
+  "meta": { "label": "Filter by Type", "category": "Canvas", "color": "#0e7490" },
+  "description": "Split a Canvas Spaces bundle by what each space IS — the value of a parameter on its attached object (default `identifyingType`). Matching spaces leave on the first output, the rest on the second.",
+  "instructions": "Answers the question a flow could not previously ask: WHICH of these spaces is a road, and which is a plot.\n\nA Canvas bundle is geometry — polygons and nothing else — so until now every space in it looked alike. This node reads the parametric object ATTACHED to each space and keeps the ones whose named parameter equals Type.\n\nWIRING: Canvas → Spaces → Filter by Type. Two geometry outputs: out-0 MATCHING, out-1 REST. Wire the one you want onward; leaving the other unwired is normal (use it to draw the complement, or to check nothing was missed).\n\nPARAMETERS\n• TYPE — the value to match, compared case-insensitively after trimming (\"Road\" matches \"road\"). Blank matches nothing rather than everything: a half-typed filter should produce no plots, not all of them.\n• PARAMETER KEY — which parameter carries the classification. Defaults to `identifyingType`, the read-only tag plot.json and road.json declare. Point it at another key to slice by something else — the same Spaces bundle can be filtered by `color`, or by any select the attached object exposes.\n\nWHAT IT MATCHES AGAINST is the attached object's parameters with the instance's edits on top, so a space answers with its default classification even if that parameter was added to the object AFTER the object was placed. A space with NO attached object matches nothing and always lands in Rest.\n\nMATCHING BY TAG, NOT BY OBJECT ID, is deliberate. An id (`road-with-math`) breaks the moment the object is renamed and cannot express \"these three different objects are all roads\". A tag is stable and shared.\n\nBOTH HALVES ARE ALSO VALUES. `val-matching` / `val-rest` carry the same polygons as a GROUPED FLAT matrix — one row per vertex, `[x, y, groupIndex]`, anchor-relative metres — which is how geometry reaches a Math Engine, since only a value wire can. Feed either into an expression and `inpoly` reads the group column back as one ring per space. `val-matchCount` / `val-restCount` are the counts.\n\nIDENTITY IS RESOLVED BY POSITION IN THE CANVAS BUNDLE, so wire this DIRECTLY to a Canvas output. An op in between (Inset, Transform, Merge …) rebuilds the polygons and their correspondence to the canvas is lost — filter FIRST, then operate on the half you kept.\n\nIt produces no geometry of its own and commits nothing: it is a selector, so it is preview / Flow-Live only and never appears as a recipe op."
+  ,
+  "handles": {
+    "input": true,
+    "output": true,
+    "outputCount": "2",
+    "outputLabels": ["Matching", "Rest"],
+    "valueOutputs": [
+      { "key": "matching", "label": "Matching (grouped)" },
+      { "key": "rest", "label": "Rest (grouped)" },
+      { "key": "matchCount", "label": "Matched" },
+      { "key": "restCount", "label": "Rest count" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "type",
+      "label": "Type",
+      "kind": "text",
+      "default": "road",
+      "placeholder": "road"
+    },
+    {
+      "key": "paramKey",
+      "label": "Parameter key",
+      "kind": "text",
+      "default": "identifyingType",
+      "placeholder": "identifyingType"
+    }
+  ]
+}

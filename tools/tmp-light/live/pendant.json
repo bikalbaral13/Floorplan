@@ -1,0 +1,730 @@
+{
+  "version": 1,
+  "id": "pendant-with-math",
+  "title": "Pendant — one Math Engine, lathed shade, cord and canopy",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Pendant",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 3v6",
+        "M8 9h8l-1 10H9z",
+        "M12 3a1 1 0 100-1 1 1 0 000 1",
+        "M10 19h4"
+      ]
+    }
+  },
+  "description": "A parametric PENDANT on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE over whatever the pendant hangs above. This is the fitting the master-bedroom plan asks for and the library did not have: `light-bulb-with-math` hangs a bare lamp on a cord, `chandelier-with-math` is a multi-arm statement piece, and neither draws a slim tube shade.\n\nTHE PENDANT IS POSITIONED FROM ITS BOTTOM, NOT ITS TOP. A lighting plan specifies the height of the aperture above the floor — \"bottom at 3'10\"\" — because that is what a person standing under it sees. So `bottomHeight` is the anchor, `bodyLength` grows the shade upward from it, and the cord takes up whatever slack is left to `ceilingHeight`. Move the ceiling and the shade does not move; only the cord gets longer. That is the opposite of the usual \"drop from ceiling\" parameterisation and it is the one that matches how the height gets specified.\n\nTHE SHADE IS A REVOLVE, AND IT HAS TO BE. The attached-object runtime resolves only Polyhedron, Loft, Tube and Ring; a Cylinder row carries its radius in a field, so nothing the Math Engine computes could drive it. The shade is therefore `mlathe` over a five-point profile that closes on the axis at both ends — which is what makes it a solid rather than a surface.\n\nTHREE FORMS, ONE BODY. Cylinder, Cone and Dome are three (top, mid) radius pairs fed to that same profile. The bottom radius is always the nominal one, so the aperture — the thing that reads in a render — stays put whichever form is chosen.\n\nCANOPY AND CORD ARE TUBES along the same axis, so neither needs a mesh, and the cord vanishes cleanly when the shade is tall enough to reach the canopy.\n\nDIMENSIONS AT THE DEFAULTS: a 51 mm brass cylinder 305 mm long, aperture at 1.168 m, canopy at 2.972 m, 1.498 m of cord, 320 lm at 2700 K.\n\nWHAT THIS CANNOT DO. There is no light cast, no IES distribution and no transparency — the diffuser is opaque geometry tinted warm, and the luminance figure is lumens over the aperture, a spacing sanity check rather than a photometric result. The cord is vertical: there is no swag, no cluster and no off-centre hang.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "diameter",
+              "name": "Shade diameter",
+              "type": "range",
+              "value": 0.0508,
+              "min": 0.02,
+              "max": 0.6,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "bodyLength",
+              "name": "Shade length",
+              "type": "range",
+              "value": 0.3048,
+              "min": 0.05,
+              "max": 1.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bottomHeight",
+              "name": "Shade bottom elevation",
+              "type": "range",
+              "value": 1.1684,
+              "min": 0.2,
+              "max": 3.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "ceilingHeight",
+              "name": "Canopy / ceiling elevation",
+              "type": "range",
+              "value": 2.9718,
+              "min": 1.5,
+              "max": 5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "cordRadius",
+              "name": "Cord radius",
+              "type": "range",
+              "value": 0.003,
+              "min": 0.001,
+              "max": 0.02,
+              "step": 0.0005,
+              "options": []
+            },
+            {
+              "id": "canopyRadius",
+              "name": "Canopy radius",
+              "type": "range",
+              "value": 0.035,
+              "min": 0.01,
+              "max": 0.12,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "canopyHeight",
+              "name": "Canopy height",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "shade",
+              "name": "Shade form",
+              "type": "select",
+              "value": "Cylinder",
+              "options": [
+                "Cylinder",
+                "Cone",
+                "Dome"
+              ]
+            },
+            {
+              "id": "openBottom",
+              "name": "Opal diffuser at the bottom",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "wallThk",
+              "name": "Shade wall thickness",
+              "type": "range",
+              "value": 0.0012,
+              "min": 0.0005,
+              "max": 0.01,
+              "step": 0.0001,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature (K)",
+              "type": "range",
+              "value": 2700,
+              "min": 2200,
+              "max": 6500,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "lumens",
+              "name": "Lamp output (lm)",
+              "type": "range",
+              "value": 320,
+              "min": 50,
+              "max": 3000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "showCord",
+              "name": "Show the cord",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Pendant maths",
+          "expr": "_natL = diameter\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n# Every length scales with the one fit scale, so the pendant stays a pendant when it is fitted to a host.\n_R = diameter / 2 * _s\n_L = bodyLength * _s\n_bz = bottomHeight * _s\n_cz = ceilingHeight * _s\n_topZ = _bz + _L\n_bodyL = 2 * _R\n_bodyW = 2 * _R\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# The shade is ONE revolve. Cylinder, Cone and Dome are not three bodies — they are three\n# (top, mid) radius pairs fed to the same profile, which always closes on the axis at both\n# ends so the lathe is a solid rather than a surface.\n_isCyl = shade == 'Cylinder'\n_isCone = shade == 'Cone'\n_rTop = _isCyl ? _R : (_isCone ? _R * 0.35 : _R * 0.2)\n_rMid = _isCyl ? _R : (_isCone ? _R * 0.675 : _R * 0.85)\n_rBot = _R\n_prof = vcat(hcat(0, 0), hcat(0, _rTop), hcat(_L / 2, _rMid), hcat(_L, _rBot), hcat(_L, 0))\n# The axis runs DOWN from the top of the shade, so profile t is depth below the top.\n_seg = hcat(_wcx, _wcy, _topZ, _wcx, _wcy, _topZ - 1)\nShade3D = mlathe(_seg, _prof, 24)\n# Canopy and cord are capped cylinders — a Tube row is exactly that, so neither needs a mesh.\n_canR = canopyRadius * _s\n_canH = canopyHeight * _s\n_canZ = _cz - _canH\nCanopy3D = hcat(_wcx, _wcy, _canZ, _wcx, _wcy, _cz, _canR)\n_cordR = cordRadius * _s\n_hasCord = (showCord > 0) && (_canZ > _topZ)\nCord3D = _hasCord ? hcat(_wcx, _wcy, _topZ, _wcx, _wcy, _canZ, _cordR) : zeros(0, 7)\n# The diffuser is a thin disc inset by the shade wall, so it reads as glowing glass in the aperture.\n_wt = wallThk * _s\n_difR = max(0.001, _rBot - _wt)\n_difH = max(0.002, _wt * 2)\nDiffuser3D = openBottom > 0 ? hcat(_wcx, _wcy, _bz, _wcx, _wcy, _bz + _difH, _difR) : zeros(0, 7)\n# Plan symbol — the shade circle with the canopy inside it.\nShadePlan = hcat(_wcx, _wcy, _R)\nCanopyPlan = hcat(_wcx, _wcy, _canR)\n# Metrics\nshadeDiameter = 2 * _R\nshadeHeight = _L\nbottomElevation = _bz\ntopElevation = _topZ\ndropFromCeiling = _cz - _topZ\ncordLength = max(0, _canZ - _topZ)\napertureArea = PI * _difR * _difR\ncolourTemperature = kelvin\nlampOutput = lumens\napertureLuminance = lumens / max(0.0001, PI * _R * _R)"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Shade — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Canopy — tube"
+            },
+            {
+              "id": "s3",
+              "label": "Cord — tube"
+            },
+            {
+              "id": "s4",
+              "label": "Diffuser — tube"
+            },
+            {
+              "id": "s5",
+              "label": "Shade — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Canopy — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Shade diameter (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Shade height (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Bottom elevation (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Top elevation (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Drop from ceiling (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Cord length (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Aperture area (m2)"
+            },
+            {
+              "id": "s14",
+              "label": "Colour temperature (K)"
+            },
+            {
+              "id": "s15",
+              "label": "Lamp output (lm)"
+            },
+            {
+              "id": "s16",
+              "label": "Aperture luminance (lm/m2)"
+            },
+            {
+              "id": "s17",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_shade",
+              "kind": "circle",
+              "name": "Shade",
+              "color": "#b45309",
+              "layer": "Pendant",
+              "radius": 0.0254,
+              "show": true
+            },
+            {
+              "id": "p2_canopy",
+              "kind": "circle",
+              "name": "Canopy",
+              "color": "#78716c",
+              "layer": "Pendant",
+              "radius": 0.035,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_shade",
+              "kind": "polyhedron",
+              "name": "Shade",
+              "color": "#b08d57",
+              "layer": "Pendant",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_canopy",
+              "kind": "tube",
+              "name": "Canopy",
+              "color": "#b08d57",
+              "layer": "Pendant",
+              "radius": 0.035,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cord",
+              "kind": "tube",
+              "name": "Cord",
+              "color": "#3f3f46",
+              "layer": "Pendant",
+              "radius": 0.003,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_diffuser",
+              "kind": "tube",
+              "name": "Diffuser",
+              "color": "#fef3c7",
+              "layer": "Pendant",
+              "radius": 0.024,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_diameter",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-diameter",
+      "targetHandle": "valin-diameter"
+    },
+    {
+      "id": "e_props_math_bodyLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bodyLength",
+      "targetHandle": "valin-bodyLength"
+    },
+    {
+      "id": "e_props_math_bottomHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bottomHeight",
+      "targetHandle": "valin-bottomHeight"
+    },
+    {
+      "id": "e_props_math_ceilingHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ceilingHeight",
+      "targetHandle": "valin-ceilingHeight"
+    },
+    {
+      "id": "e_props_math_cordRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cordRadius",
+      "targetHandle": "valin-cordRadius"
+    },
+    {
+      "id": "e_props_math_canopyRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-canopyRadius",
+      "targetHandle": "valin-canopyRadius"
+    },
+    {
+      "id": "e_props_math_canopyHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-canopyHeight",
+      "targetHandle": "valin-canopyHeight"
+    },
+    {
+      "id": "e_props_math_shade",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-shade",
+      "targetHandle": "valin-shade"
+    },
+    {
+      "id": "e_props_math_openBottom",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-openBottom",
+      "targetHandle": "valin-openBottom"
+    },
+    {
+      "id": "e_props_math_wallThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-wallThk",
+      "targetHandle": "valin-wallThk"
+    },
+    {
+      "id": "e_props_math_kelvin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-kelvin",
+      "targetHandle": "valin-kelvin"
+    },
+    {
+      "id": "e_props_math_lumens",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lumens",
+      "targetHandle": "valin-lumens"
+    },
+    {
+      "id": "e_props_math_showCord",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showCord",
+      "targetHandle": "valin-showCord"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Shade3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Canopy3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Cord3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Diffuser3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ShadePlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CanopyPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-shadeDiameter",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-shadeHeight",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bottomElevation",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topElevation",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-dropFromCeiling",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-cordLength",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-apertureArea",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-colourTemperature",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampOutput",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-apertureLuminance",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_out_r2d_p2_shade",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_shade"
+    },
+    {
+      "id": "e_out_r2d_p2_canopy",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_canopy"
+    },
+    {
+      "id": "e_out_r3d_p3_shade",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_shade"
+    },
+    {
+      "id": "e_out_r3d_p3_canopy",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_canopy"
+    },
+    {
+      "id": "e_out_r3d_p3_cord",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_cord"
+    },
+    {
+      "id": "e_out_r3d_p3_diffuser",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_diffuser"
+    }
+  ]
+}

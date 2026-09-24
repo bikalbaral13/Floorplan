@@ -1,0 +1,26 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 5,
+  "edgeCount": 7,
+  "items": [
+    {
+      "nodeId": "network_1",
+      "tool": "network",
+      "polygons": {
+        "rings": 64,
+        "vertices": 128,
+        "area": 0,
+        "bbox": [
+          -11.56,
+          -9.57,
+          11.52,
+          9.55
+        ],
+        "nonFinite": 0
+      },
+      "hash": "a86c9ad50347a574"
+    }
+  ],
+  "hash": "34f8781d3ad7b3c1"
+}

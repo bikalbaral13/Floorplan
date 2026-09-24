@@ -1,0 +1,788 @@
+{
+  "version": 1,
+  "id": "track-with-math",
+  "title": "Track — the rail, its heads and whether the circuit can carry them",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Track",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 7h18v2H3z",
+        "M7 9v3",
+        "M12 9v3",
+        "M17 9v3",
+        "M6 12h2",
+        "M11 12h2",
+        "M16 12h2"
+      ]
+    }
+  },
+  "description": "A parametric TRACK on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. It is the rail, not the light: `track-head` is the fitting, and it carries the lamp.\n\nTHE HEADS ARE LAID OUT FROM ONE END, the way a rail is actually loaded, and squeezed if they would run off it. `spacingUsed` and `spacingSqueezed` say which happened. Reporting the spacing that was used rather than the one that was asked for is the difference between a layout and a wish.\n\nWHAT THE RAIL OWNS IS THE CIRCUIT. A 16 A 230 V circuit is 3680 W; ten 50 W heads on it is 14 %, and thirty 150 W heads is 122 %, which is the one failure mode this object exists to catch. A magnetic 48 V track fails it far sooner, which is exactly why the supply is a parameter rather than an assumption.\n\nIT HAS NO LAMP BLOCK. A rail is infrastructure. Giving it lumens would mean every head on it double-counted.\n\nDIMENSIONS AT THE DEFAULTS: a 3 m surface rail at 2.7 m with three heads at 800 mm from 400 mm in, 15 W on a 3680 W circuit — 0.4 %.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Run length",
+              "type": "range",
+              "value": 3,
+              "min": 0.3,
+              "max": 30,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "trackType",
+              "name": "Type",
+              "type": "select",
+              "value": "Surface",
+              "options": [
+                "Surface",
+                "Recessed",
+                "Suspended",
+                "Magnetic 48 V"
+              ]
+            },
+            {
+              "id": "trackWidth",
+              "name": "Track width",
+              "type": "range",
+              "value": 0.035,
+              "min": 0.015,
+              "max": 0.12,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "trackDepth",
+              "name": "Track depth",
+              "type": "range",
+              "value": 0.045,
+              "min": 0.015,
+              "max": 0.15,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "mountHeight",
+              "name": "Ceiling soffit",
+              "type": "range",
+              "value": 2.7,
+              "min": 1.8,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "suspension",
+              "name": "Suspension drop",
+              "type": "range",
+              "value": 0.3,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "headCount",
+              "name": "Heads",
+              "type": "range",
+              "value": 3,
+              "min": 1,
+              "max": 40,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "headSpacing",
+              "name": "Head spacing",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.1,
+              "max": 6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "firstHeadOffset",
+              "name": "First head from the end",
+              "type": "range",
+              "value": 0.4,
+              "min": 0,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "headLoadW",
+              "name": "Load per head",
+              "type": "range",
+              "value": 5,
+              "min": 1,
+              "max": 150,
+              "step": 0.5,
+              "options": []
+            },
+            {
+              "id": "circuitAmps",
+              "name": "Circuit rating",
+              "type": "range",
+              "value": 16,
+              "min": 2,
+              "max": 63,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "supplyVolts",
+              "name": "Supply",
+              "type": "select",
+              "value": "230 V",
+              "options": [
+                "12 V",
+                "24 V",
+                "48 V",
+                "230 V"
+              ]
+            },
+            {
+              "id": "showHeads",
+              "name": "Draw the heads",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "accent",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "black anodised extrusion, copper conductors",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "adjustable accent lighting on a ceiling rail, gallery-like",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Track maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_tw = trackWidth * _s\n_td = trackDepth * _s\n_mz = mountHeight * _s\n_bodyL = _Ln\n_bodyW = _tw\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n_isRec = trackType == 'Recessed'\n_isSus = trackType == 'Suspended'\n_drop = _isSus ? (suspension * _s) : 0\n_topZ = _isRec ? (_mz + _td) : (_mz - _drop)\n_botZ = _topZ - _td\n_RAIL = hcat(0 - _Ln / 2, 0 - _tw / 2, _Ln / 2, 0 - _tw / 2, _Ln / 2, _tw / 2, 0 - _Ln / 2, _tw / 2, _botZ, _topZ, 1)\n# The heads are laid out from ONE END, the way a rail is actually loaded, and then squeezed if\n# they would run off it. Reporting the spacing that was used rather than the one that was asked\n# for is the difference between a layout and a wish.\n_nH = max(1, round(headCount))\n_off = min(firstHeadOffset * _s, _Ln / 2)\n_spMax = (_Ln - 2 * _off) / max(1, _nH - 1)\n_spUsed = _nH > 1 ? min(headSpacing * _s, max(0.05, _spMax)) : 0\n_hk = arange(_nH)\n_hu = 0 - _Ln / 2 + _off + _hk * _spUsed\n_hr = 0.028 * _s\n_hh = 0.09 * _s\n_oneH = ones(_nH, 1)\n_HEADr = hcat(_hu - _hr, 0 - _hr * _oneH, _hu + _hr, 0 - _hr * _oneH, _hu + _hr, _hr * _oneH, _hu - _hr, _hr * _oneH, (_botZ - _hh) * _oneH, _botZ * _oneH, 2 * _oneH)\n_HEADS = showHeads > 0 ? _HEADr : zeros(0, 11)\nQ = vcat(_RAIL, _HEADS)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nRail3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nHeads3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nRailPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nHeadsPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\n_wU = max(0.05, _Ln / 2 - 0.15)\n_wk = arange(2)\n_wsgn = 1 - 2 * _wk\n_WIREr = hcat(_wsgn * _wU, fill(2,1,0), fill(2,1,_topZ), _wsgn * _wU, fill(2,1,0), fill(2,1,_mz), fill(2,1,0.0025 * _s))\n_WIRE = _isSus ? _WIREr : zeros(0, 7)\n_t1u = _cu + col(_WIRE,0)\n_t1v = _cv + col(_WIRE,1)\n_t2u = _cu + col(_WIRE,3)\n_t2v = _cv + col(_WIRE,4)\nWire3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_WIRE,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_WIRE,5), col(_WIRE,6))\n# The rail carries no lamp — its heads do. What it does own is the CIRCUIT, and a track that\n# cannot carry the heads hung on it is the one failure mode this object exists to catch.\n_volts = supplyVolts == '12 V' ? 12 : (supplyVolts == '24 V' ? 24 : (supplyVolts == '48 V' ? 48 : 230))\nheadsUsed = _nH\nspacingUsed = _spUsed\nspacingAsked = headSpacing * _s\nspacingSqueezed = (_nH > 1 && _spUsed < headSpacing * _s - 0.0005) ? 1 : 0\nfirstHead = _off\nlastHead = _off + (_nH - 1) * _spUsed\nconnectedLoad = _nH * headLoadW\ncircuitCapacity = circuitAmps * _volts\ncircuitLoadPct = circuitCapacity > 0 ? (100 * connectedLoad / circuitCapacity) : 0\nsupplyUsed = _volts\nrunLength = _Ln\nmountElevation = _mz\ndropUsed = _drop\nrailElevation = _botZ"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Rail — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Heads — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Suspension — tube"
+            },
+            {
+              "id": "s4",
+              "label": "Rail — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Heads — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Run length (m)"
+            },
+            {
+              "id": "s7",
+              "label": "Heads"
+            },
+            {
+              "id": "s8",
+              "label": "Spacing used (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Spacing asked (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Spacing squeezed"
+            },
+            {
+              "id": "s11",
+              "label": "First head from the end (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Last head from the end (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Connected load (W)"
+            },
+            {
+              "id": "s14",
+              "label": "Circuit capacity (W)"
+            },
+            {
+              "id": "s15",
+              "label": "Circuit load (%)"
+            },
+            {
+              "id": "s16",
+              "label": "Supply (V)"
+            },
+            {
+              "id": "s17",
+              "label": "Mount elevation (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Rail underside (m)"
+            },
+            {
+              "id": "s19",
+              "label": "Suspension used (m)"
+            },
+            {
+              "id": "s20",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_rail",
+              "kind": "polygon",
+              "name": "Rail",
+              "color": "#44403c",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_heads",
+              "kind": "polygon",
+              "name": "Heads",
+              "color": "#78716c",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_rail",
+              "kind": "polyhedron",
+              "name": "Rail",
+              "color": "#44403c",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_heads",
+              "kind": "polyhedron",
+              "name": "Heads",
+              "color": "#78716c",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_wire",
+              "kind": "tube",
+              "name": "Suspension",
+              "color": "#57534e",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_trackType",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trackType",
+      "targetHandle": "valin-trackType"
+    },
+    {
+      "id": "e_props_math_trackWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trackWidth",
+      "targetHandle": "valin-trackWidth"
+    },
+    {
+      "id": "e_props_math_trackDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trackDepth",
+      "targetHandle": "valin-trackDepth"
+    },
+    {
+      "id": "e_props_math_mountHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mountHeight",
+      "targetHandle": "valin-mountHeight"
+    },
+    {
+      "id": "e_props_math_suspension",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-suspension",
+      "targetHandle": "valin-suspension"
+    },
+    {
+      "id": "e_props_math_headCount",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-headCount",
+      "targetHandle": "valin-headCount"
+    },
+    {
+      "id": "e_props_math_headSpacing",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-headSpacing",
+      "targetHandle": "valin-headSpacing"
+    },
+    {
+      "id": "e_props_math_firstHeadOffset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-firstHeadOffset",
+      "targetHandle": "valin-firstHeadOffset"
+    },
+    {
+      "id": "e_props_math_headLoadW",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-headLoadW",
+      "targetHandle": "valin-headLoadW"
+    },
+    {
+      "id": "e_props_math_circuitAmps",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-circuitAmps",
+      "targetHandle": "valin-circuitAmps"
+    },
+    {
+      "id": "e_props_math_supplyVolts",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-supplyVolts",
+      "targetHandle": "valin-supplyVolts"
+    },
+    {
+      "id": "e_props_math_showHeads",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showHeads",
+      "targetHandle": "valin-showHeads"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Rail3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Heads3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Wire3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-RailPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-HeadsPlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-runLength",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-headsUsed",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-spacingUsed",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-spacingAsked",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-spacingSqueezed",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-firstHead",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lastHead",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-connectedLoad",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-circuitCapacity",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-circuitLoadPct",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-supplyUsed",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mountElevation",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-railElevation",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-dropUsed",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_r2d_p2_rail",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_rail"
+    },
+    {
+      "id": "e_out_r2d_p2_heads",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_heads"
+    },
+    {
+      "id": "e_out_r3d_p3_rail",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_rail"
+    },
+    {
+      "id": "e_out_r3d_p3_heads",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_heads"
+    },
+    {
+      "id": "e_out_r3d_p3_wire",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_wire"
+    }
+  ]
+}

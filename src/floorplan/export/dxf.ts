@@ -12,7 +12,7 @@
  * double-line polygons.
  */
 
-import type { ArchitecturalDrawing, ArchDim, ArchHatch } from "./architecturalDrawing";
+import type { ArchitecturalDrawing, ArchDim, ArchHatch, ArchLayer } from "./architecturalDrawing";
 
 class DxfBuf {
   private lines: string[] = [];
@@ -198,18 +198,75 @@ function writeBlocks(buf: DxfBuf, dims: ArchDim[]): void {
   buf.g(0, "ENDSEC");
 }
 
+/** Bounding box over every entity the drawing will emit, in drawing units. Written as $EXTMIN/$EXTMAX so
+ *  the file opens zoomed onto the geometry instead of on an arbitrary default view. */
+function drawingExtents(dwg: ArchitecturalDrawing): { min: [number, number]; max: [number, number] } | null {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const put = (x: number, y: number): void => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+  };
+  for (const p of dwg.polylines) for (const [x, y] of p.pts) put(x, y);
+  for (const c of dwg.circles) { put(c.c[0] - c.r, c.c[1] - c.r); put(c.c[0] + c.r, c.c[1] + c.r); }
+  for (const t of dwg.texts) put(t.pos[0], t.pos[1]);
+  for (const i of dwg.inserts) put(i.x, i.y);
+  for (const h of dwg.hatches) for (const loop of h.loops) for (const [x, y] of loop) put(x, y);
+  for (const d of dwg.dimensions) { put(d.p1[0], d.p1[1]); put(d.p2[0], d.p2[1]); put(d.dimLine[0], d.dimLine[1]); }
+  return Number.isFinite(x0) ? { min: [x0, y0], max: [x1, y1] } : null;
+}
+
 /** Serialise an ArchitecturalDrawing to an R12 DXF string. */
 export function architecturalDrawingToDxf(dwg: ArchitecturalDrawing): string {
   const buf = new DxfBuf();
+  const ext = drawingExtents(dwg);
+  // Layer "0" always exists in a real drawing and the DOOR / WINDOW block bodies are drawn on it, so it is
+  // emitted here whether or not the caller asked for it. AutoCAD rejects a file whose entities reference a
+  // layer the table never defined.
+  const layers: ArchLayer[] = dwg.layers.some((l) => l.name === "0")
+    ? dwg.layers
+    : [{ name: "0", colorIndex: 7 }, ...dwg.layers];
 
   buf.g(0, "SECTION"); buf.g(2, "HEADER");
   buf.g(9, "$ACADVER"); buf.g(1, "AC1009");
-  buf.g(9, "$INSUNITS"); buf.g(70, 6);
+  buf.g(9, "$INSUNITS"); buf.g(70, dwg.insUnits ?? 6);
+  if (ext) {
+    buf.g(9, "$EXTMIN"); buf.g(10, ext.min[0]); buf.g(20, ext.min[1]); buf.g(30, 0);
+    buf.g(9, "$EXTMAX"); buf.g(10, ext.max[0]); buf.g(20, ext.max[1]); buf.g(30, 0);
+    buf.g(9, "$LIMMIN"); buf.g(10, ext.min[0]); buf.g(20, ext.min[1]);
+    buf.g(9, "$LIMMAX"); buf.g(10, ext.max[0]); buf.g(20, ext.max[1]);
+  }
   buf.g(0, "ENDSEC");
 
   buf.g(0, "SECTION"); buf.g(2, "TABLES");
-  buf.g(0, "TABLE"); buf.g(2, "LAYER"); buf.g(70, dwg.layers.length);
-  for (const l of dwg.layers) {
+  // VPORT — the *ACTIVE viewport, centred on the drawing extents. AutoCAD expects this table in a complete
+  // R12 file; without it the file can load into an unusable view (or refuse to load at all).
+  {
+    const cx = ext ? (ext.min[0] + ext.max[0]) / 2 : 0;
+    const cy = ext ? (ext.min[1] + ext.max[1]) / 2 : 0;
+    const h = ext ? Math.max(1e-3, (ext.max[1] - ext.min[1]) * 1.2) : 100;
+    buf.g(0, "TABLE"); buf.g(2, "VPORT"); buf.g(70, 1);
+    buf.g(0, "VPORT"); buf.g(2, "*ACTIVE"); buf.g(70, 0);
+    buf.g(10, 0); buf.g(20, 0);          // lower-left corner of the viewport (screen space)
+    buf.g(11, 1); buf.g(21, 1);          // upper-right corner
+    buf.g(12, cx); buf.g(22, cy);        // view centre (drawing space)
+    buf.g(13, 0); buf.g(23, 0);          // snap base
+    buf.g(14, 1); buf.g(24, 1);          // snap spacing
+    buf.g(15, 1); buf.g(25, 1);          // grid spacing
+    buf.g(16, 0); buf.g(26, 0); buf.g(36, 1); // view direction (0,0,1 — plan)
+    buf.g(17, 0); buf.g(27, 0); buf.g(37, 0); // view target
+    buf.g(40, h); buf.g(41, 1.5); buf.g(42, 50); buf.g(43, 0); buf.g(44, 0);
+    buf.g(50, 0); buf.g(51, 0); buf.g(71, 0); buf.g(72, 100); buf.g(73, 1); buf.g(74, 3);
+    buf.g(75, 0); buf.g(76, 0); buf.g(77, 0); buf.g(78, 0);
+    buf.g(0, "ENDTAB");
+  }
+  // LTYPE — every LAYER below names CONTINUOUS as its linetype, and AutoCAD will not open a file that
+  // references a linetype the table never defined. Must precede the LAYER table.
+  buf.g(0, "TABLE"); buf.g(2, "LTYPE"); buf.g(70, 1);
+  buf.g(0, "LTYPE"); buf.g(2, "CONTINUOUS"); buf.g(70, 0); buf.g(3, "Solid line");
+  buf.g(72, 65); buf.g(73, 0); buf.g(40, 0);
+  buf.g(0, "ENDTAB");
+  buf.g(0, "TABLE"); buf.g(2, "LAYER"); buf.g(70, layers.length);
+  for (const l of layers) {
     buf.g(0, "LAYER"); buf.g(2, l.name); buf.g(70, 0); buf.g(62, l.colorIndex); buf.g(6, "CONTINUOUS");
   }
   buf.g(0, "ENDTAB");
@@ -218,6 +275,11 @@ export function architecturalDrawingToDxf(dwg: ArchitecturalDrawing): string {
   buf.g(0, "STYLE"); buf.g(2, "STANDARD"); buf.g(70, 0);
   buf.g(40, 0); buf.g(41, 1); buf.g(50, 0); buf.g(71, 0); buf.g(42, TEXT_H);
   buf.g(3, "txt"); buf.g(4, "");
+  buf.g(0, "ENDTAB");
+  // APPID — "ACAD" is the application id every AutoCAD drawing carries; a missing table here is one more
+  // thing a strict reader can reject the file on.
+  buf.g(0, "TABLE"); buf.g(2, "APPID"); buf.g(70, 1);
+  buf.g(0, "APPID"); buf.g(2, "ACAD"); buf.g(70, 0);
   buf.g(0, "ENDTAB");
   // Dimension style — STANDARD, tuned to the picture-block sizes (tick arrows, text height, gaps).
   buf.g(0, "TABLE"); buf.g(2, "DIMSTYLE"); buf.g(70, 1);

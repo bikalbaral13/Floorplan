@@ -1,0 +1,140 @@
+{
+  "schema": "moodboard/1",
+  "eyebrow": "MOODBOARD · MASTER BEDROOM",
+  "title": "Soft Contemporary, Warm Neutrals",
+  "intro": "Ivory and warm beige grounds, grey as the quiet counterweight, wood and fluted texture for depth, marble-look underfoot, layered warm light.",
+  "source": "Bedroom Moodboard & Shopping List.pdf — 25 elements, 9 finishes",
+
+  "palette": [
+    { "token": "ivory",  "name": "Light ivory", "hex": "#F3EEE4", "use": "Walls, ceiling, bedding base" },
+    { "token": "beige",  "name": "Warm beige", "hex": "#D9C7AE", "use": "Headboard, shutters, curtains" },
+    { "token": "grey",   "name": "Grey",       "hex": "#8A8A86", "use": "Cushions, TV unit, contrast panels" },
+    { "token": "wood",   "name": "Wood accent","hex": "#A5794E", "use": "Fluting, bedside tables, trims" }
+  ],
+
+  "finishes": [
+    {
+      "token": "marble", "name": "Marble-look", "use": "Large-format floor tiles", "source": "viewer-local",
+      "pbr": { "baseColor": "#EFEAE0", "roughness": 0.18, "metallic": 0 }
+    },
+    {
+      "token": "fluted", "name": "Fluted", "use": "TV wall panels", "source": "viewer-local",
+      "pbr": { "baseColor": "#A5794E", "roughness": 0.52, "metallic": 0 }
+    },
+    {
+      "token": "groove", "name": "Groove detail", "use": "Wardrobe panels", "source": "viewer-local",
+      "pbr": { "baseColor": "#E2DACD", "roughness": 0.62, "metallic": 0 }
+    },
+    {
+      "token": "oak", "name": "Wood finish", "use": "Wall & furniture accents", "material": "Materials/Finishes/wood.json",
+      "pbr": { "baseColor": "#96663A", "roughness": 0.45, "metallic": 0 }
+    },
+    {
+      "token": "matte", "name": "Matte", "use": "Wardrobe shutters", "source": "viewer-local",
+      "pbr": { "baseColor": "#D9C7AE", "roughness": 0.78, "metallic": 0 }
+    },
+    {
+      "token": "linen", "name": "Upholstery", "use": "Headboard, bench cushions", "material": "Materials/Fabric/linen.json",
+      "pbr": { "baseColor": "#D3CCC0", "roughness": 0.92, "metallic": 0 }, "weave": true
+    },
+    {
+      "token": "mirror", "name": "Glass / mirror", "use": "Integrated wardrobe mirrors", "source": "viewer-local",
+      "pbr": { "baseColor": "#C6CED2", "roughness": 0.04, "metallic": 1 }
+    },
+    {
+      "token": "led", "name": "Warm LED", "use": "Backlight, cove, ambient · 2700–3000K", "source": "viewer-local",
+      "pbr": { "baseColor": "#FFD9A8", "roughness": 1, "metallic": 0 }, "emissive": true
+    },
+    {
+      "token": "textile", "name": "Soft textiles", "use": "Curtains, premium bedding", "source": "viewer-local",
+      "pbr": { "baseColor": "#EFE9DD", "roughness": 0.95, "metallic": 0 }
+    },
+    {
+      "token": "plaster", "name": "Painted plaster", "use": "Walls and ceiling", "material": "Materials/Finishes/plaster.json",
+      "pbr": { "baseColor": "#F3EEE4", "roughness": 0.9, "metallic": 0 }
+    },
+    {
+      "token": "greenery", "name": "Greenery", "use": "Indoor plants, 2–3 heights", "source": "viewer-local",
+      "pbr": { "baseColor": "#5A6B4A", "roughness": 0.75, "metallic": 0 }
+    },
+    {
+      "token": "steel", "name": "Brushed metal", "use": "Handles, rails, trims", "material": "Materials/Metal/steel.json",
+      "pbr": { "baseColor": "#B8BCC0", "roughness": 0.35, "metallic": 1 }
+    },
+    {
+      "token": "dark", "name": "Dark neutral", "use": "Screen, camera bodies, shadow gaps", "source": "viewer-local",
+      "pbr": { "baseColor": "#2C2A28", "roughness": 0.6, "metallic": 0 }
+    }
+  ],
+
+  "surfaces": [
+    { "id": "walls",     "label": "Walls",              "finish": "plaster",  "match": [{ "object": "wall-with-math" }] },
+    { "id": "ceiling",   "label": "False ceiling",      "finish": "plaster",  "match": [{ "object": "false-ceiling-with-math", "mesh": "!LED" }] },
+    { "id": "floor",     "label": "Floor",              "finish": "marble",   "match": [{ "object": "room-with-math" }] },
+    { "id": "skirting",  "label": "Skirting",           "finish": "plaster",  "match": [{ "object": "skirting-with-math", "mesh": "Skirting" }] },
+    { "id": "headboard", "label": "Headboard panel",    "finish": "linen",    "match": [{ "object": "upholstered-panel-with-math", "mesh": "!LED" }] },
+    { "id": "fluting",   "label": "Fluted TV wall",     "finish": "fluted",   "match": [{ "object": "fluted-panel-with-math" }] },
+    { "id": "wardrobe",  "label": "Wardrobe shutters",  "finish": "matte",    "match": [{ "object": "wardrobe-with-math", "mesh": "Doors" }, { "object": "wardrobe-with-math", "mesh": "Carcass" }, { "object": "wardrobe-with-math", "mesh": "Grooves" }, { "object": "wardrobe-with-math", "mesh": "End panels" }, { "object": "wardrobe-with-math", "mesh": "Top filler" }] },
+    { "id": "mirror",    "label": "Wardrobe mirror",    "finish": "mirror",   "match": [{ "object": "wardrobe-with-math", "mesh": "Mirror" }] },
+    { "id": "casework",  "label": "Bedside & TV unit",  "finish": "oak",      "match": [{ "object": "nightstand-with-math", "mesh": "!LED" }, { "object": "tv-unit-with-math", "mesh": "!LED" }, { "object": "window-seat-with-math", "mesh": "Carcass" }, { "object": "window-seat-with-math", "mesh": "Plinth" }, { "object": "window-seat-with-math", "mesh": "Lid" }] },
+    { "id": "bedding",   "label": "Bedding",            "finish": "textile",  "match": [{ "object": "bed-with-math", "mesh": "Mattress" }, { "object": "bed-with-math", "mesh": "Pillows" }, { "object": "bed-with-math", "mesh": "Duvet" }] },
+    { "id": "bedframe",  "label": "Bed frame",          "finish": "linen",    "match": [{ "object": "bed-with-math", "mesh": "Divan" }, { "object": "bed-with-math", "mesh": "Head" }, { "object": "bed-with-math", "mesh": "Legs" }] },
+    { "id": "cushions",  "label": "Seat cushions",      "finish": "textile",  "match": [{ "object": "window-seat-with-math", "mesh": "Cushion" }, { "object": "window-seat-with-math", "mesh": "Back cushion" }, { "object": "window-seat-with-math", "mesh": "Bolsters" }] },
+    { "id": "curtains",  "label": "Curtains",           "finish": "textile",  "match": [{ "object": "curtain-with-math", "mesh": "Drape" }, { "object": "curtain-with-math", "mesh": "Blackout" }] },
+    { "id": "rug",       "label": "Rug",                "finish": "textile",  "match": [{ "object": "rug-with-math" }] },
+    { "id": "metal",     "label": "Handles & rails",    "finish": "steel",    "match": [{ "object": "wardrobe-with-math", "mesh": "Hanging rail" }, { "object": "nightstand-with-math", "mesh": "Pulls" }, { "object": "curtain-track-with-math" }, { "object": "curtain-with-math", "mesh": "Rail" }] },
+    { "id": "joinery",   "label": "Door & window frames","finish": "matte",   "match": [{ "object": "door-with-math" }, { "object": "window-with-math", "mesh": "!Glazing" }] },
+    { "id": "glazing",   "label": "Glazing",            "finish": "mirror",   "match": [{ "object": "window-with-math", "mesh": "Glazing" }] },
+    { "id": "greenery",  "label": "Planting",           "finish": "greenery", "match": [{ "object": "plant-with-math", "mesh": "Crown" }, { "object": "plant-with-math", "mesh": "Branches" }] },
+    { "id": "screen",    "label": "TV screen",          "finish": "dark",     "match": [{ "object": "tv-with-math", "mesh": "!Bias" }] }
+  ],
+
+  "zones": [
+    { "id": "bed", "title": "Bed wall", "accent": "#A5794E", "items": [
+      "King-size bed",
+      "Upholstered full-height headboard, warm beige",
+      "Warm LED backlighting behind headboard",
+      "2 pendant lights, symmetrical bedside",
+      "2 floating bedside tables, wood finish",
+      "Premium bedding, ivory with beige layer"
+    ] },
+    { "id": "wardrobe", "title": "Wardrobe wall", "accent": "#8A8A86", "items": [
+      "Full-height wardrobe, floor to false ceiling",
+      "Matte-finish shutters, warm beige",
+      "Integrated full-length mirrors",
+      "Groove-detail panels, vertical rhythm"
+    ] },
+    { "id": "nook", "title": "Window nook", "accent": "#D9C7AE", "items": [
+      "Window bench, wood finish",
+      "Soft seat cushions, grey upholstery",
+      "Hidden storage under seat",
+      "Soft curtains, sheer plus blackout",
+      "Indoor plants flanking the seat"
+    ] },
+    { "id": "tv", "title": "TV wall", "accent": "#6B635A", "items": [
+      "TV unit, grey with wood top",
+      "Fluted wall panels, wood finish",
+      "Decorative wall panels, ivory",
+      "Ambient LED lighting behind panels",
+      "Wooden wall and furniture accents"
+    ] },
+    { "id": "ceiling", "title": "Ceiling", "accent": "#E0A24A", "items": [
+      "False ceiling, light ivory",
+      "Cove lighting, warm white perimeter",
+      "Recessed spotlights over key zones",
+      "Contemporary chandelier, centred"
+    ] },
+    { "id": "floor", "title": "Floor", "accent": "#CFC8BD", "items": [
+      "Large-format marble-look tiles, ivory base",
+      "Minimal grout lines, light grey",
+      "Optional soft rug under bed, beige"
+    ] }
+  ],
+
+  "lighting": [
+    { "tier": "AMBIENT",   "name": "Cove lighting",       "note": "Continuous warm strip in false-ceiling", "objects": ["false-ceiling-with-math"] },
+    { "tier": "TASK",      "name": "Pendants + spotlights","note": "Bedside reading, wardrobe and wet zones", "objects": ["pendant-with-math", "downlight-with-math"] },
+    { "tier": "ACCENT",    "name": "Headboard + panel LED","note": "Backlit glow behind headboard and panels", "objects": ["upholstered-panel-with-math", "nightstand-with-math", "tv-unit-with-math", "tv-with-math"] },
+    { "tier": "STATEMENT", "name": "Chandelier",          "note": "Single contemporary piece, dimmable", "objects": ["ceiling-fan-with-math", "light-with-math"] }
+  ]
+}

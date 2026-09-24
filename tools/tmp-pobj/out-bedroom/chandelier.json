@@ -1,0 +1,958 @@
+{
+  "version": 1,
+  "id": "chandelier-with-math",
+  "title": "Chandelier — one Math Engine, chain, column, ring and candle arms",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Chandelier",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 2v5",
+        "M12 7c-4 0-7 2-7 5",
+        "M12 7c4 0 7 2 7 5",
+        "M5 12v3",
+        "M12 10v5",
+        "M19 12v3",
+        "M4 15h2",
+        "M11 15h2",
+        "M18 15h2"
+      ]
+    }
+  },
+  "description": "A parametric CHANDELIER on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE and it hangs there from the ceiling height you set, the chain taking up whatever is left above the column.\n\nALMOST NOTHING HERE IS A BOX, so almost nothing here is a quad. A chandelier is a chain, a column, a set of arms sloping down and out, a cup and a candle on each — every one of them a SOLID ABOUT AN ARBITRARY AXIS, which is exactly what a Tube row is for. The arms are the interesting case: they run from the column out to the candle position AND downward by the arm drop, so their axis is tilted in three dimensions, and a tilted segment needs no special case because the perpendicular frame is derived from the segment itself.\n\nTIERS AND ARMS ARE ONE BROADCAST. `kron(arange(tiers), ones(arms,1))` gives every arm its tier and `kron(ones(tiers,1), arange(arms))` its position within that tier, so a 6-arm single tier and a 3-tier 16-arm frame are the same six lines. Each tier is smaller by `tierStep` and higher by `tierRise`.\n\nEVERY OTHER TIER IS OFFSET BY HALF A PITCH — `(_ti % 2) * PI / arms` — so candles on the tier above do not sit directly over the ones below. That is one term in the angle expression, and it is the difference between a chandelier and a stack of rings.\n\nTHE RING IS A RING ROW, not a torus row. A Torus is positioned by a POINT and lies flat by construction; a Ring is driven by its AXIS SEGMENT, so the decorative hoop is described by the same vertical axis the column already has — and only the segment's direction and midpoint are read, so its length is free.\n\nTHE PLAN IS A DRAFTING SYMBOL: the spread circle, radial arm strokes, a candle dot per lamp and the column. The candle dots come from `Cups3D` — the same world coordinates the 3D cups were built at — so the symbol and the model cannot drift apart.\n\nDIMENSIONS AT THE DEFAULTS: 0.70 m spread, six lamps on one tier, top at 3.00 m, bottom at 2.14 m, candles at 2.29 m.\n\nWHAT THIS CANNOT DO. Arms are straight tubes — no scroll, no curve, no crystal. The chain is a single cylinder, not links. There is no shade or globe over the lamps.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "arms",
+              "name": "Arms",
+              "type": "range",
+              "value": 6,
+              "min": 2,
+              "max": 16,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "style",
+              "name": "Style",
+              "type": "select",
+              "value": "Arms",
+              "options": [
+                "Arms",
+                "Linear bar",
+                "Tiered rings",
+                "Globe cluster",
+                "Flush"
+              ]
+            },
+            {
+              "id": "armRadius",
+              "name": "Arm radius (spread)",
+              "type": "range",
+              "value": 0.35,
+              "min": 0.1,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "armDrop",
+              "name": "Arm drop",
+              "type": "range",
+              "value": 0.1,
+              "min": 0,
+              "max": 0.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "tiers",
+              "name": "Tiers",
+              "type": "range",
+              "value": 1,
+              "min": 1,
+              "max": 3,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "tierStep",
+              "name": "Tier radius step",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.02,
+              "max": 0.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "tierRise",
+              "name": "Tier rise",
+              "type": "range",
+              "value": 0.16,
+              "min": 0.05,
+              "max": 0.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "columnHeight",
+              "name": "Column height",
+              "type": "range",
+              "value": 0.4,
+              "min": 0.1,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "columnRadius",
+              "name": "Column radius",
+              "type": "range",
+              "value": 0.035,
+              "min": 0.01,
+              "max": 0.12,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "chainLength",
+              "name": "Chain / stem length",
+              "type": "range",
+              "value": 0.4,
+              "min": 0,
+              "max": 2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "ceilingHeight",
+              "name": "Ceiling height",
+              "type": "range",
+              "value": 3,
+              "min": 1.8,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "candleHeight",
+              "name": "Candle height",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.03,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "candleRadius",
+              "name": "Candle radius",
+              "type": "range",
+              "value": 0.022,
+              "min": 0.008,
+              "max": 0.06,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "cupRadius",
+              "name": "Cup radius",
+              "type": "range",
+              "value": 0.045,
+              "min": 0.015,
+              "max": 0.12,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "ring",
+              "name": "Decorative ring",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "ringTube",
+              "name": "Ring section radius",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.04,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "brushed brass frame, opal glass",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "classic brass chandelier, warm candle lamps, ornate, a statement piece",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Chandelier maths",
+          "expr": "_natL = 2 * armRadius\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_na = max(2, round(arms))\n# Style changes WHERE the lamps go, not what they are. Every expression after this reads\n# _ax / _ay / _zArm and needs no branch of its own.\n_stBar = style == 'Linear bar'\n_stRing = style == 'Tiered rings'\n_stGlobe = style == 'Globe cluster'\n_stFlush = style == 'Flush'\n_nt = max(1, round(tiers))\n_aR = armRadius * _s\n_aD = armDrop * _s\n_tS = tierStep * _s\n_tR = tierRise * _s\n_colH = columnHeight * _s\n_colR = columnRadius * _s\n_chn = chainLength * _s\n_ceil = ceilingHeight * _s\n_cdH = candleHeight * _s\n_cdR = candleRadius * _s\n_cupR = cupRadius * _s\n_rgT = ringTube * _s\n_colTop = _ceil - (_stFlush ? 0 : _chn)\n_colBot = _colTop - _colH\n_span = 2 * _aR\n_bodyL = _span\n_bodyW = _span\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n# Arms — every tier and every arm in ONE broadcast; each tier is a smaller, higher ring of arms,\n# and every OTHER tier is offset by half a pitch so the candles do not stack on one another.\n_ti = kron(arange(_nt), ones(_na, 1))\n_ai = kron(ones(_nt, 1), arange(_na))\n_off = (_ti % 2) * PI / _na\n_ang = _ai * 2 * PI / _na + _off\n_rad = _aR - _ti * _tS\n_zArm = _colBot + 0.06 * _s + _ti * _tR - (_stGlobe ? ((_ai % 3) * _tR * 0.7) : 0)\n# A linear bar is the same lamps on one axis instead of on a circle — one expression, not a\n# second body, which is why the tier and offset machinery above still applies to it.\n_barU = (_ai / max(1, _na - 1) - 0.5) * 2 * _rad\n_ax = _stBar ? _barU : _rad * cos(_ang)\n_ay = _stBar ? (_ai * 0) : _rad * sin(_ang)\n_nrow = rows(_ti)\n_hubX = _colR * 0.8 * cos(_ang)\n_hubY = _colR * 0.8 * sin(_ang)\n_ARMq = hcat(_hubX, _hubY, _zArm + _aD, _ax, _ay, _zArm, fill(_nrow,1,_colR * 0.35))\n_ARM = (_stRing || _stFlush) ? zeros(0, 7) : _ARMq\n_CUPq = hcat(_ax, _ay, _zArm, _ax, _ay, _zArm + 0.03 * _s, fill(_nrow,1,_cupR))\n_CUP = (_stRing || _stFlush) ? zeros(0, 7) : _CUPq\n# A globe is a candle that is short and fat — the same tube row with two numbers changed.\n_cdHu = _stGlobe ? (_cdR * 2.2) : _cdH\n_cdRu = _stGlobe ? (_cdR * 2.2) : _cdR\n_CANDq = hcat(_ax, _ay, _zArm + 0.03 * _s, _ax, _ay, _zArm + 0.03 * _s + _cdHu, fill(_nrow,1,_cdRu))\n_CAND = (_stRing || _stFlush) ? zeros(0, 7) : _CANDq\n# Chain, canopy and column — vertical axis segments\n_CHN = hcat(0, 0, _colTop, 0, 0, _ceil, _colR * 0.22)\n_CAN = hcat(0, 0, _ceil - 0.04 * _s, 0, 0, _ceil, _colR * 1.6)\n_COL = hcat(0, 0, _colBot, 0, 0, _colTop, _colR)\n_FIN = hcat(0, 0, _colBot - _colR * 1.6, 0, 0, _colBot, _colR * 1.5)\n_t1u = _cu + col(_ARM,0)\n_t1v = _cv + col(_ARM,1)\n_t2u = _cu + col(_ARM,3)\n_t2v = _cv + col(_ARM,4)\nArms3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_ARM,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_ARM,5), col(_ARM,6))\n_t1u = _cu + col(_CUP,0)\n_t1v = _cv + col(_CUP,1)\n_t2u = _cu + col(_CUP,3)\n_t2v = _cv + col(_CUP,4)\nCups3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_CUP,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_CUP,5), col(_CUP,6))\n_t1u = _cu + col(_CAND,0)\n_t1v = _cv + col(_CAND,1)\n_t2u = _cu + col(_CAND,3)\n_t2v = _cv + col(_CAND,4)\nCandles3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_CAND,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_CAND,5), col(_CAND,6))\n_t1u = _cu + col(vcat(_CHN, _CAN, _COL, _FIN),0)\n_t1v = _cv + col(vcat(_CHN, _CAN, _COL, _FIN),1)\n_t2u = _cu + col(vcat(_CHN, _CAN, _COL, _FIN),3)\n_t2v = _cv + col(vcat(_CHN, _CAN, _COL, _FIN),4)\nStem3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(vcat(_CHN, _CAN, _COL, _FIN),2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(vcat(_CHN, _CAN, _COL, _FIN),5), col(vcat(_CHN, _CAN, _COL, _FIN),6))\n# Ring — a torus whose AXIS is vertical, so only the segment's direction and midpoint are read\n_RGr = hcat(0, 0, _colBot + 0.06 * _s, 0, 0, _colBot + 0.16 * _s, _aR, _rgT)\n# Tiered rings gives every tier its own torus at that tier's radius and height — the same two\n# numbers the arms would have used, so the rings land exactly where the arms were.\n_tiR = arange(_nt)\n_RGm = hcat(fill(_nt,1,0), fill(_nt,1,0), _colBot + 0.06 * _s + _tiR * _tR, fill(_nt,1,0), fill(_nt,1,0), _colBot + 0.16 * _s + _tiR * _tR, _aR - _tiR * _tS, fill(_nt,1,_rgT))\n_RGl = _stRing ? _RGm : (ring > 0 ? _RGr : zeros(0, 8))\n_t1u = _cu + col(_RGl,0)\n_t1v = _cv + col(_RGl,1)\n_t2u = _cu + col(_RGl,3)\n_t2v = _cv + col(_RGl,4)\nRing3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_RGl,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_RGl,5), col(_RGl,6), col(_RGl,7))\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# Plan symbol — a candle dot per arm, the column, and the spread circle\nCandlePlan = hcat(col(Cups3D,0), col(Cups3D,1), fill(_nrow,1,_cupR))\nColumnPlan = hcat(_wcx, _wcy, _colR * 1.6)\nSpreadPlan = hcat(_wcx, _wcy, _aR)\nArmPlan = hcat(col(Arms3D,0), col(Arms3D,1), col(Arms3D,3), col(Arms3D,4), fill(_nrow,1,2 * _colR * 0.35))\n# Metrics\nspreadDiameter = _span\narmCount = _na * _nt\ntierCount = _nt\nlampCount = _na * _nt\ntopElevation = _ceil\nbottomElevation = _colBot - _colR * 1.6\noverallDrop = _ceil - bottomElevation\ncandleElevation = _colBot + 0.09 * _s\narmLength = mean(len(hcat(_ax - _hubX, _ay - _hubY, _zArm - _zArm - _aD)))\nfootprintArea = PI * _aR * _aR\nisFlush = _stFlush ? 1 : 0\nisLinear = _stBar ? 1 : 0\nlampSpread = _stBar ? (2 * _aR) : (2 * _aR)\nringsDrawn = _stRing ? _nt : (ring > 0 ? 1 : 0)\nvisibleLamps = (_stRing || _stFlush) ? 0 : (_na * _nt)"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Arms — tube"
+            },
+            {
+              "id": "s2",
+              "label": "Cups — tube"
+            },
+            {
+              "id": "s3",
+              "label": "Candles — tube"
+            },
+            {
+              "id": "s4",
+              "label": "Chain, canopy & column — tube"
+            },
+            {
+              "id": "s5",
+              "label": "Ring — ring"
+            },
+            {
+              "id": "s6",
+              "label": "Candles — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Column — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Spread circle — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Arms — plan"
+            },
+            {
+              "id": "s10",
+              "label": "Spread diameter (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Arms"
+            },
+            {
+              "id": "s12",
+              "label": "Tiers"
+            },
+            {
+              "id": "s13",
+              "label": "Lamps"
+            },
+            {
+              "id": "s14",
+              "label": "Top elevation (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Bottom elevation (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Overall drop (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Candle elevation (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Mean arm length (m)"
+            },
+            {
+              "id": "s19",
+              "label": "Plan footprint (m²)"
+            },
+            {
+              "id": "s20",
+              "label": "Fit scale"
+            },
+            {
+              "id": "s21",
+              "label": "Flush mounted"
+            },
+            {
+              "id": "s22",
+              "label": "Linear bar"
+            },
+            {
+              "id": "s23",
+              "label": "Lamp spread (m)"
+            },
+            {
+              "id": "s24",
+              "label": "Rings"
+            },
+            {
+              "id": "s25",
+              "label": "Visible lamps"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_spread",
+              "kind": "circle",
+              "name": "Spread circle",
+              "color": "#f1f5f9",
+              "layer": "Chandelier",
+              "radius": 0.35,
+              "show": true
+            },
+            {
+              "id": "p2_arms",
+              "kind": "stroke",
+              "name": "Arms",
+              "color": "#a16207",
+              "layer": "Chandelier",
+              "width": 0.024,
+              "show": true
+            },
+            {
+              "id": "p2_candles",
+              "kind": "circle",
+              "name": "Candles",
+              "color": "#fde68a",
+              "layer": "Chandelier",
+              "radius": 0.045,
+              "show": true
+            },
+            {
+              "id": "p2_col",
+              "kind": "circle",
+              "name": "Column",
+              "color": "#78350f",
+              "layer": "Chandelier",
+              "radius": 0.056,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_stem",
+              "kind": "tube",
+              "name": "Chain, canopy & column",
+              "color": "#a16207",
+              "layer": "Chandelier",
+              "radius": 0.035,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_arms",
+              "kind": "tube",
+              "name": "Arms",
+              "color": "#a16207",
+              "layer": "Chandelier",
+              "radius": 0.012,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_ring",
+              "kind": "ring",
+              "name": "Ring",
+              "color": "#ca8a04",
+              "layer": "Chandelier",
+              "radius": 0.35,
+              "tubeRadius": 0.012,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cups",
+              "kind": "tube",
+              "name": "Cups",
+              "color": "#ca8a04",
+              "layer": "Chandelier",
+              "radius": 0.045,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cand",
+              "kind": "tube",
+              "name": "Candles",
+              "color": "#fef9c3",
+              "layer": "Chandelier",
+              "radius": 0.022,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_arms",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-arms",
+      "targetHandle": "valin-arms"
+    },
+    {
+      "id": "e_props_math_armRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-armRadius",
+      "targetHandle": "valin-armRadius"
+    },
+    {
+      "id": "e_props_math_armDrop",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-armDrop",
+      "targetHandle": "valin-armDrop"
+    },
+    {
+      "id": "e_props_math_tiers",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tiers",
+      "targetHandle": "valin-tiers"
+    },
+    {
+      "id": "e_props_math_tierStep",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tierStep",
+      "targetHandle": "valin-tierStep"
+    },
+    {
+      "id": "e_props_math_tierRise",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tierRise",
+      "targetHandle": "valin-tierRise"
+    },
+    {
+      "id": "e_props_math_columnHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-columnHeight",
+      "targetHandle": "valin-columnHeight"
+    },
+    {
+      "id": "e_props_math_columnRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-columnRadius",
+      "targetHandle": "valin-columnRadius"
+    },
+    {
+      "id": "e_props_math_chainLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-chainLength",
+      "targetHandle": "valin-chainLength"
+    },
+    {
+      "id": "e_props_math_ceilingHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ceilingHeight",
+      "targetHandle": "valin-ceilingHeight"
+    },
+    {
+      "id": "e_props_math_candleHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-candleHeight",
+      "targetHandle": "valin-candleHeight"
+    },
+    {
+      "id": "e_props_math_candleRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-candleRadius",
+      "targetHandle": "valin-candleRadius"
+    },
+    {
+      "id": "e_props_math_cupRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cupRadius",
+      "targetHandle": "valin-cupRadius"
+    },
+    {
+      "id": "e_props_math_ring",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ring",
+      "targetHandle": "valin-ring"
+    },
+    {
+      "id": "e_props_math_ringTube",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ringTube",
+      "targetHandle": "valin-ringTube"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Arms3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Cups3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Candles3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Stem3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Ring3D",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-CandlePlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ColumnPlan",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-SpreadPlan",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ArmPlan",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-spreadDiameter",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-armCount",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-tierCount",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampCount",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topElevation",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bottomElevation",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-overallDrop",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-candleElevation",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-armLength",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-footprintArea",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_r2d_p2_spread",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p2_spread"
+    },
+    {
+      "id": "e_out_r2d_p2_arms",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s9",
+      "targetHandle": "valin-p2_arms"
+    },
+    {
+      "id": "e_out_r2d_p2_candles",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_candles"
+    },
+    {
+      "id": "e_out_r2d_p2_col",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p2_col"
+    },
+    {
+      "id": "e_out_r3d_p3_stem",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_stem"
+    },
+    {
+      "id": "e_out_r3d_p3_arms",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_arms"
+    },
+    {
+      "id": "e_out_r3d_p3_ring",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_ring"
+    },
+    {
+      "id": "e_out_r3d_p3_cups",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_cups"
+    },
+    {
+      "id": "e_out_r3d_p3_cand",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_cand"
+    },
+    {
+      "id": "e_props_math_style",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-style",
+      "targetHandle": "valin-style"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-isFlush",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_math_out_s22",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-isLinear",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_math_out_s23",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampSpread",
+      "targetHandle": "valin-s23"
+    },
+    {
+      "id": "e_math_out_s24",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ringsDrawn",
+      "targetHandle": "valin-s24"
+    },
+    {
+      "id": "e_math_out_s25",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-visibleLamps",
+      "targetHandle": "valin-s25"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "image": "library/Images/floorplan_with_bedroom.png",
+  "scope": "room",
+  "scope_rooms": "M. BEDROOM",
+  "room_type": "bedroom"
+}

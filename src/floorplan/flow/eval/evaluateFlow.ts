@@ -8,21 +8,28 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 import type { Point } from "../../types";
-import { FLOW_TOOLS, outputSlots, inputProps, placeObjectRng, randomOptimiseRectParams, schemaNodeToSchemas, schemaNodeToResultDefs, schemaEntries, coerceSelectWire, type FlowNodeData, type FlowToolType } from "../flowTypes";
-import { computePull, type PullParams } from "../../algorithms/geometry/pull";
-import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalCorridoor, evalCoreRacking, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalLoop, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, renderGridField, evalMatrixTranspose, evalMatrixInverse, gridFieldFromMatrix, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalGraphSimplify, evalGraphClip, evalGraphFitLines, evalGraphClassify, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow, skeletonPathBands, clipBandsToBoundaries, evalBoolean2d } from "./evalNodes";
-import { toFootingSpec, footingElevationPolys, footingPlanPolys, footingMeshPrisms } from "./footing";
-import { toStaircaseSpec, staircaseElevationPolys, staircaseMeshPrisms, type ElevationView } from "./staircase";
-import { evalParametricGeometry, evalParametricPrisms } from "./parametricObject";
+import { FLOW_TOOLS, outputSlots, inputProps, renderPrims, detectionObjects, placeObjectRng, randomOptimiseRectParams, schemaNodeToSchemas, schemaNodeToResultDefs, schemaEntries, coerceSelectWire, type FlowNodeData, type FlowToolType } from "../flowTypes";
+import { computePull, type PullParams } from "@builderpluss/engine";
+import { evalInset, evalOptimise, evalSplit, evalPlaceObject, evalPlaceObjectDetailed, type PlacedFootprint, evalBsp, computeBspOpeningWalls, type BspOpeningWall, evalVoronoi, evalSkeleton, evalCorridoor, evalCoreRacking, evalConditional, evalBoundingShape, evalConvexHull, evalConvexDecomp, evalSmoothing, evalContour, evalMassing, evalSpaceCreator, evalDensify, evalLoop, evalBuffer, evalBloom, evalTransform, evalShowDirection, evalDimensions, evalAreaDimension, evalGraphToGrid, evalGridDistance, evalGridField, evalCellularAutomaton, evalLaplaceSolver, evalFillDepressions, evalFlowDirection, evalFlowAccumulation, evalWatershed, evalMorphology, evalGridThreshold, evalMarchingSquares, renderGridField, evalMatrixTranspose, evalMatrixInverse, evalMatrixSolve, evalLeastSquares, evalMatrixOps, evalMatrixShift, evalVectorOps, evalVectorProduct, evalMatrixToGraph, evalMatrixReduce, evalMatrixEigen, gridFieldFromMatrix, type GridField, evalMiteredJoin, evalGraphSmooth, evalGraphMetrics, evalGraphToSpaces, evalLongestBranch, evalGraphReduce, evalGraphSimplify, evalGraphClip, evalGraphFitLines, evalGraphClassify, evalVoronoiBloom, evalSpringLayout, evalSegmentSplit, type GraphPathEdge, computeMassingFloorPolys, evalMesh, evalCirclePacking, evalVisibility, evalTreemap, evalRectanglePacking, computeOptimalOptimiseTilt, computeSegmentDoor, computeSegmentWindow, skeletonPathBands, clipBandsToBoundaries, evalBoolean2d, pointInPolyEO } from "./evalNodes";
+import { toFootingSpec, footingElevationPolys, footingPlanPolys, footingMeshPrisms } from "@builderpluss/engine";
+import { toStaircaseSpec, staircaseElevationPolys, staircaseMeshPrisms } from "@builderpluss/engine";
+import type { ElevationView } from "@builderpluss/engine/structure";
+import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs, paramOutputEntries } from "./parametricObject";
 import { resolvePlaceObjectParams } from "./objectFootprints";
-import { evalRaw, parseExprDefs, type Scope } from "./expr";
-import { floorplanElevationPolys, type ElevSeg, type ElevKind, type ElevationView as FloorElevView } from "./floorplanElevation";
-import type { FlowMesh, FlowMeshPrism } from "./meshTypes";
+import { runExprBody, liftScopeValue, serializeValue, type Scope } from "@builderpluss/engine";
+import { floorplanElevationPolys, type ElevSeg, type ElevKind, type ElevationView as FloorElevView } from "@builderpluss/engine";
+import type { FlowMesh, FlowMeshPrism } from "@builderpluss/engine";
 import { conditionMetricValue, evaluateSpaceCondition } from "../conditional";
-import { polygonArea, polygonCentroid } from "../../algorithms/geometry/polygon";
+import { polygonArea, polygonCentroid } from "@builderpluss/engine";
 import { computeBua } from "../bua";
 
 const num = (v: unknown, d: number): number => (typeof v === "number" && isFinite(v) ? v : Number(v) || d);
+
+/** Tools that only READ what is wired into them and write it somewhere else on demand — to a file
+ *  (Export DXF / Export 3D) or straight onto the plan (Export to Canvas). They produce no geometry and
+ *  consume none through the evaluator, so their incoming edges are excluded from the dependency graph —
+ *  see the note where `succs` is built. */
+const EXPORT_SINK_TOOLS = new Set<string>(["export-dxf", "export-3d", "export-canvas"]);
 
 /** Build a 2D plan staircase anchored at node point `p`. Returns filled flight/landing rectangles
  *  (`fill`) and stroked tread lines + per-flight direction arrows (`lines`), in world-pixel coords.
@@ -248,6 +255,9 @@ const LIST_INPUT_PARAM: Partial<Record<FlowToolType, string>> = {
   bsp: "polygon",
   split: "polygon",
   "optimise-rect": "polygon",
+  // Place Object along a COMPUTED outline: an N×2 point matrix on `valin-boundary` stands in for the
+  // wired Space, so a room that only exists as maths (a Math Engine rectangle) can host objects.
+  "place-object": "boundary",
   "rect-pack": "polygon",
   mesh: "polygon",
   densify: "polygon",
@@ -269,13 +279,39 @@ const LIST_INPUT_PARAM: Partial<Record<FlowToolType, string>> = {
  *  wired graph. Each block resolves it itself (they read `inputPolylinesOf`, which the singular `input`
  *  gate never reaches) — this map only documents the set. */
 const GRAPH_INPUT_TOOLS = new Set<FlowToolType>([
-  "graph-smooth", "graph-reduce", "graph-classify", "set-thickness", "merge-graph", "graph-to-openings", "spring-layout", "longest-branch",
+  "graph-smooth", "graph-reduce", "graph-classify", "set-thickness", "label-graph", "merge-graph", "graph-to-openings", "spring-layout", "longest-branch",
   "mitered-join", "voronoi-bloom", "graph-to-spaces",
 ]);
 void GRAPH_INPUT_TOOLS;
 
 /** Parse a `[[x,y],…]` metre-pair list into a polygon in world px, placed at `anchor`. Returns undefined
  *  for anything that isn't at least a triangle. Shared by the list-driven tools above. */
+/** A GROUPED outline list -- [[x, y, ringId], ...] -- split into one ring per distinct id, in first-seen
+ *  order. This is the same third-column-is-a-group convention the rest of the flow already speaks (a Math
+ *  Engine's multi-piece plan output, render-2d rows, matrix-to-graph), and it is what lets ONE node act on
+ *  every room instead of one node per room.
+ *
+ *  Returns undefined unless the list really is grouped — a plain [[x, y], ...] outline, or a grouped one
+ *  that turns out to hold a single ring, falls through to {@link polygonFromMetreList} so nothing about the
+ *  ungrouped case changes. Rings of fewer than three points are dropped rather than passed on to a solver
+ *  that would reject them anyway. */
+function ringsFromGroupedMetreList(raw: unknown, anchor: Point, ppm: number): Point[][] | undefined {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  let arr: unknown;
+  try { arr = JSON.parse(raw); } catch { return undefined; }
+  if (!Array.isArray(arr) || arr.length === 0) return undefined;
+  const rows = arr.filter((p): p is unknown[] => Array.isArray(p) && p.length >= 3);
+  if (rows.length !== arr.length) return undefined;            // not a grouped list — leave it alone
+  const byRing = new Map<number, Point[]>();
+  for (const p of rows) {
+    const g = num(p[2], 0);
+    if (!byRing.has(g)) byRing.set(g, []);
+    byRing.get(g)!.push({ x: anchor.x + num(p[0], 0) * ppm, y: anchor.y + num(p[1], 0) * ppm });
+  }
+  const rings = [...byRing.values()].filter((r) => r.length >= 3);
+  return rings.length > 1 ? rings : undefined;
+}
+
 function polygonFromMetreList(raw: unknown, anchor: Point, ppm: number): Point[] | undefined {
   if (typeof raw !== "string" || !raw.trim()) return undefined;
   const toPts = (list: unknown[]): Point[] => list
@@ -452,7 +488,7 @@ function polylinesToGraphJson(lines: Point[][], ppm: number, anchor: Point, thic
  *  thickness. Shared by the Set Thickness / Merge Graph nodes, which work on the graph STRUCTURE directly
  *  (not via polylines) so per-edge `thickness` survives. */
 type GraphNodeJson = { id: string; x: number; y: number };
-type GraphEdgeJson = { from_node_id: string; to_node_id: string; length?: number; thickness?: number; type?: string };
+type GraphEdgeJson = { from_node_id: string; to_node_id: string; length?: number; thickness?: number; type?: string; label?: string };
 function parseGraphJson(raw: unknown): { nodes: GraphNodeJson[]; edges: GraphEdgeJson[] } {
   let g: unknown = raw;
   if (typeof raw === "string") { try { g = JSON.parse(raw); } catch { return { nodes: [], edges: [] }; } }
@@ -467,24 +503,193 @@ function parseGraphJson(raw: unknown): { nodes: GraphNodeJson[]; edges: GraphEdg
   const edges: GraphEdgeJson[] = [];
   for (const e of Array.isArray(o.edges) ? o.edges : []) {
     if (!e || typeof e !== "object") continue;
-    const p = e as { from_node_id?: unknown; to_node_id?: unknown; length?: unknown; thickness?: unknown; type?: unknown };
+    const p = e as { from_node_id?: unknown; to_node_id?: unknown; length?: unknown; thickness?: unknown; type?: unknown; label?: unknown };
     if (p.from_node_id == null || p.to_node_id == null) continue;
     const edge: GraphEdgeJson = { from_node_id: String(p.from_node_id), to_node_id: String(p.to_node_id) };
     if (typeof p.length === "number" && isFinite(p.length)) edge.length = p.length;
     if (typeof p.thickness === "number" && isFinite(p.thickness)) edge.thickness = p.thickness;
     if (typeof p.type === "string" && p.type) edge.type = p.type;
+    // `label` — the human name of the thing this edge belongs to ("Bedroom", "sofa"), stamped by Label
+    // Graph. Carried through every graph hop so a merged semantic graph keeps WHAT each family is.
+    if (typeof p.label === "string" && p.label) edge.label = p.label;
     edges.push(edge);
   }
   return { nodes, edges };
 }
 
 /** Set Thickness — overwrite `thickness` (metres) on EVERY edge of a graph, preserving nodes, ids, coords
- *  and edge lengths. Value-only: coordinates are untouched (thickness is frame-independent). */
-function setGraphThicknessJson(raw: unknown, thicknessM: number): { json: string; nodeCount: number; edgeCount: number } {
+ *  and edge lengths. Value-only: coordinates are untouched (thickness is frame-independent).
+ *  `edgeType` (optional) additionally stamps `type` on every edge — "wall" / "door" / "window" — so a family
+ *  of edges can be tagged before Merge Graph unions it with families carrying a different width and type.
+ *  Empty string leaves whatever `type` the incoming edges already had (so it stays backwards-compatible). */
+function setGraphThicknessJson(raw: unknown, thicknessM: number, edgeType = ""): { json: string; nodeCount: number; edgeCount: number } {
   const g = parseGraphJson(raw);
   const t = Math.round(Math.max(0, thicknessM) * 1e4) / 1e4;
-  const edges = g.edges.map((e) => ({ ...e, thickness: t }));
+  const ty = edgeType.trim();
+  const edges = g.edges.map((e) => ({ ...e, thickness: t, ...(ty ? { type: ty } : {}) }));
   return { json: JSON.stringify({ nodes: g.nodes, edges }), nodeCount: g.nodes.length, edgeCount: edges.length };
+}
+
+/** Label Graph — stamp a NAME on each connected component of a graph, taking the names in order from a
+ *  JSON array (Object Detection's `val-labels`, whose order matches the boxes on `val-graph`). Optionally
+ *  stamps `type` and `thickness` on every edge at the same time, so one node turns a detection into a
+ *  fully-tagged family ready for Merge Graph.
+ *
+ *  Components are numbered by the order their first node appears in `nodes`, which is the order the boxes
+ *  were serialised in — that is what keeps label[i] on box[i]. A component past the end of the array keeps
+ *  whatever label it already had; a `labels` array with ONE entry names every component (the common case
+ *  when a whole graph is one family, e.g. all walls). */
+function parseLabelList(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((s) => String(s));
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  const parsed = ((): unknown => { try { return JSON.parse(raw); } catch { return null; } })();
+  return Array.isArray(parsed) ? parsed.map((s) => String(s)) : raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+/** Union–find over a graph's edges → `find(nodeId)` plus the component INDEX of each root, numbered by
+ *  the order the component's first node appears in `nodes`. That ordering is what keeps a detection's
+ *  label[i] on its box[i], since the boxes are serialised in detection order. */
+function graphComponents(g: { nodes: GraphNodeJson[]; edges: GraphEdgeJson[] }): {
+  find: (a: string) => string; indexOf: Map<string, number>;
+} {
+  const parent = new Map<string, string>();
+  const find = (a: string): string => {
+    let r = a;
+    while (parent.get(r) && parent.get(r) !== r) r = parent.get(r)!;
+    return r;
+  };
+  for (const n of g.nodes) parent.set(n.id, n.id);
+  for (const e of g.edges) {
+    const a = find(e.from_node_id), b = find(e.to_node_id);
+    if (parent.has(a) && parent.has(b) && a !== b) parent.set(a, b);
+  }
+  const indexOf = new Map<string, number>();
+  for (const n of g.nodes) {
+    const root = find(n.id);
+    if (!indexOf.has(root)) indexOf.set(root, indexOf.size);
+  }
+  return { find, indexOf };
+}
+
+/** Parse a nested `[[[x,y],…],…]` metre list (what every multi-piece value node publishes on
+ *  `val-polygons`) into rings of metre pairs. A single flat `[[x,y],…]` outline is accepted as one ring. */
+function parseRingList(raw: unknown): number[][][] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  const arr = ((): unknown => { try { return JSON.parse(raw); } catch { return null; } })();
+  if (!Array.isArray(arr) || !arr.length) return [];
+  const isPair = (v: unknown): boolean => Array.isArray(v) && v.length >= 2 && typeof v[0] !== "object";
+  const toRing = (list: unknown[]): number[][] => list.filter(isPair).map((p) => [num((p as unknown[])[0], 0), num((p as unknown[])[1], 0)]);
+  if (isPair(arr[0])) return [toRing(arr)];
+  return (arr as unknown[][]).filter(Array.isArray).map(toRing).filter((r) => r.length >= 2);
+}
+
+/** Rings of metre pairs → graph JSON, one CLOSED component per ring (which is what makes component i
+ *  correspond to ring i downstream). `labels[i]` is stamped on ring i's edges when supplied. */
+function ringsToGraphJson(rings: number[][][], labels?: (string | undefined)[]): { json: string; nodeCount: number; edgeCount: number } {
+  const r = (v: number) => Math.round(v * 1e4) / 1e4;
+  const nodes: GraphNodeJson[] = [];
+  const edges: GraphEdgeJson[] = [];
+  rings.forEach((ring, ri) => {
+    if (ring.length < 2) return;
+    const base = nodes.length;
+    for (const p of ring) nodes.push({ id: `n${nodes.length + 1}`, x: r(p[0]), y: r(p[1]) });
+    // A 2-point ring is a single open segment — no wrap edge, or it would duplicate the same pair.
+    const last = ring.length < 3 ? ring.length - 1 : ring.length;
+    for (let i = 0; i < last; i++) {
+      const a = nodes[base + i].id, b = nodes[base + ((i + 1) % ring.length)].id;
+      if (a === b) continue;
+      const e: GraphEdgeJson = { from_node_id: a, to_node_id: b };
+      const lab = labels?.[ri];
+      if (lab) e.label = lab;
+      edges.push(e);
+    }
+  });
+  return { json: JSON.stringify({ nodes, edges }), nodeCount: nodes.length, edgeCount: edges.length };
+}
+
+/** Shoelace area (m²) of a ring already expressed in metres. */
+function ringArea(ring: number[][]): number {
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const p = ring[i], q = ring[(i + 1) % ring.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return Math.abs(a) / 2;
+}
+
+/** Filter by Label — keep only the entries of a LABELLED detection whose label matches. One Object
+ *  Detection call asking for "door, window, room" costs a fraction of three calls, but everything lands
+ *  on one pair of endpoints; this splits that single result back into families by name.
+ *
+ *  Filtering is by INDEX: label i belongs to ring i (`val-polygons`) and to component i (`val-graph`),
+ *  both serialised in detection order. Republishes the same endpoint names Object Detection uses, so it
+ *  drops straight into the same wiring. */
+function filterDetectionsByLabel(
+  polysRaw: unknown, graphRaw: unknown, labelsRaw: unknown, matchRaw: unknown, mode: string, invert: boolean,
+): { polygons: string; graph: string; labels: string; count: number; area: number } {
+  const labels = parseLabelList(labelsRaw);
+  const terms = String(matchRaw ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  // No match text = a pass-through (inverted: drop everything), so an unconfigured node is visibly inert
+  // rather than silently emptying the branch.
+  const keep = (i: number): boolean => {
+    if (!terms.length) return !invert;
+    const l = (labels[i] ?? "").toLowerCase();
+    const m = mode === "exact" ? terms.some((t) => l === t) : terms.some((t) => l.includes(t) || t.includes(l));
+    return invert ? !m : m;
+  };
+  const rings = parseRingList(polysRaw);
+  if (rings.length) {
+    const idx = rings.map((_, i) => i).filter(keep);
+    const kept = idx.map((i) => rings[i]);
+    const keptLabels = idx.map((i) => labels[i] ?? "");
+    const g = ringsToGraphJson(kept, keptLabels);
+    return {
+      polygons: JSON.stringify(kept),
+      graph: g.json,
+      labels: JSON.stringify(keptLabels),
+      count: kept.length,
+      area: kept.reduce((s, r) => s + ringArea(r), 0),
+    };
+  }
+  // No polygon list wired — filter the GRAPH's components by the same index rule.
+  const gIn = parseGraphJson(graphRaw);
+  if (!gIn.nodes.length) return { polygons: "[]", graph: JSON.stringify({ nodes: [], edges: [] }), labels: "[]", count: 0, area: 0 };
+  const { find, indexOf } = graphComponents(gIn);
+  const keepNode = new Set(gIn.nodes.filter((n) => keep(indexOf.get(find(n.id)) ?? 0)).map((n) => n.id));
+  const nodes = gIn.nodes.filter((n) => keepNode.has(n.id));
+  const edges = gIn.edges
+    .filter((e) => keepNode.has(e.from_node_id) && keepNode.has(e.to_node_id))
+    .map((e) => { const i = indexOf.get(find(e.from_node_id)) ?? 0; const l = labels[i]; return l ? { ...e, label: l } : e; });
+  const keptIdx = [...new Set(nodes.map((n) => indexOf.get(find(n.id)) ?? 0))];
+  return {
+    polygons: "[]",
+    graph: JSON.stringify({ nodes, edges }),
+    labels: JSON.stringify(keptIdx.map((i) => labels[i] ?? "")),
+    count: keptIdx.length,
+    area: 0,
+  };
+}
+
+function labelGraphJson(
+  raw: unknown, labelsRaw: unknown, edgeType: string, thicknessM: number | null,
+): { json: string; nodeCount: number; edgeCount: number; labelled: number } {
+  const g = parseGraphJson(raw);
+  const labels = parseLabelList(labelsRaw);
+  const { find, indexOf } = graphComponents(g);
+  const ty = edgeType.trim();
+  let labelled = 0;
+  const edges = g.edges.map((e) => {
+    const ci = indexOf.get(find(e.from_node_id)) ?? 0;
+    const name = labels.length === 1 ? labels[0] : labels[ci];
+    if (name) labelled++;
+    return {
+      ...e,
+      ...(thicknessM != null ? { thickness: Math.round(Math.max(0, thicknessM) * 1e4) / 1e4 } : {}),
+      ...(ty ? { type: ty } : {}),
+      ...(name ? { label: name } : {}),
+    };
+  });
+  return { json: JSON.stringify({ nodes: g.nodes, edges }), nodeCount: g.nodes.length, edgeCount: edges.length, labelled };
 }
 
 /** Merge Graph — union several graph JSONs into one, PRESERVING each edge's own thickness. Nodes at the
@@ -517,6 +722,7 @@ function mergeGraphJsons(raws: unknown[]): { json: string; nodeCount: number; ed
       if (e.length != null) edge.length = e.length;
       if (e.thickness != null) edge.thickness = e.thickness;
       if (e.type != null) edge.type = e.type;
+      if (e.label != null) edge.label = e.label;
       edges.push(edge);
     }
   }
@@ -706,17 +912,17 @@ function computeNodeValues(tool: FlowToolType, polys: Point[][], ppm: number, an
   }
   return Object.keys(out).length ? out : undefined;
 }
-import { computeSkeletonBoundaryJoins } from "../../algorithms/skeleton/computeSkeleton";
-import { rasterUnion } from "./rasterUnion";
-import { polygonUnionVector } from "./vectorUnion";
-import { vectorizeImage, type VectorizeParams, type VectorizeColorMode } from "../../algorithms/vector/vectorizeImage";
-import { solvePipeNetwork, normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeGraphNode, type PipeSolveResult } from "../../algorithms/network/pipeNetworkSolver";
-import { computeFrame, type FrameGraphInput, type FrameSchema } from "../../algorithms/structure/frameBuilder";
-import { computeMiteredWalls, computeWallDimensions } from "../../algorithms/structure/wallBuilder";
-import { computeMiteredUnion } from "../../wallGeometry";
-import { insetMassFootprint } from "../../algorithms/mass/inset3d";
-import { smoothMassFootprint } from "../../algorithms/mass/smooth3d";
-import { findDef, resolveStr, resolveNum, resolveBool, ROLES } from "./attrResolve";
+import { computeSkeletonBoundaryJoins } from "@builderpluss/engine";
+import { rasterUnion } from "@builderpluss/engine";
+import { polygonUnionVector } from "@builderpluss/engine";
+import { vectorizeImage, type VectorizeParams, type VectorizeColorMode } from "@builderpluss/engine";
+import { solvePipeNetwork, normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeGraphNode, type PipeSolveResult } from "@builderpluss/engine";
+import { computeFrame, type FrameGraphInput, type FrameSchema } from "@builderpluss/engine";
+import { computeMiteredWalls, computeWallDimensions } from "@builderpluss/engine";
+import { computeMiteredUnion } from "@builderpluss/engine";
+import { insetMassFootprint } from "@builderpluss/engine";
+import { smoothMassFootprint } from "@builderpluss/engine";
+import { findDef, resolveStr, resolveNum, resolveBool, ROLES } from "@builderpluss/engine";
 
 /** Shift a polyline perpendicular to itself by `d` px (signed; left-hand normal (-dy, dx)). Each vertex
  *  moves along its averaged edge normal. Used by Display Segment's buffered justification to push the
@@ -737,7 +943,105 @@ function offsetPolyline(pts: Point[], d: number): Point[] {
 }
 
 /** The imported underlay image fed into the flow (RGBA buffer + its world placement box). */
+
+/** EVERY VALUE an Object Detection node publishes, from the boxes / points / labels its Detect run baked
+ *  onto `params`. Extracted from the node kernel so there is ONE implementation: an ATTACHED object
+ *  resolves its detection endpoints through the spine runner, which never walks the flow interpreter, and
+ *  two copies of this splitting logic would drift the first time a row-matching rule changed.
+ *
+ *  Pure: params in, values out. `ppm` and `anchor` put the result in the same anchor-relative metres every
+ *  other value node speaks. */
+export function detectionValues(
+  params: Record<string, unknown>,
+  ppm: number,
+  anchor: Point,
+): Record<string, number | string> {
+  const boxes = (Array.isArray(params._boxes) ? (params._boxes as Point[][]) : []).filter((p) => p.length >= 3);
+  const dpts = (Array.isArray(params._points) ? (params._points as Point[]) : []).filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y));
+  const dlabels = (Array.isArray(params._labels) ? (params._labels as unknown[]) : []).map((s2) => String(s2));
+  const r4 = (v: number) => Math.round(v * 1e4) / 1e4; // 0.1 mm — keeps the JSON short
+      const dvals: Record<string, number | string> = { ...(computeNodeValues("object-detection", boxes, ppm, anchor) ?? {}) };
+      dvals.points = JSON.stringify(dpts.map((p) => [r4((p.x - anchor.x) / ppm), r4((p.y - anchor.y) / ppm)]));
+      dvals.labels = JSON.stringify(dlabels);
+      // FLAT corners — one row per box [x0,y0,x1,y1,x2,y2,x3,y3] in anchor-relative metres. The nested
+      // ring list on `polygons` parses to zeros in the Math Engine (a ring is not a number), so this is
+      // the endpoint that wires detection straight into `expr` without a Graph to Matrix bridge.
+      const flat8 = (poly: Point[]): number[] => {
+        const q = poly.slice(0, 4);
+        while (q.length < 4) q.push(q[q.length - 1]);
+        return q.flatMap((p) => [r4((p.x - anchor.x) / ppm), r4((p.y - anchor.y) / ppm)]);
+      };
+      dvals.corners = JSON.stringify(boxes.map(flat8));
+      // One detection may carry a box, a point, or both — count the items, not whichever list is longer.
+      dvals.count = Math.max(dlabels.length, boxes.length, dpts.length);
+      // ── "Add object" rows → one DYNAMIC endpoint each (`val-<rowId>`) ────────────────────────────
+      // Every row name went into the one prompt; here the single reply is split back by name. The row
+      // endpoint carries the shape the node asked for: rings for a boundary, an N×2 matrix for a point.
+      // `unmatched` collects what no row claimed — without it a row whose name the model answered with a
+      // different word looks exactly like "found nothing", which is the failure this is designed out of.
+      const rows = detectionObjects(params);
+      if (rows.length) {
+        const wantPoints = String(params.shape ?? "polygon") === "point";
+        const r4b = (v: number) => Math.round(v * 1e4) / 1e4;
+        const ringOf = (poly: Point[]) => poly.map((p) => [r4b((p.x - anchor.x) / ppm), r4b((p.y - anchor.y) / ppm)]);
+        const ptOf = (p: Point) => [r4b((p.x - anchor.x) / ppm), r4b((p.y - anchor.y) / ppm)];
+        // Bidirectional, case-insensitive containment — "door" claims "sliding door" and "doorway".
+        const hits = (label: string, name: string): boolean => {
+          const l = label.toLowerCase().trim(), n = name.toLowerCase().trim();
+          return !!l && !!n && (l.includes(n) || n.includes(l));
+        };
+        const claimed = new Set<number>();
+        for (const row of rows) {
+          const idx = dlabels.map((_, i) => i).filter((i) => row.name.trim() && hits(dlabels[i], row.name));
+          for (const i of idx) claimed.add(i);
+          dvals[row.id] = wantPoints
+            ? JSON.stringify(idx.map((i) => dpts[i]).filter(Boolean).map(ptOf))
+            : JSON.stringify(idx.map((i) => boxes[i]).filter(Boolean).map(ringOf));
+          // Per-row name list, so a row can still feed Label Graph with the individual object names.
+          dvals[`${row.id}_labels`] = JSON.stringify(idx.map((i) => dlabels[i] ?? ""));
+          dvals[`${row.id}_count`] = idx.length;
+          // Per-row FLAT corners (same N×8 form as the static `corners` endpoint) — the row subset a
+          // Math Engine can lift directly.
+          if (!wantPoints) dvals[`${row.id}_corners`] = JSON.stringify(idx.map((i) => boxes[i]).filter(Boolean).map(flat8));
+        }
+        const spare = dlabels.map((_, i) => i).filter((i) => !claimed.has(i));
+        dvals.unmatched = JSON.stringify(spare.map((i) => dlabels[i] ?? ""));
+        dvals.unmatchedCount = spare.length;
+      }
+  return dvals;
+}
+
 export interface FlowImage { data: Uint8ClampedArray; w: number; h: number; box: { x: number; y: number; scale: number }; key: string }
+/** Re-encoded underlays, keyed on `flowImage.key` — only ever populated for the URL case below. */
+const imageDataUrlCache = new Map<string, string>();
+/** The underlay as a `data:` URL, for the Image node's `val-image` — an Analyse node's File input and a
+ *  Render node's Image input both want the picture's own BYTES, which no other Image output carries.
+ *
+ *  The underlay's `src` IS the imported file's data URL (the importer reads it with `readAsDataURL`), so
+ *  the common path is a free pass-through that also keeps the ORIGINAL encoding — re-rendering a JPEG
+ *  photo of a plan to PNG would cost a copy and gain nothing. A `src` that is not a data URL (an http
+ *  image, an object URL) is re-encoded from the RGBA buffer instead, cached because that is a full
+ *  canvas round-trip per image. Returns "" where no canvas exists (a non-DOM evaluation), which reads
+ *  downstream as "no file wired" rather than as a broken one. */
+const imageDataUrl = (img: FlowImage): string => {
+  if (img.key.startsWith("data:")) return img.key;
+  const hit = imageDataUrlCache.get(img.key);
+  if (hit != null) return hit;
+  if (typeof document === "undefined") return "";
+  let url = "";
+  try {
+    const cv = document.createElement("canvas");
+    cv.width = img.w; cv.height = img.h;
+    const ctx = cv.getContext("2d");
+    if (ctx) {
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(img.data), img.w, img.h), 0, 0);
+      url = cv.toDataURL("image/png");
+    }
+  } catch { url = ""; } // a tainted (cross-origin) canvas throws on toDataURL
+  if (imageDataUrlCache.size > 4) imageDataUrlCache.clear();
+  imageDataUrlCache.set(img.key, url);
+  return url;
+};
 // Cache vectorisation results (keyed on image + params) so the heavy trace only re-runs when something
 // it depends on actually changes — not on every unrelated flow re-eval. openEnds (degree-1 graph
 // endpoints) rides along since it needs the trace's node/edge graph, gone once the result is cached.
@@ -746,6 +1050,103 @@ const vectorizeCache = new Map<string, { world: Point[][]; openEnds: number }>()
 const vectorizeMetricsCache = new Map<string, { spaces: number; openEnds: number; lines: number }>();
 // Cache pipe-network solves (keyed on graph signature + schema + params).
 const pipeSolveCache = new Map<string, PipeSolveResult>();
+/** Longest edge (in cells) of the Image node's `val-matrix`. Values travel between nodes as JSON
+ *  strings, so the raster is box-filtered down to this before it goes on the wire — a full-resolution
+ *  photo would be megabytes of JSON re-serialised on every eval. Full-resolution pixels stay inside
+ *  Vectorisation, which reads the buffer straight off `flowImage` and never serialises it. */
+export const IMAGE_MATRIX_MAX_EDGE = 128;
+// The sampled image matrix, keyed on (image, cap) — the box filter walks every pixel, so it must not
+// re-run when an unrelated node changes.
+const imageMatrixCache = new Map<string, string>();
+/** Box-filter an RGBA buffer down to at most `maxEdge` cells on its long side and return one CHANNEL of
+ *  the cells as a row-major `rows × cols` matrix, JSON-encoded (3dp — enough for an 8-bit channel, and it
+ *  keeps the string small). Row 0 is the TOP of the image, matching how a grid-field indexes +y
+ *  screen-down, so anything derived from it lands back registered on the underlay.
+ *
+ *  Every channel is oriented the SAME way — **low is ink, high is paper** — so one `value ≤ threshold`
+ *  test means "ink" whatever is selected, and every alpha is composited over white first so a transparent
+ *  underlay reads as blank paper rather than as solid ink:
+ *   • `luma`  — Rec. 601 luminance. Dark lines on light paper, the usual scan.
+ *   • `r`/`g`/`b` — that channel's level. This is how a COLOURED line is isolated: a red line absorbs
+ *     green and blue, so it is the GREEN (or blue) channel that goes dark where the red ink is.
+ *   • `dist` — Euclidean RGB distance to `target`, normalised to 0..1, so 0 is an exact colour match.
+ *     The general form of the Vectorisation node's Colour + Tolerance pair, and not limited to its five
+ *     fixed choices: any colour, and the flow's own threshold is the tolerance. */
+/** Downsample a block to ONE value. `mean` box-filters, which is right for a photograph and wrong for
+ *  line art: a 1 px hairline inside a 16 x 16 block is 6% of it, so averaging turns a red line on white
+ *  into (255, 239, 239) - 0.05 away from plain white in colour distance, and gone. `ink` instead picks
+ *  the block's DARKEST pixel and reports that, so a hairline survives at any scale with its true colour
+ *  intact. Mean stays the default: it is what every existing flow was tuned against. */
+export function imageChannelMatrixJson(img: FlowImage, maxEdge: number, channel: string, target: string, pooling = "mean"): string {
+  const scale = Math.max(1, Math.ceil(Math.max(img.w, img.h) / Math.max(1, maxEdge)));
+  const cols = Math.max(1, Math.ceil(img.w / scale));
+  const rows = Math.max(1, Math.ceil(img.h / scale));
+  const hex = /^#?([0-9a-f]{6})$/i.exec(target.trim());
+  const t = hex ? parseInt(hex[1], 16) : 0;
+  const tr = (t >> 16) & 255, tg = (t >> 8) & 255, tb = t & 255;
+  const MAXD = Math.sqrt(3) * 255;
+  const M: number[][] = [];
+  for (let r = 0; r < rows; r++) {
+    const row: number[] = [];
+    const y0 = r * scale, y1 = Math.min(img.h, y0 + scale);
+    for (let c = 0; c < cols; c++) {
+      const x0 = c * scale, x1 = Math.min(img.w, x0 + scale);
+      let sum = 0, n = 0, darkest = Infinity, dr = 255, dg = 255, db = 255;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const o = (y * img.w + x) * 4;
+          const a = img.data[o + 3] / 255;
+          // Composite over white first, so every channel below reads the pixel as it looks on paper.
+          const cr = img.data[o] * a + 255 * (1 - a);
+          const cg = img.data[o + 1] * a + 255 * (1 - a);
+          const cb = img.data[o + 2] * a + 255 * (1 - a);
+          const luma = 0.299 * cr + 0.587 * cg + 0.114 * cb;
+          if (luma < darkest) { darkest = luma; dr = cr; dg = cg; db = cb; }
+          sum += channel === "r" ? cr / 255
+            : channel === "g" ? cg / 255
+            : channel === "b" ? cb / 255
+            : channel === "dist" ? Math.sqrt((cr - tr) ** 2 + (cg - tg) ** 2 + (cb - tb) ** 2) / MAXD
+            : luma / 255;
+          n++;
+        }
+      }
+      // INK pooling reports the darkest pixel's own channel value, so a hairline is not averaged away.
+      // Its RGB is kept together rather than min-ed per channel, which would invent a colour no pixel had
+      // wherever two differently coloured lines crossed one block.
+      const inkV = channel === "r" ? dr / 255
+        : channel === "g" ? dg / 255
+        : channel === "b" ? db / 255
+        : channel === "dist" ? Math.sqrt((dr - tr) ** 2 + (dg - tg) ** 2 + (db - tb) ** 2) / MAXD
+        : darkest / 255;
+      const v = pooling === "ink" ? (n ? inkV : 1) : (n ? sum / n : 1);
+      row.push(Math.round(v * 1000) / 1000);
+    }
+    M.push(row);
+  }
+  return JSON.stringify(M);
+}
+
+/** What a segment-producing row becomes on the canvas. Named rather than inline because a Network row can
+ *  now carry SEVERAL of them — one per edge type — and a recursive inline type cannot say that. */
+export interface FlowSegMeta {
+  thicknessM: number;
+  thicknessMPer?: number[];
+  segmentType: string;
+  wallMode?: string;
+  display?: { style: "capsule" | "square" | "flat"; asSpace: boolean };
+  fill?: "filled" | "outlined";
+  extrude3d?: boolean;
+  hatch?: { style: "diagonal" | "dots"; spacing: number; angle: number; weight: number };
+  layer?: string;
+  objectId?: string;
+  objectParams?: Record<string, number | string | boolean>;
+  /** FURTHER objects hosted on the same segment, after `objectId`. A segment is not limited to one thing:
+   *  a door opening carries the door AND the masonry above its lintel, a window the frame AND the wall
+   *  below its sill and above its head. Those pieces are walls in their own right — a Wall object with a
+   *  `base` — and without them an opening leaves a hole from floor to ceiling. */
+  extraObjects?: { objectId: string; params?: Record<string, number | string | boolean> }[];
+  release: boolean;
+}
 
 export interface FlowPreviewItem {
   nodeId: string;
@@ -790,6 +1191,17 @@ export interface FlowPreviewItem {
   /** Voronoi node only: the true cell count (= seed/vertex count), independent of what's rendered
    *  (non-Euclidean metrics render edges, not cells), so the host's handle-count bake stays correct. */
   cellCount?: number;
+  /** A SPACE-producing node's hosted parametric object — the space-side counterpart of `segMeta`'s
+   *  `objectId` / `objectParams`. A materialised Space is otherwise a bare polygon; with this it arrives
+   *  already carrying the object (room.json, plot.json) that gives it a name, a type and its own params. */
+  spaceMeta?: { objectId?: string; objectParams?: Record<string, number | string | boolean> };
+  /** Draw this item's rings as ONE even-odd shape, so a ring nested inside another reads as a HOLE rather
+   *  than as a second filled patch. The Polygon node has always been drawn this way (it is what makes a
+   *  Mitered-Join poché seamless); a 2D Render POLYGON row needs it for the same reason, now that
+   *  `subtract(...)` in the Math Engine can hand it an outer boundary plus its holes. Set per row rather
+   *  than per tool because a STROKE row must NOT get it: its bands are independently filled quads, and two
+   *  that overlap would cancel each other out instead of merging. */
+  evenOdd?: boolean;
   /** Scalar value outputs (e.g. Inset's `area` in m²), one per the tool's `valueOutputs`. Surfaced
    *  for the node's amber value endpoints + readout badge. Mostly numbers; a few are string lists
    *  (e.g. BUA's pass-through Ratio "10, 90"). */
@@ -811,7 +1223,7 @@ export interface FlowPreviewItem {
   /** Place Object only: the kind + height/clearance of each placed footprint, index-aligned with
    *  `polygons`, so the host can draw the 2D furniture symbol AND extrude the 3D primitive live
    *  (matching the committed placement) instead of a bare box. */
-  placeObjects?: { objectId?: string; kind: string; heightM: number; clearanceM: number; srcIndex: number }[];
+  placeObjects?: { objectId?: string; kind: string; heightM: number; clearanceM: number; srcIndex: number; ringIndex?: number }[];
   /** Place Object only: the input Space boundary polygon (world-pixel coords) these objects were placed
    *  along — used by the host to constrain dragging each object to the perimeter and update its position%. */
   sourcePolygon?: Point[];
@@ -878,6 +1290,23 @@ export interface FlowPreviewItem {
   /** Node to Object only: a furniture symbol per input node — its footprint quad (world-pixel) plus the
    *  anchor/size/rotation the host feeds to the shared ObjectSymbol renderer. */
   objectPlacements?: { quad: Point[]; x: number; y: number; kind: string; widthPx: number; heightPx: number; rotationDeg: number; anchor: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" }[];
+  /** Network only: what the segments it draws should BECOME on the canvas — the row's thickness (m), the
+   *  `segmentType` they are stamped with, the layer they land on, and the segment-hosted library object each
+   *  one hosts (a Door segment carrying door.json). `release` hands them over to the canvas on commit
+   *  instead of keeping them flow-owned. This is what turns a generated plan into editable elements. */
+  segMeta?: FlowSegMeta & {
+    /** Row-aligned with `polygons`: the `type` each edge carried on the graph, or null. */
+    typePer?: (string | null)[];
+    /** One COMPLETE segMeta per edge type, built by the same code path as the row's own. An edge whose
+     *  type is a key here is materialised with that meta instead — which is what lets ONE Network node
+     *  draw exterior walls, interior walls, doors and windows off a single merged graph, each with its
+     *  own object, layer, thickness and display. */
+    byType?: Record<string, FlowSegMeta>;
+  };
+  /** 2D Render only: the ROW's own drawing style — outline dash, filled vs outlined, and the poché hatch.
+   *  Carried per item because a Render node's rows each draw differently (black hatched wall, hollow room,
+   *  dashed setting-out line) and an item is one row's output. */
+  primStyle?: { lineStyle: "solid" | "dashed" | "dotted"; fillMode: "filled" | "outlined"; hatch: "none" | "diagonal" | "dots"; hatchSpacing: number; hatchWeight: number };
 }
 
 /** Evaluate one node given its input polygon. Returns its output polygon(s). */
@@ -912,6 +1341,553 @@ function evalNode(tool: FlowToolType, input: Point[], params: Record<string, unk
   }
 }
 
+/** The canvas model the flow reads: spaces / nodes / segments with their index-aligned attachment
+ *  metadata. Named so {@link buildCanvasJson} can take it — the shape is evaluateFlow's `canvasContent`
+ *  parameter, unchanged. */
+export interface FlowCanvasModel {
+  spaces: Point[][];
+  /** `id` is the element's ONE id — the same string the canvas shows, an export writes and a flow source
+   *  resolves ("space-…", "segment-…", "node-…", each naming its own kind). */
+  spaceMeta?: { id?: string; objectId?: string; params?: Record<string, unknown> }[];
+  nodes: Point[][];
+  nodeMeta?: { id?: string; objectId?: string; params?: Record<string, unknown> }[];
+  segments: Point[][];
+  /** `objects` lists EVERY attachment on the segment, not just the first. A door segment carries the wall
+   *  band AND the door, and `objectId` (the first) is the wall — so on the plans this app generates the
+   *  door was invisible to anything reading this payload. `opening` is the segment's own `isObjectOpening`
+   *  flag, which no attachment carries and `type` does not either: Add Segment commits a wall as
+   *  `segmentType: "line"`, so a door, a window and a wall can all report the same `type`. */
+  segmentMeta?: { id?: string; type?: string; thicknessPx?: number; objectId?: string; params?: Record<string, unknown>; opening?: boolean; objects?: string[] }[];
+}
+
+/** THE CANVAS AS A PAYLOAD — the walls, doors, windows and objects with their real dimensions and each
+ *  one's `semantics`, serialised the way a model can read it.
+ *
+ *  Lifted out of the Plan JSON node so the GEOMETRY node can publish the same thing on `val-canvasJson`.
+ *  That is the merge: asking the canvas what a room LOOKS like and what it IS used to take two nodes, and
+ *  two nodes can disagree about which room they mean. One function, one answer, whoever calls it.
+ *
+ *  `scope` narrows the result to one outline; omit it for the whole canvas. Everything is anchor-relative
+ *  METRES, the frame every value output speaks.
+ *
+ *  DEFINITIONS ARE NOT INCLUDED, only references — the same call the canvas's own JSON export made, and
+ *  for its measured reason: on a 23-plot layout the definitions were 15.9 KB against 4.6 KB for all 24
+ *  attachments. A model needs to know a Door is on this segment and how wide the leaf is; it does not
+ *  need the maths body that draws one. */
+export function buildCanvasJson(
+  cc: FlowCanvasModel | undefined,
+  opts: { ppm: number; anchor: Point; scope?: Point[]; edgeTolerance?: number; includeParams?: boolean; includeNodes?: boolean; decimals?: number },
+): { json: string; spaceCount: number; segmentCount: number; nodeCount: number; objectCount: number; bytes: number } {
+  const { ppm, anchor: anchorPj, scope } = opts;
+  const dpj = Math.max(0, Math.min(6, Math.round(Number(opts.decimals ?? 3) || 0)));
+  const r = (v: number) => Math.round(v * 10 ** dpj) / 10 ** dpj;
+  const toM = (p: Point): [number, number] => [r((p.x - anchorPj.x) / ppm), r((p.y - anchorPj.y) / ppm)];
+  const wantParams = opts.includeParams !== false;
+  const wantNodes = opts.includeNodes !== false;
+  const tolPx = Math.max(0, Number(opts.edgeTolerance ?? 0.15) || 0) * ppm;
+  // A node is inside when its point is. A SEGMENT is tested on its midpoint WITH A TOLERANCE, and the
+  // tolerance is not a nicety: the walls that BOUND a room lie exactly ON its outline, and a point on the
+  // edge is UNDEFINED under even-odd ray casting — it lands inside or outside depending on which way the
+  // ray happens to cross. Measured on a 5x4 m room with its four bounding walls, a strict test keeps three
+  // and drops one, and which one changes with the room's coordinates. The tolerance is what makes the
+  // answer deterministic; without it the same plan drawn elsewhere reports a different set of walls.
+  const nearBoundary = (p: Point, poly: Point[]): boolean => {
+    if (tolPx <= 0) return false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[j], b = poly[i];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const L2 = dx * dx + dy * dy;
+      const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2)) : 0;
+      if (Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) <= tolPx) return true;
+    }
+    return false;
+  };
+  const inScope = (p: Point, edge: boolean): boolean =>
+    !scope || pointInPolyEO(p.x, p.y, scope) || (edge && nearBoundary(p, scope));
+  const meta = (m: { objectId?: string; params?: Record<string, unknown> } | undefined) =>
+    m?.objectId ? { objectId: m.objectId, ...(wantParams && m.params ? { params: m.params } : {}) } : {};
+  /** The element's id — one string, carrying its own kind ("segment-…"), identical to what the canvas
+   *  shows and what an export writes. Nothing here renumbers or renames it. */
+  const ident = (m: { id?: string } | undefined) => (m?.id ? { id: m.id } : {});
+
+  let objectCount = 0;
+  let spaceOut: Record<string, unknown> | undefined;
+  const spacesOut: Record<string, unknown>[] = [];
+  (cc?.spaces ?? []).forEach((sp, i) => {
+    if (sp.length < 3) return;
+    let cx = 0, cy = 0;
+    for (const p of sp) { cx += p.x; cy += p.y; }
+    cx /= sp.length; cy /= sp.length;
+    if (scope && !pointInPolyEO(cx, cy, scope)) return;
+    let a2 = 0;
+    for (let k = 0; k < sp.length; k++) { const p = sp[k], q = sp[(k + 1) % sp.length]; a2 += p.x * q.y - q.x * p.y; }
+    const m = cc?.spaceMeta?.[i];
+    if (m?.objectId) objectCount += 1;
+    spacesOut.push({ ...ident(m), boundary: sp.map(toM), areaM2: r(Math.abs(a2 / 2) / (ppm * ppm)), ...meta(m) });
+  });
+  if (spacesOut.length === 1) spaceOut = spacesOut[0];
+
+  const segsOut: Record<string, unknown>[] = [];
+  (cc?.segments ?? []).forEach((sg, i) => {
+    if (sg.length < 2) return;
+    const mid = { x: (sg[0].x + sg[1].x) / 2, y: (sg[0].y + sg[1].y) / 2 };
+    if (!inScope(mid, true)) return;
+    const m = cc?.segmentMeta?.[i];
+    if (m?.objectId) objectCount += 1;
+    segsOut.push({
+      ...ident(m),
+      type: m?.type ?? "wall",
+      from: toM(sg[0]),
+      to: toM(sg[1]),
+      lengthM: r(Math.hypot(sg[1].x - sg[0].x, sg[1].y - sg[0].y) / ppm),
+      ...(typeof m?.thicknessPx === "number" ? { thicknessM: r(m.thicknessPx / ppm) } : {}),
+      ...(m?.opening ? { opening: true } : {}),
+      // Every attachment's id, when there is more than one. `objectId` from `meta()` is the FIRST, which
+      // on an opening is the wall band rather than the door — so without this a reader cannot tell a door
+      // segment from the wall it sits in. Still references only, never definitions.
+      ...(m?.objects && m.objects.length > 1 ? { objects: m.objects } : {}),
+      ...meta(m),
+    });
+  });
+
+  const nodesOut: Record<string, unknown>[] = [];
+  if (wantNodes) (cc?.nodes ?? []).forEach((nd, i) => {
+    const p = nd[0];
+    if (!p || !inScope(p, true)) return;
+    const m = cc?.nodeMeta?.[i];
+    if (m?.objectId) objectCount += 1;
+    nodesOut.push({ ...ident(m), at: toM(p), ...meta(m) });
+  });
+
+  const json = JSON.stringify({
+    units: "m",
+    scoped: Boolean(scope),
+    ...(spaceOut ? { space: spaceOut } : { spaces: spacesOut }),
+    segments: segsOut,
+    ...(wantNodes ? { nodes: nodesOut } : {}),
+  });
+  return {
+    json,
+    spaceCount: spacesOut.length,
+    segmentCount: segsOut.length,
+    nodeCount: nodesOut.length,
+    objectCount,
+    bytes: json.length,
+  };
+}
+
+
+/** THE READ HALF OF THE CODEC — the canvas payload projected onto matrices a Math Engine can use.
+ *
+ *  A free function rather than code inside the node's branch, so the SAME implementation serves the
+ *  standalone Graph Interpreter node and a Math Engine that decodes inline. Two call sites, one body:
+ *  the pattern `importPlanText` already follows for the file picker and the encoder's Import button,
+ *  and the reason those two cannot drift apart.
+ *
+ *  `gp` is the node's params merged with whatever arrived on its wires. Returns the published values. */
+export function decodeCanvasJson(gp: Record<string, unknown>): Record<string, number | string> {
+    const r = (v: number) => Math.round(v * 1e4) / 1e4; // 0.1 mm, the precision `val-points` publishes
+    let payload: Record<string, unknown> = {};
+    if (gp.json && typeof gp.json === "object" && !Array.isArray(gp.json)) payload = gp.json as Record<string, unknown>;
+    else try {
+      const parsed = JSON.parse(String(gp.json ?? "")) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed as Record<string, unknown>;
+    } catch { /* not JSON → every output comes back empty rather than the node failing the flow */ }
+
+    // Names for the code column. Matching is by the segment's own `type` OR by an attached object id
+    // BEGINNING with the name — the library's `door-with-math` / `window-with-math` convention. The last
+    // match in the list wins, which is what makes an opening read as a door: it carries the wall band as
+    // its first attachment and the door as its second, so a first-match rule would call it a wall.
+    let typeNames: string[] = ["wall", "door", "window"];
+    try {
+      const tn = Array.isArray(gp.typeNames) ? gp.typeNames : JSON.parse(String(gp.typeNames ?? "")) as unknown;
+      if (Array.isArray(tn) && tn.length) typeNames = tn.map((t) => String(t).trim().toLowerCase());
+    } catch { /* keep the default */ }
+
+    const num = (v: unknown): number => { const n = Number(v); return isFinite(n) ? n : 0; };
+    const pt = (v: unknown): [number, number] | null =>
+      Array.isArray(v) && v.length >= 2 ? [r(num(v[0])), r(num(v[1]))] : null;
+
+    const segs = Array.isArray(payload.segments) ? (payload.segments as Record<string, unknown>[]) : [];
+    const eA: number[][] = [], eB: number[][] = [], eT: number[][] = [], eL: number[][] = [], eK: number[][] = [];
+    for (const sg of segs) {
+      const a = pt(sg.from), b = pt(sg.to);
+      if (!a || !b) continue; // keep every column row-aligned rather than emitting a half row
+      eA.push(a);
+      eB.push(b);
+      eT.push([r(num(sg.thicknessM))]);
+      eL.push([sg.lengthM != null ? r(num(sg.lengthM)) : r(Math.hypot(b[0] - a[0], b[1] - a[1]))]);
+      const own = String(sg.type ?? "").trim().toLowerCase();
+      const objs = (Array.isArray(sg.objects) ? sg.objects : [sg.objectId]).filter(Boolean).map((o) => String(o).toLowerCase());
+      let code = 0;
+      typeNames.forEach((name, ti) => {
+        if (!name) return;
+        if (own === name || objs.some((o) => o.startsWith(name))) code = ti + 1;
+      });
+      eK.push([code]);
+    }
+
+    // Spaces as ONE flat [x, y, groupIndex] matrix. The obvious nested [[[x,y],…],…] is RAGGED when the
+    // rooms differ in vertex count, so it fails isRectMatrix and reaches a Math Engine as an inert
+    // string; flat with a group column is rectangular whatever the shapes. Same form Filter by Type
+    // publishes, so the two are interchangeable downstream.
+    const spaceList = Array.isArray(payload.spaces)
+      ? (payload.spaces as Record<string, unknown>[])
+      : (payload.space && typeof payload.space === "object" ? [payload.space as Record<string, unknown>] : []);
+    const sp: number[][] = [], ar: number[][] = [];
+    spaceList.forEach((s0, gi) => {
+      const ring = Array.isArray(s0.boundary) ? (s0.boundary as unknown[]) : [];
+      let any = false;
+      for (const v of ring) { const q = pt(v); if (q) { sp.push([q[0], q[1], gi]); any = true; } }
+      if (any) ar.push([r(num(s0.areaM2))]);
+    });
+
+    // ── Nodes, incidence, and the PARAMETERS on each element's attached object ──────────────────
+    //
+    // `buildCanvasJson` already writes every node's position and every element's `objectId` + resolved
+    // `params`; until now this decoder threw all of it away and published geometry only. That made the
+    // payload's richest half unreachable from a Math Engine: a flow could see WHERE a segment is but not
+    // what it IS, so anything data-driven (a pipe's diameter, a node's demand) had to be retyped as a
+    // matrix beside the drawing it already described. These outputs close that gap. Everything stays
+    // ROW-ALIGNED with the matrices above — `nodes` with `nodeTypes`/`nodeVals`, `segNodes`/`segVals`
+    // with `a`/`b` — because alignment by position is the only identity a matrix can carry.
+    const nodeList = Array.isArray(payload.nodes) ? (payload.nodes as Record<string, unknown>[]) : [];
+    const nd: number[][] = [];        // node positions (m)
+    const nk: number[][] = [];        // node type code, same typeNames table as segments
+    const ndIds: string[] = [];
+    for (const n0 of nodeList) {
+      const p = pt(n0.at);
+      if (!p) continue;
+      nd.push(p);
+      ndIds.push(String(n0.id ?? ""));
+      const objs = (Array.isArray(n0.objects) ? n0.objects : [n0.objectId]).filter(Boolean).map((o) => String(o).toLowerCase());
+      let code = 0;
+      typeNames.forEach((name, ti) => { if (name && objs.some((o) => o.startsWith(name))) code = ti + 1; });
+      nk.push([code]);
+    }
+
+    /** The requested parameter keys, as an array — accepts a real array, a JSON array, or `a, b, c`. */
+    const keyList = (v: unknown): string[] => {
+      if (Array.isArray(v)) return v.map((k) => String(k).trim()).filter(Boolean);
+      const s = String(v ?? "").trim();
+      if (!s) return [];
+      try {
+        const parsed = JSON.parse(s) as unknown;
+        if (Array.isArray(parsed)) return parsed.map((k) => String(k).trim()).filter(Boolean);
+      } catch { /* fall through to the comma form */ }
+      return s.split(",").map((k) => k.trim()).filter(Boolean);
+    };
+    const nodeKeys = keyList(gp.nodeParams);
+    const segKeys = keyList(gp.segParams);
+
+    /** One element list × one key list → a values matrix and a 1/0 HAVE mask of the same shape.
+     *  A missing or non-numeric parameter reads 0 in the values matrix and 0 in the mask, never a
+     *  sentinel: the mask is what distinguishes "this pipe's minor loss is zero" from "this pipe has no
+     *  minor loss parameter", and a sentinel inside the values would poison any sum that touched it. */
+    const paramMatrix = (list: Record<string, unknown>[], keys: string[]): { vals: number[][]; have: number[][] } => {
+      const vals: number[][] = [], have: number[][] = [];
+      for (const el of list) {
+        const ps = (el.params && typeof el.params === "object" && !Array.isArray(el.params))
+          ? el.params as Record<string, unknown> : {};
+        const vRow: number[] = [], hRow: number[] = [];
+        for (const k of keys) {
+          const raw = ps[k];
+          const n2 = typeof raw === "boolean" ? (raw ? 1 : 0) : Number(raw);
+          const ok = raw != null && raw !== "" && Number.isFinite(n2);
+          vRow.push(ok ? r(n2) : 0);
+          hRow.push(ok ? 1 : 0);
+        }
+        vals.push(vRow); have.push(hRow);
+      }
+      return { vals, have };
+    };
+    // Segments that produced a row above are the ones with two usable endpoints — re-filter identically
+    // so the parameter rows stay aligned with `a` / `b`.
+    const segsUsed = segs.filter((sg) => pt(sg.from) && pt(sg.to));
+    const nodeP = paramMatrix(nodeList.filter((n0) => pt(n0.at)), nodeKeys);
+    const segP = paramMatrix(segsUsed, segKeys);
+
+    // INCIDENCE. Each segment's two endpoints resolved to node indices, which is what turns a pile of
+    // coordinates into a graph a solver can assemble. Exact position first (endpoints drawn with snapping
+    // ARE equal), nearest-within-tolerance after, and −1 when nothing is close — reported rather than
+    // guessed, because a wrong incidence silently solves a different network.
+    const nodeAt = new Map<string, number>();
+    nd.forEach((p, i) => { if (!nodeAt.has(`${p[0]},${p[1]}`)) nodeAt.set(`${p[0]},${p[1]}`, i); });
+    const TOL = 0.002; // 2 mm, well inside the 0.1 mm the positions are rounded to
+    const nearest = (p: [number, number]): number => {
+      const hit = nodeAt.get(`${p[0]},${p[1]}`);
+      if (hit != null) return hit;
+      let best = -1, bd = TOL * TOL;
+      nd.forEach((q, i) => { const d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2; if (d <= bd) { bd = d; best = i; } });
+      return best;
+    };
+    const sn: number[][] = [];
+    let unresolved = 0;
+    for (let i = 0; i < eA.length; i++) {
+      const ia = nearest(eA[i] as [number, number]);
+      const ib = nearest(eB[i] as [number, number]);
+      if (ia < 0 || ib < 0) unresolved += 1;
+      sn.push([ia, ib]);
+    }
+
+    const giVals: Record<string, number | string> = {
+      a: JSON.stringify(eA), b: JSON.stringify(eB),
+      thickness: JSON.stringify(eT), length: JSON.stringify(eL), types: JSON.stringify(eK),
+      spaces: JSON.stringify(sp), areas: JSON.stringify(ar),
+      nodes: JSON.stringify(nd),
+      nodeTypes: JSON.stringify(nk),
+      segNodes: JSON.stringify(sn),
+      nodeVals: JSON.stringify(nodeP.vals), nodeHas: JSON.stringify(nodeP.have),
+      segVals: JSON.stringify(segP.vals), segHas: JSON.stringify(segP.have),
+      segmentCount: eA.length,
+      spaceCount: ar.length,
+      nodeCount: nd.length,
+      unresolvedEnds: unresolved,
+    };
+  return giVals;
+}
+
+/** THE WRITE HALF — matrices back out as a whole plan document. Free for the same reason: the standalone
+ *  Canvas Encoder node and a Math Engine that encodes inline run this exact code. */
+export function encodePlan(gp: Record<string, unknown>): Record<string, number | string> {
+    const dp = Math.max(0, Math.min(6, Math.round(num(gp.decimals, 4))));
+    const ppmOut = Math.max(1, num(gp.pixelsPerMeter, 50));
+    const rp = (v: number) => Math.round(v * 10 ** dp) / 10 ** dp;
+    const mtx = (v: unknown): number[][] => {
+      try {
+        const parsed = Array.isArray(v) ? v : JSON.parse(String(v ?? "")) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((row) => (Array.isArray(row) ? row.map((c) => { const n2 = Number(c); return isFinite(n2) ? n2 : 0; }) : [Number(row) || 0]));
+      } catch { return []; }
+    };
+    // A config value may arrive as TEXT (a node parameter someone typed) or already PARSED (a section of
+    // a Math Engine's decode / encode block, authored as real JSON). Accept both, so one implementation
+    // serves the standalone node and the folded one without either side re-stringifying.
+    const jsonObj = (v: unknown): Record<string, unknown> => {
+      if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
+      try { const q = JSON.parse(String(v ?? "")) as unknown; return q && typeof q === "object" && !Array.isArray(q) ? q as Record<string, unknown> : {}; } catch { return {}; }
+    };
+    const A = mtx(gp.a), B = mtx(gp.b), TH = mtx(gp.thickness), KD = mtx(gp.types), SP = mtx(gp.spaces);
+    // ONE map for everything the plan attaches. A code column indexes its section by KEY ORDER —
+    // JSON preserves insertion order, so the map is its own code table and the two parallel arrays of
+    // names that used to carry that ordering are gone. They were the fragile part: a list indexed by
+    // code, kept beside a map keyed by name, desyncs the moment one is edited and the other is not.
+    const objects = jsonObj(gp.objects);
+    const section = (k: string): Record<string, unknown> => {
+      const v = objects[k];
+      return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
+    };
+    const segObjects = section("segments");
+    const names: string[] = Object.keys(segObjects);
+    const tmap = segObjects;
+
+    // ONE node per distinct POSITION, so a junction where four walls meet is one node carrying four
+    // segments rather than eight loose endpoints — the rule the canvas's own exporter follows. Rounding
+    // first is what makes it work: two endpoints a ten-thousandth of a millimetre apart are the same
+    // junction, and comparing raw floats would write two nodes that never join.
+    const nodesOut: { id: string; x: number; y: number; layer: string; attachments?: unknown[] }[] = [];
+    const nodeAt = new Map<string, string>();
+    const nodeIdFor = (xm: number, ym: number, layer: string): string => {
+      const key = `${rp(xm)},${rp(ym)}`;
+      const hit = nodeAt.get(key);
+      if (hit) return hit;
+      const nid = `n${nodesOut.length}`;
+      nodesOut.push({ id: nid, x: rp(xm) * ppmOut, y: rp(ym) * ppmOut, layer });
+      nodeAt.set(key, nid);
+      return nid;
+    };
+
+    // What the encoder reads off a type spec itself; everything else is segment data.
+    const ENCODER_KEYS = new Set(["segmentType", "layer", "thickness", "opening", "color", "mode", "objectId", "objectPath", "params", "extraObjects", "size"]);
+    const segsOut: Record<string, unknown>[] = [];
+    const layerSet = new Set<string>(["0"]);
+    let objectCount = 0;
+    const rowCount = Math.min(A.length, B.length);
+    for (let i = 0; i < rowCount; i++) {
+      const a0 = A[i], b0 = B[i];
+      if (!a0 || !b0 || a0.length < 2 || b0.length < 2) continue;
+      const code = Math.round(KD[i]?.[0] ?? 1);
+      const name = names[code - 1] ?? names[0];
+      const spec = (tmap[name] && typeof tmap[name] === "object" && !Array.isArray(tmap[name])) ? tmap[name] as Record<string, unknown> : {};
+      const layer = typeof spec.layer === "string" && spec.layer ? spec.layer : "wall";
+      layerSet.add(layer);
+      const from = nodeIdFor(a0[0], a0[1], layer);
+      const to = nodeIdFor(b0[0], b0[1], layer);
+      // A degenerate edge is not a segment. Left in, it writes a from === to segment that draws nothing
+      // and still counts as a wall in anything that reads the file back.
+      if (from === to) continue;
+      const thM = TH[i]?.[0] ?? 0;
+      const thickness = (thM > 0 ? thM : num(spec.thickness, 0.1)) * ppmOut;
+      // A segment may host MORE than one object, and an opening must. Its own object draws the leaf or
+      // the glazing; a Wall object beside it is what puts masonry back above the lintel and below the
+      // sill. `floorWallMeshes` looks for both by symbol and carves the wall band at the OPENING's own
+      // lintelHeight / sillHeight, so the head and apron land at the heights the plan is cut at with
+      // no second copy of those figures.
+      //
+      // The wall object must sit at base 0 spanning the full height. It is not positioned by hand:
+      // `base` is the floor of the whole band and the carve ADDS the opening's lintel to it, so a
+      // "helpful" base of 2.1 puts the head at 4.2, past the top, and the band is never emitted.
+      //
+      // Hosting it also switches OFF the 3D canvas's own opening bands, which are painted with the
+      // module constant GREY = "#d6dae0" — very nearly white against the walls' #94a3b8, and drawn as
+      // an axis-aligned box rather than mitred to its neighbours. That pale, slightly offset panel at
+      // every opening is the "white plane"; it goes because the editor now draws those bands instead.
+      const objOf = (o: Record<string, unknown>, n: number) => ({
+        id: `att${i}_${n}`,
+        objectId: String(o.objectId),
+        params: (o.params && typeof o.params === "object" && !Array.isArray(o.params)) ? o.params : {},
+        t: 0.5,
+        flip: false,
+        ...(typeof o.objectPath === "string" && o.objectPath ? { objectPath: o.objectPath } : {}),
+      });
+      const atts: Record<string, unknown>[] = [];
+      if (typeof spec.objectId === "string" && spec.objectId) atts.push(objOf(spec, 0));
+      if (Array.isArray(spec.extraObjects)) {
+        for (const o of spec.extraObjects as unknown[]) {
+          if (o && typeof o === "object" && !Array.isArray(o) && typeof (o as Record<string, unknown>).objectId === "string") {
+            atts.push(objOf(o as Record<string, unknown>, atts.length));
+          }
+        }
+      }
+      objectCount += atts.length;
+      segsOut.push({
+        id: `segment_${name}_${i}`,
+        fromNodeId: from,
+        toNodeId: to,
+        layer,
+        thickness: Math.round(thickness * 1000) / 1000,
+        color: typeof spec.color === "string" ? spec.color : "#334155",
+        dashed: false,
+        mode: typeof spec.mode === "string" ? spec.mode : "fill",
+        method: "center",
+        segmentType: typeof spec.segmentType === "string" ? spec.segmentType : "wall",
+        ...(spec.opening ? { isObjectOpening: true } : {}),
+        // Anything in the spec the encoder does not consume itself rides straight onto the segment —
+        // the same open-tail idiom planFormat uses, so `bufferStyle`, `bufferJoin`, `hatch` and the
+        // rest reach the document without this node having to know each one by name. `bufferStyle` is
+        // the load-bearing case: it is exactly what the Display block writes when you pick Buffered,
+        // and without it a wall imports as a centre LINE with no width — correct in 3D, where the
+        // extrusion reads `thickness`, and invisible in 2D, where the band is what gets drawn.
+        ...Object.fromEntries(Object.entries(spec).filter(([k]) => !ENCODER_KEYS.has(k))),
+        ...(atts.length ? { attachments: atts } : {}),
+      });
+    }
+
+    // Spaces reference NODE IDS, so a ring vertex has to land on a node. Sharing `nodeIdFor` with the
+    // segments means a corner that coincides with a junction reuses it; one that does not adds a node —
+    // which is why leaving this unwired, and letting the canvas derive rooms from the wall loops on
+    // import, is the safer default.
+    const spacesOut: Record<string, unknown>[] = [];
+    if (SP.length) {
+      const spaceObj = section("space");
+      const byGroup = new Map<number, number[][]>();
+      for (const row of SP) {
+        if (row.length < 3) continue;
+        const g = Math.round(row[2]);
+        if (!byGroup.has(g)) byGroup.set(g, []);
+        byGroup.get(g)!.push(row);
+      }
+      for (const [g, ring] of [...byGroup.entries()].sort((x, y) => x[0] - y[0])) {
+        if (ring.length < 3) continue;
+        const hasSpaceObj = typeof spaceObj.objectId === "string" && spaceObj.objectId;
+        if (hasSpaceObj) objectCount += 1;
+        spacesOut.push({
+          id: `space_${g}`,
+          nodeIds: ring.map((r2) => nodeIdFor(r2[0], r2[1], "0")),
+          layer: "0",
+          auto: false,
+          fill: "rgba(34,197,94,0.2)",
+          stroke: "#16A34A",
+          ...(hasSpaceObj
+            ? { attachments: [{ id: `spaceatt${g}`, objectId: String(spaceObj.objectId), params: (spaceObj.params && typeof spaceObj.params === "object" && !Array.isArray(spaceObj.params)) ? spaceObj.params : {}, t: 0, flip: false, ...(typeof spaceObj.objectPath === "string" && spaceObj.objectPath ? { objectPath: spaceObj.objectPath } : {}) }] }
+            : {}),
+        });
+      }
+    }
+
+    // NODE-HOSTED OBJECTS — furniture, which sits at a point rather than along a segment.
+    //
+    // Each point becomes a node carrying its object AND a degenerate segment from that node back to
+    // itself. The marker is load-bearing, not decoration: `fromStandardPlan` rebuilds node metadata
+    // under a key built from the segment ends meeting at the node, so a node that no segment touches
+    // gets no key and its attachments are dropped in silence. Writing the marker is what the canvas's
+    // own exporter does for the same reason.
+    const PTS = mtx(gp.points), PK = mtx(gp.pointTypes), PR = mtx(gp.pointRotation);
+    const pmap = section("points");
+    const pnames: string[] = Object.keys(pmap);
+    let pointCount = 0;
+    for (let i = 0; i < PTS.length; i++) {
+      const q = PTS[i];
+      if (!q || q.length < 2) continue;
+      const pname = pnames[Math.round(PK[i]?.[0] ?? 1) - 1] ?? pnames[0];
+      const pspec = (pname && pmap[pname] && typeof pmap[pname] === "object" && !Array.isArray(pmap[pname])) ? pmap[pname] as Record<string, unknown> : {};
+      if (typeof pspec.objectId !== "string" || !pspec.objectId) continue;
+      const player = typeof pspec.layer === "string" && pspec.layer ? pspec.layer : "0";
+      layerSet.add(player);
+      // A furniture point almost never coincides with a wall junction, so this normally makes a new
+      // node — but it goes through the same table, so one that DOES coincide reuses it rather than
+      // writing a second node at the same coordinate.
+      const pid = nodeIdFor(q[0], q[1], player);
+      const rot = PR[i]?.[0];
+      nodesOut[Number(pid.slice(1))].attachments = [{
+        id: `objatt${i}`,
+        objectId: String(pspec.objectId),
+        params: {
+          ...((pspec.params && typeof pspec.params === "object" && !Array.isArray(pspec.params)) ? pspec.params : {}),
+          ...(rot != null && isFinite(rot) ? { rotation: rot } : {}),
+        },
+        t: 0,
+        flip: false,
+        ...(typeof pspec.objectPath === "string" && pspec.objectPath ? { objectPath: pspec.objectPath } : {}),
+      }];
+      segsOut.push({
+        id: `marker_${i}`,
+        fromNodeId: pid,
+        toNodeId: pid,
+        layer: player,
+        thickness: 0.5,
+        color: "#334155",
+        dashed: false,
+        mode: "line",
+        method: "center",
+        segmentType: "wall",
+      });
+      pointCount += 1;
+      objectCount += 1;
+    }
+
+    const LAYER_COLORS: Record<string, string> = { "0": "#000000", wall: "#06b6d4", door: "#3b82f6", window: "#a855f7" };
+    const layersOut = [...layerSet].map((nm, li) => ({
+      id: nm,
+      name: nm === "0" ? "0" : nm.charAt(0).toUpperCase() + nm.slice(1),
+      color: LAYER_COLORS[nm] ?? "#64748b",
+      visible: true,
+      locked: false,
+      order: li,
+    }));
+
+    const planJson = JSON.stringify({
+      schemaVersion: 1,
+      settings: { library_path: String(gp.libraryPath ?? ""), units: "m", northbearing: 0, pixelsPerMeter: ppmOut },
+      nodes: nodesOut,
+      segments: segsOut,
+      spaces: spacesOut,
+      layers: layersOut,
+      imageUnderlay: null,
+    });
+
+    const ceVals: Record<string, number | string> = {
+      json: planJson,
+      nodeCount: nodesOut.length,
+      segmentCount: segsOut.length,
+      spaceCount: spacesOut.length,
+      pointCount,
+      objectCount,
+      bytes: planJson.length,
+    };
+  return ceVals;
+}
+
 /**
  * Evaluate the whole graph. `sources` is the input geometry for the Space (source) nodes — either a
  * single polygon applied to every source (legacy: one selected space), or a Map keyed by source NODE id
@@ -932,22 +1908,107 @@ export function evaluateFlow(
   /** The imported underlay image, for the Image / Vectorisation nodes. */
   flowImage?: FlowImage,
   /** Full canvas content for the Canvas node — all spaces / nodes / segments / graphs and image
-   *  footprint polygon(s), in px world coords. Each output endpoint emits one of these bundles. */
-  canvasContent?: { spaces: Point[][]; nodes: Point[][]; segments: Point[][]; graphs: Point[][][]; images: Point[][] },
+   *  footprint polygon(s), in px world coords. Each output endpoint emits one of these bundles.
+   *
+   *  `spaceMeta` is INDEX-ALIGNED with `spaces` and carries each space's attached object (its id and
+   *  resolved parameters), which is what lets Filter by Type ask what a space IS. It rides alongside
+   *  rather than changing `spaces`' element type so every existing consumer is untouched; it is optional
+   *  because the flow must still evaluate for callers that do not supply it (an absent entry simply
+   *  matches nothing). */
+  canvasContent?: {
+    spaces: Point[][];
+    spaceMeta?: { objectId?: string; params?: Record<string, unknown> }[];
+    nodes: Point[][];
+    /** INDEX-ALIGNED with `nodes` — the node's stable id plus whatever object is attached to it.
+     *  Same rationale as `spaceMeta`: it rides alongside so every existing consumer of `nodes` is
+     *  untouched. Read by Plan JSON. */
+    nodeMeta?: { id?: string; objectId?: string; params?: Record<string, unknown> }[];
+    segments: Point[][];
+    /** INDEX-ALIGNED with `segments`. `type` is the segment's own kind (wall / door / window) — the one
+     *  fact no attachment carries, since a door with no parametric object on it is still a door. */
+    /** `objects` lists EVERY attachment on the segment, not just the first. A door segment carries the wall
+   *  band AND the door, and `objectId` (the first) is the wall — so on the plans this app generates the
+   *  door was invisible to anything reading this payload. `opening` is the segment's own `isObjectOpening`
+   *  flag, which no attachment carries and `type` does not either: Add Segment commits a wall as
+   *  `segmentType: "line"`, so a door, a window and a wall can all report the same `type`. */
+  segmentMeta?: { id?: string; type?: string; thicknessPx?: number; objectId?: string; params?: Record<string, unknown>; opening?: boolean; objects?: string[] }[];
+    graphs: Point[][][];
+    images: Point[][];
+  },
   /** The canvas graph WITH component identity (nodes keyed by stableKey, segments by wall id) plus the
    *  schema attribute values — input for the Pipe Network Solver node. */
   pipeGraph?: PipeGraphInput,
   /** Per Grid (grid-source) NODE id → the construction grid as a typed grid-field (cells + per-cell
    *  values), so a Grid node can feed Grid Threshold / Grid Distance directly. */
   gridFieldsBySourceNode: Map<string, GridField> = new Map(),
+  /** The OVERLAY pictures stacked over the underlay, by id. An Image node's `id` field picks one of
+   *  these; blank keeps `flowImage`, the base drawing. Vectorisation / Object Detection follow whichever
+   *  Image node feeds them, so a chain can trace a generated redraw while another traces the original. */
+  overlayImages: Record<string, FlowImage> = {},
 ): FlowPreviewItem[] {
   if (nodes.length === 0 || ppm <= 0) return [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const dataOf = (n: Node): FlowNodeData => n.data as FlowNodeData;
+  // Guard against a node whose tool isn't registered (a stale/unknown type, or a malformed
+  // hand-authored graph). Every branch below indexes FLOW_TOOLS[tool] unconditionally in dozens of
+  // places, so one bad node would otherwise throw mid-render (this runs inside a render-time useMemo
+  // with no error boundary) and blank the whole Flow overlay. Treat it the same as "not ready to
+  // preview yet" rather than crashing.
+  if (nodes.some((n) => !FLOW_TOOLS[dataOf(n).tool])) return [];
   // Polygons feeding a given source node — a LIST (a Space node can reference several spaces by id, so
   // it outputs them all as a bundle). Legacy single-polygon callers wrap into a one-element list.
   const polysForSource = (srcNodeId: string): Point[][] =>
     sources instanceof Map ? (sources.get(srcNodeId) ?? []) : (sources.length >= 3 ? [sources] : []);
+
+  /** The canvas payload for a Geometry node's `val-canvasJson` output — the WHOLE canvas, never scoped.
+   *  A Geometry node says what the region IS; narrowing the payload to that region is Filter by Space's
+   *  job, and doing it here as well would leave two nodes holding two different ideas of one plan. Built
+   *  by the same function the Plan JSON node uses, so the bytes are identical. */
+  /** The id(s) a Geometry node resolves — its `id` param, which the host's grab effect keeps on the canvas
+   *  selection. Published on `val-id` so a flow can say WHICH element it ran on: the same "space-…" /
+   *  "segment-…" / "node-…" string the canvas shows and an export writes. Several grabbed elements come
+   *  through as the comma-separated list the field itself holds; nothing resolved is "". */
+  const sourceIdOf = (nodeId: string): string => {
+    const raw = dataOf(byId.get(nodeId)!).params.id;
+    return typeof raw === "string" ? raw.trim() : "";
+  };
+
+  const canvasJsonFor = (nodeId: string): string => buildCanvasJson(canvasContent, {
+    ppm,
+    anchor: chainAnchorByNode.get(nodeId) ?? createAnchor,
+    decimals: 3,
+  }).json;
+
+  /** WHICH CANVAS COLLECTION a Get / Set Object Param node is addressing.
+   *
+   *  Both nodes used to read `canvasContent.spaces` outright, so the two thirds of the canvas that carry
+   *  parametric objects — nodes and segments — could be neither read nor written by a flow. The resolution
+   *  rule is unchanged (reference first, position as fallback); only the collection it runs against is now
+   *  chosen rather than assumed.
+   *
+   *  AUTO resolves by IDENTITY before shape: a bundle that IS one of the canvas's own arrays is matched by
+   *  reference, whichever array that is. Only when nothing matches does it fall back to the bundle's shape
+   *  — 1 point is a node, 2 a segment, 3+ a space — which is the right guess for geometry a flow rebuilt
+   *  along the way. Shape alone would be wrong the other way round: a two-point SPACE cannot exist, but a
+   *  rebuilt node bundle and a rebuilt segment bundle are told apart by nothing else. */
+  type HostMeta = { id?: string; objectId?: string; params?: Record<string, unknown> };
+  type HostKind = "space" | "node" | "segment";
+  const hostCollection = (raw: unknown, bundle: Point[][]): { kind: HostKind; list: Point[][]; meta: HostMeta[] } => {
+    const of = (kind: HostKind) => kind === "node"
+      ? { kind, list: cc?.nodes ?? [], meta: (cc?.nodeMeta ?? []) as HostMeta[] }
+      : kind === "segment"
+        ? { kind, list: cc?.segments ?? [], meta: (cc?.segmentMeta ?? []) as HostMeta[] }
+        : { kind, list: cc?.spaces ?? [], meta: (cc?.spaceMeta ?? []) as HostMeta[] };
+    const want = String(raw ?? "auto").trim().toLowerCase();
+    if (want === "space" || want === "node" || want === "segment") return of(want);
+    for (const k of ["space", "node", "segment"] as const) {
+      const c = of(k);
+      if (bundle.some((p) => c.list.indexOf(p) >= 0)) return c;
+    }
+    const n = bundle[0]?.length ?? 0;
+    return of(n === 1 ? "node" : n === 2 ? "segment" : "space");
+  };
+
   // Need at least one pipeline root with usable geometry: a Space node resolving to a polygon, OR a
   // Space Creator (which always generates one).
   const hasValidSource = nodes.some((n) => { const t = dataOf(n).tool; return (t === "source" || (t === "grab-object" && dataOf(n).params.hostKind === "space")) && polysForSource(n.id).some((p) => p.length >= 3); });
@@ -955,6 +2016,32 @@ export function evaluateFlow(
   const hasGraph = nodes.some((n) => (dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "freehand-source") &&
     ((graphsBySourceNode.get(n.id)?.some((g) => g.length > 0)) || graphSegments.length > 0));
   const hasImage = !!flowImage && nodes.some((n) => dataOf(n).tool === "image");
+  /** WHICH PICTURE a node reads. An Image node names one in its `id` field — blank, or a name with no
+   *  overlay behind it, is the base underlay, so every flow written before overlays existed keeps
+   *  reading exactly what it read before. Vectorisation and Object Detection have no such field: they
+   *  take the answer from the Image node WIRED INTO them, walking upstream through geometry edges (a
+   *  `valin-*` wire is a value, not chain membership — the same rule chainAnchorByNode follows). That
+   *  is what lets one branch trace a generated redraw while another traces the original: the two chains
+   *  differ only in which Image node they hang off. */
+  const imageOfNode = (nodeId: string): FlowImage | undefined => {
+    const seen = new Set<string>([nodeId]);
+    const stack = [nodeId];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      const n = nodes.find((x) => x.id === cur);
+      if (n && dataOf(n).tool === "image") {
+        const wanted = String(dataOf(n).params?.id ?? "").trim();
+        return wanted ? overlayImages[wanted] ?? flowImage : flowImage;
+      }
+      for (const e of edges) {
+        if (e.target !== cur || seen.has(e.source)) continue;
+        if (e.targetHandle && e.targetHandle.startsWith("valin-")) continue;
+        seen.add(e.source);
+        stack.push(e.source);
+      }
+    }
+    return flowImage;
+  };
   const cc = canvasContent;
   const hasCanvas = !!cc && nodes.some((n) => dataOf(n).tool === "canvas-source") &&
     (cc.spaces.length > 0 || cc.nodes.length > 0 || cc.segments.length > 0 || cc.graphs.length > 0 || cc.images.length > 0);
@@ -962,8 +2049,30 @@ export function evaluateFlow(
   // 2D primitive GENERATORS are self-sufficient roots exactly like a Space Creator (they synthesise their
   // polygon from params, no canvas input needed) — so a flow built purely from Rectangle → Loop → … (e.g.
   // the general-node staircase) evaluates without a Space/Graph/Canvas root.
-  const hasPrim = nodes.some((n) => { const t = dataOf(n).tool; return t === "rectangle" || t === "circle" || t === "polygon" || t === "polyline" || t === "network" || t === "line" || t === "ngon" || t === "ellipse" || t === "rounded-rect" || t === "sector" || t === "arc"; });
-  if (!hasValidSource && !hasCreator && !hasGraph && !hasImage && !hasCanvas && !hasPipe && !hasPrim) return [];
+  // The two RENDER nodes count for the same reason, and are the case the list originally missed: their
+  // geometry arrives on a wire from a Math Engine, so a computed flow (Input Properties → Math Engine →
+  // 2D / 3D Render — Workflows/Architectural/floorplan.v5.json) has no primitive node anywhere and would
+  // otherwise evaluate to nothing until a space happened to be selected, silently. A Render row with
+  // nothing usable wired still draws nothing, so admitting them cannot make an empty flow draw.
+  const hasPrim = nodes.some((n) => { const t = dataOf(n).tool; return t === "rectangle" || t === "circle" || t === "polygon" || t === "polyline" || t === "network" || t === "line" || t === "ngon" || t === "ellipse" || t === "rounded-rect" || t === "sector" || t === "arc" || t === "render-2d" || t === "render-3d"; });
+  // DATA roots, admitted for the same reason and with the same safety: Plan JSON reads the canvas itself
+  // (and falls back to the WHOLE canvas when no space scopes it), and Snapshot photographs the canvas and
+  // needs no model geometry at all. Both are already roots in the reachability walk below, but without
+  // them here a flow made only of those two plus a consumer — Workflows/Render/Faithful_Space_Render
+  // is exactly that — evaluated to NOTHING until a space happened to be selected: the Render node's wired
+  // image and prompt silently stayed empty and it looked like a broken import. Neither node emits geometry,
+  // so admitting them cannot make an empty flow draw.
+  const hasDataRoot = nodes.some((n) => { const t = dataOf(n).tool; return t === "plan-json" || t === "snapshot" || t === "graph-interpreter" || t === "canvas-encoder"
+      || (t === "expr" && (!!dataOf(n).params.decode || !!dataOf(n).params.encode)); })
+    // A Geometry node whose CANVAS JSON is consumed is a data root on exactly the grounds Plan JSON is.
+    // That payload is always the whole canvas — `canvasJsonFor` scopes to a space only when one resolves —
+    // so the node has something to say with nothing selected, while `hasValidSource` above asks for a
+    // resolved POLYGON and therefore does not. Without this, a flow that reads the plan as data
+    // (Geometry → Input Properties → Graph Interpreter → Math Engine) evaluates to NOTHING until a space
+    // happens to be selected: silently empty metrics that look like a broken import. It emits no geometry,
+    // so admitting it cannot make an empty flow draw.
+    || (edges ?? []).some((e) => e.sourceHandle === "val-canvasJson" && dataOf(byId.get(e.source) ?? nodes[0]).tool === "source" && byId.has(e.source));
+  if (!hasValidSource && !hasCreator && !hasGraph && !hasImage && !hasCanvas && !hasPipe && !hasPrim && !hasDataRoot) return [];
 
   // Adjacency + indegree.
   const succs = new Map<string, string[]>();
@@ -975,6 +2084,11 @@ export function evaluateFlow(
     // Exclude it from the dependency graph so the topo-sort doesn't see a cycle; the iteration is run
     // explicitly at the controlled (target) node instead.
     if (dataOf(byId.get(e.target)!).tool === "param-manip" && e.targetHandle === "valin-signal") continue;
+    // An edge into an EXPORT SINK (Export DXF / Export 3D) is not a data dependency: the sink writes a file
+    // from the source's preview, it never feeds geometry onward. Keeping it out of the graph means attaching
+    // an exporter cannot un-finalise the node it reads (isFinal is "no successors"), so Run Flow still
+    // commits that node exactly as it did before the exporter was wired in.
+    if (EXPORT_SINK_TOOLS.has(dataOf(byId.get(e.target)!).tool)) continue;
     succs.get(e.source)!.push(e.target);
     indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
   }
@@ -1032,7 +2146,7 @@ export function evaluateFlow(
 
   // Reachability from source nodes (only connected tools are active).
   const reachable = new Set<string>();
-  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "grab-object" || dataOf(n).tool === "pobj-source" || dataOf(n).tool === "input-props" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "rectangle" || dataOf(n).tool === "arc" || dataOf(n).tool === "circle" || dataOf(n).tool === "polygon" || dataOf(n).tool === "polyline" || dataOf(n).tool === "vertices" || dataOf(n).tool === "network" || dataOf(n).tool === "line" || dataOf(n).tool === "ngon" || dataOf(n).tool === "ellipse" || dataOf(n).tool === "rounded-rect" || dataOf(n).tool === "sector" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "freehand-source" || dataOf(n).tool === "image" || dataOf(n).tool === "pipe-solver" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "footing" || dataOf(n).tool === "staircase" || dataOf(n).tool === "schema-to-drawing").map((n) => n.id);
+  const stack = nodes.filter((n) => dataOf(n).tool === "source" || dataOf(n).tool === "grab-object" || dataOf(n).tool === "pobj-source" || dataOf(n).tool === "input-props" || dataOf(n).tool === "space-creator" || dataOf(n).tool === "rectangle" || dataOf(n).tool === "arc" || dataOf(n).tool === "circle" || dataOf(n).tool === "polygon" || dataOf(n).tool === "polyline" || dataOf(n).tool === "vertices" || dataOf(n).tool === "network" || dataOf(n).tool === "line" || dataOf(n).tool === "ngon" || dataOf(n).tool === "ellipse" || dataOf(n).tool === "rounded-rect" || dataOf(n).tool === "sector" || dataOf(n).tool === "graph-source" || dataOf(n).tool === "segment-source" || dataOf(n).tool === "node-source" || dataOf(n).tool === "canvas-source" || dataOf(n).tool === "freehand-source" || dataOf(n).tool === "image" || dataOf(n).tool === "snapshot" || dataOf(n).tool === "plan-json" || dataOf(n).tool === "pipe-solver" || dataOf(n).tool === "grid-source" || dataOf(n).tool === "footing" || dataOf(n).tool === "staircase" || dataOf(n).tool === "schema-to-drawing").map((n) => n.id);
   while (stack.length) {
     const id = stack.pop()!;
     if (reachable.has(id)) continue;
@@ -1324,6 +2438,20 @@ export function evaluateFlow(
   // Resolve a node's value INPUTS: each `valin-<key>` edge pulls the source's `val-<srcKey>` value and
   // overrides the param `key`. Returns { paramKey: value } for the wired inputs (number, or a non-empty
   // string for list params like Split's ratios).
+  /** The value wired into `valin-<key>` on `nodeId`, for ANY key — the endpoints Input Properties grows per
+   *  parameter are dynamic, so they aren't in the tool's declared `valueInputs` that resolveValueInputs
+   *  walks. Same resolution rules: a named `val-<key>` source handle wins, else a same-named value on the
+   *  source, else its first. */
+  const wiredValueFor = (nodeId: string, key: string): number | string | undefined => {
+    const edge = edges.find((e) => e.target === nodeId && e.targetHandle === `valin-${key}`);
+    if (!edge) return undefined;
+    const srcVals = nodeValues.get(edge.source);
+    if (!srcVals) return undefined;
+    const srcKey = edge.sourceHandle && edge.sourceHandle.startsWith("val-") ? edge.sourceHandle.slice(4) : undefined;
+    const v = srcKey ? srcVals[srcKey] : (srcVals[key] ?? Object.values(srcVals)[0]);
+    return (typeof v === "number" && isFinite(v)) || (typeof v === "string" && v.length) ? v : undefined;
+  };
+
   const resolveValueInputs = (nodeId: string): Record<string, number | string> => {
     const def = FLOW_TOOLS[dataOf(byId.get(nodeId)!).tool];
     if (!def.valueInputs?.length) return {};
@@ -1334,7 +2462,10 @@ export function evaluateFlow(
       const srcVals = nodeValues.get(edge.source);
       if (!srcVals) continue;
       const srcKey = edge.sourceHandle && edge.sourceHandle.startsWith("val-") ? edge.sourceHandle.slice(4) : undefined;
-      const v = srcKey ? srcVals[srcKey] : Object.values(srcVals)[0];
+      // No named source handle → prefer a source value whose key MATCHES this input's key (so an Agent
+      // publishing `val-graph` feeds `valin-graph` by name even when the wire didn't name the handle),
+      // falling back to the source's first value for the legacy single-output case.
+      const v = srcKey ? srcVals[srcKey] : (srcVals[vi.key] ?? Object.values(srcVals)[0]);
       if (!((typeof v === "number" && isFinite(v)) || (typeof v === "string" && v.length))) continue;
       // A SELECT target resolves its option across the wire by value / label / index (see coerceSelectWire),
       // so options connect without exact-string matching. Non-select params keep the raw wired value.
@@ -1359,12 +2490,185 @@ export function evaluateFlow(
     return f?.kind === "select" && Array.isArray(f.options) ? (f.options as Array<{ value: string }>).map((o) => o.value) : undefined;
   };
 
+  /** Parse a `points` VALUE into world-px outlines. Accepts all three shapes the matrix world produces:
+   *  ONE outline `[[x,y],…]`, a LIST of them `[[[x,y],…],…]` (Skeleton's val-polygons and friends), or a FLAT
+   *  list whose rows carry a THIRD number — the group-id column, split into one outline per run of equal
+   *  value. That last form is how a Math Engine publishes MANY outlines of DIFFERENT lengths, since an
+   *  Expression can only emit a rectangular matrix. Shared by the Polygon / Polyline nodes and by every 2D
+   *  Render row, so all of them read a wire identically. */
+  const parsePointsValue = (rawIn: unknown, anchor: Point): Point[][] => {
+    const toPts = (list: unknown[]): Point[] => list
+      .filter((p): p is unknown[] => Array.isArray(p) && p.length >= 2)
+      .map((p) => ({ x: anchor.x + num(p[0], 0) * ppm, y: anchor.y + num(p[1], 0) * ppm }));
+    const groupRuns = (list: unknown[]): Point[][] => {
+      const runs: Point[][] = [];
+      let cur: Point[] = [];
+      let key: number | null = null;
+      for (const p of list) {
+        if (!Array.isArray(p) || p.length < 3) continue;
+        const g = num(p[2], 0);
+        if (key !== null && g !== key) { if (cur.length) runs.push(cur); cur = []; }
+        key = g;
+        cur.push({ x: anchor.x + num(p[0], 0) * ppm, y: anchor.y + num(p[1], 0) * ppm });
+      }
+      if (cur.length) runs.push(cur);
+      return runs;
+    };
+    try {
+      const raw = typeof rawIn === "string" ? JSON.parse(rawIn) : rawIn;
+      if (!Array.isArray(raw)) return [];
+      const nested = Array.isArray(raw[0]) && Array.isArray((raw[0] as unknown[])[0]);
+      const grouped = !nested && Array.isArray(raw[0]) && (raw[0] as unknown[]).length >= 3
+        && raw.every((p) => Array.isArray(p) && p.length >= 3);
+      return nested ? (raw as unknown[][]).map(toPts) : grouped ? groupRuns(raw as unknown[]) : [toPts(raw as unknown[])];
+    } catch { return []; } // malformed → nothing
+  };
+
+  /** The raw `[x, y, extra?]` metre rows of a `points` VALUE, ungrouped — what a Circle / 3D Render row wants:
+   *  one PIECE per row, with the third column (radius / Z) read per row rather than used as a group id. */
+  const parsePointRows = (rawIn: unknown): number[][] => {
+    try {
+      const raw = typeof rawIn === "string" ? JSON.parse(rawIn) : rawIn;
+      if (!Array.isArray(raw)) return [];
+      const flat = Array.isArray(raw[0]) && !Array.isArray((raw[0] as unknown[])[0]) ? (raw as unknown[]) : [];
+      return flat.filter((p): p is unknown[] => Array.isArray(p) && p.length >= 2).map((p) => p.map((v) => num(v, 0)));
+    } catch { return []; }
+  };
+
+  /** A world-px point as the `[x, y]` anchor-relative metre pair every `points` value uses (0.1 mm), so a
+   *  Node / Segment source's point list lands in the same frame as a Space's and as Polygon's input. */
+  const ptM = (p: Point, anchor: Point): [number, number] => {
+    const r = (v: number) => Math.round(v * 1e4) / 1e4;
+    return [r((p.x - anchor.x) / ppm), r((p.y - anchor.y) / ppm)];
+  };
+
+  // The graph JSON for a set of polylines, with the canvas graph's REAL node ids and per-edge schema
+  // thickness when the polylines match its edges. Shared by Graph Geometry and the Graph source, so a
+  // `val-graph` taken straight off the source is byte-identical to one taken through Graph Geometry —
+  // which is what lets the Geometry hop be optional rather than merely usually-skippable.
+  const graphJsonForLines = (lines: Point[][], anchorG: Point): { graph: string; nodeCount: number; edgeCount: number } => {
+    if (!pipeGraph || !pipeGraph.edges.length) return { graph: '{"nodes":[],"edges":[]}', nodeCount: 0, edgeCount: 0 };
+    // Restrict to the edges actually wired in (e.g. one Skeleton branch), matching endpoints against the
+    // input polylines exactly as Wall Builder does. Nothing matched → publish the whole graph.
+    const ptById = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
+    const d2 = (p: { x: number; y: number }, q: { x: number; y: number }) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+    const TOL2 = 9;
+    const onInput = (A: { x: number; y: number }, B: { x: number; y: number }): boolean =>
+      lines.some((pl) => {
+        for (let i = 0; i + 1 < pl.length; i++) {
+          const s = pl[i], t = pl[i + 1];
+          if ((d2(s, A) < TOL2 && d2(t, B) < TOL2) || (d2(s, B) < TOL2 && d2(t, A) < TOL2)) return true;
+        }
+        return false;
+      });
+    const matched = lines.length
+      ? pipeGraph.edges.filter((e) => { const A = ptById.get(e.a); const B = ptById.get(e.b); return A && B ? onInput(A, B) : false; })
+      : [];
+    const use = matched.length ? matched : pipeGraph.edges;
+    const segDefs = undefined; // no schema node required — role lookup falls back to the drawn width
+    const usedIds: string[] = [];
+    const seenNode = new Set<string>();
+    const outEdges = use.map((e) => {
+      for (const nid of [e.a, e.b]) if (!seenNode.has(nid)) { seenNode.add(nid); usedIds.push(nid); }
+      // Schema `wall-thickness` (metres) wins; otherwise the drawn segment width (px → m).
+      const fromWidth = typeof e.widthPx === "number" && e.widthPx > 0 ? e.widthPx / ppm : 0;
+      const thickness = resolveNum(segDefs, pipeGraph.attrs.segments, e.id, "thickness", ROLES.wallThickness, fromWidth);
+      return { from_node_id: e.a, to_node_id: e.b, thickness: Math.round(thickness * 1e4) / 1e4 };
+    });
+    // Node POSITIONS ride along — an id-only list can't be redrawn, so without these the JSON couldn't feed
+    // a Network node. ANCHOR-relative metres, the shared frame (see polysToMetreListJson).
+    const rr = (v: number) => Math.round(v * 1e4) / 1e4;
+    const outNodes = usedIds.map((nid) => {
+      const n = ptById.get(nid);
+      return { id: nid, x: n ? rr((n.x - anchorG.x) / ppm) : 0, y: n ? rr((n.y - anchorG.y) / ppm) : 0 };
+    });
+    return { graph: JSON.stringify({ nodes: outNodes, edges: outEdges }), nodeCount: outNodes.length, edgeCount: outEdges.length };
+  };
+
   const items: FlowPreviewItem[] = [];
   for (const id of order) {
     const node = byId.get(id)!;
     const data = dataOf(node);
-    if (data.tool === "source") continue; // plain geometry source (from the canvas via `sources`); no params of its own
-    if (data.tool === "image") { outputs.set(id, []); continue; } // image root carries no geometry — feeds Vectorisation
+    // Plain geometry source — its polygons come from the canvas via `sources`, and it has no params of its
+    // own. It DOES publish `val-points`: the resolved outline in the same anchor-relative metre list Space
+    // Geometry emits, so a value chain (Math Engine, Matrix nodes, Input Properties) can hang straight off
+    // the Space and the Space Geometry hop becomes optional rather than mandatory.
+    if (data.tool === "source") {
+      // The scalar breakdown (points / area / extent), PLUS the canvas payload — so this ONE node answers
+      // both "what is the region" and "what is on the plan". See `canvasJsonFor`: always the whole canvas,
+      // never pre-scoped, because narrowing it to this region is Filter by Space's job. Published even when
+      // the node resolves no space yet, so the payload wire does not go dead while nothing is selected.
+      const srcScalars = computeNodeValues("source", polysForSource(id), ppm, chainAnchorByNode.get(id) ?? createAnchor);
+      const srcVals = { id: sourceIdOf(id), ...(srcScalars ?? {}), canvasJson: canvasJsonFor(id) };
+      nodeValues.set(id, srcVals);
+      items.push({ nodeId: id, tool: "source", polygons: [], color: FLOW_TOOLS.source.color, isFinal: false, values: srcVals });
+      continue;
+    }
+    // Image root: carries no geometry (it feeds Vectorisation over the edge, which reads the buffer off
+    // `flowImage` rather than off the wire) but DOES publish the raster as a value — `val-matrix`, the
+    // downsampled luminance matrix, so the Matrix / Grid nodes can read the image directly.
+    if (data.tool === "image") {
+      outputs.set(id, []);
+      const flowImage = imageOfNode(id);
+      if (flowImage) {
+        const chan = typeof data.params.channel === "string" ? data.params.channel : "luma";
+        const target = typeof data.params.inkColor === "string" ? data.params.inkColor : "#000000";
+        const pool = data.params.pooling === "ink" ? "ink" : "mean";
+        const matrixFor = (ch: string): string => {
+          const key = `${flowImage.key}:${flowImage.w}x${flowImage.h}:${IMAGE_MATRIX_MAX_EDGE}:${ch}:${ch === "dist" ? target : ""}:${pool}`;
+          let m = imageMatrixCache.get(key);
+          if (m == null) {
+            m = imageChannelMatrixJson(flowImage, IMAGE_MATRIX_MAX_EDGE, ch, target, pool);
+            if (imageMatrixCache.size > 32) imageMatrixCache.clear();
+            imageMatrixCache.set(key, m);
+          }
+          return m;
+        };
+        const mtx = matrixFor(chan);
+        // WHERE the pixels are, in the same anchor-relative metres every other value output speaks, so a
+        // Math Engine can put its result back registered on the picture instead of being placed by a typed
+        // width and origin. The chain is the one Vectorisation already uses, run forwards:
+        //   image pixel -> world px:  box.x + px * box.scale
+        //   world px    -> metres:    (worldPx - anchor) / ppm
+        // `cellM` folds in the DOWNSAMPLE as well, since a matrix cell is `dsScale` image pixels wide —
+        // the same `dsScale` imageChannelMatrixJson computes, kept in step with it here deliberately.
+        const anchorImg = chainAnchorByNode.get(id) ?? createAnchor;
+        const dsScale = Math.max(1, Math.ceil(Math.max(flowImage.w, flowImage.h) / Math.max(1, IMAGE_MATRIX_MAX_EDGE)));
+        const boxScale = flowImage.box.scale || 1;
+        const perPx = ppm > 0 ? boxScale / ppm : boxScale;
+        const imgVals = {
+          // Echoes which picture this node actually resolved — blank for the base drawing. Wire it into
+          // an Output slot and a flow reading an overlay says so, instead of looking like one that is
+          // reading the plan.
+          id: String(data.params.id ?? "").trim(),
+          image: imageDataUrl(flowImage),
+          matrix: mtx,
+          // THE THREE COLOUR CHANNELS, beside the single one `matrix` carries. A colour test needs all
+          // three at once — distance to a picked colour, or saturation as max minus min — and `channel`
+          // can only ever answer with one, which is why isolating an arbitrary colour had to happen
+          // INSIDE this node (`channel: "dist"`) where no downstream brief could reach it: a wire back
+          // from a brief would close a cycle. Published together, the test moves into the Math Engine
+          // and the colour becomes an ordinary wired parameter. Each is cached on its own key, so three
+          // costs one pass each and only when the picture or the pooling actually changes.
+          matrixR: matrixFor("r"),
+          matrixG: matrixFor("g"),
+          matrixB: matrixFor("b"),
+          originX: (flowImage.box.x - anchorImg.x) / (ppm || 1),
+          originY: (flowImage.box.y - anchorImg.y) / (ppm || 1),
+          cellM: dsScale * perPx,
+          widthM: flowImage.w * perPx,
+          heightM: flowImage.h * perPx,
+        };
+        nodeValues.set(id, imgVals);
+        items.push({ nodeId: id, tool: "image", polygons: [], color: FLOW_TOOLS.image.color, isFinal: false, values: imgVals });
+      }
+      continue;
+    }
+    // Export sinks (DXF / 3D / Canvas) — pure writers. They draw nothing, publish nothing and are
+    // deliberately detached from the dependency graph above, so wiring one in cannot change what the flow
+    // previews or commits. The output is built from the SOURCE node's preview when the node's button is
+    // pressed — Download for the two file sinks, Reflect for the canvas one.
+    if (EXPORT_SINK_TOOLS.has(data.tool)) { outputs.set(id, []); continue; }
     // Space Creator (generator, no input) — always active. Synthesise its polygon and publish it as this
     // node's single output, so downstream nodes consume it exactly like a Space source.
     if (data.tool === "space-creator") {
@@ -1628,6 +2932,82 @@ export function evaluateFlow(
       }
       continue;
     }
+    // 2D RENDER — one node for an operation's whole 2D output. Each ROW is a kind + its style, and draws
+    // whatever arrives on that row's own `valin-<rowId>`: a Polygon row splits a grouped list into one outline
+    // per run, a Circle row draws one circle per point (its third column, when present, is that circle's own
+    // radius), a Stroke row thickens each segment of a segment list into a band. So N pieces need ONE row,
+    // not one node per shape. Each row emits its OWN preview item —
+    // `${id}__${rowId}`, the established sub-item convention — because an item carries a single colour and
+    // layer; and echoes what it resolved on `val-<rowId>` so a rendered piece can still feed a Boolean.
+    if (data.tool === "render-2d") {
+      const anchorR = chainAnchorByNode.get(id) ?? createAnchor;
+      const vals: Record<string, number | string> = {};
+      const all: Point[][] = [];
+      const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+      for (const p of renderPrims(data.params)) {
+        const wired = wiredValueFor(id, p.id);
+        let polys: Point[][] = [];
+        if (p.kind === "stroke") {
+          // STROKE — a SEGMENT list `[[x1,y1,x2,y2],…]`, each thickened to a band of the row's Width about
+          // its centreline (a FIFTH column overrides that width per segment, exactly as a Circle row's third
+          // column overrides its radius). The quad is built from the segment's own perpendicular, so a band
+          // follows any direction; consecutive segments are stroked INDEPENDENTLY — there is no join, which
+          // is the Mitered Join node's job. A degenerate (zero-length) segment is dropped rather than drawn
+          // as a spike: a vertical 3D member projects to exactly that in plan.
+          for (const s of parsePointRows(wired)) {
+            if (s.length < 4) continue;
+            const w = Math.max(0.001, s.length >= 5 ? s[4] : p.width) * ppm;
+            const ax = anchorR.x + s[0] * ppm, ay = anchorR.y + s[1] * ppm;
+            const bx = anchorR.x + s[2] * ppm, by = anchorR.y + s[3] * ppm;
+            const dx = bx - ax, dy = by - ay;
+            const L = Math.hypot(dx, dy);
+            if (L < 1e-6) continue;
+            const nx = (-dy / L) * (w / 2), ny = (dx / L) * (w / 2);
+            polys.push([
+              { x: ax + nx, y: ay + ny }, { x: bx + nx, y: by + ny },
+              { x: bx - nx, y: by - ny }, { x: ax - nx, y: ay - ny },
+            ]);
+          }
+        } else if (p.kind === "circle") {
+          const SEG = 64;
+          // Nothing wired → one circle at the row's own X / Y, so the node draws standalone.
+          const centres = parsePointRows(wired);
+          for (const row of centres.length ? centres : [[p.x, p.y]]) {
+            const rad = Math.max(0.01, row.length >= 3 ? row[2] : p.radius) * ppm;
+            const cx = anchorR.x + row[0] * ppm, cy = anchorR.y + row[1] * ppm;
+            const ring: Point[] = [];
+            for (let k = 0; k < SEG; k++) {
+              const a = (2 * Math.PI * k) / SEG;
+              ring.push({ x: cx + rad * Math.cos(a), y: cy + rad * Math.sin(a) });
+            }
+            polys.push(ring);
+          }
+        } else {
+          polys = parsePointsValue(wired, anchorR).filter((pl) => pl.length >= 3);
+        }
+        if (!p.show || !polys.length) continue;
+        all.push(...polys);
+        vals[p.id] = JSON.stringify(polys.length === 1
+          ? polys[0].map((q) => [r4((q.x - anchorR.x) / ppm), r4((q.y - anchorR.y) / ppm)])
+          : polys.map((pl) => pl.map((q) => [r4((q.x - anchorR.x) / ppm), r4((q.y - anchorR.y) / ppm)])));
+        items.push({
+          // `isFinal` is presentation only (see the canvas preview renderer): a final item draws SOLID and
+          // filled, a non-final one dashed and hollow — the "this is still an intermediate step" look. A 2D
+          // Render row IS the drawing the flow set out to produce, never an intermediate, so it draws solid.
+          nodeId: `${id}__${p.id}`, tool: "render-2d", polygons: polys, color: p.color, isFinal: true,
+          cellCount: polys.length, layer: p.layer.trim() || undefined,
+          // The row's own style travels with its geometry — see `primStyle`. A Stroke row is already a band,
+          // so only its line style is meaningful; fill/hatch are read but harmless there.
+          primStyle: { lineStyle: p.lineStyle, fillMode: p.fillMode, hatch: p.hatch, hatchSpacing: p.hatchSpacing, hatchWeight: p.hatchWeight },
+          // A Polygon row's rings are read even-odd, so a `subtract(...)` result draws its holes as voids.
+          // A Circle row likewise (concentric circles → an annulus). A Stroke row must not — see `evenOdd`.
+          evenOdd: p.kind !== "stroke",
+        });
+      }
+      outputs.set(id, all);
+      if (Object.keys(vals).length) nodeValues.set(id, vals);
+      continue;
+    }
     // Polygon / Polyline (2D primitives): build a point list from the `points` JSON (metre pairs, LOCAL to the
     // flow anchor). Polygon → a closed, filled Space; Polyline → an open stroke (openPath, no fill/3D). A
     // `color` param / wired `valin-color` overrides the tool tint. Used by object decompile for poly/line rules.
@@ -1636,21 +3016,9 @@ export function evaluateFlow(
       const gp = { ...data.params, ...vin };
       // Anchored at the chain's Node when wired into one (chainAnchorByNode), else the flow anchor.
       const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
-      // `points` accepts EITHER one outline `[[x,y],…]` or a LIST of them `[[[x,y],…],…]` — Skeleton's
-      // val-polygons and any other multi-polygon producer emit the nested form. Distinguished by nesting
-      // depth; without this the nested form passes the per-point filter and every coordinate collapses to
-      // the anchor (num([x,y]) is NaN → 0), drawing a degenerate blob.
-      const toPts = (list: unknown[]): Point[] => list
-        .filter((p): p is unknown[] => Array.isArray(p) && p.length >= 2)
-        .map((p) => ({ x: anchor0.x + num(p[0], 0) * ppm, y: anchor0.y + num(p[1], 0) * ppm }));
-      let polyList: Point[][] = [];
-      try {
-        const raw = typeof gp.points === "string" ? JSON.parse(gp.points) : gp.points;
-        if (Array.isArray(raw)) {
-          const nested = Array.isArray(raw[0]) && Array.isArray((raw[0] as unknown[])[0]);
-          polyList = nested ? (raw as unknown[][]).map(toPts) : [toPts(raw as unknown[])];
-        }
-      } catch { /* malformed points → nothing */ }
+      // One outline / a nested list / a flat list with a group column — all three handled by the shared
+      // parsePointsValue, which the 2D Render rows read with too.
+      let polyList: Point[][] = parsePointsValue(gp.points, anchor0);
       const minLen = data.tool === "polygon" ? 3 : 2;
       polyList = polyList.filter((pl) => pl.length >= minLen);
       const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS[data.tool].color;
@@ -1686,6 +3054,10 @@ export function evaluateFlow(
       const gp = { ...data.params, ...vin };
       const anchor0 = chainAnchorByNode.get(id) ?? createAnchor;
       const segs: Point[][] = [];
+      /** Per-edge thickness in metres, row-aligned with `segs`; null where the edge carries none. */
+      const segThickM: (number | null)[] = [];
+      /** Per-edge `type` off the graph, row-aligned with `segs` — the key `typeMap` dispatches on. */
+      const segTypes: (string | null)[] = [];
       const at = new Map<string, Point>();
       try {
         const raw = typeof gp.graph === "string" ? JSON.parse(gp.graph) : gp.graph;
@@ -1697,9 +3069,15 @@ export function evaluateFlow(
           at.set(o.id, { x: anchor0.x + num(o.x, 0) * ppm, y: anchor0.y + num(o.y, 0) * ppm });
         }
         for (const e of Array.isArray(g?.edges) ? g!.edges : []) {
-          const o = e as { from_node_id?: unknown; to_node_id?: unknown };
+          const o = e as { from_node_id?: unknown; to_node_id?: unknown; thickness?: unknown; type?: unknown };
           const a = at.get(String(o?.from_node_id)); const b = at.get(String(o?.to_node_id));
-          if (a && b) segs.push([a, b]);
+          if (!a || !b) continue;
+          segs.push([a, b]);
+          // An edge carrying its OWN thickness wins over the row's uniform value. This is what keeps a door
+          // or window as thick as the wall it sits in: the graph already knows each opening's HOST wall
+          // width, and a thin opening between thick wall stubs mitres into a wedge that pinches the run.
+          segThickM.push(typeof o.thickness === "number" && isFinite(o.thickness) && o.thickness > 0 ? o.thickness : null);
+          segTypes.push(typeof o.type === "string" && o.type.trim() ? o.type.trim() : null);
         }
       } catch { /* malformed graph → nothing drawn */ }
       const tint = typeof gp.color === "string" && gp.color ? gp.color : FLOW_TOOLS.network.color;
@@ -1708,7 +3086,104 @@ export function evaluateFlow(
       // 2-point polylines flow on downstream (Mitered Join & graph consumers accept minLen 2), exactly
       // like the Line primitive.
       outputs.set(id, segs);
-      items.push({ nodeId: id, tool: "network", polygons: segs, color: tint, isFinal: succs.get(id)!.length === 0, openPath: true, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      // PER-EDGE TYPE DISPATCH. `typeMap` is a JSON object keyed by the `type` an edge carries on the graph,
+      // each value a partial set of this row's own parameters. Every entry is turned into a COMPLETE
+      // segMeta by the same factory that builds the row's, so a per-type entry can never drift from the
+      // row it overrides, and any Network parameter is overridable without listing them here one by one.
+      //
+      // This is what collapses a wall/door/window pipeline: merge the four typed graphs, hand the union to
+      // ONE Network, and let each edge find its own object, layer, thickness and display. It also mitres
+      // exterior and interior walls in a SINGLE union, which four separate rows cannot do — their unions
+      // stop at the row boundary and leave a seam at every T-junction between a partition and the shell.
+      const mkSegMeta = (sp: Record<string, unknown>): FlowSegMeta => ({
+          thicknessM: Math.max(0.01, num(sp.thickness, 0.12)),
+          // Row-aligned with `polygons` — see `segThickM`. Omitted entirely when no edge carried its own.
+          ...(segThickM.some((t) => t != null)
+            ? { thicknessMPer: segThickM.map((t) => (t != null ? Math.max(0.01, t) : Math.max(0.01, num(sp.thickness, 0.12)))) }
+            : {}),
+          segmentType: typeof sp.segmentType === "string" && sp.segmentType ? sp.segmentType : "wall",
+          // "auto" leaves `mode` unset so the canvas view (Sharp / Filling+Union / Graph) decides, as it does
+          // for a hand-drawn wall; anything else pins the join — "mitered-union" is the seamless poché.
+          wallMode: typeof sp.wallMode === "string" && sp.wallMode && sp.wallMode !== "auto" ? sp.wallMode : undefined,
+          // Display mode, stamped on every segment the row draws. "buffered" / "path" set `bufferStyle`, which
+          // is what the Segment Properties Display block writes when you click Buffered — so an imported flow
+          // arrives banded instead of needing each wall visited by hand. "path" additionally derives a live
+          // Space from the connected run.
+          display: (sp.display === "buffered" || sp.display === "path")
+            ? {
+                style: sp.bufferStyle === "capsule" ? "capsule" as const : sp.bufferStyle === "square" ? "square" as const : "flat" as const,
+                asSpace: sp.display === "path",
+              }
+            : undefined,
+          // How the CANVAS band is painted — the Display block's three-way Fill. "outlined" is the drafting
+          // default (stroke only), so a run reads as one seamless mitred outline; "hatched" adds the 45°
+          // poché pattern on top of a filled band. Either way the canvas draws the whole wall, so the hosted
+          // Wall object needn't paint a 2D band whose per-segment edges show as seams at a T-junction.
+          fill: sp.fill === "filled" || sp.fill === "hatched" ? "filled" as const : "outlined" as const,
+          // Off hands 3D to the flow: the canvas skips its own band extrusion for these segments, so a
+          // Polyhedron row built from the mitred rings isn't drawn on top of a second, unmitred copy.
+          extrude3d: !(sp.extrude3d === false || num(sp.extrude3d, 1) === 0),
+          hatch: sp.fill === "hatched"
+            ? {
+                style: sp.hatchStyle === "dots" ? "dots" as const : "diagonal" as const,
+                spacing: Math.max(1, num(sp.hatchSpacing, 8)),
+                angle: num(sp.hatchAngle, 45),
+                weight: Math.max(0.1, num(sp.hatchWeight, 1)),
+              }
+            : undefined,
+          layer: typeof sp.layer === "string" && sp.layer.trim() ? sp.layer.trim() : undefined,
+          objectId: typeof sp.objectId === "string" && sp.objectId.trim() ? sp.objectId.trim() : undefined,
+          // Field bindings for the hosted object, e.g. {"thickness": 0.23} so a Wall object is as thick as the
+          // segment it sits on. Malformed JSON binds nothing rather than failing the whole row.
+          objectParams: (() => {
+            if (typeof sp.objectParams !== "string" || !sp.objectParams.trim()) return undefined;
+            try {
+              const v = JSON.parse(sp.objectParams) as unknown;
+              return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, number | string | boolean>) : undefined;
+            } catch { return undefined; }
+          })(),
+          // A JSON ARRAY of further hosted objects — [{objectId, params}, …]. Malformed input hosts none
+          // rather than failing the row, the same rule objectParams follows.
+          extraObjects: (() => {
+            if (typeof sp.extraObjects !== "string" || !sp.extraObjects.trim()) return undefined;
+            try {
+              const v = JSON.parse(sp.extraObjects) as unknown;
+              if (!Array.isArray(v)) return undefined;
+              const out = v
+                .filter((o): o is Record<string, unknown> => !!o && typeof o === "object" && !Array.isArray(o))
+                .filter((o) => typeof o.objectId === "string" && o.objectId.trim())
+                .map((o) => ({
+                  objectId: String(o.objectId).trim(),
+                  params: o.params && typeof o.params === "object" && !Array.isArray(o.params)
+                    ? (o.params as Record<string, number | string | boolean>)
+                    : undefined,
+                }));
+              return out.length ? out : undefined;
+            } catch { return undefined; }
+          })(),
+          release: sp.release === true || num(sp.release, 0) === 1,
+      });
+      const typeMap: Record<string, FlowSegMeta> = {};
+      if (typeof gp.typeMap === "string" && gp.typeMap.trim()) {
+        try {
+          const parsed = JSON.parse(gp.typeMap) as unknown;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            for (const [key, ov] of Object.entries(parsed as Record<string, unknown>)) {
+              if (ov && typeof ov === "object" && !Array.isArray(ov)) typeMap[key] = mkSegMeta({ ...gp, ...(ov as Record<string, unknown>) });
+            }
+          }
+        } catch { /* malformed map → the row's own meta applies to every edge, as before */ }
+      }
+      items.push({
+        nodeId: id, tool: "network", polygons: segs, color: tint, isFinal: succs.get(id)!.length === 0, openPath: true,
+        values: vals, valueInputs: Object.keys(vin).length ? vin : undefined,
+        // What these segments become on the canvas — read here so the host doesn't have to look the node up.
+        segMeta: {
+          ...mkSegMeta(gp),
+          ...(segTypes.some((t) => t != null) ? { typePer: segTypes } : {}),
+          ...(Object.keys(typeMap).length ? { byType: typeMap } : {}),
+        },
+      });
       continue;
     }
     // File Upload (value source): publish the chosen file's path as a `val-path` text value for
@@ -1718,6 +3193,21 @@ export function evaluateFlow(
       const vals = { path: String(data.params.path ?? ""), data: String(data.params._data ?? "") };
       nodeValues.set(id, vals);
       items.push({ nodeId: id, tool: "file-upload", polygons: [], color: FLOW_TOOLS["file-upload"].color, isFinal: false, values: vals });
+      continue;
+    }
+    // Render (action node): resolve the wired Image / Prompt value inputs so the host bakes them for the
+    // "Render" button, and publish the picture it last produced on `val-image`.
+    //
+    // WHY THE OUTPUT EXISTS. A generated redraw was previously a dead end — visible on the node, saveable
+    // by hand, reachable by nothing. It is now a first-class value, which is what closes the loop this
+    // node was always half of: render a clean schematic, and read it back. Vectorisation still traces a
+    // CANVAS picture rather than a wire, so the way back in is the overlay the run drops on the canvas
+    // (`render-1`, `render-2`, …) plus an Image node naming it — this endpoint is for everything else,
+    // an Analyse node reading the result or an Output slot showing that one exists at all.
+    if (data.tool === "render") {
+      const vin = resolveValueInputs(id);
+      nodeValues.set(id, { image: String(data.params._resultUrl ?? "") });
+      items.push({ nodeId: id, tool: "render", polygons: [], color: FLOW_TOOLS.render.color, isFinal: false, values: nodeValues.get(id), valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
     // Analyse (action node): resolve the wired File (data URL) / Url value inputs and surface them so the
@@ -1736,6 +3226,49 @@ export function evaluateFlow(
       const vals = { text };
       nodeValues.set(id, vals);
       items.push({ nodeId: id, tool: "text", polygons: [], color: FLOW_TOOLS.text.color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Material: a LINK, not a computation — it publishes the Library-relative PATH it names on
+    // `val-material` and draws nothing. The wire that matters leaves here on `matin-<rowId>` into a
+    // 3D Render row, which the flow's value plane does not resolve (that prefix is read by the object
+    // spine when the object is baked), so this node's only job in the overlay is to be visible and to
+    // report the path it points at.
+    if (data.tool === "material") {
+      const vals = { material: String(data.params.path ?? "") };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "material", polygons: [], color: FLOW_TOOLS.material.color, isFinal: false, values: vals });
+      continue;
+    }
+    // Prompt Builder: substitute `{name}` in the template with the value wired into the slot NAMED
+    // `name`, and publish the filled text on `val-text`. The one node that turns the value plane's
+    // numbers into a sentence — the Math Engine cannot concatenate strings and Text only passes one
+    // through, so without this nothing could compose a Render / Analyse prompt from measured figures.
+    if (data.tool === "prompt-builder") {
+      const vin = resolveValueInputs(id);
+      const dp = Math.max(0, Math.min(6, Math.round(num(data.params.decimals, 2))));
+      // slot name → resolved value, skipping unnamed slots and slots with nothing wired.
+      // The slot COUNT comes from the declaration's own valueInputs rather than a literal, so adding
+      // an eleventh endpoint to the .node.json cannot leave this loop silently ignoring it.
+      const bind = new Map<string, string>();
+      for (const slot of FLOW_TOOLS["prompt-builder"].valueInputs ?? []) {
+        const name = String(data.params[`n${slot.key.slice(1)}`] ?? "").trim();
+        const v = vin[slot.key];
+        if (!name || v == null) continue;
+        // Round numbers so `{area}` reads "17.9" rather than "17.899999999999999". A value that
+        // arrived as a numeric STRING is rounded too; anything else passes through verbatim.
+        const n = typeof v === "number" ? v : (typeof v === "string" && v.trim() !== "" && isFinite(Number(v)) ? Number(v) : null);
+        bind.set(name, n != null ? String(Number(n.toFixed(dp))) : String(v));
+      }
+      // An unwired / unnamed placeholder is LEFT VERBATIM rather than emptied: a hole in a prompt the
+      // author cannot see is worse than a visible `{doorWidth}` saying which wire is missing. Prose
+      // containing braces survives for the same reason.
+      const text = String(data.params.template ?? "").replace(
+        /\{([A-Za-z_][\w.-]*)\}/g,
+        (whole, key: string) => bind.get(key) ?? whole,
+      );
+      const vals = { text };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "prompt-builder", polygons: [], color: FLOW_TOOLS["prompt-builder"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
     // Parametric Object (definition source): publish the textbox definition on `val-def` for a Parametric
@@ -1792,12 +3325,20 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "param-geometry", polygons: [], color: FLOW_TOOLS["param-geometry"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
-    // Grab Output Metrics (read-only readout): the inline metrics are baked by the host sync effect. Here we
-    // just PASS the wired definition through on `val-def` so the node can sit mid-chain. No geometry.
+    // Grab Output Metrics: passes the wired definition through on `val-def` so the node can sit mid-chain,
+    // AND publishes EVERY metric on its own `val-<key>` endpoint (declared outputs first, then the derived
+    // size / area / volume) so a metric can drive anything downstream — a Math Engine, an Output slot, a
+    // param. Same `paramOutputEntries` keying the node's readout and its handles use, so the endpoint a row
+    // shows is the endpoint that carries it. The wired definition already has any upstream Grab Input
+    // Parameters' chosen values baked into `parameters[].default`, so these are the values on display, not
+    // the object's defaults. `def` is written LAST: a metric whose name reduces to `def` cannot shadow the
+    // declared definition pass-through.
     if (data.tool === "param-output-metrics") {
       const vin = resolveValueInputs(id);
       const def = vin.def != null ? String(vin.def) : String(data.params.definition ?? "");
-      const vals = { def };
+      const vals: Record<string, number | string> = {};
+      for (const m of paramOutputEntries(evalParametricOutputs(def))) vals[m.key] = m.num ?? m.value;
+      vals.def = def;
       nodeValues.set(id, vals);
       items.push({ nodeId: id, tool: "param-output-metrics", polygons: [], color: FLOW_TOOLS["param-output-metrics"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
@@ -1891,7 +3432,28 @@ export function evaluateFlow(
       // A Grid node also publishes its lattice as a typed grid-field, so downstream grid nodes
       // (Grid Threshold, Grid Distance, …) can classify/recolour the cells.
       if (data.tool === "grid-source") { const gf = gridFieldsBySourceNode.get(id); if (gf) fields.set(id, gf); }
-      if (all.length > 0) items.push({ nodeId: id, tool: data.tool, polygons: all, color: FLOW_TOOLS[data.tool].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: handles.length });
+      // ONE value output per source, in the shape the matrix world speaks: Graph / Freehand publish their
+      // graph JSON, Segment its two endpoints as a point LIST. Uniform with the Space source's `val-points`
+      // and with each other, so a value chain reads any source through the same variable and the Geometry
+      // hop becomes optional (the Geometry nodes keep their scalar breakdowns for when a number is wanted).
+      const srcAnchor = chainAnchorByNode.get(id) ?? createAnchor;
+      let gsVals: Record<string, number | string> | undefined;
+      if (data.tool === "graph-source") {
+        gsVals = { graph: graphJsonForLines(all, srcAnchor).graph };
+      } else if (data.tool === "freehand-source") {
+        gsVals = { graph: polylinesToGraphJson(all, ppm, srcAnchor).json };
+      } else if (data.tool === "segment-source") {
+        // `[[x1,y1],[x2,y2]]` — the polyline's first and last vertex, anchor-relative metres like every
+        // other `points` value (Segment Geometry's x1/y1/x2/y2 scalars are unshifted; don't mix frames).
+        const pl = all.find((p) => p.length >= 2);
+        const a = pl?.[0], b = pl?.[pl.length - 1];
+        gsVals = { points: JSON.stringify(a && b ? [ptM(a, srcAnchor), ptM(b, srcAnchor)] : []) };
+      }
+      // Every Geometry kernel also publishes the canvas payload — the Plan JSON node folded in, so the
+      // shape and the model behind it come off one node. Grid is not a Geometry kind and is left alone.
+      if (data.tool !== "grid-source") gsVals = { ...(data.tool === "freehand-source" ? {} : { id: sourceIdOf(id) }), ...(gsVals ?? {}), canvasJson: canvasJsonFor(id) };
+      if (gsVals) nodeValues.set(id, gsVals);
+      if (all.length > 0) items.push({ nodeId: id, tool: data.tool, polygons: all, color: FLOW_TOOLS[data.tool].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: handles.length, values: gsVals });
       continue;
     }
     // Node (generator): emit the referenced canvas node(s) as single points (single-point polylines).
@@ -1903,6 +3465,13 @@ export function evaluateFlow(
       outputs.set(id, all);
       const handles: Point[][][] = data.params.outputMode === "single" ? [all] : pts;
       handleGroups.set(id, handles);
+      // ONE value output, the same `points` shape every source publishes: `[[x,y]]`, anchor-relative metres
+      // (Node Geometry's x/y scalars are unshifted — don't mix frames). A one-row point list is still a
+      // matrix, so a Math Engine reads a Node source exactly as it reads a Space or a Segment.
+      const nsPt = all.find((pl) => pl.length >= 1)?.[0];
+      const nsAnchor = chainAnchorByNode.get(id) ?? createAnchor;
+      const nsVals = { id: sourceIdOf(id), points: JSON.stringify(nsPt ? [ptM(nsPt, nsAnchor)] : []), canvasJson: canvasJsonFor(id) };
+      nodeValues.set(id, nsVals);
       // STAMP mode: a drawing/mesh wired into `gin-stamp` is an origin-relative representation; copy it to
       // each of this node's point(s). Renders the stamped drawing (2D) and/or mesh (3D) instead of the bare
       // node markers.
@@ -1923,13 +3492,14 @@ export function evaluateFlow(
         items.push({
           nodeId: id, tool: "node-source", polygons: [], color: stamp.color,
           isFinal: succs.get(id)!.length === 0,
+          values: nsVals,
           doorFill: fill.length ? fill : undefined,
           doorLines: lines.length ? lines : undefined,
           meshes: meshes.length ? meshes : undefined,
         });
         continue;
       }
-      if (all.length > 0) items.push({ nodeId: id, tool: "node-source", polygons: all, color: FLOW_TOOLS["node-source"].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: handles.length });
+      if (all.length > 0) items.push({ nodeId: id, tool: "node-source", polygons: all, color: FLOW_TOOLS["node-source"].color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: handles.length, values: nsVals });
       continue;
     }
     // Canvas (generator): the whole canvas as five typed output endpoints — out-0 Spaces, out-1 Nodes,
@@ -1986,6 +3556,13 @@ export function evaluateFlow(
     // scope under its own keys (wire a params node's output once → every parameter is in scope by name).
     // One Expression node replaces a chain of Math/Conditional/Match nodes — e.g. the staircase's
     // "(midSteps>0 && midSteps<steps) ? midSteps : floor(steps/2)". Publishes `val-result` (booleans → 1|0).
+    //
+    // MATRICES travel on wires as JSON text, so every incoming value goes through `liftScopeValue` — a
+    // string that parses as a rectangular row-major array becomes a real matrix in scope and the operators
+    // overload on it (`+ - * / ^` element-wise with broadcasting, `@` the matrix product). `serializeValue`
+    // turns a matrix result back into the same JSON every Matrix node emits, so an Expression output wires
+    // into Polygon's `valin-points` or Points to Graph unchanged. That is what collapses the eleven-node
+    // inset chain (inset_using_maths.json) into the five lines of inset_using_maths_v2.json.
     if (data.tool === "expr") {
       const scope: Scope = { PI: Math.PI };
       // Pass 1 — `deps` (the whole params node merged by name). Pass 2 — explicit per-variable wires, which
@@ -1994,7 +3571,7 @@ export function evaluateFlow(
       for (const e of edges) {
         if (e.target !== id || e.targetHandle !== "valin-deps") continue;
         const srcVals = nodeValues.get(e.source);
-        if (srcVals) Object.assign(scope, srcVals);
+        if (srcVals) for (const [k, v] of Object.entries(srcVals)) scope[k] = liftScopeValue(v);
       }
       for (const e of edges) {
         if (e.target !== id || !e.targetHandle?.startsWith("valin-") || e.targetHandle === "valin-deps") continue;
@@ -2003,16 +3580,45 @@ export function evaluateFlow(
         const key = e.targetHandle.slice(6);
         const srcKey = e.sourceHandle && e.sourceHandle.startsWith("val-") ? e.sourceHandle.slice(4) : undefined;
         const v = srcKey ? srcVals[srcKey] : Object.values(srcVals)[0];
-        if (v != null) scope[key] = v;
+        if (v != null) scope[key] = liftScopeValue(v);
       }
       // Evaluate each `name = expr` definition IN ORDER — a later line sees earlier names in scope (a vars
       // block) — and publish each as its own `val-<name>` output. A single-expression body → one `result`.
+      // The scope keeps the LIVE value (a matrix stays a matrix for the next line); only what is published
+      // on the wire is serialized, so a six-line chain rounds once at the end rather than at every step —
+      // materially more accurate than the equivalent node chain, which round6's after every node.
+      // `runExprBody` is shared with the baked-IR path and understands `loop … end`, so an accumulator that
+      // grows across iterations behaves identically live and baked.
+      // DECODE — the read half, run before the formulas. Its matrices go into scope BY NAME, so the body
+      // reads `types` and `spaces` as ordinary free variables and the wires that used to carry them are
+      // gone. They are published as `val-` outputs as well, exactly as the standalone node publishes them,
+      // so folding hides nothing: every intermediate stays inspectable and still reachable by other nodes.
+      const cfgOf = (v: unknown): Record<string, unknown> | null => {
+        if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
+        if (typeof v !== "string" || !v.trim()) return null;
+        try { const q = JSON.parse(v) as unknown; return q && typeof q === "object" && !Array.isArray(q) ? q as Record<string, unknown> : null; } catch { return null; }
+      };
       const vals: Record<string, number | string> = {};
-      for (const d of parseExprDefs(data.params.expr)) {
-        const raw = evalRaw(d.expr, scope);
-        const val = typeof raw === "boolean" ? (raw ? 1 : 0) : raw;
-        scope[d.name] = val;
-        vals[d.name] = val;
+      const decCfg = cfgOf(data.params.decode);
+      if (decCfg) {
+        // `from` names the scope key holding the payload — whatever arrived on `valin-<key>`, which for a
+        // Geometry node's canvas JSON is a plain string sitting inertly in scope until this reads it.
+        const src = typeof decCfg.from === "string" && decCfg.from ? decCfg.from : "canvasJson";
+        const dec = decodeCanvasJson({ ...decCfg, json: decCfg.json ?? scope[src] });
+        for (const [k, v] of Object.entries(dec)) { vals[k] = v; scope[k] = liftScopeValue(v); }
+      }
+      for (const [name, raw] of Object.entries(runExprBody(data.params.expr, scope))) vals[name] = serializeValue(raw);
+      // ENCODE — the write half, run after. `from` maps each encoder input to the name this body publishes
+      // it under, which is the wiring made explicit as data rather than as eight edges on the canvas.
+      const encCfg = cfgOf(data.params.encode);
+      if (encCfg) {
+        const from = cfgOf(encCfg.from) ?? {};
+        const feed: Record<string, unknown> = { ...encCfg };
+        for (const [input, published] of Object.entries(from)) {
+          const v = vals[String(published)];
+          if (v !== undefined) feed[input] = v;
+        }
+        for (const [k, v] of Object.entries(encodePlan(feed))) vals[k] = v;
       }
       nodeValues.set(id, vals);
       items.push({ nodeId: id, tool: "expr", polygons: [], color: FLOW_TOOLS.expr.color, isFinal: false, values: vals });
@@ -2024,14 +3630,49 @@ export function evaluateFlow(
     if (data.tool === "input-props") {
       const propsInput = inputOf(id);
       const vals: Record<string, number | string> = {};
+      // Each parameter has its own input endpoint (`valin-<propId>`, grown per parameter): a value
+      // wired in OVERRIDES that parameter's control, so a brief can be driven from upstream — a computed
+      // number, another params node, an Agent — exactly as every op's params can be. The overrides are
+      // surfaced on the item (baked to `_wired`) so the editor shows the incoming value read-only instead
+      // of a control that no longer decides anything.
+      const wiredProps: Record<string, number | string> = {};
       for (const p of inputProps(data.params)) {
+        const w = wiredValueFor(id, p.id);
+        if (w != null) {
+          // A select resolves its option across the wire by value / label / index, like any select param.
+          const coerced = p.type === "select" && p.options.length ? coerceSelectWire(w, p.options) : undefined;
+          const v: number | string = coerced ?? (p.type === "checkbox" ? (Number(w) !== 0 ? 1 : 0)
+            : p.type === "range" ? (typeof w === "number" ? w : Number(w) || 0)
+            : w);
+          wiredProps[p.id] = v;
+          vals[p.id] = v;
+          continue;
+        }
         vals[p.id] = p.type === "checkbox" ? (p.value ? 1 : 0)
           : p.type === "range" ? (typeof p.value === "number" ? p.value : Number(p.value) || 0)
           : String(p.value ?? "");
       }
+      // A COLOUR parameter also publishes its three COMPONENTS, `val-<id>_r` / `_g` / `_b`, 0..255.
+      // The swatch itself is a "#rrggbb" STRING, and the expression language has no way to parse one -
+      // it compares strings and multiplies numbers, and nothing bridges the two. Without this a colour
+      // picked in a brief could only ever be forwarded to another string field, never computed with, so
+      // "find the lines nearest THIS colour" was unreachable from the one control built to express it.
+      for (const p of inputProps(data.params)) {
+        if (p.type !== "color") continue;
+        const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(vals[p.id] ?? ""));
+        if (!m) continue;
+        vals[`${p.id}_r`] = parseInt(m[1], 16);
+        vals[`${p.id}_g`] = parseInt(m[2], 16);
+        vals[`${p.id}_b`] = parseInt(m[3], 16);
+      }
       nodeValues.set(id, vals);
-      outputs.set(id, propsInput && propsInput.length >= 3 ? [propsInput] : []);
-      items.push({ nodeId: id, tool: "input-props", polygons: [], color: FLOW_TOOLS["input-props"].color, isFinal: false, values: vals });
+      const propsGeom = propsInput && propsInput.length >= 3 ? [propsInput] : [];
+      outputs.set(id, propsGeom);
+      // The forwarded outline is surfaced on the ITEM too, not just threaded: consumers that read
+      // geometry off the preview rather than off `outputs` — the Snapshot node's "Selected" framing —
+      // would otherwise find nothing behind a params node and quietly frame the whole canvas instead.
+      // Same treatment Grab Object gives its pass-through.
+      items.push({ nodeId: id, tool: "input-props", polygons: propsGeom, color: FLOW_TOOLS["input-props"].color, isFinal: false, values: vals, valueInputs: Object.keys(wiredProps).length ? wiredProps : undefined });
       continue;
     }
     // Output node (terminal collector) — always active. For each named slot, resolve the value wired
@@ -2039,6 +3680,12 @@ export function evaluateFlow(
     // source has already been evaluated. Produces a metrics item (no geometry).
     if (data.tool === "output") {
       const slots = outputSlots(data.params);
+      // Each slot also PUBLISHES what it collected, on `val-<slotId>` — the mirror of its own
+      // `valin-<slotId>` input, on the same row. So a collector can sit mid-chain: read a metric here, show
+      // it, and pass it on to a Math Engine, another Output, or any param. Keyed by the SLOT ID, not the
+      // label, so renaming a slot never moves a wire (the input endpoints are keyed the same way). An
+      // unwired slot publishes nothing, so a downstream consumer keeps its own value.
+      const vals: Record<string, number | string> = {};
       const metrics = slots.map((s) => {
         const edge = edges.find((e) => e.target === id && e.targetHandle === `valin-${s.id}`);
         let value: number | string | null = null;
@@ -2050,12 +3697,182 @@ export function evaluateFlow(
             if (typeof v === "number" || typeof v === "string") value = v;
           }
         }
+        if (value != null) vals[s.id] = value;
         return { slotId: s.id, label: s.label, value };
       });
-      items.push({ nodeId: id, tool: "output", polygons: [], color: FLOW_TOOLS.output.color, isFinal: false, metrics });
+      nodeValues.set(id, vals);
+      // `values` rides on the ITEM too, not just in nodeValues: the 3D side resolves its wires from the
+      // published preview (valuesByNode in FloorPlanEditor), which never sees nodeValues — so without this a
+      // collector sitting mid-chain would feed a 2D consumer but silently starve a 3D Render row.
+      items.push({ nodeId: id, tool: "output", polygons: [], color: FLOW_TOOLS.output.color, isFinal: false, metrics, values: vals });
       continue;
     }
     if (!reachable.has(id)) continue;
+    // Plan JSON: the canvas MODEL as JSON on a wire, scoped to the Space wired in.
+    //
+    // Every other Canvas node hands a flow bare geometry — five polygon bundles, an outline, one NUMBER
+    // off one parameter. None can say "this segment is a door, 0.9 m wide, carrying the Door object".
+    // This reads the attachment metadata the host already threads for Filter by Type (`spaceMeta`, plus
+    // the `nodeMeta` / `segmentMeta` that ride alongside for the same reason) and serialises it.
+    //
+    // DEFINITIONS ARE NOT INCLUDED, only references — the same call the canvas's JSON export made, and
+    // for its measured reason: on a 23-plot layout the definitions were 15.9 KB against 4.6 KB for all
+    // 24 attachments. A model needs to know a Door is on this segment and how wide the leaf is; it does
+    // not need the maths body that draws one.
+    if (data.tool === "plan-json") {
+      // Scope: this node's OWN space, resolved by the host from `id` (which the grab-from-selection
+      // effect keeps on the canvas selection) — the same path a Space source uses. It is a ROOT with no
+      // geometry input, so there is no wire to read. No space selected / blank id → the WHOLE canvas,
+      // which is the honest fallback but is usually far too big to put in front of a model.
+      //
+      // The payload itself is built by {@link buildCanvasJson}, shared with the Geometry node's
+      // `val-canvasJson` output — one implementation, so the two can never report different plans.
+      const vals = buildCanvasJson(canvasContent, {
+        ppm,
+        anchor: chainAnchorByNode.get(id) ?? createAnchor,
+        scope: polysForSource(id).find((p) => p.length >= 3),
+        edgeTolerance: num(data.params.edgeTolerance, 0.15),
+        includeParams: data.params.includeParams !== false,
+        includeNodes: data.params.includeNodes !== false,
+        decimals: num(data.params.decimals, 3),
+      });
+      nodeValues.set(id, vals);
+      // A pure VALUE node: it draws nothing and threads nothing. `outputs` is cleared so no consumer
+      // mistakes its scope polygon for a Space it produced.
+      outputs.set(id, []);
+      items.push({ nodeId: id, tool: "plan-json", polygons: [], color: FLOW_TOOLS["plan-json"].color, isFinal: false, values: vals });
+      continue;
+    }
+    // Filter by Space: the SCOPING half of Plan JSON, split out so the region is ordinary flow geometry
+    // rather than the canvas selection. Takes an outline on its geometry input and a Plan JSON string on
+    // `json`, and republishes the payload narrowed to what falls inside that outline grown by `margin`.
+    //
+    // The two must share a coordinate frame or nothing lines up: Plan JSON emits metres relative to its own
+    // anchor, so this node resolves ITS anchor by the same rule and converts the wired outline the same way.
+    // With no Node source in the graph both land on `createAnchor`, which is the ordinary case.
+    if (data.tool === "filter-by-space") {
+      const anchorFb = chainAnchorByNode.get(id) ?? createAnchor;
+      const dFb = Math.max(0, Math.min(6, Math.round(num(data.params.decimals, 3))));
+      const rFb = (v: number) => Math.round(v * 10 ** dFb) / 10 ** dFb;
+      // `margin` is a value INPUT as well as a field, so read the wire first — that is what lets a Math
+      // Engine or an Input Properties slider drive the catchment from inside the flow.
+      const wiredMargin = wiredValueFor(id, "margin");
+      const marginM = Math.max(0, num(wiredMargin !== undefined ? wiredMargin : data.params.margin, 1));
+      const objectsOnly = data.params.objectsOnly === true;
+      const wantNodesFb = data.params.includeNodes !== false;
+      // Every outline wired in, in METRES in Plan JSON's frame — an entry is kept if it falls inside ANY of
+      // them, so two rooms wired in filter as one region.
+      const wired = inputsOf(id)
+        .filter((poly) => poly.length >= 3)
+        .map((poly) => poly.map((pt): [number, number] => [(pt.x - anchorFb.x) / ppm, (pt.y - anchorFb.y) / ppm]));
+      // …or as a LIST on `valin-points`, already in metres in this same frame. The geometry handle WINS
+      // when both are connected: a wire you can see beats a value you have to read. The list exists so a
+      // flow that already carries its outline as a value (a Geometry node's `val-points` landing on an
+      // Input Properties parameter, say) does not need a parallel geometry wire saying the same thing.
+      const listed = wired.length ? [] : parsePointsValue(wiredValueFor(id, "points"), anchorFb)
+        .filter((poly) => poly.length >= 3)
+        .map((poly) => poly.map((pt): [number, number] => [(pt.x - anchorFb.x) / ppm, (pt.y - anchorFb.y) / ppm]));
+      const regions = wired.length ? wired : listed;
+      const raw = wiredValueFor(id, "json");
+      let payload: Record<string, unknown> | null = null;
+      if (typeof raw === "string") { try { payload = JSON.parse(raw) as Record<string, unknown>; } catch { payload = null; } }
+      // Nothing to filter, or nothing to filter BY → pass the payload through untouched rather than emitting
+      // an empty plan. An unwired region is "no question asked", not "the answer is nothing".
+      if (!payload || !regions.length) {
+        const passthrough = typeof raw === "string" ? raw : "";
+        const valsFb = { json: passthrough, margin: marginM, spaceCount: 0, segmentCount: 0, nodeCount: 0, objectCount: 0, bytes: passthrough.length };
+        nodeValues.set(id, valsFb);
+        outputs.set(id, []);
+        items.push({ nodeId: id, tool: "filter-by-space", polygons: [], color: FLOW_TOOLS["filter-by-space"].color, isFinal: false, values: valsFb });
+        continue;
+      }
+      // Inside ANY region, or within `margin` of its boundary. The margin is measured against the EDGE
+      // rather than by offsetting the polygon, which keeps a concave room honest — an inward-facing wall
+      // stays as reachable as an outward one, and there is no self-intersecting offset to clean up.
+      const nearEdge = (x: number, y: number, poly: [number, number][]): boolean => {
+        if (marginM <= 0) return false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const a = poly[j], b = poly[i];
+          const dx = b[0] - a[0], dy = b[1] - a[1];
+          const L2 = dx * dx + dy * dy;
+          const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2)) : 0;
+          if (Math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy)) <= marginM) return true;
+        }
+        return false;
+      };
+      const inRegion = (pt: unknown): boolean => {
+        if (!Array.isArray(pt) || pt.length < 2) return false;
+        const x = Number(pt[0]), y = Number(pt[1]);
+        if (!isFinite(x) || !isFinite(y)) return false;
+        return regions.some((poly) => pointInPolyEO(x, y, poly.map(([px, py]) => ({ x: px, y: py }))) || nearEdge(x, y, poly));
+      };
+      const centroidOf = (ring: unknown): [number, number] | null => {
+        if (!Array.isArray(ring) || ring.length < 3) return null;
+        let cx = 0, cy = 0, n = 0;
+        for (const pt of ring) {
+          if (!Array.isArray(pt) || pt.length < 2) continue;
+          cx += Number(pt[0]); cy += Number(pt[1]); n += 1;
+        }
+        return n ? [cx / n, cy / n] : null;
+      };
+      const hasObject = (o: Record<string, unknown>) => typeof o.objectId === "string" && o.objectId.length > 0;
+      const keep = (o: Record<string, unknown>) => !objectsOnly || hasObject(o);
+      const listOf = (v: unknown): Record<string, unknown>[] =>
+        Array.isArray(v) ? v.filter((e): e is Record<string, unknown> => !!e && typeof e === "object") : [];
+
+      // A SPACE is tested by its centroid, a SEGMENT by its midpoint — so a wall shared by two rooms belongs
+      // to both, which is what a render of either one needs — and a NODE by its point.
+      const spacesFb = listOf(payload.spaces).concat(payload.space && typeof payload.space === "object" ? [payload.space as Record<string, unknown>] : [])
+        .filter((sp) => { const c = centroidOf(sp.boundary); return c ? inRegion(c) : false; })
+        .filter(keep);
+      const segsFb = listOf(payload.segments).filter((sg) => {
+        const a = sg.from, b = sg.to;
+        if (!Array.isArray(a) || !Array.isArray(b)) return false;
+        return inRegion([(Number(a[0]) + Number(b[0])) / 2, (Number(a[1]) + Number(b[1])) / 2]);
+      }).filter(keep);
+      const nodesFb = wantNodesFb ? listOf(payload.nodes).filter((nd) => inRegion(nd.at)).filter(keep) : [];
+
+      // The region ITSELF becomes the payload's `space`, carrying the attachment of whichever filtered space
+      // shares its centroid — so a downstream consumer reads the room it asked for, not the whole canvas.
+      const firstRegion = regions[0];
+      let a2Fb = 0;
+      for (let k = 0; k < firstRegion.length; k++) {
+        const pA = firstRegion[k], pB = firstRegion[(k + 1) % firstRegion.length];
+        a2Fb += pA[0] * pB[1] - pB[0] * pA[1];
+      }
+      const regionCentroid = centroidOf(firstRegion);
+      const matched = regionCentroid ? spacesFb.find((sp) => { const c = centroidOf(sp.boundary); return c && Math.hypot(c[0] - regionCentroid[0], c[1] - regionCentroid[1]) < 0.05; }) : undefined;
+      const spaceFb: Record<string, unknown> = {
+        boundary: firstRegion.map(([x, y]) => [rFb(x), rFb(y)]),
+        areaM2: rFb(Math.abs(a2Fb / 2)),
+        ...(matched?.objectId ? { objectId: matched.objectId, ...(matched.params ? { params: matched.params } : {}) } : {}),
+      };
+      const outJson = JSON.stringify({
+        units: "m",
+        scoped: true,
+        space: spaceFb,
+        segments: segsFb,
+        ...(wantNodesFb ? { nodes: nodesFb } : {}),
+      });
+      const objectCountFb = [...spacesFb, ...segsFb, ...nodesFb].filter(hasObject).length;
+      const valsFb = {
+        json: outJson,
+        // Margin is republished as a VALUE so the number driving the catchment can be read back out and
+        // reused downstream (a matching Inset, a second filter) instead of being re-entered by hand.
+        margin: marginM,
+        spaceCount: spacesFb.length,
+        segmentCount: segsFb.length,
+        nodeCount: nodesFb.length,
+        objectCount: objectCountFb,
+        bytes: outJson.length,
+      };
+      nodeValues.set(id, valsFb);
+      // A pure VALUE node: it draws nothing and threads nothing. `outputs` is cleared so no consumer
+      // mistakes the region it was asked about for a Space it produced.
+      outputs.set(id, []);
+      items.push({ nodeId: id, tool: "filter-by-space", polygons: [], color: FLOW_TOOLS["filter-by-space"].color, isFinal: false, values: valsFb });
+      continue;
+    }
     // Pipe Network Solver (root): solve the canvas segment graph with the Todini global gradient
     // algorithm. Inputs come from the imported schema (node params) + per-component attribute values
     // (Properties tab); per-component results ride on the item (`pipeResults`) for the host to store.
@@ -2333,6 +4150,7 @@ export function evaluateFlow(
     // Vectorisation: trace the imported image's lines into world-space polylines (a graph). Heavy, so the
     // result is cached per (image, params); maps image-pixel coords onto the underlay's world box.
     if (data.tool === "vectorise") {
+      const flowImage = imageOfNode(id);
       if (!flowImage) { outputs.set(id, []); continue; }
       const vin = resolveValueInputs(id);
       const vparams = { ...data.params, ...vin };
@@ -2366,8 +4184,12 @@ export function evaluateFlow(
         vectorizeCache.set(cacheKey, cached);
       }
       const segs = cached.world.filter((seg) => seg.length >= 2);
-      outputs.set(id, segs);
-      handleGroups.set(id, [segs]);
+      // VALUE-ONLY: the trace leaves this node as a GRAPH on `val-graph`, never as geometry. Tracing is a
+      // reading of the image, so what comes out is data; draw it by wiring the graph into a Network or a
+      // Polygon node. That also means one wire type downstream instead of a geometry edge that only some
+      // graph nodes accept.
+      outputs.set(id, []);
+      const anchorVec = chainAnchorByNode.get(id) ?? createAnchor;
       // Trace-quality metrics (the Auto-Tune objective, live on the node): closed faces ≥ Min space
       // area, open ends, traced lines. Faces depend on ppm + the area floor → own cache key.
       const tuneMinArea = Math.max(0, num(vparams.tuneMinArea, 1));
@@ -2382,17 +4204,43 @@ export function evaluateFlow(
         if (vectorizeMetricsCache.size > 48) vectorizeMetricsCache.clear();
         vectorizeMetricsCache.set(mKey, vvals);
       }
-      nodeValues.set(id, vvals);
-      if (segs.length > 0) items.push({ nodeId: id, tool: "vectorise", polygons: segs, color: FLOW_TOOLS.vectorise.color, isFinal: succs.get(id)!.length === 0, openPath: true, values: vvals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      // The traced polylines as node/edge JSON in anchor-relative metres — the same shape every Graph
+      // node consumes, so Fit Lines / Graph Reduce / Network take it directly and the Graph Geometry hop
+      // that used to bridge geometry → val-graph is no longer needed.
+      const vecGraph = polylinesToGraphJson(segs, ppm, anchorVec);
+      nodeValues.set(id, { ...vvals, graph: vecGraph.json, nodes: vecGraph.nodeCount, edges: vecGraph.edgeCount });
+      // Draws nothing (`drawsNothing` on the tool def hides the eye toggle too) — the metrics readout is
+      // what you tune against, and Auto-Tune scores the same numbers.
+      items.push({ nodeId: id, tool: "vectorise", polygons: [], color: FLOW_TOOLS.vectorise.color, isFinal: false, values: nodeValues.get(id), valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
-    // Object Detection: emit the baked bounding boxes (`_boxes`, world polygons from the async Gemini run)
-    // as Spaces — one handle per box, or a single bundle.
+    // Object Detection: publish the baked bounding boxes (`_boxes`, world polygons from the async Gemini
+    // run) as VALUES — `polygons` (nested metre list, straight into a Polygon node), `graph` (node/edge
+    // JSON, straight into a Network node), plus the object count and their total area. There is no
+    // geometry output: the boxes are a READING of the image, so they travel as maths and are drawn only
+    // where the flow author chooses to draw them. The polygons still preview on canvas (the node is not
+    // flagged `materialisesSpace`, so Live never turns them into Spaces by itself).
     if (data.tool === "object-detection") {
+      // Key / model / Max items may arrive on a wire from a brief; surface them so the host bakes them
+      // onto params, which is what the DETECT button actually reads.
+      const vinOD = resolveValueInputs(id);
+      const anchorOD = chainAnchorByNode.get(id) ?? createAnchor;
+      outputs.set(id, []);
+      // Every endpoint this node publishes — see `detectionValues`, which an ATTACHED object calls too.
+      const dvals = detectionValues(data.params, ppm, anchorOD);
+      nodeValues.set(id, dvals);
+      // The two lists the PREVIEW below needs, in world coords (the values above are anchor-relative).
       const boxes = (Array.isArray(data.params._boxes) ? (data.params._boxes as Point[][]) : []).filter((p) => p.length >= 3);
-      outputs.set(id, boxes);
-      handleGroups.set(id, data.params.outputMode === "single" ? [boxes] : boxes.map((p) => [p]));
-      if (boxes.length > 0) items.push({ nodeId: id, tool: "object-detection", polygons: boxes, color: FLOW_TOOLS["object-detection"].color, isFinal: succs.get(id)!.length === 0, cellCount: boxes.length });
+      const dpts = (Array.isArray(data.params._points) ? (data.params._points as Point[]) : []).filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y));
+      // Preview only (the node isn't `materialisesSpace`, so Live never commits these). Points get a small
+      // square marker so a point-shape detection is visible on canvas rather than silently empty.
+      const mark = 0.15 * ppm;
+      const markers = dpts.map((p) => [
+        { x: p.x - mark, y: p.y - mark }, { x: p.x + mark, y: p.y - mark },
+        { x: p.x + mark, y: p.y + mark }, { x: p.x - mark, y: p.y + mark },
+      ]);
+      const previewOD = [...boxes, ...markers];
+      items.push({ nodeId: id, tool: "object-detection", polygons: previewOD, color: FLOW_TOOLS["object-detection"].color, isFinal: false, cellCount: previewOD.length, values: dvals, valueInputs: Object.keys(vinOD).length ? vinOD : undefined });
       continue;
     }
     // Graph nodes consume POLYLINES (segments, ≥2 pts), so they run before the polygon (≥3) bail below.
@@ -2939,6 +4787,159 @@ export function evaluateFlow(
       if (bundle.length > 0) items.push({ nodeId: id, tool: "separate", polygons: bundle, color: FLOW_TOOLS.separate.color, isFinal: succs.get(id)!.length === 0, openPath: true, cellCount: bundle.length });
       continue;
     }
+    // Filter by Type: split a Canvas Spaces bundle by what each space IS — the value of a parameter on its
+    // attached object. out-0 = matching, out-1 = the rest.
+    //
+    // IDENTITY COMES FROM `canvasContent.spaceMeta`, which is index-aligned with `canvasContent.spaces`. The
+    // incoming bundle is matched back to that list by REFERENCE first: the Canvas node puts the very same
+    // `Point[]` arrays into its output, so `indexOf` is exact and survives a bundle that was reordered or
+    // partly consumed upstream. Position is the fallback for the case where something cloned the polygons
+    // but preserved their order. Anything that does neither (an op that rebuilds geometry) resolves to no
+    // meta and lands in Rest — which is why the node's instructions say to filter FIRST, then operate.
+    if (data.tool === "filter-by-type") {
+      const bundle = inputPolylinesOf(id, 1);
+      const spaces = cc?.spaces ?? [];
+      const meta = cc?.spaceMeta ?? [];
+      const wanted = String(data.params.type ?? "").trim().toLowerCase();
+      const key = String(data.params.paramKey ?? "identifyingType").trim() || "identifyingType";
+      const matching: Point[][] = [];
+      const rest: Point[][] = [];
+      bundle.forEach((poly, i) => {
+        const byRef = spaces.indexOf(poly);
+        const m = meta[byRef >= 0 ? byRef : i];
+        const v = m?.params?.[key];
+        // A blank Type matches NOTHING rather than everything — a half-typed filter should yield no spaces,
+        // not silently pass the whole canvas through as if it had been classified.
+        const hit = !!wanted && v != null && String(v).trim().toLowerCase() === wanted;
+        (hit ? matching : rest).push(poly);
+      });
+      outputs.set(id, matching);
+      handleGroups.set(id, [matching, rest]);
+      // Both halves are ALSO published as values, because a geometry wire cannot reach a Math Engine — only a
+      // `val-` wire can. The form is the GROUPED FLAT matrix the 2D Render polygon row already documents:
+      // one row per vertex, `[x, y, groupIndex]`, anchor-relative metres. A nested `[[[x,y],…],…]` list would
+      // be the obvious shape and is the wrong one — it is ragged when the polygons differ in vertex count, so
+      // `liftScopeValue` fails `isRectMatrix` and hands the expression a STRING instead of a matrix. Flat and
+      // grouped is rectangular whatever the shapes, and `inpoly` reads the group column back as rings.
+      const anchorF = chainAnchorByNode.get(id) ?? createAnchor;
+      const r4f = (v: number) => Math.round(v * 1e4) / 1e4;
+      const groupedJson = (polys: Point[][]): string => {
+        const rowsOut: number[][] = [];
+        polys.forEach((poly, gi) => {
+          for (const p of poly) rowsOut.push([r4f((p.x - anchorF.x) / ppm), r4f((p.y - anchorF.y) / ppm), gi]);
+        });
+        return JSON.stringify(rowsOut);
+      };
+      nodeValues.set(id, {
+        matchCount: matching.length,
+        restCount: rest.length,
+        matching: groupedJson(matching),
+        rest: groupedJson(rest),
+      });
+      if (bundle.length > 0) {
+        items.push({
+          nodeId: id, tool: "filter-by-type", polygons: matching,
+          color: FLOW_TOOLS["filter-by-type"].color, isFinal: succs.get(id)!.length === 0,
+          openPath: true, cellCount: matching.length,
+          values: { matchCount: matching.length, restCount: rest.length },
+        });
+      }
+      continue;
+    }
+    // Get Object Param: read one parameter off each incoming space's attached object into a matrix, so a
+    // Math Engine can use what the canvas already knows (a plot's Number, say). Geometry passes through.
+    if (data.tool === "get-object-param") {
+      const bundle = inputPolylinesOf(id, 1);
+      const { list: spaces, meta } = hostCollection(data.params.host, bundle);
+      const key = String(data.params.paramKey ?? "").trim();
+      const rowsOut: number[][] = [];
+      let missing = 0;
+      bundle.forEach((poly, i) => {
+        const byRef = spaces.indexOf(poly);
+        const raw = key ? meta[byRef >= 0 ? byRef : i]?.params?.[key] : undefined;
+        const n = typeof raw === "boolean" ? (raw ? 1 : 0) : Number(raw);
+        // A value that is not a number is REPORTED missing, never coerced to 0 — a plot with no Number is
+        // unknown, not plot zero, and a silent 0 would name it as a neighbour of everything.
+        if (raw == null || raw === "" || !Number.isFinite(n)) { missing += 1; return; }
+        rowsOut.push([i, n]);
+      });
+      outputs.set(id, bundle);
+      handleGroups.set(id, [bundle]);
+      nodeValues.set(id, { values: JSON.stringify(rowsOut), count: rowsOut.length, missing });
+      items.push({
+        nodeId: id, tool: "get-object-param", polygons: bundle,
+        color: FLOW_TOOLS["get-object-param"].color, isFinal: succs.get(id)!.length === 0,
+        openPath: true, cellCount: rowsOut.length,
+        values: { count: rowsOut.length, missing },
+      });
+      continue;
+    }
+    // Set Object Param: work out which canvas space gets which parameter value. It COMPUTES ONLY — the write
+    // itself is the host's, triggered by the node's Apply button, because this function is pure and runs
+    // inside a render-time useMemo: mutating the document from here would edit the plan on every keystroke
+    // that re-evaluates the flow, and would not be undoable.
+    //
+    // Resolution is the same rule Filter by Type uses (reference first, position as fallback), so the result
+    // is expressed as indices into `canvasContent.spaces` — the one identity the host can map back to a room.
+    if (data.tool === "set-object-param") {
+      const bundle = inputPolylinesOf(id, 1);
+      const { kind: hostKind, list: spaces, meta } = hostCollection(data.params.host, bundle);
+      const key = String(data.params.paramKey ?? "").trim();
+      const template = String(data.params.template ?? "");
+      // The value map accepts BOTH forms in one list, because the two jobs are different and both are wanted:
+      // a bare word is POSITIONAL (its place in the list is the code it names — "North,East,South,West"),
+      // while an `n=Word` entry names one specific code, which is how a sentinel outside 0..n-1 gets a word
+      // ("-1=Empty,-2=Road"). Mixing them in one list beats two parameters that mean nearly the same thing.
+      const codeWord = new Map<number, string>();
+      String(data.params.valueMap ?? "").split(",").map((s) => s.trim()).filter(Boolean).forEach((entry, idx) => {
+        const eq = entry.indexOf("=");
+        if (eq > 0) {
+          const k = Number(entry.slice(0, eq).trim());
+          if (Number.isFinite(k)) codeWord.set(k, entry.slice(eq + 1).trim());
+        } else codeWord.set(idx, entry);
+      });
+      /** One numeric cell → the word that names it, or the number itself when nothing does. */
+      const cell = (n: number): string => codeWord.get(Math.round(n)) ?? String(Math.round(n * 1e4) / 1e4);
+      // The assignment matrix, as rows of [indexInBundle, value] — or [indexInBundle, v0, v1, …] in template
+      // mode, where each `{n}` in the template is replaced by the (n+1)th column.
+      const assignments = parsePointRows(wiredValueFor(id, "values"));
+      // Each write names the COLLECTION as well as the index. The host resolves an index against one
+      // specific array, and "row 3" means a different element in each of the three — so a write that
+      // travelled without its kind could only ever be applied to spaces, which is exactly the limit
+      // this node used to have.
+      const writes: { kind: HostKind; i: number; v: number | string }[] = [];
+      let unmatched = 0;
+      for (const a of assignments) {
+        if (a.length < 2) { unmatched += 1; continue; }
+        const bi = Math.round(a[0]);
+        // TEMPLATE MODE composes a STRING from several columns — the only way a flow can write a formatted
+        // value, since a Math Engine can put numbers on a wire and nothing else. Without it a result like
+        // "East:20, West:21, North:Road, South:Empty" would have to become four separate parameters.
+        // Otherwise: a single value, named through the map when the map names it.
+        // A value with no entry in the map is DROPPED rather than clamped to the first option — -1 meaning
+        // "undecided" must not silently become "North".
+        const v: number | string | undefined = template
+          ? template.replace(/\{(\d+)\}/g, (_m, d: string) => cell(a[Number(d) + 1] ?? NaN))
+          : codeWord.size ? codeWord.get(Math.round(a[1])) : a[1];
+        const poly = bundle[bi];
+        if (!poly || v === undefined || !key) { unmatched += 1; continue; }
+        const byRef = spaces.indexOf(poly);
+        const si = byRef >= 0 ? byRef : -1;
+        // No attached object → nothing to write a parameter onto.
+        if (si < 0 || !meta[si]?.objectId) { unmatched += 1; continue; }
+        writes.push({ kind: hostKind, i: si, v });
+      }
+      outputs.set(id, bundle);
+      handleGroups.set(id, [bundle]);
+      nodeValues.set(id, { writeCount: writes.length, unmatched, writes: JSON.stringify(writes), paramKey: key });
+      items.push({
+        nodeId: id, tool: "set-object-param", polygons: bundle,
+        color: FLOW_TOOLS["set-object-param"].color, isFinal: succs.get(id)!.length === 0,
+        openPath: true, cellCount: writes.length,
+        values: { writeCount: writes.length, unmatched, writes: JSON.stringify(writes), paramKey: key },
+      });
+      continue;
+    }
     // Transform: affine-transform every input Space (Scale/Rotate/Mirror about an anchor, then Translate).
     // Transform — pure CALCULATION node: moves/rotates/scales the WHOLE set, so it reads every polygon
     // from the list (not just the largest). Publishes on `val-polygons`, draws NOTHING.
@@ -3260,6 +5261,176 @@ export function evaluateFlow(
       items.push({ nodeId: id, tool: "matrix-inverse", polygons: [], color: FLOW_TOOLS["matrix-inverse"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
       continue;
     }
+    // Linear Solve: K·d = F for d (Gauss–Jordan, partial pivoting). K square, F an n×m RHS. The direct-
+    // stiffness "solve Kd = F" step — never forms K⁻¹. Singular / non-square / mismatch → empty.
+    if (data.tool === "matrix-solve") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixSolve(gp.k, gp.f);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols, value: res.value };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-solve", polygons: [], color: FLOW_TOOLS["matrix-solve"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Least Squares: solve the over-determined A·x ≈ b (Householder QR) → best-fit x + residual ‖Ax−b‖.
+    // The robust alternative to the normal equations. m < n / mismatch / rank-deficient → empty.
+    if (data.tool === "least-squares") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalLeastSquares(gp.a, gp.b);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols, value: res.value, residual: res.residual };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "least-squares", polygons: [], color: FLOW_TOOLS["least-squares"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Matrix Operations: TWO matrix VALUES in → one out. A+B / A−B / A·B (matrix product) / A∘B (element-wise).
+    // Dimension mismatch → empty. Pure value node; draws nothing.
+    if (data.tool === "matrix-ops") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixOps(gp.a, gp.b, gp.op);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols, value: res.value };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-ops", polygons: [], color: FLOW_TOOLS["matrix-ops"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Shift Rows: cyclic row roll — pairs each vertex with its next / previous neighbour. Pure value node.
+    if (data.tool === "matrix-shift") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixShift(gp.matrix, gp.by);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-shift", polygons: [], color: FLOW_TOOLS["matrix-shift"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Vector Ops: ROW-WISE unary vector maths (normalize / length / perp / negate / angle) on an N×2 list.
+    if (data.tool === "vector-ops") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalVectorOps(gp.a, gp.op);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "vector-ops", polygons: [], color: FLOW_TOOLS["vector-ops"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Vector Product: ROW-WISE dot / cross / angle-between of two vector lists → an N×1 column (or N×3 in 3D).
+    if (data.tool === "vector-product") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalVectorProduct(gp.a, gp.b, gp.op);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "vector-product", polygons: [], color: FLOW_TOOLS["vector-product"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Eigen: all eigenvalues + eigenvectors of a symmetric matrix (Jacobi). The iteration runs INSIDE the
+    // node — the evaluator is a DAG, so a convergence loop can't be expressed as nodes (see evalMatrixEigen).
+    if (data.tool === "matrix-eigen") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixEigen(gp.matrix, gp.sort, gp.sweeps);
+      const vals = { values: res.values, vectors: res.vectors, dominant: res.dominant, angle: res.angle };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-eigen", polygons: [], color: FLOW_TOOLS["matrix-eigen"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Snapshot (diagnostic value node): republish the canvas PNG the host baked under `_snapshot` as
+    // `val-image`, so it can be wired into Analyse's File input or the Render node's Image input. No
+    // geometry, draws nothing. The host re-photographs the canvas automatically whenever the drawing
+    // changes (FlowOverlay's live-snapshot effect) — there is no Capture step, so the wire stays current.
+    // It is a ROOT — no inputs of any kind — so it must be in the reachable set above or this branch is
+    // never reached and the wire silently carries nothing.
+    if (data.tool === "snapshot") {
+      // Margin has a value INPUT, so a wired number drives the framing exactly like the slider does — the
+      // host bakes it back into `params.margin` (FlowOverlay's `_vin` merge), which is what the capture reads.
+      const vin = resolveValueInputs(id);
+      const image = typeof data.params._snapshot === "string" ? data.params._snapshot : "";
+      // The 3D view, framed on the whole model. Empty whenever the 3D view is not open — the live capture
+      // deliberately will not switch the app into it just to answer this node.
+      const image3d = typeof data.params._snapshot3d === "string" ? data.params._snapshot3d : "";
+      const vals = { image, "image-3d": image3d };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "snapshot", polygons: [], color: FLOW_TOOLS.snapshot.color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Reduce: fold a matrix (sum / min / max / mean / product) over all cells, per row, or per column.
+    if (data.tool === "matrix-reduce") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixReduce(gp.a, gp.op, gp.axis);
+      const vals = { matrix: res.matrix, rows: res.rows, cols: res.cols, value: res.value };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-reduce", polygons: [], color: FLOW_TOOLS["matrix-reduce"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Points to Graph: point MATRICES → graph JSON (the bridge out of the matrix chain into Network).
+    if (data.tool === "matrix-to-graph") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const res = evalMatrixToGraph(gp.a, gp.b, gp.mode, gp.thickness, gp.type, gp.types, gp.typeNames);
+      const vals = { graph: res.graph, nodeCount: res.nodeCount, edgeCount: res.edgeCount };
+      nodeValues.set(id, vals);
+      items.push({ nodeId: id, tool: "matrix-to-graph", polygons: [], color: FLOW_TOOLS["matrix-to-graph"].color, isFinal: false, values: vals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Graph to Points — the INVERSE of the block above, and the bridge back INTO the matrix chain: a graph
+    // JSON is an object, so wiring it into an Expression variable yields an inert string. Split into an
+    // edge-start matrix, an edge-end matrix and a thickness column (row i of each is edge i, the layout
+    // Points to Graph's "pairs" mode consumes, so the pair round-trips) an edge list becomes ordinary
+    // linear algebra. Coordinates pass through in the graph's own anchor-relative metres — the same frame
+    // Polygon and Network read — so nothing needs re-anchoring. Value-only: draws nothing.
+    if (data.tool === "graph-to-matrix") {
+      const vin = resolveValueInputs(id);
+      const gp = { ...data.params, ...vin };
+      const g = parseGraphJson(gp.graph);
+      const posOf = new Map(g.nodes.map((n) => [n.id, n]));
+      const r = (v: number) => Math.round(v * 1e4) / 1e4; // 0.1 mm, as `val-points` publishes
+      const eA: number[][] = [], eB: number[][] = [], eT: number[][] = [];
+      for (const e of g.edges) {
+        // `type:"opening"` edges are the gaps Graph to Openings carves; Mitered Join skips them, so the
+        // default here matches — otherwise a door would be stroked as if it were wall.
+        if (gp.skipOpenings !== false && e.type === "opening") continue;
+        const s = posOf.get(e.from_node_id), t = posOf.get(e.to_node_id);
+        if (!s || !t) continue; // an edge naming a missing node, so a/b/thickness stay row-aligned
+        eA.push([r(s.x), r(s.y)]);
+        eB.push([r(t.x), r(t.y)]);
+        eT.push([e.thickness != null ? r(e.thickness) : 0]);
+      }
+      const gmVals: Record<string, number | string> = {
+        a: JSON.stringify(eA), b: JSON.stringify(eB), thickness: JSON.stringify(eT),
+        nodes: JSON.stringify(g.nodes.map((n) => [r(n.x), r(n.y)])),
+        nodeCount: g.nodes.length, edgeCount: eA.length,
+      };
+      nodeValues.set(id, gmVals);
+      items.push({ nodeId: id, tool: "graph-to-matrix", polygons: [], color: FLOW_TOOLS["graph-to-matrix"].color, isFinal: false, values: gmVals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Graph Interpreter — the canvas JSON straight into matrices, replacing Graph Geometry + Graph to
+    // Points. Those two reach the plan through GEOMETRY: Canvas emits polylines, Graph Geometry rebuilds a
+    // graph from them, Graph to Points projects it. A polyline is coordinates and nothing else, so the
+    // segment's type, its opening flag and the objects attached to it are gone before the projection even
+    // starts — which is why `skipOpenings` finds nothing to skip on a plan routed that way and reports
+    // every door and window as wall. Reading the payload keeps all of it.
+    if (data.tool === "graph-interpreter") {
+      const vin = resolveValueInputs(id);
+      const giVals = decodeCanvasJson({ ...data.params, ...vin });
+      nodeValues.set(id, giVals);
+      items.push({ nodeId: id, tool: "graph-interpreter", polygons: [], color: FLOW_TOOLS["graph-interpreter"].color, isFinal: false, values: giVals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
+    // Canvas Encoder — matrices back out as a whole PLAN DOCUMENT, the inverse of Graph Interpreter.
+    // Not Points to Graph: that emits a graph, which still needs a Network to become segments and has
+    // nowhere to carry an attachment. This writes the shape the canvas exports — settings, nodes,
+    // segments, spaces, layers — with each segment's parametric object, its params and its library path,
+    // so a flow can compute a plan and hand it over as text without materialising anything.
+    if (data.tool === "canvas-encoder") {
+      const vin = resolveValueInputs(id);
+      const ceVals = encodePlan({ ...data.params, ...vin });
+      nodeValues.set(id, ceVals);
+      items.push({ nodeId: id, tool: "canvas-encoder", polygons: [], color: FLOW_TOOLS["canvas-encoder"].color, isFinal: false, values: ceVals, valueInputs: Object.keys(vin).length ? vin : undefined });
+      continue;
+    }
     // Area Dimension (Space node): centroid annotation (Label / Area / L×B) per Space; Space forwarded on.
     if (data.tool === "area-dimension") {
       const spaces = inputsOf(id).filter((p) => p.length >= 3);
@@ -3496,11 +5667,53 @@ export function evaluateFlow(
       const rawGraph = (typeof gp.graph === "string" && gp.graph.trim())
         ? gp.graph
         : (inG.length ? polylinesToGraphJson(inG, ppm, anchorG).json : "");
-      const res = setGraphThicknessJson(rawGraph, Math.max(0, num(gp.thickness, 0.1)));
+      const res = setGraphThicknessJson(rawGraph, Math.max(0, num(gp.thickness, 0.1)), typeof gp.type === "string" ? gp.type : "");
       outputs.set(id, []);
       const values: Record<string, number | string> = { graph: res.json, nodeCount: res.nodeCount, edgeCount: res.edgeCount };
       nodeValues.set(id, values);
       items.push({ nodeId: id, tool: "set-thickness", polygons: [], color: FLOW_TOOLS["set-thickness"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Filter by Label: split ONE labelled detection into families by name. Asking Gemini for
+    // "door, window, room" in a single call costs a fraction of three calls, but everything arrives on one
+    // pair of endpoints — this keeps only the entries whose label matches, republishing the SAME endpoint
+    // names Object Detection uses so it drops into the same wiring. A pure value node — draws nothing.
+    if (data.tool === "filter-by-label") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const res = filterDetectionsByLabel(
+        gp.polygons, gp.graph, gp.labels, gp.match,
+        typeof gp.mode === "string" ? gp.mode : "contains",
+        Boolean(gp.invert),
+      );
+      outputs.set(id, []);
+      const values: Record<string, number | string> = {
+        polygons: res.polygons, graph: res.graph, labels: res.labels, count: res.count, area: res.area,
+      };
+      nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "filter-by-label", polygons: [], color: FLOW_TOOLS["filter-by-label"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
+      continue;
+    }
+    // Label Graph: name each connected component of a graph from a labels array (Object Detection's
+    // val-labels lines up with its val-graph boxes), optionally stamping `type` + `thickness` at the same
+    // time. This is what turns "a graph of rectangles" into "these three are windows, that one is a sofa".
+    // A pure value node — draws nothing.
+    if (data.tool === "label-graph") {
+      const vinG = resolveValueInputs(id);
+      const gp = { ...data.params, ...vinG };
+      const anchorG = chainAnchorByNode.get(id) ?? createAnchor;
+      const inG = inputPolylinesOf(id);
+      const rawGraph = (typeof gp.graph === "string" && gp.graph.trim())
+        ? gp.graph
+        : (inG.length ? polylinesToGraphJson(inG, ppm, anchorG).json : "");
+      // A thickness of 0 means "leave the incoming thickness alone" — a detection graph often has none,
+      // while a wall graph arrives already carrying its own.
+      const thick = num(gp.thickness, 0);
+      const res = labelGraphJson(rawGraph, gp.labels, typeof gp.type === "string" ? gp.type : "", thick > 0 ? thick : null);
+      outputs.set(id, []);
+      const values: Record<string, number | string> = { graph: res.json, nodeCount: res.nodeCount, edgeCount: res.edgeCount, labelled: res.labelled };
+      nodeValues.set(id, values);
+      items.push({ nodeId: id, tool: "label-graph", polygons: [], color: FLOW_TOOLS["label-graph"].color, isFinal: false, values, valueInputs: Object.keys(vinG).length ? vinG : undefined });
       continue;
     }
     // Merge Graph: union EVERY graph wired into valin-graph (fan-in) into one, preserving each edge's own
@@ -3584,7 +5797,18 @@ export function evaluateFlow(
       // the host's Live-materialise effect both read, so the extracted rooms can become REAL Spaces. Auto
       // room detection deliberately ignores `flowOwner` walls, so Live segments alone never produce a Space
       // — this node is how a graph turns into rooms.
-      items.push({ nodeId: id, tool: "graph-to-spaces", polygons: faces, color: FLOW_TOOLS["graph-to-spaces"].color, isFinal: false, values: gvals });
+      // The hosted object, resolved exactly as a Network row resolves its own: a named SPACE-hosted object
+      // plus optional field bindings. Malformed JSON binds nothing rather than failing the node.
+      const gsP = { ...data.params, ...resolveValueInputs(id) } as Record<string, unknown>;
+      const gsObjId = typeof gsP.objectId === "string" && gsP.objectId.trim() ? gsP.objectId.trim() : undefined;
+      const gsObjParams = (() => {
+        if (typeof gsP.objectParams !== "string" || !gsP.objectParams.trim()) return undefined;
+        try {
+          const v = JSON.parse(gsP.objectParams) as unknown;
+          return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, number | string | boolean>) : undefined;
+        } catch { return undefined; }
+      })();
+      items.push({ nodeId: id, tool: "graph-to-spaces", polygons: faces, color: FLOW_TOOLS["graph-to-spaces"].color, isFinal: false, values: gvals, ...(gsObjId ? { spaceMeta: { objectId: gsObjId, objectParams: gsObjParams } } : {}) });
       continue;
     }
     // Graph Metrics: measure the incoming graph's topology and forward the graph unchanged so it can
@@ -3605,53 +5829,9 @@ export function evaluateFlow(
     if (data.tool === "graph-geometry") {
       const lines = inputPolylinesOf(id);
       outputs.set(id, lines);
-      let graphJson = '{"nodes":[],"edges":[]}';
-      let nodeCount = 0;
-      let edgeCount = 0;
-      if (pipeGraph && pipeGraph.edges.length) {
-        // Restrict to the edges actually wired in (e.g. one Skeleton branch), matching endpoints against
-        // the input polylines exactly as Wall Builder does. Nothing matched → publish the whole graph.
-        const ptById = new Map(pipeGraph.nodes.map((n) => [n.id, n]));
-        const d2 = (p: { x: number; y: number }, q: { x: number; y: number }) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
-        const TOL2 = 9;
-        const onInput = (A: { x: number; y: number }, B: { x: number; y: number }): boolean =>
-          lines.some((pl) => {
-            for (let i = 0; i + 1 < pl.length; i++) {
-              const s = pl[i], t = pl[i + 1];
-              if ((d2(s, A) < TOL2 && d2(t, B) < TOL2) || (d2(s, B) < TOL2 && d2(t, A) < TOL2)) return true;
-            }
-            return false;
-          });
-        const matched = lines.length
-          ? pipeGraph.edges.filter((e) => {
-              const A = ptById.get(e.a); const B = ptById.get(e.b);
-              return A && B ? onInput(A, B) : false;
-            })
-          : [];
-        const use = matched.length ? matched : pipeGraph.edges;
-        const segDefs = undefined; // no schema node required — role lookup falls back to the drawn width
-        const usedIds: string[] = [];
-        const seenNode = new Set<string>();
-        const outEdges = use.map((e) => {
-          for (const nid of [e.a, e.b]) if (!seenNode.has(nid)) { seenNode.add(nid); usedIds.push(nid); }
-          // Schema `wall-thickness` (metres) wins; otherwise the drawn segment width (px → m).
-          const fromWidth = typeof e.widthPx === "number" && e.widthPx > 0 ? e.widthPx / ppm : 0;
-          const thickness = resolveNum(segDefs, pipeGraph.attrs.segments, e.id, "thickness", ROLES.wallThickness, fromWidth);
-          return { from_node_id: e.a, to_node_id: e.b, thickness: Math.round(thickness * 1e4) / 1e4 };
-        });
-        // Node POSITIONS ride along — an id-only list can't be redrawn, so without these the JSON couldn't
-        // feed a Network node. ANCHOR-relative metres, the shared frame (see polysToMetreListJson).
-        const anchorGg = chainAnchorByNode.get(id) ?? createAnchor;
-        const rr = (v: number) => Math.round(v * 1e4) / 1e4;
-        const outNodes = usedIds.map((nid) => {
-          const n = ptById.get(nid);
-          return { id: nid, x: n ? rr((n.x - anchorGg.x) / ppm) : 0, y: n ? rr((n.y - anchorGg.y) / ppm) : 0 };
-        });
-        nodeCount = outNodes.length;
-        edgeCount = outEdges.length;
-        graphJson = JSON.stringify({ nodes: outNodes, edges: outEdges });
-      }
-      const vals = { graph: graphJson, nodeCount, edgeCount };
+      // Shared with the Graph source's own `val-graph` (see graphJsonForLines) so the two are identical.
+      const g = graphJsonForLines(lines, chainAnchorByNode.get(id) ?? createAnchor);
+      const vals = { graph: g.graph, nodeCount: g.nodeCount, edgeCount: g.edgeCount };
       nodeValues.set(id, vals);
       items.push({ nodeId: id, tool: "graph-geometry", polygons: [], color: FLOW_TOOLS["graph-geometry"].color, isFinal: succs.get(id)!.length === 0, values: vals });
       continue;
@@ -3742,6 +5922,23 @@ export function evaluateFlow(
     let surfacedVin: Record<string, number | string> = {};
     if (FLOW_TOOLS[data.tool].valueInputs?.length) {
       const vin = resolveValueInputs(id);
+      // PARAM-BAG input: a `valin-params` wire carries a WHOLE {key: value} object at once (e.g. an Agent's
+      // generated params JSON). Expand it into `vin` so every key is merged + coerced exactly like an
+      // individual valin-* wire below. The bag can't set a geometry input (`polygon` / `vertices`) or itself,
+      // and any real per-key valin-* wire (resolved into `vin` already) WINS over the bag.
+      if (typeof vin.params === "string" && vin.params.trim()) {
+        try {
+          const bag = JSON.parse(vin.params) as Record<string, unknown>;
+          if (bag && typeof bag === "object" && !Array.isArray(bag)) {
+            for (const [k, v] of Object.entries(bag)) {
+              if (k === "params" || k === "polygon" || k === "vertices" || k in vin) continue;
+              if (typeof v === "boolean") vin[k] = v ? 1 : 0;
+              else if (typeof v === "number" || typeof v === "string") vin[k] = v;
+            }
+          }
+        } catch { /* malformed bag → ignore, leave the node on its own params */ }
+        delete vin.params;
+      }
       if (Object.keys(vin).length) {
         const merged: Record<string, unknown> = { ...data.params };
         // Field kinds for this tool — a value wired into a checkbox param must coerce to a real BOOLEAN
@@ -3787,8 +5984,22 @@ export function evaluateFlow(
     // furniture symbols (matching the committed placement) rather than plain boxes. The geometry
     // output threaded downstream is the footprints themselves.
     if (data.tool === "place-object") {
-      // Parametric entries (objectId) size themselves from the library object's measured footprint.
-      const placed = evalPlaceObjectDetailed(input, resolvePlaceObjectParams(evalParams), ppm);
+      // The boundary may be ONE outline or a GROUPED list of them — one ring per room. Solving each ring
+      // separately and concatenating is what makes a single node furnish any number of rooms: the object
+      // list is applied to every ring, so the fan-out moves from "a node per room" (unbounded, since the
+      // room count is a slider) to "a node per room TYPE" (a fixed, small set).
+      //
+      // srcIndex keeps meaning "which entry in params.objects" — the host drags a footprint back onto
+      // that entry to update its position% — so the ring is carried separately as ringIndex. Without it
+      // the same entry in ten rooms would produce ten identical geometry ids and nine would be lost.
+      const poParams = resolvePlaceObjectParams(evalParams);
+      const poRings = ringsFromGroupedMetreList(evalParams.boundary, chainAnchorByNode.get(id) ?? createAnchor, ppm);
+      const poGroups: Point[][] = poRings ?? [input];
+      const placed: (PlacedFootprint & { ringIndex: number })[] = [];
+      poGroups.forEach((ring, ringIndex) => {
+        if (ring.length < 3) return;
+        for (const p of evalPlaceObjectDetailed(ring, poParams, ppm)) placed.push({ ...p, ringIndex });
+      });
       const polygons = placed.map((p) => p.polygon);
       outputs.set(id, polygons);
       if (polygons.length > 0) {
@@ -3799,9 +6010,11 @@ export function evaluateFlow(
           polygons,
           color: FLOW_TOOLS["place-object"].color,
           isFinal,
-          placeObjects: placed.map((p) => ({ objectId: p.objectId, kind: p.kind, heightM: p.heightM, clearanceM: p.clearanceM, srcIndex: p.srcIndex })),
+          placeObjects: placed.map((p) => ({ objectId: p.objectId, kind: p.kind, heightM: p.heightM, clearanceM: p.clearanceM, srcIndex: p.srcIndex, ringIndex: p.ringIndex })),
           // Boundary the objects ride — lets the host drag each object along the perimeter (updates position%).
-          sourcePolygon: input,
+          // With a grouped boundary this is the FIRST ring: position% is a property of the entry, not of the
+          // instance, so dragging any copy moves that object in every room the node furnishes.
+          sourcePolygon: poGroups[0] ?? input,
         });
       }
       continue;

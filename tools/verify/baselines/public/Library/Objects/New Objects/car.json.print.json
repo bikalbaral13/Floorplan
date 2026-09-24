@@ -1,0 +1,182 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 8,
+          "vertices": 72,
+          "area": 11.2216,
+          "bbox": [
+            -2.22,
+            -1.0101,
+            2.22,
+            1.0101
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "f88577f7604edda5"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "overallLength",
+          "name": "Overall length (m)",
+          "value": "4.44"
+        },
+        {
+          "key": "overallWidth",
+          "name": "Overall width (m)",
+          "value": "1.82"
+        },
+        {
+          "key": "overallHeight",
+          "name": "Overall height (m)",
+          "value": "1.45"
+        },
+        {
+          "key": "wheelbaseOut",
+          "name": "Wheelbase (m)",
+          "value": "2.65"
+        },
+        {
+          "key": "frontOverhangOut",
+          "name": "Front overhang (m)",
+          "value": "0.86"
+        },
+        {
+          "key": "rearOverhangOut",
+          "name": "Rear overhang (m)",
+          "value": "0.93"
+        },
+        {
+          "key": "trackWidth",
+          "name": "Track width (m)",
+          "value": "1.54"
+        },
+        {
+          "key": "groundClearance",
+          "name": "Ground clearance (m)",
+          "value": "0.14"
+        },
+        {
+          "key": "footprint",
+          "name": "Footprint (m²)",
+          "value": "8.0808"
+        },
+        {
+          "key": "scale",
+          "name": "Fit scale",
+          "value": "1"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 8,
+          "vertices": 72,
+          "area": 11.2216,
+          "bbox": [
+            -2.22,
+            -1.0101,
+            2.22,
+            1.0101
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "f88577f7604edda5"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "overallLength",
+          "name": "Overall length (m)",
+          "value": "4.44"
+        },
+        {
+          "key": "overallWidth",
+          "name": "Overall width (m)",
+          "value": "1.82"
+        },
+        {
+          "key": "overallHeight",
+          "name": "Overall height (m)",
+          "value": "1.45"
+        },
+        {
+          "key": "wheelbaseOut",
+          "name": "Wheelbase (m)",
+          "value": "2.65"
+        },
+        {
+          "key": "frontOverhangOut",
+          "name": "Front overhang (m)",
+          "value": "0.86"
+        },
+        {
+          "key": "rearOverhangOut",
+          "name": "Rear overhang (m)",
+          "value": "0.93"
+        },
+        {
+          "key": "trackWidth",
+          "name": "Track width (m)",
+          "value": "1.54"
+        },
+        {
+          "key": "groundClearance",
+          "name": "Ground clearance (m)",
+          "value": "0.14"
+        },
+        {
+          "key": "footprint",
+          "name": "Footprint (m²)",
+          "value": "8.0808"
+        },
+        {
+          "key": "scale",
+          "name": "Fit scale",
+          "value": "1"
+        }
+      ]
+    }
+  }
+}

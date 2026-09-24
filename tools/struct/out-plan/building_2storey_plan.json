@@ -1,0 +1,557 @@
+{
+ "schemaVersion": 1,
+ "settings": {
+  "library_path": "/Library/",
+  "units": "m",
+  "northbearing": 0,
+  "pixelsPerMeter": 20,
+  "keywords": "structural, floor plan, column grid, slab panels",
+  "building": {
+   "note": "The PLAN of the same building: 4 x 3 = 12 columns, grid beams between them, and a Slab panel on each of the 6 bays. The slab's tributary edge UDL is what the frame elevation's beams carry.",
+   "generator": "tools/struct/make-building.mjs"
+  }
+ },
+ "nodes": [
+  {
+   "id": "G00",
+   "x": 40,
+   "y": 240,
+   "layer": "grid",
+   "label": "C1A",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G01",
+   "x": 40,
+   "y": 140,
+   "layer": "grid",
+   "label": "C1B",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G02",
+   "x": 40,
+   "y": 40,
+   "layer": "grid",
+   "label": "C1C",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G10",
+   "x": 160,
+   "y": 240,
+   "layer": "grid",
+   "label": "C2A",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G11",
+   "x": 160,
+   "y": 140,
+   "layer": "grid",
+   "label": "C2B",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G12",
+   "x": 160,
+   "y": 40,
+   "layer": "grid",
+   "label": "C2C",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G20",
+   "x": 280,
+   "y": 240,
+   "layer": "grid",
+   "label": "C3A",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G21",
+   "x": 280,
+   "y": 140,
+   "layer": "grid",
+   "label": "C3B",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G22",
+   "x": 280,
+   "y": 40,
+   "layer": "grid",
+   "label": "C3C",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G30",
+   "x": 400,
+   "y": 240,
+   "layer": "grid",
+   "label": "C4A",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G31",
+   "x": 400,
+   "y": 140,
+   "layer": "grid",
+   "label": "C4B",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  },
+  {
+   "id": "G32",
+   "x": 400,
+   "y": 40,
+   "layer": "grid",
+   "label": "C4C",
+   "showLabel": true,
+   "type": "column",
+   "columnShape": "rectangular",
+   "dimX": 0.3,
+   "dimY": 0.45
+  }
+ ],
+ "segments": [
+  {
+   "id": "gx_00",
+   "fromNodeId": "G00",
+   "toNodeId": "G10",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX00"
+  },
+  {
+   "id": "gy_00",
+   "fromNodeId": "G00",
+   "toNodeId": "G01",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY00"
+  },
+  {
+   "id": "gx_01",
+   "fromNodeId": "G01",
+   "toNodeId": "G11",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX01"
+  },
+  {
+   "id": "gy_01",
+   "fromNodeId": "G01",
+   "toNodeId": "G02",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY01"
+  },
+  {
+   "id": "gx_02",
+   "fromNodeId": "G02",
+   "toNodeId": "G12",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX02"
+  },
+  {
+   "id": "gx_10",
+   "fromNodeId": "G10",
+   "toNodeId": "G20",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX10"
+  },
+  {
+   "id": "gy_10",
+   "fromNodeId": "G10",
+   "toNodeId": "G11",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY10"
+  },
+  {
+   "id": "gx_11",
+   "fromNodeId": "G11",
+   "toNodeId": "G21",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX11"
+  },
+  {
+   "id": "gy_11",
+   "fromNodeId": "G11",
+   "toNodeId": "G12",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY11"
+  },
+  {
+   "id": "gx_12",
+   "fromNodeId": "G12",
+   "toNodeId": "G22",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX12"
+  },
+  {
+   "id": "gx_20",
+   "fromNodeId": "G20",
+   "toNodeId": "G30",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX20"
+  },
+  {
+   "id": "gy_20",
+   "fromNodeId": "G20",
+   "toNodeId": "G21",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY20"
+  },
+  {
+   "id": "gx_21",
+   "fromNodeId": "G21",
+   "toNodeId": "G31",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX21"
+  },
+  {
+   "id": "gy_21",
+   "fromNodeId": "G21",
+   "toNodeId": "G22",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY21"
+  },
+  {
+   "id": "gx_22",
+   "fromNodeId": "G22",
+   "toNodeId": "G32",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BX22"
+  },
+  {
+   "id": "gy_30",
+   "fromNodeId": "G30",
+   "toNodeId": "G31",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY30"
+  },
+  {
+   "id": "gy_31",
+   "fromNodeId": "G31",
+   "toNodeId": "G32",
+   "layer": "grid",
+   "thickness": 11,
+   "color": "#b45309",
+   "segmentType": "beam",
+   "label": "BY31"
+  }
+ ],
+ "spaces": [
+  {
+   "id": "panel_00",
+   "layer": "grid",
+   "nodeIds": [
+    "G00",
+    "G10",
+    "G11",
+    "G01"
+   ],
+   "name": "Panel 1A",
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.18)",
+   "stroke": "#64748b",
+   "attachments": [
+    {
+     "id": "att_slab_00",
+     "objectId": "slab-with-math",
+     "objectPath": "Objects/Structural/slab.json",
+     "t": 0,
+     "params": {
+      "thickness": 150,
+      "density": 25,
+      "finishes": 1.5,
+      "imposed": 3,
+      "spanning": "Two-way",
+      "combination": "1.0 D + 1.0 L (service)",
+      "spanDepthLimit": 30,
+      "steelRate": 90,
+      "showPanel": true,
+      "levelZ": 3.5
+     }
+    }
+   ]
+  },
+  {
+   "id": "panel_01",
+   "layer": "grid",
+   "nodeIds": [
+    "G01",
+    "G11",
+    "G12",
+    "G02"
+   ],
+   "name": "Panel 1B",
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.18)",
+   "stroke": "#64748b",
+   "attachments": [
+    {
+     "id": "att_slab_01",
+     "objectId": "slab-with-math",
+     "objectPath": "Objects/Structural/slab.json",
+     "t": 0,
+     "params": {
+      "thickness": 150,
+      "density": 25,
+      "finishes": 1.5,
+      "imposed": 3,
+      "spanning": "Two-way",
+      "combination": "1.0 D + 1.0 L (service)",
+      "spanDepthLimit": 30,
+      "steelRate": 90,
+      "showPanel": true,
+      "levelZ": 3.5
+     }
+    }
+   ]
+  },
+  {
+   "id": "panel_10",
+   "layer": "grid",
+   "nodeIds": [
+    "G10",
+    "G20",
+    "G21",
+    "G11"
+   ],
+   "name": "Panel 2A",
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.18)",
+   "stroke": "#64748b",
+   "attachments": [
+    {
+     "id": "att_slab_10",
+     "objectId": "slab-with-math",
+     "objectPath": "Objects/Structural/slab.json",
+     "t": 0,
+     "params": {
+      "thickness": 150,
+      "density": 25,
+      "finishes": 1.5,
+      "imposed": 3,
+      "spanning": "Two-way",
+      "combination": "1.0 D + 1.0 L (service)",
+      "spanDepthLimit": 30,
+      "steelRate": 90,
+      "showPanel": true,
+      "levelZ": 3.5
+     }
+    }
+   ]
+  },
+  {
+   "id": "panel_11",
+   "layer": "grid",
+   "nodeIds": [
+    "G11",
+    "G21",
+    "G22",
+    "G12"
+   ],
+   "name": "Panel 2B",
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.18)",
+   "stroke": "#64748b",
+   "attachments": [
+    {
+     "id": "att_slab_11",
+     "objectId": "slab-with-math",
+     "objectPath": "Objects/Structural/slab.json",
+     "t": 0,
+     "params": {
+      "thickness": 150,
+      "density": 25,
+      "finishes": 1.5,
+      "imposed": 3,
+      "spanning": "Two-way",
+      "combination": "1.0 D + 1.0 L (service)",
+      "spanDepthLimit": 30,
+      "steelRate": 90,
+      "showPanel": true,
+      "levelZ": 3.5
+     }
+    }
+   ]
+  },
+  {
+   "id": "panel_20",
+   "layer": "grid",
+   "nodeIds": [
+    "G20",
+    "G30",
+    "G31",
+    "G21"
+   ],
+   "name": "Panel 3A",
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.18)",
+   "stroke": "#64748b",
+   "attachments": [
+    {
+     "id": "att_slab_20",
+     "objectId": "slab-with-math",
+     "objectPath": "Objects/Structural/slab.json",
+     "t": 0,
+     "params": {
+      "thickness": 150,
+      "density": 25,
+      "finishes": 1.5,
+      "imposed": 3,
+      "spanning": "Two-way",
+      "combination": "1.0 D + 1.0 L (service)",
+      "spanDepthLimit": 30,
+      "steelRate": 90,
+      "showPanel": true,
+      "levelZ": 3.5
+     }
+    }
+   ]
+  },
+  {
+   "id": "panel_21",
+   "layer": "grid",
+   "nodeIds": [
+    "G21",
+    "G31",
+    "G32",
+    "G22"
+   ],
+   "name": "Panel 3B",
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.18)",
+   "stroke": "#64748b",
+   "attachments": [
+    {
+     "id": "att_slab_21",
+     "objectId": "slab-with-math",
+     "objectPath": "Objects/Structural/slab.json",
+     "t": 0,
+     "params": {
+      "thickness": 150,
+      "density": 25,
+      "finishes": 1.5,
+      "imposed": 3,
+      "spanning": "Two-way",
+      "combination": "1.0 D + 1.0 L (service)",
+      "spanDepthLimit": 30,
+      "steelRate": 90,
+      "showPanel": true,
+      "levelZ": 3.5
+     }
+    }
+   ]
+  }
+ ],
+ "layers": [
+  {
+   "id": "0",
+   "name": "0",
+   "color": "#94a3b8",
+   "visible": true,
+   "locked": false,
+   "order": 0
+  },
+  {
+   "id": "grid",
+   "name": "Column grid",
+   "color": "#0f766e",
+   "visible": true,
+   "locked": false,
+   "order": 1
+  }
+ ],
+ "imageUnderlay": null
+}

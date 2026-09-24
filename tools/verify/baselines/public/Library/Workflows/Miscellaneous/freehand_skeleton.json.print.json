@@ -1,0 +1,115 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 11,
+  "edgeCount": 12,
+  "items": [
+    {
+      "nodeId": "boolean-2d_10",
+      "tool": "boolean-2d",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "boolean-2d_8",
+      "tool": "boolean-2d",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "freehand-geometry_1",
+      "tool": "freehand-geometry",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "graph-clip_2",
+      "tool": "graph-clip",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "graph-fit-lines_5",
+      "tool": "graph-fit-lines",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "mitered-join_6",
+      "tool": "mitered-join",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "network_3",
+      "tool": "network",
+      "polygons": {
+        "rings": 13,
+        "vertices": 26,
+        "area": 0,
+        "bbox": [
+          -11.6408,
+          -5.0293,
+          10.261,
+          4.8956
+        ],
+        "nonFinite": 0
+      },
+      "hash": "2ef46dc831839e3e"
+    },
+    {
+      "nodeId": "polygon_9",
+      "tool": "polygon",
+      "polygons": {
+        "rings": 1,
+        "vertices": 38,
+        "area": 29.9615,
+        "bbox": [
+          -11.7119,
+          -5.0535,
+          10.2657,
+          4.9321
+        ],
+        "nonFinite": 0
+      },
+      "hash": "e470ae437a88fbdd"
+    }
+  ],
+  "hash": "682bdf3b047938ba"
+}

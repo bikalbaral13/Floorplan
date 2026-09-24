@@ -1,0 +1,20 @@
+[
+  {
+    "key": "camera",
+    "file": "camera.json",
+    "hostKind": "node",
+    "bytes": 33658,
+    "props": 25,
+    "outputs": 22,
+    "edges": 54
+  },
+  {
+    "key": "light",
+    "file": "light.json",
+    "hostKind": "node",
+    "bytes": 31248,
+    "props": 22,
+    "outputs": 23,
+    "edges": 52
+  }
+]

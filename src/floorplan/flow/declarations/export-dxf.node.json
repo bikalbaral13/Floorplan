@@ -1,0 +1,35 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "export-dxf",
+  "meta": { "label": "Export DXF", "category": "Output", "color": "#475569" },
+  "description": "Write the incoming 2D geometry to an AutoCAD DXF (R12) and download it — the drawing counterpart of Export 3D. Wire a 2D Render node in and each of its rows becomes a layer.",
+  "instructions": "A SINK: wire any 2D geometry into its input and press Download .dxf. Nothing is drawn on canvas and nothing is committed — the node is invisible to the flow apart from the file it writes.\n\nWIRE A 2D RENDER NODE IN and the export is fully described by the render rows: every row's outlines go out as closed POLYLINEs on a layer named after that row's Layer field, in the nearest AutoCAD pen colour to the row's colour, and a CIRCLE row can go out as true CIRCLE entities instead of a 64-sided polygon. Any other 2D node (Polygon, Mitered Join, Boolean 2D, BSP …) exports too — it simply has one layer instead of several.\n\nCOORDINATES are measured from the flow anchor, not from wherever the canvas happens to sit, so the drawing opens around the origin. Plan Y points DOWN; \"Y up (CAD)\" flips it so the DXF reads the right way up in AutoCAD / LibreCAD / QCAD, which is what you almost always want.\n\nUNITS scale the metre coordinates on the way out — the file itself carries no unit, so pick what the receiving drawing expects (millimetres for most production CAD).",
+  "handles": {
+    "input": true,
+    "output": false
+  },
+  "parameters": [
+    { "key": "fileName", "label": "File name", "kind": "text", "default": "flow-export", "placeholder": "flow-export" },
+    {
+      "key": "units", "label": "Units", "kind": "select", "default": "m",
+      "options": [
+        { "value": "m", "label": "Metres" },
+        { "value": "cm", "label": "Centimetres" },
+        { "value": "mm", "label": "Millimetres" },
+        { "value": "ft", "label": "Feet" }
+      ]
+    },
+    { "key": "yUp", "label": "Y up (CAD)", "kind": "checkbox", "default": true },
+    {
+      "key": "layerMode", "label": "Layers from", "kind": "select", "default": "row",
+      "options": [
+        { "value": "row", "label": "Render row layer" },
+        { "value": "node", "label": "Source node" },
+        { "value": "single", "label": "One layer" }
+      ]
+    },
+    { "key": "layerName", "label": "Layer name", "kind": "text", "default": "FLOW", "placeholder": "FLOW", "showWhen": "layerMode == 'single'" },
+    { "key": "circleEntities", "label": "True circles", "kind": "checkbox", "default": true }
+  ]
+}

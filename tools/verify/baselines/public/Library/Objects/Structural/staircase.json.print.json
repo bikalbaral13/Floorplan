@@ -1,0 +1,192 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 16,
+          "vertices": 64,
+          "area": 4.9984,
+          "bbox": [
+            0,
+            0,
+            4.92,
+            1
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "7a8a125a3c5dadc6"
+      },
+      "solids": {
+        "count": 15,
+        "volume": 7.378,
+        "hash": "b8bd4aed72057d32"
+      },
+      "metrics": [
+        {
+          "key": "stepCount",
+          "name": "Steps",
+          "value": "14"
+        },
+        {
+          "key": "riserHeight",
+          "name": "Riser (m)",
+          "value": "0.17"
+        },
+        {
+          "key": "treadDepth",
+          "name": "Tread (m)",
+          "value": "0.28"
+        },
+        {
+          "key": "totalRise",
+          "name": "Total rise (m)",
+          "value": "2.38"
+        },
+        {
+          "key": "goingLength",
+          "name": "Going (m)",
+          "value": "3.92"
+        },
+        {
+          "key": "flightWidth",
+          "name": "Flight width (m)",
+          "value": "1"
+        },
+        {
+          "key": "pitchDeg",
+          "name": "Pitch (deg)",
+          "value": "31.2637"
+        },
+        {
+          "key": "rule2RT",
+          "name": "2R + T (m)",
+          "value": "0.62"
+        },
+        {
+          "key": "headroomOk",
+          "name": "Comfort rule met",
+          "value": "1"
+        },
+        {
+          "key": "stairArea",
+          "name": "Plan area (m²)",
+          "value": "4.92"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "0.3332"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 16,
+          "vertices": 64,
+          "area": 4.9984,
+          "bbox": [
+            0,
+            0,
+            4.92,
+            1
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "7a8a125a3c5dadc6"
+      },
+      "solids": {
+        "count": 15,
+        "volume": 7.378,
+        "hash": "b8bd4aed72057d32"
+      },
+      "metrics": [
+        {
+          "key": "stepCount",
+          "name": "Steps",
+          "value": "14"
+        },
+        {
+          "key": "riserHeight",
+          "name": "Riser (m)",
+          "value": "0.17"
+        },
+        {
+          "key": "treadDepth",
+          "name": "Tread (m)",
+          "value": "0.28"
+        },
+        {
+          "key": "totalRise",
+          "name": "Total rise (m)",
+          "value": "2.38"
+        },
+        {
+          "key": "goingLength",
+          "name": "Going (m)",
+          "value": "3.92"
+        },
+        {
+          "key": "flightWidth",
+          "name": "Flight width (m)",
+          "value": "1"
+        },
+        {
+          "key": "pitchDeg",
+          "name": "Pitch (deg)",
+          "value": "31.2637"
+        },
+        {
+          "key": "rule2RT",
+          "name": "2R + T (m)",
+          "value": "0.62"
+        },
+        {
+          "key": "headroomOk",
+          "name": "Comfort rule met",
+          "value": "1"
+        },
+        {
+          "key": "stairArea",
+          "name": "Plan area (m²)",
+          "value": "4.92"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "0.3332"
+        }
+      ]
+    }
+  }
+}

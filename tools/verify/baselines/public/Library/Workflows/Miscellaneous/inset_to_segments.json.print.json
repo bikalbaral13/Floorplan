@@ -1,0 +1,108 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 8,
+  "edgeCount": 23,
+  "items": [
+    {
+      "nodeId": "math",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "out",
+      "tool": "output",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "props",
+      "tool": "input-props",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "r2d__p2_inset",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 1,
+        "vertices": 4,
+        "area": 39.96,
+        "bbox": [
+          0.3,
+          0.3,
+          7.7,
+          5.7
+        ],
+        "nonFinite": 0
+      },
+      "hash": "2ff260ba9f912f98"
+    },
+    {
+      "nodeId": "r2d__p2_src",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 1,
+        "vertices": 4,
+        "area": 48,
+        "bbox": [
+          0,
+          0,
+          8,
+          6
+        ],
+        "nonFinite": 0
+      },
+      "hash": "55f99134698a03f6"
+    },
+    {
+      "nodeId": "ring",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "walls",
+      "tool": "network",
+      "polygons": {
+        "rings": 4,
+        "vertices": 8,
+        "area": 0,
+        "bbox": [
+          0.3,
+          0.3,
+          7.7,
+          5.7
+        ],
+        "nonFinite": 0
+      },
+      "hash": "f7ed59dabf7e8314"
+    }
+  ],
+  "hash": "9f8f323d19c429bd"
+}

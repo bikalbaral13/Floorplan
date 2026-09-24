@@ -1,0 +1,38 @@
+{
+  "schema": "material/1",
+  "id": "plaster.smooth",
+  "title": "Plaster — smooth render",
+  "category": "Finishes",
+  "description": "Smooth internal plaster. Very fine noise only — the point is that it is almost flat.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 60,
+      "detail": 2,
+      "roughness": 0.4,
+      "lacunarity": 2,
+      "distortion": 0,
+      "noiseDimensions": "3D",
+      "colorA": "#efece6",
+      "colorB": "#e4e0d8"
+    }
+  },
+  "pbr": {
+    "baseColor": "#efece6",
+    "roughness": 0.75,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 8,
+    "angle": 0,
+    "weight": 1,
+    "color": "#efece6"
+  },
+  "dxf": {
+    "pattern": "AR-SAND",
+    "scale": 1,
+    "angle": 0
+  }
+}

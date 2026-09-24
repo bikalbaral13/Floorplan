@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { Node, Edge } from "@xyflow/react";
 import { FLOW_TOOLS } from "../flow/flowTypes";
 import { compileFlow } from "../flow/compileFlow";
-import { saveLibraryFile, listFlowNodeFiles, listLibraryFiles, deleteLibraryFile } from "../libraryFiles";
+import { saveLibraryFile, listFlowNodeFiles, listLibraryFiles, deleteLibraryFile, fetchLibraryJson, LIB_TOOLS, LIB_WORKFLOWS } from "../libraryFiles";
 import type { SerializedFlow, SerializedFlowNode } from "../types";
 import type { AgentEvent } from "./agentChat";
 
@@ -26,12 +26,12 @@ const parseParamsJson = (s: string | undefined): Record<string, unknown> | undef
   return v as Record<string, unknown>;
 };
 
-/** Fetch + parse a node-template file (public/Library/Flows/Nodes/<rel>). */
+/** Fetch + parse a tool / node-template file (Library `Tools/<rel>`, R2 bucket first). */
 const fetchNodeFile = async (path: string): Promise<{ tool?: string; params?: Record<string, unknown>; label?: string; category?: string; description?: string }> => {
   const rel = path.replace(/^\/+/, "").replace(/\\/g, "/");
-  const res = await fetch(encodeURI(`/Library/Flows/Nodes/${rel}`));
-  if (!res.ok) throw new Error(`node file not found: ${rel} (HTTP ${res.status})`);
-  return (await res.json()) as { tool?: string; params?: Record<string, unknown> };
+  const parsed = await fetchLibraryJson<{ tool?: string; params?: Record<string, unknown> }>(`${LIB_TOOLS}/${rel}`);
+  if (!parsed) throw new Error(`node file not found: ${rel}`);
+  return parsed;
 };
 
 /** The live tool catalog (every node type: handles + params + defaults) — injected into the flow agent's
@@ -83,14 +83,22 @@ export function buildFlowToolCatalog(): string {
 /** Base flow-building instructions (schema + wiring rules). The live tool catalog is appended at runtime. */
 export const FLOW_AGENT_SYSTEM_PROMPT = `You are the Flow Agent for a node-graph "Flow" (an Operations Pipeline) in a 2D architecture floor-plan tool. You do TWO kinds of work:
 A) BUILD & EDIT the live graph (a WORKFLOW = nodes + connections): read it with get_flow, design the change, write the WHOLE graph back with replace_flow, then verify with compile_flow — iterate until it compiles clean. The graph drives the canvas geometry (inset / split / massing / walls / doors / schemas …).
-B) MANAGE the file-based LIBRARY: reusable NODE templates live as files under public/Library/Flows/Nodes/<folder>/<name>.node.json (the old palette moved to files — the user adds nodes via "Import Nodes"), and WORKFLOWS live under public/Library/Flows (Workflows/). You can list / read / create / edit / delete node templates, drop a saved node onto the canvas (import_node), and save / list / load whole workflows. Match the request: "add/place a node in the flow" → import_node or replace_flow; "create/save a new node type", "edit/rename/tweak a node", "delete a node" → the *_node_file tools; "save/load this workflow" → the *_workflow tools. File tools write to the repo (dev only) — real, persistent changes, so only create/edit/DELETE files the user asked you to.
+B) MANAGE the file-based LIBRARY: reusable TOOLS (node declarations / templates) live as files under Tools/<folder>/<name>.node.json (the old palette moved to files — the user adds nodes via "Import Nodes"), and WORKFLOWS live under Workflows/<folder>/<name>.json. You can list / read / create / edit / delete node templates, drop a saved node onto the canvas (import_node), and save / list / load whole workflows. Match the request: "add/place a node in the flow" → import_node or replace_flow; "create/save a new node type", "edit/rename/tweak a node", "delete a node" → the *_node_file tools; "save/load this workflow" → the *_workflow tools. File tools write to the repo (dev only) — real, persistent changes, so only create/edit/DELETE files the user asked you to.
 
 WORKFLOW (every request):
 1) READ — call get_flow to see the current nodes/edges. Empty or Source-only means start fresh.
 2) DESIGN — pick a ROOT, the middle algorithm/calculation chain, and the outputs; lay nodes left→right.
 3) WRITE — call replace_flow with the COMPLETE graph JSON (it replaces the whole graph). To EDIT, start from get_flow's graph, keep every node/edge you aren't changing, and add/modify only what's needed.
 4) VERIFY — call compile_flow; if it reports errors (unknown tool, dangling edge, cycle, empty), fix them and replace_flow again.
-5) REPORT — 1–3 plain sentences on what the flow does. No JSON in chat.
+5) LOOK — call snapshot_canvas and STUDY the image. compile_flow only proves the graph is well-formed; the snapshot is the only evidence the flow actually DREW what was asked. See the REFINE LOOP below.
+6) REPORT — 1–3 plain sentences on what the flow does, and what the snapshot showed. No JSON in chat.
+
+REFINE LOOP (this is the point of snapshot_canvas — a flow that compiles is not a flow that works):
+- The snapshot renders the canvas INCLUDING the flow's live preview, framed to all visible content, top = NORTH (-y). So a generated-but-uncommitted result IS in the picture.
+- After every replace_flow, look. Grade the picture against the request: is the geometry there at all, or is the canvas empty? Is it the right SHAPE, at the right SCALE, in the right PLACE? Are pieces missing, overlapping, inside-out, or collapsed to a dot?
+- An empty or wrong picture is a PARAMETER or WIRING problem, not a reason to stop. Common causes, in the order worth checking: a value wire missing so a node fell back to its default; a magnitude off by a factor (metres vs pixels, a ratio typed as a percent); a geometry edge to the wrong output slot; a root that reads nothing because nothing is selected on canvas.
+- Change ONE thing, replace_flow, look again. Iterate until the picture matches the request or you have tried three rounds — then say plainly what is still wrong and what you think causes it. Never report success on a graph you have not seen draw.
+- Judge it on the drawing, not on the JSON. If the numbers look right and the picture does not, the picture wins.
 
 GRAPH JSON (what replace_flow accepts) — { "version": 1, "nodes": [...], "edges": [...] }:
 - node: { "id": string, "position": {"x":number,"y":number}, "data": {"tool":string,"params":object}, "type"?: "group", "parentId"?: string, "width"?: number, "height"?: number }
@@ -126,15 +134,15 @@ SCHEMAS + BUILDING nodes (graph/floorplan flows):
 
 FURNISH RECIPE (requests like "place a sofa, table and bed in the room"): ONE "place-object" node fed by the space — {"id":"place-object_1","data":{"tool":"place-object","params":{"objects":[{"objectId":"sofa.v2","position":10},{"objectId":"table.v2","position":40},{"objectId":"bed.v2","position":70}],"seed":3}}} with an edge source → place-object_1. Use objectIds from the PARAMETRIC OBJECTS catalog (dims auto-measure — never invent length/breadth for them); spread initial positions (or just re-roll seed) and the solver arranges the objects along the boundary without overlaps. Committing the flow places the REAL parametric objects as selectable nodes.
 
-RASTER→SPACES RECIPE (requests like "trace this scanned plan / survey image into spaces"): image → vectorise → graph-to-spaces, plus an output for metrics — image-rooted, NO "source" node needed. Nodes: {"id":"image_1","data":{"tool":"image","params":{}}} → {"id":"vectorise_1","data":{"tool":"vectorise","params":{"colorMode":"black","tuneMinArea":1,"tuneColour":true}}} → {"id":"graph-to-spaces_1","data":{"tool":"graph-to-spaces","params":{"outputMode":"single","minArea":1}}} → {"id":"output_1","data":{"tool":"output","params":{"slots":[{"id":"s1","label":"Spaces"},{"id":"s2","label":"Total Area (m²)"},{"id":"s3","label":"Open Ends"}]}}}; value edges: graph-to-spaces val-spaces→valin-s1 + val-totalArea→valin-s2, vectorise val-openEnds→valin-s3. (The bundled public/Library/Flows/raster-to-spaces.json is this exact graph.) After building, TELL THE USER to press AUTO-TUNE on the Vectorisation node — it loops the tracing parameters, scores each combo on closed spaces found (− noise faces − open ends) with live progress, and bakes the best values into the sliders — then Run commits the faces as wall loops → Spaces. Do NOT hand-guess tolerance/despeckle values.
+RASTER→SPACES RECIPE (requests like "trace this scanned plan / survey image into spaces"): image → vectorise → graph-to-spaces, plus an output for metrics — image-rooted, NO "source" node needed. Nodes: {"id":"image_1","data":{"tool":"image","params":{}}} → {"id":"vectorise_1","data":{"tool":"vectorise","params":{"colorMode":"black","tuneMinArea":1,"tuneColour":true}}} → {"id":"graph-to-spaces_1","data":{"tool":"graph-to-spaces","params":{"outputMode":"single","minArea":1}}} → {"id":"output_1","data":{"tool":"output","params":{"slots":[{"id":"s1","label":"Spaces"},{"id":"s2","label":"Total Area (m²)"},{"id":"s3","label":"Open Ends"}]}}}; value edges: graph-to-spaces val-spaces→valin-s1 + val-totalArea→valin-s2, vectorise val-openEnds→valin-s3. (The bundled Workflows/raster-to-spaces.json is this exact graph.) After building, TELL THE USER to press AUTO-TUNE on the Vectorisation node — it loops the tracing parameters, scores each combo on closed spaces found (− noise faces − open ends) with live progress, and bakes the best values into the sliders — then Run commits the faces as wall loops → Spaces. Do NOT hand-guess tolerance/despeckle values.
 
 GROUPING (optional, VISUAL ONLY): a group container { "id":"g_<name>", "type":"group", "position":{abs}, "width", "height", "data":{"tool":"group","params":{"label":"Title"}} }; member nodes set "parentId" to it with RELATIVE positions (leave ~40px top for the label). List every group node BEFORE its children. Never group the "source" node.
 
 NODE LIBRARY & WORKFLOW FILES (the file tools):
-- A NODE TEMPLATE file (public/Library/Flows/Nodes/<folder>/<tool>.node.json) is { "version":1, "kind":"flow-node", "tool", "label", "category", "description", "params" }. It only REFERENCES a node type from the catalog + presets its params — the node's behaviour stays in the app code; the file just names a tool and starting params. The folder is its display category (e.g. "Space", "Reshape", "Partition", or a custom folder like "Custom").
+- A NODE TEMPLATE file (Tools/<folder>/<tool>.node.json) is { "version":1, "kind":"flow-node", "tool", "label", "category", "description", "params" }. It only REFERENCES a node type from the catalog + presets its params — the node's behaviour stays in the app code; the file just names a tool and starting params. The folder is its display category (e.g. "Space", "Reshape", "Partition", or a custom folder like "Custom").
 - CREATE / EDIT a node: save_node_file { path:"<Folder>/<name>.node.json", tool, paramsJson? }. To EDIT, read_node_file first, then save_node_file back with your changes (keep fields you aren't changing). paramsJson is a JSON object STRING (e.g. {"width":2.5,"shape":"cross"}); omit it to use the tool's defaults. The tool must be a real catalog id.
 - DELETE a node: delete_node_file { path }. IMPORT a saved node onto the canvas: import_node { path } (or { tool, paramsJson? }) — it appends ONE node to the live graph.
-- WORKFLOWS: save_workflow_file { name } writes the CURRENT graph to Flows/Workflows/<name>.json; list_workflow_files + import_workflow { path } discover and load saved workflows (import_workflow REPLACES the graph). A workflow is the whole nodes+connections graph — that's what you build with replace_flow.
+- WORKFLOWS: save_workflow_file { name } writes the CURRENT graph to Workflows/<name>.json; list_workflow_files + import_workflow { path } discover and load saved workflows (import_workflow REPLACES the graph). A workflow is the whole nodes+connections graph — that's what you build with replace_flow.
 - These are DEV-ONLY writes (the library bridge). On a production build the save/delete tools return an error; relay that to the user rather than retrying.
 
 COMMIT BEHAVIOUR (what "Run Flow" does with the graph you build):
@@ -143,7 +151,7 @@ COMMIT BEHAVIOUR (what "Run Flow" does with the graph you build):
 TOOL NOTES:
 - replace_flow's argument (graphJson) is the COMPLETE graph as a JSON string. compile_flow re-reads and validates the live graph.
 - If a tool returns { "error" } or compile_flow lists errors, FIX the graph and replace_flow again — do not repeat the same broken graph.
-- LIBRARY FOLDER: node templates → public/Library/Flows/Nodes/<Folder>/*.node.json (save_node_file); whole workflows → public/Library/Flows/Workflows/*.json (save_workflow_file, or the Flow panel's Export → "Save .json file"); designs → public/Library/Designs; parametric objects → public/Library/Parametric Objects.`;
+- LIBRARY FOLDER: tools / node templates → Tools/<Folder>/*.node.json (save_node_file); whole workflows → Workflows/*.json (save_workflow_file, or the Flow panel's Export → "Save .json file"); designs → Designs/; parametric objects → Objects/.`;
 
 /** Compact single-line summary of a tool result for the transcript (the model still gets the full value). */
 const short = (v: unknown): string => {
@@ -157,6 +165,10 @@ export interface FlowAgentApi {
   getFlow: () => SerializedFlow;
   /** Replace the whole graph with `graph` (host normalises + loads it). Returns the node count applied. */
   applyFlow: (graph: { nodes?: unknown[]; edges?: unknown[]; version?: number }) => number | Promise<number>;
+  /** Render the canvas — INCLUDING this flow's live preview — to a PNG data URL, so the agent can SEE what
+   *  the graph drew and refine it. `{ dataUrl, widthM, heightM }` or `{ error }`. Optional: without it the
+   *  agent simply has no snapshot_canvas tool and falls back to compile-only verification. */
+  snapshotCanvas?: () => unknown | Promise<unknown>;
 }
 
 // SerializedFlow → the minimal React-Flow Node[]/Edge[] compileFlow needs (id + data.tool/params + edges).
@@ -291,23 +303,50 @@ export async function runFlowAgent(p: RunFlowAgentParams): Promise<{ text: strin
       inputSchema: z.object({}),
       execute: wrap("compile_flow", () => validateFlowGraph(p.api.getFlow())),
     }),
+    snapshot_canvas: tool({
+      description: "Render the canvas — committed geometry AND this flow's LIVE PREVIEW — to a PNG and receive it AS AN IMAGE. This is the only way to see what the graph actually drew: compile_flow proves the graph is well-formed, the snapshot proves it works. Framed to all visible content; top of the image = NORTH (-y), right = EAST (+x). Call it after every replace_flow and grade the picture against the request before reporting. Also returns the captured extent { widthM, heightM }.",
+      inputSchema: z.object({}),
+      execute: wrap("snapshot_canvas", async () => {
+        if (!p.api.snapshotCanvas) return { error: "this host cannot capture the canvas — verify with compile_flow only" };
+        // The graph was applied a moment ago and the overlay re-evaluates it asynchronously, so capturing
+        // immediately would photograph the PREVIOUS preview and the agent would refine against a stale
+        // picture. Let the live evaluation settle first — the same beat flow_apply waits on the canvas side.
+        await new Promise((r) => setTimeout(r, 500));
+        return p.api.snapshotCanvas();
+      }),
+      // Hand the model a real image part rather than a base64 blob in JSON. Errors fall through as text.
+      toModelOutput: ({ output }) => {
+        const o = output as { dataUrl?: string; widthM?: number; heightM?: number } | null;
+        const b64 = typeof o?.dataUrl === "string" && o.dataUrl.includes(",") ? o.dataUrl.split(",")[1] : null;
+        if (b64) {
+          return {
+            type: "content",
+            value: [
+              { type: "file", mediaType: "image/png", data: { type: "data", data: b64 } },
+              { type: "text", text: `canvas + live flow preview — extent ${o?.widthM ?? "?"} m × ${o?.heightM ?? "?"} m; top of the image is NORTH (-y), right is EAST (+x)` },
+            ],
+          };
+        }
+        return { type: "text", value: JSON.stringify(output ?? { error: "no snapshot" }) };
+      },
+    }),
 
-    // ── NODE-LIBRARY tools — the reusable node templates under public/Library/Flows/Nodes (the palette
+    // ── TOOL-LIBRARY tools — the reusable node declarations / templates under Tools/ (the palette
     //    moved to files; the user adds nodes via "Import Nodes"). Dev only (the library bridge). ──
     list_node_files: tool({
-      description: "List every reusable NODE TEMPLATE under public/Library/Flows/Nodes — folder-relative paths like \"Space/inset.node.json\" (folder = category). Each file is one saved node (a tool + preset params). Call before read/save/delete/import_node.",
+      description: "List every reusable TOOL (node declaration / template) under Tools/ — folder-relative paths like \"Space/inset.node.json\" (folder = category). Each file is one saved node (a tool + preset params). Call before read/save/delete/import_node.",
       inputSchema: z.object({}),
       execute: wrap("list_node_files", async () => ({ files: await listFlowNodeFiles() })),
     }),
     read_node_file: tool({
-      description: "Read one node-template file's JSON ({ tool, label, category, description, params }). `path` is folder-relative under Flows/Nodes. Call before editing so you preserve the fields you aren't changing.",
+      description: "Read one node-template file's JSON ({ tool, label, category, description, params }). `path` is folder-relative under Tools. Call before editing so you preserve the fields you aren't changing.",
       inputSchema: z.object({ path: z.string().describe('e.g. "Space/inset.node.json"') }),
       execute: wrap("read_node_file", (a: { path: string }) => fetchNodeFile(a.path)),
     }),
     save_node_file: tool({
-      description: "Create OR overwrite a reusable NODE TEMPLATE at public/Library/Flows/Nodes/<path> (both CREATE a new node and EDIT an existing one — read_node_file first to keep other fields). `tool` MUST be a real node type from the catalog; `paramsJson` presets it (omit → the tool's defaults). `.node.json` is appended if missing; the folder is the category. Dev only — returns { ok, path } or throws with the bridge error.",
+      description: "Create OR overwrite a reusable TOOL at Tools/<path> (both CREATE a new node and EDIT an existing one — read_node_file first to keep other fields). `tool` MUST be a real node type from the catalog; `paramsJson` presets it (omit → the tool's defaults). `.node.json` is appended if missing; the folder is the category. Dev only — returns { ok, path } or throws with the bridge error.",
       inputSchema: z.object({
-        path: z.string().describe('folder-relative under Flows/Nodes, e.g. "Custom/wide-corridoor.node.json"'),
+        path: z.string().describe('folder-relative under Tools, e.g. "Custom/wide-corridoor.node.json"'),
         tool: z.string().describe('a node type id from the catalog (e.g. "rectangle", "inset", "corridoor")'),
         label: z.string().optional(),
         category: z.string().optional().describe("display category (defaults to the folder name)"),
@@ -328,23 +367,23 @@ export async function runFlowAgent(p: RunFlowAgentParams): Promise<{ text: strin
           description: a.description ?? (typeof def.hint === "string" ? def.hint : ""),
           params,
         };
-        const r = await saveLibraryFile(`Flows/Nodes/${rel}`, `${JSON.stringify(body, null, 2)}\n`);
+        const r = await saveLibraryFile(`${LIB_TOOLS}/${rel}`, `${JSON.stringify(body, null, 2)}\n`);
         if (!r.ok) throw new Error(r.error ?? "save failed (library bridge is dev-only)");
-        return { ok: true, path: r.path ?? `Flows/Nodes/${rel}` };
+        return { ok: true, path: r.path ?? `${LIB_TOOLS}/${rel}` };
       }),
     }),
     delete_node_file: tool({
-      description: "Delete a node-template file at public/Library/Flows/Nodes/<path> (folder-relative). Dev only. Returns { ok, deleted } or throws.",
+      description: "Delete a tool file at Tools/<path> (folder-relative). Dev only. Returns { ok, deleted } or throws.",
       inputSchema: z.object({ path: z.string().describe('e.g. "Custom/old.node.json"') }),
       execute: wrap("delete_node_file", async (a: { path: string }) => {
         const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/");
-        const r = await deleteLibraryFile(`Flows/Nodes/${rel}`);
+        const r = await deleteLibraryFile(`${LIB_TOOLS}/${rel}`);
         if (!r.ok) throw new Error(r.error ?? "delete failed");
         return r;
       }),
     }),
     import_node: tool({
-      description: "Add ONE node to the CURRENT Flow canvas — from a saved template (`path` under Flows/Nodes) OR directly by `tool` (+ optional `paramsJson`). Appends to the live graph (keeps everything else). Use replace_flow to build a whole pipeline; use this to drop a single library node.",
+      description: "Add ONE node to the CURRENT Flow canvas — from a saved tool file (`path` under Tools) OR directly by `tool` (+ optional `paramsJson`). Appends to the live graph (keeps everything else). Use replace_flow to build a whole pipeline; use this to drop a single library node.",
       inputSchema: z.object({
         path: z.string().optional().describe('a node template, e.g. "Space/inset.node.json"'),
         tool: z.string().optional().describe("a node type id (when no path)"),
@@ -375,19 +414,19 @@ export async function runFlowAgent(p: RunFlowAgentParams): Promise<{ text: strin
       }),
     }),
 
-    // ── WORKFLOW-FILE tools — full node+connection graphs under public/Library/Flows (Workflows/). ──
+    // ── WORKFLOW-FILE tools — full node+connection graphs under Workflows/. ──
     list_workflow_files: tool({
-      description: "List saved WORKFLOW files (full node+connection graphs) under public/Library/Flows (incl. the Workflows/ subfolder; the Nodes/ node-template subtree is excluded). Use before import_workflow.",
+      description: "List saved WORKFLOW files (full node+connection graphs) under Workflows/ — folder-relative paths like \"Architectural/corridoor-generator.json\". Use before import_workflow.",
       inputSchema: z.object({}),
       execute: wrap("list_workflow_files", async () => {
-        const all = await listLibraryFiles("Flows");
-        return { files: (all ?? []).filter((f) => f.toLowerCase().endsWith(".json") && !/^nodes\//i.test(f)) };
+        const all = await listLibraryFiles(LIB_WORKFLOWS);
+        return { files: (all ?? []).filter((f) => f.toLowerCase().endsWith(".json")) };
       }),
     }),
     save_workflow_file: tool({
-      description: "Save the CURRENT Flow graph (ALL nodes + connections) as a reusable WORKFLOW file at public/Library/Flows/Workflows/<name>.json. Build + compile_flow the graph first. Dev only. Returns { ok, path, nodes }.",
+      description: "Save the CURRENT Flow graph (ALL nodes + connections) as a reusable WORKFLOW file at Workflows/<name>.json. Build + compile_flow the graph first. Dev only. Returns { ok, path, nodes }.",
       inputSchema: z.object({
-        name: z.string().describe('file name, e.g. "site-massing" (.json appended)'),
+        name: z.string().describe('file name, e.g. "site-massing" or "Architectural/site-massing" (.json appended)'),
         title: z.string().optional(),
         description: z.string().optional(),
       }),
@@ -395,7 +434,7 @@ export async function runFlowAgent(p: RunFlowAgentParams): Promise<{ text: strin
         const g = p.api.getFlow();
         if (!Array.isArray(g.nodes) || g.nodes.length === 0) throw new Error("the flow is empty — build it first (replace_flow)");
         const name = a.name.replace(/^\/+/, "").replace(/\\/g, "/").replace(/\.json$/i, "");
-        const rel = `Flows/Workflows/${name}.json`;
+        const rel = `${LIB_WORKFLOWS}/${name}.json`;
         const doc = { version: 1, title: a.title ?? name, ...(a.description ? { description: a.description } : {}), nodes: g.nodes, edges: g.edges ?? [] };
         const r = await saveLibraryFile(rel, `${JSON.stringify(doc, null, 2)}\n`);
         if (!r.ok) throw new Error(r.error ?? "save failed (library bridge is dev-only)");
@@ -403,13 +442,12 @@ export async function runFlowAgent(p: RunFlowAgentParams): Promise<{ text: strin
       }),
     }),
     import_workflow: tool({
-      description: "Load a saved WORKFLOW file (from list_workflow_files) and REPLACE the current graph with it. `path` is Flows-relative, e.g. \"Workflows/site-massing.json\" or \"raster-to-spaces.json\".",
+      description: "Load a saved WORKFLOW file (from list_workflow_files) and REPLACE the current graph with it. `path` is Workflows-relative, e.g. \"Architectural/corridoor-generator.json\".",
       inputSchema: z.object({ path: z.string() }),
       execute: wrap("import_workflow", async (a: { path: string }) => {
         const rel = a.path.replace(/^\/+/, "").replace(/\\/g, "/");
-        const res = await fetch(encodeURI(`/Library/Flows/${rel}`));
-        if (!res.ok) throw new Error(`workflow not found: ${rel} (HTTP ${res.status})`);
-        const g = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; version?: number };
+        const g = await fetchLibraryJson<{ nodes?: unknown[]; edges?: unknown[]; version?: number }>(`${LIB_WORKFLOWS}/${rel}`);
+        if (!g) throw new Error(`workflow not found: ${rel}`);
         if (!Array.isArray(g.nodes)) throw new Error("not a workflow file (no nodes[])");
         const applied = await p.api.applyFlow(g);
         const check = validateFlowGraph(g as unknown as SerializedFlow);

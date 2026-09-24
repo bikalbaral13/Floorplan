@@ -1,0 +1,710 @@
+{
+  "version": 1,
+  "id": "room-with-math",
+  "title": "Room — a space-hosted colour fill, with its measured area, perimeter, dimensions and centroid",
+  "category": "Building",
+  "object": {
+    "hostKind": "space",
+    "name": "Room"
+  },
+  "description": "Select a Space and it reads as a room: a coloured surface in plan, a paper-thin floor plate in 3D, and its area, perimeter, bounding dimensions, aspect ratio and centroid as numbers. Six nodes: Geometry -> Input Properties -> Math Engine -> Output Metrics, with a 2D Render node and a 3D Render node alongside — the same shape as plot.json and road.json.\n\n  IDENTIFYING TYPE is a CLASSIFIER, not a setting: it reads \"room\" and is EDITABLE: FALSE because changing it would make the object lie about what it is. It exists so consumers can ask what a space IS without matching on this file's `id`, which breaks the moment the object is renamed. Its partners are \"plot\" on plot.json and \"road\" on road.json.\n\n  WHAT YOU DECLARE. Colour, and for now only colour. Space outline is EDITABLE: FALSE because it is the HOST — it carries a coordinate list, not a setting, and it arrives from whichever Space the object is attached to.\n\n  WHY COLOUR IS A LIST AND NOT A PICKER. This is the one thing worth understanding before extending the file. A Render row's colour is a property OF THE ROW — the attached-object runtime reads it as `row.color` and from nowhere else — and a Math Engine can only put NUMBERS on a wire. So no expression, and no colour-picker parameter, can reach it: a picker would render happily in the Properties panel and change nothing on screen.\n\n  What CAN change is WHICH ROW RECEIVES THE OUTLINE. So there is one 2D row and one 3D row per colour, and the Math Engine feeds exactly one pair: the chosen row gets `_Q`, every other row gets an EMPTY list. A Render row with nothing parseable wired draws nothing at all — not a transparent shape on top of the others — so exactly one colour is ever on screen. Eight colours, sixteen rows, one comparison each.\n\n  GREY IS THE FALLBACK ARM, not an equality test: `_isGrey = _named < 1`, where `_named` is the sum of the seven other flags. A blank, misspelt or newly-unrecognised colour therefore still draws the room in grey instead of vanishing — the failure mode of a chain of equality tests, where nothing matches and nothing is fed.\n\n  THE SLAB IS BUILT ONCE AND THEN ROUTED. `mprism` runs a single time into `_Slab`; the eight 3D outputs are cheap ternaries over it. Adding a ninth colour costs a comparison, not another extrusion.\n\n  NOTHING SELECTED IS NOT AN ERROR. `_ok` gates every published figure, and the outline falls back to a degenerate 3-point stub so the row maths downstream is always well formed. With no space attached the metrics read zero and no row is fed, rather than the engine throwing or a phantom shape appearing at the origin.\n\n  THE METRICS ARE MEASURED, NOT DECLARED. Area is the shoelace sum, absolute so winding direction cannot flip its sign. Dimension X and Y are the BOUNDING BOX, not edge lengths — correct for an L-shaped or T-shaped room, where no single edge is the overall width. Aspect is greater over smaller, so it is >= 1 whichever way the room is turned. The centroid is the AREA centroid rather than the average of the vertices: those two differ the moment the vertices are unevenly spaced, and it is the area centroid that a room label should sit on.\n\n  WHAT THIS CANNOT DO. The palette is fixed at authoring time, because that is what the row model requires — an arbitrary user-chosen hex is not reachable without a change to the Render row itself. Holes are not subtracted from the area: this is the outline's area. There is no wall, ceiling or volume — the 3D output is a 1 mm floor plate, not a room in the solid sense.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1180,
+        "y": 40
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry — selected Space"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -880,
+        "y": 0
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": true,
+              "id": "P",
+              "name": "Space outline [[x, y], ...]",
+              "type": "text",
+              "value": "[]"
+            },
+            {
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": false,
+              "showInCanvas": false,
+              "necessary": false,
+              "id": "identifyingType",
+              "name": "Identifying type",
+              "type": "text",
+              "value": "room"
+            },
+            {
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [
+                "Grey",
+                "Blue",
+                "Green",
+                "Yellow",
+                "Orange",
+                "Red",
+                "Purple",
+                "Teal"
+              ],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true,
+              "id": "color",
+              "name": "Colour",
+              "type": "select",
+              "value": "Grey"
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "bright modern interior, matte painted walls, oak flooring, natural daylight",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -460,
+        "y": 0
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Room metrics & colour routing",
+          "expr": "# Space metrics from the selected Space's outline. P arrives as [[x, y], ...] in metres,\n# local to the flow anchor.\n\n_n = rows(P)\n_ok = _n >= 3 ? 1 : 0\n# Nothing selected yet, or a degenerate outline: fall back to a 3-point stub so the row maths\n# below is always well formed. Every published figure is gated on _ok, so the readout is zeros\n# rather than a crash or a phantom shape.\n_Q = _ok > 0 ? P : vcat(hcat(0, 0), hcat(0, 0), hcat(0, 0))\n_x = col(_Q, 0)\n_y = col(_Q, 1)\n\n# The same ring advanced by one vertex — `shift` rolls the ROW ORDER cyclically, so the last\n# vertex wraps back to the first and every edge-wise term below has its partner.\n_Q2 = shift(_Q, -1)\n_x2 = col(_Q2, 0)\n_y2 = col(_Q2, 1)\n\n# Shoelace, absolute so winding direction does not flip the sign. Holes are not subtracted:\n# this is the outline's area.\narea = _ok * abs(sum(_x * _y2 - _x2 * _y)) / 2\nperimeter = _ok * sum(len(_Q2 - _Q))\n\n# Bounding box, not the edge lengths — correct for an L or a T, where no single edge is the\n# overall width.\ndimX = _ok * (max(_x) - min(_x))\ndimY = _ok * (max(_y) - min(_y))\n\n# GREATER over SMALLER, so the ratio is >= 1 whichever way the space is turned: a 2 x 7 room\n# reads 3.5, not 0.286.\naspect = _ok * max(dimX, dimY) / max(min(dimX, dimY), 1e-9)\n\n# CENTROID of the outline (the area centroid, not the average of the vertices — those differ the\n# moment the vertices are unevenly spaced, and it is the area centroid a label wants to sit on).\n_cr = _x * _y2 - _x2 * _y\n_sa = sum(_cr)\n_den = abs(_sa) > 1e-12 ? (3 * _sa) : 1e-12\ncentroidX = _ok * sum((_x + _x2) * _cr) / _den\ncentroidY = _ok * sum((_y + _y2) * _cr) / _den\n\n# The floor plate for the 3D rows: the outline extruded from z = 0 to 0.001 m. Thin enough to\n# read as a plate rather than a volume, and it is a real solid so the 3D view can shade it.\n# Built ONCE and then routed, so adding a colour costs a comparison, not another extrusion.\n_Slab = _ok > 0 ? mprism(_Q, 0, 0.001) : zeros(0, 4)\n\n# COLOUR -> WHICH ROW GETS THE OUTLINE.\n# A Render row's colour is a property OF THE ROW, not of the geometry: a Math Engine can only put\n# numbers on a wire, never a colour, so ONE row cannot change hue on a condition. N rows can, and\n# the switch becomes a question of which row is fed. The chosen row receives _Q and draws the room;\n# every other row receives an EMPTY list and is skipped outright, because a Render row with no\n# parseable geometry draws nothing rather than drawing something invisible on top. No two rows are\n# ever filled at once, so exactly one colour is on screen.\n# Grey is the FALLBACK arm rather than an equality test, so a blank or unrecognised colour still\n# draws the room instead of vanishing. Nothing selected (_ok = 0) fills no row at all, which keeps\n# the \"nothing selected is not an error\" rule the rest of this engine follows.\n\n_isBlue = color == 'Blue' ? 1 : 0\n_isGreen = color == 'Green' ? 1 : 0\n_isYellow = color == 'Yellow' ? 1 : 0\n_isOrange = color == 'Orange' ? 1 : 0\n_isRed = color == 'Red' ? 1 : 0\n_isPurple = color == 'Purple' ? 1 : 0\n_isTeal = color == 'Teal' ? 1 : 0\n_named = _isBlue + _isGreen + _isYellow + _isOrange + _isRed + _isPurple + _isTeal\n_isGrey = _named < 1 ? 1 : 0\n\nRoomGrey = _ok > 0 && _isGrey > 0 ? _Q : zeros(0, 2)\nRoomBlue = _ok > 0 && _isBlue > 0 ? _Q : zeros(0, 2)\nRoomGreen = _ok > 0 && _isGreen > 0 ? _Q : zeros(0, 2)\nRoomYellow = _ok > 0 && _isYellow > 0 ? _Q : zeros(0, 2)\nRoomOrange = _ok > 0 && _isOrange > 0 ? _Q : zeros(0, 2)\nRoomRed = _ok > 0 && _isRed > 0 ? _Q : zeros(0, 2)\nRoomPurple = _ok > 0 && _isPurple > 0 ? _Q : zeros(0, 2)\nRoomTeal = _ok > 0 && _isTeal > 0 ? _Q : zeros(0, 2)\n\nSlabGrey = _isGrey > 0 ? _Slab : zeros(0, 4)\nSlabBlue = _isBlue > 0 ? _Slab : zeros(0, 4)\nSlabGreen = _isGreen > 0 ? _Slab : zeros(0, 4)\nSlabYellow = _isYellow > 0 ? _Slab : zeros(0, 4)\nSlabOrange = _isOrange > 0 ? _Slab : zeros(0, 4)\nSlabRed = _isRed > 0 ? _Slab : zeros(0, 4)\nSlabPurple = _isPurple > 0 ? _Slab : zeros(0, 4)\nSlabTeal = _isTeal > 0 ? _Slab : zeros(0, 4)"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 40,
+        "y": 0
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Area (m2)",
+              "showInCanvas": true,
+              "necessary": true
+            },
+            {
+              "id": "s2",
+              "label": "Perimeter (m)",
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "s3",
+              "label": "Dimension X (m)",
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "s4",
+              "label": "Dimension Y (m)",
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "s5",
+              "label": "Aspect ratio (greater : smaller)",
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "s6",
+              "label": "Centroid X (m)",
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "s7",
+              "label": "Centroid Y (m)",
+              "showInCanvas": false,
+              "necessary": false
+            },
+            {
+              "id": "s8",
+              "label": "Colour",
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 460,
+        "y": -160
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "pr_grey",
+              "kind": "polygon",
+              "name": "Room — grey",
+              "color": "#cbd5e1",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            },
+            {
+              "id": "pr_blue",
+              "kind": "polygon",
+              "name": "Room — blue",
+              "color": "#93c5fd",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            },
+            {
+              "id": "pr_green",
+              "kind": "polygon",
+              "name": "Room — green",
+              "color": "#86efac",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            },
+            {
+              "id": "pr_yellow",
+              "kind": "polygon",
+              "name": "Room — yellow",
+              "color": "#fde047",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            },
+            {
+              "id": "pr_orange",
+              "kind": "polygon",
+              "name": "Room — orange",
+              "color": "#fdba74",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            },
+            {
+              "id": "pr_red",
+              "kind": "polygon",
+              "name": "Room — red",
+              "color": "#fca5a5",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            },
+            {
+              "id": "pr_purple",
+              "kind": "polygon",
+              "name": "Room — purple",
+              "color": "#d8b4fe",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            },
+            {
+              "id": "pr_teal",
+              "kind": "polygon",
+              "name": "Room — teal",
+              "color": "#5eead4",
+              "layer": "",
+              "radius": 1,
+              "width": 0.1,
+              "tubeRadius": 0.1,
+              "length": 3,
+              "breadth": 2,
+              "height": 3,
+              "radiusTop": 0.8,
+              "topLength": 2,
+              "topBreadth": 1.5,
+              "arcDeg": 360,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "lineStyle": "solid",
+              "fillMode": "filled",
+              "hatch": "none",
+              "hatchSpacing": 8,
+              "hatchWeight": 1,
+              "opacity": 1,
+              "displayType": "solid",
+              "showEdges": false,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 460,
+        "y": 160
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_grey",
+              "kind": "polyhedron",
+              "name": "Floor plate — grey",
+              "color": "#94a3b8",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_blue",
+              "kind": "polyhedron",
+              "name": "Floor plate — blue",
+              "color": "#60a5fa",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_green",
+              "kind": "polyhedron",
+              "name": "Floor plate — green",
+              "color": "#4ade80",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_yellow",
+              "kind": "polyhedron",
+              "name": "Floor plate — yellow",
+              "color": "#facc15",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_orange",
+              "kind": "polyhedron",
+              "name": "Floor plate — orange",
+              "color": "#fb923c",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_red",
+              "kind": "polyhedron",
+              "name": "Floor plate — red",
+              "color": "#f87171",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_purple",
+              "kind": "polyhedron",
+              "name": "Floor plate — purple",
+              "color": "#c084fc",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_teal",
+              "kind": "polyhedron",
+              "name": "Floor plate — teal",
+              "color": "#2dd4bf",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "source",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_color",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-color",
+      "targetHandle": "valin-color"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-area",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-perimeter",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-dimX",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-dimY",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-aspect",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-centroidX",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-centroidY",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_props_out_s8",
+      "source": "props",
+      "target": "out",
+      "sourceHandle": "val-color",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_r2d_pr_grey",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomGrey",
+      "targetHandle": "valin-pr_grey"
+    },
+    {
+      "id": "e_math_r2d_pr_blue",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomBlue",
+      "targetHandle": "valin-pr_blue"
+    },
+    {
+      "id": "e_math_r2d_pr_green",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomGreen",
+      "targetHandle": "valin-pr_green"
+    },
+    {
+      "id": "e_math_r2d_pr_yellow",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomYellow",
+      "targetHandle": "valin-pr_yellow"
+    },
+    {
+      "id": "e_math_r2d_pr_orange",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomOrange",
+      "targetHandle": "valin-pr_orange"
+    },
+    {
+      "id": "e_math_r2d_pr_red",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomRed",
+      "targetHandle": "valin-pr_red"
+    },
+    {
+      "id": "e_math_r2d_pr_purple",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomPurple",
+      "targetHandle": "valin-pr_purple"
+    },
+    {
+      "id": "e_math_r2d_pr_teal",
+      "source": "math",
+      "target": "r2d",
+      "sourceHandle": "val-RoomTeal",
+      "targetHandle": "valin-pr_teal"
+    },
+    {
+      "id": "e_math_r3d_p3_grey",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabGrey",
+      "targetHandle": "valin-p3_grey"
+    },
+    {
+      "id": "e_math_r3d_p3_blue",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabBlue",
+      "targetHandle": "valin-p3_blue"
+    },
+    {
+      "id": "e_math_r3d_p3_green",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabGreen",
+      "targetHandle": "valin-p3_green"
+    },
+    {
+      "id": "e_math_r3d_p3_yellow",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabYellow",
+      "targetHandle": "valin-p3_yellow"
+    },
+    {
+      "id": "e_math_r3d_p3_orange",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabOrange",
+      "targetHandle": "valin-p3_orange"
+    },
+    {
+      "id": "e_math_r3d_p3_red",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabRed",
+      "targetHandle": "valin-p3_red"
+    },
+    {
+      "id": "e_math_r3d_p3_purple",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabPurple",
+      "targetHandle": "valin-p3_purple"
+    },
+    {
+      "id": "e_math_r3d_p3_teal",
+      "source": "math",
+      "target": "r3d",
+      "sourceHandle": "val-SlabTeal",
+      "targetHandle": "valin-p3_teal"
+    }
+  ]
+}

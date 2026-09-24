@@ -1,4 +1,4 @@
-import type { ElevRect } from "../flow/eval/floorplanElevation";
+import type { ElevRect } from "@builderpluss/engine";
 
 /** Floorplan "Views" overlay aligned to the live plan. The four elevations sit in edge strips around the
  *  plan (Back top / Front bottom / Left / Right) and are drawn through the SAME pan/zoom transform as the

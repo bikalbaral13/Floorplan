@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
-import { polygonCentroid } from "../../algorithms/geometry/polygon";
+import { polygonCentroid } from "@builderpluss/engine";
 
 export interface DelaunayTriangulationBlockProps {
   selectedRoom: { id: string; points: Point[]; roomType?: string };

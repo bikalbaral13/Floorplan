@@ -1,0 +1,37 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-eigen",
+  "meta": { "label": "Eigen", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — ALL eigenvalues and eigenvectors of a SYMMETRIC matrix by cyclic Jacobi rotation. Matrix in, values + vectors out; draws nothing.",
+  "instructions": "A value-only node: a symmetric matrix as JSON in, its complete eigen-decomposition out. It has no geometry input or output and draws nothing on the canvas.\n\nWHY IT IS A NODE AND NOT A FLOW. Jacobi repeats until the off-diagonal mass drops below tolerance — a data-dependent stopping test. The flow evaluator is a DAG (topological sort, cycles rejected), so no arrangement of nodes can express that loop; the Loop node is a geometry array and does not iterate values. Unrolling power-iteration blocks in the graph works but only ever yields the DOMINANT pair, and converges at |λ₂/λ₁| per block. This runs the loop internally, converges in 2–4 sweeps, and returns every pair.\n\nINPUT: wire a square symmetric matrix into valin-matrix — an inertia tensor, a covariance matrix, a stiffness matrix, or a graph Laplacian. The matrix is symmetrised on entry ((A + Aᵀ)/2), so float noise or a slightly-off typed tensor is well-posed rather than silently wrong. NON-SYMMETRIC input is therefore treated as its symmetric part — this node does not do general (complex) eigenvalues.\n\nOUTPUTS:\n• `val-values` — the eigenvalues as an n×1 column, sorted (default largest first).\n• `val-vectors` — an n×n matrix whose COLUMNS are the matching unit eigenvectors, in the same order. They are orthonormal, so the transpose is also the inverse.\n• `val-dominant` — the leading eigenvector alone, as an n×1 column, ready to wire onward.\n• `val-angle` — the direction of the leading eigenvector in the XY plane, in DEGREES. For a 2×2 tensor this is the principal-axis angle directly.\n\nWHAT THE NUMBERS MEAN depends on the matrix you feed it. Inertia tensor [[Ixx, −Ixy], [−Ixy, Iyy]] → I_max / I_min and the principal-axis angle, which is what governs bending of any unsymmetric section (angles, channels, Z-purlins). Covariance of a point set → PCA: the leading eigenvector is the shape's dominant orientation. Stiffness with mass → mode shapes. Graph Laplacian → the second-smallest eigenvalue's vector is the Fiedler vector, which partitions the graph.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "matrix", "label": "Matrix" },
+      { "key": "sort", "label": "Sort" }
+    ],
+    "valueOutputs": [
+      { "key": "values", "label": "Eigenvalues" },
+      { "key": "vectors", "label": "Eigenvectors" },
+      { "key": "dominant", "label": "Dominant vector" },
+      { "key": "angle", "label": "Principal angle", "unit": "°" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "sort",
+      "label": "Sort",
+      "kind": "select",
+      "default": "desc",
+      "options": [
+        { "value": "desc", "label": "Largest first" },
+        { "value": "asc", "label": "Smallest first" },
+        { "value": "none", "label": "Unsorted" }
+      ]
+    },
+    { "key": "matrix", "label": "Matrix (JSON)", "kind": "text", "default": "" },
+    { "key": "sweeps", "label": "Max sweeps", "kind": "number", "default": 50, "step": 1 }
+  ]
+}

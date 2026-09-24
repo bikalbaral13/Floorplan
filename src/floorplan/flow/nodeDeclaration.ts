@@ -9,7 +9,7 @@
  *  params + `vars`, evaluated by the same safe engine the parametric objects use (see ./eval/expr) — so a
  *  data file reproduces the exact `showIf`/`outputCount` FUNCTIONS the hand-written FLOW_TOOLS entry had. */
 import type { FlowToolDef, ParamField, FlowToolType } from "./flowTypes";
-import { evalNum, evalRaw, evalTruthy, type Scope } from "./eval/expr";
+import { evalNum, evalRaw, evalTruthy, type Scope } from "@builderpluss/engine";
 
 /** One parameter's full declaration — mirrors {@link ParamField} but with `default` (baked into
  *  `defaultParams`) and `showWhen` (a predicate STRING compiled into `showIf`). */
@@ -27,6 +27,8 @@ export interface NodeParamDecl {
   placeholder?: string;
   /** `textarea` only — visible row count (default 3). */
   rows?: number;
+  /** `textarea` only — render as foldable `# <title>` regions (see ExprSectionsEditor). */
+  sections?: boolean;
   secret?: boolean;
   output?: boolean;
   role?: string;
@@ -46,6 +48,8 @@ export interface NodeDeclaration {
   materialisesSpace?: boolean;
   /** This node outputs real SEGMENT geometry (open strokes) → Live materialises it as walls (see FlowToolDef). */
   materialisesSegments?: boolean;
+  /** Set FALSE on a space-producing node whose boundary is already drawn by something else (see FlowToolDef). */
+  materialisesSpaceEdges?: boolean;
   handles?: {
     input?: boolean;
     output?: boolean;
@@ -93,6 +97,7 @@ export function buildToolDefFromDeclaration(decl: NodeDeclaration): FlowToolDef 
     if (p.unit != null) field.unit = p.unit;
     if (p.placeholder != null) field.placeholder = p.placeholder;
     if (p.rows != null) field.rows = p.rows;
+    if (p.sections) field.sections = true;
     if (p.secret) field.secret = true;
     if (p.output) field.output = true;
     if (p.role != null) field.role = p.role;
@@ -121,6 +126,8 @@ export function buildToolDefFromDeclaration(decl: NodeDeclaration): FlowToolDef 
   if (decl.instructions) def.instructions = decl.instructions;
   if (decl.materialisesSpace) def.materialisesSpace = true;
   if (decl.materialisesSegments) def.materialisesSegments = true;
+  // Only the explicit false is carried — an absent flag leaves the default (owns its edges) in place.
+  if (decl.materialisesSpaceEdges === false) def.materialisesSpaceEdges = false;
   if (h.outputCount) {
     const expr = h.outputCount;
     def.outputCount = (params) => Math.max(0, Math.round(evalNum(expr, buildScope(params, vars))));

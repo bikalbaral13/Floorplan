@@ -13,9 +13,11 @@
 // ──────────────────────────────────────────────────────────────────────────
 
 /** Default Robotics-ER model recommended for spatial detection. */
-export const DEFAULT_DETECTION_MODEL = "gemini-robotics-er-1.6-preview";
+export const DEFAULT_DETECTION_MODEL = "gemini-robotics-er-2-preview";
 
-export type DetectionMode = "box" | "point";
+/** "box" → bounding boxes only · "point" → points only · "both" → each item carries a box AND a point,
+ *  asked for in ONE call (the spatial models return both fields per object happily). */
+export type DetectionMode = "box" | "point" | "both";
 
 export interface Detection {
   label: string;
@@ -30,7 +32,7 @@ export interface DetectParams {
   model: string;
   /** Google AI Studio API key. */
   apiKey: string;
-  /** "box" → bounding boxes; "point" → points. */
+  /** "box" → bounding boxes; "point" → points; "both" → box + point per item. */
   mode: DetectionMode;
   /** What to detect (free text). Empty → all prominent objects. */
   targets: string;
@@ -58,6 +60,18 @@ const buildPrompt = (mode: DetectionMode, targets: string, maxItems: number): st
     );
   }
   const subject = targets.trim() ? targets.trim() : "all prominent objects";
+  if (mode === "both") {
+    // One call for both readings: the models return a box and a point in the same object without
+    // complaint, which is cheaper and keeps the two readings of an item paired by index.
+    return (
+      `Detect ${subject} in the image (no more than ${n} items). ` +
+      `For EACH item return BOTH its bounding box AND a point at its centre, plus a label. ` +
+      `Never return masks. ` +
+      `The format should be [{"box_2d": [ymin, xmin, ymax, xmax], "point": [y, x], "label": <label>}], ` +
+      `with all coordinates as integers normalized to 0-1000 (y = vertical, x = horizontal). ` +
+      `Output only the JSON array — no prose, no code fences.`
+    );
+  }
   return (
     `Detect ${subject} in the image (no more than ${n} items). ` +
     `Return bounding boxes as a JSON array with labels. Never return masks. ` +
@@ -159,17 +173,18 @@ const normaliseDetections = (raw: unknown, mode: DetectionMode): Detection[] => 
     if (!item || typeof item !== "object") continue;
     const rec = item as Record<string, unknown>;
     const label = typeof rec.label === "string" && rec.label.trim() ? rec.label.trim() : "object";
-    if (mode === "box") {
-      const b = (rec.box_2d ?? rec.box2d ?? rec.box ?? rec.bbox) as unknown;
-      if (Array.isArray(b) && b.length >= 4) {
-        out.push({ label, box2d: [toNum(b[0]), toNum(b[1]), toNum(b[2]), toNum(b[3])] });
-      }
-    } else {
-      const p = (rec.point ?? rec.point_2d) as unknown;
-      if (Array.isArray(p) && p.length >= 2) {
-        out.push({ label, point: [toNum(p[0]), toNum(p[1])] });
-      }
-    }
+    const b = (rec.box_2d ?? rec.box2d ?? rec.box ?? rec.bbox) as unknown;
+    const p = (rec.point ?? rec.point_2d) as unknown;
+    const box2d: Detection["box2d"] | undefined =
+      mode !== "point" && Array.isArray(b) && b.length >= 4
+        ? [toNum(b[0]), toNum(b[1]), toNum(b[2]), toNum(b[3])] : undefined;
+    let point: Detection["point"] | undefined =
+      mode !== "box" && Array.isArray(p) && p.length >= 2
+        ? [toNum(p[0]), toNum(p[1])] : undefined;
+    // "both" but the model returned only a box for this item — fall back to the box centre so the two
+    // readings stay paired by index rather than silently losing one.
+    if (mode === "both" && !point && box2d) point = [(box2d[0] + box2d[2]) / 2, (box2d[1] + box2d[3]) / 2];
+    if (box2d || point) out.push({ label, ...(box2d ? { box2d } : {}), ...(point ? { point } : {}) });
   }
   return out;
 };

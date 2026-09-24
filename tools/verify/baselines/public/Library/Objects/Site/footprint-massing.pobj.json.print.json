@@ -1,0 +1,231 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "49af69986b6a114c"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "plotArea",
+          "name": "Plot Area",
+          "value": "0",
+          "unit": "m²"
+        },
+        {
+          "key": "amenityArea",
+          "name": "Amenity Open Space",
+          "value": "0",
+          "unit": "m²"
+        },
+        {
+          "key": "netPlot",
+          "name": "Net Plot Area",
+          "value": "0",
+          "unit": "m²"
+        },
+        {
+          "key": "fsiBua",
+          "name": "FSI BUA",
+          "value": "0",
+          "unit": "m²"
+        },
+        {
+          "key": "nonFsiBua",
+          "name": "Non-FSI BUA",
+          "value": "8000",
+          "unit": "m²"
+        },
+        {
+          "key": "totalBua",
+          "name": "Total BUA",
+          "value": "8000",
+          "unit": "m²"
+        },
+        {
+          "key": "towerFloors",
+          "name": "Number of Floors",
+          "value": "1"
+        },
+        {
+          "key": "basementFloors",
+          "name": "Basement Floors",
+          "value": "8000"
+        },
+        {
+          "key": "buildingHeight",
+          "name": "Building Height",
+          "value": "3",
+          "unit": "m"
+        },
+        {
+          "key": "groundCoverage",
+          "name": "Ground Coverage",
+          "value": "0"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 112,
+          "vertices": 560,
+          "area": 1182.72,
+          "bbox": [
+            -2.2,
+            -1.2,
+            2.2,
+            1.2
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 112,
+          "vertices": 560,
+          "area": 1182.72,
+          "bbox": [
+            -2.2,
+            -1.2,
+            2.2,
+            1.2
+          ],
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "4cc7d95d28b145d6"
+      },
+      "solids": {
+        "count": 112,
+        "volume": 3548.16,
+        "hash": "14f109512203d56a"
+      },
+      "metrics": [
+        {
+          "key": "plotArea",
+          "name": "Plot Area",
+          "value": "80",
+          "unit": "m²"
+        },
+        {
+          "key": "amenityArea",
+          "name": "Amenity Open Space",
+          "value": "8",
+          "unit": "m²"
+        },
+        {
+          "key": "netPlot",
+          "name": "Net Plot Area",
+          "value": "72",
+          "unit": "m²"
+        },
+        {
+          "key": "fsiBua",
+          "name": "FSI BUA",
+          "value": "220.68",
+          "unit": "m²"
+        },
+        {
+          "key": "nonFsiBua",
+          "name": "Non-FSI BUA",
+          "value": "8000",
+          "unit": "m²"
+        },
+        {
+          "key": "totalBua",
+          "name": "Total BUA",
+          "value": "8220.68",
+          "unit": "m²"
+        },
+        {
+          "key": "towerFloors",
+          "name": "Number of Floors",
+          "value": "7"
+        },
+        {
+          "key": "basementFloors",
+          "name": "Basement Floors",
+          "value": "112"
+        },
+        {
+          "key": "buildingHeight",
+          "name": "Building Height",
+          "value": "21",
+          "unit": "m"
+        },
+        {
+          "key": "groundCoverage",
+          "name": "Ground Coverage",
+          "value": "0.45"
+        },
+        {
+          "key": "Shapes",
+          "name": "Shapes",
+          "value": "112"
+        },
+        {
+          "key": "Width",
+          "name": "Width",
+          "value": "4.4",
+          "unit": "m"
+        },
+        {
+          "key": "Depth",
+          "name": "Depth",
+          "value": "2.4",
+          "unit": "m"
+        },
+        {
+          "key": "Height",
+          "name": "Height",
+          "value": "336",
+          "unit": "m"
+        },
+        {
+          "key": "Footprint",
+          "name": "Footprint",
+          "value": "1182.72",
+          "unit": "m²"
+        },
+        {
+          "key": "Volume",
+          "name": "Volume",
+          "value": "3548.16",
+          "unit": "m³"
+        }
+      ]
+    }
+  }
+}

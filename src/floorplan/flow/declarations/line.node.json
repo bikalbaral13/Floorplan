@@ -8,7 +8,7 @@
     "color": "#0891b2"
   },
   "description": "2D primitive — a straight line from (X1, Y1) to (X2, Y2) in metres. An open stroke (no fill, no downstream Space); every endpoint coordinate is wireable.",
-  "instructions": "A 2D line SEGMENT from (x1, y1) to (x2, y2) in metres — an OPEN stroke, so it draws linework (symbols, axes, leaders) and flows on as a 2-point polyline (e.g. into Mitered Join to stroke it into a wall). Every coordinate is wireable (valin-*): drive the endpoints from an Expression / Segment Geometry to draw wall-aligned symbol lines. Publishes `val-length` (m).",
+  "instructions": "A 2D line SEGMENT from (x1, y1) to (x2, y2) in metres — an OPEN stroke, so it draws linework (symbols, axes, leaders) and flows on as a 2-point polyline (e.g. into Mitered Join to stroke it into a wall). Every coordinate is wireable (valin-*): drive the endpoints from a Math Engine / Segment Geometry to draw wall-aligned symbol lines. Publishes `val-length` (m).",
   "handles": {
     "input": false,
     "output": true,

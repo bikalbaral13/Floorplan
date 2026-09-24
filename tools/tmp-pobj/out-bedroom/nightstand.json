@@ -1,0 +1,859 @@
+{
+  "version": 1,
+  "id": "nightstand-with-math",
+  "title": "Nightstand — one Math Engine, carcass, drawers, base",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Nightstand",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M5 7h14v13H5z",
+        "M5 13h14",
+        "M9 10h6",
+        "M9 16h6",
+        "M7 20v2",
+        "M17 20v2"
+      ]
+    }
+  },
+  "description": "A parametric NIGHTSTAND on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nTHE DRAWER COUNT IS A NUMBER, not a shape. The fronts are built in a bounded loop that divides the carcass height by the count, so 0 to 4 drawers is one parameter and the carcass never has to be redrawn. Zero drawers is a legitimate answer — an open cube — and it costs nothing to say.\n\nTHREE BASES ON ONE TERNARY: four corner legs, a recessed plinth, or nothing at all for a wall-hung unit. This is the same base block the chest of drawers and the TV unit use, written once, because they are one piece of furniture at three sizes and letting them drift is how a library stops looking like a library.\n\nSTORAGE VOLUME is published net of the top and the base at 70% of the carcass, which is roughly what drawers hold once their own sides are counted.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Width",
+              "type": "range",
+              "value": 0.45,
+              "min": 0.3,
+              "max": 0.8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.4,
+              "min": 0.25,
+              "max": 0.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Height",
+              "type": "range",
+              "value": 0.55,
+              "min": 0.3,
+              "max": 0.9,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "topThk",
+              "name": "Top thickness",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.01,
+              "max": 0.1,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "legHeight",
+              "name": "Leg height",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.03,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "base",
+              "name": "Base",
+              "type": "select",
+              "value": "Legs",
+              "options": [
+                "Legs",
+                "Plinth",
+                "Wall-hung"
+              ]
+            },
+            {
+              "id": "drawers",
+              "name": "Drawers",
+              "type": "range",
+              "value": 2,
+              "min": 0,
+              "max": 4,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "doorGap",
+              "name": "Front gap",
+              "type": "range",
+              "value": 0.005,
+              "min": 0,
+              "max": 0.02,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "mountHeight",
+              "name": "Wall-hung top height",
+              "type": "range",
+              "value": 0.558,
+              "min": 0,
+              "max": 2.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "underLed",
+              "name": "LED under the unit",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "pullType",
+              "name": "Pull",
+              "type": "select",
+              "value": "Handle",
+              "options": [
+                "Handle",
+                "Groove",
+                "Push"
+              ]
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "light oak veneer, matte lacquer, ivory stone top",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "walnut bedside table, two drawers, tapered legs, brass pulls",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Nightstand maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Wd = width * _s\n_Ht = height * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_tT = min(topThk * _s, _Ht * 0.25)\n_isLegs = base == 'Legs' ? 1 : 0\n_isPlinth = base == 'Plinth' ? 1 : 0\n_baseH = _isLegs > 0 ? min(legHeight * _s, _Ht * 0.5) : (_isPlinth > 0 ? min(0.08 * _s, _Ht * 0.2) : 0)\n_carZ0 = _baseH\n_carZ1 = _Ht - _tT\n_lg = max(0.03 * _s, min(_Ln, _Wd) * 0.07)\n_plinthIn = _Wd * 0.06\n_nD = max(0, min(4, round(drawers)))\n_gap = doorGap * _s\n# A wall-hung unit is dimensioned by the height of its TOP, not by a base that is not there.\n_mz = base == 'Wall-hung' ? max(0, mountHeight * _s - _Ht) : 0\n_pullH = pullType == 'Handle' ? 1 : 0\n_pullG = pullType == 'Groove' ? 1 : 0\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_TOP = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _carZ1, _Ht, 1)\n_CAR = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _carZ0, _carZ1, 2)\n_L1 = hcat(_u0, _v0, _u0 + _lg, _v0, _u0 + _lg, _v0 + _lg, _u0, _v0 + _lg, 0, _baseH, 3)\n_L2 = hcat(_u1 - _lg, _v0, _u1, _v0, _u1, _v0 + _lg, _u1 - _lg, _v0 + _lg, 0, _baseH, 3)\n_L3 = hcat(_u1 - _lg, _v1 - _lg, _u1, _v1 - _lg, _u1, _v1, _u1 - _lg, _v1, 0, _baseH, 3)\n_L4 = hcat(_u0, _v1 - _lg, _u0 + _lg, _v1 - _lg, _u0 + _lg, _v1, _u0, _v1, 0, _baseH, 3)\n_PLQ = hcat(_u0 + _plinthIn, _v0 + _plinthIn, _u1 - _plinthIn, _v0 + _plinthIn, _u1 - _plinthIn, _v1 - _plinthIn, _u0 + _plinthIn, _v1 - _plinthIn, 0, _baseH, 3)\n_BASE = _isLegs > 0 ? vcat(vcat(_L1, _L2), vcat(_L3, _L4)) : (_isPlinth > 0 ? _PLQ : zeros(0, 11))\n_dh = max(0.02, (_carZ1 - _carZ0) / max(1, _nD))\n_DRW = zeros(0, 11)\nloop i in _nD:\n  _dz0 = _carZ0 + i * _dh + _gap\n  _dz1 = _carZ0 + (i + 1) * _dh - _gap\n  _DRW = vcat(_DRW, hcat(_u0 + _gap, _v0 - 0.012 * _s, _u1 - _gap, _v0 - 0.012 * _s, _u1 - _gap, _v0, _u0 + _gap, _v0, _dz0, _dz1, 4))\nend\n_pfV = _v0 - 0.012 * _s\n_pwT = 0.018 * _s\n_pHalf = min(0.07 * _s, _Ln * 0.3)\n_pzH = _carZ1 - 0.07 * _s\n_HDLq = hcat(0 - _pHalf, _pfV - _pwT, _pHalf, _pfV - _pwT, _pHalf, _pfV, 0 - _pHalf, _pfV, _pzH, _pzH + _pwT, 6)\n_HDL = (_pullH > 0 && _nD > 0) ? _HDLq : zeros(0, 11)\n_GRVq = hcat(_u0 + _gap, _pfV - 0.006 * _s, _u1 - _gap, _pfV - 0.006 * _s, _u1 - _gap, _pfV, _u0 + _gap, _pfV, _carZ1 - 0.03 * _s, _carZ1 - 0.012 * _s, 6)\n_GRV = (_pullG > 0 && _nD > 0) ? _GRVq : zeros(0, 11)\n_LEDq = hcat(_u0 + 0.03 * _s, _v0 + 0.03 * _s, _u1 - 0.03 * _s, _v0 + 0.03 * _s, _u1 - 0.03 * _s, _v1 - 0.02 * _s, _u0 + 0.03 * _s, _v1 - 0.02 * _s, _carZ0 - 0.012 * _s, _carZ0 - 0.003 * _s, 7)\n_LEDU = underLed > 0 ? _LEDq : zeros(0, 11)\nQ = vcat(vcat(vcat(_TOP, _CAR), vcat(_BASE, _DRW)), vcat(vcat(_HDL, _GRV), _LEDU))\n# Lift the FINISHED table once so mountHeight means the top of the unit. Threading the offset\n# through every z above would be the same number written eleven times.\nQ = hcat(sub(Q, 0, 0, rows(Q), 8), col(Q, 8) + _mz, col(Q, 9) + _mz, col(Q, 10))\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nTop3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nTopPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nCarcass3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nCarcassPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nBase3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nBasePlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nFronts3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nFrontsPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\nPulls3D = sub(compress(_W, eq(col(_W,4), 6)), 0, 0, _nw, 4)\nUnderLed3D = sub(compress(_W, eq(col(_W,4), 7)), 0, 0, _nw, 4)\nPullsPlan = sub(compress(_WP, eq(col(_WP,3), 6)), 0, 0, _nwp, 3)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\ndrawerCount = _nD\ndrawerHeight = _dh\ntopLevel = _Ht + _mz\nstorageVolume = _Ln * _Wd * max(0, _carZ1 - _carZ0) * 0.7\nmountLift = _mz\nwallHung = base == 'Wall-hung' ? 1 : 0\nunderLedRun = underLed > 0 ? (2 * max(0, _Ln - 0.06 * _s) + max(0, _Wd - 0.05 * _s)) : 0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Top — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Carcass — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Base — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Drawer fronts — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Top — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Carcass — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Base — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Drawer fronts — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Drawers"
+            },
+            {
+              "id": "s14",
+              "label": "Drawer height (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Top level (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Storage volume (m³)"
+            },
+            {
+              "id": "s17",
+              "label": "Pulls — solid"
+            },
+            {
+              "id": "s18",
+              "label": "Under-unit LED — solid"
+            },
+            {
+              "id": "s19",
+              "label": "Pulls — plan"
+            },
+            {
+              "id": "s20",
+              "label": "Mount lift (m)"
+            },
+            {
+              "id": "s21",
+              "label": "Wall-hung"
+            },
+            {
+              "id": "s22",
+              "label": "Under LED run (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_top",
+              "kind": "polygon",
+              "name": "Top",
+              "color": "#a16207",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_carcass",
+              "kind": "polygon",
+              "name": "Carcass",
+              "color": "#78350f",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_base",
+              "kind": "polygon",
+              "name": "Base",
+              "color": "#57534e",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_fronts",
+              "kind": "polygon",
+              "name": "Drawer fronts",
+              "color": "#b45309",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_pulls",
+              "kind": "polygon",
+              "name": "Pulls",
+              "color": "#c8a968",
+              "layer": "Nightstand",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_top",
+              "kind": "polyhedron",
+              "name": "Top",
+              "color": "#a16207",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_carcass",
+              "kind": "polyhedron",
+              "name": "Carcass",
+              "color": "#78350f",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_base",
+              "kind": "polyhedron",
+              "name": "Base",
+              "color": "#57534e",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_fronts",
+              "kind": "polyhedron",
+              "name": "Drawer fronts",
+              "color": "#b45309",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_pulls",
+              "kind": "polyhedron",
+              "name": "Pulls",
+              "color": "#c8a968",
+              "layer": "Nightstand",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_uled",
+              "kind": "polyhedron",
+              "name": "Under-unit LED",
+              "color": "#fbbf24",
+              "layer": "Nightstand",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-length__math_valin-length",
+      "source": "props",
+      "sourceHandle": "val-length",
+      "target": "math",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-height__math_valin-height",
+      "source": "props",
+      "sourceHandle": "val-height",
+      "target": "math",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e6_props_val-topThk__math_valin-topThk",
+      "source": "props",
+      "sourceHandle": "val-topThk",
+      "target": "math",
+      "targetHandle": "valin-topThk"
+    },
+    {
+      "id": "e7_props_val-legHeight__math_valin-legHeight",
+      "source": "props",
+      "sourceHandle": "val-legHeight",
+      "target": "math",
+      "targetHandle": "valin-legHeight"
+    },
+    {
+      "id": "e8_props_val-base__math_valin-base",
+      "source": "props",
+      "sourceHandle": "val-base",
+      "target": "math",
+      "targetHandle": "valin-base"
+    },
+    {
+      "id": "e9_props_val-drawers__math_valin-drawers",
+      "source": "props",
+      "sourceHandle": "val-drawers",
+      "target": "math",
+      "targetHandle": "valin-drawers"
+    },
+    {
+      "id": "e10_props_val-doorGap__math_valin-doorGap",
+      "source": "props",
+      "sourceHandle": "val-doorGap",
+      "target": "math",
+      "targetHandle": "valin-doorGap"
+    },
+    {
+      "id": "e11_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e12_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e13_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e14_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e15_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e16_math_val-Top3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Top3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e17_out_val-s1__r3d_valin-p3_top",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_top"
+    },
+    {
+      "id": "e18_math_val-Carcass3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Carcass3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e19_out_val-s2__r3d_valin-p3_carcass",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_carcass"
+    },
+    {
+      "id": "e20_math_val-Base3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Base3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e21_out_val-s3__r3d_valin-p3_base",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_base"
+    },
+    {
+      "id": "e22_math_val-Fronts3D__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-Fronts3D",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e23_out_val-s4__r3d_valin-p3_fronts",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r3d",
+      "targetHandle": "valin-p3_fronts"
+    },
+    {
+      "id": "e24_math_val-TopPlan__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-TopPlan",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e25_out_val-s5__r2d_valin-p2_top",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r2d",
+      "targetHandle": "valin-p2_top"
+    },
+    {
+      "id": "e26_math_val-CarcassPlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-CarcassPlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e27_out_val-s6__r2d_valin-p2_carcass",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_carcass"
+    },
+    {
+      "id": "e28_math_val-BasePlan__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-BasePlan",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e29_out_val-s7__r2d_valin-p2_base",
+      "source": "out",
+      "sourceHandle": "val-s7",
+      "target": "r2d",
+      "targetHandle": "valin-p2_base"
+    },
+    {
+      "id": "e30_math_val-FrontsPlan__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-FrontsPlan",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e31_out_val-s8__r2d_valin-p2_fronts",
+      "source": "out",
+      "sourceHandle": "val-s8",
+      "target": "r2d",
+      "targetHandle": "valin-p2_fronts"
+    },
+    {
+      "id": "e32_math_val-overallLength__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e33_math_val-overallWidth__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e34_math_val-overallHeight__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e35_math_val-footprint__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e36_math_val-drawerCount__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-drawerCount",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e37_math_val-drawerHeight__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-drawerHeight",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e38_math_val-topLevel__out_valin-s15",
+      "source": "math",
+      "sourceHandle": "val-topLevel",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e39_math_val-storageVolume__out_valin-s16",
+      "source": "math",
+      "sourceHandle": "val-storageVolume",
+      "target": "out",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_props_math_mountHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mountHeight",
+      "targetHandle": "valin-mountHeight"
+    },
+    {
+      "id": "e_props_math_underLed",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-underLed",
+      "targetHandle": "valin-underLed"
+    },
+    {
+      "id": "e_props_math_pullType",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pullType",
+      "targetHandle": "valin-pullType"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Pulls3D",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-UnderLed3D",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-PullsPlan",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mountLift",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-wallHung",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_math_out_s22",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-underLedRun",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_out_r3d_p3_pulls",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s17",
+      "targetHandle": "valin-p3_pulls"
+    },
+    {
+      "id": "e_out_r3d_p3_uled",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s18",
+      "targetHandle": "valin-p3_uled"
+    },
+    {
+      "id": "e_out_r2d_p2_pulls",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s19",
+      "targetHandle": "valin-p2_pulls"
+    }
+  ]
+}

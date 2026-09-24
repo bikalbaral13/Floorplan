@@ -1,0 +1,50 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "matrix-reduce",
+  "meta": { "label": "Reduce", "category": "Grid", "color": "#0e7490" },
+  "description": "A pure CALCULATION node — fold a matrix down to fewer numbers: Sum, Min, Max, Mean or Product, over the whole matrix, per row, or per column. Draws nothing.",
+  "instructions": "A value-only node: a matrix in, a smaller matrix out. It has no geometry input or output and draws nothing on the canvas.\n\nWHY IT EXISTS: every other matrix node is shape-preserving or shape-combining — none of them can answer \"what is the total / the smallest / the average\". Reduce is the aggregate step, and its 1×1 result BROADCASTS back over any shape through Matrix Operations, so a whole-matrix statistic can be applied per row.\n\nAXIS:\n• All → one number (1×1). Total area, first event time, global min.\n• Per row → N×1, folding each row across its columns.\n• Per column → 1×C, folding each column down its rows. Column sums of an N×2 point list give (Σx, Σy) — divide by N for the centroid.\n\nTWO IDIOMS worth knowing:\n• SIGNED AREA / WINDING — Vector Product (Cross) of a point list against Shift Rows(-1) gives the per-edge shoelace terms; Reduce (Sum, All) totals them. The result is 2×area, and its SIGN is the polygon's winding (positive = counter-clockwise). Divide it by its own absolute value to get ±1, then multiply your normals by that to make them face inward whatever the winding.\n• SMALLEST POSITIVE — Reduce (Min) counts negatives and zeros too. To get the smallest POSITIVE entry, take 1/x first (Matrix Operations Divide, with A = [[1]]), Reduce (Max), then invert again: non-positive entries become ≤ 0 and lose automatically.\n\nOUTPUT: `val-matrix` plus `val-rows` / `val-cols`. Every parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "a", "label": "Matrix" },
+      { "key": "op", "label": "Operation" },
+      { "key": "axis", "label": "Axis" }
+    ],
+    "valueOutputs": [
+      { "key": "matrix", "label": "Matrix (JSON)" },
+      { "key": "rows", "label": "Rows" },
+      { "key": "cols", "label": "Cols" },
+      { "key": "value", "label": "Value" }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "op",
+      "label": "Operation",
+      "kind": "select",
+      "default": "sum",
+      "options": [
+        { "value": "sum", "label": "Sum" },
+        { "value": "min", "label": "Min" },
+        { "value": "max", "label": "Max" },
+        { "value": "mean", "label": "Mean" },
+        { "value": "product", "label": "Product" }
+      ]
+    },
+    {
+      "key": "axis",
+      "label": "Axis",
+      "kind": "select",
+      "default": "all",
+      "options": [
+        { "value": "all", "label": "All (→ 1×1)" },
+        { "value": "rows", "label": "Per row (→ N×1)" },
+        { "value": "cols", "label": "Per column (→ 1×C)" }
+      ]
+    },
+    { "key": "a", "label": "Matrix (JSON)", "kind": "text", "default": "" }
+  ]
+}

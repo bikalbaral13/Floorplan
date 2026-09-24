@@ -1,0 +1,675 @@
+{
+  "version": 1,
+  "id": "floor-drain-with-math",
+  "title": "Floor Drain — one Math Engine, frame, grating, fall",
+  "category": "Sanitary",
+  "object": {
+    "hostKind": "node",
+    "name": "Floor Drain",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 4h16v16H4z",
+        "M8 8v8",
+        "M12 8v8",
+        "M16 8v8"
+      ]
+    }
+  },
+  "description": "A parametric FLOOR DRAIN on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nIT SITS BELOW ZERO, which is the whole point. The frame and grating run from −frame depth up to 0, so the drain is recessed into the floor rather than standing on it, and a section through the bathroom shows the gully where it belongs.\n\nTHE FALL ZONE IS THE USEFUL PART. A drain on its own says nothing about whether the floor drains to it; the published fall zone — a 32-point circle at the fall radius, on its own slot and its own pale colour — is the region the screed has to slope toward. Switch it off for a clean drawing, leave it on while setting out.\n\nTHE GRATING IS A COUNTED LOOP: N slots across the clear opening at half-pitch spacing, so a 100 mm gully with five slots and a 200 mm one with ten both come out right, and the published open area is the number that decides flow rate.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Size",
+              "type": "range",
+              "value": 0.1,
+              "min": 0.05,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Width",
+              "type": "range",
+              "value": 0.1,
+              "min": 0.05,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Frame depth",
+              "type": "range",
+              "value": 0.02,
+              "min": 0.005,
+              "max": 0.08,
+              "step": 0.0025,
+              "options": []
+            },
+            {
+              "id": "frameWidth",
+              "name": "Frame width",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "slots",
+              "name": "Grating slots",
+              "type": "range",
+              "value": 5,
+              "min": 2,
+              "max": 12,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "fallRadius",
+              "name": "Fall zone radius",
+              "type": "range",
+              "value": 0.6,
+              "min": 0,
+              "max": 2,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "shape",
+              "name": "Shape",
+              "type": "select",
+              "value": "Square",
+              "options": [
+                "Square",
+                "Round",
+                "Linear"
+              ]
+            },
+            {
+              "id": "showFall",
+              "name": "Show fall zone",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "stainless steel square floor gully, slotted grating",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Floor Drain maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Wd = width * _s\n_Ht = height * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_fW = min(frameWidth * _s, min(_Ln, _Wd) * 0.3)\n_nS = max(2, min(12, round(slots)))\n_round = shape == 'Round' ? 1 : 0\n_linear = shape == 'Linear' ? 1 : 0\n_dR = min(_Ln, _Wd) / 2\n_fallR = fallRadius * _s\n_hasFall = (showFall > 0 && _fallR > 0) ? 1 : 0\n_iu0 = _u0 + _fW\n_iu1 = _u1 - _fW\n_iv0 = _v0 + _fW\n_iv1 = _v1 - _fW\n_sw = max(0.002, (_iu1 - _iu0) / (2 * _nS - 1))\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_F1 = hcat(_u0, _v0, _u1, _v0, _u1, _iv0, _u0, _iv0, 0 - _Ht, 0, 1)\n_F2 = hcat(_u0, _iv1, _u1, _iv1, _u1, _v1, _u0, _v1, 0 - _Ht, 0, 1)\n_F3 = hcat(_u0, _iv0, _iu0, _iv0, _iu0, _iv1, _u0, _iv1, 0 - _Ht, 0, 1)\n_F4 = hcat(_iu1, _iv0, _u1, _iv0, _u1, _iv1, _iu1, _iv1, 0 - _Ht, 0, 1)\n_FRAME = _round > 0 ? zeros(0, 11) : vcat(vcat(_F1, _F2), vcat(_F3, _F4))\n_GRT = zeros(0, 11)\nloop i in _nS:\n  _gu0 = _iu0 + i * 2 * _sw\n  _GRT = vcat(_GRT, hcat(_gu0, _iv0, _gu0 + _sw, _iv0, _gu0 + _sw, _iv1, _gu0, _iv1, 0 - _Ht * 0.4, 0, 2))\nend\n_GRATE = _round > 0 ? zeros(0, 11) : _GRT\nQ = vcat(_FRAME, _GRATE)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nFrame3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nFramePlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nGrating3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nGratingPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\n_Roundk = arange(24)\n_Roundt = _Roundk * 2 * PI / 24\n_RoundL = hcat((0) + (_dR) * cos(_Roundt), (0) + (_dR) * sin(_Roundt))\n_RoundW = hcat((_cu + col(_RoundL,0)) * _ux + (_cv + col(_RoundL,1)) * _vx, (_cu + col(_RoundL,0)) * _uy + (_cv + col(_RoundL,1)) * _vy)\nRoundPlan = _round > 0 ? _RoundW : zeros(0, 2)\nRound3D = _round > 0 ? mprism(_RoundW, 0 - _Ht, 0) : zeros(0, 4)\n_Fallk = arange(32)\n_Fallt = _Fallk * 2 * PI / 32\n_FallL = hcat((0) + (_fallR) * cos(_Fallt), (0) + (_fallR) * sin(_Fallt))\n_FallW = hcat((_cu + col(_FallL,0)) * _ux + (_cv + col(_FallL,1)) * _vx, (_cu + col(_FallL,0)) * _uy + (_cv + col(_FallL,1)) * _vy)\nFallPlan = _hasFall > 0 ? _FallW : zeros(0, 2)\nFall3D = _hasFall > 0 ? mprism(_FallW, 0 - 0.001, 0) : zeros(0, 4)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\nslotCount = _nS\nopenArea = _round > 0 ? PI * _dR * _dR * 0.5 : _nS * _sw * max(0, _iv1 - _iv0)\nfallZone = _hasFall > 0 ? PI * _fallR * _fallR : 0\nfallRadiusOut = _fallR"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Frame — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Grating — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Round grating — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Fall zone — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Frame — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Grating — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Round grating — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Fall zone — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Slots"
+            },
+            {
+              "id": "s14",
+              "label": "Open area (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Fall zone (m²)"
+            },
+            {
+              "id": "s16",
+              "label": "Fall radius (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_frame",
+              "kind": "polygon",
+              "name": "Frame",
+              "color": "#94a3b8",
+              "layer": "Sanitary",
+              "show": true
+            },
+            {
+              "id": "p2_grating",
+              "kind": "polygon",
+              "name": "Grating",
+              "color": "#64748b",
+              "layer": "Sanitary",
+              "show": true
+            },
+            {
+              "id": "p2_round",
+              "kind": "polygon",
+              "name": "Round grating",
+              "color": "#64748b",
+              "layer": "Sanitary",
+              "show": true
+            },
+            {
+              "id": "p2_fall",
+              "kind": "polygon",
+              "name": "Fall zone",
+              "color": "#bae6fd",
+              "layer": "Sanitary",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_frame",
+              "kind": "polyhedron",
+              "name": "Frame",
+              "color": "#94a3b8",
+              "layer": "Sanitary",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_grating",
+              "kind": "polyhedron",
+              "name": "Grating",
+              "color": "#64748b",
+              "layer": "Sanitary",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_round",
+              "kind": "polyhedron",
+              "name": "Round grating",
+              "color": "#64748b",
+              "layer": "Sanitary",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_fall",
+              "kind": "polyhedron",
+              "name": "Fall zone",
+              "color": "#bae6fd",
+              "layer": "Sanitary",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-length__math_valin-length",
+      "source": "props",
+      "sourceHandle": "val-length",
+      "target": "math",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-height__math_valin-height",
+      "source": "props",
+      "sourceHandle": "val-height",
+      "target": "math",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e6_props_val-frameWidth__math_valin-frameWidth",
+      "source": "props",
+      "sourceHandle": "val-frameWidth",
+      "target": "math",
+      "targetHandle": "valin-frameWidth"
+    },
+    {
+      "id": "e7_props_val-slots__math_valin-slots",
+      "source": "props",
+      "sourceHandle": "val-slots",
+      "target": "math",
+      "targetHandle": "valin-slots"
+    },
+    {
+      "id": "e8_props_val-fallRadius__math_valin-fallRadius",
+      "source": "props",
+      "sourceHandle": "val-fallRadius",
+      "target": "math",
+      "targetHandle": "valin-fallRadius"
+    },
+    {
+      "id": "e9_props_val-shape__math_valin-shape",
+      "source": "props",
+      "sourceHandle": "val-shape",
+      "target": "math",
+      "targetHandle": "valin-shape"
+    },
+    {
+      "id": "e10_props_val-showFall__math_valin-showFall",
+      "source": "props",
+      "sourceHandle": "val-showFall",
+      "target": "math",
+      "targetHandle": "valin-showFall"
+    },
+    {
+      "id": "e11_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e12_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e13_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e14_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e15_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e16_math_val-Frame3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Frame3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e17_out_val-s1__r3d_valin-p3_frame",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_frame"
+    },
+    {
+      "id": "e18_math_val-Grating3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Grating3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e19_out_val-s2__r3d_valin-p3_grating",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_grating"
+    },
+    {
+      "id": "e20_math_val-Round3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Round3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e21_out_val-s3__r3d_valin-p3_round",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_round"
+    },
+    {
+      "id": "e22_math_val-Fall3D__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-Fall3D",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e23_out_val-s4__r3d_valin-p3_fall",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r3d",
+      "targetHandle": "valin-p3_fall"
+    },
+    {
+      "id": "e24_math_val-FramePlan__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-FramePlan",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e25_out_val-s5__r2d_valin-p2_frame",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r2d",
+      "targetHandle": "valin-p2_frame"
+    },
+    {
+      "id": "e26_math_val-GratingPlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-GratingPlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e27_out_val-s6__r2d_valin-p2_grating",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_grating"
+    },
+    {
+      "id": "e28_math_val-RoundPlan__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-RoundPlan",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e29_out_val-s7__r2d_valin-p2_round",
+      "source": "out",
+      "sourceHandle": "val-s7",
+      "target": "r2d",
+      "targetHandle": "valin-p2_round"
+    },
+    {
+      "id": "e30_math_val-FallPlan__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-FallPlan",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e31_out_val-s8__r2d_valin-p2_fall",
+      "source": "out",
+      "sourceHandle": "val-s8",
+      "target": "r2d",
+      "targetHandle": "valin-p2_fall"
+    },
+    {
+      "id": "e32_math_val-overallLength__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e33_math_val-overallWidth__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e34_math_val-overallHeight__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e35_math_val-footprint__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e36_math_val-slotCount__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-slotCount",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e37_math_val-openArea__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-openArea",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e38_math_val-fallZone__out_valin-s15",
+      "source": "math",
+      "sourceHandle": "val-fallZone",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e39_math_val-fallRadiusOut__out_valin-s16",
+      "source": "math",
+      "sourceHandle": "val-fallRadiusOut",
+      "target": "out",
+      "targetHandle": "valin-s16"
+    }
+  ]
+}

@@ -1,0 +1,886 @@
+{
+ "schemaVersion": 1,
+ "settings": {
+  "library_path": "/Library/",
+  "units": "m",
+  "northbearing": 0,
+  "pixelsPerMeter": 12,
+  "keywords": "EPANET, pipe network, GPM, H-W",
+  "epanet": {
+   "source": "Net1-gravity.inp",
+   "flowUnits": "GPM",
+   "headloss": "H-W",
+   "converted": "tools/epanet/inp2canvas.mjs",
+   "mapUnitsPerMetre": 1,
+   "note": "Map coordinates are a SCHEMATIC. True pipe lengths ride in graphAttrs.segments[].length (role `length`) and in each Pipe object's lengthOverride."
+  }
+ },
+ "nodes": [
+  {
+   "id": "10",
+   "x": 48,
+   "y": 288,
+   "layer": "pipes",
+   "label": "10",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_10",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 216.408,
+      "demand": 0,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "11",
+   "x": 168,
+   "y": 288,
+   "layer": "pipes",
+   "label": "11",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_11",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 216.408,
+      "demand": 9.4635,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "12",
+   "x": 408,
+   "y": 288,
+   "layer": "pipes",
+   "label": "12",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_12",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 213.36,
+      "demand": 9.4635,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "13",
+   "x": 648,
+   "y": 288,
+   "layer": "pipes",
+   "label": "13",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_13",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 211.836,
+      "demand": 6.309,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "21",
+   "x": 168,
+   "y": 648,
+   "layer": "pipes",
+   "label": "21",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_21",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 213.36,
+      "demand": 9.4635,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "22",
+   "x": 408,
+   "y": 648,
+   "layer": "pipes",
+   "label": "22",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_22",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 211.836,
+      "demand": 12.618,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "23",
+   "x": 648,
+   "y": 648,
+   "layer": "pipes",
+   "label": "23",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_23",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 210.312,
+      "demand": 9.4635,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "31",
+   "x": 168,
+   "y": 1008,
+   "layer": "pipes",
+   "label": "31",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_31",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 213.36,
+      "demand": 6.309,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "32",
+   "x": 408,
+   "y": 1008,
+   "layer": "pipes",
+   "label": "32",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_junction_32",
+     "objectId": "junction-with-math",
+     "objectPath": "Objects/Hydraulics/junction.json",
+     "t": 0,
+     "params": {
+      "elevation": 216.408,
+      "demand": 6.309,
+      "head": 0,
+      "minPressure": 15,
+      "markerSize": 1.2,
+      "showGrade": true,
+      "gradeScale": 0.05
+     }
+    }
+   ]
+  },
+  {
+   "id": "2",
+   "x": 408,
+   "y": 48,
+   "layer": "pipes",
+   "label": "2",
+   "showLabel": true,
+   "type": "point",
+   "attachments": [
+    {
+     "id": "att_reservoir_2",
+     "objectId": "reservoir-with-math",
+     "objectPath": "Objects/Hydraulics/reservoir.json",
+     "t": 0,
+     "params": {
+      "totalHead": 295.656,
+      "baseElevation": 290.656,
+      "planSize": 6,
+      "supply": 0,
+      "bankThk": 0.6
+     }
+    }
+   ]
+  }
+ ],
+ "segments": [
+  {
+   "id": "pipe_10",
+   "fromNodeId": "10",
+   "toNodeId": "11",
+   "layer": "pipes",
+   "thickness": 5.4864,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "10",
+   "attachments": [
+    {
+     "id": "att_pipe_10",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 457.2,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 10,
+      "lengthOverride": 3209.544,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_11",
+   "fromNodeId": "11",
+   "toNodeId": "12",
+   "layer": "pipes",
+   "thickness": 4.2672,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "11",
+   "attachments": [
+    {
+     "id": "att_pipe_11",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 355.6,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 20,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_12",
+   "fromNodeId": "12",
+   "toNodeId": "13",
+   "layer": "pipes",
+   "thickness": 3.048,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "12",
+   "attachments": [
+    {
+     "id": "att_pipe_12",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 254,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 20,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_21",
+   "fromNodeId": "21",
+   "toNodeId": "22",
+   "layer": "pipes",
+   "thickness": 3.048,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "21",
+   "attachments": [
+    {
+     "id": "att_pipe_21",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 254,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 20,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_22",
+   "fromNodeId": "22",
+   "toNodeId": "23",
+   "layer": "pipes",
+   "thickness": 3.6576,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "22",
+   "attachments": [
+    {
+     "id": "att_pipe_22",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 304.8,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 20,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_31",
+   "fromNodeId": "31",
+   "toNodeId": "32",
+   "layer": "pipes",
+   "thickness": 2,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "31",
+   "attachments": [
+    {
+     "id": "att_pipe_31",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 152.4,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 20,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_110",
+   "fromNodeId": "2",
+   "toNodeId": "12",
+   "layer": "pipes",
+   "thickness": 5.4864,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "110",
+   "attachments": [
+    {
+     "id": "att_pipe_110",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 457.2,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 20,
+      "lengthOverride": 60.96,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_111",
+   "fromNodeId": "11",
+   "toNodeId": "21",
+   "layer": "pipes",
+   "thickness": 3.048,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "111",
+   "attachments": [
+    {
+     "id": "att_pipe_111",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 254,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 30,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_112",
+   "fromNodeId": "12",
+   "toNodeId": "22",
+   "layer": "pipes",
+   "thickness": 3.6576,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "112",
+   "attachments": [
+    {
+     "id": "att_pipe_112",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 304.8,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 30,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_113",
+   "fromNodeId": "13",
+   "toNodeId": "23",
+   "layer": "pipes",
+   "thickness": 2.4384,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "113",
+   "attachments": [
+    {
+     "id": "att_pipe_113",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 203.2,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 30,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_121",
+   "fromNodeId": "21",
+   "toNodeId": "31",
+   "layer": "pipes",
+   "thickness": 2.4384,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "121",
+   "attachments": [
+    {
+     "id": "att_pipe_121",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 203.2,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 30,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  },
+  {
+   "id": "pipe_122",
+   "fromNodeId": "22",
+   "toNodeId": "32",
+   "layer": "pipes",
+   "thickness": 2,
+   "color": "#0e7490",
+   "segmentType": "pipe",
+   "bufferStyle": "flat",
+   "label": "122",
+   "attachments": [
+    {
+     "id": "att_pipe_122",
+     "objectId": "pipe-with-math",
+     "objectPath": "Objects/Hydraulics/pipe.json",
+     "t": 0.5,
+     "params": {
+      "diameter": 152.4,
+      "wallThk": 6,
+      "formula": "Hazen-Williams",
+      "roughC": 100,
+      "roughMM": 0.05,
+      "minorLoss": 0,
+      "spanMode": "Fill segment",
+      "ownLength": 30,
+      "lengthOverride": 1609.344,
+      "invert": 0,
+      "flow": 0,
+      "headA": 0,
+      "headB": 0
+     }
+    }
+   ]
+  }
+ ],
+ "spaces": [],
+ "layers": [
+  {
+   "id": "0",
+   "name": "0",
+   "color": "#94a3b8",
+   "visible": true,
+   "locked": false,
+   "order": 0
+  },
+  {
+   "id": "pipes",
+   "name": "Pipe network",
+   "color": "#0e7490",
+   "visible": true,
+   "locked": false,
+   "order": 1
+  }
+ ],
+ "imageUnderlay": null,
+ "customSegmentTypes": {
+  "pipe": {
+   "id": "pipe",
+   "displayName": "Pipe",
+   "fill": "#0e7490",
+   "params": []
+  }
+ },
+ "graphAttrs": {
+  "nodes": {
+   "pipe_10:start": {
+    "elevation": 216.408,
+    "demand": 0,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "10"
+   },
+   "pipe_10:end|pipe_111:start|pipe_11:start": {
+    "elevation": 216.408,
+    "demand": 9.4635,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "11"
+   },
+   "pipe_110:end|pipe_112:start|pipe_11:end|pipe_12:start": {
+    "elevation": 213.36,
+    "demand": 9.4635,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "12"
+   },
+   "pipe_113:start|pipe_12:end": {
+    "elevation": 211.836,
+    "demand": 6.309,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "13"
+   },
+   "pipe_111:end|pipe_121:start|pipe_21:start": {
+    "elevation": 213.36,
+    "demand": 9.4635,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "21"
+   },
+   "pipe_112:end|pipe_122:start|pipe_21:end|pipe_22:start": {
+    "elevation": 211.836,
+    "demand": 12.618,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "22"
+   },
+   "pipe_113:end|pipe_22:end": {
+    "elevation": 210.312,
+    "demand": 9.4635,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "23"
+   },
+   "pipe_121:end|pipe_31:start": {
+    "elevation": 213.36,
+    "demand": 6.309,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "31"
+   },
+   "pipe_122:end|pipe_31:end": {
+    "elevation": 216.408,
+    "demand": 6.309,
+    "fixedHead": false,
+    "head": 0,
+    "node-kind": "junction",
+    "node-label": "32"
+   },
+   "pipe_110:start": {
+    "elevation": 295.656,
+    "demand": 0,
+    "fixedHead": true,
+    "head": 295.656,
+    "node-kind": "reservoir",
+    "node-label": "2"
+   }
+  },
+  "segments": {
+   "pipe_10": {
+    "diameter": 457.2,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 3209.544,
+    "seg-label": "10"
+   },
+   "pipe_11": {
+    "diameter": 355.6,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "11"
+   },
+   "pipe_12": {
+    "diameter": 254,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "12"
+   },
+   "pipe_21": {
+    "diameter": 254,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "21"
+   },
+   "pipe_22": {
+    "diameter": 304.8,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "22"
+   },
+   "pipe_31": {
+    "diameter": 152.4,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "31"
+   },
+   "pipe_110": {
+    "diameter": 457.2,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 60.96,
+    "seg-label": "110"
+   },
+   "pipe_111": {
+    "diameter": 254,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "111"
+   },
+   "pipe_112": {
+    "diameter": 304.8,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "112"
+   },
+   "pipe_113": {
+    "diameter": 203.2,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "113"
+   },
+   "pipe_121": {
+    "diameter": 203.2,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "121"
+   },
+   "pipe_122": {
+    "diameter": 152.4,
+    "roughness": 100,
+    "minorLoss": 0,
+    "length": 1609.344,
+    "seg-label": "122"
+   }
+  }
+ }
+}

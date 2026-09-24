@@ -1,0 +1,147 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "prompt-builder",
+  "meta": {
+    "label": "Prompt Builder",
+    "category": "AI",
+    "color": "#7c3aed"
+  },
+  "description": "Fill a text TEMPLATE with values wired in from the flow — `{area}`, `{doorWidth}` — and publish the result on `val-text`. The bridge from measured numbers to a written prompt.",
+  "instructions": "The missing step between a flow's NUMBERS and a model's WORDS.\n\nEverything else in the value plane speaks numbers: the Math Engine broadcasts them, Output Metrics collects them, Get Object Param reads them off an attached object. But the Render and Analyse nodes want a SENTENCE, and nothing could turn one into the other — the Math Engine has no string concatenation, and the Text node only passes a string through unchanged. This node is that step.\n\nHOW IT WORKS. Type a template with `{name}` placeholders. Each value input has a NAME field; wire a value into `Value 1` and call it `area`, and every `{area}` in the template is replaced by what arrived on that wire. The filled text leaves on `val-text` — wire it into the Render node's `Prompt`, or into Analyse, or into an Output slot to read it.\n\nWHY TEN NAMED SLOTS rather than an endpoint per placeholder. The endpoints are STATIC, so the node's shape never changes as you type — a half-written `{` cannot detach a wire you already made, which is exactly what a dynamic-endpoint node does while you edit its template. Ten covers a room schedule with room to spare; wire a Math Engine's matrix into one slot if you need more figures than that in one go.\n\nA NUMBER IS FORMATTED, not dumped: `Decimals` rounds every numeric substitution, so `{area}` reads \"17.9\" rather than \"17.899999999999999\". Strings pass through untouched.\n\nAN UNWIRED OR UNNAMED SLOT SUBSTITUTES NOTHING — its placeholder is left in the text verbatim, so `{doorWidth}` staying visible in the output is the node telling you that wire is missing. That is deliberate: silently emptying it would send a model a sentence with a hole in it and no way to notice.\n\nA placeholder with no matching slot name is likewise left alone, so ordinary prose containing braces survives.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "v1",
+        "label": "Value 1"
+      },
+      {
+        "key": "v2",
+        "label": "Value 2"
+      },
+      {
+        "key": "v3",
+        "label": "Value 3"
+      },
+      {
+        "key": "v4",
+        "label": "Value 4"
+      },
+      {
+        "key": "v5",
+        "label": "Value 5"
+      },
+      {
+        "key": "v6",
+        "label": "Value 6"
+      },
+      {
+        "key": "v7",
+        "label": "Value 7"
+      },
+      {
+        "key": "v8",
+        "label": "Value 8"
+      },
+      {
+        "key": "v9",
+        "label": "Value 9"
+      },
+      {
+        "key": "v10",
+        "label": "Value 10"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "text",
+        "label": "Text"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "template",
+      "label": "Template",
+      "kind": "textarea",
+      "rows": 8,
+      "default": "",
+      "placeholder": "A {roomType} of {area} m², {dimX} × {dimY} m…"
+    },
+    {
+      "key": "n1",
+      "label": "Value 1 name",
+      "kind": "text",
+      "default": "",
+      "placeholder": "e.g. area"
+    },
+    {
+      "key": "n2",
+      "label": "Value 2 name",
+      "kind": "text",
+      "default": "",
+      "placeholder": "e.g. perimeter"
+    },
+    {
+      "key": "n3",
+      "label": "Value 3 name",
+      "kind": "text",
+      "default": "",
+      "placeholder": "e.g. dimX"
+    },
+    {
+      "key": "n4",
+      "label": "Value 4 name",
+      "kind": "text",
+      "default": "",
+      "placeholder": "e.g. dimY"
+    },
+    {
+      "key": "n5",
+      "label": "Value 5 name",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "n6",
+      "label": "Value 6 name",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "n7",
+      "label": "Value 7 name",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "n8",
+      "label": "Value 8 name",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "n9",
+      "label": "Value 9 name",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "n10",
+      "label": "Value 10 name",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "decimals",
+      "label": "Decimals",
+      "kind": "range",
+      "default": 2,
+      "min": 0,
+      "max": 6,
+      "step": 1
+    }
+  ]
+}

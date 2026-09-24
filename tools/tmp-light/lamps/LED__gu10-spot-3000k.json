@@ -1,0 +1,67 @@
+{
+  "schema": "lamp/1",
+  "id": "gu10-spot-3000k",
+  "name": "GU10 spot 3000 K 400 lm",
+  "category": "LED",
+  "description": "The track-head and adjustable-gimbal lamp. Narrower and dimmer than the COB, because a track head is an accent and not the ambient layer.",
+  "emission": {
+    "sourceType": "Spot",
+    "areaShape": "",
+    "lumens": 400,
+    "lumensPerMetre": 0,
+    "wattsElectrical": 4.8,
+    "efficacy": 83.3,
+    "illuminanceLux": 0,
+    "kelvin": 3000,
+    "cri": 92,
+    "duv": 0
+  },
+  "distribution": {
+    "profile": "Narrow",
+    "beamAngle": 24,
+    "fieldAngle": 40,
+    "beamBlend": 0.2,
+    "spread": 180,
+    "ies": {
+      "path": "",
+      "normalise": true
+    }
+  },
+  "shadow": {
+    "lampRadius": 0.018,
+    "castShadow": true,
+    "maxBounces": 1024,
+    "multipleImportance": true,
+    "diffuseFactor": 1,
+    "glossyFactor": 1,
+    "transmissionFactor": 1,
+    "volumeFactor": 1,
+    "visibleToCamera": false,
+    "isPortal": false
+  },
+  "blender": {
+    "type": "SPOT",
+    "shape": "",
+    "energyWatts": 0.585652,
+    "color": {
+      "mode": "blackbody",
+      "kelvin": 3000
+    },
+    "rgb": [
+      1,
+      0.478526,
+      0.154317
+    ],
+    "sizeX": 0,
+    "sizeY": 0,
+    "radius": 0.018,
+    "spotSizeDeg": 40,
+    "spotBlend": 0.2,
+    "spread": 180,
+    "angleDeg": 0
+  },
+  "emissive": {
+    "material": "Materials/Emissive/led-warm.json",
+    "luminanceOverride": 0
+  }
+}

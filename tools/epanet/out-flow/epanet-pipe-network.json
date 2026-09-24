@@ -1,0 +1,844 @@
+{
+  "version": 1,
+  "id": "epanet-pipe-network",
+  "title": "EPANET pipe network — the canvas solved in one Math Engine",
+  "category": "Hydrology",
+  "description": "Read the drawing, solve it as a pressurised pipe network, and write the answer back onto every node and every segment. Press RUN.\n\nTHE NETWORK IS THE DRAWING. Nothing about it is typed into this flow. The **Geometry** node's Canvas JSON goes into the **Math Engine**'s `decode` block, which publishes the topology (`nodes`, `segNodes`), the classification (`nodeTypes`, `types`) and — the part that makes this possible — the PARAMETERS off each element's attached object: a junction's elevation and demand, a pipe's diameter, roughness, minor loss and hydraulic length. Change a diameter on a pipe and the next run solves the new network, because the pipe is where that number lives.\n\nONE MATH ENGINE, NOT A SOLVER NODE. The whole Todini-Pilati Global Gradient Algorithm — the method EPANET itself uses — is the body of this node, and it is readable: the incidence matrix, the linearised headloss, the Newton step, the flow update. The algebra is assembled with MASKS rather than index maps. The classical GGA eliminates the fixed-head nodes and solves an nn×nn junction system, which needs a junction-numbering map the expression language has no cheap way to write; here the system is built over all N nodes and the pinned rows are replaced by identity rows, which is the same system without the renumbering. A node no live pipe touches is pinned the same way, so one stray segment cannot turn every head into NaN.\n\nRUN IS A REAL BUTTON, and it is the reason the solve is affordable. A flow re-evaluates on every keystroke; a 60-iteration dense solve on every slider drag is not something to do quietly in the background. The button publishes a counter, the body gates its iteration count on that counter (`run > 0 ? maxIter : 0`), and until it is pressed the node reads the canvas and does no work. Pressing it solves AND commits — every Set Object Param node in the graph is applied as one undoable edit each, after the re-evaluation has landed. Every press is a new counter value, so pressing again genuinely re-runs.\n\nTHE RESULTS GO ON THE ELEMENTS, NOT IN A REPORT. Six writers put the solve where it belongs: total head onto each Junction, supply onto each Reservoir, net inflow onto each Tank, and discharge plus both end heads onto each Pipe. Those objects then do their own arithmetic — a Junction turns head into pressure in m, kPa, bar and psi and checks it against its service minimum; a Pipe turns discharge into velocity, Reynolds number and a Hazen-Williams headloss it derives ITSELF, and publishes `Headloss residual`, which is |H_A − H_B| minus its own answer and should be ~0. Select a pipe and its Metrics tab is its own solved state.\n\nEach assignment matrix is restricted to the elements that own the parameter — a junction has no `supply` and a reservoir no `head` — so no writer ever touches an object that has no such field.\n\nTHE FLOW'S OWN METRICS ARE THE WHOLE-NETWORK ANSWER: total demand and supply and the mass-balance error between them, worst velocity, worst pressure, total pipe length, water in the mains, the energy and continuity residuals that say whether the solve actually converged, and the design check — peak demand in L/s, m³/h and MLD, population served, and pass/fail against the service standards on the settings node.\n\nVERIFIED. On EPANET's own Net1 (gravity variant) this flow reproduces the official EPANET 2.2 toolkit's heads to better than 0.1 mm and its flows to better than 0.002 L/s, reading the network entirely from the canvas. See tools/epanet/check-gga-canvas.mjs.\n\nWHAT THIS CANNOT DO. No pumps, valves, extended-period simulation or water quality: one steady-state, demand-driven solve, Hazen-Williams. A closed pipe should be removed from the graph rather than flagged. A segment with no Pipe object attached is carried in the graph but excluded from the solve, and a node no pipe reaches reports its own elevation.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -1240,
+        "y": -40
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": false,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "canvas",
+      "position": {
+        "x": -1240,
+        "y": 300
+      },
+      "data": {
+        "tool": "canvas-source",
+        "params": {}
+      }
+    },
+    {
+      "id": "settings",
+      "position": {
+        "x": -1240,
+        "y": -520
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "run",
+              "name": "Run — solve & apply",
+              "type": "button",
+              "value": 0,
+              "min": 0,
+              "max": 0,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "maxIter",
+              "name": "Max iterations",
+              "type": "range",
+              "value": 60,
+              "min": 5,
+              "max": 200,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "demandFactor",
+              "name": "Demand multiplier",
+              "type": "range",
+              "value": 1,
+              "min": 0,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "peakFactor",
+              "name": "Peak demand factor",
+              "type": "range",
+              "value": 1,
+              "min": 0.1,
+              "max": 5,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "minPressureReq",
+              "name": "Minimum service pressure (m)",
+              "type": "range",
+              "value": 15,
+              "min": 0,
+              "max": 200,
+              "step": 0.5,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "maxVelocityAllowed",
+              "name": "Maximum allowable velocity (m/s)",
+              "type": "range",
+              "value": 3,
+              "min": 0.1,
+              "max": 10,
+              "step": 0.1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "minVelocityReq",
+              "name": "Minimum self-cleansing velocity (m/s)",
+              "type": "range",
+              "value": 0.3,
+              "min": 0,
+              "max": 3,
+              "step": 0.05,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "supplyHours",
+              "name": "Supply hours per day",
+              "type": "range",
+              "value": 24,
+              "min": 1,
+              "max": 24,
+              "step": 0.5,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "perCapita",
+              "name": "Per-capita demand (L/person/day)",
+              "type": "range",
+              "value": 135,
+              "min": 20,
+              "max": 500,
+              "step": 5,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "solve",
+      "position": {
+        "x": -720,
+        "y": -200
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Pipe network — Todini-Pilati GGA",
+          "expr": "# Shape and index helpers\n_N = rows(nodes)\n_M = rows(a)\n_iN = arange(_N)\n_iM = arange(_M)\n_rowN = T(_iN)\n_ones1N = ones(1, _N)\n_I = eq(kron(_iN, _ones1N), kron(ones(_N, 1), _rowN))\n\n# Node classification — typeNames = [pipe, junction, reservoir, tank], so 2 / 3 / 4 here.\n_code = col(nodeTypes, 0)\n_isJ = eq(_code, 2)\n_isR = eq(_code, 3)\n_isT = eq(_code, 4)\n_fix = max(_isR, _isT)\n\n# Node data — nodeVals columns: 0 elevation, 1 demand, 2 head, 3 totalHead, 4 baseElevation,\n# 5 bottomElevation, 6 initLevel. Each kind reads the columns its own object actually carries.\n_elev = _isJ * col(nodeVals, 0) + _isR * col(nodeVals, 4) + _isT * col(nodeVals, 5)\n_demLps = _isJ * col(nodeVals, 1) * demandFactor\n_dem = _demLps / 1000\n# A tank's head MOVES with its level; a reservoir's is the level you typed.\n_hFix = _isR * col(nodeVals, 3) + _isT * (col(nodeVals, 5) + col(nodeVals, 6))\n\n# Segment data — segVals columns: 0 diameter (mm), 1 Hazen-Williams C, 2 minor loss K,\n# 3 hydraulic length override. Only segments carrying a Pipe object are part of the network.\n_isPipe = eq(col(types, 0), 1)\n_d = max(0.005, col(segVals, 0) / 1000)\n_C = max(1, col(segVals, 1))\n_K = max(0, col(segVals, 2))\n# The override wins when set; 0 means \"use the drawn length\". A network layout is a schematic, so the\n# true length is DATA on the pipe rather than a distance on the drawing.\n_useOv = gt(col(segVals, 3), 0)\n_L = max(0.01, _useOv * col(segVals, 3) + (1 - _useOv) * col(length, 0))\n_area = PI * _d * _d / 4\n_r = 10.667 * _L / (pow(_C, 1.852) * pow(_d, 4.871))\n_mK = 8 * _K / (PI * PI * 9.81 * pow(_d, 4))\n_nE = 1.852\n\n# Incidence, from the node indices the decoder resolved. -1 at the from-node, +1 at the to-node, so\n# A @ H is the head DROP along each pipe. A row of an endpoint that resolved to nothing is all zeros.\n_fromOH = eq(kron(col(segNodes, 0), _ones1N), kron(ones(_M, 1), _rowN))\n_toOH = eq(kron(col(segNodes, 1), _ones1N), kron(ones(_M, 1), _rowN))\n_pipeN = kron(_isPipe, _ones1N)\n_A = (_toOH - _fromOH) * _pipeN\n_AT = T(_A)\n\n# Which rows are PINNED — the fixed heads, plus any node no live pipe reaches.\n_deg = T(abs(_A)) @ ones(_M, 1)\n_iso = eq(_deg, 0)\n_pin = max(_fix, _iso)\n_free = 1 - _pin\n_pr = kron(_pin, _ones1N)\n_pc = kron(ones(_N, 1), T(_pin))\n_keep = (1 - _pr) * (1 - _pc)\n\n# Initial state: fixed nodes at their head, everything else at its own ground level, every pipe at\n# about 0.3 m/s. The GGA converges from almost anywhere; this just keeps the first linearisation sane.\n_H = _hFix * _fix + _elev * _free\n_Q = _area * 0.3 * _isPipe\n# THE RUN GATE. The button publishes a counter; until it is pressed this is 0 iterations, so the node\n# costs nothing while sliders move and the expensive solve happens when it is asked for.\n_iters = run > 0 ? max(1, min(200, round(maxIter))) : 0\n\nloop k in _iters:\n  _aq = max(abs(_Q), 1e-9)\n  # h(Q) = r Q|Q|^(n-1) + m Q|Q|, linearised about the current Q.\n  _hq = _r * _Q * pow(_aq, _nE - 1) + _mK * _Q * _aq\n  _g = max(_nE * _r * pow(_aq, _nE - 1) + 2 * _mK * _aq, 1e-12)\n  _c = _isPipe / _g\n  _qs = _Q - _hq * _c\n  _Am = _AT @ (_A * kron(_c, _ones1N))\n  # Pinned rows become identity rows; the pinned COLUMNS are zeroed out of the free rows and their\n  # known heads moved across to the right-hand side. Same system, no renumbering.\n  _Mm = _Am * _keep + _I * _pr\n  _known = _H * _pin\n  _rhs = (_AT @ _qs - _dem - _Am @ _known) * _free + _known\n  _H = inv(_Mm) @ _rhs\n  _Q = _qs - _c * (_A @ _H)\nend\n\n# ── Results ────────────────────────────────────────────────────────────────────\n_aqf = max(abs(_Q), 1e-9)\n_vel = abs(_Q) / _area * _isPipe\n_press = _H - _elev\n_net = _AT @ _Q\n_energy = (_r * _Q * pow(_aqf, _nE - 1) + _mK * _Q * _aqf + _A @ _H) * _isPipe\n_cont = (_net - _dem) * _free\n_hl = (_r * _Q * pow(_aqf, _nE - 1) + _mK * _Q * _aqf) * _isPipe\n\nQsolved = _Q\nHsolved = _H\nPressure = _press\nVelocity = _vel\nHeadloss = _hl\n\n# ── Assignment matrices — [indexInBundle, value] rows for the Set Object Param nodes ────────────\n# One row per element that should be written, and only for the kind that owns that parameter: a\n# junction has no \"supply\" and a reservoir no \"head\", so a single matrix over all nodes would write\n# a parameter onto objects that do not have one.\nNodeHead = compress(hcat(_iN, _H), _isJ)\nResSupply = compress(hcat(_iN, _net * 1000), _isR)\nTankInflow = compress(hcat(_iN, _net * 1000), _isT)\nSegFlow = compress(hcat(_iM, _Q * 1000), _isPipe)\nSegHeadA = compress(hcat(_iM, _fromOH @ _H), _isPipe)\nSegHeadB = compress(hcat(_iM, _toOH @ _H), _isPipe)\n\n# ── Global metrics ─────────────────────────────────────────────────────────────\nnodesRead = _N\nsegmentsRead = _M\npipeCount = sum(_isPipe)\njunctionCount = sum(_isJ)\nfixedHeadCount = sum(_fix)\nisolatedNodes = sum(_iso)\ndanglingEnds = unresolvedEnds\nsolved = _iters > 0 ? 1 : 0\niterationsRun = _iters\n\ntotalDemand = sum(_demLps * _isJ)\ntotalSupply = 0 - sum(_net * _fix) * 1000\nmaxVelocity = max(_vel)\nminPressure = junctionCount > 0 ? min(_press * _isJ + (1 - _isJ) * 1e9) : 0\nmaxHeadloss = max(abs(_hl))\ntotalPipeLength = sum(_L * _isPipe)\nwaterVolume = sum(_area * _L * _isPipe)\n\nmaxEnergyResidual = max(abs(_energy))\nmaxContinuityResidual = max(abs(_cont))\nbalanceError = abs(totalDemand - totalSupply)\n\n# ── Design check against the global settings ───────────────────────────────────\npeakDemand = totalDemand * peakFactor\npeakDemandM3h = totalDemand * peakFactor * 3.6\npeakDemandMld = totalDemand * peakFactor * 0.0864\ndailyVolume = totalDemand * peakFactor * max(0.5, supplyHours) * 3.6\npopulationServed = perCapita > 0 ? dailyVolume * 1000 / perCapita : 0\npressureMargin = minPressure - minPressureReq\npressureOk = minPressure >= minPressureReq ? 1 : 0\nvelocityMargin = maxVelocityAllowed - maxVelocity\nvelocityOk = maxVelocity <= maxVelocityAllowed ? 1 : 0\nscouringOk = maxVelocity >= minVelocityReq ? 1 : 0\ndesignOk = (minPressure >= minPressureReq && maxVelocity <= maxVelocityAllowed) ? 1 : 0",
+          "decode": "{\n \"from\": \"canvasJson\",\n \"typeNames\": [\n  \"pipe\",\n  \"junction\",\n  \"reservoir\",\n  \"tank\"\n ],\n \"nodeParams\": [\n  \"elevation\",\n  \"demand\",\n  \"head\",\n  \"totalHead\",\n  \"baseElevation\",\n  \"bottomElevation\",\n  \"initLevel\"\n ],\n \"segParams\": [\n  \"diameter\",\n  \"roughC\",\n  \"minorLoss\",\n  \"lengthOverride\"\n ]\n}",
+          "encode": ""
+        }
+      }
+    },
+    {
+      "id": "summary",
+      "position": {
+        "x": -120,
+        "y": -520
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Nodes read",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s2",
+              "label": "Segments read",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s3",
+              "label": "Pipes",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s4",
+              "label": "Junctions",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s5",
+              "label": "Fixed-head nodes",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s6",
+              "label": "Isolated nodes",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s7",
+              "label": "Unresolved pipe ends",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s8",
+              "label": "Solved",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s9",
+              "label": "Iterations",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s10",
+              "label": "Total demand (L/s)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s11",
+              "label": "Total supply (L/s)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s12",
+              "label": "Mass balance error (L/s)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s13",
+              "label": "Max velocity (m/s)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s14",
+              "label": "Min pressure (m)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s15",
+              "label": "Max headloss (m)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s16",
+              "label": "Total pipe length (m)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s17",
+              "label": "Water in mains (m³)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s18",
+              "label": "Energy residual",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s19",
+              "label": "Continuity residual (m³/s)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s20",
+              "label": "Peak demand (L/s)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s21",
+              "label": "Peak demand (m³/h)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s22",
+              "label": "Peak demand (MLD)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s23",
+              "label": "Volume per supply cycle (m³)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s24",
+              "label": "Population served",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s25",
+              "label": "Pressure margin (m)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s26",
+              "label": "Pressure OK",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s27",
+              "label": "Velocity margin (m/s)",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s28",
+              "label": "Velocity OK",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s29",
+              "label": "Self-cleansing OK",
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "s30",
+              "label": "Design OK",
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "w_head",
+      "position": {
+        "x": -120,
+        "y": 120
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "head",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Junction — total head"
+        }
+      }
+    },
+    {
+      "id": "w_supply",
+      "position": {
+        "x": -120,
+        "y": 270
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "supply",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Reservoir — supply"
+        }
+      }
+    },
+    {
+      "id": "w_inflow",
+      "position": {
+        "x": -120,
+        "y": 420
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "node",
+          "paramKey": "netInflow",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Tank — net inflow"
+        }
+      }
+    },
+    {
+      "id": "w_flow",
+      "position": {
+        "x": -120,
+        "y": 570
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "flow",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Pipe — discharge"
+        }
+      }
+    },
+    {
+      "id": "w_ha",
+      "position": {
+        "x": -120,
+        "y": 720
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "headA",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Pipe — head at start"
+        }
+      }
+    },
+    {
+      "id": "w_hb",
+      "position": {
+        "x": -120,
+        "y": 870
+      },
+      "data": {
+        "tool": "set-object-param",
+        "params": {
+          "host": "segment",
+          "paramKey": "headB",
+          "valueMap": "",
+          "template": "",
+          "nodeLabel": "Pipe — head at end"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_solve",
+      "source": "geo",
+      "target": "solve",
+      "sourceHandle": "val-canvasJson",
+      "targetHandle": "valin-canvasJson"
+    },
+    {
+      "id": "e_set_run",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-run",
+      "targetHandle": "valin-run"
+    },
+    {
+      "id": "e_set_maxIter",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-maxIter",
+      "targetHandle": "valin-maxIter"
+    },
+    {
+      "id": "e_set_demandFactor",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-demandFactor",
+      "targetHandle": "valin-demandFactor"
+    },
+    {
+      "id": "e_set_peakFactor",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-peakFactor",
+      "targetHandle": "valin-peakFactor"
+    },
+    {
+      "id": "e_set_minPressureReq",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-minPressureReq",
+      "targetHandle": "valin-minPressureReq"
+    },
+    {
+      "id": "e_set_maxVelocityAllowed",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-maxVelocityAllowed",
+      "targetHandle": "valin-maxVelocityAllowed"
+    },
+    {
+      "id": "e_set_minVelocityReq",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-minVelocityReq",
+      "targetHandle": "valin-minVelocityReq"
+    },
+    {
+      "id": "e_set_supplyHours",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-supplyHours",
+      "targetHandle": "valin-supplyHours"
+    },
+    {
+      "id": "e_set_perCapita",
+      "source": "settings",
+      "target": "solve",
+      "sourceHandle": "val-perCapita",
+      "targetHandle": "valin-perCapita"
+    },
+    {
+      "id": "e_out_nodesRead",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-nodesRead",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_out_segmentsRead",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-segmentsRead",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_out_pipeCount",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-pipeCount",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_out_junctionCount",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-junctionCount",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_out_fixedHeadCount",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-fixedHeadCount",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_out_isolatedNodes",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-isolatedNodes",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_out_danglingEnds",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-danglingEnds",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_out_solved",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-solved",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_out_iterationsRun",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-iterationsRun",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_out_totalDemand",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-totalDemand",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_out_totalSupply",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-totalSupply",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_out_balanceError",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-balanceError",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_out_maxVelocity",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxVelocity",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_out_minPressure",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-minPressure",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_out_maxHeadloss",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxHeadloss",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_out_totalPipeLength",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-totalPipeLength",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_out_waterVolume",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-waterVolume",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_out_maxEnergyResidual",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxEnergyResidual",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_out_maxContinuityResidual",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-maxContinuityResidual",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_out_peakDemand",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-peakDemand",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_peakDemandM3h",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-peakDemandM3h",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_out_peakDemandMld",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-peakDemandMld",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_out_dailyVolume",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-dailyVolume",
+      "targetHandle": "valin-s23"
+    },
+    {
+      "id": "e_out_populationServed",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-populationServed",
+      "targetHandle": "valin-s24"
+    },
+    {
+      "id": "e_out_pressureMargin",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-pressureMargin",
+      "targetHandle": "valin-s25"
+    },
+    {
+      "id": "e_out_pressureOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-pressureOk",
+      "targetHandle": "valin-s26"
+    },
+    {
+      "id": "e_out_velocityMargin",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-velocityMargin",
+      "targetHandle": "valin-s27"
+    },
+    {
+      "id": "e_out_velocityOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-velocityOk",
+      "targetHandle": "valin-s28"
+    },
+    {
+      "id": "e_out_scouringOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-scouringOk",
+      "targetHandle": "valin-s29"
+    },
+    {
+      "id": "e_out_designOk",
+      "source": "solve",
+      "target": "summary",
+      "sourceHandle": "val-designOk",
+      "targetHandle": "valin-s30"
+    },
+    {
+      "id": "e_bundle_w_head",
+      "source": "canvas",
+      "target": "w_head",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_head",
+      "source": "solve",
+      "target": "w_head",
+      "sourceHandle": "val-NodeHead",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_supply",
+      "source": "canvas",
+      "target": "w_supply",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_supply",
+      "source": "solve",
+      "target": "w_supply",
+      "sourceHandle": "val-ResSupply",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_inflow",
+      "source": "canvas",
+      "target": "w_inflow",
+      "sourceHandle": "out-1",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_inflow",
+      "source": "solve",
+      "target": "w_inflow",
+      "sourceHandle": "val-TankInflow",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_flow",
+      "source": "canvas",
+      "target": "w_flow",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_flow",
+      "source": "solve",
+      "target": "w_flow",
+      "sourceHandle": "val-SegFlow",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_ha",
+      "source": "canvas",
+      "target": "w_ha",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_ha",
+      "source": "solve",
+      "target": "w_ha",
+      "sourceHandle": "val-SegHeadA",
+      "targetHandle": "valin-values"
+    },
+    {
+      "id": "e_bundle_w_hb",
+      "source": "canvas",
+      "target": "w_hb",
+      "sourceHandle": "out-2",
+      "targetHandle": null
+    },
+    {
+      "id": "e_vals_w_hb",
+      "source": "solve",
+      "target": "w_hb",
+      "sourceHandle": "val-SegHeadB",
+      "targetHandle": "valin-values"
+    }
+  ]
+}

@@ -1,0 +1,918 @@
+{
+  "version": 1,
+  "id": "downlight-with-math",
+  "title": "Downlight — one Math Engine, trim ring, housing and beam footprint",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "node",
+    "name": "Downlight",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 3a4 4 0 100 8 4 4 0 000-8z",
+        "M6 21l6-10 6 10",
+        "M4 7h2",
+        "M18 7h2"
+      ]
+    }
+  },
+  "description": "A parametric DOWNLIGHT on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE at the position you want the spot. This is the object the plan's six recessed spots need; `light-bulb-with-math` mounts a lamp, it does not cut a ceiling.\n\nTRIM STYLE MOVES TWO PLANES AND NOTHING ELSE. Flush puts the lens at the soffit, Recessed drops it half an aperture up inside, Surface hangs the whole housing below, Gimbal aims it. Each is one flag, and the lens plane, the housing plane and the beam offset are written in terms of them, so there is no fourth body to keep in step.\n\nTHE BEAM IS REPORTED AS A FOOTPRINT, NOT MODELLED AS A CONE. `_br = ceilingHeight × tan(beamAngle / 2)` is the radius the cone actually makes at the floor, drawn as a plan circle and reported as a diameter. A tilted gimbal shifts that circle by `ceilingHeight × tan(tilt)` along the host's own axis — so the circle is where the light really lands, which is the thing worth drawing.\n\nILLUMINANCE FALLS OUT OF THE SAME TWO NUMBERS: lumens over the beam's floor area. It is approximate on purpose — it is a sanity figure for spacing, not a photometric calculation.\n\nHOUSING AND LENS ARE TUBE ROWS and the trim is a RING row, so the circle is resolved by the renderer at its own segment count rather than faceted here.\n\nDIMENSIONS AT THE DEFAULTS: a 75 mm aperture in a 90 mm cutout at 3.124 m, a 36° beam landing 2.03 m across, 650 lm, about 201 lx, suggested spacing 4.69 m.\n\nWHAT THIS CANNOT DO. It does not cut the ceiling — `cutoutDia` is a reported number for whoever does. No light is cast; there is no IES distribution, and the illuminance figure assumes an even beam.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "aperture",
+              "name": "Aperture diameter",
+              "type": "range",
+              "value": 0.075,
+              "min": 0.02,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "trim",
+              "name": "Trim",
+              "type": "select",
+              "value": "Flush",
+              "options": [
+                "Flush",
+                "Recessed",
+                "Gimbal",
+                "Surface"
+              ]
+            },
+            {
+              "id": "trimWidth",
+              "name": "Trim width",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.002,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "housingDia",
+              "name": "Housing diameter",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.03,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "housingHeight",
+              "name": "Housing height",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.02,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "mountHeight",
+              "name": "Ceiling soffit",
+              "type": "range",
+              "value": 3.124,
+              "min": 1.8,
+              "max": 6,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "aimTilt",
+              "name": "Gimbal tilt",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 40,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "beamAngle",
+              "name": "Beam angle",
+              "type": "range",
+              "value": 36,
+              "min": 8,
+              "max": 120,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 3000,
+              "min": 2200,
+              "max": 6500,
+              "step": 100,
+              "options": []
+            },
+            {
+              "id": "lumens",
+              "name": "Output",
+              "type": "range",
+              "value": 650,
+              "min": 50,
+              "max": 4000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "showBeam",
+              "name": "Beam footprint in plan",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "beamBlend",
+              "name": "Beam edge softness",
+              "type": "range",
+              "value": 0.25,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "white powder-coated trim, frosted lens, 3000K COB",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "discreet recessed spotlight, clean ceiling, minimal trim, contemporary",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Photometry/…)",
+              "type": "text",
+              "value": "Photometry/LED/cob-spot-3000k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "downlights",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "iesProfile",
+              "name": "IES profile (Library/Photometry/ies/…)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightLink",
+              "name": "Light linking (include / exclude)",
+              "type": "text",
+              "value": "",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Downlight maths",
+          "expr": "_natL = housingDia\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_ap = aperture * _s\n_tw = trimWidth * _s\n_hd = max(housingDia * _s, _ap + 0.004)\n_hh = housingHeight * _s\n_cz = mountHeight\n_bodyL = _hd\n_bodyW = _hd\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# Trim style only moves two planes: where the lens sits relative to the soffit, and whether the\n# housing hangs below it. Everything else is the same body.\n_isRec = trim == 'Recessed'\n_isSurf = trim == 'Surface'\n_isGim = trim == 'Gimbal'\n_drop = _isRec ? (_ap * 0.5) : 0\n_lensZ = _cz - _drop\n_hz0 = _isSurf ? (_cz - _hh) : _cz\n_hz1 = _hz0 + _hh\n# Housing and lens are cylinders — a tube row is x,y,z,x,y,z,r.\nHousing3D = hcat(_wcx, _wcy, _hz0, _wcx, _wcy, _hz1, _hd / 2)\nLens3D = hcat(_wcx, _wcy, _lensZ - 0.004, _wcx, _wcy, _lensZ, _ap / 2)\n# Trim is a torus at the soffit — a ring row is x,y,z,x,y,z,r,tubeR.\n_tr = _ap / 2 + _tw / 2\nTrim3D = hcat(_wcx, _wcy, _cz, _wcx, _wcy, _cz + 0.001, _tr, _tw / 2)\n# Beam footprint at the floor. A gimbal throws its cone off-centre by the aimTilt.\n_half = beamAngle * PI / 360\n_br = max(0.02, _cz * tan(_half))\n_off = _isGim ? (_cz * tan(aimTilt * PI / 180)) : 0\n_beamX = _wcx + _off * _ux\n_beamY = _wcy + _off * _uy\n_BEAMr = hcat(_beamX, _beamY, _br)\nBeamPlan = showBeam > 0 ? _BEAMr : zeros(0, 3)\nTrimPlan = hcat(_wcx, _wcy, _tr + _tw / 2)\nAperturePlan = hcat(_wcx, _wcy, _ap / 2)\n# Metrics\napertureDia = _ap\ncutoutDia = _hd\nbeamDiameter = 2 * _br\nbeamOffset = _off\ncolourTemp = kelvin\noutputLumens = lumens\nilluminance = lumens / max(0.01, PI * _br * _br)\nspacingRule = 1.5 * _cz\nmountElevation = _cz\nprojection = _isSurf ? _hh : 0\nlampFeather = max(0, min(1, beamBlend))\n# ── Lamp block ─────────────────────────────────────────────────────────────────────────────\n# The photometry a renderer needs and a drawing cannot show. Arithmetic on the inputs only:\n# nothing here lights anything, and `lamp` names the Photometry file that carries the rest.\n_lbDim = max(0, min(100, dimLevel)) / 100\n_lbLm = lumens\nlampDimmed = _lbLm * _lbDim\n# 683 lm/W is the same constant material/1 uses for emission.luminance. Writing it in both\n# places is the point: a lit diffuser and the lamp behind it have to be reconcilable, and they\n# can only be reconciled through one number.\nlampWatts = lampDimmed / 683\nlampSoftSize = lampRadius\nlampEmits = emitsLight > 0 ? 1 : 0\nlampCri = cri"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Housing — tube"
+            },
+            {
+              "id": "s2",
+              "label": "Lens — tube"
+            },
+            {
+              "id": "s3",
+              "label": "Trim ring"
+            },
+            {
+              "id": "s4",
+              "label": "Trim — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Aperture — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Beam footprint — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Aperture (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Ceiling cutout (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Beam at floor (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Beam offset (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Colour temperature (K)"
+            },
+            {
+              "id": "s12",
+              "label": "Output (lm)"
+            },
+            {
+              "id": "s13",
+              "label": "Illuminance (lx)"
+            },
+            {
+              "id": "s14",
+              "label": "Suggested spacing (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Mount elevation (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Projection below soffit (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Fit scale"
+            },
+            {
+              "id": "s18",
+              "label": "Beam blend"
+            },
+            {
+              "id": "s19",
+              "label": "Dimmed output (lm)"
+            },
+            {
+              "id": "s20",
+              "label": "Blender watts (W)"
+            },
+            {
+              "id": "s21",
+              "label": "Lamp radius (m)"
+            },
+            {
+              "id": "s22",
+              "label": "Emits light"
+            },
+            {
+              "id": "s23",
+              "label": "CRI"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_beam",
+              "kind": "circle",
+              "name": "Beam footprint",
+              "color": "#fef3c7",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_trim",
+              "kind": "circle",
+              "name": "Trim",
+              "color": "#78716c",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_ap",
+              "kind": "circle",
+              "name": "Aperture",
+              "color": "#fbbf24",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_hous",
+              "kind": "tube",
+              "name": "Housing",
+              "color": "#57534e",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_trim",
+              "kind": "ring",
+              "name": "Trim ring",
+              "color": "#d6d3d1",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lens",
+              "kind": "tube",
+              "name": "Lens",
+              "color": "#fde68a",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_aperture",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-aperture",
+      "targetHandle": "valin-aperture"
+    },
+    {
+      "id": "e_props_math_trim",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trim",
+      "targetHandle": "valin-trim"
+    },
+    {
+      "id": "e_props_math_trimWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trimWidth",
+      "targetHandle": "valin-trimWidth"
+    },
+    {
+      "id": "e_props_math_housingDia",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-housingDia",
+      "targetHandle": "valin-housingDia"
+    },
+    {
+      "id": "e_props_math_housingHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-housingHeight",
+      "targetHandle": "valin-housingHeight"
+    },
+    {
+      "id": "e_props_math_mountHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mountHeight",
+      "targetHandle": "valin-mountHeight"
+    },
+    {
+      "id": "e_props_math_aimTilt",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-aimTilt",
+      "targetHandle": "valin-aimTilt"
+    },
+    {
+      "id": "e_props_math_beamAngle",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-beamAngle",
+      "targetHandle": "valin-beamAngle"
+    },
+    {
+      "id": "e_props_math_kelvin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-kelvin",
+      "targetHandle": "valin-kelvin"
+    },
+    {
+      "id": "e_props_math_lumens",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lumens",
+      "targetHandle": "valin-lumens"
+    },
+    {
+      "id": "e_props_math_showBeam",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showBeam",
+      "targetHandle": "valin-showBeam"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Housing3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Lens3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Trim3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-TrimPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-AperturePlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BeamPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-apertureDia",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-cutoutDia",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-beamDiameter",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-beamOffset",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-colourTemp",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-outputLumens",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-illuminance",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-spacingRule",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mountElevation",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-projection",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_out_r2d_p2_beam",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_beam"
+    },
+    {
+      "id": "e_out_r2d_p2_trim",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_trim"
+    },
+    {
+      "id": "e_out_r2d_p2_ap",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_ap"
+    },
+    {
+      "id": "e_out_r3d_p3_hous",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_hous"
+    },
+    {
+      "id": "e_out_r3d_p3_trim",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_trim"
+    },
+    {
+      "id": "e_out_r3d_p3_lens",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_lens"
+    },
+    {
+      "id": "e_props_math_cri",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cri",
+      "targetHandle": "valin-cri"
+    },
+    {
+      "id": "e_props_math_dimLevel",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-dimLevel",
+      "targetHandle": "valin-dimLevel"
+    },
+    {
+      "id": "e_props_math_beamBlend",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-beamBlend",
+      "targetHandle": "valin-beamBlend"
+    },
+    {
+      "id": "e_props_math_lampRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lampRadius",
+      "targetHandle": "valin-lampRadius"
+    },
+    {
+      "id": "e_props_math_emitsLight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-emitsLight",
+      "targetHandle": "valin-emitsLight"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampFeather",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampDimmed",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampWatts",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_out_s21",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampSoftSize",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_math_out_s22",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampEmits",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_math_out_s23",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampCri",
+      "targetHandle": "valin-s23"
+    }
+  ]
+}

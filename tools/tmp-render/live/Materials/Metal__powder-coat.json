@@ -1,0 +1,36 @@
+{
+  "schema": "material/1",
+  "category": "Metal",
+  "id": "metal.powdercoat",
+  "title": "Metal — powder-coated housing",
+  "description": "The white-painted metal every light fitting is made of: downlight trims, fan canopies, track brackets. Metallic 0 on purpose — the coat is paint, and the metal under it is never seen.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 260,
+      "detail": 2,
+      "roughness": 0.5,
+      "distortion": 0,
+      "colorA": "#f0eee9",
+      "colorB": "#e3e0da"
+    }
+  },
+  "pbr": {
+    "baseColor": "#eceae5",
+    "roughness": 0.42,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#eceae5"
+  },
+  "dxf": {
+    "pattern": "STEEL",
+    "scale": 1,
+    "angle": 0
+  }
+}

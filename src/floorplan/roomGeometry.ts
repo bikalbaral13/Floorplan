@@ -3,7 +3,7 @@ import {
   polygonArea,
   polygonAreaWithHoles,
   polygonContainsPolygon,
-} from "./algorithms/geometry/polygon";
+} from "@builderpluss/engine";
 
 /** Derive the effective holes of a room.
  *

@@ -8,42 +8,50 @@
  */
 import type { Point, Wall, GridDef } from "../../types";
 import { gridCellValue } from "../../types";
-import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
-import { detectAutoRoomsFromWalls } from "../../algorithms/walls/detectAutoRooms";
-import { computeMiteredWallPolygons } from "../../wallGeometry";
-import { computeOptimiseRect, type OptimiseRectShape, type OptimiseRectReference, type OptimiseRectResult } from "../../algorithms/layout/optimiseRect";
-import { computeSplitPolygons } from "../../algorithms/geometry/splitPolygons";
-import { computePolygonSkeleton, reduceSkeletonByMidpoints, computeSkeletonBoundaryJoins, type SkeletonType } from "../../algorithms/skeleton/computeSkeleton";
-import { clipPolygonByHalfPlane, computeVoronoiCells } from "../../algorithms/partitioning/voronoi";
-import { computeRectilinearVoronoi, type RectVoronoiMetric } from "../../algorithms/partitioning/rectilinearVoronoi";
-import { computeSquarifiedTreemap } from "../../algorithms/partitioning/treemap";
-import { computeRectanglePacking, computeRandomRectanglePacking } from "../../algorithms/layout/rectanglePacking";
-import { relaxVoronoiSeeds } from "../../algorithms/partitioning/cvtRelaxation";
-import { polygonArea, polygonCentroid, longestEdgeIndex } from "../../algorithms/geometry/polygon";
-import { rasterUnion } from "./rasterUnion";
-import { polygonUnionVector, polygonUnionVectorLoops, polygonsInteriorsCross } from "./vectorUnion";
-import { sutherlandHodgmanClip } from "../../algorithms/geometry/sutherlandHodgman";
-import { type BspSeed } from "../../algorithms/partitioning/bsp";
-import { computeBspCellsAdvanced, parseBspConnections } from "../../algorithms/partitioning/bspAdvanced";
-import { computePolygonPrincipalAxes, computePolygonMinAreaOBB, type PrincipalAxesMethod } from "../../algorithms/geometry/principalAxes";
+// Linear-algebra kernels live in the LEAF module ./matrixCore so the Expression node (expr.ts, also a leaf)
+// runs the identical maths — `A @ B` typed into an Expression and a Matrix Operations node set to
+// "multiply" call the same multiplyMatrix, so the two surfaces can never drift.
+import {
+  round6, parseMatrix, parseMatrixOrScalar, isRectMatrix, transposeMatrix, invertMatrix,
+  elementwiseMatrix, multiplyMatrix, solveMatrix, shiftMatrix,
+  vectorOpMatrix, vectorProductMatrix, reduceMatrix,
+} from "@builderpluss/engine";
+import { computeInsetPolygon } from "@builderpluss/engine";
+import { detectAutoRoomsFromWalls } from "@builderpluss/engine";
+import { computeMiteredWallPolygons } from "@builderpluss/engine";
+import { computeOptimiseRect, type OptimiseRectShape, type OptimiseRectReference, type OptimiseRectResult } from "@builderpluss/engine";
+import { computeSplitPolygons } from "@builderpluss/engine";
+import { computePolygonSkeleton, reduceSkeletonByMidpoints, computeSkeletonBoundaryJoins, type SkeletonType } from "@builderpluss/engine";
+import { clipPolygonByHalfPlane, computeVoronoiCells } from "@builderpluss/engine";
+import { computeRectilinearVoronoi, type RectVoronoiMetric } from "@builderpluss/engine";
+import { computeSquarifiedTreemap } from "@builderpluss/engine";
+import { computeRectanglePacking, computeRandomRectanglePacking } from "@builderpluss/engine";
+import { relaxVoronoiSeeds } from "@builderpluss/engine";
+import { polygonArea, polygonCentroid, longestEdgeIndex } from "@builderpluss/engine";
+import { rasterUnion } from "@builderpluss/engine";
+import { polygonUnionVector, polygonUnionVectorLoops, polygonsInteriorsCross } from "@builderpluss/engine";
+import { sutherlandHodgmanClip } from "@builderpluss/engine";
+import { type BspSeed } from "@builderpluss/engine";
+import { computeBspCellsAdvanced, parseBspConnections } from "@builderpluss/engine";
+import { computePolygonPrincipalAxes, computePolygonMinAreaOBB, type PrincipalAxesMethod } from "@builderpluss/engine";
 import { evaluateSpaceCondition } from "../conditional";
-import { computeBoundingCircle, computeBoundingEllipse, computeBoundingNGon } from "../../algorithms/geometry/boundingShapes";
-import { computeConvexHull } from "../../algorithms/partitioning/convexHull";
+import { computeBoundingCircle, computeBoundingEllipse, computeBoundingNGon } from "@builderpluss/engine";
+import { computeConvexHull } from "@builderpluss/engine";
 import { parseSplitRatios, parseNumberList, placeObjectEntries, placeObjectRng, parseDimEdges } from "../flowTypes";
-import { computePerimeterPlacement } from "../../algorithms/placement/runPlacement";
-import { computeConvexDecomposition, type ConvexDecompositionType } from "../../algorithms/partitioning/convexDecomposition";
-import { computeSmoothedPolygon, type SmoothingType } from "../../algorithms/geometry/smoothPolygon";
-import { computeContours } from "../../algorithms/geometry/contours";
-import { computePolygonMesh, type MeshType } from "../../algorithms/geometry/meshPolygon";
-import { computeOptimiseLShape } from "../../algorithms/layout/optimiseLShape";
-import { computeOptimiseTShape } from "../../algorithms/layout/optimiseTShape";
-import { computeOptimiseZShape } from "../../algorithms/layout/optimiseZShape";
-import { computeOptimiseIShape } from "../../algorithms/layout/optimiseIShape";
-import { computeOptimiseCShape } from "../../algorithms/layout/optimiseCShape";
-import { computeOptimiseSteppedShape } from "../../algorithms/layout/optimiseSteppedShape";
-import { computeOptimiseCrossShape } from "../../algorithms/layout/optimiseCrossShape";
-import { computeInCircles } from "../../algorithms/layout/inCircles";
-import { computeVisibilityPolygon, sampleSegmentInside } from "../../algorithms/geometry/visibilityPolygon";
+import { computePerimeterPlacement } from "@builderpluss/engine";
+import { computeConvexDecomposition, type ConvexDecompositionType } from "@builderpluss/engine";
+import { computeSmoothedPolygon, type SmoothingType } from "@builderpluss/engine";
+import { computeContours } from "@builderpluss/engine";
+import { computePolygonMesh, type MeshType } from "@builderpluss/engine";
+import { computeOptimiseLShape } from "@builderpluss/engine";
+import { computeOptimiseTShape } from "@builderpluss/engine";
+import { computeOptimiseZShape } from "@builderpluss/engine";
+import { computeOptimiseIShape } from "@builderpluss/engine";
+import { computeOptimiseCShape } from "@builderpluss/engine";
+import { computeOptimiseSteppedShape } from "@builderpluss/engine";
+import { computeOptimiseCrossShape } from "@builderpluss/engine";
+import { computeInCircles } from "@builderpluss/engine";
+import { computeVisibilityPolygon, sampleSegmentInside } from "@builderpluss/engine";
 // The package ships an ESM bundle whose only export is `default`, but its .d.ts declares named
 // exports — resolve the callable object defensively across bundler/interop modes (see columnClip.ts).
 import * as PolygonClippingNS from "polygon-clipping";
@@ -1791,50 +1799,6 @@ export function renderGridField(field: GridField, params: Record<string, unknown
   return { cells, segments };
 }
 
-/** Parse a matrix VALUE (from Grid Geometry's val-matrix, or a val-grid `{values:[[…]]}`) into a numeric
- *  2D array. Ragged / invalid input → []. */
-const parseMatrix = (raw: unknown): number[][] => {
-  if (typeof raw !== "string" || !raw.trim()) return [];
-  try {
-    const v: unknown = JSON.parse(raw);
-    const rows2d = Array.isArray(v) ? v
-      : (v && typeof v === "object" && Array.isArray((v as { values?: unknown }).values)) ? (v as { values: unknown[] }).values
-      : null;
-    if (!rows2d || !Array.isArray(rows2d[0])) return [];
-    return (rows2d as unknown[][]).map((row) => (Array.isArray(row) ? row.map((x) => (Number.isFinite(Number(x)) ? Number(x) : 0)) : []));
-  } catch { return []; }
-};
-
-/** Transpose (Aᵀ): rows ↔ columns. */
-const transposeMatrix = (M: number[][]): number[][] => {
-  const rows = M.length, cols = M[0]?.length ?? 0;
-  const T: number[][] = [];
-  for (let j = 0; j < cols; j++) { const row: number[] = []; for (let i = 0; i < rows; i++) row.push(M[i][j] ?? 0); T.push(row); }
-  return T;
-};
-
-/** Inverse (A⁻¹) of a SQUARE matrix by Gauss–Jordan elimination with partial pivoting. Non-square or singular
- *  (pivot ≈ 0) → null. Values rounded to 1e-6. */
-const invertMatrix = (M: number[][]): number[][] | null => {
-  const n = M.length;
-  if (n === 0 || M.some((r) => r.length !== n)) return null;
-  const A = M.map((r, i) => [...r, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]); // [M | I]
-  for (let col = 0; col < n; col++) {
-    let piv = col;
-    for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
-    if (Math.abs(A[piv][col]) < 1e-12) return null; // singular
-    [A[col], A[piv]] = [A[piv], A[col]];
-    const d = A[col][col];
-    for (let k = 0; k < 2 * n; k++) A[col][k] /= d;
-    for (let r = 0; r < n; r++) {
-      if (r === col) continue;
-      const f = A[r][col];
-      for (let k = 0; k < 2 * n; k++) A[r][k] -= f * A[col][k];
-    }
-  }
-  return A.map((r) => r.slice(n).map((x) => Math.round(x * 1e6) / 1e6));
-};
-
 /** Transpose node → matrix VALUE in, its transpose out (+ result dimensions). */
 export function evalMatrixTranspose(raw: unknown): { matrix: string; rows: number; cols: number } {
   const T = transposeMatrix(parseMatrix(raw));
@@ -1846,6 +1810,249 @@ export function evalMatrixInverse(raw: unknown): { matrix: string; rows: number;
   const inv = invertMatrix(parseMatrix(raw));
   if (!inv) return { matrix: "[]", rows: 0, cols: 0 };
   return { matrix: JSON.stringify(inv), rows: inv.length, cols: inv[0]?.length ?? 0 };
+}
+
+/** Matrix Operations node → TWO matrix VALUES in, one out (+ dimensions). `op` selects add / subtract /
+ *  multiply (the matrix product A·B) / hadamard (element-wise ×). Dimension mismatch, ragged or empty
+ *  input → empty matrix, so downstream should check `rows` > 0. */
+export function evalMatrixOps(rawA: unknown, rawB: unknown, op: unknown): { matrix: string; rows: number; cols: number; value: number } {
+  const A = parseMatrixOrScalar(rawA), B = parseMatrixOrScalar(rawB);
+  const mode = typeof op === "string" && op ? op : "multiply";
+  const R = mode === "add" ? elementwiseMatrix(A, B, (a, b) => a + b)
+    : mode === "subtract" ? elementwiseMatrix(A, B, (a, b) => a - b)
+    : mode === "hadamard" ? elementwiseMatrix(A, B, (a, b) => a * b)
+    // Divide guards ÷0 → 0 rather than Infinity/NaN: the miter denominator (1 + n̂·n̂ₚ) hits 0 at a 180°
+    // spike where the true offset is infinite, and 0 leaves that vertex put instead of poisoning the list.
+    : mode === "divide" ? elementwiseMatrix(A, B, (a, b) => (Math.abs(b) < 1e-12 ? 0 : a / b))
+    : multiplyMatrix(A, B);
+  if (!R) return { matrix: "[]", rows: 0, cols: 0, value: 0 };
+  // `value` is cell [0][0] as a plain NUMBER — the bridge out of the matrix world, so a computed scalar can
+  // drive an ordinary numeric param (Loop's Step X, Rectangle's Length …) which cannot read a JSON matrix.
+  return { matrix: JSON.stringify(R), rows: R.length, cols: R[0]?.length ?? 0, value: R[0]?.[0] ?? 0 };
+}
+
+/** Linear Solve node → solve the system K·d = F for d by Gauss–Jordan elimination with partial pivoting.
+ *  K is n×n, F is an n×m right-hand side (a single load column, or several load cases side by side); the
+ *  result d is n×m. This is the direct-stiffness "solve Kd = F" step, and is preferable to forming K⁻¹
+ *  explicitly and multiplying — it never computes the inverse, so it is both cheaper and better-conditioned.
+ *  Non-square K, a row-count mismatch (K.rows ≠ F.rows), a ragged input, or a singular K (zero pivot) → an
+ *  EMPTY matrix, so downstream should check `rows` > 0. Values rounded to 1e-6 to match Inverse. */
+export function evalMatrixSolve(rawK: unknown, rawF: unknown): { matrix: string; rows: number; cols: number; value: number } {
+  const X = solveMatrix(parseMatrix(rawK), parseMatrixOrScalar(rawF));
+  if (!X) return { matrix: "[]", rows: 0, cols: 0, value: 0 };
+  // `value` = cell [0][0] as a plain NUMBER — lets a single solved unknown drive an ordinary numeric param.
+  return { matrix: JSON.stringify(X), rows: X.length, cols: X[0]?.length ?? 0, value: X[0]?.[0] ?? 0 };
+}
+
+/** Least Squares node → solve the (usually OVER-determined) system A·x ≈ b in the least-squares sense by
+ *  Householder QR. This is the robust alternative to the normal equations x = (AᵀA)⁻¹Aᵀb, which SQUARE the
+ *  condition number; QR works on A directly. A is m×n with m ≥ n (more equations than unknowns is the point);
+ *  b is m×k (usually a single observation column). Returns the x (n×k) that minimises ‖A·x − b‖, plus the
+ *  residual norm ‖A·x − b‖.
+ *
+ *  Householder reflections drive A → R (upper-triangular) and b → Qᵀb WITHOUT ever forming Q, then R·x = Qᵀb
+ *  is back-substituted. Non-conforming shapes (m < n — that is the under-determined / minimum-norm case, SVD
+ *  territory; or A.rows ≠ b.rows), ragged input, or a rank-deficient A (a zero pivot in R) → empty (check
+ *  `val-rows` > 0). Values rounded to 1e-6. */
+export function evalLeastSquares(rawA: unknown, rawB: unknown): { matrix: string; rows: number; cols: number; value: number; residual: number } {
+  const A = parseMatrix(rawA), B = parseMatrixOrScalar(rawB);
+  const m = A.length, n = A[0]?.length ?? 0;
+  if (m === 0 || n === 0 || !isRectMatrix(A) || !isRectMatrix(B) || B.length !== m || m < n) return { matrix: "[]", rows: 0, cols: 0, value: 0, residual: 0 };
+  const k = B[0].length;
+  const R = A.map((r) => r.slice());   // in place → R (upper-triangular in its top n rows)
+  const Qtb = B.map((r) => r.slice()); // in place → Qᵀb
+  for (let j = 0; j < n; j++) {
+    let norm = 0; for (let i = j; i < m; i++) norm += R[i][j] * R[i][j];
+    norm = Math.sqrt(norm);
+    if (norm < 1e-12) return { matrix: "[]", rows: 0, cols: 0, value: 0, residual: 0 }; // rank-deficient column
+    // Householder vector v = x − αe_j, α = ∓‖x‖ chosen opposite the pivot's sign to avoid cancellation.
+    const alpha = R[j][j] >= 0 ? -norm : norm;
+    const v: number[] = new Array(m).fill(0);
+    v[j] = R[j][j] - alpha;
+    for (let i = j + 1; i < m; i++) v[i] = R[i][j];
+    let vn = 0; for (let i = j; i < m; i++) vn += v[i] * v[i];
+    if (vn < 1e-18) continue;
+    // Apply H = I − 2·vvᵀ/vᵀv to the remaining columns of R and to Qᵀb (rows j..m-1 only).
+    for (let c = j; c < n; c++) { let d = 0; for (let i = j; i < m; i++) d += v[i] * R[i][c]; const f = (2 * d) / vn; for (let i = j; i < m; i++) R[i][c] -= f * v[i]; }
+    for (let c = 0; c < k; c++) { let d = 0; for (let i = j; i < m; i++) d += v[i] * Qtb[i][c]; const f = (2 * d) / vn; for (let i = j; i < m; i++) Qtb[i][c] -= f * v[i]; }
+  }
+  // Back-substitute R·x = (Qᵀb) on the top n rows.
+  const X: number[][] = Array.from({ length: n }, () => new Array(k).fill(0));
+  for (let c = 0; c < k; c++) {
+    for (let i = n - 1; i >= 0; i--) {
+      if (Math.abs(R[i][i]) < 1e-12) return { matrix: "[]", rows: 0, cols: 0, value: 0, residual: 0 };
+      let s = Qtb[i][c];
+      for (let j = i + 1; j < n; j++) s -= R[i][j] * X[j][c];
+      X[i][c] = s / R[i][i];
+    }
+  }
+  // Residual ‖A·x − b‖ (Frobenius) from the UNROUNDED x — the fit quality, one number regardless of k.
+  let res = 0;
+  for (let i = 0; i < m; i++) for (let c = 0; c < k; c++) { let s = 0; for (let j = 0; j < n; j++) s += A[i][j] * X[j][c]; const e = s - B[i][c]; res += e * e; }
+  const Xr = X.map((r) => r.map(round6));
+  return { matrix: JSON.stringify(Xr), rows: n, cols: k, value: Xr[0]?.[0] ?? 0, residual: round6(Math.sqrt(res)) };
+}
+
+/** Shift Rows node → cyclic row roll ("neighbour" in array language). `by = -1` puts each row's NEXT
+ *  neighbour on its own row, so `shift(P,-1) − P` is the edge-vector list; `by = +1` gives the PREVIOUS. */
+export function evalMatrixShift(raw: unknown, by: unknown): { matrix: string; rows: number; cols: number } {
+  const R = shiftMatrix(parseMatrix(raw), Number(by));
+  return { matrix: JSON.stringify(R), rows: R.length, cols: R[0]?.length ?? 0 };
+}
+
+/** Vector Ops node → ROW-WISE unary vector maths on an N×2 (or N×3) list. An N×2 matrix IS a list of N 2D
+ *  vectors, so this shares the matrix type rather than introducing a new one. `perp` / `perp-cw` are 2D
+ *  only (they read the first two columns); `length` / `angle` reduce to an N×1 column. */
+export function evalVectorOps(raw: unknown, op: unknown): { matrix: string; rows: number; cols: number } {
+  const R = vectorOpMatrix(parseMatrixOrScalar(raw), typeof op === "string" && op ? op : "normalize");
+  return { matrix: JSON.stringify(R), rows: R.length, cols: R[0]?.length ?? 0 };
+}
+
+/** Vector Product node → ROW-WISE binary products of two vector lists (broadcasting, so a single vector can
+ *  meet a whole list). `dot` and the 2D `cross` reduce to an N×1 column; a 3D `cross` stays N×3. `angle`
+ *  uses atan2(cross, dot) — SIGNED in 2D (left/right turn), unsigned in 3D — which keeps full precision
+ *  near 0° and 180° where acos(dot) collapses. */
+export function evalVectorProduct(rawA: unknown, rawB: unknown, op: unknown): { matrix: string; rows: number; cols: number } {
+  const R = vectorProductMatrix(parseMatrixOrScalar(rawA), parseMatrixOrScalar(rawB), typeof op === "string" && op ? op : "dot");
+  return { matrix: JSON.stringify(R), rows: R.length, cols: R[0]?.length ?? 0 };
+}
+
+/** Eigen node → ALL eigenvalues and eigenvectors of a SYMMETRIC matrix by cyclic Jacobi rotation.
+ *
+ *  The loop lives here rather than in the graph on purpose: Jacobi repeats until the off-diagonal mass
+ *  falls below tolerance, which is a data-dependent stopping test, and the flow evaluator is a DAG
+ *  (Kahn sort, bails on a cycle) so it cannot express one. Unrolling power-iteration blocks in the graph
+ *  gets only the DOMINANT pair and converges at |λ₂/λ₁| per block; this converges in 2–4 sweeps for any
+ *  symmetric matrix and returns every pair.
+ *
+ *  Each sweep zeroes every off-diagonal in turn with a plane rotation J, applying A ← JᵀAJ and V ← VJ, so
+ *  A tends to a diagonal of eigenvalues while V accumulates the (orthonormal) eigenvectors as its COLUMNS.
+ *  Symmetric input only — the matrix is symmetrised on entry so float noise or a slightly-off typed inertia
+ *  tensor is well-posed instead of silently wrong. */
+export function evalMatrixEigen(raw: unknown, sort: unknown, sweeps: unknown): {
+  values: string; vectors: string; dominant: string; angle: number; size: number;
+} {
+  const M0 = parseMatrix(raw);
+  const n = M0.length;
+  if (n === 0 || M0.some((r) => r.length !== n)) return { values: "[]", vectors: "[]", dominant: "[]", angle: 0, size: 0 };
+  const A = M0.map((r, i) => r.map((_, j) => (M0[i][j] + M0[j][i]) / 2)); // symmetrise
+  const V: number[][] = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));
+  const maxSweeps = Math.max(1, Math.round(Number(sweeps)) || 50);
+  for (let sweep = 0; sweep < maxSweeps; sweep++) {
+    let off = 0;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += A[p][q] * A[p][q];
+    if (off < 1e-24) break; // already diagonal to machine precision
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      if (Math.abs(A[p][q]) < 1e-18) continue;
+      const th = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+      const t = (th >= 0 ? 1 : -1) / (Math.abs(th) + Math.sqrt(th * th + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < n; k++) { const akp = A[k][p], akq = A[k][q]; A[k][p] = c * akp - s * akq; A[k][q] = s * akp + c * akq; } // A·J
+      for (let k = 0; k < n; k++) { const apk = A[p][k], aqk = A[q][k]; A[p][k] = c * apk - s * aqk; A[q][k] = s * apk + c * aqk; } // Jᵀ·(A·J)
+      for (let k = 0; k < n; k++) { const vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq; } // V·J
+    }
+  }
+  const ev = Array.from({ length: n }, (_, i) => A[i][i]);
+  const mode = typeof sort === "string" && sort ? sort : "desc";
+  const idx = Array.from({ length: n }, (_, i) => i);
+  if (mode !== "none") idx.sort((a, b) => (mode === "asc" ? ev[a] - ev[b] : ev[b] - ev[a]));
+  const values = idx.map((i) => [round6(ev[i])]);
+  const vectors = Array.from({ length: n }, (_, r) => idx.map((i) => round6(V[r][i]))); // columns = eigenvectors
+  const dominant = Array.from({ length: n }, (_, r) => [round6(V[r][idx[0]])]);
+  // Direction of the leading eigenvector read in the XY plane — the principal-axis angle of a 2×2 tensor.
+  const angle = n >= 2 ? round6((Math.atan2(V[1][idx[0]], V[0][idx[0]]) * 180) / Math.PI) : 0;
+  return { values: JSON.stringify(values), vectors: JSON.stringify(vectors), dominant: JSON.stringify(dominant), angle, size: n };
+}
+
+/** Reduce node → fold a matrix down to fewer numbers (sum / min / max / mean / product). `axis` picks what
+ *  collapses: "all" → 1×1, "rows" → N×1 (fold each row across its columns), "cols" → 1×C (fold each column
+ *  down its rows). The 1×1 result then BROADCASTS back over any shape via Matrix Operations, which is how a
+ *  whole-matrix statistic (a signed area, a first-event time) gets applied per row. */
+export function evalMatrixReduce(raw: unknown, op: unknown, axis: unknown): { matrix: string; rows: number; cols: number; value: number } {
+  const R = reduceMatrix(parseMatrixOrScalar(raw), typeof op === "string" && op ? op : "sum", typeof axis === "string" && axis ? axis : "all");
+  // `value` = cell [0][0] as a plain NUMBER, so an aggregate can drive an ordinary numeric param.
+  return { matrix: JSON.stringify(R), rows: R.length, cols: R[0]?.length ?? 0, value: R[0]?.[0] ?? 0 };
+}
+
+/** Points to Graph node → turn point MATRICES into the graph JSON that Network / Merge Graph consume. This
+ *  is the bridge OUT of the matrix world: an N×2 matrix is a bag of positions with no connectivity, a graph
+ *  has edges. Coincident points MERGE onto one node (keyed to the millimetre), so rays that converge share an
+ *  endpoint — that is what makes a skeleton read as a connected graph instead of N loose spokes. */
+export function evalMatrixToGraph(
+  rawA: unknown,
+  rawB: unknown,
+  mode: unknown,
+  /** Optional per-edge thickness in METRES: an N×1 column (row i = edge i, matching the row that produced
+   *  it) or a single scalar / 1×1 that applies to every edge. Omitted / 0 → the edge carries no `thickness`,
+   *  exactly as before. This is what lets ONE graph hold both a 0.23 m outer wall and a 0.1 m inner wall. */
+  rawThickness?: unknown,
+  /** Optional `type` stamped on every edge produced here — "wall" / "door" / "window". Merge Graph keeps it,
+   *  so merging a wall graph with a door graph yields one graph whose edges stay distinguishable. */
+  edgeType?: unknown,
+  /** Optional PER-EDGE type, as an N×1 column of 1-based CODES into `typeNames`. The expression language
+   *  emits numbers, never strings, so a Math Engine cannot name a type directly — it emits a code column
+   *  and this pair turns it back into a name. A code of 0, out of range, or with no name behind it falls
+   *  back to `edgeType`, so a graph can be part typed by column and part typed by the row's own select.
+   *
+   *  This is what lets ONE Points to Graph node carry exterior walls, interior walls, doors and windows at
+   *  once: the families are stacked into a single A / B / thickness matrix and told apart by this column. */
+  rawTypes?: unknown,
+  /** Names for the codes above, 1-based: code 1 is `typeNames[0]`. A JSON array of strings. */
+  typeNames?: unknown,
+): { graph: string; nodeCount: number; edgeCount: number } {
+  const A = parseMatrix(rawA), B = parseMatrix(rawB);
+  const T = parseMatrixOrScalar(rawThickness);
+  const ty = typeof edgeType === "string" ? edgeType.trim() : "";
+  const m = typeof mode === "string" && mode ? mode : "pairs";
+  const nodes: { id: string; x: number; y: number }[] = [];
+  const byKey = new Map<string, string>();
+  const nodeId = (p: number[]): string => {
+    const x = round6(p[0] ?? 0), y = round6(p[1] ?? 0);
+    const key = `${Math.round(x * 1000)},${Math.round(y * 1000)}`;
+    const hit = byKey.get(key);
+    if (hit) return hit;
+    const id = `n${nodes.length + 1}`;
+    byKey.set(key, id);
+    nodes.push({ id, x, y });
+    return id;
+  };
+  // Row i of the thickness column belongs to edge i; a 1-row column broadcasts to every edge.
+  const thicknessAt = (row: number): number | undefined => {
+    if (T.length === 0) return undefined;
+    const v = (T.length === 1 ? T[0] : T[row])?.[0];
+    return typeof v === "number" && isFinite(v) && v > 0 ? round6(v) : undefined;
+  };
+  // Row i of the type-code column belongs to edge i, the same rule the thickness column follows. A 1-row
+  // column broadcasts, so a single code types the whole graph.
+  const K = parseMatrixOrScalar(rawTypes);
+  const names: string[] = (() => {
+    if (Array.isArray(typeNames)) return typeNames.map((x) => String(x));
+    if (typeof typeNames !== "string" || !typeNames.trim()) return [];
+    try {
+      const v = JSON.parse(typeNames) as unknown;
+      return Array.isArray(v) ? v.map((x) => String(x)) : [];
+    } catch { return []; }
+  })();
+  const typeAt = (row: number): string => {
+    if (K.length === 0 || names.length === 0) return ty;
+    const v = (K.length === 1 ? K[0] : K[row])?.[0];
+    if (typeof v !== "number" || !isFinite(v)) return ty;
+    const name = names[Math.round(v) - 1];
+    return typeof name === "string" && name.trim() ? name.trim() : ty;
+  };
+  const edges: { from_node_id: string; to_node_id: string; thickness?: number; type?: string }[] = [];
+  const link = (p: number[], q: number[], row: number) => {
+    const a = nodeId(p), b = nodeId(q);
+    if (a === b) return; // a collapsed pair leaves the node, drops the edge
+    const t = thicknessAt(row);
+    const et = typeAt(row);
+    edges.push({ from_node_id: a, to_node_id: b, ...(t != null ? { thickness: t } : {}), ...(et ? { type: et } : {}) });
+  };
+  if (m === "ring") { for (let i = 0; i < A.length; i++) link(A[i], A[(i + 1) % A.length], i); }
+  else if (m === "path") { for (let i = 0; i + 1 < A.length; i++) link(A[i], A[i + 1], i); }
+  else if (m === "points") { for (const p of A) nodeId(p); }
+  else { const n = Math.min(A.length, B.length); for (let i = 0; i < n; i++) link(A[i], B[i], i); } // pairs
+  return { graph: JSON.stringify({ nodes, edges }), nodeCount: nodes.length, edgeCount: edges.length };
 }
 
 /** Build a GridField from a bare matrix VALUE (which has no world frame) so Render Grid can draw a matrix
@@ -2823,8 +3030,9 @@ export function evalGraphSimplify(polylines: Point[][], params: Record<string, u
   return polylines.map((pl) => douglasPeuckerAny(pl, eps)).filter((pl) => pl.length >= 2);
 }
 
-/** Even-odd point-in-polygon (ray cast). */
-const pointInPolyEO = (x: number, y: number, poly: Point[]): boolean => {
+/** Even-odd point-in-polygon (ray cast). Exported because Plan JSON scopes the canvas to a Space with
+ *  exactly this test, and two implementations of "is it inside" would eventually disagree. */
+export const pointInPolyEO = (x: number, y: number, poly: Point[]): boolean => {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;

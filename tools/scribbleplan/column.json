@@ -1,0 +1,787 @@
+{
+ "version": 1,
+ "id": "column-with-math",
+ "title": "Column — one Math Engine, section, shaft and reinforcement cage",
+ "category": "Structural",
+ "object": {
+  "hostKind": "node",
+  "name": "Column",
+  "icon": {
+   "paths": [
+    "M8 4h8v16H8z",
+    "M12 4v16"
+   ]
+  }
+ },
+ "description": "A parametric COLUMN on the six-node spine:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nDROP IT ON A NODE and the shaft stands there. ONE SECTION, EXTRUDED — four corners or a polygon of `Sides`, a unit ring scaled by the dimensions and turned by `Rotation` — swept by `mprism` from the base to the top.\n\nTHE CAGE. The concrete is drawn at 35 % opacity so the reinforcement inside it reads: `mainBars` bars of `barDia` (8 × 16 mm by default) on the perimeter, their centres cover + stirrup + half a bar in from each face — four bars are the corners, eight are corners and mid-sides, twelve add the thirds; on a circular section they sit on the inner circle. Closed STIRRUPS of `stirrupDia` at `stirrupSpacing` (8 mm at 127 mm — five inches — by default) from base + cover to top − cover: the outer tie round every bar and, with eight or more bars in a rectangle, the inner DIAMOND tie through the four mid-side bars, which is the arrangement that holds a mid-side bar against buckling. The plan symbol shows the bars as dots and both ties as lines inside the hatched section.\n\nWHAT IT REPORTS. Section area, perimeter, concrete volume, formwork area, self-weight, slenderness — and the steel: bar count and size, stirrup count and pitch, main steel and stirrup steel by mass (0.006165·d² kg/m, hooks at 10d each end), the total, and the steel ratio As/Ag. At the defaults a 400 × 400 × 3 m column carries 37 kg of 16 mm and 19 kg of 8 mm ties (the diamond doubles the tie length), 1.0 % steel.\n\nWHAT IT DOES NOT DO. No lap lengths, no starter bars into the footing, no bend radii — the ties are straight thin boxes meeting at the bar lines. It does not carve the wall it sits in. Circular columns are polygonised at `Sides`; their tie is twelve chords.",
+ "nodes": [
+  {
+   "id": "source",
+   "position": {
+    "x": -1040,
+    "y": 80
+   },
+   "data": {
+    "tool": "source",
+    "params": {
+     "grabFromSelection": true,
+     "id": "",
+     "nodeLabel": "Geometry"
+    }
+   }
+  },
+  {
+   "id": "props",
+   "position": {
+    "x": -700,
+    "y": 40
+   },
+   "data": {
+    "tool": "input-props",
+    "params": {
+     "props": [
+      {
+       "id": "P",
+       "name": "Host — node point [[x, y]]",
+       "type": "text",
+       "value": "[[0, 0]]",
+       "options": []
+      },
+      {
+       "id": "shape",
+       "name": "Shape",
+       "type": "select",
+       "value": "Rectangular",
+       "options": [
+        "Rectangular",
+        "Circular"
+       ]
+      },
+      {
+       "id": "length",
+       "name": "Length",
+       "type": "range",
+       "value": 0.4,
+       "options": [],
+       "min": 0.1,
+       "max": 2,
+       "step": 0.01,
+       "showIf": {
+        "when": "shape",
+        "equals": "Rectangular"
+       }
+      },
+      {
+       "id": "breadth",
+       "name": "Breadth",
+       "type": "range",
+       "value": 0.4,
+       "options": [],
+       "min": 0.1,
+       "max": 2,
+       "step": 0.01,
+       "showIf": {
+        "when": "shape",
+        "equals": "Rectangular"
+       }
+      },
+      {
+       "id": "radius",
+       "name": "Radius",
+       "type": "range",
+       "value": 0.2,
+       "options": [],
+       "min": 0.05,
+       "max": 1,
+       "step": 0.01,
+       "showIf": {
+        "when": "shape",
+        "equals": "Circular"
+       }
+      },
+      {
+       "id": "sides",
+       "name": "Circle segments",
+       "type": "range",
+       "value": 24,
+       "options": [],
+       "min": 6,
+       "max": 64,
+       "step": 1,
+       "showIf": {
+        "when": "shape",
+        "equals": "Circular"
+       }
+      },
+      {
+       "id": "height",
+       "name": "Height",
+       "type": "range",
+       "value": 3,
+       "options": [],
+       "min": 0.1,
+       "max": 12,
+       "step": 0.1
+      },
+      {
+       "id": "base",
+       "name": "Base elevation",
+       "type": "range",
+       "value": 0,
+       "options": [],
+       "min": -5,
+       "max": 30,
+       "step": 0.05
+      },
+      {
+       "id": "showRebar",
+       "name": "Show reinforcement",
+       "type": "checkbox",
+       "value": true,
+       "options": []
+      },
+      {
+       "id": "mainBars",
+       "name": "Main bars",
+       "type": "range",
+       "value": 8,
+       "options": [],
+       "min": 4,
+       "max": 16,
+       "step": 2
+      },
+      {
+       "id": "barDia",
+       "name": "Main bar diameter",
+       "type": "range",
+       "value": 0.016,
+       "options": [],
+       "min": 0.008,
+       "max": 0.04,
+       "step": 0.002
+      },
+      {
+       "id": "stirrupDia",
+       "name": "Stirrup diameter",
+       "type": "range",
+       "value": 0.008,
+       "options": [],
+       "min": 0.006,
+       "max": 0.016,
+       "step": 0.001
+      },
+      {
+       "id": "stirrupSpacing",
+       "name": "Stirrup spacing",
+       "type": "range",
+       "value": 0.127,
+       "options": [],
+       "min": 0.05,
+       "max": 0.3,
+       "step": 0.001
+      },
+      {
+       "id": "cover",
+       "name": "Clear cover",
+       "type": "range",
+       "value": 0.04,
+       "options": [],
+       "min": 0.02,
+       "max": 0.075,
+       "step": 0.005
+      },
+      {
+       "id": "rotation",
+       "name": "Rotation",
+       "type": "range",
+       "value": 0,
+       "options": [],
+       "min": 0,
+       "max": 360,
+       "step": 1
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "math",
+   "position": {
+    "x": -220,
+    "y": 0
+   },
+   "data": {
+    "tool": "expr",
+    "params": {
+     "name": "Column maths",
+     "expr": "_n = rows(P)\n_cx = _n >= 1 ? mean(col(P, 0)) : 0\n_cy = _n >= 1 ? mean(col(P, 1)) : 0\n_isC = shape == 'Circular'\n_L = max(0.05, length)\n_B = max(0.05, breadth)\n_R = max(0.03, radius)\n_H = max(0.1, height)\n_b = base\n_a = rotation * PI / 180\n_ca = cos(_a)\n_sa = sin(_a)\n_S = vcat(hcat(-1, -1), hcat(1, -1), hcat(1, 1), hcat(-1, 1))\n_qx = col(_S, 0) * _L / 2\n_qy = col(_S, 1) * _B / 2\n_Rect = hcat(_cx + _qx * _ca - _qy * _sa, _cy + _qx * _sa + _qy * _ca)\n_sd = max(6, min(64, round(sides)))\n_k = arange(_sd)\n_th = _k / _sd * 2 * PI\n_Circ = hcat(_cx + _R * cos(_th), _cy + _R * sin(_th))\nSectionPlan = _isC ? _Circ : _Rect\nColumnMesh = mprism(SectionPlan, _b, _b + _H)\n_mx = _isC ? _R * 1.35 : max(_L, _B) * 0.7\nAxisPlan = vcat(hcat(_cx - _mx * _ca, _cy - _mx * _sa, _cx + _mx * _ca, _cy + _mx * _sa), hcat(_cx + _mx * _sa, _cy - _mx * _ca, _cx - _mx * _sa, _cy + _mx * _ca))\nsectionArea = _isC ? PI * _R * _R : _L * _B\nperimeter = _isC ? 2 * PI * _R : 2 * (_L + _B)\nvolume = sectionArea * _H\nformworkArea = perimeter * _H\nselfWeightkN = volume * 25\ntopElevation = _b + _H\ncolumnHeight = _H\nleastDim = _isC ? 2 * _R : min(_L, _B)\nslenderness = _H / max(leastDim, 1e-6)\n\n# ── Reinforcement ────────────────────────────────────────────────────────────────────────────────\n_show = showRebar > 0 ? 1 : 0\n_bn = max(4, min(16, round(mainBars)))\n_bd = max(0.006, barDia)\n_sd = max(0.004, stirrupDia)\n_ss = max(0.05, stirrupSpacing)\n_cv = max(0.015, cover)\n_off = _cv + _sd + _bd / 2\n_hx = max(0.01, _L / 2 - _off)\n_hy = max(0.01, _B / 2 - _off)\n_rb = max(0.01, _R - _off)\n_per = 4 * (_hx + _hy)\n# main bar centres in the section's own frame, then to world\n_BC = zeros(0, 2)\nloop i in _bn:\n  _t = i * _per / _bn\n  _u = _t < 2 * _hx ? (0 - _hx + _t) : (_t < 2 * _hx + 2 * _hy ? _hx : (_t < 4 * _hx + 2 * _hy ? (_hx - (_t - 2 * _hx - 2 * _hy)) : (0 - _hx)))\n  _v = _t < 2 * _hx ? (0 - _hy) : (_t < 2 * _hx + 2 * _hy ? (0 - _hy + (_t - 2 * _hx)) : (_t < 4 * _hx + 2 * _hy ? _hy : (_hy - (_t - 4 * _hx - 2 * _hy))))\n  _uc = _rb * cos(i / _bn * 2 * PI)\n  _vc = _rb * sin(i / _bn * 2 * PI)\n  _bu = _isC ? _uc : _u\n  _bv = _isC ? _vc : _v\n  _BC = vcat(_BC, hcat(_bu, _bv))\nend\n_ok = arange(8)\n_oth = _ok / 8 * 2 * PI\n_BR = hcat(_bd / 2 * cos(_oth), _bd / 2 * sin(_oth))\nBars3D = zeros(0, 4)\nBarsPlan = zeros(0, 3)\nloop i in _bn:\n  _bu = sub(_BC, i, 0, 1, 1)\n  _bv = sub(_BC, i, 1, 1, 1)\n  _rx = _bu + col(_BR, 0)\n  _ry = _bv + col(_BR, 1)\n  _ring = hcat(_cx + _rx * _ca - _ry * _sa, _cy + _rx * _sa + _ry * _ca)\n  Bars3D = _show > 0 ? vcat(Bars3D, mprism(_ring, _b + _cv, _b + _H)) : Bars3D\n  BarsPlan = _show > 0 ? vcat(BarsPlan, hcat(_ring, fill(8, 1, i))) : BarsPlan\nend\n# tie segments as a table [px, py, qx, qy] in the section frame: 4 outer sides, the diamond when\n# there are 8+ bars in a rectangle, or 12 chords for a circular tie\n_TR = vcat(vcat(hcat(0 - _hx, 0 - _hy, _hx, 0 - _hy), hcat(_hx, 0 - _hy, _hx, _hy)), vcat(hcat(_hx, _hy, 0 - _hx, _hy), hcat(0 - _hx, _hy, 0 - _hx, 0 - _hy)))\n_TD = vcat(vcat(hcat(0, 0 - _hy, _hx, 0), hcat(_hx, 0, 0, _hy)), vcat(hcat(0, _hy, 0 - _hx, 0), hcat(0 - _hx, 0, 0, 0 - _hy)))\n_ck = arange(12)\n_ct0 = _ck / 12 * 2 * PI\n_ct1 = (_ck + 1) / 12 * 2 * PI\n_TC = hcat(_rb * cos(_ct0), _rb * sin(_ct0), _rb * cos(_ct1), _rb * sin(_ct1))\n_hasD = (_bn >= 8 && !_isC) ? 1 : 0\n_TT = _isC ? _TC : (_hasD > 0 ? vcat(_TR, _TD) : _TR)\n_nb = rows(_TT)\n_nst = max(1, floor((_H - 2 * _cv) / _ss) + 1)\nStirrups3D = zeros(0, 4)\nloop q in (_nst * _nb):\n  _lvl = floor(q / _nb)\n  _kk = q - _lvl * _nb\n  _zc = _b + _cv + _lvl * _ss\n  _px = sub(_TT, _kk, 0, 1, 1)\n  _py = sub(_TT, _kk, 1, 1, 1)\n  _qx = sub(_TT, _kk, 2, 1, 1)\n  _qy = sub(_TT, _kk, 3, 1, 1)\n  _dl = max(1e-6, sqrt((_qx - _px) * (_qx - _px) + (_qy - _py) * (_qy - _py)))\n  _nx = 0 - (_qy - _py) / _dl * _sd / 2\n  _ny = (_qx - _px) / _dl * _sd / 2\n  _s4 = vcat(vcat(hcat(_px + _nx, _py + _ny), hcat(_qx + _nx, _qy + _ny)), vcat(hcat(_qx - _nx, _qy - _ny), hcat(_px - _nx, _py - _ny)))\n  _sw = hcat(_cx + col(_s4, 0) * _ca - col(_s4, 1) * _sa, _cy + col(_s4, 0) * _sa + col(_s4, 1) * _ca)\n  Stirrups3D = _show > 0 ? vcat(Stirrups3D, mprism(_sw, _zc - _sd / 2, _zc + _sd / 2)) : Stirrups3D\nend\n# ties in plan, as strokes\n_tw = hcat(_cx + col(_TT, 0) * _ca - col(_TT, 1) * _sa, _cy + col(_TT, 0) * _sa + col(_TT, 1) * _ca, _cx + col(_TT, 2) * _ca - col(_TT, 3) * _sa, _cy + col(_TT, 2) * _sa + col(_TT, 3) * _ca)\nTiePlan = _show > 0 ? _tw : zeros(0, 4)\n# steel\n_bdmm = _bd * 1000\n_sdmm = _sd * 1000\n_kgm = 0.006165 * _bdmm * _bdmm\n_kgs = 0.006165 * _sdmm * _sdmm\nmainBarCount = _bn\nmainBarDiaMm = _bdmm\nstirrupCount = _nst\nstirrupPitch = _ss\n_tieLen = _isC ? (2 * PI * _rb) : (2 * (2 * _hx + 2 * _hy) + (_hasD > 0 ? 4 * sqrt(_hx * _hx + _hy * _hy) : 0))\n_hook = 2 * max(0.075, 10 * _sd)\nmainSteelKg = _bn * (_H - _cv) * _kgm\nstirrupSteelKg = _nst * (_tieLen + _hook) * _kgs\nsteelKg = mainSteelKg + stirrupSteelKg\n_As = _bn * PI * _bd * _bd / 4\nsteelRatioPct = 100 * _As / max(sectionArea, 1e-6)\ncoverOut = _cv\n"
+    }
+   }
+  },
+  {
+   "id": "out",
+   "position": {
+    "x": 260,
+    "y": 60
+   },
+   "data": {
+    "tool": "output",
+    "params": {
+     "slots": [
+      {
+       "id": "s1",
+       "label": "Section — plan"
+      },
+      {
+       "id": "s2",
+       "label": "Centre axes — plan"
+      },
+      {
+       "id": "s3",
+       "label": "Column — solid"
+      },
+      {
+       "id": "s4",
+       "label": "Section area (m²)"
+      },
+      {
+       "id": "s5",
+       "label": "Perimeter (m)"
+      },
+      {
+       "id": "s6",
+       "label": "Concrete volume (m³)"
+      },
+      {
+       "id": "s7",
+       "label": "Formwork area (m²)"
+      },
+      {
+       "id": "s8",
+       "label": "Self weight (kN)"
+      },
+      {
+       "id": "s9",
+       "label": "Height (m)"
+      },
+      {
+       "id": "s10",
+       "label": "Top elevation (m)"
+      },
+      {
+       "id": "s11",
+       "label": "Least dimension (m)"
+      },
+      {
+       "id": "s12",
+       "label": "Slenderness (h / least dim)"
+      },
+      {
+       "id": "s13",
+       "label": "Main bars — solids"
+      },
+      {
+       "id": "s14",
+       "label": "Stirrups — solids"
+      },
+      {
+       "id": "s15",
+       "label": "Main bars — plan"
+      },
+      {
+       "id": "s16",
+       "label": "Ties — plan"
+      },
+      {
+       "id": "s17",
+       "label": "Main bars"
+      },
+      {
+       "id": "s18",
+       "label": "Main bar Ø (mm)"
+      },
+      {
+       "id": "s19",
+       "label": "Stirrups"
+      },
+      {
+       "id": "s20",
+       "label": "Stirrup pitch (m)"
+      },
+      {
+       "id": "s21",
+       "label": "Main steel (kg)"
+      },
+      {
+       "id": "s22",
+       "label": "Stirrup steel (kg)"
+      },
+      {
+       "id": "s23",
+       "label": "Steel total (kg)"
+      },
+      {
+       "id": "s24",
+       "label": "Steel ratio (%)"
+      },
+      {
+       "id": "s25",
+       "label": "Clear cover (m)"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r2d",
+   "position": {
+    "x": 660,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-2d",
+    "params": {
+     "prims": [
+      {
+       "id": "p2_section",
+       "kind": "polygon",
+       "name": "Column section",
+       "color": "#475569",
+       "layer": "Structure",
+       "lineStyle": "solid",
+       "fillMode": "filled",
+       "hatch": "diagonal",
+       "hatchSpacing": 6,
+       "hatchWeight": 0.8,
+       "show": true
+      },
+      {
+       "id": "p2_axis",
+       "kind": "stroke",
+       "name": "Centre axes",
+       "color": "#94a3b8",
+       "layer": "Structure",
+       "lineStyle": "dotted",
+       "width": 0.01,
+       "show": true
+      },
+      {
+       "id": "p2_bars",
+       "kind": "polygon",
+       "name": "Main bars",
+       "color": "#7c2d12",
+       "layer": "Structure",
+       "lineStyle": "solid",
+       "fillMode": "filled",
+       "show": true
+      },
+      {
+       "id": "p2_ties",
+       "kind": "stroke",
+       "name": "Ties",
+       "color": "#b45309",
+       "layer": "Structure",
+       "lineStyle": "solid",
+       "width": 0.008,
+       "show": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r3d",
+   "position": {
+    "x": 960,
+    "y": 180
+   },
+   "data": {
+    "tool": "render-3d",
+    "params": {
+     "prims": [
+      {
+       "id": "p3_column",
+       "kind": "polyhedron",
+       "name": "Column",
+       "color": "#94a3b8",
+       "layer": "Structure",
+       "opacity": 0.35,
+       "displayType": "solid",
+       "showEdges": true,
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_bars",
+       "kind": "polyhedron",
+       "name": "Main bars",
+       "color": "#7c2d12",
+       "layer": "Structure",
+       "opacity": 1,
+       "displayType": "solid",
+       "showEdges": false,
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_stirrups",
+       "kind": "polyhedron",
+       "name": "Stirrups",
+       "color": "#b45309",
+       "layer": "Structure",
+       "opacity": 1,
+       "displayType": "solid",
+       "showEdges": false,
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e1_source_val-points__props_valin-P",
+   "source": "source",
+   "sourceHandle": "val-points",
+   "target": "props",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e2_props_val-shape__math_valin-shape",
+   "source": "props",
+   "sourceHandle": "val-shape",
+   "target": "math",
+   "targetHandle": "valin-shape"
+  },
+  {
+   "id": "e3_props_val-length__math_valin-length",
+   "source": "props",
+   "sourceHandle": "val-length",
+   "target": "math",
+   "targetHandle": "valin-length"
+  },
+  {
+   "id": "e4_props_val-breadth__math_valin-breadth",
+   "source": "props",
+   "sourceHandle": "val-breadth",
+   "target": "math",
+   "targetHandle": "valin-breadth"
+  },
+  {
+   "id": "e5_props_val-radius__math_valin-radius",
+   "source": "props",
+   "sourceHandle": "val-radius",
+   "target": "math",
+   "targetHandle": "valin-radius"
+  },
+  {
+   "id": "e6_props_val-sides__math_valin-sides",
+   "source": "props",
+   "sourceHandle": "val-sides",
+   "target": "math",
+   "targetHandle": "valin-sides"
+  },
+  {
+   "id": "e7_props_val-height__math_valin-height",
+   "source": "props",
+   "sourceHandle": "val-height",
+   "target": "math",
+   "targetHandle": "valin-height"
+  },
+  {
+   "id": "e8_props_val-base__math_valin-base",
+   "source": "props",
+   "sourceHandle": "val-base",
+   "target": "math",
+   "targetHandle": "valin-base"
+  },
+  {
+   "id": "e9_props_val-showRebar__math_valin-showRebar",
+   "source": "props",
+   "sourceHandle": "val-showRebar",
+   "target": "math",
+   "targetHandle": "valin-showRebar"
+  },
+  {
+   "id": "e10_props_val-mainBars__math_valin-mainBars",
+   "source": "props",
+   "sourceHandle": "val-mainBars",
+   "target": "math",
+   "targetHandle": "valin-mainBars"
+  },
+  {
+   "id": "e11_props_val-barDia__math_valin-barDia",
+   "source": "props",
+   "sourceHandle": "val-barDia",
+   "target": "math",
+   "targetHandle": "valin-barDia"
+  },
+  {
+   "id": "e12_props_val-stirrupDia__math_valin-stirrupDia",
+   "source": "props",
+   "sourceHandle": "val-stirrupDia",
+   "target": "math",
+   "targetHandle": "valin-stirrupDia"
+  },
+  {
+   "id": "e13_props_val-stirrupSpacing__math_valin-stirrupSpacing",
+   "source": "props",
+   "sourceHandle": "val-stirrupSpacing",
+   "target": "math",
+   "targetHandle": "valin-stirrupSpacing"
+  },
+  {
+   "id": "e14_props_val-cover__math_valin-cover",
+   "source": "props",
+   "sourceHandle": "val-cover",
+   "target": "math",
+   "targetHandle": "valin-cover"
+  },
+  {
+   "id": "e15_props_val-rotation__math_valin-rotation",
+   "source": "props",
+   "sourceHandle": "val-rotation",
+   "target": "math",
+   "targetHandle": "valin-rotation"
+  },
+  {
+   "id": "e16_props_val-P__math_valin-P",
+   "source": "props",
+   "sourceHandle": "val-P",
+   "target": "math",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e17_math_val-SectionPlan__out_valin-s1",
+   "source": "math",
+   "sourceHandle": "val-SectionPlan",
+   "target": "out",
+   "targetHandle": "valin-s1"
+  },
+  {
+   "id": "e18_out_val-s1__r2d_valin-p2_section",
+   "source": "out",
+   "sourceHandle": "val-s1",
+   "target": "r2d",
+   "targetHandle": "valin-p2_section"
+  },
+  {
+   "id": "e19_math_val-AxisPlan__out_valin-s2",
+   "source": "math",
+   "sourceHandle": "val-AxisPlan",
+   "target": "out",
+   "targetHandle": "valin-s2"
+  },
+  {
+   "id": "e20_out_val-s2__r2d_valin-p2_axis",
+   "source": "out",
+   "sourceHandle": "val-s2",
+   "target": "r2d",
+   "targetHandle": "valin-p2_axis"
+  },
+  {
+   "id": "e21_math_val-ColumnMesh__out_valin-s3",
+   "source": "math",
+   "sourceHandle": "val-ColumnMesh",
+   "target": "out",
+   "targetHandle": "valin-s3"
+  },
+  {
+   "id": "e22_out_val-s3__r3d_valin-p3_column",
+   "source": "out",
+   "sourceHandle": "val-s3",
+   "target": "r3d",
+   "targetHandle": "valin-p3_column"
+  },
+  {
+   "id": "e23_math_val-sectionArea__out_valin-s4",
+   "source": "math",
+   "sourceHandle": "val-sectionArea",
+   "target": "out",
+   "targetHandle": "valin-s4"
+  },
+  {
+   "id": "e24_math_val-perimeter__out_valin-s5",
+   "source": "math",
+   "sourceHandle": "val-perimeter",
+   "target": "out",
+   "targetHandle": "valin-s5"
+  },
+  {
+   "id": "e25_math_val-volume__out_valin-s6",
+   "source": "math",
+   "sourceHandle": "val-volume",
+   "target": "out",
+   "targetHandle": "valin-s6"
+  },
+  {
+   "id": "e26_math_val-formworkArea__out_valin-s7",
+   "source": "math",
+   "sourceHandle": "val-formworkArea",
+   "target": "out",
+   "targetHandle": "valin-s7"
+  },
+  {
+   "id": "e27_math_val-selfWeightkN__out_valin-s8",
+   "source": "math",
+   "sourceHandle": "val-selfWeightkN",
+   "target": "out",
+   "targetHandle": "valin-s8"
+  },
+  {
+   "id": "e28_math_val-columnHeight__out_valin-s9",
+   "source": "math",
+   "sourceHandle": "val-columnHeight",
+   "target": "out",
+   "targetHandle": "valin-s9"
+  },
+  {
+   "id": "e29_math_val-topElevation__out_valin-s10",
+   "source": "math",
+   "sourceHandle": "val-topElevation",
+   "target": "out",
+   "targetHandle": "valin-s10"
+  },
+  {
+   "id": "e30_math_val-leastDim__out_valin-s11",
+   "source": "math",
+   "sourceHandle": "val-leastDim",
+   "target": "out",
+   "targetHandle": "valin-s11"
+  },
+  {
+   "id": "e31_math_val-slenderness__out_valin-s12",
+   "source": "math",
+   "sourceHandle": "val-slenderness",
+   "target": "out",
+   "targetHandle": "valin-s12"
+  },
+  {
+   "id": "e32_math_val-Bars3D__out_valin-s13",
+   "source": "math",
+   "sourceHandle": "val-Bars3D",
+   "target": "out",
+   "targetHandle": "valin-s13"
+  },
+  {
+   "id": "e33_out_val-s13__r3d_valin-p3_bars",
+   "source": "out",
+   "sourceHandle": "val-s13",
+   "target": "r3d",
+   "targetHandle": "valin-p3_bars"
+  },
+  {
+   "id": "e34_math_val-Stirrups3D__out_valin-s14",
+   "source": "math",
+   "sourceHandle": "val-Stirrups3D",
+   "target": "out",
+   "targetHandle": "valin-s14"
+  },
+  {
+   "id": "e35_out_val-s14__r3d_valin-p3_stirrups",
+   "source": "out",
+   "sourceHandle": "val-s14",
+   "target": "r3d",
+   "targetHandle": "valin-p3_stirrups"
+  },
+  {
+   "id": "e36_math_val-BarsPlan__out_valin-s15",
+   "source": "math",
+   "sourceHandle": "val-BarsPlan",
+   "target": "out",
+   "targetHandle": "valin-s15"
+  },
+  {
+   "id": "e37_out_val-s15__r2d_valin-p2_bars",
+   "source": "out",
+   "sourceHandle": "val-s15",
+   "target": "r2d",
+   "targetHandle": "valin-p2_bars"
+  },
+  {
+   "id": "e38_math_val-TiePlan__out_valin-s16",
+   "source": "math",
+   "sourceHandle": "val-TiePlan",
+   "target": "out",
+   "targetHandle": "valin-s16"
+  },
+  {
+   "id": "e39_out_val-s16__r2d_valin-p2_ties",
+   "source": "out",
+   "sourceHandle": "val-s16",
+   "target": "r2d",
+   "targetHandle": "valin-p2_ties"
+  },
+  {
+   "id": "e40_math_val-mainBarCount__out_valin-s17",
+   "source": "math",
+   "sourceHandle": "val-mainBarCount",
+   "target": "out",
+   "targetHandle": "valin-s17"
+  },
+  {
+   "id": "e41_math_val-mainBarDiaMm__out_valin-s18",
+   "source": "math",
+   "sourceHandle": "val-mainBarDiaMm",
+   "target": "out",
+   "targetHandle": "valin-s18"
+  },
+  {
+   "id": "e42_math_val-stirrupCount__out_valin-s19",
+   "source": "math",
+   "sourceHandle": "val-stirrupCount",
+   "target": "out",
+   "targetHandle": "valin-s19"
+  },
+  {
+   "id": "e43_math_val-stirrupPitch__out_valin-s20",
+   "source": "math",
+   "sourceHandle": "val-stirrupPitch",
+   "target": "out",
+   "targetHandle": "valin-s20"
+  },
+  {
+   "id": "e44_math_val-mainSteelKg__out_valin-s21",
+   "source": "math",
+   "sourceHandle": "val-mainSteelKg",
+   "target": "out",
+   "targetHandle": "valin-s21"
+  },
+  {
+   "id": "e45_math_val-stirrupSteelKg__out_valin-s22",
+   "source": "math",
+   "sourceHandle": "val-stirrupSteelKg",
+   "target": "out",
+   "targetHandle": "valin-s22"
+  },
+  {
+   "id": "e46_math_val-steelKg__out_valin-s23",
+   "source": "math",
+   "sourceHandle": "val-steelKg",
+   "target": "out",
+   "targetHandle": "valin-s23"
+  },
+  {
+   "id": "e47_math_val-steelRatioPct__out_valin-s24",
+   "source": "math",
+   "sourceHandle": "val-steelRatioPct",
+   "target": "out",
+   "targetHandle": "valin-s24"
+  },
+  {
+   "id": "e48_math_val-coverOut__out_valin-s25",
+   "source": "math",
+   "sourceHandle": "val-coverOut",
+   "target": "out",
+   "targetHandle": "valin-s25"
+  }
+ ]
+}

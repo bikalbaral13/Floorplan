@@ -1,0 +1,829 @@
+{
+  "version": 1,
+  "id": "cove-light-with-math",
+  "title": "Cove Light — the detail that hides the tape, with the cut-off angle that proves it",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Cove Light",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 14h18",
+        "M3 14v-3",
+        "M21 14v-3",
+        "M6 11h12",
+        "M8 8c1.5-2 6.5-2 8 0"
+      ]
+    }
+  },
+  "description": "A parametric COVE LIGHT on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT — a wall. This is the DETAIL, not the tape: the board, the lip that hides the tape and the gap the light gets to open out across. `led-strip` is the tape on its own, for when the detail already exists in the model.\n\nTHE TAPE IS SET BACK FROM THE LIP, NOT FROM THE WALL. The lip is what conceals it, so the concealment is a distance between those two and has nothing to do with where the wall is. Move the wall and nothing about the concealment changes — which is correct, and would not be true of a setback measured the other way.\n\nTHE CUT-OFF ANGLE IS THE NUMBER TO LOOK AT. Sight the top of the lip against the near edge of the tape: below that angle the source is hidden, above it you are looking straight at a line of diodes. A 30 mm lip with the tape hard against it conceals nothing, and no amount of lumens fixes that.\n\nWASH HEIGHT IS THE SECOND NUMBER. The light has to open out across the gap between the tape and the slab. Under about 150 mm a cove reads as a bright stripe rather than a lit ceiling, so `washHeight` and `slotClear` are both reported rather than left for the eye.\n\nDIMENSIONS AT THE DEFAULTS: a 3 m run, 180 mm deep, board 250 mm below a 2.9 m slab, 90 mm lip, tape 40 mm behind it — a 65.8° cut-off and 246 mm of wash.\n\nWHAT THIS CANNOT DO. The cove is straight. A curved or stepped cove is several of these. The ceiling luminance is lumens over the wash area and is a sanity figure, not a simulation.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Run length",
+              "type": "range",
+              "value": 3,
+              "min": 0.1,
+              "max": 30,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "coveDepth",
+              "name": "Cove depth from the wall",
+              "type": "range",
+              "value": 0.18,
+              "min": 0.06,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "boardThk",
+              "name": "Cove board thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "lipHeight",
+              "name": "Lip height",
+              "type": "range",
+              "value": 0.09,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "lipThk",
+              "name": "Lip thickness",
+              "type": "range",
+              "value": 0.018,
+              "min": 0.006,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "slabHeight",
+              "name": "Slab soffit",
+              "type": "range",
+              "value": 2.9,
+              "min": 2,
+              "max": 8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "coveDrop",
+              "name": "Cove below the slab",
+              "type": "range",
+              "value": 0.25,
+              "min": 0.02,
+              "max": 1.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "tapeSetback",
+              "name": "Tape set back from the lip",
+              "type": "range",
+              "value": 0.04,
+              "min": 0,
+              "max": 0.4,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "stripWidth",
+              "name": "Tape width",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "lumensPerMetre",
+              "name": "Output per metre",
+              "type": "range",
+              "value": 900,
+              "min": 100,
+              "max": 3000,
+              "step": 10,
+              "options": []
+            },
+            {
+              "id": "kelvin",
+              "name": "Colour temperature",
+              "type": "range",
+              "value": 2700,
+              "min": 1800,
+              "max": 8000,
+              "step": 50,
+              "options": []
+            },
+            {
+              "id": "cri",
+              "name": "Colour rendering index",
+              "type": "range",
+              "value": 90,
+              "min": 50,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "dimLevel",
+              "name": "Dim level (%)",
+              "type": "range",
+              "value": 100,
+              "min": 0,
+              "max": 100,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "lampRadius",
+              "name": "Lamp radius (soft shadow)",
+              "type": "range",
+              "value": 0.006,
+              "min": 0.002,
+              "max": 0.5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "emitsLight",
+              "name": "Export a lamp (off = geometry only)",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "lamp",
+              "name": "Lamp (Library/Photometry/…)",
+              "type": "text",
+              "value": "Photometry/LED/tape-warm-2700k.json",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "lightGroup",
+              "name": "Light group",
+              "type": "text",
+              "value": "cove",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "painted MDF cove board, plaster lip, anodised channel",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "concealed perimeter wash, no visible source, warm and even",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Cove Light maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_cd = coveDepth * _s\n_bt = min(boardThk * _s, _cd / 2)\n_lh = lipHeight * _s\n_lt = min(lipThk * _s, _cd / 2)\n_sh = slabHeight * _s\n_bodyL = _Ln\n_bodyW = _cd\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# v runs from the wall outward, and ANCHOR has already centred the body on it — so the wall\n# face is at -depth/2 and the front of the lip is at +depth/2.\n_vWall = 0 - _cd / 2\n_vOut = _cd / 2\n_topZ = _sh - coveDrop * _s\n_botZ = _topZ - _bt\n# The tape is set back FROM THE LIP, not from the wall: the lip is what hides it, so the\n# concealment is a distance between those two and nothing to do with where the wall is.\n_sw = min(stripWidth * _s, max(0.002, _cd - _lt))\n_ts = min(tapeSetback * _s, max(0, _cd - _lt - _sw))\n_tv1 = _vOut - _lt - _ts\n_tv0 = _tv1 - _sw\n_tT = 0.004 * _s\n_BOARD = hcat(0 - _Ln / 2, _vWall, _Ln / 2, _vWall, _Ln / 2, _vOut, 0 - _Ln / 2, _vOut, _botZ, _topZ, 1)\n_LIPr = hcat(0 - _Ln / 2, _vOut - _lt, _Ln / 2, _vOut - _lt, _Ln / 2, _vOut, 0 - _Ln / 2, _vOut, _topZ, _topZ + _lh, 2)\n_LIP = _lh > 0.001 ? _LIPr : zeros(0, 11)\n_TAPE = hcat(0 - _Ln / 2, _tv0, _Ln / 2, _tv0, _Ln / 2, _tv1, 0 - _Ln / 2, _tv1, _topZ, _topZ + _tT, 3)\nQ = vcat(_BOARD, _LIP, _TAPE)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBoard3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nLip3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nTape3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nBoardPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nTapePlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\n# ── Lamp block ─────────────────────────────────────────────────────────────────────────────\n# The photometry a renderer needs and a drawing cannot show. Arithmetic on the inputs only:\n# nothing here lights anything, and `lamp` names the Photometry file that carries the rest.\n_lbDim = max(0, min(100, dimLevel)) / 100\n_lbLm = lumensPerMetre * _Ln\nlampDimmed = _lbLm * _lbDim\n# 683 lm/W is the same constant material/1 uses for emission.luminance. Writing it in both\n# places is the point: a lit diffuser and the lamp behind it have to be reconcilable, and they\n# can only be reconciled through one number.\nlampWatts = lampDimmed / 683\nlampSoftSize = lampRadius\nlampEmits = emitsLight > 0 ? 1 : 0\nlampCri = cri\nlampKelvin = kelvin\n# THE number for a cove. Sight the lip top against the near edge of the tape: below that angle\n# the source is hidden, above it you are looking straight at a line of diodes. A cove with a\n# 30 mm lip and the tape hard against it conceals nothing, and no amount of lumens fixes that.\ncutoffAngle = atan2(_lh, max(0.001, _vOut - _tv1)) * 180 / PI\n# How much ceiling the wash has to open out across. Too little and the cove reads as a bright\n# stripe rather than a lit ceiling — under about 150 mm it always does.\nwashHeight = _sh - _topZ - _tT\nslotClear = _sh - _topZ - _lh\nrunLength = _Ln\ncoveTop = _topZ\ncoveDepthUsed = _cd\ntapeConcealed = (_lh > 0.001 && _ts > 0.001) ? 1 : 0\nwashLuminance = washHeight > 0.01 ? (lampDimmed / (PI * max(0.01, _Ln * washHeight))) : 0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Cove board — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Lip — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Tape — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Cove board — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Tape — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Run length (m)"
+            },
+            {
+              "id": "s7",
+              "label": "Cove top (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Cove depth (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Cut-off angle (°)"
+            },
+            {
+              "id": "s10",
+              "label": "Wash height (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Slot clear above the lip (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Tape concealed"
+            },
+            {
+              "id": "s13",
+              "label": "Ceiling luminance (cd/m²)"
+            },
+            {
+              "id": "s14",
+              "label": "Dimmed output (lm)"
+            },
+            {
+              "id": "s15",
+              "label": "Blender watts (W)"
+            },
+            {
+              "id": "s16",
+              "label": "Lamp radius (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Emits light"
+            },
+            {
+              "id": "s18",
+              "label": "CRI"
+            },
+            {
+              "id": "s19",
+              "label": "Colour temperature (K)"
+            },
+            {
+              "id": "s20",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_board",
+              "kind": "polygon",
+              "name": "Cove board",
+              "color": "#e7e5e4",
+              "layer": "Lighting",
+              "show": true
+            },
+            {
+              "id": "p2_tape",
+              "kind": "polygon",
+              "name": "Tape",
+              "color": "#fbbf24",
+              "layer": "Lighting",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_board",
+              "kind": "polyhedron",
+              "name": "Cove board",
+              "color": "#e7e5e4",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_lip",
+              "kind": "polyhedron",
+              "name": "Lip",
+              "color": "#d6d3d1",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tape",
+              "kind": "polyhedron",
+              "name": "Tape",
+              "color": "#fde68a",
+              "layer": "Lighting",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_coveDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-coveDepth",
+      "targetHandle": "valin-coveDepth"
+    },
+    {
+      "id": "e_props_math_boardThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-boardThk",
+      "targetHandle": "valin-boardThk"
+    },
+    {
+      "id": "e_props_math_lipHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lipHeight",
+      "targetHandle": "valin-lipHeight"
+    },
+    {
+      "id": "e_props_math_lipThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lipThk",
+      "targetHandle": "valin-lipThk"
+    },
+    {
+      "id": "e_props_math_slabHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-slabHeight",
+      "targetHandle": "valin-slabHeight"
+    },
+    {
+      "id": "e_props_math_coveDrop",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-coveDrop",
+      "targetHandle": "valin-coveDrop"
+    },
+    {
+      "id": "e_props_math_tapeSetback",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tapeSetback",
+      "targetHandle": "valin-tapeSetback"
+    },
+    {
+      "id": "e_props_math_stripWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-stripWidth",
+      "targetHandle": "valin-stripWidth"
+    },
+    {
+      "id": "e_props_math_lumensPerMetre",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lumensPerMetre",
+      "targetHandle": "valin-lumensPerMetre"
+    },
+    {
+      "id": "e_props_math_kelvin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-kelvin",
+      "targetHandle": "valin-kelvin"
+    },
+    {
+      "id": "e_props_math_cri",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-cri",
+      "targetHandle": "valin-cri"
+    },
+    {
+      "id": "e_props_math_dimLevel",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-dimLevel",
+      "targetHandle": "valin-dimLevel"
+    },
+    {
+      "id": "e_props_math_lampRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lampRadius",
+      "targetHandle": "valin-lampRadius"
+    },
+    {
+      "id": "e_props_math_emitsLight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-emitsLight",
+      "targetHandle": "valin-emitsLight"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Board3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Lip3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Tape3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BoardPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-TapePlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-runLength",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-coveTop",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-coveDepthUsed",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-cutoffAngle",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-washHeight",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-slotClear",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-tapeConcealed",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-washLuminance",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampDimmed",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampWatts",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampSoftSize",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampEmits",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampCri",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_out_s19",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-lampKelvin",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_out_s20",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_out_r2d_p2_board",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_board"
+    },
+    {
+      "id": "e_out_r2d_p2_tape",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_tape"
+    },
+    {
+      "id": "e_out_r3d_p3_board",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_board"
+    },
+    {
+      "id": "e_out_r3d_p3_lip",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_lip"
+    },
+    {
+      "id": "e_out_r3d_p3_tape",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_tape"
+    }
+  ]
+}

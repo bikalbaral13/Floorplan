@@ -1,0 +1,13 @@
+{
+  "room_length":    { "value": 3.9624, "source": "measured" },
+  "room_width":     { "value": 3.7338, "source": "measured" },
+  "window_width":   { "value": 1.524,  "source": "measured" },
+  "wardrobe_width": { "value": 2.176,  "source": "measured" },
+  "wardrobe_depth": { "value": 0.379,  "source": "measured" },
+  "seat_length":    { "value": 1.548,  "source": "measured" },
+  "seat_depth":     { "value": 0.379,  "source": "measured" },
+  "entry_door":     { "value": "B",        "source": "measured" },
+  "other_door":     { "value": "bathroom", "source": "measured" },
+  "clear_span":     { "value": 3.9624, "source": "derived" },
+  "sill_height":    { "value": 0.9,    "source": "convention" }
+}

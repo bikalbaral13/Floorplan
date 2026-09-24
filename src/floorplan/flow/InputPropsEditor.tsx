@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Play, Plus, X } from "lucide-react";
 import { DEFAULT_PROP_COLOR, inputProps, propVisible, type InputProp, type InputPropType } from "./flowTypes";
 
 let propSeq = 1;
@@ -11,12 +11,13 @@ const TYPE_OPTIONS: { value: InputPropType; label: string }[] = [
   { value: "checkbox", label: "Checkbox" },
   { value: "text", label: "Textbox" },
   { value: "color", label: "Colour" },
+  { value: "button", label: "Run button" },
 ];
 
 /** Default value for a freshly-chosen control type. */
 const defaultValue = (type: InputPropType, options: string[]): string | number | boolean =>
   type === "checkbox" ? false
-  : type === "range" ? 0
+  : type === "range" || type === "button" ? 0
   : type === "select" ? (options[0] ?? "")
   : type === "color" ? DEFAULT_PROP_COLOR
   : "";
@@ -58,12 +59,22 @@ export const InputPropsEditor = ({
   nodrag,
   valuesOnly,
   hideGated,
+  wired,
+  onRunAction,
 }: {
   params: Record<string, unknown>;
   onParamChange: (key: string, value: unknown) => void;
   onRowRef?: (propId: string, el: HTMLDivElement | null) => void;
   nodrag?: boolean;
   valuesOnly?: boolean;
+  /** Parameters currently DRIVEN by a wire into their `valin-<id>` endpoint, keyed by prop id. Their control
+   *  is replaced by a read-only readout of the incoming value: the wire overwrites the stored value on every
+   *  evaluation, so leaving an editable slider there would be a lie. */
+  wired?: Record<string, number | string>;
+  /** What a `button` parameter DOES beyond bumping its run counter — supplied by the flow editor, where a
+   *  press also applies the graph's pending Set Object Param writes. Absent in the Properties tab, where
+   *  there is no graph to commit: the button still counts up, so a gated Math Engine still runs. */
+  onRunAction?: (p: InputProp) => void;
   /** Consumer view (Properties tab): actually HIDE parameters whose `showIf` gate isn't met, instead of just
    *  dimming them. Off on the canvas node so every row (and its `val-<id>` handle) stays put for authoring. */
   hideGated?: boolean;
@@ -78,21 +89,62 @@ export const InputPropsEditor = ({
     update(id, { type, value: defaultValue(type, p?.options ?? []) });
   };
   const addProp = () =>
-    setProps([...props, { id: nextPropId(), name: "", type: "range", value: 0, min: 0, max: 10, step: 1, options: [] }]);
+    setProps([...props, { id: nextPropId(), name: "", type: "range", value: 0, min: 0, max: 10, step: 1, options: [], editable: true, showInCanvas: false, necessary: true }]);
   const inputCls = `h-6 rounded border border-slate-200 px-1.5 text-[10px]${nd}`;
 
-  // The value control for a parameter — shared by both modes.
+  // The value control for a parameter — shared by both modes. A parameter fed by a wire shows the INCOMING
+  // value read-only instead: its own control is overridden on every evaluation.
   const valueControl = (p: InputProp) => {
+    const w = wired?.[p.id];
+    // `editable: false` locks the parameter for the CONSUMER only. The flow-canvas editor keeps its
+    // control live — that is where the flag is set, and a parameter you locked by mistake has to
+    // remain fixable.
+    const locked = !!valuesOnly && !p.editable;
+    if (w != null) {
+      return (
+        <div className="flex items-center gap-1.5 rounded bg-amber-50 px-1.5 py-0.5" title="Driven by the value wired into this parameter">
+          <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-amber-500">wired</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-amber-800">
+            {p.type === "checkbox" ? (Number(w) !== 0 ? "On (1)" : "Off (0)") : String(w)}
+          </span>
+        </div>
+      );
+    }
+    const lockTitle = locked ? "Locked by the flow author — not editable here" : undefined;
+    const lockCls = locked ? " cursor-not-allowed opacity-60" : "";
+    if (p.type === "button") {
+      const runs = typeof p.value === "number" ? p.value : 0;
+      return (
+        <button
+          type="button"
+          disabled={locked}
+          title={locked ? lockTitle : "Run — solve and apply"}
+          className={`flex h-6 w-full items-center justify-center gap-1.5 rounded bg-teal-600 px-2 text-[10px] font-semibold text-white hover:bg-teal-700${nd}${lockCls}`}
+          onClick={() => {
+            // A NEW value every press. Re-pressing with the same number would be "no change" to the
+            // graph, so a re-run after editing something upstream would silently do nothing.
+            const next = runs + 1;
+            update(p.id, { value: next });
+            onRunAction?.({ ...p, value: next });
+          }}
+        >
+          <Play className="h-3 w-3" />
+          {p.name.trim() || "Run"}
+          {runs > 0 && <span className="font-mono text-[9px] font-normal opacity-70">#{runs}</span>}
+        </button>
+      );
+    }
     if (p.type === "range") {
       return (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5" title={lockTitle}>
           <input
             type="range"
-            className={`min-w-0 flex-1${nd}`}
+            className={`min-w-0 flex-1${nd}${lockCls}`}
             min={p.min}
             max={p.max}
             step={p.step || 1}
             value={typeof p.value === "number" ? p.value : 0}
+            disabled={locked}
             onChange={(e) => update(p.id, { value: +e.target.value })}
           />
           <span className="w-10 shrink-0 text-right font-mono text-[10px] text-slate-700">{typeof p.value === "number" ? p.value : 0}</span>
@@ -101,7 +153,7 @@ export const InputPropsEditor = ({
     }
     if (p.type === "select") {
       return (
-        <select className={`${inputCls} w-full`} value={String(p.value ?? "")} onChange={(e) => update(p.id, { value: e.target.value })}>
+        <select className={`${inputCls} w-full${lockCls}`} title={lockTitle} value={String(p.value ?? "")} disabled={locked} onChange={(e) => update(p.id, { value: e.target.value })}>
           {p.options.length === 0 && <option value="">—</option>}
           {p.options.map((o) => (
             <option key={o} value={o}>{o}</option>
@@ -111,8 +163,8 @@ export const InputPropsEditor = ({
     }
     if (p.type === "checkbox") {
       return (
-        <label className="flex items-center gap-1.5 text-[10px] text-slate-600">
-          <input type="checkbox" className={nd.trim()} checked={p.value === true} onChange={(e) => update(p.id, { value: e.target.checked })} />
+        <label className={`flex items-center gap-1.5 text-[10px] text-slate-600${lockCls}`} title={lockTitle}>
+          <input type="checkbox" className={nd.trim()} checked={p.value === true} disabled={locked} onChange={(e) => update(p.id, { value: e.target.checked })} />
           {p.value === true ? "On (1)" : "Off (0)"}
         </label>
       );
@@ -120,18 +172,19 @@ export const InputPropsEditor = ({
     if (p.type === "color") {
       const hex = typeof p.value === "string" && p.value ? p.value : DEFAULT_PROP_COLOR;
       return (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5" title={lockTitle}>
           <input
             type="color"
-            className={`h-6 w-8 shrink-0 cursor-pointer rounded border border-slate-200 bg-white${nd}`}
+            className={`h-6 w-8 shrink-0 cursor-pointer rounded border border-slate-200 bg-white${nd}${lockCls}`}
             value={hex}
+            disabled={locked}
             onChange={(e) => update(p.id, { value: e.target.value })}
           />
           <span className="font-mono text-[10px] text-slate-700">{hex}</span>
         </div>
       );
     }
-    return <input type="text" className={`${inputCls} w-full`} placeholder="value" value={String(p.value ?? "")} onChange={(e) => update(p.id, { value: e.target.value })} />;
+    return <input type="text" className={`${inputCls} w-full${lockCls}`} title={lockTitle} placeholder="value" value={String(p.value ?? "")} disabled={locked} onChange={(e) => update(p.id, { value: e.target.value })} />;
   };
 
   // ── Interaction-only (Properties tab): label + value control, nothing structural. ──
@@ -146,7 +199,8 @@ export const InputPropsEditor = ({
           // (pobj-source exposes every parameter as an output endpoint; without the ref they'd all
           // stack at the node's default handle position). onRowRef is a no-op where unused (Properties tab).
           <div key={p.id} ref={(el) => onRowRef?.(p.id, el)} className="space-y-0.5">
-            <span className="text-[10px] text-slate-500">{p.name.trim() || `Parameter ${i + 1}`}</span>
+            {/* A button already carries its own name on its face — a label above it would say it twice. */}
+            {p.type !== "button" && <span className="text-[10px] text-slate-500">{p.name.trim() || `Parameter ${i + 1}`}</span>}
             {valueControl(p)}
           </div>
         ))}
@@ -195,6 +249,27 @@ export const InputPropsEditor = ({
           )}
 
           {valueControl(p)}
+
+          {/* Editable — whether the CONSUMER (Properties tab) may change this value. On by default, and
+              absent from files authored before it existed, which read as editable. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <label className={`flex items-center gap-1.5 text-[9px] uppercase tracking-wide text-slate-400${nd}`} title="Allow this parameter to be changed from the Properties tab">
+              <input type="checkbox" className={nd.trim()} checked={p.editable} onChange={(e) => update(p.id, { editable: e.target.checked })} />
+              Editable
+            </label>
+
+            {/* Draw the live value on the plan, at the host's anchor: Space → centroid, Segment → midpoint,
+                Node → over the point. Off by default so no existing object starts labelling itself. */}
+            <label className={`flex items-center gap-1.5 text-[9px] uppercase tracking-wide text-slate-400${nd}`} title="Draw this value on the 2D canvas — at the Space centroid / Segment midpoint / over the Node">
+              <input type="checkbox" className={nd.trim()} checked={p.showInCanvas} onChange={(e) => update(p.id, { showInCanvas: e.target.checked })} />
+              Show in canvas
+            </label>
+
+            <label className={`flex items-center gap-1.5 text-[9px] uppercase tracking-wide text-slate-400${nd}`} title="Mark this parameter as required">
+              <input type="checkbox" className={nd.trim()} checked={p.necessary} onChange={(e) => update(p.id, { necessary: e.target.checked })} />
+              Necessary
+            </label>
+          </div>
 
           {/* Conditional visibility — show this parameter only when another checkbox / select prop matches.
               Only offered when there's a gate to point at; clearing it back to "Always" drops the showIf. */}

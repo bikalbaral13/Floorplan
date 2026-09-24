@@ -1,0 +1,36 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.blackout",
+  "title": "Fabric — blackout liner",
+  "description": "The coated liner behind a drape. Matte to the point of having no specular story at all, and opaque — which is the whole point of the layer.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 400,
+      "detail": 2,
+      "roughness": 0.5,
+      "distortion": 0,
+      "colorA": "#ded4c2",
+      "colorB": "#cfc4b1"
+    }
+  },
+  "pbr": {
+    "baseColor": "#d9cbb5",
+    "roughness": 1,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#d9cbb5"
+  },
+  "dxf": {
+    "pattern": "SOLID",
+    "scale": 1,
+    "angle": 0
+  }
+}

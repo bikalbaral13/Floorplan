@@ -1,0 +1,661 @@
+{
+  "version": 1,
+  "id": "kitchen-sink-with-math",
+  "title": "Kitchen Sink — one Math Engine, deck, bowls, drainer",
+  "category": "Kitchen",
+  "object": {
+    "hostKind": "node",
+    "name": "Kitchen Sink",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 10h18v3a5 5 0 01-5 5H8a5 5 0 01-5-5v-3z",
+        "M12 3v4",
+        "M10 7h4",
+        "M16 13h2"
+      ]
+    }
+  },
+  "description": "A parametric KITCHEN SINK on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nTHE HALF BOWL IS A DIVISOR, not a special case. Single, one-and-a-half and double are the same two-bowl construction with the split moved: the divider sits at 1/1, 1/1.6 or 1/2 of the bowl run, and Single simply drops the second bowl. That is one number changing, so a sink can be resized without any of the three arrangements breaking.\n\nTHE DRAINER TAKES ITS LENGTH FROM WHAT IS LEFT. Turn it on and the bowl run shrinks to 60% of the deck, so the two always add up to the sink you asked for rather than overflowing it. Turn it off and the bowls take the full length.\n\nFOUR PIECES, FOUR SLOTS — deck, bowls, drainer, tap — because a sink cut into a worktop needs its bowl outline separately from its deck outline, and a schedule wants the bowl area on its own.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Length",
+              "type": "range",
+              "value": 1,
+              "min": 0.4,
+              "max": 1.8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.35,
+              "max": 0.7,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Deck height",
+              "type": "range",
+              "value": 0.9,
+              "min": 0.7,
+              "max": 1.1,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "deckThk",
+              "name": "Deck thickness",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.01,
+              "max": 0.1,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bowlDepth",
+              "name": "Bowl depth",
+              "type": "range",
+              "value": 0.18,
+              "min": 0.08,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bowls",
+              "name": "Bowls",
+              "type": "select",
+              "value": "One and a half",
+              "options": [
+                "Single",
+                "One and a half",
+                "Double"
+              ]
+            },
+            {
+              "id": "drainer",
+              "name": "Drainer board",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "showTap",
+              "name": "Show tap",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "stainless steel inset sink, one and a half bowl, right-hand drainer",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Kitchen Sink maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Wd = width * _s\n_Ht = height * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_dT = min(deckThk * _s, _Ht * 0.2)\n_bD = min(bowlDepth * _s, _Ht * 0.5)\n_deckZ0 = _Ht - _dT\n_bz0 = _deckZ0 - _bD\n_isSingle = bowls == 'Single' ? 1 : 0\n_isDouble = bowls == 'Double' ? 1 : 0\n_drain = drainer > 0 ? 1 : 0\n_workL = _drain > 0 ? _Ln * 0.6 : _Ln\n_bu0 = _u0 + 0.04 * _s\n_bu1 = _bu0 + max(0.15 * _s, _workL - 0.08 * _s)\n_bv0 = _v0 + 0.05 * _s\n_bv1 = _v1 - 0.05 * _s\n_split = _isSingle > 0 ? 1 : (_isDouble > 0 ? 2 : 1.6)\n_bMid = _bu0 + (_bu1 - _bu0) / _split\n_gap = 0.03 * _s\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_DECK = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _deckZ0, _Ht, 1)\n_B1 = hcat(_bu0, _bv0, _bMid, _bv0, _bMid, _bv1, _bu0, _bv1, _bz0, _deckZ0, 2)\n_B2 = hcat(_bMid + _gap, _bv0, _bu1, _bv0, _bu1, _bv1, _bMid + _gap, _bv1, _bz0, _deckZ0, 2)\n_BOWLS = _isSingle > 0 ? _B1 : vcat(_B1, _B2)\n_DR = hcat(_bu1 + _gap, _bv0, _u1 - 0.04 * _s, _bv0, _u1 - 0.04 * _s, _bv1, _bu1 + _gap, _bv1, _deckZ0 - 0.01 * _s, _deckZ0, 3)\n_DRN = _drain > 0 ? _DR : zeros(0, 11)\n_TAPQ = hcat(_bu0 + 0.02 * _s, _v0 + 0.03 * _s, _bu0 + 0.07 * _s, _v0 + 0.03 * _s, _bu0 + 0.07 * _s, _v0 + 0.08 * _s, _bu0 + 0.02 * _s, _v0 + 0.08 * _s, _Ht, _Ht + 0.3 * _s, 4)\n_TAP = showTap > 0 ? _TAPQ : zeros(0, 11)\nQ = vcat(vcat(_DECK, _BOWLS), vcat(_DRN, _TAP))\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nDeck3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nDeckPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nBowls3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nBowlsPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nDrainer3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nDrainerPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nTap3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nTapPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\nbowlArea = max(0, _bMid - _bu0) * max(0, _bv1 - _bv0)\ndeckLevel = _Ht\nbowlCount = _isSingle > 0 ? 1 : 2"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Deck — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Bowls — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Drainer — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Tap — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Deck — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Bowls — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Drainer — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Tap — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Main bowl area (m²)"
+            },
+            {
+              "id": "s14",
+              "label": "Deck level (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Bowls"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_deck",
+              "kind": "polygon",
+              "name": "Deck",
+              "color": "#cbd5e1",
+              "layer": "Kitchen",
+              "show": true
+            },
+            {
+              "id": "p2_bowls",
+              "kind": "polygon",
+              "name": "Bowls",
+              "color": "#94a3b8",
+              "layer": "Kitchen",
+              "show": true
+            },
+            {
+              "id": "p2_drainer",
+              "kind": "polygon",
+              "name": "Drainer",
+              "color": "#e2e8f0",
+              "layer": "Kitchen",
+              "show": true
+            },
+            {
+              "id": "p2_tap",
+              "kind": "polygon",
+              "name": "Tap",
+              "color": "#475569",
+              "layer": "Kitchen",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_deck",
+              "kind": "polyhedron",
+              "name": "Deck",
+              "color": "#cbd5e1",
+              "layer": "Kitchen",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_bowls",
+              "kind": "polyhedron",
+              "name": "Bowls",
+              "color": "#94a3b8",
+              "layer": "Kitchen",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_drainer",
+              "kind": "polyhedron",
+              "name": "Drainer",
+              "color": "#e2e8f0",
+              "layer": "Kitchen",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_tap",
+              "kind": "polyhedron",
+              "name": "Tap",
+              "color": "#475569",
+              "layer": "Kitchen",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-length__math_valin-length",
+      "source": "props",
+      "sourceHandle": "val-length",
+      "target": "math",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-height__math_valin-height",
+      "source": "props",
+      "sourceHandle": "val-height",
+      "target": "math",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e6_props_val-deckThk__math_valin-deckThk",
+      "source": "props",
+      "sourceHandle": "val-deckThk",
+      "target": "math",
+      "targetHandle": "valin-deckThk"
+    },
+    {
+      "id": "e7_props_val-bowlDepth__math_valin-bowlDepth",
+      "source": "props",
+      "sourceHandle": "val-bowlDepth",
+      "target": "math",
+      "targetHandle": "valin-bowlDepth"
+    },
+    {
+      "id": "e8_props_val-bowls__math_valin-bowls",
+      "source": "props",
+      "sourceHandle": "val-bowls",
+      "target": "math",
+      "targetHandle": "valin-bowls"
+    },
+    {
+      "id": "e9_props_val-drainer__math_valin-drainer",
+      "source": "props",
+      "sourceHandle": "val-drainer",
+      "target": "math",
+      "targetHandle": "valin-drainer"
+    },
+    {
+      "id": "e10_props_val-showTap__math_valin-showTap",
+      "source": "props",
+      "sourceHandle": "val-showTap",
+      "target": "math",
+      "targetHandle": "valin-showTap"
+    },
+    {
+      "id": "e11_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e12_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e13_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e14_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e15_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e16_math_val-Deck3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Deck3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e17_out_val-s1__r3d_valin-p3_deck",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_deck"
+    },
+    {
+      "id": "e18_math_val-Bowls3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Bowls3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e19_out_val-s2__r3d_valin-p3_bowls",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_bowls"
+    },
+    {
+      "id": "e20_math_val-Drainer3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Drainer3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e21_out_val-s3__r3d_valin-p3_drainer",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_drainer"
+    },
+    {
+      "id": "e22_math_val-Tap3D__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-Tap3D",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e23_out_val-s4__r3d_valin-p3_tap",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r3d",
+      "targetHandle": "valin-p3_tap"
+    },
+    {
+      "id": "e24_math_val-DeckPlan__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-DeckPlan",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e25_out_val-s5__r2d_valin-p2_deck",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r2d",
+      "targetHandle": "valin-p2_deck"
+    },
+    {
+      "id": "e26_math_val-BowlsPlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-BowlsPlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e27_out_val-s6__r2d_valin-p2_bowls",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_bowls"
+    },
+    {
+      "id": "e28_math_val-DrainerPlan__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-DrainerPlan",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e29_out_val-s7__r2d_valin-p2_drainer",
+      "source": "out",
+      "sourceHandle": "val-s7",
+      "target": "r2d",
+      "targetHandle": "valin-p2_drainer"
+    },
+    {
+      "id": "e30_math_val-TapPlan__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-TapPlan",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e31_out_val-s8__r2d_valin-p2_tap",
+      "source": "out",
+      "sourceHandle": "val-s8",
+      "target": "r2d",
+      "targetHandle": "valin-p2_tap"
+    },
+    {
+      "id": "e32_math_val-overallLength__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e33_math_val-overallWidth__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e34_math_val-overallHeight__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e35_math_val-footprint__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e36_math_val-bowlArea__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-bowlArea",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e37_math_val-deckLevel__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-deckLevel",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e38_math_val-bowlCount__out_valin-s15",
+      "source": "math",
+      "sourceHandle": "val-bowlCount",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    }
+  ]
+}

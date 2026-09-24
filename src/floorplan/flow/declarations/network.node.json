@@ -7,8 +7,8 @@
     "category": "2d primitives",
     "color": "#0891b2"
   },
-  "description": "2D primitive — draws a graph JSON on the canvas as segments. Nodes place the points, each edge becomes a 2-point stroke.",
-  "instructions": "A 2D primitive source that DRAWS a graph. Feed `graph` (or wire `valin-graph`) with the JSON that Graph Geometry and Skeleton's `val-branches` publish:\n\n{ \"nodes\": [{ \"id\": \"n1\", \"x\": 0, \"y\": 0 }, …],\n  \"edges\": [{ \"from_node_id\": \"n1\", \"to_node_id\": \"n2\" }, …] }\n\nEvery edge is drawn as an open 2-point segment between its endpoint nodes, and flows on downstream as a polyline — feed it into Mitered Join to stroke the network into walls.\n\nCoordinates are METRES local to the anchor, the same convention every other 2D primitive uses. Nodes given as bare id strings carry no position, so edges referencing them are skipped — publish nodes as {id,x,y} objects. `val-nodeCount` / `val-edgeCount` report what was actually placed and drawn.",
+  "description": "2D primitive — draws a graph JSON on the canvas as real SEGMENTS: nodes place the points, every edge becomes a canvas wall. The row's Thickness / Segment type / Layer are stamped on each one, and Attach object hosts a segment-hosted library object (door.json / window.json) on it — which is what makes a generated plan editable element by element instead of a drawing. Object params (JSON) binds the hosted object's own fields to this row — {\"thickness\": 0.23} makes a Wall object match the segment it sits on — and a door / window row additionally renders as an OPENING, so the band is a gap and the object draws the leaf or the frame. Display mode arrives on every segment the row draws, so a generated wall is already \"Buffered\" without visiting each one in Segment Properties. Fill paints the band Outlined (stroke only — the drafting default), Filled, or Hatched with a 45° poché pattern, so the CANVAS draws the whole wall and the hosted Wall object need not draw a 2D band at all. Wall join sets how the bands meet at shared endpoints: \"Mitered union\" merges every connected run into ONE seamless outline (no line across a corner or a T), \"Mitered\" closes each corner but still strokes each wall, \"Individual bands\" is the raw rectangle per segment.",
+  "instructions": "A 2D primitive source that DRAWS a graph. Feed `graph` (or wire `valin-graph`) with the JSON that Graph Geometry and Skeleton's `val-branches` publish:\n\n{ \"nodes\": [{ \"id\": \"n1\", \"x\": 0, \"y\": 0 }, …],\n  \"edges\": [{ \"from_node_id\": \"n1\", \"to_node_id\": \"n2\" }, …] }\n\nEvery edge is drawn as an open 2-point segment between its endpoint nodes, and flows on downstream as a polyline — feed it into Mitered Join to stroke the network into walls.\n\nCoordinates are METRES local to the anchor, the same convention every other 2D primitive uses. Nodes given as bare id strings carry no position, so edges referencing them are skipped — publish nodes as {id,x,y} objects. `val-nodeCount` / `val-edgeCount` report what was actually placed and drawn.\n\nWALL JOIN + DISPLAY MODE work together, and which field carries the join depends on the display:\n\n• BUFFERED / PATH row — \"Mitered union (seamless)\" pins the band to the merged outline via the segment's own `bufferJoin`, leaving `mode` free for Fill (Outlined / Filled / Hatched). The two are independent there, so a run can be Outlined AND seamless. A hatched union carries its poché pattern on the merged shape, since the per-segment bands render stroke-less underneath it.\n• LINE row — the join lives in the segment's `mode`, exactly as it does for a hand-drawn wall.\n• \"Auto (canvas view)\" on either — the canvas decides: Preferences → Buffered Segment Joins for a buffered band, the Sharp / Filling+Union view for a line one.\n\nPinning matters because a generated plan should not need a preference flipped by hand before its walls read as masonry.",
   "handles": {
     "input": false,
     "output": true,
@@ -16,6 +16,10 @@
       {
         "key": "graph",
         "label": "Graph (JSON)"
+      },
+      {
+        "key": "thickness",
+        "label": "Thickness (m)"
       },
       {
         "key": "color",
@@ -43,6 +47,231 @@
       "label": "Graph (JSON)",
       "kind": "text",
       "default": ""
+    },
+    {
+      "key": "thickness",
+      "label": "Thickness",
+      "kind": "range",
+      "default": 0.12,
+      "min": 0.02,
+      "max": 1,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "segmentType",
+      "label": "Segment type",
+      "kind": "select",
+      "default": "wall",
+      "options": [
+        {
+          "value": "wall",
+          "label": "Wall"
+        },
+        {
+          "value": "door",
+          "label": "Door"
+        },
+        {
+          "value": "window",
+          "label": "Window"
+        },
+        {
+          "value": "line",
+          "label": "Line"
+        },
+        {
+          "value": "path",
+          "label": "Path"
+        }
+      ]
+    },
+    {
+      "key": "wallMode",
+      "label": "Wall join",
+      "kind": "select",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto (canvas view)"
+        },
+        {
+          "value": "mitered-union",
+          "label": "Mitered union (seamless)"
+        },
+        {
+          "value": "mitered",
+          "label": "Mitered (per wall)"
+        },
+        {
+          "value": "fill",
+          "label": "Individual bands"
+        },
+        {
+          "value": "line",
+          "label": "Line"
+        }
+      ],
+      "showWhen": "segmentType == 'wall'"
+    },
+    {
+      "key": "display",
+      "label": "Display mode",
+      "kind": "select",
+      "default": "line",
+      "options": [
+        {
+          "value": "line",
+          "label": "Line (thin styled stroke)"
+        },
+        {
+          "value": "buffered",
+          "label": "Buffered (thickness band)"
+        },
+        {
+          "value": "path",
+          "label": "Path (band + live Space)"
+        }
+      ],
+      "showWhen": "segmentType == 'wall'"
+    },
+    {
+      "key": "bufferStyle",
+      "label": "Buffer cap",
+      "kind": "select",
+      "default": "flat",
+      "options": [
+        {
+          "value": "flat",
+          "label": "Flat (butt)"
+        },
+        {
+          "value": "square",
+          "label": "Square (extended)"
+        },
+        {
+          "value": "capsule",
+          "label": "Capsule (rounded)"
+        }
+      ],
+      "showWhen": "segmentType == 'wall' && display != 'line'"
+    },
+    {
+      "key": "fill",
+      "label": "Fill",
+      "kind": "select",
+      "default": "outlined",
+      "options": [
+        {
+          "value": "outlined",
+          "label": "Outlined (stroke only)"
+        },
+        {
+          "value": "filled",
+          "label": "Filled (solid)"
+        },
+        {
+          "value": "hatched",
+          "label": "Hatched (poché pattern)"
+        }
+      ],
+      "showWhen": "segmentType == 'wall' && display != 'line'"
+    },
+    {
+      "key": "extrude3d",
+      "label": "Extrude in 3D",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "hatchStyle",
+      "label": "Hatch Style",
+      "kind": "select",
+      "default": "diagonal",
+      "options": [
+        {
+          "value": "diagonal",
+          "label": "Diagonal lines"
+        },
+        {
+          "value": "dots",
+          "label": "Random dots"
+        }
+      ],
+      "showWhen": "fill == 'hatched'"
+    },
+    {
+      "key": "hatchSpacing",
+      "label": "Spacing",
+      "kind": "range",
+      "default": 8,
+      "min": 3,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "showWhen": "fill == 'hatched'"
+    },
+    {
+      "key": "hatchAngle",
+      "label": "Angle",
+      "kind": "range",
+      "default": 45,
+      "min": 0,
+      "max": 180,
+      "step": 1,
+      "unit": "°",
+      "showWhen": "fill == 'hatched' && hatchStyle == 'diagonal'"
+    },
+    {
+      "key": "hatchWeight",
+      "label": "Weight",
+      "kind": "range",
+      "default": 1,
+      "min": 0.5,
+      "max": 5,
+      "step": 0.5,
+      "unit": "px",
+      "showWhen": "fill == 'hatched'"
+    },
+    {
+      "key": "typeMap",
+      "label": "Per-type overrides (JSON)",
+      "kind": "text",
+      "default": "",
+      "placeholder": "{\"door\": {\"objectId\": \"door-with-math\", \"layer\": \"Doors\", \"segmentType\": \"door\"}}"
+    },
+    {
+      "key": "objectId",
+      "label": "Attach object (id)",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "objectParams",
+      "label": "Object params (JSON)",
+      "kind": "text",
+      "default": "",
+      "placeholder": "{\"thickness\": 0.23}"
+    },
+    {
+      "key": "extraObjects",
+      "label": "Also host (JSON array)",
+      "kind": "text",
+      "default": "",
+      "placeholder": "[{\"objectId\":\"wall-with-math\",\"params\":{\"base\":2.1,\"height\":0.7}}]"
+    },
+    {
+      "key": "layer",
+      "label": "Layer",
+      "kind": "text",
+      "default": ""
+    },
+    {
+      "key": "release",
+      "label": "Release on commit",
+      "kind": "checkbox",
+      "default": false
     },
     {
       "key": "color",

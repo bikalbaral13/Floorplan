@@ -1,0 +1,101 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "filter-by-space",
+  "meta": {
+    "label": "Filter by Space",
+    "category": "Canvas",
+    "color": "#0f766e"
+  },
+  "description": "Narrow a Plan JSON payload to ONE space. Takes the space's outline on its geometry input and a Plan JSON string on `json`, grows the outline by Margin, and republishes only the spaces, segments and nodes that fall inside — with their attached objects. Publishes on `val-json`.",
+  "instructions": "The scoping half of Plan JSON, split out so the SHAPE and the PAYLOAD can be decided separately.\n\nPlan JSON scopes itself to the canvas SELECTION, which is convenient and inflexible: nothing else can choose the region, and the region cannot be grown, computed or reused. Wire Plan JSON with nothing selected — so it emits the WHOLE canvas — then feed it through this node with any Space on the geometry input, and the region becomes ordinary flow geometry: a selected room, an Inset of it, a Bounding Shape, a Math Engine's result. The filter reads the wired outline's VERTICES, so whatever produced them is irrelevant.\n\nINPUTS\n• GEOMETRY (left) — the outline to filter by. Several wired in are treated as one region: an entry is kept if it falls inside ANY of them.\n• `json` — a Plan JSON string, normally straight off Plan JSON's `val-json`.\n\nMARGIN is an outward offset on that outline, in metres, and it is the setting that decides whether a room arrives complete. The walls that BOUND a room lie exactly ON its outline, and a point on the edge is undefined under even-odd ray casting — it lands inside or outside depending on which way the ray happens to cross. A margin of zero therefore keeps some of a room's own walls and drops others, and WHICH ones changes with the room's coordinates. Anything from about 0.15 m up is deterministic; the default 1 m also catches a door leaf swinging out, a window reveal and furniture pushed against the far face of a wall. Grow it further to pull in the neighbouring context a render benefits from, and watch the counts: past a metre or two you are collecting other rooms.\n\nWHAT IS TESTED, per entry:\n• a SPACE by its centroid,\n• a SEGMENT by its midpoint — so a wall shared by two rooms belongs to both, which is what a render of either one needs,\n• a NODE by its point.\n\nATTACHED OBJECTS ONLY narrows the result to entries carrying an `objectId` — the nodes and segments that have a parametric object on them, and nothing else. That is the subset a render actually draws from: the door with its leaf and handle, the window with its reveal, the furniture. Leave it off to keep the plain walls too, which is what gives the model the room's shape.\n\nOUTPUT `val-json` is the same payload shape Plan JSON emits, so anything that consumed one consumes the other — the Render node's Prompt above all. `space` is replaced by the wired outline (with its own attachment, when the outline matches a canvas space), and `scoped` is true. The counts beside it are the diagnostic: if Attached objects reads 0, either nothing in range carries an object or the Margin is too tight, and the counts say which.\n\nIt draws nothing and threads no geometry onward — the wired outline is a QUESTION, not something this node produces.\n\nTHE REGION CAN ARRIVE AS A LIST. `valin-points` takes the outline as `[[x,y],…]` in metres — a Geometry node's `val-points`, an Input Properties text parameter carrying it, a Math Engine's result — and is used exactly as a wired outline is. The GEOMETRY input still works and still WINS when both are connected; the list is there so a flow that already passes the outline around as a value does not need a second, parallel geometry wire to say the same thing twice.",
+  "handles": {
+    "input": true,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "points",
+        "label": "Region (points)"
+      },
+      {
+        "key": "json",
+        "label": "Plan (JSON)"
+      },
+      {
+        "key": "margin",
+        "label": "Margin"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "json",
+        "label": "Plan (JSON)"
+      },
+      {
+        "key": "margin",
+        "label": "Margin",
+        "unit": "m"
+      },
+      {
+        "key": "spaceCount",
+        "label": "Spaces"
+      },
+      {
+        "key": "segmentCount",
+        "label": "Segments"
+      },
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      },
+      {
+        "key": "objectCount",
+        "label": "Attached objects"
+      },
+      {
+        "key": "bytes",
+        "label": "JSON size",
+        "unit": "B"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "margin",
+      "label": "Margin",
+      "kind": "range",
+      "default": 1,
+      "min": 0,
+      "max": 20,
+      "step": 0.05,
+      "unit": "m"
+    },
+    {
+      "key": "objectsOnly",
+      "label": "Attached objects only",
+      "kind": "checkbox",
+      "default": false
+    },
+    {
+      "key": "includeNodes",
+      "label": "Include nodes",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "decimals",
+      "label": "Decimals",
+      "kind": "range",
+      "default": 3,
+      "min": 0,
+      "max": 6,
+      "step": 1
+    }
+  ],
+  "defaults": {
+    "margin": 1,
+    "objectsOnly": false,
+    "includeNodes": true,
+    "decimals": 3
+  }
+}

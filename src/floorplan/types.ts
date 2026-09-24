@@ -79,6 +79,16 @@ export interface Wall {
    *  style (capsule = rounded, square = extended, flat = butt), surviving Graph view. Absent = Line mode
    *  (thin styled stroke). Mirrors the flow "Display Segment" node's buffer style. */
   bufferStyle?: "capsule" | "square" | "flat";
+  /** Buffered bands normally join the way the canvas-wide "Buffered Segment Joins" preference says. A
+   *  segment can instead PIN itself to the seamless union — which is what a flow Network row does when its
+   *  Wall join is "Mitered union" — so a generated plan reads as masonry without the preference being
+   *  flipped by hand. Deliberately separate from `mode`, because that field carries the FILL style for a
+   *  buffered band (fill vs outline) and the two must be selectable independently. */
+  bufferJoin?: "mitered-union";
+  /** Skip this segment in the canvas 3D extrusion. Set by a flow Network row that hands 3D to the flow —
+   *  e.g. floorplan.v3 builds its walls as a Polyhedron from the mitred-union rings, with real spandrels over
+   *  the openings, and the canvas band would otherwise extrude the same walls a second time. */
+  noExtrude3d?: boolean;
   /** Display block "Path" mode (requires `bufferStyle`): besides the band, the connected run of touching
    *  path segments derives a LIVE Space (union outline, recomputed as segments move — never persisted in
    *  `rooms`). Space attachments for it live in `FloorPlanModel.pathSpaceAttachments`. */
@@ -442,6 +452,10 @@ export const PATH_SPACE_ID_PREFIX = "path-space:";
 
 export interface Room {
   id: string;
+  /** True for a room DETECTED from a closed wall loop rather than drawn. Every space id is `space_<uuid>`
+   *  whichever it is, so the fact needs its own field — see the engine's `isAutoRoom`, which falls back to
+   *  the legacy id prefixes for plans saved before this existed. */
+  auto?: boolean;
   points: Point[];
   /** Layer this room lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`). */
   layerId?: string;
@@ -586,6 +600,13 @@ export type Tool =
   | "scale"
   /** "Set Scale → By Area" — click a space/polygon, then enter its real-world area to rescale the drawing. */
   | "scale-area"
+  /** "Set North" — click two points to draw an arrow pointing at north; its bearing becomes the plan's
+   *  north rotation. Tail then head, like Set Scale → By Segment, but the direction is what is kept. */
+  | "north"
+  /** "Grab Colour" (Preferences) — click a point on the image underlay and read the pixel's colour.
+   *  A sampling tool, not a drawing one: it commits nothing to the model and stays armed so several
+   *  points can be read in a row. */
+  | "pick-color"
   | "pan"
   | "door"
   | "window"
@@ -694,6 +715,11 @@ export interface ParametricObjectParam {
    *  `"mode == 'stepped'"`). When it evaluates falsy the field is hidden from the Properties / creation UI —
    *  the value still exists and drives geometry. Absent ⇒ always shown. Evaluated by the shared expr engine. */
   showWhen?: string;
+  /** Draw this parameter's live value on the 2D plan, anchored to the host the instance is attached to:
+   *  a Space at its CENTROID, a Segment at its MIDPOINT, a Node over the point. Absent ⇒ not drawn. */
+  showInCanvas?: boolean;
+  /** Whether the parameter is required. Absent ⇒ required; only an explicit `false` marks it optional. */
+  necessary?: boolean;
 }
 
 /** A self-contained parametric object loaded from a `.pobj.json` file — its identity + Input Properties
@@ -728,15 +754,30 @@ export interface ParametricObjectFile {
    *  `icon` is the toolbar/menu glyph (Add Segment/Node/Space dropdowns) — see {@link ParametricObjectIcon};
    *  when absent the menu falls back to a built-in Lucide icon keyed by `symbol`. */
   meta: { id: string; name: string; category?: string; units?: string; symbol?: "door" | "window" | "staircase" | "floor" | "wall" | "massing" | "titleblock" | "settings"; icon?: ParametricObjectIcon };
+  /** WHERE this definition was read from — a Library-relative path, root-prefixed, e.g.
+   *  "Objects/Architectural/plot.json". Provenance, not identity: it is set by every load that went
+   *  through a library path and absent for a definition typed in or authored in-session. Export writes
+   *  it onto each attachment as {@link SegmentAttachment.objectPath} so a reader can fetch the object
+   *  without first knowing the id, and import reads it back the same way. */
+  sourcePath?: string;
   parameters: ParametricObjectParam[];
   /** Which host this object is drawn onto from the toolbar — set when imported via a Floorplan-Tracer
    *  folder (Nodes → "node", Segments → "segment", Spaces → "space", Canvas → "canvas"). Drives the
    *  Add Node / Add Segment / Add Space menus and the auto-attach when the matching element is drawn /
-   *  selected. `canvas` objects (e.g. the Layout title block) attach to the project sheet, not an element. */
-  hostKind?: "node" | "segment" | "space" | "canvas";
+   *  selected. `canvas` objects (e.g. the Layout title block) attach to the project sheet, not an element;
+   *  `image` objects attach to an imported PICTURE and read it — the underlay or one of the overlays —
+   *  which is what makes "measure this drawing" an attachable thing rather than a flow you have to open. */
+  hostKind?: "node" | "segment" | "space" | "canvas" | "image";
   /** Declarative geometry generator (vars + cases + box rules with expression strings). Passed verbatim to
    *  `evalParametricGeometry` (plan) / `evalParametricPrisms` (3D mesh). Kept loose — the evaluator validates. */
   geometry?: Record<string, unknown>;
+  /** A SIX-NODE SPINE flow carried verbatim (its `object` block, nodes and edges). Present INSTEAD of
+   *  `geometry`: the object's plan, solids and metrics are then resolved by running the flow's Math Engine
+   *  headlessly (see flow/eval/spineObject.ts) rather than by the rules DSL, and `parameters` above is the
+   *  flow's own Input Properties schema. Everything else about the record — `hostKind` driving the Add menus,
+   *  the Properties params, attachment, layers — behaves identically, which is the point: the two kinds of
+   *  definition differ only in how geometry is produced. */
+  spine?: { object?: Record<string, unknown>; nodes: unknown[]; edges?: unknown[] };
   /** Optional explicit Flow decompilation: an ordered semantic node list that the "Edit in Flow" / import-to-
    *  flow path materialises into a wired graph (Object Node → these nodes). Positions + edges are DERIVED
    *  (never stored) so it survives node-schema changes. See {@link PobjFlowNode}. */
@@ -758,6 +799,12 @@ export interface ParametricObjectFile {
 export interface SegmentAttachment {
   id: string;
   objectId: string;
+  /** WHERE the definition came from — a path RELATIVE to the plan's `settings.library_path`, e.g.
+   *  "Objects/Architectural/plot.json". A plan written by another tool references its objects this way
+   *  because a path is resolvable without the library already being loaded, whereas `objectId` is a
+   *  property of the definition and can only be read once the file has been fetched. Import resolves the
+   *  path and stamps `objectId` from what came back (see `unresolvedObjectPaths` in FloorPlanEditor). */
+  objectPath?: string;
   params: Record<string, number | string | boolean>;
   /** Per-instance overrides for NESTED components (`ref` rules inside the object), keyed by ref-instance
    *  path (e.g. "door.single.v1", "window[2]") → {paramKey: value}. SketchUp-style nested editing: params the
@@ -771,6 +818,12 @@ export interface SegmentAttachment {
    *  object, which auto-injects `pobj-source → Node`). Binds the two param stores so editing either side
    *  keeps them in sync. Absent for attachments with no flow node. */
   flowNodeId?: string;
+  /** EXPORT ONLY — this instance's evaluated result (metrics, 2D rings, 3D meshes), stamped on the way out
+   *  by `export/bakeAttachments` so a consumer with no evaluator can draw it. Never set in the live model
+   *  and never read by the editor: import carries it through untouched and everything on screen is still
+   *  evaluated from the definition. Typed loosely here so `types` stays free of the exporter's shapes —
+   *  see {@link BakedAttachment} for the real one. */
+  baked?: unknown;
 }
 
 /** An instance of a parametric object bound to the project canvas (not a node / segment / space) — e.g.
@@ -779,7 +832,30 @@ export interface SegmentAttachment {
 export interface CanvasAttachment {
   id: string;
   objectId: string;
+  /** Library-relative path the definition came from — see {@link SegmentAttachment.objectPath}. */
+  objectPath?: string;
   params: Record<string, number | string | boolean>;
+}
+
+/** A parametric object attached to an imported PICTURE. The image-host twin of {@link CanvasAttachment},
+ *  and it carries one field a canvas attachment does not need: a drawing has exactly one sheet but may
+ *  hold many pictures, so each entry has to say WHICH it is hosted on. */
+export interface ImageAttachment {
+  id: string;
+  /** The host picture: an {@link ImageUnderlay.id} from `imageOverlays`, or ABSENT for the base underlay —
+   *  which leaves its own id unset for the same reason ("it is the image, and there is only ever one"). */
+  imageId?: string;
+  objectId: string;
+  /** Library-relative path the definition came from — see {@link SegmentAttachment.objectPath}. */
+  objectPath?: string;
+  params: Record<string, number | string | boolean>;
+  /** BAKED detection results, keyed by the Object Detection node's id inside the object's spine. Some
+   *  image objects are TOOLS rather than formulas — they report nothing until a Run presses their
+   *  detector — and the result has to live on the INSTANCE, not the definition: two pictures with the
+   *  same object attached hold different readings, and a definition is shared by every instance.
+   *  Contents are the node's own `_boxes` / `_points` / `_labels`, in world pixels, exactly as the flow
+   *  bakes them, so one `detectionValues` call reads either. */
+  detections?: Record<string, { _boxes?: unknown; _points?: unknown; _labels?: unknown }>;
 }
 
 export interface FurnitureItem {
@@ -801,6 +877,11 @@ export interface FurnitureItem {
 }
 
 export interface ImageUnderlay {
+  /** Stable handle for this picture. The BASE underlay leaves it unset — it is "the image", and there is
+   *  only ever one. Every entry in `imageOverlays` carries one, because a flow has to be able to say
+   *  WHICH picture it means: the Image node's `id` field is matched against this, so a Vectorise chain
+   *  can keep reading the original plan while another reads a render laid over it. */
+  id?: string;
   src: string;
   x: number;
   y: number;
@@ -1020,6 +1101,12 @@ export interface FloorPlanModel {
   /** Parametric construction grids (Create Grid tool). */
   grids?: GridDef[];
   imageUnderlay: ImageUnderlay | null;
+  /** Pictures stacked ON TOP of `imageUnderlay`, drawn in array order (last = frontmost) and each with
+   *  its own `opacity`, so a generated redraw can be cross-faded against the plan it came from. The base
+   *  underlay stays where it is: it is the imported drawing, the thing every existing path — PDF raster,
+   *  Fit to rect, colour sampling, plan save — already means by "the image". These are additions to it.
+   *  A Render node's result lands here, registered on the picture it was made from. */
+  imageOverlays?: ImageUnderlay[];
   /** Optional OSM overlay configuration. Renders only when the "map" layer is visible. */
   mapOverlay?: MapOverlayState | null;
   constraints?: {
@@ -1067,6 +1154,11 @@ export interface FloorPlanModel {
   /** Canvas-attached parametric objects (e.g. the Layout title block), keyed by sheet id. Each entry is a
    *  {@link CanvasAttachment} whose object lives in {@link objectLibrary}; its `params` drive the sheet. */
   canvasObjects?: Record<string, CanvasAttachment>;
+  /** Image-attached parametric objects, keyed by the ATTACHMENT's own id rather than the picture's: one
+   *  image can host several, and each entry names its host in {@link ImageAttachment.imageId}. Kept as a
+   *  top-level map beside {@link canvasObjects} rather than hung on {@link ImageUnderlay} so an attachment
+   *  survives the picture being replaced, and so the two hosts persist and restore by the same path. */
+  imageObjects?: Record<string, ImageAttachment>;
 }
 
 /** AutoCAD-style layer. Every drawable entity carries a `layerId` referencing one of these. */
@@ -1181,7 +1273,7 @@ export const withLayerDefaults = (model: FloorPlanModel): FloorPlanModel => {
 /** Stored state from an auto-generated floor plan, enabling interactive room dragging. */
 export interface GeneratedLayoutState {
   /** The generation config used (boundary, rooms, connections, etc.) */
-  config: import("./floorplanAlgorithms").GenerateConfig;
+  config: import("@builderpluss/engine").GenerateConfig;
   /** Current seed positions in meters (used to re-run BSP on drag) */
   seedPositions: Record<string, { x: number; y: number }>;
   /** Current room rectangles in pixel coords (for hit-testing drag targets) */

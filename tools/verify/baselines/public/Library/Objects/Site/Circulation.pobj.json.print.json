@@ -1,0 +1,134 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "49af69986b6a114c"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "plotArea",
+          "name": "Plot Area",
+          "value": "0",
+          "unit": "m²"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 6,
+          "vertices": 30,
+          "area": 57.6,
+          "bbox": [
+            -4.1,
+            -4.6,
+            4.1,
+            4.6
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 6,
+          "vertices": 30,
+          "area": 57.6,
+          "bbox": [
+            -4.1,
+            -4.6,
+            4.1,
+            4.6
+          ],
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 1,
+          "vertices": 5,
+          "area": 12,
+          "bbox": [
+            -5,
+            -0.6,
+            5,
+            0.6
+          ],
+          "nonFinite": 0
+        },
+        "hash": "76a55dc045958f5d"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "plotArea",
+          "name": "Plot Area",
+          "value": "80",
+          "unit": "m²"
+        },
+        {
+          "key": "Shapes",
+          "name": "Shapes",
+          "value": "7"
+        },
+        {
+          "key": "Width",
+          "name": "Width",
+          "value": "8.2",
+          "unit": "m"
+        },
+        {
+          "key": "Depth",
+          "name": "Depth",
+          "value": "9.2",
+          "unit": "m"
+        },
+        {
+          "key": "Height",
+          "name": "Height",
+          "value": "0",
+          "unit": "m"
+        },
+        {
+          "key": "Footprint",
+          "name": "Footprint",
+          "value": "57.6",
+          "unit": "m²"
+        },
+        {
+          "key": "Volume",
+          "name": "Volume",
+          "value": "0",
+          "unit": "m³"
+        }
+      ]
+    }
+  }
+}

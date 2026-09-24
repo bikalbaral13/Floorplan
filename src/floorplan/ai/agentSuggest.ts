@@ -255,6 +255,176 @@ export async function runAgentSuggest(p: RunAgentSuggestParams): Promise<Suggest
   return { values, rationale: typeof parsed.rationale === "string" ? parsed.rationale : "" };
 }
 
+// ─── GENERATOR MODE ─────────────────────────────────────────────────────────────────────────────────
+// The other half of the Agent node. `runAgentSuggest` TUNES a downstream node's declared params; this
+// GENERATES the whole data payload for a downstream node's value INPUT (a graph for Network, a point list
+// for Polygon …) — the "no algorithm, the agent invents the geometry" path. The output contract is not
+// hardcoded per domain: it is the TARGET NODE'S OWN instructions (its documented input format), so one
+// Agent serves any node that documents what it consumes. Same bake-on-Run discipline: the payload is
+// baked as the agent's `val-<inputKey>` output and evaluation stays pure.
+
+/** One downstream node the agent GENERATES a JSON payload for — its output is wired into `valin-<inputKey>`. */
+export interface GenTarget {
+  nodeId: string;
+  tool: string;
+  label: string;
+  /** The value-input key its output feeds — `graph` for Network's valin-graph; names the published val-<key>. */
+  inputKey: string;
+  /** The input field's label, if declared (e.g. "Graph (JSON)"). */
+  fieldLabel?: string;
+  /** The target node's full usage instructions — the format spec the model must follow. */
+  formatDoc?: string;
+  /** True when this is a `valin-params` PARAM-BAG target: the agent produces a {key: value} PARAMETER object
+   *  (from the node's field schema in `formatDoc`), NOT geometry — so no coordinate frame / offset applies. */
+  isParams?: boolean;
+}
+
+export interface RunAgentGenerateParams {
+  apiKey: string;
+  model: string;
+  instructions: string;
+  prompt: string;
+  /** The boundary the payload must live inside — vertices as [x,y] metre pairs. The caller normalises this to
+   *  a TOP-LEFT [0..W]×[0..H] frame (all coords ≥ 0), which the model respects far more reliably than the
+   *  centroid-relative frame Network actually draws in (that one has negative coords). Empty = no Space. */
+  boundary: number[][];
+  /** Added back to every coordinate in the generated payload to move it from the normalised [0..W] frame into
+   *  the target's real (anchor-relative) frame — see {@link translateCoords}. Omit / {0,0} to skip. */
+  offset?: { x: number; y: number };
+  target: GenTarget;
+  /** Feedback loop: what the reviewer said was wrong with the LAST round's drawing. Blank on round 1. */
+  critique?: string;
+  round?: number;
+  rounds?: number;
+}
+
+export interface GenerateResult {
+  /** The JSON payload as a STRING, ready to bake as the agent's val-<inputKey> output. */
+  payload: string;
+  rationale: string;
+}
+
+/** Gemini structured-output schema for a generated payload. `payload` is a STRING: the actual shape varies
+ *  per target (a graph, a point list …) and the schema dialect can't express "arbitrary object", so the
+ *  model returns the payload as stringified JSON, which is exactly what the agent's text output needs. */
+const GENERATE_SCHEMA = {
+  type: "object",
+  properties: {
+    payload: { type: "string" },
+    rationale: { type: "string" },
+  },
+  required: ["payload"],
+};
+
+/** Recursively translate every coordinate in a parsed geometry payload by (dx, dy). Handles the two shapes a
+ *  generated payload uses: graph NODES `{…, x, y}` (offsets numeric x / y) and POINT-LIST leaves `[x, y]`
+ *  (a bare 2-number array). Everything else passes through untouched. This is what lets the agent generate in
+ *  a clean top-left [0..W] frame while the result lands in the target's real (anchor-relative) frame. */
+const translateCoords = (v: unknown, dx: number, dy: number): unknown => {
+  if (Array.isArray(v)) {
+    if (v.length === 2 && typeof v[0] === "number" && typeof v[1] === "number") return [v[0] + dx, v[1] + dy];
+    return v.map((el) => translateCoords(el, dx, dy));
+  }
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(o)) out[k] = translateCoords(val, dx, dy);
+    if (typeof o.x === "number" && typeof o.y === "number") { out.x = o.x + dx; out.y = o.y + dy; }
+    return out;
+  }
+  return v;
+};
+
+/** Ask the model to author the JSON DATA for a downstream node's value input, conforming to that node's own
+ *  documented format, inside the given boundary. Throws on transport / API / parse error. */
+export async function runAgentGenerate(p: RunAgentGenerateParams): Promise<GenerateResult> {
+  const system = [
+    p.instructions.trim() || DEFAULT_AGENT_INSTRUCTIONS,
+    "",
+    "You are running as an AGENT NODE inside a parametric node graph, NOT a chat assistant. You cannot call tools, draw, or talk to the user. Your one job is to GENERATE the JSON data payload for the input of the downstream node described below, and return it (stringified) in the `payload` field.",
+    "",
+    "RULES",
+    "• `payload` MUST conform EXACTLY to the target node's documented format below — same keys, same nesting, same coordinate convention.",
+    "• All coordinates are in METRES, in the SAME frame as the boundary polygon given below. Place every point INSIDE that boundary.",
+    "• Produce a genuine, non-degenerate result that satisfies the brief: real connectivity, no duplicate points, no zero-length edges, nothing outside the boundary.",
+    "• Return ONLY the payload as a JSON string — no prose, no code fences.",
+    "• `rationale` = ONE short sentence, plain language, for an architect.",
+  ].join("\n");
+
+  const t = p.target;
+  // Space extent (from the boundary) as plain metres — for a PARAM target it's sizing context, not a frame.
+  const extent = p.boundary.length
+    ? { w: Math.max(...p.boundary.map((v) => v[0])), h: Math.max(...p.boundary.map((v) => v[1])) }
+    : null;
+  const userText = [
+    "BRIEF",
+    `  ${p.prompt.trim() || "(none given — produce a sensible result for a space of this shape)"}`,
+    "",
+    t.isParams
+      ? `TARGET NODE — you are setting the PARAMETERS of ${t.label} (tool "${t.tool}"). Return a JSON OBJECT of { key: value } pairs.`
+      : `TARGET NODE — you are filling the "${t.inputKey}" input of ${t.label} (tool "${t.tool}")${t.fieldLabel ? ` — field "${t.fieldLabel}"` : ""}.`,
+    "",
+    t.isParams ? "PARAMETERS YOU MAY SET (match each value's kind / range / options exactly; omit any you are unsure about):" : "REQUIRED OUTPUT FORMAT (the target node's own documentation — follow it literally):",
+    t.formatDoc?.trim() || "  (no format documented — infer a sensible JSON shape for this input)",
+    "",
+    ...(t.isParams
+      ? [extent ? `SPACE CONTEXT: the target operates on a space about ${extent.w.toFixed(2)} × ${extent.h.toFixed(2)} m — size your parameters sensibly for it.` : "SPACE CONTEXT: none given — choose sensible defaults."]
+      : p.boundary.length
+        ? [
+            `BOUNDARY (metres — your coordinate frame. Origin (0,0) is the TOP-LEFT corner; x increases RIGHT to ${extent!.w.toFixed(2)}, y increases DOWN to ${extent!.h.toFixed(2)}. EVERY coordinate must be ≥ 0 and inside this polygon):`,
+            `  ${JSON.stringify(p.boundary)}`,
+          ]
+        : ["BOUNDARY: none wired — work in a sensible area with the origin (0,0) at the top-left and all coordinates ≥ 0."]),
+    // Round 2+ carries the reviewer's verdict on the drawing the LAST payload produced.
+    ...(p.critique?.trim()
+      ? [
+          "",
+          `REVIEW OF YOUR LAST ATTEMPT (round ${(p.round ?? 2) - 1} of ${p.rounds ?? "?"})`,
+          `  ${p.critique.trim()}`,
+          "  Fix this. Keep what worked; change what the review flagged.",
+        ]
+      : []),
+  ].join("\n");
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(p.model)}:generateContent?key=${encodeURIComponent(p.apiKey)}`;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ parts: [{ text: userText }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: GENERATE_SCHEMA },
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    let msg = errText;
+    try { msg = JSON.parse(errText)?.error?.message ?? errText; } catch { /* keep raw */ }
+    throw new Error(`${res.status}: ${String(msg).slice(0, 200)}`);
+  }
+  const json = await res.json();
+  const parts = json?.candidates?.[0]?.content?.parts ?? [];
+  const text = parts.map((x: { text?: string }) => x.text ?? "").join("").trim();
+  if (!text) throw new Error("model returned no content");
+  const parsed = JSON.parse(text) as { payload?: unknown; rationale?: unknown };
+  // The model may honour `payload:string` literally, or return the object directly — accept both. Then
+  // round-trip through JSON to validate and compact it; if it won't parse, keep the raw string (Network and
+  // the other consumers tolerate malformed input by drawing nothing, so a bad round degrades, not crashes).
+  let payload = typeof parsed.payload === "string" ? parsed.payload : JSON.stringify(parsed.payload ?? {});
+  // Round-trip to validate/compact, AND move coordinates from the normalised [0..W] frame the model worked in
+  // back to the target's real (anchor-relative) frame by adding the offset. A payload that won't parse is kept
+  // raw (consumers tolerate malformed input by drawing nothing — a bad round degrades, not crashes).
+  // A PARAM bag is not geometry — never translate it. Otherwise move coordinates from the normalised [0..W]
+  // frame the model worked in back to the target's real (anchor-relative) frame by adding the offset.
+  const off = p.target.isParams ? undefined : p.offset;
+  try {
+    const parsedPayload = JSON.parse(payload);
+    const shifted = off && (off.x || off.y) ? translateCoords(parsedPayload, off.x, off.y) : parsedPayload;
+    payload = JSON.stringify(shifted);
+  } catch { /* keep raw */ }
+  return { payload, rationale: typeof parsed.rationale === "string" ? parsed.rationale : "" };
+}
+
 const CRITIQUE_SCHEMA = {
   type: "object",
   properties: {

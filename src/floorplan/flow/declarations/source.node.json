@@ -2,12 +2,45 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "source",
-  "meta": { "label": "Space", "category": "Space", "color": "#0f172a" },
+  "meta": {
+    "label": "Space",
+    "category": "Space",
+    "color": "#0f172a"
+  },
   "description": "Pipeline input — a Space on the canvas (by id, or the current selection).",
-  "instructions": "The primary pipeline ROOT — feeds a Space from the canvas into the flow. `id` identifies the source Space; with 'Grab ID from selection' on, the id stays synced to the space currently selected on the canvas (and feeds that space's geometry). Geometry always comes from the canvas, never from the wire.\n\nThe input endpoint accepts a Schema node to attach Space schema properties to the referenced space(s) — the node itself stays a root (incoming geometry is ignored).\n\nTIP: turn grab OFF and type an id to pin a specific Space regardless of selection.",
-  "handles": { "input": true, "output": true },
+  "instructions": "GEOMETRY NODE: this is the single \"Geometry\" node — there is no kind selector, because THE CANVAS SELECTION IS THE SELECTOR. With \"Grab ID from selection\" on, selecting a canvas node makes it a Point source, a segment makes it a Segment source, a graph a Graph source, a space a Space source and a picture an Image source; the node keeps its id, name, position and wires across the change. That is what lets one input carry a host whose TYPE changes — the anchor of a parametric object stays wired while you switch from a node to a wall to a room. Turn the toggle off and type an id to pin it to one element. (Freehand is not selection-driven — its strokes are matched by colour — so it stays its own node.)\n\nEvery kind publishes its geometry in the same anchor-relative metre frame: a point list on `val-points` (Point → one row, Segment → two, Space → its outline) or nodes+links on `val-graph` (Graph, Freehand).\n\nThe primary pipeline ROOT — feeds a Space from the canvas into the flow. `id` identifies the source Space; with 'Grab ID from selection' on, the id stays synced to the space currently selected on the canvas (and feeds that space's geometry). Geometry always comes from the canvas, never from the wire.\n\nThe input endpoint accepts a Schema node to attach Space schema properties to the referenced space(s) — the node itself stays a root (incoming geometry is ignored).\n\nTIP: turn grab OFF and type an id to pin a specific Space regardless of selection.\n\nVALUE OUTPUT: `val-points` publishes the resolved outline as a `[[x,y],…]` metre list, anchor-relative — the SAME list Space Geometry emits on its own `val-points`. So a value chain (Math Engine, the Matrix nodes, Input Properties) can hang straight off the Space and the Space Geometry hop is optional; add Space Geometry when you also want area / perimeter / vertex count. With several spaces referenced, the FIRST one is published (matching Space Geometry).\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.\n\nID. `val-id` publishes the id of the element this node resolves — `space-…`, `segment-…`, `node-…`, each naming its own kind, and the SAME string the canvas shows, an export writes and this node's own ID field holds. Wire it into a Prompt Builder slot, an Output slot or an Input Properties text parameter to say WHICH element a run was about, rather than describing it by its coordinates. With several elements grabbed it is the comma-separated list, in the order they were selected; with nothing resolved it is empty.",
+  "handles": {
+    "input": true,
+    "output": true,
+    "valueOutputs": [
+      {
+        "key": "id",
+        "label": "ID"
+      },
+      {
+        "key": "points",
+        "label": "Vertices (list)"
+      },
+      {
+        "key": "canvasJson",
+        "label": "Canvas JSON"
+      }
+    ]
+  },
   "parameters": [
-    { "key": "grabFromSelection", "label": "Grab ID from selection", "kind": "checkbox", "default": true },
-    { "key": "id", "label": "ID", "kind": "text", "default": "", "placeholder": "space id", "showWhen": "!grabFromSelection" }
+    {
+      "key": "grabFromSelection",
+      "label": "Grab ID from selection",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "id",
+      "label": "ID",
+      "kind": "text",
+      "default": "",
+      "placeholder": "space id",
+      "showWhen": "!grabFromSelection"
+    }
   ]
 }

@@ -1,0 +1,65 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "snapshot",
+  "meta": {
+    "label": "Snapshot",
+    "category": "Output",
+    "color": "#7c3aed"
+  },
+  "description": "A LIVE photograph of the plan AND of the 3D model from above, shown inside the node — no button to press. Frame the WHOLE drawing, or wire geometry in and frame just that. Both images are PNG data URLs on their own output endpoints.",
+  "instructions": "A live capture node. It draws nothing on the canvas; its geometry input is a FRAMING hint, not something it renders.\n\nIt photographs the current canvas — the SAME snapshot the Agent node takes for its vision-critique loop — and RE-photographs it by itself whenever the picture changes: an edit to the flow, a wall drawn on the plan, a node's eye toggled. There is nothing to press; the images inside the node are always the current ones. That is the quickest way to see whether the snapshot pipeline is working, and it keeps working while you edit.\n\nSCOPE\n• WHOLE (default) — frames every visible thing on the canvas, the zoom-to-extent the Agent's critique sees. Needs no input.\n• SELECTED — frames ONLY the geometry wired into this node's input, plus the Margin below. Wire any geometry node in (Space, Rectangle, Inset, a Render row …) and the shot closes in on it; the rest of the plan simply falls outside the frame. With nothing wired in there is nothing to frame, so it falls back to Whole rather than photographing an empty box.\n\nSELECTED can also be told its region as a LIST: `valin-points` takes `[[x,y],…]` in metres — a Geometry node's `val-points`, or an Input Properties parameter holding it — and frames that. The geometry input still works and still WINS when both are connected. A flow that already passes its outline around as a value therefore needs no second geometry wire beside it.\n\nMARGIN is breathing room around the framed geometry, in metres. It applies to both images, so the plan and the 3D view close in together.\n\nWHAT COUNTS AS A CHANGE: the flow's live preview geometry, the committed canvas (spaces / nodes / segments / graphs / images / freehand strokes), the 3D solids being drawn, which nodes are hidden, and this node's own Scope / Margin. Re-capture is debounced, so dragging a slider photographs the result you stop on, not every frame in between — expect the images to land a moment after the canvas settles. An empty frame clears the images rather than leaving the last good one standing, because a stale picture that looks fine is exactly the failure this node exists to catch. Orbiting the 3D camera is NOT a change it can see: the 3D shot is taken from a fixed camera fitted to the scope, not from your current view.\n\nOUTPUTS — two PNG data URL strings, ready to wire into any node that accepts an image value input (Analyse's File input, the Render node's Image input):\n• `val-image` — the PLAN (top = NORTH).\n• `val-image-3d` — the 3D VIEW, looking straight DOWN and fitted to the same scope, so it registers with the plan beside it. EMPTY unless the 3D view is already open: a node that fires on its own must not switch the app out of the plan to answer, so open 3D (or the split view) if you want this endpoint live.\n\nBoth images are transient — they are not saved with the flow, and re-form on their own when it is reopened.",
+  "handles": {
+    "input": true,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "points",
+        "label": "Region (points)"
+      },
+      {
+        "key": "margin",
+        "label": "Margin"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "image",
+        "label": "Plan Image"
+      },
+      {
+        "key": "image-3d",
+        "label": "3D Image"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "scope",
+      "label": "Scope",
+      "kind": "select",
+      "default": "whole",
+      "options": [
+        {
+          "value": "whole",
+          "label": "Whole canvas"
+        },
+        {
+          "value": "selected",
+          "label": "Selected (wired-in geometry)"
+        }
+      ]
+    },
+    {
+      "key": "margin",
+      "label": "Margin",
+      "kind": "range",
+      "default": 1,
+      "min": 0,
+      "max": 20,
+      "step": 0.1,
+      "unit": "m",
+      "showWhen": "scope == 'selected'"
+    }
+  ]
+}

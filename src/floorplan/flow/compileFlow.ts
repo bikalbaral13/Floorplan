@@ -42,6 +42,19 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
 
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const dataOf = (n: Node): FlowNodeData => n.data as FlowNodeData;
+
+  // Guard against a node whose tool isn't registered (a stale/unknown type — e.g. from a newer or
+  // differently-migrated flow file, or a malformed hand-authored graph). Fail the compile cleanly
+  // instead of throwing mid-render: outCountOf below indexes FLOW_TOOLS unconditionally, and an
+  // unguarded lookup crashes the whole Flow overlay (compileFlow runs inside a render-time useMemo
+  // with no error boundary) rather than surfacing a normal compile error.
+  for (const n of nodes) {
+    const tool = dataOf(n).tool;
+    if (!FLOW_TOOLS[tool]) {
+      return { ...empty, error: `Unknown node type "${tool}" on node "${n.id}" — it isn't registered in this build.` };
+    }
+  }
+
   // Number of output handles a node exposes (Split → one per piece).
   const outCountOf = (n: Node): number => {
     const def = FLOW_TOOLS[dataOf(n).tool];
@@ -112,6 +125,15 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "node-source") continue; // node generator → preview-only (no recipe runner)
     if (data.tool === "canvas-source") continue; // whole-canvas generator → preview-only (no recipe runner)
     if (data.tool === "separate") continue; // fan-out pass-through → preview-only (no recipe runner)
+    // Selector, not a producer: it routes spaces that already exist on the canvas and creates none, so there
+    // is nothing for the recipe engine to commit. Preview / Flow Live only, like Separate above.
+    if (data.tool === "filter-by-type") continue;
+    // Set Object Param edits parameters on objects that already exist; it makes no geometry, so there is no
+    // recipe op. Deliberately NOT part of Run either — it applies through its own Apply button, so a geometry
+    // run can never silently rewrite the parameters of dozens of placed objects.
+    if (data.tool === "set-object-param") continue;
+    // Get Object Param only READS the canvas into a matrix and passes the geometry through — nothing to commit.
+    if (data.tool === "get-object-param") continue;
     if (data.tool === "render") continue; // action node (AI image), not a recipe op — never compiled
     if (data.tool === "analyse") continue; // action node (Gemini analysis), not a recipe op — never compiled
     if (data.tool === "generate") continue; // action node (Gemini media generation), not a recipe op — never compiled
@@ -163,6 +185,25 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "render-grid") continue; // grid-field display — preview-only (no recipe op)
     if (data.tool === "matrix-transpose") continue; // matrix transpose — value-only (no recipe op)
     if (data.tool === "matrix-inverse") continue; // matrix inverse — value-only (no recipe op)
+    if (data.tool === "matrix-solve") continue; // linear solve Kd=F — value-only (no recipe op)
+    if (data.tool === "least-squares") continue; // QR least-squares A·x≈b — value-only (no recipe op)
+    if (data.tool === "matrix-ops") continue; // matrix A∘B / A·B — value-only (no recipe op)
+    if (data.tool === "matrix-shift") continue; // cyclic row roll — value-only (no recipe op)
+    if (data.tool === "vector-ops") continue; // row-wise vector maths — value-only (no recipe op)
+    if (data.tool === "vector-product") continue; // row-wise dot / cross — value-only (no recipe op)
+    if (data.tool === "matrix-to-graph") continue; // points → graph JSON — value-only (no recipe op)
+    if (data.tool === "graph-to-matrix") continue; // graph JSON → point matrices — value-only (no recipe op)
+    // 2D / 3D Render — preview + Flow Live only for now: their rows are drawings, not recipe ops, and a row's
+    // pieces carry their own colour/layer rather than becoming committed Spaces. (A commit path would need to
+    // decide what a multi-row, multi-layer render means for history.)
+    if (data.tool === "render-2d" || data.tool === "render-3d") continue;
+    // Export sinks — they write a file from what is wired in and produce no canvas geometry at all.
+    // Export to Canvas skips too: it DOES write geometry, but through its own Reflect button (a direct
+    // stamp of the wired node's polygons), never as a recipe op — so Run must not double-apply it.
+    if (data.tool === "export-dxf" || data.tool === "export-3d" || data.tool === "export-canvas") continue;
+    if (data.tool === "matrix-reduce") continue; // sum / min / max fold — value-only (no recipe op)
+    if (data.tool === "matrix-eigen") continue; // Jacobi eigen-decomposition — value-only (no recipe op)
+    if (data.tool === "snapshot") continue; // canvas snapshot — diagnostic value-only (no recipe op)
     if (data.tool === "longest-branch") continue; // graph longest-path — preview-only (no recipe runner)
     if (data.tool === "graph-reduce") continue; // graph reduce/clean ops — preview-only (no recipe runner)
     if (data.tool === "graph-simplify") continue; // Douglas–Peucker graph simplify — value-only (no recipe runner)
@@ -172,6 +213,8 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "set-thickness") continue; // sets per-edge graph thickness — value-only (no recipe runner)
     if (data.tool === "merge-graph") continue; // merges several graphs into one — value-only (no recipe runner)
     if (data.tool === "graph-to-openings") continue; // carves opening-typed edges into a graph — value-only (no recipe runner)
+    if (data.tool === "label-graph") continue; // stamps label/type/thickness onto a graph — value-only (no recipe runner)
+    if (data.tool === "filter-by-label") continue; // keeps the detections whose label matches — value-only (no recipe runner)
     if (data.tool === "freehand-geometry") continue; // freehand strokes → graph JSON — value-only (no recipe runner)
     if (data.tool === "voronoi-bloom") continue; // graph node-grown Voronoi cells — preview-only (no recipe runner)
     if (data.tool === "spring-layout") continue; // topology-preserving spring layout — preview-only (no recipe runner)
@@ -186,6 +229,11 @@ export function compileFlow(nodes: Node[], edges: Edge[], mode: "commit" | "prev
     if (data.tool === "point" || data.tool === "visibility") continue; // point/visibility — preview-only (no recipe runner)
     if (data.tool === "treemap") continue; // squarified treemap — preview-only (no recipe runner)
     if (data.tool === "rect-pack") continue; // rectangle packing — preview-only (no recipe runner)
+    // Place Object driven ONLY by a wired `boundary` point list (no geometry parent): there is no committed
+    // Space for the recipe runner to target, so an emitted op would fall back to whatever is SELECTED and
+    // furnish the wrong room. In that form it is a Flow-Live node — the live materialiser drops the object
+    // nodes at the solved footprints — so emit no op at all rather than a mistargeted one.
+    if (data.tool === "place-object" && !edges.some((e) => e.target === id && !(e.targetHandle && (e.targetHandle.startsWith("valin-") || e.targetHandle.startsWith("gin-"))))) continue;
     if (!reachable.has(id)) continue; // not connected to a space → skip
 
     // NOTE: no per-op `commit` flag — that would override the recipe-level mode and force a

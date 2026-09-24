@@ -1,5 +1,5 @@
 import type { FloorObject, FurnitureItem, Point, Room, Wall } from "./types";
-import { getWallPolygonGeometry } from "./algorithms/walls/wallCorners";
+import { getWallPolygonGeometry, isPointInPolygon, polygonCentroid } from "@builderpluss/engine";
 
 /** One clearance line from an edge midpoint to wall inner face or to another item's edge midpoint. */
 export type MoveMeasureSegment = {
@@ -13,52 +13,9 @@ export type MoveMeasureSegment = {
   kind: "wall" | "object";
 };
 
-const pointInPolygon = (point: Point, polygon: Point[]) => {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
-    const intersect =
-      (yi > point.y) !== (yj > point.y) && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-};
-
-const polygonCentroid = (points: Point[]): Point => {
-  if (points.length === 0) return { x: 0, y: 0 };
-  if (points.length < 3) {
-    const avgX = points.reduce((s, p) => s + p.x, 0) / points.length;
-    const avgY = points.reduce((s, p) => s + p.y, 0) / points.length;
-    return { x: avgX, y: avgY };
-  }
-  let signedArea2 = 0;
-  let cx = 0;
-  let cy = 0;
-  for (let i = 0; i < points.length; i += 1) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    const cross = a.x * b.y - b.x * a.y;
-    signedArea2 += cross;
-    cx += (a.x + b.x) * cross;
-    cy += (a.y + b.y) * cross;
-  }
-  if (Math.abs(signedArea2) < 1e-9) {
-    const minX = Math.min(...points.map((p) => p.x));
-    const maxX = Math.max(...points.map((p) => p.x));
-    const minY = Math.min(...points.map((p) => p.y));
-    const maxY = Math.max(...points.map((p) => p.y));
-    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-  }
-  const k = 1 / (3 * signedArea2);
-  return { x: cx * k, y: cy * k };
-};
-
 const pickRoomReference = (rooms: Room[], anchor: Point): Point => {
   for (const r of rooms) {
-    if (r.points.length >= 3 && pointInPolygon(anchor, r.points)) {
+    if (r.points.length >= 3 && isPointInPolygon(anchor, r.points)) {
       return polygonCentroid(r.points);
     }
   }

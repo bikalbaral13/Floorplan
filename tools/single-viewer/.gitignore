@@ -1,0 +1,4 @@
+# Mirrors of the R2 library, a lifted three.js and the embedded typeface — all re-fetchable.
+cache/
+# The build output.
+dist/

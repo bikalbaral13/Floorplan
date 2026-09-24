@@ -1,0 +1,222 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "49af69986b6a114c"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "wallLength",
+          "name": "Length (m)",
+          "value": "3"
+        },
+        {
+          "key": "wallThickness",
+          "name": "Thickness (m)",
+          "value": "0.15"
+        },
+        {
+          "key": "wallHeight",
+          "name": "Height (m)",
+          "value": "2.7"
+        },
+        {
+          "key": "baseElevation",
+          "name": "Base elevation (m)",
+          "value": "0"
+        },
+        {
+          "key": "topElevation",
+          "name": "Top elevation (m)",
+          "value": "2.7"
+        },
+        {
+          "key": "planArea",
+          "name": "Plan area (m²)",
+          "value": "0.45"
+        },
+        {
+          "key": "volume",
+          "name": "Volume (m³)",
+          "value": "1.215"
+        },
+        {
+          "key": "faceArea",
+          "name": "Face area, both sides (m²)",
+          "value": "16.2"
+        },
+        {
+          "key": "endArea",
+          "name": "End area, both ends (m²)",
+          "value": "0.81"
+        },
+        {
+          "key": "exposedArea",
+          "name": "Exposed area (m²)",
+          "value": "17.46"
+        },
+        {
+          "key": "bearing",
+          "name": "Bearing (deg)",
+          "value": "0"
+        },
+        {
+          "key": "hostLength",
+          "name": "Host length (m)",
+          "value": "3"
+        },
+        {
+          "key": "hatchLines",
+          "name": "Hatch lines",
+          "value": "23"
+        },
+        {
+          "key": "offsetApplied",
+          "name": "Offset applied (m)",
+          "value": "0"
+        },
+        {
+          "key": "centrelineShift",
+          "name": "Centreline shift (m)",
+          "value": "0"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "49af69986b6a114c"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "wallLength",
+          "name": "Length (m)",
+          "value": "10"
+        },
+        {
+          "key": "wallThickness",
+          "name": "Thickness (m)",
+          "value": "0.15"
+        },
+        {
+          "key": "wallHeight",
+          "name": "Height (m)",
+          "value": "2.7"
+        },
+        {
+          "key": "baseElevation",
+          "name": "Base elevation (m)",
+          "value": "0"
+        },
+        {
+          "key": "topElevation",
+          "name": "Top elevation (m)",
+          "value": "2.7"
+        },
+        {
+          "key": "planArea",
+          "name": "Plan area (m²)",
+          "value": "1.5"
+        },
+        {
+          "key": "volume",
+          "name": "Volume (m³)",
+          "value": "4.05"
+        },
+        {
+          "key": "faceArea",
+          "name": "Face area, both sides (m²)",
+          "value": "54"
+        },
+        {
+          "key": "endArea",
+          "name": "End area, both ends (m²)",
+          "value": "0.81"
+        },
+        {
+          "key": "exposedArea",
+          "name": "Exposed area (m²)",
+          "value": "56.31"
+        },
+        {
+          "key": "bearing",
+          "name": "Bearing (deg)",
+          "value": "0"
+        },
+        {
+          "key": "hostLength",
+          "name": "Host length (m)",
+          "value": "10"
+        },
+        {
+          "key": "hatchLines",
+          "name": "Hatch lines",
+          "value": "85"
+        },
+        {
+          "key": "offsetApplied",
+          "name": "Offset applied (m)",
+          "value": "0"
+        },
+        {
+          "key": "centrelineShift",
+          "name": "Centreline shift (m)",
+          "value": "0"
+        }
+      ]
+    }
+  }
+}

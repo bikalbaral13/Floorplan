@@ -1,0 +1,1044 @@
+{
+ "version": 1,
+ "id": "staircase-with-math",
+ "title": "Staircase — one Math Engine, waist slabs on beams, handrails and balusters",
+ "category": "Structural",
+ "object": {
+  "hostKind": "node",
+  "name": "Staircase",
+  "symbol": "staircase",
+  "icon": {
+   "paths": [
+    "M4 20h4v-4h4v-4h4V8h4"
+   ]
+  }
+ },
+ "description": "A parametric STAIRCASE on the six-node spine:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nDROP IT ON A NODE. Three configurations — Straight, U-shape (dog-leg with a landing at the far end), U-shape (mid landing) — set out from the host point along `direction`: first tread at the anchor, landing at the far end. The plan footprint is unchanged from the earlier version, so every plan that already places this object keeps placing it exactly.\n\nTHE 3D IS A CAST STAIR, NOT A STAIRCASE-SHAPED BLOCK. Each flight is a WAIST SLAB with the steps on it: one polyhedron from the flight's side profile — the sawtooth of risers and treads, a drop at the landing end, and the soffit back down along the pitch line offset by the waist thickness measured perpendicular to the slope — extruded across the flight width. Each landing is a slab of its own thickness on a BEAM along its outer edge, not a block down to the floor. A HANDRAIL runs above the nosing line on the side you choose (Inner = the well side of a dog-leg, the left of a straight flight) with square BALUSTERS on every tread at the spacing you set. Open-riser stairs keep tread-only boxes, because an open stair has no waist.\n\nWHAT IT REPORTS. Riser, tread, total rise, going, pitch, the 2R + T comfort rule; concrete volume as flights + landings + beams; formwork area (soffits, risers, and both sides of every flight — what the shuttering is priced on); concrete weight at 25 kN/m³; handrail length along the slope; baluster count; flight count and waist. At the defaults (14 risers, 280 tread, 1.0 m wide, 150 waist): 1.7 m³ of concrete, 42 kN.\n\nWHAT IT DOES NOT DO. The soffit is one plane per flight; there is no kite winder, no nosing overhang, no top or bottom newel post, and the mid-landing configuration has rails on its flights but not across its landings. It does not cut the slab it lands on.",
+ "nodes": [
+  {
+   "id": "source",
+   "position": {
+    "x": -1040,
+    "y": 80
+   },
+   "data": {
+    "tool": "source",
+    "params": {
+     "grabFromSelection": true,
+     "id": "",
+     "nodeLabel": "Geometry"
+    }
+   }
+  },
+  {
+   "id": "props",
+   "position": {
+    "x": -700,
+    "y": 40
+   },
+   "data": {
+    "tool": "input-props",
+    "params": {
+     "props": [
+      {
+       "id": "P",
+       "name": "Host — node point [[x, y]]",
+       "type": "text",
+       "value": "[[0, 0]]",
+       "options": [],
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "config",
+       "name": "Configuration",
+       "type": "select",
+       "value": "Straight",
+       "options": [
+        "Straight",
+        "U-shape",
+        "U-shape (mid landing)"
+       ],
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "steps",
+       "name": "Steps",
+       "type": "range",
+       "value": 14,
+       "options": [],
+       "min": 2,
+       "max": 60,
+       "step": 1,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "tread",
+       "name": "Tread (going)",
+       "type": "range",
+       "value": 0.28,
+       "options": [],
+       "min": 0.15,
+       "max": 0.45,
+       "step": 0.005,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "riser",
+       "name": "Riser",
+       "type": "range",
+       "value": 0.17,
+       "options": [],
+       "min": 0.1,
+       "max": 0.25,
+       "step": 0.005,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "width",
+       "name": "Flight width",
+       "type": "range",
+       "value": 1,
+       "options": [],
+       "min": 0.6,
+       "max": 3,
+       "step": 0.05,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "direction",
+       "name": "Direction",
+       "type": "select",
+       "value": "Left to right",
+       "options": [
+        "Left to right",
+        "Right to left"
+       ],
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "midSteps",
+       "name": "Steps before the turn (0 = auto)",
+       "type": "range",
+       "value": 0,
+       "options": [],
+       "min": 0,
+       "max": 40,
+       "step": 1,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "landingWidth",
+       "name": "Landing width",
+       "type": "range",
+       "value": 1,
+       "options": [],
+       "min": 0,
+       "max": 3,
+       "step": 0.05,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "midSpace",
+       "name": "Well between flights",
+       "type": "range",
+       "value": 0.1,
+       "options": [],
+       "min": 0,
+       "max": 1,
+       "step": 0.02,
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "stepStyle",
+       "name": "Step style",
+       "type": "select",
+       "value": "Solid",
+       "options": [
+        "Solid",
+        "Open"
+       ],
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "treadThickness",
+       "name": "Tread thickness",
+       "type": "range",
+       "value": 0.06,
+       "options": [],
+       "min": 0.02,
+       "max": 0.3,
+       "step": 0.005,
+       "showIf": {
+        "when": "stepStyle",
+        "equals": "Open"
+       },
+       "editable": true,
+       "necessary": true
+      },
+      {
+       "id": "waist",
+       "name": "Waist slab thickness",
+       "type": "range",
+       "value": 0.15,
+       "options": [],
+       "min": 0.08,
+       "max": 0.35,
+       "step": 0.005
+      },
+      {
+       "id": "landingThickness",
+       "name": "Landing slab thickness",
+       "type": "range",
+       "value": 0.15,
+       "options": [],
+       "min": 0.08,
+       "max": 0.35,
+       "step": 0.005
+      },
+      {
+       "id": "showBeams",
+       "name": "Beams under landings",
+       "type": "checkbox",
+       "value": true,
+       "options": []
+      },
+      {
+       "id": "beamWidth",
+       "name": "Beam width",
+       "type": "range",
+       "value": 0.23,
+       "options": [],
+       "min": 0.1,
+       "max": 0.6,
+       "step": 0.01
+      },
+      {
+       "id": "beamDepth",
+       "name": "Beam depth",
+       "type": "range",
+       "value": 0.35,
+       "options": [],
+       "min": 0.15,
+       "max": 0.9,
+       "step": 0.01
+      },
+      {
+       "id": "railSide",
+       "name": "Handrail on",
+       "type": "select",
+       "value": "Inner",
+       "options": [
+        "Inner",
+        "Left",
+        "Right",
+        "Both",
+        "None"
+       ]
+      },
+      {
+       "id": "railHeight",
+       "name": "Handrail height above nosing",
+       "type": "range",
+       "value": 0.9,
+       "options": [],
+       "min": 0.6,
+       "max": 1.2,
+       "step": 0.01
+      },
+      {
+       "id": "railSize",
+       "name": "Handrail section",
+       "type": "range",
+       "value": 0.05,
+       "options": [],
+       "min": 0.02,
+       "max": 0.12,
+       "step": 0.005
+      },
+      {
+       "id": "balusterSpacing",
+       "name": "Baluster spacing",
+       "type": "range",
+       "value": 0.125,
+       "options": [],
+       "min": 0.06,
+       "max": 0.3,
+       "step": 0.005
+      },
+      {
+       "id": "balusterSize",
+       "name": "Baluster section",
+       "type": "range",
+       "value": 0.02,
+       "options": [],
+       "min": 0.01,
+       "max": 0.06,
+       "step": 0.002
+      },
+      {
+       "id": "railInset",
+       "name": "Rail inset from flight edge",
+       "type": "range",
+       "value": 0.04,
+       "options": [],
+       "min": 0,
+       "max": 0.15,
+       "step": 0.005
+      },
+      {
+       "id": "rotation",
+       "name": "Rotation",
+       "type": "range",
+       "value": 0,
+       "options": [],
+       "min": 0,
+       "max": 360,
+       "step": 1,
+       "editable": true,
+       "necessary": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "math",
+   "position": {
+    "x": -220,
+    "y": 0
+   },
+   "data": {
+    "tool": "expr",
+    "params": {
+     "name": "Staircase maths",
+     "expr": "_n = rows(P)\n_cx = _n >= 1 ? mean(col(P, 0)) : 0\n_cy = _n >= 1 ? mean(col(P, 1)) : 0\n_a = rotation * PI / 180\n_ca = cos(_a)\n_sa = sin(_a)\n_S = vcat(hcat(-1, -1), hcat(1, -1), hcat(1, 1), hcat(-1, 1))\n_ux = (col(_S, 0) + 1) / 2\n_uy = (col(_S, 1) + 1) / 2\n_N = max(2, min(60, round(steps)))\n_T = max(0.05, tread)\n_W = max(0.1, width)\n_L = max(0, landingWidth)\n_G = max(0, midSpace)\n_R = max(0.05, riser)\n_MS = round(midSteps)\n_dir = direction == 'Right to left' ? -1 : 1\n_open = stepStyle == 'Open' ? 1 : 0\n_TT = max(0.01, treadThickness)\n_isU = config == 'U-shape'\n_isUM = config == 'U-shape (mid landing)'\n_n1 = (_MS > 0 && _MS < _N) ? _MS : floor(_N / 2)\n_n2 = _N - _n1\n_mid = (_MS > 0 && _MS < _N - 1) ? _MS : max(1, round(_N / 3))\n_rem = max(2, _N - _mid)\n_pa = ceil(_rem / 2)\n_pb = _rem - _pa\n_xt = _isUM ? _dir * _pa * _T : _dir * _n1 * _T\n_xl = _xt + _dir * _L\n_xr = _xt + _dir * _W\n_y2 = _W + _mid * _T\n_y3 = _y2 + _W\nSteps = zeros(0, 3)\nStepMesh = zeros(0, 4)\nLandings = zeros(0, 3)\nLandMesh = zeros(0, 4)\n_f1 = _isUM ? _pa : (_isU ? _n1 : _N)\nloop i in _f1:\n  _bx0 = _dir * i * _T\n  _bx1 = _dir * (i + 1) * _T\n  _by0 = 0\n  _by1 = _W\n  _h1 = (i + 1) * _R\n  _h0 = _open > 0 ? max(0, _h1 - _TT) : 0\n  _px = _bx0 + _ux * (_bx1 - _bx0)\n  _py = _by0 + _uy * (_by1 - _by0)\n  _ring = hcat(_cx + _px * _ca - _py * _sa, _cy + _px * _sa + _py * _ca)\n  Steps = vcat(Steps, hcat(_ring, fill(4, 1, i)))\n  StepMesh = vcat(StepMesh, mprism(_ring, _h0, _h1))\nend\n_f2 = _isUM ? _mid : (_isU ? _n2 : 0)\nloop k in _f2:\n  _bx0 = _isUM ? _xt : (_xt - _dir * k * _T)\n  _bx1 = _isUM ? _xr : (_xt - _dir * (k + 1) * _T)\n  _by0 = _isUM ? (_W + k * _T) : (_W + _G)\n  _by1 = _isUM ? (_W + (k + 1) * _T) : (2 * _W + _G)\n  _h1 = _isUM ? (_pa + k + 1) * _R : (_n1 + k + 1) * _R\n  _h0 = _open > 0 ? max(0, _h1 - _TT) : 0\n  _px = _bx0 + _ux * (_bx1 - _bx0)\n  _py = _by0 + _uy * (_by1 - _by0)\n  _ring = hcat(_cx + _px * _ca - _py * _sa, _cy + _px * _sa + _py * _ca)\n  Steps = vcat(Steps, hcat(_ring, fill(4, 1, 100 + k)))\n  StepMesh = vcat(StepMesh, mprism(_ring, _h0, _h1))\nend\n_f3 = _isUM ? _pb : 0\nloop j in _f3:\n  _bx0 = _xt - _dir * j * _T\n  _bx1 = _xt - _dir * (j + 1) * _T\n  _by0 = _y2\n  _by1 = _y3\n  _h1 = (_pa + _mid + j + 1) * _R\n  _h0 = _open > 0 ? max(0, _h1 - _TT) : 0\n  _px = _bx0 + _ux * (_bx1 - _bx0)\n  _py = _by0 + _uy * (_by1 - _by0)\n  _ring = hcat(_cx + _px * _ca - _py * _sa, _cy + _px * _sa + _py * _ca)\n  Steps = vcat(Steps, hcat(_ring, fill(4, 1, 200 + j)))\n  StepMesh = vcat(StepMesh, mprism(_ring, _h0, _h1))\nend\n_LT = max(0.05, landingThickness)\n_wv = max(0.05, waist) * sqrt(_T * _T + _R * _R) / _T\n_RH = max(0.3, railHeight)\n_rs = max(0.005, railSize) / 2\n_ri = max(0, railInset)\n_bpt = max(1, round(_T / max(0.03, balusterSpacing)))\n_bh = max(0.005, balusterSize) / 2\n_BSQ0 = vcat(vcat(hcat(0 - _bh), hcat(_bh)), vcat(hcat(_bh), hcat(0 - _bh)))\n_BSQ1 = vcat(vcat(hcat(0 - _bh), hcat(0 - _bh)), vcat(hcat(_bh), hcat(_bh)))\n_both = railSide == 'Both'\n_none = railSide == 'None'\n_left = railSide == 'Left' || (railSide == 'Inner' && !(_isU || _isUM))\n_right = railSide == 'Right'\n_inner = railSide == 'Inner' && (_isU || _isUM)\n_rlA = (_both || _left) ? 1 : 0\n_rrA = (_both || _right || _inner) ? 1 : 0\n_rlB = (_both || _left || _inner) ? 1 : 0\n_rrB = (_both || _right) ? 1 : 0\nFlights3D = zeros(0, 4)\nRail3D = zeros(0, 4)\nBal3D = zeros(0, 4)\nRailPlan = zeros(0, 4)\nbalusterCount = 0\nhandrailLength = 0\nflightConcrete = 0\nformworkArea = 0\n\n# ── flight A: _f1 steps from (0, 0) along (_dir, 0), across (0, 1), base 0\n_nA = _f1\n_oxA = 0\n_oyA = 0\n_dxA = _dir\n_dyA = 0\n_axA = 0\n_ayA = 1\n_z0A = 0\n_rlA = _rlA\n_rrA = _rrA\n_PFA = hcat(0, 0)\nloop i in _nA:\n  _PFA = vcat(_PFA, vcat(hcat(i * _T, (i + 1) * _R), hcat((i + 1) * _T, (i + 1) * _R)))\nend\n_PFA = vcat(_PFA, vcat(hcat(_nA * _T, _nA * _R - _wv), hcat(_wv * _T / _R, 0)))\n_mA = rows(_PFA)\n_psA = col(_PFA, 0)\n_pzA = col(_PFA, 1) + _z0A\n_p0xA = _oxA + _dxA * _psA\n_p0yA = _oyA + _dyA * _psA\n_p1xA = _p0xA + _axA * _W\n_p1yA = _p0yA + _ayA * _W\n_S0A = hcat(_cx + _p0xA * _ca - _p0yA * _sa, _cy + _p0xA * _sa + _p0yA * _ca, _pzA, fill(_mA, 1, 0))\n_S1A = hcat(_cx + _p1xA * _ca - _p1yA * _sa, _cy + _p1xA * _sa + _p1yA * _ca, _pzA, fill(_mA, 1, 0 + 1))\n_QA = zeros(0, 4)\nloop k in (_mA - 1):\n  _sa0 = sub(_psA, k, 0, 1, 1)\n  _sa1 = sub(_psA, k + 1, 0, 1, 1)\n  _za0 = sub(_pzA, k, 0, 1, 1)\n  _za1 = sub(_pzA, k + 1, 0, 1, 1)\n  _qa = hcat(_oxA + _dxA * _sa0, _oyA + _dyA * _sa0)\n  _qb = hcat(_oxA + _dxA * _sa1, _oyA + _dyA * _sa1)\n  _qc = _qb + hcat(_axA * _W, _ayA * _W)\n  _qd = _qa + hcat(_axA * _W, _ayA * _W)\n  _q4 = vcat(vcat(_qa, _qb), vcat(_qc, _qd))\n  _qz = vcat(vcat(hcat(_za0), hcat(_za1)), vcat(hcat(_za1), hcat(_za0)))\n  _qw = hcat(_cx + col(_q4, 0) * _ca - col(_q4, 1) * _sa, _cy + col(_q4, 0) * _sa + col(_q4, 1) * _ca, _qz, fill(4, 1, 0 + 2 + k))\n  _QA = vcat(_QA, _qw)\nend\nFlights3D = (_open > 0 || _nA == 0) ? Flights3D : vcat(Flights3D, vcat(vcat(_S0A, _S1A), _QA))\n# balusters: _bpt per tread, at the rail inset on each railed side, from tread top to rail height\nloop b in (_nA * _bpt):\n  _bi = floor(b / _bpt)\n  _bs = _bi * _T + (b - _bi * _bpt + 0.5) * _T / _bpt\n  _bz0 = _z0A + (_bi + 1) * _R\n  _bz1 = _bz0 + _RH\n  _bl = hcat(_oxA + _dxA * _bs + _axA * _ri, _oyA + _dyA * _bs + _ayA * _ri)\n  _br = hcat(_oxA + _dxA * _bs + _axA * (_W - _ri), _oyA + _dyA * _bs + _ayA * (_W - _ri))\n  _blr = hcat(_cx + (col(_bl, 0) + _BSQ0) * _ca - (col(_bl, 1) + _BSQ1) * _sa, _cy + (col(_bl, 0) + _BSQ0) * _sa + (col(_bl, 1) + _BSQ1) * _ca)\n  _brr = hcat(_cx + (col(_br, 0) + _BSQ0) * _ca - (col(_br, 1) + _BSQ1) * _sa, _cy + (col(_br, 0) + _BSQ0) * _sa + (col(_br, 1) + _BSQ1) * _ca)\n  Bal3D = _rlA > 0 ? vcat(Bal3D, mprism(_blr, _bz0, _bz1)) : Bal3D\n  Bal3D = _rrA > 0 ? vcat(Bal3D, mprism(_brr, _bz0, _bz1)) : Bal3D\nend\nbalusterCount = balusterCount + _nA * _bpt * (_rlA + _rrA)\n# handrail: a sloped bar from above the first nosing to above the last, on each railed side\n_h0zA = _z0A + _R + _RH\n_h1zA = _z0A + _nA * _R + _RH\nloop s in 2:\n  _wside = s == 0 ? _ri : (_W - _ri)\n  _on = _nA > 0 ? (s == 0 ? _rlA : _rrA) : 0\n  _c0 = hcat(_oxA + _axA * _wside, _oyA + _ayA * _wside)\n  _c1 = hcat(_oxA + _dxA * _nA * _T + _axA * _wside, _oyA + _dyA * _nA * _T + _ayA * _wside)\n  _cw = hcat(_axA * _rs, _ayA * _rs)\n  _r8 = vcat(vcat(vcat(_c0 - _cw, _c0 + _cw), vcat(_c1 + _cw, _c1 - _cw)), vcat(vcat(_c0 - _cw, _c0 + _cw), vcat(_c1 + _cw, _c1 - _cw)))\n  _r8z = vcat(vcat(hcat(_h0zA - _rs), hcat(_h0zA - _rs)), vcat(vcat(hcat(_h1zA - _rs), hcat(_h1zA - _rs)), vcat(vcat(hcat(_h0zA + _rs), hcat(_h0zA + _rs)), vcat(hcat(_h1zA + _rs), hcat(_h1zA + _rs)))))\n  _r8w = hcat(_cx + col(_r8, 0) * _ca - col(_r8, 1) * _sa, _cy + col(_r8, 0) * _sa + col(_r8, 1) * _ca, _r8z)\n  _fb = 0 + 500 + s * 6\n  _F0 = hcat(vcat(vcat(row(_r8w, 0), row(_r8w, 1)), vcat(row(_r8w, 2), row(_r8w, 3))), fill(4, 1, _fb))\n  _F1 = hcat(vcat(vcat(row(_r8w, 4), row(_r8w, 5)), vcat(row(_r8w, 6), row(_r8w, 7))), fill(4, 1, _fb + 1))\n  _F2 = hcat(vcat(vcat(row(_r8w, 0), row(_r8w, 1)), vcat(row(_r8w, 5), row(_r8w, 4))), fill(4, 1, _fb + 2))\n  _F3 = hcat(vcat(vcat(row(_r8w, 1), row(_r8w, 2)), vcat(row(_r8w, 6), row(_r8w, 5))), fill(4, 1, _fb + 3))\n  _F4 = hcat(vcat(vcat(row(_r8w, 2), row(_r8w, 3)), vcat(row(_r8w, 7), row(_r8w, 6))), fill(4, 1, _fb + 4))\n  _F5 = hcat(vcat(vcat(row(_r8w, 3), row(_r8w, 0)), vcat(row(_r8w, 4), row(_r8w, 7))), fill(4, 1, _fb + 5))\n  Rail3D = _on > 0 ? vcat(Rail3D, vcat(vcat(vcat(_F0, _F1), vcat(_F2, _F3)), vcat(_F4, _F5))) : Rail3D\n  RailPlan = _on > 0 ? vcat(RailPlan, hcat(_cx + col(_c0, 0) * _ca - col(_c0, 1) * _sa, _cy + col(_c0, 0) * _sa + col(_c0, 1) * _ca, _cx + col(_c1, 0) * _ca - col(_c1, 1) * _sa, _cy + col(_c1, 0) * _sa + col(_c1, 1) * _ca)) : RailPlan\n  handrailLength = handrailLength + _on * _nA * _T * sqrt(1 + (_R / _T) * (_R / _T))\nend\n_faA = _nA > 0 ? (_nA * _T * _R / 2 + _nA * _T * _wv - _wv * _wv * _T / (2 * _R)) : 0\nflightConcrete = flightConcrete + (_open > 0 ? 0 : _faA * _W)\nformworkArea = formworkArea + (_open > 0 ? 0 : (2 * _faA + _W * _nA * _T * sqrt(1 + (_R / _T) * (_R / _T)) + _W * _nA * _R))\n\n\n# ── flight B: (_isUM ? _mid : (_isU ? _n2 : 0)) steps from (_xt, (_isUM ? _W : (_W + _G))) along ((_isUM ? 0 : (0 - _dir)), (_isUM ? 1 : 0)), across ((_isUM ? _dir : 0), (_isUM ? 0 : 1)), base (_isUM ? _pa * _R : _n1 * _R)\n_nB = (_isUM ? _mid : (_isU ? _n2 : 0))\n_oxB = _xt\n_oyB = (_isUM ? _W : (_W + _G))\n_dxB = (_isUM ? 0 : (0 - _dir))\n_dyB = (_isUM ? 1 : 0)\n_axB = (_isUM ? _dir : 0)\n_ayB = (_isUM ? 0 : 1)\n_z0B = (_isUM ? _pa * _R : _n1 * _R)\n_rlB = (_isUM ? _rrA : _rlB)\n_rrB = (_isUM ? _rlA : _rrB)\n_PFB = hcat(0, 0)\nloop i in _nB:\n  _PFB = vcat(_PFB, vcat(hcat(i * _T, (i + 1) * _R), hcat((i + 1) * _T, (i + 1) * _R)))\nend\n_PFB = vcat(_PFB, vcat(hcat(_nB * _T, _nB * _R - _wv), hcat(_wv * _T / _R, 0)))\n_mB = rows(_PFB)\n_psB = col(_PFB, 0)\n_pzB = col(_PFB, 1) + _z0B\n_p0xB = _oxB + _dxB * _psB\n_p0yB = _oyB + _dyB * _psB\n_p1xB = _p0xB + _axB * _W\n_p1yB = _p0yB + _ayB * _W\n_S0B = hcat(_cx + _p0xB * _ca - _p0yB * _sa, _cy + _p0xB * _sa + _p0yB * _ca, _pzB, fill(_mB, 1, 1000))\n_S1B = hcat(_cx + _p1xB * _ca - _p1yB * _sa, _cy + _p1xB * _sa + _p1yB * _ca, _pzB, fill(_mB, 1, 1000 + 1))\n_QB = zeros(0, 4)\nloop k in (_mB - 1):\n  _sa0 = sub(_psB, k, 0, 1, 1)\n  _sa1 = sub(_psB, k + 1, 0, 1, 1)\n  _za0 = sub(_pzB, k, 0, 1, 1)\n  _za1 = sub(_pzB, k + 1, 0, 1, 1)\n  _qa = hcat(_oxB + _dxB * _sa0, _oyB + _dyB * _sa0)\n  _qb = hcat(_oxB + _dxB * _sa1, _oyB + _dyB * _sa1)\n  _qc = _qb + hcat(_axB * _W, _ayB * _W)\n  _qd = _qa + hcat(_axB * _W, _ayB * _W)\n  _q4 = vcat(vcat(_qa, _qb), vcat(_qc, _qd))\n  _qz = vcat(vcat(hcat(_za0), hcat(_za1)), vcat(hcat(_za1), hcat(_za0)))\n  _qw = hcat(_cx + col(_q4, 0) * _ca - col(_q4, 1) * _sa, _cy + col(_q4, 0) * _sa + col(_q4, 1) * _ca, _qz, fill(4, 1, 1000 + 2 + k))\n  _QB = vcat(_QB, _qw)\nend\nFlights3D = (_open > 0 || _nB == 0) ? Flights3D : vcat(Flights3D, vcat(vcat(_S0B, _S1B), _QB))\n# balusters: _bpt per tread, at the rail inset on each railed side, from tread top to rail height\nloop b in (_nB * _bpt):\n  _bi = floor(b / _bpt)\n  _bs = _bi * _T + (b - _bi * _bpt + 0.5) * _T / _bpt\n  _bz0 = _z0B + (_bi + 1) * _R\n  _bz1 = _bz0 + _RH\n  _bl = hcat(_oxB + _dxB * _bs + _axB * _ri, _oyB + _dyB * _bs + _ayB * _ri)\n  _br = hcat(_oxB + _dxB * _bs + _axB * (_W - _ri), _oyB + _dyB * _bs + _ayB * (_W - _ri))\n  _blr = hcat(_cx + (col(_bl, 0) + _BSQ0) * _ca - (col(_bl, 1) + _BSQ1) * _sa, _cy + (col(_bl, 0) + _BSQ0) * _sa + (col(_bl, 1) + _BSQ1) * _ca)\n  _brr = hcat(_cx + (col(_br, 0) + _BSQ0) * _ca - (col(_br, 1) + _BSQ1) * _sa, _cy + (col(_br, 0) + _BSQ0) * _sa + (col(_br, 1) + _BSQ1) * _ca)\n  Bal3D = _rlB > 0 ? vcat(Bal3D, mprism(_blr, _bz0, _bz1)) : Bal3D\n  Bal3D = _rrB > 0 ? vcat(Bal3D, mprism(_brr, _bz0, _bz1)) : Bal3D\nend\nbalusterCount = balusterCount + _nB * _bpt * (_rlB + _rrB)\n# handrail: a sloped bar from above the first nosing to above the last, on each railed side\n_h0zB = _z0B + _R + _RH\n_h1zB = _z0B + _nB * _R + _RH\nloop s in 2:\n  _wside = s == 0 ? _ri : (_W - _ri)\n  _on = _nB > 0 ? (s == 0 ? _rlB : _rrB) : 0\n  _c0 = hcat(_oxB + _axB * _wside, _oyB + _ayB * _wside)\n  _c1 = hcat(_oxB + _dxB * _nB * _T + _axB * _wside, _oyB + _dyB * _nB * _T + _ayB * _wside)\n  _cw = hcat(_axB * _rs, _ayB * _rs)\n  _r8 = vcat(vcat(vcat(_c0 - _cw, _c0 + _cw), vcat(_c1 + _cw, _c1 - _cw)), vcat(vcat(_c0 - _cw, _c0 + _cw), vcat(_c1 + _cw, _c1 - _cw)))\n  _r8z = vcat(vcat(hcat(_h0zB - _rs), hcat(_h0zB - _rs)), vcat(vcat(hcat(_h1zB - _rs), hcat(_h1zB - _rs)), vcat(vcat(hcat(_h0zB + _rs), hcat(_h0zB + _rs)), vcat(hcat(_h1zB + _rs), hcat(_h1zB + _rs)))))\n  _r8w = hcat(_cx + col(_r8, 0) * _ca - col(_r8, 1) * _sa, _cy + col(_r8, 0) * _sa + col(_r8, 1) * _ca, _r8z)\n  _fb = 1000 + 500 + s * 6\n  _F0 = hcat(vcat(vcat(row(_r8w, 0), row(_r8w, 1)), vcat(row(_r8w, 2), row(_r8w, 3))), fill(4, 1, _fb))\n  _F1 = hcat(vcat(vcat(row(_r8w, 4), row(_r8w, 5)), vcat(row(_r8w, 6), row(_r8w, 7))), fill(4, 1, _fb + 1))\n  _F2 = hcat(vcat(vcat(row(_r8w, 0), row(_r8w, 1)), vcat(row(_r8w, 5), row(_r8w, 4))), fill(4, 1, _fb + 2))\n  _F3 = hcat(vcat(vcat(row(_r8w, 1), row(_r8w, 2)), vcat(row(_r8w, 6), row(_r8w, 5))), fill(4, 1, _fb + 3))\n  _F4 = hcat(vcat(vcat(row(_r8w, 2), row(_r8w, 3)), vcat(row(_r8w, 7), row(_r8w, 6))), fill(4, 1, _fb + 4))\n  _F5 = hcat(vcat(vcat(row(_r8w, 3), row(_r8w, 0)), vcat(row(_r8w, 4), row(_r8w, 7))), fill(4, 1, _fb + 5))\n  Rail3D = _on > 0 ? vcat(Rail3D, vcat(vcat(vcat(_F0, _F1), vcat(_F2, _F3)), vcat(_F4, _F5))) : Rail3D\n  RailPlan = _on > 0 ? vcat(RailPlan, hcat(_cx + col(_c0, 0) * _ca - col(_c0, 1) * _sa, _cy + col(_c0, 0) * _sa + col(_c0, 1) * _ca, _cx + col(_c1, 0) * _ca - col(_c1, 1) * _sa, _cy + col(_c1, 0) * _sa + col(_c1, 1) * _ca)) : RailPlan\n  handrailLength = handrailLength + _on * _nB * _T * sqrt(1 + (_R / _T) * (_R / _T))\nend\n_faB = _nB > 0 ? (_nB * _T * _R / 2 + _nB * _T * _wv - _wv * _wv * _T / (2 * _R)) : 0\nflightConcrete = flightConcrete + (_open > 0 ? 0 : _faB * _W)\nformworkArea = formworkArea + (_open > 0 ? 0 : (2 * _faB + _W * _nB * _T * sqrt(1 + (_R / _T) * (_R / _T)) + _W * _nB * _R))\n\n\n# ── flight C: (_isUM ? _pb : 0) steps from (_xt, _y2) along ((0 - _dir), 0), across (0, 1), base ((_pa + _mid) * _R)\n_nC = (_isUM ? _pb : 0)\n_oxC = _xt\n_oyC = _y2\n_dxC = (0 - _dir)\n_dyC = 0\n_axC = 0\n_ayC = 1\n_z0C = ((_pa + _mid) * _R)\n_rlC = _rlB\n_rrC = _rrB\n_PFC = hcat(0, 0)\nloop i in _nC:\n  _PFC = vcat(_PFC, vcat(hcat(i * _T, (i + 1) * _R), hcat((i + 1) * _T, (i + 1) * _R)))\nend\n_PFC = vcat(_PFC, vcat(hcat(_nC * _T, _nC * _R - _wv), hcat(_wv * _T / _R, 0)))\n_mC = rows(_PFC)\n_psC = col(_PFC, 0)\n_pzC = col(_PFC, 1) + _z0C\n_p0xC = _oxC + _dxC * _psC\n_p0yC = _oyC + _dyC * _psC\n_p1xC = _p0xC + _axC * _W\n_p1yC = _p0yC + _ayC * _W\n_S0C = hcat(_cx + _p0xC * _ca - _p0yC * _sa, _cy + _p0xC * _sa + _p0yC * _ca, _pzC, fill(_mC, 1, 2000))\n_S1C = hcat(_cx + _p1xC * _ca - _p1yC * _sa, _cy + _p1xC * _sa + _p1yC * _ca, _pzC, fill(_mC, 1, 2000 + 1))\n_QC = zeros(0, 4)\nloop k in (_mC - 1):\n  _sa0 = sub(_psC, k, 0, 1, 1)\n  _sa1 = sub(_psC, k + 1, 0, 1, 1)\n  _za0 = sub(_pzC, k, 0, 1, 1)\n  _za1 = sub(_pzC, k + 1, 0, 1, 1)\n  _qa = hcat(_oxC + _dxC * _sa0, _oyC + _dyC * _sa0)\n  _qb = hcat(_oxC + _dxC * _sa1, _oyC + _dyC * _sa1)\n  _qc = _qb + hcat(_axC * _W, _ayC * _W)\n  _qd = _qa + hcat(_axC * _W, _ayC * _W)\n  _q4 = vcat(vcat(_qa, _qb), vcat(_qc, _qd))\n  _qz = vcat(vcat(hcat(_za0), hcat(_za1)), vcat(hcat(_za1), hcat(_za0)))\n  _qw = hcat(_cx + col(_q4, 0) * _ca - col(_q4, 1) * _sa, _cy + col(_q4, 0) * _sa + col(_q4, 1) * _ca, _qz, fill(4, 1, 2000 + 2 + k))\n  _QC = vcat(_QC, _qw)\nend\nFlights3D = (_open > 0 || _nC == 0) ? Flights3D : vcat(Flights3D, vcat(vcat(_S0C, _S1C), _QC))\n# balusters: _bpt per tread, at the rail inset on each railed side, from tread top to rail height\nloop b in (_nC * _bpt):\n  _bi = floor(b / _bpt)\n  _bs = _bi * _T + (b - _bi * _bpt + 0.5) * _T / _bpt\n  _bz0 = _z0C + (_bi + 1) * _R\n  _bz1 = _bz0 + _RH\n  _bl = hcat(_oxC + _dxC * _bs + _axC * _ri, _oyC + _dyC * _bs + _ayC * _ri)\n  _br = hcat(_oxC + _dxC * _bs + _axC * (_W - _ri), _oyC + _dyC * _bs + _ayC * (_W - _ri))\n  _blr = hcat(_cx + (col(_bl, 0) + _BSQ0) * _ca - (col(_bl, 1) + _BSQ1) * _sa, _cy + (col(_bl, 0) + _BSQ0) * _sa + (col(_bl, 1) + _BSQ1) * _ca)\n  _brr = hcat(_cx + (col(_br, 0) + _BSQ0) * _ca - (col(_br, 1) + _BSQ1) * _sa, _cy + (col(_br, 0) + _BSQ0) * _sa + (col(_br, 1) + _BSQ1) * _ca)\n  Bal3D = _rlC > 0 ? vcat(Bal3D, mprism(_blr, _bz0, _bz1)) : Bal3D\n  Bal3D = _rrC > 0 ? vcat(Bal3D, mprism(_brr, _bz0, _bz1)) : Bal3D\nend\nbalusterCount = balusterCount + _nC * _bpt * (_rlC + _rrC)\n# handrail: a sloped bar from above the first nosing to above the last, on each railed side\n_h0zC = _z0C + _R + _RH\n_h1zC = _z0C + _nC * _R + _RH\nloop s in 2:\n  _wside = s == 0 ? _ri : (_W - _ri)\n  _on = _nC > 0 ? (s == 0 ? _rlC : _rrC) : 0\n  _c0 = hcat(_oxC + _axC * _wside, _oyC + _ayC * _wside)\n  _c1 = hcat(_oxC + _dxC * _nC * _T + _axC * _wside, _oyC + _dyC * _nC * _T + _ayC * _wside)\n  _cw = hcat(_axC * _rs, _ayC * _rs)\n  _r8 = vcat(vcat(vcat(_c0 - _cw, _c0 + _cw), vcat(_c1 + _cw, _c1 - _cw)), vcat(vcat(_c0 - _cw, _c0 + _cw), vcat(_c1 + _cw, _c1 - _cw)))\n  _r8z = vcat(vcat(hcat(_h0zC - _rs), hcat(_h0zC - _rs)), vcat(vcat(hcat(_h1zC - _rs), hcat(_h1zC - _rs)), vcat(vcat(hcat(_h0zC + _rs), hcat(_h0zC + _rs)), vcat(hcat(_h1zC + _rs), hcat(_h1zC + _rs)))))\n  _r8w = hcat(_cx + col(_r8, 0) * _ca - col(_r8, 1) * _sa, _cy + col(_r8, 0) * _sa + col(_r8, 1) * _ca, _r8z)\n  _fb = 2000 + 500 + s * 6\n  _F0 = hcat(vcat(vcat(row(_r8w, 0), row(_r8w, 1)), vcat(row(_r8w, 2), row(_r8w, 3))), fill(4, 1, _fb))\n  _F1 = hcat(vcat(vcat(row(_r8w, 4), row(_r8w, 5)), vcat(row(_r8w, 6), row(_r8w, 7))), fill(4, 1, _fb + 1))\n  _F2 = hcat(vcat(vcat(row(_r8w, 0), row(_r8w, 1)), vcat(row(_r8w, 5), row(_r8w, 4))), fill(4, 1, _fb + 2))\n  _F3 = hcat(vcat(vcat(row(_r8w, 1), row(_r8w, 2)), vcat(row(_r8w, 6), row(_r8w, 5))), fill(4, 1, _fb + 3))\n  _F4 = hcat(vcat(vcat(row(_r8w, 2), row(_r8w, 3)), vcat(row(_r8w, 7), row(_r8w, 6))), fill(4, 1, _fb + 4))\n  _F5 = hcat(vcat(vcat(row(_r8w, 3), row(_r8w, 0)), vcat(row(_r8w, 4), row(_r8w, 7))), fill(4, 1, _fb + 5))\n  Rail3D = _on > 0 ? vcat(Rail3D, vcat(vcat(vcat(_F0, _F1), vcat(_F2, _F3)), vcat(_F4, _F5))) : Rail3D\n  RailPlan = _on > 0 ? vcat(RailPlan, hcat(_cx + col(_c0, 0) * _ca - col(_c0, 1) * _sa, _cy + col(_c0, 0) * _sa + col(_c0, 1) * _ca, _cx + col(_c1, 0) * _ca - col(_c1, 1) * _sa, _cy + col(_c1, 0) * _sa + col(_c1, 1) * _ca)) : RailPlan\n  handrailLength = handrailLength + _on * _nC * _T * sqrt(1 + (_R / _T) * (_R / _T))\nend\n_faC = _nC > 0 ? (_nC * _T * _R / 2 + _nC * _T * _wv - _wv * _wv * _T / (2 * _R)) : 0\nflightConcrete = flightConcrete + (_open > 0 ? 0 : _faC * _W)\nformworkArea = formworkArea + (_open > 0 ? 0 : (2 * _faC + _W * _nC * _T * sqrt(1 + (_R / _T) * (_R / _T)) + _W * _nC * _R))\n\n# ── landings: SLABS of _LT, with a beam under the outer edge when asked ──────────────────────────\n_nl = _isUM ? 2 : (_isU ? 1 : (_L > 0 ? 1 : 0))\nBeams3D = zeros(0, 4)\nlandingConcrete = 0\nbeamConcrete = 0\n_bw = max(0.05, beamWidth)\n_bd = max(0.05, beamDepth)\nloop m in _nl:\n  _lx0 = _isUM ? _xt : (_isU ? _xt : _dir * _N * _T)\n  _lx1 = _isUM ? _xr : (_isU ? _xl : _dir * (_N * _T + _L))\n  _ly0 = _isUM ? (m > 0 ? _y2 : 0) : 0\n  _ly1 = _isUM ? (m > 0 ? _y3 : _W) : (_isU ? (2 * _W + _G) : _W)\n  _lh1 = _isUM ? (m > 0 ? (_pa + _mid) * _R : _pa * _R) : (_isU ? _n1 * _R : _N * _R)\n  _lh0 = _open > 0 ? max(0, _lh1 - _TT) : max(0, _lh1 - _LT)\n  _px = _lx0 + _ux * (_lx1 - _lx0)\n  _py = _ly0 + _uy * (_ly1 - _ly0)\n  _ring = hcat(_cx + _px * _ca - _py * _sa, _cy + _px * _sa + _py * _ca)\n  Landings = vcat(Landings, hcat(_ring, fill(4, 1, m)))\n  LandMesh = vcat(LandMesh, mprism(_ring, _lh0, _lh1))\n  landingConcrete = landingConcrete + abs(_lx1 - _lx0) * abs(_ly1 - _ly0) * (_lh1 - _lh0)\n  _bx1 = _lx1\n  _bx0 = _lx1 - _dir * (_lx1 > _lx0 ? 1 : -1) * _dir * _bw\n  _bxa = min(_bx0, _bx1)\n  _bxb = max(_bx0, _bx1)\n  _bpx = _bxa + _ux * (_bxb - _bxa)\n  _bpy = _ly0 + _uy * (_ly1 - _ly0)\n  _bring = hcat(_cx + _bpx * _ca - _bpy * _sa, _cy + _bpx * _sa + _bpy * _ca)\n  Beams3D = (showBeams > 0 && _open == 0) ? vcat(Beams3D, mprism(_bring, _lh0 - _bd, _lh0)) : Beams3D\n  beamConcrete = beamConcrete + ((showBeams > 0 && _open == 0) ? _bw * _bd * abs(_ly1 - _ly0) : 0)\nend\n_gx0 = _dir * 0.5 * _T\n_gy0 = _W / 2\n_gx1 = _isUM ? _xr : (_isU ? _xt : _dir * (_N + 0.5) * _T)\n_gy1 = _isUM ? _W / 2 : (_isU ? _W / 2 : _W / 2)\nArrowPlan = hcat(_cx + _gx0 * _ca - _gy0 * _sa, _cy + _gx0 * _sa + _gy0 * _ca, _cx + _gx1 * _ca - _gy1 * _sa, _cy + _gx1 * _sa + _gy1 * _ca)\nstepCount = _N\nriserHeight = _R\ntreadDepth = _T\ntotalRise = _N * _R\ngoingLength = _N * _T\nflightWidth = _W\npitchDeg = atan2(_R, _T) * 180 / PI\nrule2RT = 2 * _R + _T\nheadroomOk = _R <= 0.19 && _T >= 0.25 ? 1 : 0\nstairArea = _isUM ? (_pa * _T + _W) * (_W + _mid * _T + _W) : (_isU ? (_n1 * _T + _L) * (2 * _W + _G) : (_N * _T + _L) * _W)\nStepMesh = _open > 0 ? StepMesh : zeros(0, 4)\nconcreteVolume = flightConcrete + landingConcrete + beamConcrete + (_open > 0 ? _N * _T * _W * _TT : 0)\nconcreteWeight = 25 * concreteVolume\nflightCount = _isUM ? 3 : (_isU ? 2 : 1)\nwaistThickness = max(0.05, waist)\n"
+    }
+   }
+  },
+  {
+   "id": "out",
+   "position": {
+    "x": 260,
+    "y": 60
+   },
+   "data": {
+    "tool": "output",
+    "params": {
+     "slots": [
+      {
+       "id": "s1",
+       "label": "Treads — plan",
+       "necessary": false
+      },
+      {
+       "id": "s2",
+       "label": "Landings — plan",
+       "necessary": false
+      },
+      {
+       "id": "s3",
+       "label": "Up arrow — plan",
+       "necessary": false
+      },
+      {
+       "id": "s4",
+       "label": "Treads (open) — solids",
+       "necessary": false
+      },
+      {
+       "id": "s5",
+       "label": "Landings — solids",
+       "necessary": false
+      },
+      {
+       "id": "s6",
+       "label": "Steps",
+       "necessary": false
+      },
+      {
+       "id": "s7",
+       "label": "Riser (m)",
+       "necessary": false
+      },
+      {
+       "id": "s8",
+       "label": "Tread (m)",
+       "necessary": false
+      },
+      {
+       "id": "s9",
+       "label": "Total rise (m)",
+       "necessary": false
+      },
+      {
+       "id": "s10",
+       "label": "Going (m)",
+       "necessary": false
+      },
+      {
+       "id": "s11",
+       "label": "Flight width (m)",
+       "necessary": false
+      },
+      {
+       "id": "s12",
+       "label": "Pitch (deg)",
+       "necessary": false
+      },
+      {
+       "id": "s13",
+       "label": "2R + T (m)",
+       "necessary": false
+      },
+      {
+       "id": "s14",
+       "label": "Comfort rule met",
+       "necessary": false
+      },
+      {
+       "id": "s15",
+       "label": "Plan area (m²)",
+       "necessary": false
+      },
+      {
+       "id": "s16",
+       "label": "Concrete volume (m³)",
+       "necessary": false
+      },
+      {
+       "id": "s17",
+       "label": "Flights with waist — solids"
+      },
+      {
+       "id": "s18",
+       "label": "Beams — solids"
+      },
+      {
+       "id": "s19",
+       "label": "Handrails — solids"
+      },
+      {
+       "id": "s20",
+       "label": "Balusters — solids"
+      },
+      {
+       "id": "s21",
+       "label": "Handrails — plan"
+      },
+      {
+       "id": "s22",
+       "label": "Formwork area (m²)"
+      },
+      {
+       "id": "s23",
+       "label": "Handrail length (m)"
+      },
+      {
+       "id": "s24",
+       "label": "Balusters"
+      },
+      {
+       "id": "s25",
+       "label": "Concrete weight (kN)"
+      },
+      {
+       "id": "s26",
+       "label": "Flights"
+      },
+      {
+       "id": "s27",
+       "label": "Waist (m)"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r2d",
+   "position": {
+    "x": 660,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-2d",
+    "params": {
+     "prims": [
+      {
+       "id": "p2_land",
+       "kind": "polygon",
+       "name": "Landings",
+       "color": "#cbd5e1",
+       "layer": "Stair",
+       "lineStyle": "solid",
+       "fillMode": "filled",
+       "hatch": "none",
+       "show": true
+      },
+      {
+       "id": "p2_steps",
+       "kind": "polygon",
+       "name": "Treads",
+       "color": "#334155",
+       "layer": "Stair",
+       "lineStyle": "solid",
+       "fillMode": "outlined",
+       "hatch": "none",
+       "show": true
+      },
+      {
+       "id": "p2_arrow",
+       "kind": "stroke",
+       "name": "Up arrow",
+       "color": "#0f766e",
+       "layer": "Stair",
+       "lineStyle": "solid",
+       "width": 0.02,
+       "show": true
+      },
+      {
+       "id": "p2_rail",
+       "kind": "stroke",
+       "name": "Handrails",
+       "color": "#78350f",
+       "layer": "Structural",
+       "show": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r3d",
+   "position": {
+    "x": 960,
+    "y": 180
+   },
+   "data": {
+    "tool": "render-3d",
+    "params": {
+     "prims": [
+      {
+       "id": "p3_steps",
+       "kind": "polyhedron",
+       "name": "Treads (open)",
+       "color": "#94a3b8",
+       "layer": "Stair",
+       "opacity": 1,
+       "displayType": "solid",
+       "showEdges": true,
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_land",
+       "kind": "polyhedron",
+       "name": "Landings",
+       "color": "#cbd5e1",
+       "layer": "Stair",
+       "opacity": 1,
+       "displayType": "solid",
+       "showEdges": true,
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_flights",
+       "kind": "polyhedron",
+       "name": "Flights",
+       "color": "#9ca3af",
+       "layer": "Structural",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_beams",
+       "kind": "polyhedron",
+       "name": "Beams",
+       "color": "#6b7280",
+       "layer": "Structural",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_rail",
+       "kind": "polyhedron",
+       "name": "Handrails",
+       "color": "#78350f",
+       "layer": "Structural",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_bal",
+       "kind": "polyhedron",
+       "name": "Balusters",
+       "color": "#1f2937",
+       "layer": "Structural",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e1_source_val-points__props_valin-P",
+   "source": "source",
+   "sourceHandle": "val-points",
+   "target": "props",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e2_props_val-config__math_valin-config",
+   "source": "props",
+   "sourceHandle": "val-config",
+   "target": "math",
+   "targetHandle": "valin-config"
+  },
+  {
+   "id": "e3_props_val-steps__math_valin-steps",
+   "source": "props",
+   "sourceHandle": "val-steps",
+   "target": "math",
+   "targetHandle": "valin-steps"
+  },
+  {
+   "id": "e4_props_val-tread__math_valin-tread",
+   "source": "props",
+   "sourceHandle": "val-tread",
+   "target": "math",
+   "targetHandle": "valin-tread"
+  },
+  {
+   "id": "e5_props_val-riser__math_valin-riser",
+   "source": "props",
+   "sourceHandle": "val-riser",
+   "target": "math",
+   "targetHandle": "valin-riser"
+  },
+  {
+   "id": "e6_props_val-width__math_valin-width",
+   "source": "props",
+   "sourceHandle": "val-width",
+   "target": "math",
+   "targetHandle": "valin-width"
+  },
+  {
+   "id": "e7_props_val-direction__math_valin-direction",
+   "source": "props",
+   "sourceHandle": "val-direction",
+   "target": "math",
+   "targetHandle": "valin-direction"
+  },
+  {
+   "id": "e8_props_val-midSteps__math_valin-midSteps",
+   "source": "props",
+   "sourceHandle": "val-midSteps",
+   "target": "math",
+   "targetHandle": "valin-midSteps"
+  },
+  {
+   "id": "e9_props_val-landingWidth__math_valin-landingWidth",
+   "source": "props",
+   "sourceHandle": "val-landingWidth",
+   "target": "math",
+   "targetHandle": "valin-landingWidth"
+  },
+  {
+   "id": "e10_props_val-midSpace__math_valin-midSpace",
+   "source": "props",
+   "sourceHandle": "val-midSpace",
+   "target": "math",
+   "targetHandle": "valin-midSpace"
+  },
+  {
+   "id": "e11_props_val-stepStyle__math_valin-stepStyle",
+   "source": "props",
+   "sourceHandle": "val-stepStyle",
+   "target": "math",
+   "targetHandle": "valin-stepStyle"
+  },
+  {
+   "id": "e12_props_val-treadThickness__math_valin-treadThickness",
+   "source": "props",
+   "sourceHandle": "val-treadThickness",
+   "target": "math",
+   "targetHandle": "valin-treadThickness"
+  },
+  {
+   "id": "e13_props_val-waist__math_valin-waist",
+   "source": "props",
+   "sourceHandle": "val-waist",
+   "target": "math",
+   "targetHandle": "valin-waist"
+  },
+  {
+   "id": "e14_props_val-landingThickness__math_valin-landingThickness",
+   "source": "props",
+   "sourceHandle": "val-landingThickness",
+   "target": "math",
+   "targetHandle": "valin-landingThickness"
+  },
+  {
+   "id": "e15_props_val-showBeams__math_valin-showBeams",
+   "source": "props",
+   "sourceHandle": "val-showBeams",
+   "target": "math",
+   "targetHandle": "valin-showBeams"
+  },
+  {
+   "id": "e16_props_val-beamWidth__math_valin-beamWidth",
+   "source": "props",
+   "sourceHandle": "val-beamWidth",
+   "target": "math",
+   "targetHandle": "valin-beamWidth"
+  },
+  {
+   "id": "e17_props_val-beamDepth__math_valin-beamDepth",
+   "source": "props",
+   "sourceHandle": "val-beamDepth",
+   "target": "math",
+   "targetHandle": "valin-beamDepth"
+  },
+  {
+   "id": "e18_props_val-railSide__math_valin-railSide",
+   "source": "props",
+   "sourceHandle": "val-railSide",
+   "target": "math",
+   "targetHandle": "valin-railSide"
+  },
+  {
+   "id": "e19_props_val-railHeight__math_valin-railHeight",
+   "source": "props",
+   "sourceHandle": "val-railHeight",
+   "target": "math",
+   "targetHandle": "valin-railHeight"
+  },
+  {
+   "id": "e20_props_val-railSize__math_valin-railSize",
+   "source": "props",
+   "sourceHandle": "val-railSize",
+   "target": "math",
+   "targetHandle": "valin-railSize"
+  },
+  {
+   "id": "e21_props_val-balusterSpacing__math_valin-balusterSpacing",
+   "source": "props",
+   "sourceHandle": "val-balusterSpacing",
+   "target": "math",
+   "targetHandle": "valin-balusterSpacing"
+  },
+  {
+   "id": "e22_props_val-balusterSize__math_valin-balusterSize",
+   "source": "props",
+   "sourceHandle": "val-balusterSize",
+   "target": "math",
+   "targetHandle": "valin-balusterSize"
+  },
+  {
+   "id": "e23_props_val-railInset__math_valin-railInset",
+   "source": "props",
+   "sourceHandle": "val-railInset",
+   "target": "math",
+   "targetHandle": "valin-railInset"
+  },
+  {
+   "id": "e24_props_val-rotation__math_valin-rotation",
+   "source": "props",
+   "sourceHandle": "val-rotation",
+   "target": "math",
+   "targetHandle": "valin-rotation"
+  },
+  {
+   "id": "e25_props_val-P__math_valin-P",
+   "source": "props",
+   "sourceHandle": "val-P",
+   "target": "math",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e26_math_val-Steps__out_valin-s1",
+   "source": "math",
+   "sourceHandle": "val-Steps",
+   "target": "out",
+   "targetHandle": "valin-s1"
+  },
+  {
+   "id": "e27_out_val-s1__r2d_valin-p2_steps",
+   "source": "out",
+   "sourceHandle": "val-s1",
+   "target": "r2d",
+   "targetHandle": "valin-p2_steps"
+  },
+  {
+   "id": "e28_math_val-Landings__out_valin-s2",
+   "source": "math",
+   "sourceHandle": "val-Landings",
+   "target": "out",
+   "targetHandle": "valin-s2"
+  },
+  {
+   "id": "e29_out_val-s2__r2d_valin-p2_land",
+   "source": "out",
+   "sourceHandle": "val-s2",
+   "target": "r2d",
+   "targetHandle": "valin-p2_land"
+  },
+  {
+   "id": "e30_math_val-ArrowPlan__out_valin-s3",
+   "source": "math",
+   "sourceHandle": "val-ArrowPlan",
+   "target": "out",
+   "targetHandle": "valin-s3"
+  },
+  {
+   "id": "e31_out_val-s3__r2d_valin-p2_arrow",
+   "source": "out",
+   "sourceHandle": "val-s3",
+   "target": "r2d",
+   "targetHandle": "valin-p2_arrow"
+  },
+  {
+   "id": "e32_math_val-StepMesh__out_valin-s4",
+   "source": "math",
+   "sourceHandle": "val-StepMesh",
+   "target": "out",
+   "targetHandle": "valin-s4"
+  },
+  {
+   "id": "e33_out_val-s4__r3d_valin-p3_steps",
+   "source": "out",
+   "sourceHandle": "val-s4",
+   "target": "r3d",
+   "targetHandle": "valin-p3_steps"
+  },
+  {
+   "id": "e34_math_val-LandMesh__out_valin-s5",
+   "source": "math",
+   "sourceHandle": "val-LandMesh",
+   "target": "out",
+   "targetHandle": "valin-s5"
+  },
+  {
+   "id": "e35_out_val-s5__r3d_valin-p3_land",
+   "source": "out",
+   "sourceHandle": "val-s5",
+   "target": "r3d",
+   "targetHandle": "valin-p3_land"
+  },
+  {
+   "id": "e36_math_val-stepCount__out_valin-s6",
+   "source": "math",
+   "sourceHandle": "val-stepCount",
+   "target": "out",
+   "targetHandle": "valin-s6"
+  },
+  {
+   "id": "e37_math_val-riserHeight__out_valin-s7",
+   "source": "math",
+   "sourceHandle": "val-riserHeight",
+   "target": "out",
+   "targetHandle": "valin-s7"
+  },
+  {
+   "id": "e38_math_val-treadDepth__out_valin-s8",
+   "source": "math",
+   "sourceHandle": "val-treadDepth",
+   "target": "out",
+   "targetHandle": "valin-s8"
+  },
+  {
+   "id": "e39_math_val-totalRise__out_valin-s9",
+   "source": "math",
+   "sourceHandle": "val-totalRise",
+   "target": "out",
+   "targetHandle": "valin-s9"
+  },
+  {
+   "id": "e40_math_val-goingLength__out_valin-s10",
+   "source": "math",
+   "sourceHandle": "val-goingLength",
+   "target": "out",
+   "targetHandle": "valin-s10"
+  },
+  {
+   "id": "e41_math_val-flightWidth__out_valin-s11",
+   "source": "math",
+   "sourceHandle": "val-flightWidth",
+   "target": "out",
+   "targetHandle": "valin-s11"
+  },
+  {
+   "id": "e42_math_val-pitchDeg__out_valin-s12",
+   "source": "math",
+   "sourceHandle": "val-pitchDeg",
+   "target": "out",
+   "targetHandle": "valin-s12"
+  },
+  {
+   "id": "e43_math_val-rule2RT__out_valin-s13",
+   "source": "math",
+   "sourceHandle": "val-rule2RT",
+   "target": "out",
+   "targetHandle": "valin-s13"
+  },
+  {
+   "id": "e44_math_val-headroomOk__out_valin-s14",
+   "source": "math",
+   "sourceHandle": "val-headroomOk",
+   "target": "out",
+   "targetHandle": "valin-s14"
+  },
+  {
+   "id": "e45_math_val-stairArea__out_valin-s15",
+   "source": "math",
+   "sourceHandle": "val-stairArea",
+   "target": "out",
+   "targetHandle": "valin-s15"
+  },
+  {
+   "id": "e46_math_val-concreteVolume__out_valin-s16",
+   "source": "math",
+   "sourceHandle": "val-concreteVolume",
+   "target": "out",
+   "targetHandle": "valin-s16"
+  },
+  {
+   "id": "e47_math_val-Flights3D__out_valin-s17",
+   "source": "math",
+   "sourceHandle": "val-Flights3D",
+   "target": "out",
+   "targetHandle": "valin-s17"
+  },
+  {
+   "id": "e48_out_val-s17__r3d_valin-p3_flights",
+   "source": "out",
+   "sourceHandle": "val-s17",
+   "target": "r3d",
+   "targetHandle": "valin-p3_flights"
+  },
+  {
+   "id": "e49_math_val-Beams3D__out_valin-s18",
+   "source": "math",
+   "sourceHandle": "val-Beams3D",
+   "target": "out",
+   "targetHandle": "valin-s18"
+  },
+  {
+   "id": "e50_out_val-s18__r3d_valin-p3_beams",
+   "source": "out",
+   "sourceHandle": "val-s18",
+   "target": "r3d",
+   "targetHandle": "valin-p3_beams"
+  },
+  {
+   "id": "e51_math_val-Rail3D__out_valin-s19",
+   "source": "math",
+   "sourceHandle": "val-Rail3D",
+   "target": "out",
+   "targetHandle": "valin-s19"
+  },
+  {
+   "id": "e52_out_val-s19__r3d_valin-p3_rail",
+   "source": "out",
+   "sourceHandle": "val-s19",
+   "target": "r3d",
+   "targetHandle": "valin-p3_rail"
+  },
+  {
+   "id": "e53_math_val-Bal3D__out_valin-s20",
+   "source": "math",
+   "sourceHandle": "val-Bal3D",
+   "target": "out",
+   "targetHandle": "valin-s20"
+  },
+  {
+   "id": "e54_out_val-s20__r3d_valin-p3_bal",
+   "source": "out",
+   "sourceHandle": "val-s20",
+   "target": "r3d",
+   "targetHandle": "valin-p3_bal"
+  },
+  {
+   "id": "e55_math_val-RailPlan__out_valin-s21",
+   "source": "math",
+   "sourceHandle": "val-RailPlan",
+   "target": "out",
+   "targetHandle": "valin-s21"
+  },
+  {
+   "id": "e56_out_val-s21__r2d_valin-p2_rail",
+   "source": "out",
+   "sourceHandle": "val-s21",
+   "target": "r2d",
+   "targetHandle": "valin-p2_rail"
+  },
+  {
+   "id": "e57_math_val-formworkArea__out_valin-s22",
+   "source": "math",
+   "sourceHandle": "val-formworkArea",
+   "target": "out",
+   "targetHandle": "valin-s22"
+  },
+  {
+   "id": "e58_math_val-handrailLength__out_valin-s23",
+   "source": "math",
+   "sourceHandle": "val-handrailLength",
+   "target": "out",
+   "targetHandle": "valin-s23"
+  },
+  {
+   "id": "e59_math_val-balusterCount__out_valin-s24",
+   "source": "math",
+   "sourceHandle": "val-balusterCount",
+   "target": "out",
+   "targetHandle": "valin-s24"
+  },
+  {
+   "id": "e60_math_val-concreteWeight__out_valin-s25",
+   "source": "math",
+   "sourceHandle": "val-concreteWeight",
+   "target": "out",
+   "targetHandle": "valin-s25"
+  },
+  {
+   "id": "e61_math_val-flightCount__out_valin-s26",
+   "source": "math",
+   "sourceHandle": "val-flightCount",
+   "target": "out",
+   "targetHandle": "valin-s26"
+  },
+  {
+   "id": "e62_math_val-waistThickness__out_valin-s27",
+   "source": "math",
+   "sourceHandle": "val-waistThickness",
+   "target": "out",
+   "targetHandle": "valin-s27"
+  }
+ ]
+}

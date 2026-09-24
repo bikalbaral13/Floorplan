@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Point } from "../../types";
-import { clipInsetByDeduction } from "../../algorithms/geometry/insetDeduction";
-import { computeInsetPolygon } from "../../algorithms/geometry/insetPolygon";
+import { clipInsetByDeduction } from "@builderpluss/engine";
+import { computeInsetPolygon } from "@builderpluss/engine";
 
 export type InsetMode = "equal" | "variable" | "front-remaining";
 

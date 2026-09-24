@@ -4,7 +4,7 @@ import type { Point } from "../../types";
 import {
   classifyRectilinearPolygon,
   type ClassificationResult,
-} from "../../algorithms/geometry/rectilinearShapeClassifier";
+} from "@builderpluss/engine";
 
 export interface ClassifyPolygonBlockProps {
   selectedRoom: { id: string; points: Point[] };

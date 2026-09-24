@@ -1,0 +1,67 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 4,
+  "edgeCount": 5,
+  "items": [
+    {
+      "nodeId": "math",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "props",
+      "tool": "input-props",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "pts",
+      "tool": "polygon",
+      "polygons": {
+        "rings": 1,
+        "vertices": 5,
+        "area": 23.5,
+        "bbox": [
+          0,
+          0,
+          6,
+          7.5
+        ],
+        "nonFinite": 0
+      },
+      "hash": "c41f6e1c31fe90f9"
+    },
+    {
+      "nodeId": "render__pr1",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 4,
+        "vertices": 24,
+        "area": 4.375,
+        "bbox": [
+          0,
+          -0.125,
+          6.125,
+          7.5
+        ],
+        "nonFinite": 0
+      },
+      "hash": "d3d0ce68888f767b"
+    }
+  ],
+  "hash": "a7d25c4039288ba3"
+}

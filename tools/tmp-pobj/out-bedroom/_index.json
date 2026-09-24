@@ -1,0 +1,92 @@
+[
+  {
+    "key": "falseCeiling",
+    "file": "false-ceiling.json",
+    "hostKind": "space",
+    "bytes": 31795,
+    "props": 23,
+    "outputs": 18,
+    "edges": 48
+  },
+  {
+    "key": "ledStrip",
+    "file": "led-strip.json",
+    "hostKind": "segment",
+    "bytes": 22872,
+    "props": 18,
+    "outputs": 14,
+    "edges": 35
+  },
+  {
+    "key": "downlight",
+    "file": "downlight.json",
+    "hostKind": "node",
+    "bytes": 22728,
+    "props": 19,
+    "outputs": 17,
+    "edges": 41
+  },
+  {
+    "key": "upholsteredPanel",
+    "file": "upholstered-panel.json",
+    "hostKind": "segment",
+    "bytes": 29203,
+    "props": 21,
+    "outputs": 20,
+    "edges": 48
+  },
+  {
+    "key": "flutedPanel",
+    "file": "fluted-panel.json",
+    "hostKind": "segment",
+    "bytes": 26974,
+    "props": 22,
+    "outputs": 17,
+    "edges": 42
+  },
+  {
+    "key": "windowSeat",
+    "file": "window-seat.json",
+    "hostKind": "node",
+    "bytes": 34313,
+    "props": 23,
+    "outputs": 25,
+    "edges": 60
+  },
+  {
+    "key": "skirting",
+    "file": "skirting.json",
+    "hostKind": "segment",
+    "bytes": 22808,
+    "props": 17,
+    "outputs": 15,
+    "edges": 35
+  },
+  {
+    "key": "wallArt",
+    "file": "wall-art.json",
+    "hostKind": "segment",
+    "bytes": 26426,
+    "props": 20,
+    "outputs": 18,
+    "edges": 42
+  },
+  {
+    "key": "curtainTrack",
+    "file": "curtain-track.json",
+    "hostKind": "segment",
+    "bytes": 26644,
+    "props": 20,
+    "outputs": 18,
+    "edges": 43
+  },
+  {
+    "key": "beam",
+    "file": "beam.json",
+    "hostKind": "segment",
+    "bytes": 26454,
+    "props": 18,
+    "outputs": 22,
+    "edges": 47
+  }
+]

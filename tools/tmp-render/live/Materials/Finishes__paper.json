@@ -1,0 +1,36 @@
+{
+  "schema": "material/1",
+  "category": "Finishes",
+  "id": "paper.matt",
+  "title": "Paper — art print & mount",
+  "description": "Cotton-rag print and its mount board. Fully diffuse, a hair off white, with a fibre noise fine enough to survive a close camera.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 320,
+      "detail": 2,
+      "roughness": 0.45,
+      "distortion": 0,
+      "colorA": "#f7f5f0",
+      "colorB": "#eae6dd"
+    }
+  },
+  "pbr": {
+    "baseColor": "#f2efe8",
+    "roughness": 0.88,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "none",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#f2efe8"
+  },
+  "dxf": {
+    "pattern": "SOLID",
+    "scale": 1,
+    "angle": 0
+  }
+}

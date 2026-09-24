@@ -1,0 +1,471 @@
+# Natural size — the fit scale is measured against the unscaled depth
+_natL = depth
+# Host frame — node, segment or space
+_e1 = hcat(1, 0)
+_np = rows(P)
+_isSeg = _np == 2
+_isSpace = _np > 2
+_edges = _isSpace ? (shift(P, -1) - P) : _e1
+_edgeLen = len(_edges)
+_longest = max(_edgeLen)
+_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1
+_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1
+_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)
+_dirLen = len(_dir)
+_axisB = _dirLen > 0 ? normalize(_dir) : _e1
+_rot = rotation * PI / 180
+_crot = cos(_rot)
+_srot = sin(_rot)
+_bx = sub(_axisB, 0, 0, 1, 1)
+_by = sub(_axisB, 0, 1, 1, 1)
+_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)
+_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)
+_ux = sub(_axisU, 0, 0, 1, 1)
+_uy = sub(_axisU, 0, 1, 1, 1)
+_vx = sub(_axisV, 0, 0, 1, 1)
+_vy = sub(_axisV, 0, 1, 1, 1)
+_Qu = col(P, 0) * _ux + col(P, 1) * _uy
+_Qv = col(P, 0) * _vx + col(P, 1) * _vy
+_hu0 = _np > 0 ? min(_Qu) : 0
+_hu1 = _np > 0 ? max(_Qu) : 0
+_hv0 = _np > 0 ? min(_Qv) : 0
+_hv1 = _np > 0 ? max(_Qv) : 0
+_hcu = (_hu0 + _hu1) / 2
+_hcv = (_hv0 + _hv1) / 2
+_hostL = _hu1 - _hu0
+_hostW = _hv1 - _hv0
+# Fit to host — one uniform scale, Max never enlarges
+_availL = max(0, _hostL - 2 * margin)
+_notOff = fitMode != 'Off'
+_exact = fitMode == 'Exact'
+_sRaw = _natL > 0 ? _availL / _natL : 1
+_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1
+scale = max(0.15, min(5, _sFit))
+_s = scale
+# Anchor — place the footprint by any of the nine box points
+_bodyL = depth * _s
+_bodyW = width * _s
+_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'
+_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'
+_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'
+_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'
+_ax = _anchorR - _anchorL
+_ay = _anchorB - _anchorT
+_hau = _hcu + _ax * max(0, _hostL / 2 - margin)
+_hav = _hcv + _ay * max(0, _hostW / 2 - margin)
+_cu = _hau - _ax * _bodyL / 2
+_cv = _hav - _ay * _bodyW / 2
+
+# ===========================================================================
+# THE CHAIR IN ITS OWN FRAME — u runs back (-) to front (+), v across, z up.
+# The back is at -u, which is what the plan tools' BACK table measures for
+# this object at rotation 0; turning that round would silently face every
+# placed chair into its table.
+# ===========================================================================
+_Wd = width * _s
+_Dp = depth * _s
+_sH = seatHeight * _s
+_cT = min(cushionThk * _s, _sH - 0.12 * _s)
+_T = shellThk * _s
+_R = _T / 2
+_u0 = 0 - _Dp / 2
+_u1 = _Dp / 2
+_b = _Wd / 2
+
+# -- the two dials. ONE detail dial sets every sample count in the file, so
+# face count is a decision rather than a discovery. --
+_dB = detail == 'Blocky'
+_dM = detail == 'Medium'
+_dF = detail == 'Fine'
+_S = _dB ? 28 : (_dM ? 64 : (_dF ? 120 : 180))
+_nO = _dB ? 2 : (_dM ? 4 : (_dF ? 6 : 8))
+_nTp = _dB ? 5 : (_dM ? 9 : (_dF ? 13 : 17))
+_nI = _dB ? 3 : (_dM ? 16 : (_dF ? 36 : 52))
+_nBt = _dB ? 1 : (_dM ? 2 : 2)
+_nLeg = _dB ? 8 : (_dM ? 12 : (_dF ? 20 : 28))
+_nSeat = _dB ? 32 : (_dM ? 72 : (_dF ? 128 : 176))
+_nPipe = _dB ? 6 : (_dM ? 8 : (_dF ? 10 : 12))
+# Edge character is the ROLL, in metres here rather than as an exponent:
+# upholstery is a stated radius over foam, and the seat's roll, the crown
+# and the shell's bulge all read from it.
+_ecC = edgeCharacter == 'Crisp'
+_ecP = edgeCharacter == 'Plump'
+_rr = (_ecC ? 0.012 : (_ecP ? 0.03 : 0.02)) * _s
+_crown = (_ecC ? 0.006 : (_ecP ? 0.016 : 0.011)) * _s
+_bulge = (_ecC ? 0.002 : (_ecP ? 0.007 : 0.004)) * _s
+
+# ===========================================================================
+# STEP 1 — THE SHELL'S PLAN LINE
+# ===========================================================================
+# A tub chair is ONE upholstered shell wrapped round the seat: the back and
+# both arms are the same body, so they are one loft along one plan curve
+# rather than three boxes butted together. The curve is the CENTRELINE of
+# the shell's thickness: a quarter superellipse round each back corner, then
+# a straight run forward to the arm tip.
+#
+# Superellipse, not a circle: the exponent is how square the back corners
+# are. 1 would be a quarter ellipse (a barrel chair); the reference is a
+# boxier wrap that still has no corner.
+_bc = _b - _R
+_uB = _u0 + _R
+_aW = max(0.04 * _s, min(0.95, backCurve) * _bc)
+_uS = _uB + _aW
+_armT = armStyle == 'Tub arms'
+_armL = armStyle == 'Low arms'
+_armN = armStyle == 'Armless'
+_uTipFull = _u1 - 0.05 * _s
+_uTipRaw = _armN ? (_uS + 0.012 * _s) : (_armL ? (_uS + 0.55 * (_uTipFull - _uS)) : _uTipFull)
+_uEnd = max(_uS + 0.012 * _s, _uTipRaw)
+_ePl = 0.62
+_nqd = 96
+_ph = arange(_nqd + 1) / _nqd * PI / 2
+_qU = _uB + _aW - _aW * pow(cos(_ph), _ePl)
+_qV = _bc * pow(sin(_ph), _ePl)
+_QB = hcat(_qU, _qV)
+_Lb = max(arclen(_QB))
+_Ls = _uEnd - _uS
+_Lh = _Lb + _Ls
+_HH = vcat(_QB, hcat(_uEnd, _bc))
+_nH = rows(_HH)
+_HHr = sortby(_HH, 0 - arange(_nH))
+_HL = hcat(col(_HHr, 0), 0 - col(_HHr, 1))
+_HR = sub(_HH, 1, 0, _nH - 1, 2)
+# Resampled by ARC LENGTH: the quilting is laid out in world distance along
+# the shell, so the stations have to be evenly spaced in the world too, or
+# the diamonds stretch round the corners where a parameter bunches them.
+_CL = resample(vcat(_HL, _HR), _S)
+_Cu = col(_CL, 0)
+_Cv = col(_CL, 1)
+_sArc = arclen(_CL)
+_Ltot = max(_sArc)
+_sg = _sArc - _Ltot / 2
+_sc = abs(_sg)
+# Tangent by central difference, one-sided at the two tips — shift() wraps,
+# and a wrapped tangent at the arm tip points across the seat.
+_ix = arange(_S)
+_first = eq(_ix, 0)
+_last = eq(_ix, _S - 1)
+_nu = shift(_Cu, -1)
+_nv = shift(_Cv, -1)
+_pu = shift(_Cu, 1)
+_pv = shift(_Cv, 1)
+_tu = where(_first, _nu - _Cu, where(_last, _Cu - _pu, _nu - _pu))
+_tv = where(_first, _nv - _Cv, where(_last, _Cv - _pv, _nv - _pv))
+_tl = max(0.000001, sqrt(_tu * _tu + _tv * _tv))
+_tu = _tu / _tl
+_tv = _tv / _tl
+# The path runs left tip -> back -> right tip, so the outward normal is the
+# counter-clockwise perpendicular everywhere: -u across the back, +/-v down
+# the arms. No sign test, because the direction is fixed by construction.
+_Nu = 0 - _tv
+_Nv = _tu
+
+# ===========================================================================
+# STEP 2 — THE HEIGHT OF THE SHELL ALONG IT
+# ===========================================================================
+# Measured from the back centre, both ways at once (_sc is symmetric):
+#   flat across the middle of the back,
+#   a smoothstep down through the corners to arm height,
+#   a gentle fall along the arm,
+#   and a quarter-round drop at the tip onto the seat.
+# The shell's bottom is sunk into the seat body, just under its roll, so the
+# piping round the seat covers the one seam where the two meet.
+_zS0 = _sH - _rr - 0.004 * _s
+_zTip = max(_sH + 0.012 * _s, _zS0 + _R + 0.012 * _s)
+_bkTop = max(_sH + 0.1 * _s, _sH + backTop * _s)
+_hArmR = _armN ? _zTip : (_armL ? min(armHeight * _s, _sH + 0.12 * _s) : armHeight * _s)
+_hArm = max(_zTip, min(_bkTop, _hArmR))
+_rEnd = _armN ? 0.0001 : max(0.02 * _s, min(0.075 * _s, 0.35 * _Ls))
+_k1 = 0.34 * _Lb
+_k2 = _armN ? _Lh : (_Lb + 0.12 * _Ls)
+_k3 = max(_k2 + 0.0001, _Lh - _rEnd)
+_armDrop = _armN ? 0 : min(0.03 * _s, 0.5 * (_hArm - _zTip))
+_hE = _hArm - _armDrop
+_t1 = min(1, max(0, (_sc - _k1) / max(0.0001, _k2 - _k1)))
+_st1 = _t1 * _t1 * (3 - 2 * _t1)
+_t2 = min(1, max(0, (_sc - _k2) / max(0.0001, _k3 - _k2)))
+_x3 = min(1, max(0, (_sc - _k3) / _rEnd))
+_zt = _bkTop - (_bkTop - _hArm) * _st1 - _armDrop * _t2 - (_hE - _zTip) * (1 - sqrt(max(0, 1 - _x3 * _x3)))
+_zt = max(_zS0 + _R + 0.008 * _s, _zt)
+_Hs = _zt - _R - _zS0
+# Rake: the back leans back and the arms flare out a little less. It is a
+# SHEAR on the section — offset outward in proportion to height — so the
+# shell's foot stays exactly on the seat outline whatever the angle.
+_tilt = tan(backRake * PI / 180)
+_wBk = 1 - 0.45 * min(1, max(0, (_sc - 0.5 * _Lb) / max(0.0001, 0.8 * _Lb)))
+_tlt = _tilt * _wBk
+
+# ===========================================================================
+# STEP 3 — THE SHELL SECTION, AND THE QUILTING ON ITS FACE
+# ===========================================================================
+# Every station carries the SAME ring, walked counter-clockwise in its own
+# (n, z) plane: up the outer face, over a half-round top, down the inner face,
+# back along the foot. Same point count at every station is what lets it be
+# one loft; the heights differ, the topology does not.
+_nr1 = _nO
+_nr2 = _nr1 + _nTp
+_nr3 = _nr2 + _nI
+_Nr = _nr3 + _nBt
+_j = arange(_Nr)
+_mO = lt(_j, _nr1)
+_mT = ge(_j, _nr1) * lt(_j, _nr2)
+_mI = ge(_j, _nr2) * lt(_j, _nr3)
+_mB = ge(_j, _nr3)
+_fO = _j / max(1, _nO)
+_thT = (_j - _nr1) / max(1, _nTp - 1) * PI
+_fI = (_j - _nr2 + 1) / max(1, _nI)
+_fB = (_j - _nr3 + 1) / (_nBt + 1)
+# broadcast: station quantities down the rows, ring quantities across
+_o1 = ones(_Nr, 1)
+_oS = ones(_S, 1)
+_KS = kron(arange(_S), _o1)
+_Kzt = kron(_zt, _o1)
+_KHs = kron(_Hs, _o1)
+_Ksg = kron(_sg, _o1)
+_Ksc = kron(_sc, _o1)
+_Ktl = kron(_tlt, _o1)
+_KCu = kron(_Cu, _o1)
+_KCv = kron(_Cv, _o1)
+_KNu = kron(_Nu, _o1)
+_KNv = kron(_Nv, _o1)
+_GmO = kron(_oS, _mO)
+_GmT = kron(_oS, _mT)
+_GmI = kron(_oS, _mI)
+_GmB = kron(_oS, _mB)
+_GfO = kron(_oS, _fO)
+_GthT = kron(_oS, _thT)
+_GfI = kron(_oS, _fI)
+_GfB = kron(_oS, _fB)
+_shZ = _GmO * (_zS0 + _GfO * _KHs) + _GmT * (_Kzt - _R + _R * sin(_GthT)) + _GmI * (_Kzt - _R - _GfI * _KHs) + _GmB * _zS0
+_shN0 = _GmO * (_R + _bulge * sin(PI * _GfO)) + _GmT * (_R * cos(_GthT)) + _GmI * (0 - _R) + _GmB * (0 - _R + 2 * _R * _GfB)
+
+# THE QUILT IS A DISPLACEMENT, not more geometry. Stitch lines are where the
+# face stays put; each diamond puffs toward the sitter between them. Two
+# waves at +/-45 degrees in the unrolled (arc length, height) plane: their
+# product is zero on both families of stitch lines and peaks in every cell
+# centre, and measuring along the shell from the BACK CENTRE makes the
+# pattern symmetric left to right at any width.
+#
+# The square root is the upholstery: a raw product is a soft egg-crate; its
+# root flattens each pad and pinches the seam, which is how foam behaves
+# under a stitched cover.
+_qOn = quilting != 'Plain' && !_dB
+_qP = max(0.03, quiltPitch) * _s
+_qD = quiltDepth * _s
+_qz = _shZ - _sH
+_qA = (_Ksg + _qz / max(0.3, quiltAspect)) / _qP
+_qBv = (_Ksg - _qz / max(0.3, quiltAspect)) / _qP
+_puffD = sqrt(abs(sin(PI * _qA)) * abs(sin(PI * _qBv)))
+_puffC = sqrt(abs(sin(PI * _Ksg / _qP)))
+_puff = quilting == 'Channel' ? _puffC : _puffD
+# The quilted field stops short of every edge so a plain border frames it,
+# as a real panel is framed by its welt: above the seat, below the roll, and
+# before the arm turns down.
+_wz0 = min(1, max(0, (_shZ - _sH - 0.012 * _s) / (0.03 * _s)))
+_wz1 = min(1, max(0, (_Kzt - 1.15 * _R - _shZ) / (0.03 * _s)))
+_ws = min(1, max(0, (_Lh - _rEnd - 0.03 * _s - _Ksc) / (0.05 * _s)))
+_win = _wz0 * _wz0 * (3 - 2 * _wz0) * _wz1 * _wz1 * (3 - 2 * _wz1) * _ws * _ws * (3 - 2 * _ws)
+_shN = _shN0 - (_qOn ? 1 : 0) * _GmI * _qD * _puff * _win + (_shZ - _zS0) * _Ktl
+_shU = _KCu + _shN * _KNu
+_shV = _KCv + _shN * _KNv
+_SHsec = hcat(_shU, _shV, _shZ, _KS)
+_SHm = Solid.Skin(_SHsec, 0)
+
+# ===========================================================================
+# STEP 4 — THE SEAT: the shell's own foot, closed across the front
+# ===========================================================================
+# The seat outline is not drawn separately. Its back and sides ARE the
+# shell's outer face at the foot (centreline pushed out by half the shell),
+# so the shell stands exactly on the seat edge at every width and wrap, and
+# only the front — two rounded corners and a straight edge — is new.
+_rf = min(0.07 * _s, 0.45 * _b)
+_oU = _Cu + (_R + 0.0025 * _s) * _Nu
+_oV = _Cv + (_R + 0.0025 * _s) * _Nv
+_uF0 = max(_uEnd + 0.002 * _s, _u1 - _rf)
+_na = 12
+_arc = arange(_na + 1) / _na * PI / 2
+_crU = _uF0 + (_u1 - _uF0) * sin(_arc)
+_crV = (_b - _rf) + _rf * cos(_arc)
+_front = vcat(hcat(_crU, _crV), hcat(_u1, 0))
+_frontR = hcat(sortby(col(_front, 0), 0 - arange(rows(_front))), 0 - sortby(col(_front, 1), 0 - arange(rows(_front))))
+_loopA = vcat(hcat(_oU, _oV), _front, sub(_frontR, 1, 0, rows(_frontR) - 1, 2), sub(hcat(_oU, _oV), 0, 0, 1, 2))
+_ringA = resample(_loopA, _nSeat + 1)
+_rg0 = sub(_ringA, 0, 0, _nSeat, 2)
+# Wound COUNTER-CLOCKWISE seen from above: stacked bottom to top that is the winding
+# the skin needs to face outward. Walked the other way the seat is a valid,
+# renderable, INSIDE-OUT solid — signed volume is what catches it, not a look.
+_ar0 = sum(col(_rg0, 0) * shift(col(_rg0, 1), -1) - shift(col(_rg0, 0), -1) * col(_rg0, 1))
+_rg = _ar0 < 0 ? sortby(_rg0, 0 - arange(_nSeat)) : _rg0
+_rgU = col(_rg, 0)
+_rgV = col(_rg, 1)
+# inward normal of the ring, from the ring itself (it is closed, so shift()
+# wrapping is exactly right here)
+_rtu = shift(_rgU, -1) - shift(_rgU, 1)
+_rtv = shift(_rgV, -1) - shift(_rgV, 1)
+_rtl = max(0.000001, sqrt(_rtu * _rtu + _rtv * _rtv))
+_area2 = sum(_rgU * shift(_rgV, -1) - shift(_rgU, -1) * _rgV)
+_sgA = _area2 > 0 ? 1 : -1
+_inU = (0 - _rtv / _rtl) * _sgA
+_inV = (_rtu / _rtl) * _sgA
+_rcU = mean(_rgU)
+_rcV = mean(_rgV)
+# Section, bottom to top: an eased foot, a straight side, the top ROLL on a
+# stated radius, then a low crown that closes the top by scaling toward the
+# middle — an inward OFFSET would swallow the front corners long before it
+# reached the centre, a scale cannot.
+_zB = _sH - _cT
+_rb = 0.01 * _s
+_nRl = _dB ? 2 : (_dM ? 4 : 6)
+_nCr = _dB ? 1 : (_dM ? 3 : 5)
+_nbR = 3
+_nSt = _nbR + 1 + _nRl + _nCr
+_si = arange(_nSt)
+# foot ease: rings 0..2 on a quarter circle of radius _rb
+_fa = min(1, _si / max(1, _nbR - 1)) * PI / 2
+_isFoot = lt(_si, _nbR)
+_isRoll = ge(_si, _nbR) * lt(_si, _nbR + 1 + _nRl)
+_isCrown = ge(_si, _nbR + 1 + _nRl)
+_ra = (_si - _nbR) / max(1, _nRl) * PI / 2
+_ca = (_si - _nbR - _nRl) / max(1, _nCr)
+_stZ = _isFoot * (_zB + _rb - _rb * cos(_fa)) + _isRoll * (_sH - _rr + _rr * sin(_ra)) + _isCrown * (_sH + _crown * (1 - pow(1 - _ca, 2)))
+_stIn = _isFoot * (_rb - _rb * sin(_fa)) + _isRoll * (_rr - _rr * cos(_ra)) + _isCrown * _rr
+_stSc = _isCrown * (1 - 0.82 * _ca) + (1 - _isCrown)
+_o2 = ones(_nSeat, 1)
+_KZ = kron(_stZ, _o2)
+_KIn = kron(_stIn, _o2)
+_KSc = kron(_stSc, _o2)
+_Kid = kron(_si, _o2)
+_on2 = ones(_nSt, 1)
+_Gu = kron(_on2, _rgU)
+_Gv = kron(_on2, _rgV)
+_Giu = kron(_on2, _inU)
+_Giv = kron(_on2, _inV)
+_seU = _rcU + (_Gu + _KIn * _Giu - _rcU) * _KSc
+_seV = _rcV + (_Gv + _KIn * _Giv - _rcV) * _KSc
+_SEm = Solid.Skin(hcat(_seU, _seV, _KZ, _Kid), 0)
+
+# ===========================================================================
+# STEP 5 — PIPING: two welts, each a circle swept along a rail
+# ===========================================================================
+# msweep carries the section by parallel transport, so the welt does not
+# twist where the shell rail turns the corner and climbs down the arm.
+_pR = max(0.0015, pipingDia / 2) * _s
+_pa = arange(_nPipe) / _nPipe * 2 * PI
+_pc = hcat(_pR * cos(_pa), _pR * sin(_pa))
+# (a) round the seat, on the line where its side meets its roll
+_pzS = _sH - _rr
+_prU = _rgU - (0.45 * _pR) * _inU
+_prV = _rgV - (0.45 * _pR) * _inV
+_PPs = msweep(_pc, hcat(_prU, _prV, fill(_nSeat, 1, _pzS)), 1)
+# (b) along the shell's outer top edge, 40 degrees up the roll
+_thP = 40 * PI / 180
+_pnn = (_R + 0.45 * _pR) * cos(_thP)
+_pzz = _zt - _R + (_R + 0.45 * _pR) * sin(_thP)
+_pnS = _pnn + (_pzz - _zS0) * _tlt
+_PPt = msweep(_pc, hcat(_Cu + _pnS * _Nu, _Cv + _pnS * _Nv, _pzz), 0)
+_pipeOn = piping > 0 && !_dB
+_PPm = vcat(_PPs, hcat(sub(_PPt, 0, 0, rows(_PPt), 3), col(_PPt, 3) + 1000000))
+
+# ===========================================================================
+# STEP 6 — LEGS: four tapered rounds, splayed
+# ===========================================================================
+# Rings are HORIZONTAL slices of a tilted cone, which is what a turned leg cut
+# square to the floor and to the seat actually is: the foot sits flat and the
+# top meets the underside flat, at any splay, with no trimming.
+_zLt = _zB + 0.004 * _s
+_rT = legSize * _s / 2
+_rF = min(_rT, legFootDia * _s / 2)
+_spl = tan(legSplay * PI / 180) * _zLt
+_liF = 0.075 * _s
+_liB = 0.1 * _s
+_lgTu = vcat(_u1 - _liF, _u1 - _liF, _u0 + _liB, _u0 + _liB)
+_lgTv = vcat(_b - _liF, 0 - (_b - _liF), _b - _liB, 0 - (_b - _liB))
+# front legs kick forward a little, back legs rake back harder — the back
+# legs carry the lean of whoever sits down.
+_lgDu = vcat(0.55 * _spl, 0.55 * _spl, 0 - 1.25 * _spl, 0 - 1.25 * _spl)
+_lgDv = vcat(_spl, 0 - _spl, _spl, 0 - _spl)
+_lz = vcat(0, 0.003 * _s, 0.5 * _zLt, _zLt)
+_lr = vcat(_rF - 0.0025 * _s, _rF, _rF + (_rT - _rF) * 0.5, _rT)
+_la = arange(_nLeg) / _nLeg * 2 * PI
+_ol = ones(_nLeg, 1)
+_LGm = zeros(0, 4)
+loop i in 4:
+  _tu0 = sub(_lgTu, i, 0, 1, 1)
+  _tv0 = sub(_lgTv, i, 0, 1, 1)
+  _du0 = sub(_lgDu, i, 0, 1, 1)
+  _dv0 = sub(_lgDv, i, 0, 1, 1)
+  _fz = kron(_lz, _ol)
+  _fr = kron(_lr, _ol)
+  _off = 1 - _fz / _zLt
+  _lu = _tu0 + _du0 * _off + _fr * kron(ones(4, 1), cos(_la))
+  _lv = _tv0 + _dv0 * _off + _fr * kron(ones(4, 1), sin(_la))
+  _LGm = vcat(_LGm, Solid.Skin(hcat(_lu, _lv, _fz, kron(arange(4), _ol)), (i + 1) * 100000))
+end
+
+# ===========================================================================
+# THE FRAME RULE — local (u, v, z) to the host's frame, once per part.
+# Columns 2 and 3 ride through untouched: the face id must survive.
+# ===========================================================================
+_wU = _cu + col(_SHm, 0)
+_wV = _cv + col(_SHm, 1)
+Shell3D = hcat(_wU * _ux + _wV * _vx, _wU * _uy + _wV * _vy, col(_SHm, 2), col(_SHm, 3))
+_eU = _cu + col(_SEm, 0)
+_eV = _cv + col(_SEm, 1)
+Seat3D = hcat(_eU * _ux + _eV * _vx, _eU * _uy + _eV * _vy, col(_SEm, 2), col(_SEm, 3))
+_gU = _cu + col(_PPm, 0)
+_gV = _cv + col(_PPm, 1)
+Piping3D = _pipeOn ? hcat(_gU * _ux + _gV * _vx, _gU * _uy + _gV * _vy, col(_PPm, 2), col(_PPm, 3)) : zeros(0, 4)
+_lU = _cu + col(_LGm, 0)
+_lV = _cv + col(_LGm, 1)
+Legs3D = hcat(_lU * _ux + _lV * _vx, _lU * _uy + _lV * _vy, col(_LGm, 2), col(_LGm, 3))
+
+# ===========================================================================
+# PLAN — derived from the same numbers, cheap on purpose
+# ===========================================================================
+# Seat: the ring itself. Shell: the band between its inner foot and its outer
+# top edge (where the rake carries it furthest out), as ONE ring.
+_spU = _cu + _rgU
+_spV = _cv + _rgV
+SeatPlan = hcat(_spU * _ux + _spV * _vx, _spU * _uy + _spV * _vy, fill(_nSeat, 1, 1))
+_oTop = _R + (_zt - _zS0) * _tlt
+_bOu = _Cu + _oTop * _Nu
+_bOv = _Cv + _oTop * _Nv
+_bIu = sortby(_Cu - _R * _Nu, 0 - arange(_S))
+_bIv = sortby(_Cv - _R * _Nv, 0 - arange(_S))
+_bdU = _cu + vcat(_bOu, _bIu)
+_bdV = _cv + vcat(_bOv, _bIv)
+ShellPlan = hcat(_bdU * _ux + _bdV * _vx, _bdU * _uy + _bdV * _vy, fill(2 * _S, 1, 1))
+# Legs: the four feet, where they meet the floor
+_fa16 = arange(16) / 16 * 2 * PI
+_ftU = _cu + kron(_lgTu + _lgDu, ones(16, 1)) + _rF * kron(ones(4, 1), cos(_fa16))
+_ftV = _cv + kron(_lgTv + _lgDv, ones(16, 1)) + _rF * kron(ones(4, 1), sin(_fa16))
+LegsPlan = hcat(_ftU * _ux + _ftV * _vx, _ftU * _uy + _ftV * _vy, kron(arange(4) + 1, ones(16, 1)))
+
+# ===========================================================================
+# METRICS — measured on the geometry that came back, not on the request
+# ===========================================================================
+# Extents come from the per-STATION vectors (a few hundred numbers), never
+# from the mesh columns: a max() over a 27 000-row column costs seconds in
+# this engine, and the metrics block was 95% of the whole evaluation.
+_pOut = _pipeOn ? 1.45 * _pR : 0
+# furthest-out point of each station: the roll where it leaves the outer face,
+# or the top welt standing proud of it
+_shOn = max(_R + (_zt - _R - _zS0) * _tlt, _pipeOn ? (_pnS + _pR) : 0)
+_shOu = _Cu + _shOn * _Nu
+_shOv = _Cv + _shOn * _Nv
+_seatV = _b + 0.0025 * _s + _pOut
+_legV = _b - _liF + _spl + _rF
+overallWidth = 2 * max(max(abs(_shOv)), max(_seatV, _legV))
+overallDepth = max(_u1 + _pOut, _u1 - _liF + 0.55 * _spl + _rF) - min(min(_shOu), _u0 + _liB - 1.25 * _spl - _rF)
+overallHeight = max(_zt)
+seatTop = _sH + _crown
+armTop = _armN ? 0 : _hArm
+backTopHeight = _bkTop
+footprint = overallWidth * overallDepth
+quiltCells = _qOn ? round(2 * _Ltot / _qP * (_bkTop - _sH) / (_qP * max(0.3, quiltAspect)) * 0.6) : 0
+_fSh = 2 + (_S - 1) * _Nr
+_fSe = 2 + (_nSt - 1) * _nSeat
+_fLg = 4 * (2 + 3 * _nLeg)
+_fPp = _pipeOn ? ((2 + _nSeat * _nPipe) + (2 + (_S - 1) * _nPipe)) : 0
+meshFaces = _fSh + _fSe + _fLg + _fPp
+shellStations = _S

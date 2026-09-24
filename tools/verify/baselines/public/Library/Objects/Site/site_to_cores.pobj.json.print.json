@@ -1,0 +1,174 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "49af69986b6a114c"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "amenityArea",
+          "name": "Amenities Open Space Area",
+          "value": "0",
+          "unit": "m²"
+        },
+        {
+          "key": "netPlot",
+          "name": "Net Plot Area",
+          "value": "0",
+          "unit": "m²"
+        },
+        {
+          "key": "fsiBua",
+          "name": "FSI BUA",
+          "value": "15824.16",
+          "unit": "m²"
+        },
+        {
+          "key": "nonFsiBua",
+          "name": "Non-FSI BUA",
+          "value": "18510",
+          "unit": "m²"
+        },
+        {
+          "key": "totalBua",
+          "name": "Total BUA Area",
+          "value": "34334.16",
+          "unit": "m²"
+        },
+        {
+          "key": "towerFloors",
+          "name": "Number of Floors",
+          "value": "15825"
+        },
+        {
+          "key": "basementFloors",
+          "name": "Number of Basement Floors",
+          "value": "18510"
+        },
+        {
+          "key": "buildingHeight",
+          "name": "Total Height of Building",
+          "value": "50640",
+          "unit": "m"
+        },
+        {
+          "key": "groundCoverage",
+          "name": "Ground Coverage Ratio",
+          "value": "0"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "49af69986b6a114c"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "amenityArea",
+          "name": "Amenities Open Space Area",
+          "value": "8",
+          "unit": "m²"
+        },
+        {
+          "key": "netPlot",
+          "name": "Net Plot Area",
+          "value": "72",
+          "unit": "m²"
+        },
+        {
+          "key": "fsiBua",
+          "name": "FSI BUA",
+          "value": "16057.44",
+          "unit": "m²"
+        },
+        {
+          "key": "nonFsiBua",
+          "name": "Non-FSI BUA",
+          "value": "18510",
+          "unit": "m²"
+        },
+        {
+          "key": "totalBua",
+          "name": "Total BUA Area",
+          "value": "34567.44",
+          "unit": "m²"
+        },
+        {
+          "key": "towerFloors",
+          "name": "Number of Floors",
+          "value": "447"
+        },
+        {
+          "key": "basementFloors",
+          "name": "Number of Basement Floors",
+          "value": "258"
+        },
+        {
+          "key": "buildingHeight",
+          "name": "Total Height of Building",
+          "value": "1430.4",
+          "unit": "m"
+        },
+        {
+          "key": "groundCoverage",
+          "name": "Ground Coverage Ratio",
+          "value": "0.45"
+        }
+      ]
+    }
+  }
+}

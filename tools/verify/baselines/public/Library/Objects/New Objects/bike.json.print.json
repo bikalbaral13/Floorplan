@@ -1,0 +1,152 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 21,
+          "vertices": 84,
+          "area": 0.2199,
+          "bbox": [
+            -0.865,
+            -0.22,
+            0.865,
+            0.22
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "871c3639ce475237"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "length",
+          "name": "Overall length (m)",
+          "value": "1.73"
+        },
+        {
+          "key": "width",
+          "name": "Overall width (m)",
+          "value": "0.44"
+        },
+        {
+          "key": "height",
+          "name": "Overall height (m)",
+          "value": "1.02"
+        },
+        {
+          "key": "wheelDia",
+          "name": "Wheel diameter (m)",
+          "value": "0.68"
+        },
+        {
+          "key": "saddleHeight",
+          "name": "Saddle height (m)",
+          "value": "0.95"
+        },
+        {
+          "key": "scale",
+          "name": "Fit scale",
+          "value": "1"
+        },
+        {
+          "key": "footprint",
+          "name": "Footprint (m²)",
+          "value": "0.7612"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 21,
+          "vertices": 84,
+          "area": 0.2199,
+          "bbox": [
+            -0.865,
+            -0.22,
+            0.865,
+            0.22
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "871c3639ce475237"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "length",
+          "name": "Overall length (m)",
+          "value": "1.73"
+        },
+        {
+          "key": "width",
+          "name": "Overall width (m)",
+          "value": "0.44"
+        },
+        {
+          "key": "height",
+          "name": "Overall height (m)",
+          "value": "1.02"
+        },
+        {
+          "key": "wheelDia",
+          "name": "Wheel diameter (m)",
+          "value": "0.68"
+        },
+        {
+          "key": "saddleHeight",
+          "name": "Saddle height (m)",
+          "value": "0.95"
+        },
+        {
+          "key": "scale",
+          "name": "Fit scale",
+          "value": "1"
+        },
+        {
+          "key": "footprint",
+          "name": "Footprint (m²)",
+          "value": "0.7612"
+        }
+      ]
+    }
+  }
+}

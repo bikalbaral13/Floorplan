@@ -1,0 +1,250 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 9,
+          "vertices": 45,
+          "area": 760,
+          "bbox": [
+            -28.5,
+            -10,
+            28.5,
+            10
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 25,
+          "vertices": 77,
+          "area": 760,
+          "bbox": [
+            -28.5,
+            -10,
+            28.5,
+            10
+          ],
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "e7512d1eb33f3cb5"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "gross_area",
+          "name": "Gross Area",
+          "value": "640",
+          "unit": "m²"
+        },
+        {
+          "key": "spaceArea",
+          "name": "Space Area",
+          "value": "0",
+          "unit": "m²"
+        },
+        {
+          "key": "drawnCores",
+          "name": "Cores Drawn",
+          "value": "8"
+        },
+        {
+          "key": "coresArea",
+          "name": "Cores Area",
+          "value": "120",
+          "unit": "m²"
+        },
+        {
+          "key": "rowSpan",
+          "name": "Row Span",
+          "value": "57",
+          "unit": "m"
+        },
+        {
+          "key": "spanOk",
+          "name": "Row Fits Plate",
+          "value": "0"
+        },
+        {
+          "key": "gapOk",
+          "name": "Gap ≥ Core Width",
+          "value": "1"
+        },
+        {
+          "key": "checksOk",
+          "name": "All Checks OK",
+          "value": "0"
+        },
+        {
+          "key": "Shapes",
+          "name": "Shapes",
+          "value": "25"
+        },
+        {
+          "key": "Width",
+          "name": "Width",
+          "value": "57",
+          "unit": "m"
+        },
+        {
+          "key": "Depth",
+          "name": "Depth",
+          "value": "20",
+          "unit": "m"
+        },
+        {
+          "key": "Height",
+          "name": "Height",
+          "value": "0",
+          "unit": "m"
+        },
+        {
+          "key": "Footprint",
+          "name": "Footprint",
+          "value": "760",
+          "unit": "m²"
+        },
+        {
+          "key": "Volume",
+          "name": "Volume",
+          "value": "0",
+          "unit": "m³"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 9,
+          "vertices": 45,
+          "area": 200,
+          "bbox": [
+            -28.5,
+            -6,
+            28.5,
+            6
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 25,
+          "vertices": 77,
+          "area": 200,
+          "bbox": [
+            -28.5,
+            -6,
+            28.5,
+            6
+          ],
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "8ade274c89750bae"
+      },
+      "solids": {
+        "count": 0,
+        "volume": 0,
+        "hash": "e3b0c44298fc1c14"
+      },
+      "metrics": [
+        {
+          "key": "gross_area",
+          "name": "Gross Area",
+          "value": "80",
+          "unit": "m²"
+        },
+        {
+          "key": "spaceArea",
+          "name": "Space Area",
+          "value": "80",
+          "unit": "m²"
+        },
+        {
+          "key": "drawnCores",
+          "name": "Cores Drawn",
+          "value": "8"
+        },
+        {
+          "key": "coresArea",
+          "name": "Cores Area",
+          "value": "120",
+          "unit": "m²"
+        },
+        {
+          "key": "rowSpan",
+          "name": "Row Span",
+          "value": "57",
+          "unit": "m"
+        },
+        {
+          "key": "spanOk",
+          "name": "Row Fits Plate",
+          "value": "0"
+        },
+        {
+          "key": "gapOk",
+          "name": "Gap ≥ Core Width",
+          "value": "1"
+        },
+        {
+          "key": "checksOk",
+          "name": "All Checks OK",
+          "value": "0"
+        },
+        {
+          "key": "Shapes",
+          "name": "Shapes",
+          "value": "25"
+        },
+        {
+          "key": "Width",
+          "name": "Width",
+          "value": "57",
+          "unit": "m"
+        },
+        {
+          "key": "Depth",
+          "name": "Depth",
+          "value": "12",
+          "unit": "m"
+        },
+        {
+          "key": "Height",
+          "name": "Height",
+          "value": "0",
+          "unit": "m"
+        },
+        {
+          "key": "Footprint",
+          "name": "Footprint",
+          "value": "200",
+          "unit": "m²"
+        },
+        {
+          "key": "Volume",
+          "name": "Volume",
+          "value": "0",
+          "unit": "m³"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "material/1",
+  "id": "brick.running-bond",
+  "title": "Brick — running bond",
+  "category": "Masonry",
+  "description": "Standard 230×75 clay brick in running bond, 10 mm mortar. The bond offset is half a brick (offset 0.5, every 2nd row).",
+  "procedural": {
+    "type": "brick",
+    "blenderNode": "ShaderNodeTexBrick",
+    "params": {
+      "brickWidth": 0.23,
+      "rowHeight": 0.0755,
+      "mortarSize": 0.01,
+      "mortarSmooth": 0.1,
+      "bias": 0,
+      "offset": 0.5,
+      "offsetFrequency": 2,
+      "squash": 1,
+      "squashFrequency": 2,
+      "color1": "#9c4a2f",
+      "color2": "#8a3f28",
+      "mortar": "#cfc9bd",
+      "scale": 1
+    }
+  },
+  "pbr": {
+    "baseColor": "#9c4a2f",
+    "roughness": 0.85,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "diagonal",
+    "spacing": 6,
+    "angle": 45,
+    "weight": 1,
+    "color": "#9c4a2f"
+  },
+  "dxf": {
+    "pattern": "AR-B816",
+    "scale": 1,
+    "angle": 0
+  }
+}

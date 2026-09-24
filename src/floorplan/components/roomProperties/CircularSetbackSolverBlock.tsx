@@ -11,7 +11,7 @@ import {
   type Regulations,
   type RoadLocation,
   type SolverResult,
-} from "../../algorithms/dcr/circularSetbackSolver";
+} from "@builderpluss/engine";
 
 export interface CircularSetbackSolverBlockProps {
   selectedRoom: { id: string; points: Point[] };

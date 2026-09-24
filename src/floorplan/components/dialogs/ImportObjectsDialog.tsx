@@ -10,29 +10,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { listParametricObjectFiles } from "../../libraryFiles";
+import { listParametricObjectFiles, listFlowNodeFiles, LIB_OBJECTS, LIB_TOOLS } from "../../libraryFiles";
+import { LibrarySourceNote } from "../LibrarySourceNote";
 
-/** One library category folder in the picker — its name + the category-relative `.pobj` paths under it. */
-type FolderGroup = { folder: string; files: string[] };
+/** One category folder in the picker — the Library root it belongs to, its folder name, and the
+ *  ROOT-PREFIXED paths under it (e.g. "Objects/Site/site.pobj.json"). */
+type FolderGroup = { root: string; folder: string; files: string[] };
 
 export interface ImportObjectsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Import the ticked library files (category-relative paths under public/Library/Parametric Objects). */
+  /** Import the ticked library files — Library-relative paths INCLUDING their root folder, e.g.
+   *  "Objects/Site/site.pobj.json" or "Tools/Space/schema.node.json". */
   onImportSelected: (relPaths: string[]) => void;
   /** Import `.pobj.json` files / a whole folder picked from this device via the native file dialogs. */
   onImportFiles: (files: File[]) => void;
 }
 
-/** "Kitchen/oven.pobj.json" → "oven" (a nested subpath is kept, minus the extension). */
-const fileLabel = (rel: string): string => {
-  const slash = rel.indexOf("/");
-  return (slash > 0 ? rel.slice(slash + 1) : rel).replace(/\.pobj\.json$/i, "").replace(/\.json$/i, "");
-};
+/** "Objects/Kitchen/oven.pobj.json" → "oven" (basename, minus the extension). */
+const fileLabel = (rel: string): string =>
+  (rel.split("/").pop() ?? rel).replace(/\.pobj\.json$/i, "").replace(/\.node\.json$/i, "").replace(/\.json$/i, "");
 
-/** Import Objects picker (Drawing toolbar ▸ Import Objects). Lists the object library grouped by its
- *  category folders — tick whole folders and/or individual objects, then Import fetches just those.
- *  The "This device" buttons instead import external `.pobj.json` files or a folder from disk. */
+/** Import Objects picker (Drawing toolbar ▸ Import Objects). Lists BOTH library roots that can hold an
+ *  object definition — `Objects/` (parametric objects) and `Tools/` (flow files; an object-declaring spine
+ *  flow filed there imports as an object too) — grouped by their category folders. Tick whole folders
+ *  and/or individual files, then Import fetches just those; files that aren't object definitions are
+ *  reported as skipped by the host. The "This device" buttons import external files or a folder from disk. */
 export const ImportObjectsDialog = ({ open, onOpenChange, onImportSelected, onImportFiles }: ImportObjectsDialogProps) => {
   // null = the library listing is in flight (the tree shows a loading row until it resolves).
   const [groups, setGroups] = useState<FolderGroup[] | null>(null);
@@ -47,20 +50,27 @@ export const ImportObjectsDialog = ({ open, onOpenChange, onImportSelected, onIm
     setGroups(null);
     setSelected(new Set());
     setExpandedFolders(new Set());
-    void listParametricObjectFiles().then((all) => {
+    // Both roots are listed: Objects/ (parametric objects) and Tools/ (flow files — an object-declaring
+    // spine flow filed there is an object too). Paths are stored ROOT-PREFIXED so the host knows where to
+    // fetch each one from.
+    void Promise.all([listParametricObjectFiles(), listFlowNodeFiles()]).then(([objects, tools]) => {
       if (stale) return;
-      const byFolder = new Map<string, string[]>();
-      for (const rel of all) {
-        const folder = rel.includes("/") ? rel.slice(0, rel.indexOf("/")) : "Library";
-        const list = byFolder.get(folder);
-        if (list) list.push(rel);
-        else byFolder.set(folder, [rel]);
+      const built: FolderGroup[] = [];
+      for (const [root, all] of [[LIB_OBJECTS, objects], [LIB_TOOLS, tools]] as const) {
+        const byFolder = new Map<string, string[]>();
+        for (const rel of all) {
+          const folder = rel.includes("/") ? rel.slice(0, rel.indexOf("/")) : root;
+          const list = byFolder.get(folder);
+          if (list) list.push(`${root}/${rel}`);
+          else byFolder.set(folder, [`${root}/${rel}`]);
+        }
+        built.push(
+          ...[...byFolder.entries()]
+            .map(([folder, files]) => ({ root, folder, files: files.sort((a, b) => a.localeCompare(b)) }))
+            .sort((a, b) => a.folder.localeCompare(b.folder)),
+        );
       }
-      setGroups(
-        [...byFolder.entries()]
-          .map(([folder, files]) => ({ folder, files: files.sort((a, b) => a.localeCompare(b)) }))
-          .sort((a, b) => a.folder.localeCompare(b.folder)),
-      );
+      setGroups(built);
     });
     return () => { stale = true; };
   }, [open]);
@@ -111,10 +121,11 @@ export const ImportObjectsDialog = ({ open, onOpenChange, onImportSelected, onIm
         <DialogHeader>
           <DialogTitle>Import Objects</DialogTitle>
           <DialogDescription>
-            Tick whole folders or individual objects from the library, then Import — or pick{" "}
-            <code>.pobj.json</code> files / a folder from this device.
+            Tick whole folders or individual files from the <code>Objects</code> and <code>Tools</code>{" "}
+            library folders, then Import — or pick <code>.pobj.json</code> files / a folder from this device.
           </DialogDescription>
         </DialogHeader>
+        <LibrarySourceNote label="Reading from" />
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span>
             {selected.size} of {total} selected
@@ -144,32 +155,43 @@ export const ImportObjectsDialog = ({ open, onOpenChange, onImportSelected, onIm
           {groups === null ? (
             <p className="p-3 text-sm text-slate-500">Loading library…</p>
           ) : groups.length === 0 ? (
-            <p className="p-3 text-sm text-slate-500">No objects found at public/Library/Parametric Objects.</p>
+            <div className="space-y-1 p-3 text-sm text-slate-500">
+              <p>Nothing under <code>Objects/</code> or <code>Tools/</code> in the shared Library.</p>
+              <LibrarySourceNote label="Checked" />
+            </div>
           ) : (
-            groups.map((g) => {
+            groups.map((g, gi) => {
+              const key = `${g.root}/${g.folder}`;
               const pickedCount = g.files.filter((rel) => selected.has(rel)).length;
-              const expanded = expandedFolders.has(g.folder);
+              const expanded = expandedFolders.has(key);
+              // One sticky header per Library ROOT — the folders below it live in that top-level folder.
+              const rootHeader = gi === 0 || groups[gi - 1].root !== g.root;
               return (
-                <div key={g.folder} className="border-b border-slate-100 last:border-b-0">
+                <div key={key} className="border-b border-slate-100 last:border-b-0">
+                  {rootHeader && (
+                    <div className="sticky top-0 z-10 bg-slate-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      {g.root}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50">
                     <button
                       type="button"
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-600"
                       title={expanded ? "Collapse" : "Expand"}
-                      aria-label={`${expanded ? "Collapse" : "Expand"} ${g.folder}`}
-                      onClick={() => toggleExpanded(g.folder)}
+                      aria-label={`${expanded ? "Collapse" : "Expand"} ${key}`}
+                      onClick={() => toggleExpanded(key)}
                     >
                       {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </button>
                     <Checkbox
                       checked={pickedCount === g.files.length}
-                      aria-label={`Select all objects in ${g.folder}`}
+                      aria-label={`Select all files in ${key}`}
                       onCheckedChange={(v) => setFolderSelected(g.files, v === true)}
                     />
                     <button
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
-                      onClick={() => toggleExpanded(g.folder)}
+                      onClick={() => toggleExpanded(key)}
                     >
                       {expanded
                         ? <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />

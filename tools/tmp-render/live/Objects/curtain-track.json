@@ -1,0 +1,751 @@
+{
+  "version": 1,
+  "id": "curtain-track-with-math",
+  "title": "Curtain Track — one Math Engine, one to three tracks, brackets and a stack-back zone",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Curtain Track",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 5h18",
+        "M3 8h18",
+        "M6 5v3",
+        "M12 5v3",
+        "M18 5v3",
+        "M4 11v8",
+        "M20 11v8"
+      ]
+    }
+  },
+  "description": "A parametric CURTAIN TRACK on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. The plan calls for a two-layer track recessed into the cove band and stacking toward one corner; `curtain-with-math` draws the fabric and a pole, and a recessed twin track is separate hardware.\n\nMOUNT MOVES ONE PLANE. Recessed puts the track ABOVE the mount elevation so its underside is flush with the soffit; Ceiling, Wall and Face-fix hang it below. `_onWall` additionally pushes it out by the wall offset. Two flags, and the track body itself never changes.\n\nONE TO THREE TRACKS IS A BROADCAST, not three cases. `(_it - (_nt - 1)/2) * _tg` centres however many tracks there are about the mount line, so a single track and a sheer-plus-blackout pair take the identical path and the pair stays centred.\n\nTHE STACK-BACK ZONE IS PLAN ONLY. It is the width the gathered curtain eats when it is open — something a plan has to show and a model must not pretend is solid, so it is drawn as a 2D row and reported as `stackAllowance`, with `drawWidth` giving what is left.\n\nBRACKETS SPAN EVERY TRACK AT ONCE, because their extent is written from `_span`, which is derived from the track count — add a track and the brackets get wider on their own.\n\nDIMENSIONS AT THE DEFAULTS: a 1.60 m recessed twin track at 2.972 m, 0.30 m of stack to the left leaving 1.30 m of clear draw, three brackets at 0.533 m.\n\nWHAT THIS CANNOT DO. It is straight — a bay or a return is several tracks. No carriers, no gliders and no cording. The stack zone is an allowance you set, not a fullness calculation.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Track length",
+              "type": "range",
+              "value": 1.6,
+              "min": 0.3,
+              "max": 10,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "mountHeight",
+              "name": "Mount elevation",
+              "type": "range",
+              "value": 2.972,
+              "min": 0.5,
+              "max": 5,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "mount",
+              "name": "Mount",
+              "type": "select",
+              "value": "Recessed",
+              "options": [
+                "Ceiling",
+                "Recessed",
+                "Wall",
+                "Face-fix"
+              ]
+            },
+            {
+              "id": "tracks",
+              "name": "Tracks",
+              "type": "range",
+              "value": 2,
+              "min": 1,
+              "max": 3,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "trackWidth",
+              "name": "Track width",
+              "type": "range",
+              "value": 0.02,
+              "min": 0.008,
+              "max": 0.06,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "trackDepth",
+              "name": "Track depth",
+              "type": "range",
+              "value": 0.025,
+              "min": 0.008,
+              "max": 0.08,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "trackGap",
+              "name": "Gap between tracks",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.01,
+              "max": 0.15,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "wallOffset",
+              "name": "Offset from wall",
+              "type": "range",
+              "value": 0.08,
+              "min": 0,
+              "max": 0.5,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "stackSide",
+              "name": "Stack back to",
+              "type": "select",
+              "value": "Left",
+              "options": [
+                "None",
+                "Left",
+                "Right",
+                "Both"
+              ]
+            },
+            {
+              "id": "stackWidth",
+              "name": "Stack width per side",
+              "type": "range",
+              "value": 0.3,
+              "min": 0.05,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "brackets",
+              "name": "Brackets",
+              "type": "range",
+              "value": 3,
+              "min": 0,
+              "max": 12,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "endCaps",
+              "name": "End caps",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "anodised aluminium track, brushed brass end caps",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "concealed ceiling curtain track, hidden hardware, clean soffit line",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Curtain Track maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_tw = trackWidth * _s\n_td = trackDepth * _s\n_tg = max(trackGap * _s, _tw + 0.004)\n_nt = max(1, round(tracks))\n_mz = mountHeight\n_off = wallOffset * _s\n_span = (_nt - 1) * _tg + _tw\n_bodyL = _Ln\n_bodyW = max(_span, _td) + _off\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n# Mount decides ONE thing: which side of the mount plane the track sits on, and whether it is\n# pushed off a wall face. Everything else about the track is the same body.\n_isCeil = mount == 'Ceiling'\n_isRec = mount == 'Recessed'\n_isWall = mount == 'Wall'\n_isFace = mount == 'Face-fix'\n_onWall = _isWall || _isFace\n_tz0 = _isRec ? _mz : (_mz - _td)\n_tz1 = _tz0 + _td\n# A recessed track is buried in the cove band — its underside is flush with the soffit.\n_vBase = _onWall ? (0 - _off) : 0\n_it = arange(_nt)\n_tv0 = _vBase + (_it - (_nt - 1) / 2) * _tg - _tw / 2\n_tv1 = _tv0 + _tw\n_one = ones(_nt, 1)\n_TRK = hcat(_one * _u0, _tv0, _one * _u1, _tv0, _one * _u1, _tv1, _one * _u0, _tv1, _one * _tz0, _one * _tz1, _one)\n# Brackets — evenly spaced along the run, spanning every track at once.\n_nb = max(0, round(brackets))\n_bw = 0.03 * _s\n_bv0 = _vBase - _span / 2 - 0.006\n_bv1 = _onWall ? 0.006 : (_vBase + _span / 2 + 0.006)\n_bu = _u0 + (arange(_nb) + 0.5) * (_Ln / max(1, _nb)) - _bw / 2\n_ob = ones(_nb, 1)\n_BRKr = hcat(_bu, _ob * _bv0, _bu + _bw, _ob * _bv0, _bu + _bw, _ob * _bv1, _bu, _ob * _bv1, _ob * _tz0, _ob * (_tz1 + 0.008), _ob * 2)\n_BRK = _nb > 0 ? _BRKr : zeros(0, 11)\n# End caps\n_cw = _tw * 1.3\n_E1 = hcat(_u0 - _cw, _vBase - _span / 2, _u0, _vBase - _span / 2, _u0, _vBase + _span / 2, _u0 - _cw, _vBase + _span / 2, _tz0, _tz1, 3)\n_E2 = hcat(_u1, _vBase - _span / 2, _u1 + _cw, _vBase - _span / 2, _u1 + _cw, _vBase + _span / 2, _u1, _vBase + _span / 2, _tz0, _tz1, 3)\n_CAPS = endCaps > 0 ? vcat(_E1, _E2) : zeros(0, 11)\n# Stack-back zone — PLAN ONLY. It is the width the gathered curtain eats when it is open, which\n# is a thing a plan must show and a model must not pretend is solid.\n_stL = stackSide == 'Left' || stackSide == 'Both'\n_stR = stackSide == 'Right' || stackSide == 'Both'\n_sw = min(stackWidth * _s, _Ln / 2)\n_S1 = hcat(_u0, _vBase - _span / 2, _u0 + _sw, _vBase - _span / 2, _u0 + _sw, _vBase + _span / 2 + 0.06, _u0, _vBase + _span / 2 + 0.06, _tz0, _tz0 + 0.002, 4)\n_S2 = hcat(_u1 - _sw, _vBase - _span / 2, _u1, _vBase - _span / 2, _u1, _vBase + _span / 2 + 0.06, _u1 - _sw, _vBase + _span / 2 + 0.06, _tz0, _tz0 + 0.002, 4)\n_SZa = _stL ? _S1 : zeros(0, 11)\n_SZb = _stR ? _S2 : zeros(0, 11)\n_STACK = vcat(_SZa, _SZb)\nQ = vcat(_TRK, _BRK, _CAPS, _STACK)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nTracks3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nBrackets3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nEndCaps3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nTracksPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nBracketsPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nStackPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\n# Metrics\ntrackLength = _Ln\ntrackCount = _nt\ntotalTrackRun = _nt * _Ln\nmountElevation = _mz\ntrackSoffit = _tz0\nstackAllowance = _stL * _sw + _stR * _sw\ndrawWidth = max(0, _Ln - stackAllowance)\nbracketCount = _nb\nbracketSpacing = _nb > 0 ? (_Ln / _nb) : 0\nprojection = _onWall ? (_off + _span / 2) : (_span / 2)\nrecessedFlag = _isRec ? 1 : 0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Tracks — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Brackets — solid"
+            },
+            {
+              "id": "s3",
+              "label": "End caps — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Tracks — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Brackets — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Stack-back zone — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Track length (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Tracks"
+            },
+            {
+              "id": "s9",
+              "label": "Total track run (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Mount elevation (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Track underside (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Stack allowance (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Clear draw width (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Brackets"
+            },
+            {
+              "id": "s15",
+              "label": "Bracket spacing (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Projection from wall (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Recessed"
+            },
+            {
+              "id": "s18",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_stk",
+              "kind": "polygon",
+              "name": "Stack-back zone",
+              "color": "#e7dccb",
+              "layer": "Curtain",
+              "show": true
+            },
+            {
+              "id": "p2_trk",
+              "kind": "polygon",
+              "name": "Tracks",
+              "color": "#57534e",
+              "layer": "Curtain",
+              "show": true
+            },
+            {
+              "id": "p2_brk",
+              "kind": "polygon",
+              "name": "Brackets",
+              "color": "#44403c",
+              "layer": "Curtain",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_trk",
+              "kind": "polyhedron",
+              "name": "Tracks",
+              "color": "#a8a29e",
+              "layer": "Curtain",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_brk",
+              "kind": "polyhedron",
+              "name": "Brackets",
+              "color": "#78716c",
+              "layer": "Curtain",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cap",
+              "kind": "polyhedron",
+              "name": "End caps",
+              "color": "#c8a968",
+              "layer": "Curtain",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_length",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-length",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e_props_math_mountHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mountHeight",
+      "targetHandle": "valin-mountHeight"
+    },
+    {
+      "id": "e_props_math_mount",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-mount",
+      "targetHandle": "valin-mount"
+    },
+    {
+      "id": "e_props_math_tracks",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-tracks",
+      "targetHandle": "valin-tracks"
+    },
+    {
+      "id": "e_props_math_trackWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trackWidth",
+      "targetHandle": "valin-trackWidth"
+    },
+    {
+      "id": "e_props_math_trackDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trackDepth",
+      "targetHandle": "valin-trackDepth"
+    },
+    {
+      "id": "e_props_math_trackGap",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-trackGap",
+      "targetHandle": "valin-trackGap"
+    },
+    {
+      "id": "e_props_math_wallOffset",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-wallOffset",
+      "targetHandle": "valin-wallOffset"
+    },
+    {
+      "id": "e_props_math_stackSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-stackSide",
+      "targetHandle": "valin-stackSide"
+    },
+    {
+      "id": "e_props_math_stackWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-stackWidth",
+      "targetHandle": "valin-stackWidth"
+    },
+    {
+      "id": "e_props_math_brackets",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-brackets",
+      "targetHandle": "valin-brackets"
+    },
+    {
+      "id": "e_props_math_endCaps",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-endCaps",
+      "targetHandle": "valin-endCaps"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Tracks3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Brackets3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-EndCaps3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-TracksPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BracketsPlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-StackPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-trackLength",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-trackCount",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-totalTrackRun",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-mountElevation",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-trackSoffit",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-stackAllowance",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-drawWidth",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bracketCount",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bracketSpacing",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-projection",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-recessedFlag",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_out_r2d_p2_stk",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_stk"
+    },
+    {
+      "id": "e_out_r2d_p2_trk",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_trk"
+    },
+    {
+      "id": "e_out_r2d_p2_brk",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_brk"
+    },
+    {
+      "id": "e_out_r3d_p3_trk",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_trk"
+    },
+    {
+      "id": "e_out_r3d_p3_brk",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_brk"
+    },
+    {
+      "id": "e_out_r3d_p3_cap",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_cap"
+    }
+  ]
+}

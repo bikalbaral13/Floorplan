@@ -1,0 +1,630 @@
+{
+  "version": 1,
+  "id": "tv-with-math",
+  "title": "TV — one Math Engine, screen, bezel, mount",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "segment",
+    "name": "TV",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M3 5h18v11H3z",
+        "M8 20h8",
+        "M12 16v4"
+      ]
+    }
+  },
+  "description": "A parametric TV on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nSIZED BY DIAGONAL, which is the only dimension anyone knows about a television. A 16:9 panel is 0.871 × its diagonal wide and 0.490 tall, so width and height are DERIVED and the published \"Diagonal (inches)\" converts back — type 1.39 m and it reads 55\", which is the number on the box.\n\nSEGMENT-HOSTED, because most televisions are on a wall now. Drop it on one and it takes the wall's line; the plan is a thin sliver at the wall face, which is all a TV really occupies. Switch the mount to Stand and it grows a neck and a foot that project into the room — those are the only pieces that touch the floor, and they are the ones a plan needs.\n\nVIEWING DISTANCE at 1.6 × the diagonal is published for the same reason the TV unit publishes it: it is where the sofa goes, and it is the one measurement that connects this object to the room around it.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "diagonal",
+              "name": "Screen diagonal",
+              "type": "range",
+              "value": 1.39,
+              "min": 0.4,
+              "max": 2.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.07,
+              "min": 0.03,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bezel",
+              "name": "Bezel width",
+              "type": "range",
+              "value": 0.012,
+              "min": 0,
+              "max": 0.06,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "centreHeight",
+              "name": "Screen centre height",
+              "type": "range",
+              "value": 1.1,
+              "min": 0.3,
+              "max": 2.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "standWidth",
+              "name": "Stand width",
+              "type": "range",
+              "value": 0.5,
+              "min": 0.15,
+              "max": 1.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "standDepth",
+              "name": "Stand depth",
+              "type": "range",
+              "value": 0.25,
+              "min": 0.1,
+              "max": 0.6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "mount",
+              "name": "Mount",
+              "type": "select",
+              "value": "Wall",
+              "options": [
+                "Wall",
+                "Stand",
+                "Bracket"
+              ]
+            },
+            {
+              "id": "showMount",
+              "name": "Show mount",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Top-Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "wall-mounted 55-inch flat screen, slim black bezel",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "TV maths",
+          "expr": "_natL = diagonal\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = diagonal * _s * 0.871\n_Ht = diagonal * _s * 0.490\n_Wd = width * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_bz = min(bezel * _s, min(_Ln, _Ht) * 0.15)\n_cz = centreHeight * _s\n_z0 = _cz - _Ht / 2\n_z1 = _cz + _Ht / 2\n_isStand = mount == 'Stand' ? 1 : 0\n_isBracket = mount == 'Bracket' ? 1 : 0\n_stW = min(standWidth * _s, _Ln)\n_stD = standDepth * _s\n_hasM = showMount > 0 ? 1 : 0\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_BODY = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _z0, _z1, 1)\n_SCR = hcat(_u0 + _bz, _v0 - 0.004 * _s, _u1 - _bz, _v0 - 0.004 * _s, _u1 - _bz, _v0, _u0 + _bz, _v0, _z0 + _bz, _z1 - _bz, 2)\n_NECK = hcat(0 - _stW * 0.12, _v0, _stW * 0.12, _v0, _stW * 0.12, _v1 + _stD * 0.5, 0 - _stW * 0.12, _v1 + _stD * 0.5, 0, _z0, 3)\n_FOOT = hcat(0 - _stW / 2, _v0, _stW / 2, _v0, _stW / 2, _v1 + _stD, 0 - _stW / 2, _v1 + _stD, 0, 0.02 * _s, 3)\n_STAND = (_isStand > 0 && _hasM > 0) ? vcat(_NECK, _FOOT) : zeros(0, 11)\n_BRK = hcat(0 - _Ln * 0.12, _v1, _Ln * 0.12, _v1, _Ln * 0.12, _v1 + _Wd * 0.8, 0 - _Ln * 0.12, _v1 + _Wd * 0.8, _cz - _Ht * 0.2, _cz + _Ht * 0.2, 3)\n_BRC = (_isBracket > 0 && _hasM > 0) ? _BRK : zeros(0, 11)\nQ = vcat(vcat(_BODY, _SCR), vcat(_STAND, _BRC))\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBody3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nBodyPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nScreen3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nScreenPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nMount3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nMountPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\nscreenWidth = max(0, _Ln - 2 * _bz)\nscreenHeight = max(0, _Ht - 2 * _bz)\ncentreLevel = _cz\nviewingDistance = diagonal * _s * 1.6\ndiagonalInches = diagonal * _s * 39.3701"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Body — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Screen — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Mount — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Body — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Screen — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Mount — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s9",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s11",
+              "label": "Screen width (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Screen height (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Centre level (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Viewing distance (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Diagonal (inches)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_body",
+              "kind": "polygon",
+              "name": "Body",
+              "color": "#1e293b",
+              "layer": "Furnishing",
+              "show": true
+            },
+            {
+              "id": "p2_screen",
+              "kind": "polygon",
+              "name": "Screen",
+              "color": "#0f172a",
+              "layer": "Furnishing",
+              "show": true
+            },
+            {
+              "id": "p2_mount",
+              "kind": "polygon",
+              "name": "Mount",
+              "color": "#334155",
+              "layer": "Furnishing",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_body",
+              "kind": "polyhedron",
+              "name": "Body",
+              "color": "#1e293b",
+              "layer": "Furnishing",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_screen",
+              "kind": "polyhedron",
+              "name": "Screen",
+              "color": "#0f172a",
+              "layer": "Furnishing",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_mount",
+              "kind": "polyhedron",
+              "name": "Mount",
+              "color": "#334155",
+              "layer": "Furnishing",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-diagonal__math_valin-diagonal",
+      "source": "props",
+      "sourceHandle": "val-diagonal",
+      "target": "math",
+      "targetHandle": "valin-diagonal"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-bezel__math_valin-bezel",
+      "source": "props",
+      "sourceHandle": "val-bezel",
+      "target": "math",
+      "targetHandle": "valin-bezel"
+    },
+    {
+      "id": "e6_props_val-centreHeight__math_valin-centreHeight",
+      "source": "props",
+      "sourceHandle": "val-centreHeight",
+      "target": "math",
+      "targetHandle": "valin-centreHeight"
+    },
+    {
+      "id": "e7_props_val-standWidth__math_valin-standWidth",
+      "source": "props",
+      "sourceHandle": "val-standWidth",
+      "target": "math",
+      "targetHandle": "valin-standWidth"
+    },
+    {
+      "id": "e8_props_val-standDepth__math_valin-standDepth",
+      "source": "props",
+      "sourceHandle": "val-standDepth",
+      "target": "math",
+      "targetHandle": "valin-standDepth"
+    },
+    {
+      "id": "e9_props_val-mount__math_valin-mount",
+      "source": "props",
+      "sourceHandle": "val-mount",
+      "target": "math",
+      "targetHandle": "valin-mount"
+    },
+    {
+      "id": "e10_props_val-showMount__math_valin-showMount",
+      "source": "props",
+      "sourceHandle": "val-showMount",
+      "target": "math",
+      "targetHandle": "valin-showMount"
+    },
+    {
+      "id": "e11_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e12_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e13_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e14_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e15_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e16_math_val-Body3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Body3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e17_out_val-s1__r3d_valin-p3_body",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_body"
+    },
+    {
+      "id": "e18_math_val-Screen3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Screen3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e19_out_val-s2__r3d_valin-p3_screen",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_screen"
+    },
+    {
+      "id": "e20_math_val-Mount3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Mount3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e21_out_val-s3__r3d_valin-p3_mount",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_mount"
+    },
+    {
+      "id": "e22_math_val-BodyPlan__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-BodyPlan",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e23_out_val-s4__r2d_valin-p2_body",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r2d",
+      "targetHandle": "valin-p2_body"
+    },
+    {
+      "id": "e24_math_val-ScreenPlan__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-ScreenPlan",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e25_out_val-s5__r2d_valin-p2_screen",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r2d",
+      "targetHandle": "valin-p2_screen"
+    },
+    {
+      "id": "e26_math_val-MountPlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-MountPlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e27_out_val-s6__r2d_valin-p2_mount",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_mount"
+    },
+    {
+      "id": "e28_math_val-overallLength__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e29_math_val-overallWidth__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e30_math_val-overallHeight__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e31_math_val-footprint__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e32_math_val-screenWidth__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-screenWidth",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e33_math_val-screenHeight__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-screenHeight",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e34_math_val-centreLevel__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-centreLevel",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e35_math_val-viewingDistance__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-viewingDistance",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e36_math_val-diagonalInches__out_valin-s15",
+      "source": "math",
+      "sourceHandle": "val-diagonalInches",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    }
+  ]
+}

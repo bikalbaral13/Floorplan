@@ -1,0 +1,64 @@
+
+# ===========================================================================
+# THE NIGHTSTAND IN ITS OWN FRAME — u across, v FRONT (-) to back (+), z up.
+# Fronts face -v; the back is at +v (the plan tools' BACK table: +y).
+# ===========================================================================
+_L = length * _s
+_D = width * _s
+_Ht = height * _s
+_tT = topThk * _s
+_g = max(0.001, doorGap) * _s
+_u0 = 0 - _L / 2
+_u1 = _L / 2
+_v0 = 0 - _D / 2
+_v1 = _D / 2
+_isLegs = base == 'Legs'
+_isPl = base == 'Plinth'
+_isWall = base == 'Wall-hung'
+_lift = _isWall ? max(0, mountHeight * _s - _Ht) : 0
+_legH = (_isLegs || _isPl) ? min(legHeight * _s, 0.6 * _Ht) : 0
+_z0 = _lift + _legH
+_z1 = _lift + _Ht
+_fr = 0.02 * _s
+_dB = detail == 'Blocky'
+_dM = detail == 'Medium'
+_dF = detail == 'Fine'
+_kA = _dB ? 1 : (_dM ? 2 : (_dF ? 3 : 5))
+_ecC = edgeCharacter == 'Crisp'
+_ecP = edgeCharacter == 'Plump'
+_rE = (_ecC ? 0.0012 : (_ecP ? 0.005 : 0.003)) * _s
+# groups: 1 oak case · 2 drawer fronts · 3 LED
+_BX = zeros(0, 9)
+
+# ===========================================================================
+# STEP 1 — THE CASE: a mid-century frame — top, bottom and sides as a
+# continuous box whose front edges are the visible frame, a divider rail
+# between drawers, and a back. The drawers sit INSIDE the frame, set back.
+# ===========================================================================
+_BX = vcat(_BX, hcat(_u0, _u1, _v0, _v1, _z1 - _tT, _z1, _rE * 1.6, 0, 1), hcat(_u0, _u1, _v0, _v1, _z0, _z0 + _fr, _rE, 0, 1), hcat(_u0, _u0 + _fr, _v0, _v1, _z0, _z1 - _tT, _rE, 0, 1), hcat(_u1 - _fr, _u1, _v0, _v1, _z0, _z1 - _tT, _rE, 0, 1), hcat(_u0 + _fr, _u1 - _fr, _v1 - 0.012 * _s, _v1, _z0 + _fr, _z1 - _tT, 0, 0, 1))
+_nDr = max(1, round(drawers))
+_iz0 = _z0 + _fr
+_iz1 = _z1 - _tT
+_dp = (_iz1 - _iz0 - (_nDr - 1) * _fr) / _nDr
+_di = arange(_nDr)
+_dz0 = _iz0 + _di * (_dp + _fr)
+_dz1 = _dz0 + _dp
+_oD = ones(_nDr, 1)
+_set = 0.004 * _s
+_fa = _u0 + _fr + _g
+_fb = _u1 - _fr - _g
+# drawer fronts, inset: their face sits 4 mm behind the frame's front edge
+_BX = vcat(_BX, hcat(_fa * _oD, _fb * _oD, (_v0 + _set) * _oD, (_v0 + _set + 0.018 * _s) * _oD, _dz0 + _g, _dz1 - _g, _rE * _oD, 0 * _oD, 2 * _oD))
+# divider rails between drawers, flush with the frame
+_BX = _nDr > 1 ? vcat(_BX, hcat((_u0 + _fr) * ones(_nDr - 1, 1), (_u1 - _fr) * ones(_nDr - 1, 1), _v0 * ones(_nDr - 1, 1), (_v1 - 0.012 * _s) * ones(_nDr - 1, 1), sub(_dz1, 0, 0, _nDr - 1, 1), sub(_dz1, 0, 0, _nDr - 1, 1) + _fr, _rE * ones(_nDr - 1, 1), 0 * ones(_nDr - 1, 1), 1 * ones(_nDr - 1, 1))) : _BX
+# plinth base, or an LED under a wall-hung case
+_BX = _isPl ? vcat(_BX, hcat(_u0 + 0.03 * _s, _u1 - 0.03 * _s, _v0 + 0.03 * _s, _v1 - 0.01 * _s, _lift, _z0, _rE, 0, 1)) : _BX
+_BX = (underLed > 0 && !_isLegs) ? vcat(_BX, hcat(_v0 + 0.03 * _s, _v0 + 0.045 * _s, _z0 - 0.004 * _s, _z0, _u0 + 0.03 * _s, _u1 - 0.03 * _s, 0.002 * _s, 1, 3)) : _BX
+# pull handles as bars (Handle), a routed groove shadow (Groove) — Knob is turned, below
+_hOn = pullType == 'Handle'
+_hc = (_dz0 + _dz1) / 2
+_BX = _hOn ? vcat(_BX, hcat((_v0 + _set - 0.028 * _s) * _oD, (_v0 + _set - 0.016 * _s) * _oD, _hc - 0.005 * _s, _hc + 0.005 * _s, (-0.07 * _s) * _oD, (0.07 * _s) * _oD, 0.0045 * _s * _oD, 1 * _oD, 2 * _oD)) : _BX
+
+# ===========================================================================
+# STEP 2 — THE ROUNDED-BOX KERNEL (shared with wardrobe / tv-unit)
+# ===========================================================================

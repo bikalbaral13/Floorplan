@@ -1,0 +1,29 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "render-2d",
+  "meta": {
+    "label": "2D Render",
+    "category": "2d primitives",
+    "color": "#0891b2"
+  },
+  "description": "Draw ANY number of 2D primitives from one node — add a row per kind (Polygon, Circle, Stroke), each with its own colour, layer and input endpoint. The drawing counterpart of Input Properties.",
+  "instructions": "One node for the whole 2D output of an operation. Press \"Add primitive\" for a row, pick its KIND, and wire the geometry into that row's own `valin-<rowId>` endpoint on the left. Everything that is not a number — colour, layer name — lives on the row, because a Math Engine can only put numbers on a wire.\n\nA ROW IS A STYLE GROUP, NOT A SHAPE. Fed a list with many entries, one row draws many pieces in its colour and layer, so a computed result of any size needs ONE row — not one node per shape. That is what replaces a chain of Polygon nodes.\n\nKINDS\n• POLYGON — takes a vertex list. `[[x,y],…]` is one outline; `[[[x,y],…],…]` is several; and a FLAT list whose rows carry a THIRD column splits into one outline per run of equal third value (the group column a Math Engine emits with `hcat(pts, fill(rows(pts),1,i))`). Vertex counts may differ from piece to piece. A grouped list is read EVEN-ODD, so a ring nested inside another is a HOLE rather than a second filled patch — which is what makes the Math Engine's `subtract(outline, cutters)` drawable directly: an outer boundary plus its holes arrives as one grouped list and draws with the holes voided. Disjoint rings still fill individually. A STROKE row is deliberately NOT read this way: its bands are independent quads, and two that overlapped would cancel instead of merging.\n• CIRCLE — takes a CENTRE list and draws one circle per point: `[[x,y],…]` at the row's Radius, or `[[x,y,r],…]` to give every circle its own radius from the third column. Circles are emitted as sampled outlines (64 segments), so they behave like any other Space downstream.\n\n• STROKE — takes a SEGMENT list `[[x1,y1,x2,y2],…]` and thickens each segment into a band of the row's Width about its centreline; a FIFTH column gives a segment its own width, exactly as Circle's third column gives a circle its own radius. The open-path row: Polygon and Circle can only draw a CLOSED ring, so a centreline — a frame member, a pipe run, a bar, a 3D Tube's plan projection — had to be widened into a quad by hand before it could be drawn. Segments are stroked INDEPENDENTLY, with no join between them: for a continuous mitred outline use the Mitered Join node. A zero-length segment is dropped rather than drawn as a spike, which is what a vertical 3D member projects to in plan.\nCOORDINATES are anchor-relative metres — the same frame `val-points` uses everywhere else, so a Space source's outline, a Math Engine's result and a Polygon node's echo all drop straight in.\n\nEACH ROW ALSO PUBLISHES what it resolved on `val-<rowId>`, so a rendered piece can still feed a Boolean 2D, a Merge or another operation.\n\nLAYER: names the canvas layer this row's pieces are rendered on (Flow Live). Blank falls back to the node's own layer. Several rows may share one name.\n\nWHAT THIS DOES NOT REPLACE: the single-purpose generators (Rectangle, Ngon, Ellipse …). Those are for hand-authoring, where a width/height slider is the point. This node is for geometry that arrives computed.",
+  "handles": {
+    "input": false,
+    "output": true
+  },
+  "defaults": {
+    "prims": [
+      {
+        "id": "pr1",
+        "kind": "polygon",
+        "name": "",
+        "color": "#0891b2",
+        "layer": "",
+        "show": true
+      }
+    ]
+  },
+  "parameters": []
+}

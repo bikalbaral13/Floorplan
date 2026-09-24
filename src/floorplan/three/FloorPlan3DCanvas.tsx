@@ -4,10 +4,11 @@ import { Edges, Html, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { CSG } from "three-csg-ts";
 import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
-import { computeMiteredUnion, computeMiteredWallPolygons, getWallCorners } from "../wallGeometry";
-import { subtractPolygon } from "../algorithms/geometry/columnClip";
+import { computeMiteredUnion, computeMiteredWallPolygons, getWallCorners } from "@builderpluss/engine";
+import { subtractPolygon } from "@builderpluss/engine";
 import type { Point } from "../types";
-import type { FlowMesh, FlowMeshPrism } from "../flow/eval/meshTypes";
+import type { FlowMesh, FlowMeshPrism } from "@builderpluss/engine";
+import { wrapForExport, exportGroupToBlob, type Mesh3DFormat, type Mesh3DOptions } from "../export/flowMesh3d";
 
 /** A `<mesh>` that automatically adds dark edge lines to any geometry it contains.
  *  Drop-in replacement for `<mesh>`. Improves visual separation between adjacent meshes. */
@@ -32,6 +33,10 @@ function ZUpController() {
   }, [camera, controls]);
   return null;
 }
+
+/** Name of the group holding everything the user drew. The mesh export walks this rather than the whole
+ *  scene, so lights, controls and the origin axis arrows are excluded by structure. */
+const MODEL_CONTENT_GROUP = "model-content";
 
 /** Origin axis indicator — coloured arrows for X (red, →, east) / Y (green, SOUTH) / Z (blue, ↑ UP), so the
  *  3D view reads like the 2D canvas (X right, Y south/down, Z up). Drawn at the ORIGIN, OUTSIDE the scene's
@@ -79,6 +84,35 @@ function taperedBoxGeometry(L: number, B: number, TL: number, TB: number, H: num
   return geom;
 }
 
+/** A POLYHEDRON: an arbitrary solid given as its own faces, each an ordered ring of vertices already in
+ *  scene coords. Every face is fan-triangulated (v0,v1,v2 / v0,v2,v3 …) into a NON-INDEXED triangle list, so
+ *  computeVertexNormals gives crisp per-face normals exactly like {@link taperedBoxGeometry}. The fan is
+ *  exact for convex faces (a box face, a computed quad) and acceptable for mildly concave ones — this is a
+ *  renderer, not a tessellator. Faces are drawn DoubleSided, so a ring's winding direction doesn't matter.
+ *  This is what a Math Engine's mesh output renders as: the shape IS the data, so it stays parametric. */
+function polyhedronGeometry(faces: number[][][]): THREE.BufferGeometry {
+  const tris: number[] = [];
+  for (const ring of faces) {
+    if (!Array.isArray(ring) || ring.length < 3) continue;
+    const a = ring[0];
+    for (let i = 1; i + 1 < ring.length; i++) {
+      const b = ring[i], c = ring[i + 1];
+      tris.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+    }
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(tris), 3));
+  geom.computeVertexNormals();
+  return geom;
+}
+
+/** The polyhedron's geometry as a child element, so the build is memoized on the face list rather than
+ *  re-running (and re-allocating a GPU buffer) on every re-render of the scene. */
+function PolyhedronGeom({ faces }: { faces: number[][][] }) {
+  const geom = useMemo(() => polyhedronGeometry(faces), [faces]);
+  return <primitive object={geom} attach="geometry" />;
+}
+
 /** Build a positioned THREE.Mesh for one 3D primitive descriptor — geometry per shape, then place/orient it
  *  by its baked transform (translate m, rotate rad, mirror ±1 scale), resting on the floor plane. Used as a
  *  CSG operand (positions are in local group space, NOT the +X auto-layout — so A and B can overlap). */
@@ -99,6 +133,8 @@ function buildPrimitiveMesh(d: PrimMass3D): THREE.Mesh {
     geom.rotateX(Math.PI / 2); // THREE's torus stands in XY — lay it flat in plan (XZ)
   }
   else if (d.shape === "capsule") { const mid = Math.max(0, d.length); y = mid / 2 + d.radius; geom = new THREE.CapsuleGeometry(d.radius, mid, 8, 16); }
+  // A polyhedron's vertices are absolute, so there is no half-height to lift it onto the floor.
+  else if (d.shape === "polyhedron") { y = 0; geom = polyhedronGeometry(d.faces ?? []); }
   else { y = d.length / 2; geom = new THREE.BoxGeometry(d.length, d.length, d.length); }
   const mesh = new THREE.Mesh(geom);
   const tf = d.transform;
@@ -229,13 +265,22 @@ export type SnapshotView =
 export interface SnapshotResult { view: SnapshotView; dataUrl: string }
 export interface SnapshotApi {
   captureAll: () => Promise<SnapshotResult[]>;
+  /** Render ONE view and return its data URL. Two things this does that `captureAll` cannot:
+   *  it renders a single camera instead of 6 views + composite + 6 cube faces + a panorama (the Flow
+   *  Render node used to pay for all of that and keep one frame), and it accepts a FOCUS box so the
+   *  camera can frame one room rather than the whole building. Omit `focus` for the building box.
+   *  Returns "" if the read-back fails (tainted canvas). */
+  captureOne: (view: SnapshotView, focus?: CaptureFocus) => Promise<string>;
+  /** Serialise everything currently drawn — walls, slabs, objects, flow meshes — to a mesh file.
+   *  Exports the LIVE scene rather than re-deriving geometry, so what you get is what you see. */
+  exportScene: (format: Mesh3DFormat, opts: Mesh3DOptions) => Promise<{ blob: Blob; meshes: number; triangles: number }>;
 }
 
 /** Display style from a downstream "Display 3D" node — colour / opacity / solid-vs-wireframe / edges. */
 type Display3DStyle = { color: string; opacity: number; wireframe: boolean; showEdges: boolean };
 /** A resolved 3D primitive: shape + (scale-baked) dimensions + baked transform (translate m, rotate rad,
  *  mirror ±1 per axis) + optional Display 3D style. Mirrors FloorPlanEditor's PrimMass3D. */
-type PrimMass3D = { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string; transform?: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number }; display?: Display3DStyle };
+type PrimMass3D = { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string; layer?: string; faces?: number[][][]; transform?: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number }; display?: Display3DStyle };
 /** One operand of a Boolean op: a primitive, or a nested Boolean subtree (so Booleans chain). */
 type BoolOperand3D = { prim: PrimMass3D } | { bool: BoolNode3D };
 /** A Boolean (CSG) node: operation + two operands (each a primitive or another Boolean). */
@@ -253,6 +298,11 @@ interface Props {
   /** Visible rooms (manual + auto-detected). When present, each is extruded as a thin floor slab
    *  and click-selectable. Falls back to model.rooms (manual only) if not provided. */
   rooms?: Room[];
+  /** "Objects only" (Preferences): a bare canvas segment / node / Space contributes NOTHING to 3D — only
+   *  what a hosted parametric object builds is shown. A generated plan then reads as real elements (the Wall
+   *  object's solid, the door leaf, the window frame) instead of those plus a default grey extrusion of the
+   *  same segment underneath. Off = every wall and slab extrudes as before. */
+  objectsOnly?: boolean;
   /** IDs of walls or rooms currently selected in the parent (selection state shared with 2D). */
   selectedWallIds?: string[];
   /** Click handler â€” id may be a wall id or a room id. additive=true on shift-click for multi-select. */
@@ -304,7 +354,10 @@ function MapGround({ src, geometry }: { src: string; geometry: THREE.BufferGeome
   tex.flipY = false; // image data top-left = UV (0,0), matching the quad's UVs
   tex.colorSpace = THREE.SRGBColorSpace;
   return (
-    <mesh geometry={geometry} renderOrder={-1}>
+    // noExport: this is a photographic backdrop, not model geometry. A mesh export that included it
+    // would carry a flat quad under the building — and without its texture (which the exporter does
+    // not carry) it lands as an opaque slab.
+    <mesh geometry={geometry} renderOrder={-1} userData={{ noExport: true }}>
       <meshBasicMaterial map={tex} side={THREE.DoubleSide} toneMapped={false} depthWrite={false} />
     </mesh>
   );
@@ -354,9 +407,14 @@ const FURNITURE_DIMS: Record<FurnitureItem["type"], { w: number; d: number; h: n
   window: { w: 1.2, d: 0.1, h: 1.2 },
 };
 
-const isExtrudableWall = (w: Wall) => {
+/** Does this segment contribute a default 3D extrusion? Under `objectsOnly` a bare segment does not — only
+ *  one hosting a parametric object, whose own solids are built separately from its attachment. */
+const isExtrudableWall = (w: Wall, objectsOnly = false) => {
   const t = w.segmentType ?? "wall";
-  return t === "wall" || t === "door" || t === "window" || t === "footprint-boundary";
+  if (!(t === "wall" || t === "door" || t === "window" || t === "footprint-boundary")) return false;
+  // The flow that drew this segment builds its own solid — don't extrude a second one underneath it.
+  if (w.noExtrude3d) return false;
+  return !objectsOnly || (w.attachments?.length ?? 0) > 0;
 };
 
 const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }> => {
@@ -376,6 +434,159 @@ const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }
   return [{ yMin: 0, yMax: fullH }];
 };
 
+/** The box a capture is framed on, in WORLD METRES. Defaults to the whole building; the Flow Render
+ *  node passes the bounding box of the Space wired into it so one room fills the frame instead of
+ *  sitting as a speck in the middle of the plan. */
+export interface CaptureFocus { centerX: number; centerY: number; widthM: number; depthM: number }
+
+/** The six canonical camera placements for a focus box, plus the point they all look at.
+ *
+ *  Shared by `captureAll` (which renders every one) and `captureOne` (which renders exactly one), so
+ *  the two entry points cannot drift apart — a change to the isometric angle moves both.
+ *
+ *  Z-UP scene (matches the interactive view — the model content is rotated so the floor is the XY plane
+ *  and height rises along +Z): eye height is along +Z; elevations look horizontally with up = +Z; the
+ *  top view looks straight down −Z.
+ *
+ *  THE DISTANCE IS FITTED, NOT GUESSED. Each view backs off exactly far enough for the focus box to fill
+ *  the frame: the box's half-extents are projected onto that camera's own right/up axes, measured against
+ *  BOTH field-of-view angles (the horizontal one is the vertical one widened by the canvas aspect, so a
+ *  wide pane can't crop a deep model), and the box's own half-depth along the view axis is added, because
+ *  the NEAREST corner is what the frustum has to clear. The old `max(w, d) * 1.1 + 6` was a guess, and its
+ *  fixed 6 m pad swallowed the frame precisely when the box was small — a 4 m object sat at 10.4 m and
+ *  filled a fifth of the picture, which is the case a "Selected" Snapshot asks for most.
+ *
+ *  `topZ` is how high the drawn scene actually reaches. It must be MEASURED and passed in: `floorHeightM`
+ *  is ONE storey, so a massing tower framed by that alone would put the top view's camera inside the
+ *  building. */
+const viewCameras = (
+  focus: CaptureFocus,
+  floorHeightM: number,
+  opts?: { aspect?: number; fovYDeg?: number; topZ?: number },
+) => {
+  const { centerX, centerY, widthM, depthM } = focus;
+  const eyeZ = floorHeightM * 0.6;
+  // Framed on the focus centre (world metres) — the model does not sit at the origin (see toScene).
+  const center = new THREE.Vector3(centerX, centerY, eyeZ);
+  // Half-extents ABOUT `center`. The scene spans z ∈ [0, topZ] while the eye sits at 0.6 of one storey,
+  // so the vertical half-extent is whichever side of the look-at point reaches further.
+  const topZ = Math.max(opts?.topZ ?? floorHeightM, floorHeightM);
+  const half = new THREE.Vector3(
+    Math.max(widthM, 0.5) / 2,
+    Math.max(depthM, 0.5) / 2,
+    Math.max(topZ - eyeZ, eyeZ, 0.5),
+  );
+  const fovY = ((opts?.fovYDeg ?? 45) * Math.PI) / 180;
+  const fovX = 2 * Math.atan(Math.tan(fovY / 2) * Math.max(opts?.aspect ?? 1, 1e-6));
+  const tanY = Math.tan(fovY / 2), tanX = Math.tan(fovX / 2);
+  const MARGIN = 1.06; // a sliver of air around the fit, so nothing sits flush against the frame edge
+  const UP_Z: [number, number, number] = [0, 0, 1];
+  /** Camera position for a view, given the unit direction it LOOKS ALONG (camera → centre) and its up. */
+  const at = (dir: [number, number, number], up: [number, number, number]): [number, number, number] => {
+    const f = new THREE.Vector3(...dir).normalize();
+    const r = new THREE.Vector3().crossVectors(f, new THREE.Vector3(...up)).normalize();
+    const u = new THREE.Vector3().crossVectors(r, f).normalize();
+    const proj = (v: THREE.Vector3) => Math.abs(v.x) * half.x + Math.abs(v.y) * half.y + Math.abs(v.z) * half.z;
+    const dist = Math.max(proj(u) / tanY, proj(r) / tanX) * MARGIN + proj(f);
+    return [center.x - f.x * dist, center.y - f.y * dist, center.z - f.z * dist];
+  };
+  const views: { view: SnapshotView; pos: [number, number, number]; up: [number, number, number] }[] = [
+    { view: "front",     pos: at([0, 1, 0], UP_Z), up: UP_Z },
+    { view: "back",      pos: at([0, -1, 0], UP_Z), up: UP_Z },
+    { view: "left",      pos: at([1, 0, 0], UP_Z), up: UP_Z },
+    { view: "right",     pos: at([-1, 0, 0], UP_Z), up: UP_Z },
+    { view: "top",       pos: at([0, 0, -1], [0, 1, 0]), up: [0, 1, 0] },
+    // The same oblique the old placement gave: camera to the east, to the south, and above.
+    { view: "isometric", pos: at([-1, 1, -0.8], UP_Z), up: UP_Z },
+  ];
+  return { center, views };
+};
+
+/** Compose the five orthographic views into ONE labelled grid image, so a single-image model can
+ *  reason about all of them in one call. `get` supplies each view's data URL — captureAll passes its
+ *  own results, captureOne passes the frames it just rendered for a narrower focus box, and neither
+ *  has to know how the grid is drawn. Returns null if anything goes wrong; a missing composite is
+ *  never fatal. */
+const buildComposite = async (get: (v: SnapshotView) => string | undefined): Promise<string | null> => {
+  // ── Composite (front/back/left/right/top into one labelled grid) ──────
+  // Single image that lets a one-shot render model see all five orthographic
+  // views together. Laid out as a 3×2 grid with the top view on the centre
+  // of row 1 (the classic unfolded-cross spirit, minus the bottom face):
+  //   [Left ][Front][Right]
+  //   [Back ][Top  ][     ]
+  // Each cell is the captured PNG, padded with a thin border, and a small
+  // text label is drawn under each so the model can disambiguate them.
+  try {
+    const layout: { url: string | undefined; label: string }[] = [
+      { url: get("left"),  label: "LEFT"  },
+      { url: get("front"), label: "FRONT" },
+      { url: get("right"), label: "RIGHT" },
+      { url: get("back"),  label: "BACK"  },
+      { url: get("top"),   label: "TOP"   },
+      { url: undefined,    label: ""      }, // placeholder; isometric could go here
+    ];
+    const CELL = 512;          // pixel size of each view in the composite
+    const PAD = 16;            // outer padding around the whole image
+    const GAP = 12;            // gap between cells
+    const LABEL_H = 28;        // height of the label strip below each cell
+    const cols = 3, rowsN = 2;
+    const compW = PAD * 2 + cols * CELL + (cols - 1) * GAP;
+    const compH = PAD * 2 + rowsN * (CELL + LABEL_H) + (rowsN - 1) * GAP;
+    const comp = document.createElement("canvas");
+    comp.width = compW;
+    comp.height = compH;
+    const ctx = comp.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, compW, compH);
+      // Each cell is a sub-image plus a label band below.
+      const drawCell = async (slot: typeof layout[number], col: number, row: number) => {
+        const x = PAD + col * (CELL + GAP);
+        const y = PAD + row * (CELL + LABEL_H + GAP);
+        // Cell background + border so empty slots don't read as missing data.
+        ctx.fillStyle = "#f1f5f9";
+        ctx.fillRect(x, y, CELL, CELL + LABEL_H);
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL + LABEL_H - 1);
+        if (slot.url) {
+          const img = new Image();
+          img.src = slot.url;
+          await new Promise<void>((resolve) => {
+            if (img.complete) { resolve(); return; }
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          });
+          // Fit the image inside the cell while preserving aspect ratio.
+          const iw = img.naturalWidth || CELL;
+          const ih = img.naturalHeight || CELL;
+          const r = Math.min(CELL / iw, CELL / ih);
+          const dw = iw * r, dh = ih * r;
+          ctx.drawImage(img, x + (CELL - dw) / 2, y + (CELL - dh) / 2, dw, dh);
+        }
+        // Label strip.
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "bold 18px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(slot.label, x + CELL / 2, y + CELL + LABEL_H / 2);
+      };
+      // Render cells in order (sequential awaits — the total wait is dominated
+      // by image decode, which is microseconds for cached data URLs).
+      for (let i = 0; i < layout.length; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        await drawCell(layout[i], col, row);
+      }
+      try { return comp.toDataURL("image/png"); } catch { return null; }
+    }
+  } catch (e) {
+    // Non-fatal: just skip the composite if anything went wrong.
+    console.warn("Composite snapshot skipped:", e);
+  }
+  return null;
+};
+
 /** Bridge component mounted inside <Canvas/> so it has access to gl/scene/camera
  *  via useThree. Exposes a captureAll() that renders the scene from six canonical
  *  viewpoints to the offscreen-capable WebGL buffer (preserveDrawingBuffer on),
@@ -383,25 +594,109 @@ const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }
 const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number; floorHeightM: number; centerX: number; centerY: number }>(
   ({ widthM, depthM, floorHeightM, centerX, centerY }, ref) => {
     const { gl, scene, camera, size } = useThree();
+    /** How high the drawn model actually reaches, in world metres — what a TOP view has to clear and what
+     *  an elevation has to contain. MEASURED, because `floorHeightM` is one storey: a massing tower framed
+     *  by that alone would put the top camera inside the building. Measured over the model content group
+     *  (the origin arrows sit outside it, so a 5 m helper can't inflate the frame) and clamped, so one
+     *  stray mesh cannot push the camera towards infinity. */
+    const sceneTopZ = (): number => {
+      const root = scene.getObjectByName(MODEL_CONTENT_GROUP) ?? scene;
+      scene.updateMatrixWorld(true);
+      const top = new THREE.Box3().setFromObject(root).max.z;
+      return Number.isFinite(top) ? Math.min(Math.max(top, floorHeightM), 500) : floorHeightM;
+    };
     useImperativeHandle(ref, () => ({
+      /**
+       * Serialise the live scene. Every visible mesh is cloned with its WORLD matrix baked into the
+       * vertices, so the file matches the view exactly — no re-deriving geometry from the model, and
+       * no chance of the two drifting. Lights, helpers and non-mesh objects are skipped, and a mesh
+       * under a hidden parent is skipped too (`visible` is not inherited by the flag itself).
+       *
+       * The scene is authored Z-UP, hence `sourceUp: "z-up"` — passing the default would silently
+       * lay every export on its side.
+       */
+      exportScene: async (format: Mesh3DFormat, opts: Mesh3DOptions) => {
+        scene.updateMatrixWorld(true);
+        // Walk the model content group, NOT the whole scene. The origin axis arrows are ArrowHelpers
+        // (whose cone heads are real meshes) and sit outside this group, so they are excluded by
+        // structure rather than by name-matching. Falling back to the scene keeps the export working
+        // if the group is ever renamed, at the cost of picking helpers back up.
+        const root = scene.getObjectByName(MODEL_CONTENT_GROUP) ?? scene;
+        const inner = new THREE.Group();
+        let triangles = 0;
+        root.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (!(mesh as unknown as { isMesh?: boolean }).isMesh || !mesh.visible) return;
+          // Opt-out for context that lives inside the content group — the map-underlay backdrop.
+          if (mesh.userData?.noExport) return;
+          let hiddenAncestor = false;
+          mesh.traverseAncestors((a) => { if (!a.visible) hiddenAncestor = true; });
+          if (hiddenAncestor) return;
+          const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material & {
+            color?: THREE.Color; opacity?: number; transparent?: boolean;
+          } | undefined;
+          // A fully-transparent mesh is invisible on screen; exporting it as opaque geometry would put
+          // a solid surface in the file that the user never saw.
+          if (src && src.transparent && (src.opacity ?? 1) <= 0.01) return;
+          const geom = (mesh.geometry as THREE.BufferGeometry | undefined)?.clone();
+          const pos = geom?.getAttribute("position");
+          if (!geom || !pos || pos.count < 3) return;
+          geom.applyMatrix4(mesh.matrixWorld);
+          triangles += (geom.index ? geom.index.count : pos.count) / 3;
+          const hex = src?.color ? `#${src.color.getHexString()}` : "#94a3b8";
+          // Fresh material named after the colour, so OBJ's `usemtl` and glTF's material list read
+          // sensibly — the same convention massesToGroup uses. Opacity is carried through so a
+          // translucent preview stays translucent instead of exporting as a solid block.
+          const opacity = src?.opacity ?? 1;
+          const mat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(hex),
+            side: THREE.DoubleSide,
+            transparent: opacity < 1,
+            opacity,
+          });
+          mat.name = `mat_${hex.replace(/[^0-9a-z]/gi, "")}`;
+          const clone = new THREE.Mesh(geom, mat);
+          clone.name = (mesh.name || "mesh").replace(/[^0-9a-z_-]/gi, "_");
+          inner.add(clone);
+        });
+        const group = wrapForExport(inner, opts, "z-up");
+        return { blob: await exportGroupToBlob(group, format), meshes: inner.children.length, triangles };
+      },
+      captureOne: async (view: SnapshotView, focus?: CaptureFocus) => {
+        const aspect = Math.max(1e-6, size.width / size.height);
+        // Fall back to the building box, which is what captureAll always uses — so an unfocused
+        // captureOne("isometric") is pixel-identical to the frame captureAll would have produced.
+        const box = focus ?? { centerX, centerY, widthM, depthM };
+        const { center, views } = viewCameras(box, floorHeightM, { aspect, topZ: sceneTopZ() });
+        const shoot = (v: typeof views[number]): string => {
+          const cam = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
+          cam.up.set(v.up[0], v.up[1], v.up[2]);
+          cam.position.set(v.pos[0], v.pos[1], v.pos[2]);
+          cam.lookAt(center);
+          cam.updateMatrixWorld();
+          gl.render(scene, cam);
+          try { return gl.domElement.toDataURL("image/png"); } catch { return ""; }
+        };
+        // The composite is the one view that is not a camera: it needs the five orthographic frames
+        // first, so render those (still framed on `box`) and hand them to the shared builder.
+        if (view === "composite") {
+          const frames = new Map<SnapshotView, string>();
+          for (const v of views) if (v.view !== "isometric") frames.set(v.view, shoot(v));
+          const url = await buildComposite((k) => frames.get(k));
+          // No composite (canvas tainted, or a draw failed) → the isometric is a better answer than
+          // nothing, since the caller is about to send this to a model.
+          if (url) return url;
+          const iso = views.find((v) => v.view === "isometric");
+          return iso ? shoot(iso) : "";
+        }
+        const v = views.find((x) => x.view === view) ?? views.find((x) => x.view === "isometric");
+        return v ? shoot(v) : "";
+      },
       captureAll: async () => {
         const aspect = Math.max(1e-6, size.width / size.height);
-        const dist = Math.max(widthM, depthM) * 1.1 + 6;
-        // Z-UP scene (matches the interactive view — the model content is rotated so the floor is the XY
-        // plane and height rises along +Z): eye height is along +Z; elevations look horizontally with
-        // up = +Z; the top view looks straight down −Z.
-        const eyeZ = floorHeightM * 0.6;
-        // Framed on the building centre (world metres) — the model no longer sits at the origin (see toScene).
-        const center = new THREE.Vector3(centerX, centerY, eyeZ);
-        const UP_Z: [number, number, number] = [0, 0, 1];
-        const views: { view: SnapshotView; pos: [number, number, number]; up: [number, number, number] }[] = [
-          { view: "front",     pos: [centerX, centerY - dist, eyeZ], up: UP_Z },
-          { view: "back",      pos: [centerX, centerY + dist, eyeZ], up: UP_Z },
-          { view: "left",      pos: [centerX - dist, centerY, eyeZ], up: UP_Z },
-          { view: "right",     pos: [centerX + dist, centerY, eyeZ], up: UP_Z },
-          { view: "top",       pos: [centerX, centerY, dist * 1.4], up: [0, 1, 0] },
-          { view: "isometric", pos: [centerX + dist, centerY - dist, dist * 0.8], up: UP_Z },
-        ];
+        // Framed on the whole building — captureAll is the Snapshot dialog's path and always shows
+        // everything. The Flow Render node uses captureOne, which can narrow the box.
+        const { center, views } = viewCameras({ centerX, centerY, widthM, depthM }, floorHeightM, { aspect, topZ: sceneTopZ() });
         const results: SnapshotResult[] = [];
         for (const v of views) {
           const cam = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
@@ -415,86 +710,9 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
           results.push({ view: v.view, dataUrl: url });
         }
 
-        // ── Composite (front/back/left/right/top into one labelled grid) ──────
-        // Single image that lets a one-shot render model see all five orthographic
-        // views together. Laid out as a 3×2 grid with the top view on the centre
-        // of row 1 (the classic unfolded-cross spirit, minus the bottom face):
-        //   [Left ][Front][Right]
-        //   [Back ][Top  ][     ]
-        // Each cell is the captured PNG, padded with a thin border, and a small
-        // text label is drawn under each so the model can disambiguate them.
-        try {
-          const get = (v: SnapshotView) => results.find((r) => r.view === v)?.dataUrl;
-          const layout: { url: string | undefined; label: string }[] = [
-            { url: get("left"),  label: "LEFT"  },
-            { url: get("front"), label: "FRONT" },
-            { url: get("right"), label: "RIGHT" },
-            { url: get("back"),  label: "BACK"  },
-            { url: get("top"),   label: "TOP"   },
-            { url: undefined,    label: ""      }, // placeholder; isometric could go here
-          ];
-          const CELL = 512;          // pixel size of each view in the composite
-          const PAD = 16;            // outer padding around the whole image
-          const GAP = 12;            // gap between cells
-          const LABEL_H = 28;        // height of the label strip below each cell
-          const cols = 3, rowsN = 2;
-          const compW = PAD * 2 + cols * CELL + (cols - 1) * GAP;
-          const compH = PAD * 2 + rowsN * (CELL + LABEL_H) + (rowsN - 1) * GAP;
-          const comp = document.createElement("canvas");
-          comp.width = compW;
-          comp.height = compH;
-          const ctx = comp.getContext("2d");
-          if (ctx) {
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, compW, compH);
-            // Each cell is a sub-image plus a label band below.
-            const drawCell = async (slot: typeof layout[number], col: number, row: number) => {
-              const x = PAD + col * (CELL + GAP);
-              const y = PAD + row * (CELL + LABEL_H + GAP);
-              // Cell background + border so empty slots don't read as missing data.
-              ctx.fillStyle = "#f1f5f9";
-              ctx.fillRect(x, y, CELL, CELL + LABEL_H);
-              ctx.strokeStyle = "#cbd5e1";
-              ctx.lineWidth = 1;
-              ctx.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL + LABEL_H - 1);
-              if (slot.url) {
-                const img = new Image();
-                img.src = slot.url;
-                await new Promise<void>((resolve) => {
-                  if (img.complete) { resolve(); return; }
-                  img.onload = () => resolve();
-                  img.onerror = () => resolve();
-                });
-                // Fit the image inside the cell while preserving aspect ratio.
-                const iw = img.naturalWidth || CELL;
-                const ih = img.naturalHeight || CELL;
-                const r = Math.min(CELL / iw, CELL / ih);
-                const dw = iw * r, dh = ih * r;
-                ctx.drawImage(img, x + (CELL - dw) / 2, y + (CELL - dh) / 2, dw, dh);
-              }
-              // Label strip.
-              ctx.fillStyle = "#0f172a";
-              ctx.font = "bold 18px sans-serif";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText(slot.label, x + CELL / 2, y + CELL + LABEL_H / 2);
-            };
-            // Render cells in order (sequential awaits — the total wait is dominated
-            // by image decode, which is microseconds for cached data URLs).
-            for (let i = 0; i < layout.length; i++) {
-              const col = i % cols;
-              const row = Math.floor(i / cols);
-              await drawCell(layout[i], col, row);
-            }
-            try {
-              results.push({ view: "composite", dataUrl: comp.toDataURL("image/png") });
-            } catch { /* canvas tainted — skip */ }
-          }
-        } catch (e) {
-          // Non-fatal: just skip the composite if anything went wrong.
-          // eslint-disable-next-line no-console
-          console.warn("Composite snapshot skipped:", e);
-        }
+        // Composite (front/back/left/right/top into one labelled grid) - see buildComposite.
+        const compUrl = await buildComposite((v) => results.find((r) => r.view === v)?.dataUrl);
+        if (compUrl) results.push({ view: "composite", dataUrl: compUrl });
 
         // ── 360 / cubemap capture ─────────────────────────────────────────────
         // Render the scene from the eye-height centre point with a 90° FOV camera
@@ -632,13 +850,13 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
         gl.render(scene, camera);
         return results;
       },
-    }), [gl, scene, camera, size, widthM, depthM, floorHeightM]);
+    }), [gl, scene, camera, size, widthM, depthM, floorHeightM, centerX, centerY]);
     return null;
   }
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, objectsOnly = false, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -694,6 +912,20 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
     }
     return result;
   }, [model.walls, miteredPolygons, useSymbol]);
+
+  /** Segments whose 3D band the EDITOR already builds because they host a Wall object (floorWallMeshes →
+   *  `meshPreview`). That band is the richer one — it sits at the object's own base / height, is carved by
+   *  overlapping column footprints, and splits into spandrels around a door or window — so extruding the
+   *  segment here as well would draw the same solid twice and z-fight with it. Keyed by id rather than by
+   *  `segmentType`, because Add Segment → Wall commits its segments as `"line"`. */
+  const wallObjectSegIds = useMemo(() => {
+    const lib = model.objectLibrary ?? {};
+    const ids = new Set<string>();
+    for (const w of model.walls) {
+      if ((w.attachments ?? []).some((a) => lib[a.objectId]?.meta.symbol === "wall")) ids.add(w.id);
+    }
+    return ids;
+  }, [model.walls, model.objectLibrary]);
 
   // Union-mode extrusion: when walls share mode "mitered-union", their per-wall mitered footprints
   // butt seamlessly. Computing the union outerEdges (boundary edges not shared with another wall) and
@@ -942,8 +1174,13 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
           ground plane and building height rises along +Z — keeping the 2D and 3D canvases axis-synced
           from the origin. Geometry is still authored Y-up internally; this ONE group flips the whole
           scene, so nothing below had to change. Picking (onClick raycasts) and drei Html labels project
-          through the rotation correctly. The SnapshotBridge captures use the matching Z-up view frame. */}
-      <group rotation={[Math.PI / 2, 0, 0]}>
+          through the rotation correctly. The SnapshotBridge captures use the matching Z-up view frame.
+
+          NAMED because the mesh export walks this group rather than the whole scene: everything the
+          user drew is inside it, and the scene furniture that must never reach a file — the origin
+          axis arrows, lights, controls — sits outside. Structural exclusion beats a deny-list, which
+          would silently miss the next helper someone adds. */}
+      <group name={MODEL_CONTENT_GROUP} rotation={[Math.PI / 2, 0, 0]}>
 
       {/* Georeferenced map underlay as a ground plane (Approach A) — the building/massing sits on the map. */}
       {mapUnderlay && mapGroundGeom && (
@@ -1027,6 +1264,11 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         } else if (pm.shape === "cylinder") {
           y = pm.height / 2;
           geom = <cylinderGeometry args={[pm.radius, pm.radius, pm.height, 40]} />;
+        } else if (pm.shape === "polyhedron") {
+          // A computed solid (a 3D Render "Polyhedron" row): its faces are absolute scene coords, so no
+          // half-height lift — the transform is a pure offset.
+          y = 0;
+          geom = <PolyhedronGeom faces={pm.faces ?? []} />;
         } else {
           // cube
           y = pm.length / 2;
@@ -1038,10 +1280,13 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         const tf = pm.transform;
         // Display 3D style (colour / opacity / wireframe / edges) — defaults keep bare primitives visible.
         const ds = pm.display;
-        const mirrored = tf ? tf.mx * tf.my * tf.mz < 0 : false;
+        // A polyhedron's faces come from data, so their winding is whatever the author's ring order was —
+        // draw it double-sided rather than punching holes wherever a ring happens to be back-wound.
+        const mirrored = (tf ? tf.mx * tf.my * tf.mz < 0 : false) || pm.shape === "polyhedron";
         return (
           <mesh
             key={`prim-mass-${pm.id}`}
+            name={pm.layer ?? pm.id}
             position={[tf?.tx ?? 0, y + (tf?.ty ?? 0), tf?.tz ?? 0]}
             rotation={[tf?.rx ?? 0, tf?.ry ?? 0, tf?.rz ?? 0]}
             scale={[tf?.mx ?? 1, tf?.my ?? 1, tf?.mz ?? 1]}
@@ -1074,7 +1319,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
            selection list is shared with walls (a single id list keyed by room.id or wall.id).
            Low-poly mode: each room becomes a single flat ShapeGeometry plane (no extrusion, no
            per-floor stacking) for the schematic Graph view. */}
-      {slabRooms.filter((r) => Array.isArray(r.points) && r.points.length >= 3).flatMap((r) => {
+      {slabRooms.filter((r) => Array.isArray(r.points) && r.points.length >= 3 && (!objectsOnly || (r.attachments?.length ?? 0) > 0)).flatMap((r) => {
         const shape = new THREE.Shape(
           r.points.map((p) => {
             const [sx, sz] = toScene(p.x, p.y);
@@ -1498,7 +1743,7 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
               // Plot-boundary segments are rendered ONCE outside this per-floor stack (single
               // 2 m fence plane at ground level — see the dedicated low-poly block below).
               if (t === "plot-boundary") return false;
-              if (!isExtrudableWall(w)) return false;
+              if (!isExtrudableWall(w, objectsOnly)) return false;
               if ((w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId) return false;
               // Drop OptRect preview walls coincident with any Massing preview run.
               if (w.isMaxRectPreview && hasMassingPreview) return false;
@@ -1622,7 +1867,9 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         return Array.from({ length: globalFloors }, (_, fi) => (
           <group key={`walls-floor-${fi}`} position={[0, massingFloorBaseY(fi, floorH), 0]}>
       {model.walls.filter((w) => {
-        if (!isExtrudableWall(w)) return false;
+        if (!isExtrudableWall(w, objectsOnly)) return false;
+        // A hosted Wall object's band is built by the editor and arrives on `meshPreview` — see wallObjectSegIds.
+        if (wallObjectSegIds.has(w.id)) return false;
         if ((useSymbol || w.objectPrimitive3d) && (w.isPlacementWall || w.isPlacementPreview) && w.placementObjectId && w.placementKind) return false;
         // Union mode: plain walls are absorbed into the union extrusion above. Doors/windows still
         // need per-wall band extrusion so the lintel/sill show.

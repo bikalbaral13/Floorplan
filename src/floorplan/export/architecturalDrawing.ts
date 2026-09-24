@@ -19,8 +19,8 @@
 
 import type { Point, Wall, Room, NodeMeta } from "../types";
 import { objectKindDefaultSize, NODE_OBJECT_KINDS, type ObjectAnchor } from "../types";
-import { computeMiteredWallPolygons, computeMiteredUnion } from "../wallGeometry";
-import { columnFootprintPolygons, clipWallBandByColumns } from "../algorithms/geometry/columnClip";
+import { computeMiteredWallPolygons, computeMiteredUnion } from "@builderpluss/engine";
+import { columnFootprintPolygons, clipWallBandByColumns } from "@builderpluss/engine";
 
 // ─── Layer table (name + AutoCAD Color Index) ────────────────────────────────
 export const ARCH_LAYERS = {
@@ -32,6 +32,9 @@ export const ARCH_LAYERS = {
   COLS: { name: "Columns", colorIndex: 1 },
   FURN: { name: "Furniture", colorIndex: 4 },
   PLNT: { name: "Landscape", colorIndex: 92 },
+  /** Parametric object plan geometry — staircases, wells, vehicles, anything attached to a
+   *  segment / node / space. Its own layer so it can be frozen independently of the walls. */
+  OBJ: { name: "Objects", colorIndex: 6 },
   TEXT: { name: "Text", colorIndex: 7 },
   HATCH: { name: "Wall-Hatch", colorIndex: 8 },
 } as const;
@@ -50,6 +53,9 @@ export interface ArchHatch { layer: string; loops: [number, number][][]; }
 
 export interface ArchitecturalDrawing {
   units: "m";
+  /** DXF $INSUNITS code for the coordinates actually written (1 = inches, 2 = feet, 4 = mm, 5 = cm,
+   *  6 = metres). Omitted → metres, which is what the editor's own export emits. */
+  insUnits?: number;
   layers: ArchLayer[];
   polylines: ArchPolyline[];
   circles: ArchCircle[];
@@ -73,6 +79,17 @@ export interface BuildArchInput {
    *  `cutsWall` objects (column.v1). Subtracted from the wall band exactly like column footprints,
    *  so the DXF matches the canvas carve. */
   extraCarvePolys?: V[][];
+  /**
+   * Evaluated parametric-object plan geometry (world px), already resolved by the caller.
+   *
+   * The builder cannot produce this itself: evaluating an attachment needs the object library, the
+   * host anchor and the per-instance params, all of which live in editor state. Without it a plan
+   * whose content is objects — a staircase on a node, say — exported as an empty drawing, because
+   * walls, rooms, doors and columns were the only things this ever emitted.
+   *
+   * `closed` are filled outlines (emitted as closed polylines), `open` are stroke paths.
+   */
+  objectPolys?: { closed: V[][]; open: V[][] };
 }
 
 type V = { x: number; y: number };
@@ -355,6 +372,17 @@ export function buildArchitecturalDrawing(input: BuildArchInput): ArchitecturalD
     polylines.push({ layer: ARCH_LAYERS.FURN.name, closed: true, pts });
     const label = NODE_OBJECT_KINDS.find((k) => k.value === meta.objectKind)?.label;
     if (label) texts.push({ layer: ARCH_LAYERS.TEXT.name, pos: T(node), height: 0.18, text: label });
+  }
+
+  // ── Parametric objects ──────────────────────────────────────────────────────────────────────
+  // Already evaluated by the caller (see BuildArchInput.objectPolys) — this only transforms and
+  // files them. Degenerate rings are dropped rather than written as one- or two-point polylines,
+  // which some CAD readers reject outright.
+  for (const poly of input.objectPolys?.closed ?? []) {
+    if (poly.length >= 3) polylines.push({ layer: ARCH_LAYERS.OBJ.name, closed: true, pts: poly.map((p) => T(p)) });
+  }
+  for (const line of input.objectPolys?.open ?? []) {
+    if (line.length >= 2) polylines.push({ layer: ARCH_LAYERS.OBJ.name, closed: false, pts: line.map((p) => T(p)) });
   }
 
   return {

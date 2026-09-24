@@ -7,8 +7,8 @@
     "category": "Graph",
     "color": "#0d9488"
   },
-  "description": "A pure CALCULATION node — set a uniform wall thickness on every edge of a graph: graph in, graph out. Draws nothing on canvas.",
-  "instructions": "A value-only node: it takes a GRAPH as JSON and returns a graph as JSON with `thickness` (metres) set on EVERY edge to the parameter value. It has no geometry input or output and draws nothing on the canvas.\n\nINPUT: graph takes { \"nodes\": [{ \"id\", \"x\", \"y\" }, ...], \"edges\": [{ \"from_node_id\", \"to_node_id\" }, ...] } — coordinates in metres, local to the anchor. Wire BSP / Graph Reduce val-graph into valin-graph.\n\nOUTPUT: val-graph publishes the SAME graph (node ids + coordinates untouched) with every edge's `thickness` overwritten by the Thickness param. Wire it into another graph node, or into Merge Graph to combine graphs that carry different thicknesses.\n\nEvery parameter is wireable (valin-*).",
+  "description": "A pure CALCULATION node — set a uniform wall thickness (and optionally an edge type) on every edge of a graph: graph in, graph out. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a GRAPH as JSON and returns a graph as JSON with `thickness` (metres) set on EVERY edge to the parameter value. It has no geometry input or output and draws nothing on the canvas.\n\nINPUT: graph takes { \"nodes\": [{ \"id\", \"x\", \"y\" }, ...], \"edges\": [{ \"from_node_id\", \"to_node_id\" }, ...] } — coordinates in metres, local to the anchor. Wire BSP / Graph Reduce val-graph into valin-graph.\n\nOUTPUT: val-graph publishes the SAME graph (node ids + coordinates untouched) with every edge's `thickness` overwritten by the Thickness param. Wire it into another graph node, or into Merge Graph to combine graphs that carry different thicknesses.\n\nEDGE TYPE: the optional Edge type param additionally stamps `type` on every edge — \"wall\", \"door\", \"window\" or \"opening\". Leave it on \"(leave unchanged)\" to keep whatever type the incoming edges already carry. This is what lets ONE merged graph distinguish its families: tag an exterior-wall graph at 0.23 m / \"wall\", an interior-wall graph at 0.1 m / \"wall\", a door graph at 0.1 m / \"door\" and a window graph at 0.23 m / \"window\", then Merge Graph unions all four with each edge keeping its own width and type. Note that Mitered Join and Graph to Matrix both SKIP `type: \"opening\"` edges, so use \"door\" / \"window\" (not \"opening\") when the openings should still be stroked.\n\nEvery parameter is wireable (valin-*).",
   "handles": {
     "input": false,
     "output": false,
@@ -20,6 +20,10 @@
       {
         "key": "thickness",
         "label": "Thickness"
+      },
+      {
+        "key": "type",
+        "label": "Edge type"
       }
     ],
     "valueOutputs": [
@@ -53,6 +57,42 @@
       "max": 1,
       "step": 0.01,
       "unit": "m"
+    },
+    {
+      "key": "type",
+      "label": "Edge type",
+      "kind": "select",
+      "default": "",
+      "options": [
+        {
+          "value": "",
+          "label": "(leave unchanged)"
+        },
+        {
+          "value": "wall",
+          "label": "Wall"
+        },
+        {
+          "value": "door",
+          "label": "Door"
+        },
+        {
+          "value": "window",
+          "label": "Window"
+        },
+        {
+          "value": "room",
+          "label": "Room"
+        },
+        {
+          "value": "furniture",
+          "label": "Furniture"
+        },
+        {
+          "value": "opening",
+          "label": "Opening (skipped by Mitered Join)"
+        }
+      ]
     }
   ]
 }

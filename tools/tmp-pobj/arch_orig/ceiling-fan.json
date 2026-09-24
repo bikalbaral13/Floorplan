@@ -1,0 +1,795 @@
+{
+  "version": 1,
+  "id": "ceiling-fan-with-math",
+  "title": "Ceiling Fan — one Math Engine, down rod, hub and pitched blades",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Ceiling Fan",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M12 12a2 2 0 100-4 2 2 0 000 4",
+        "M12 8V3",
+        "M12 12c3 0 5 1 6 3",
+        "M12 12c-3 0-5 1-6 3",
+        "M10.5 10.5L6 8",
+        "M13.5 10.5L18 8"
+      ]
+    }
+  },
+  "description": "A parametric CEILING FAN on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A NODE and it hangs at that point from the ceiling height you set. Rotation spins the blade set about the down rod, which on a fan is a real setting rather than a placement detail.\n\nBLADE PITCH IS STEPPED, NOT FAKED. A quad prism is flat between one z0 and one z1, so a twisted blade cannot be a single quad. The blade is therefore cut into N CHORDWISE STRIPS, each a flat quad at its own elevation `_zm = base + f·chord·tan(pitch)` — a staircase approximation of the twist that converges as the step count rises, and collapses to a flat blade at 1 step. This is stated rather than hidden: at 4 steps it reads as a pitched blade; it is not an aerofoil.\n\nBLADES AND STRIPS ARE ONE BROADCAST. `kron(arange(blades), ones(steps,1))` gives every strip its blade angle and `kron(ones(blades,1), arange(steps))` its chord position, so a 3-blade and a 10-blade fan are the same seven lines. Each strip's four corners are the radial direction `(cos θ, sin θ)` and its perpendicular, combined with the strip's chord offsets — which is why a ROTATED blade needs no special case anywhere: the quad kernel takes arbitrary corners.\n\nTHE ROOT IS NARROWER THAN THE TIP by `bladeTaper`, applied only to the two hub-end corners, so the blade is a trapezoid — again free, because the kernel never assumed a rectangle.\n\nTHE LIGHT KIT IS A REVOLVE, NOT A SPHERE. A Sphere row is DIMENSIONED — its size lives in fields on the row that no wire can reach — so a computed dome has to be `mlathe`: a quarter-circle profile swept about the fan axis, which is parametric and renders down the same Polyhedron path.\n\nTHE PLAN IS A DRAFTING SYMBOL, which is what a plan wants: the swept circle at blade-tip radius, the blades over it, and the hub as a dot. All three are the same numbers the model is built from.\n\nSOLIDITY is the ratio of blade area to swept area — the number that actually characterises a fan — and it comes free from dimensions already present.\n\nDIMENSIONS AT THE DEFAULTS: a 1.42 m sweep on four 0.62 m blades at 12°, blades at 2.36 m, 1.58 m² swept, solidity 0.186, clear headroom 2.22 m.\n\nWHAT THIS CANNOT DO. Blades are flat plates with a stepped twist — no camber, no rake, no curved planform. The fan does not turn: there is no motion, only a rotation setting.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "blades",
+              "name": "Blades",
+              "type": "range",
+              "value": 4,
+              "min": 2,
+              "max": 10,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "bladeLength",
+              "name": "Blade length",
+              "type": "range",
+              "value": 0.62,
+              "min": 0.2,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "bladeChord",
+              "name": "Blade chord",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.05,
+              "max": 0.4,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "bladeThk",
+              "name": "Blade thickness",
+              "type": "range",
+              "value": 0.012,
+              "min": 0.004,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "bladeTaper",
+              "name": "Blade root / tip chord",
+              "type": "range",
+              "value": 0.7,
+              "min": 0.2,
+              "max": 1,
+              "step": 0.05,
+              "options": []
+            },
+            {
+              "id": "pitch",
+              "name": "Blade pitch (deg)",
+              "type": "range",
+              "value": 12,
+              "min": 0,
+              "max": 30,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "pitchSteps",
+              "name": "Pitch steps",
+              "type": "range",
+              "value": 4,
+              "min": 1,
+              "max": 10,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "hubRadius",
+              "name": "Hub radius",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.03,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "hubHeight",
+              "name": "Hub height",
+              "type": "range",
+              "value": 0.09,
+              "min": 0.03,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "rodLength",
+              "name": "Down rod length",
+              "type": "range",
+              "value": 0.3,
+              "min": 0,
+              "max": 1.5,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "rodRadius",
+              "name": "Down rod radius",
+              "type": "range",
+              "value": 0.015,
+              "min": 0.005,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "ceilingHeight",
+              "name": "Ceiling height",
+              "type": "range",
+              "value": 2.7,
+              "min": 1.8,
+              "max": 6,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "lightKit",
+              "name": "Light kit",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "lightRadius",
+              "name": "Light kit radius",
+              "type": "range",
+              "value": 0.11,
+              "min": 0.05,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Ceiling Fan maths",
+          "expr": "_natL = 2 * (hubRadius + bladeLength)\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_nb = max(2, round(blades))\n_bL = bladeLength * _s\n_ch = bladeChord * _s\n_bT = bladeThk * _s\n_hubR = hubRadius * _s\n_hubH = hubHeight * _s\n_rodL = rodLength * _s\n_rodR = rodRadius * _s\n_ceil = ceilingHeight * _s\n_ltR = lightRadius * _s\n_hubTop = _ceil - _rodL\n_hubBot = _hubTop - _hubH\n_bladeZ = _hubBot + _hubH / 2\n_span = 2 * (_hubR + _bL)\n_bodyL = _span\n_bodyW = _span\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n# Blades — every blade and every pitch step in ONE broadcast (kron pair, as in the curtain).\n# A blade is a quad from hub to tip; the pitch is expressed as N chordwise strips, each a flat\n# quad at its own elevation, so the twist is stepped rather than faked.\n_nst = max(1, round(pitchSteps))\n_bi = kron(arange(_nb), ones(_nst, 1))\n_sj = kron(ones(_nb, 1), arange(_nst))\n_th = _bi * 2 * PI / _nb\n_cth = cos(_th)\n_sth = sin(_th)\n_r0 = fill(rows(_bi), 1, _hubR * 0.9)\n_r1 = _r0 + _bL\n_f0 = _sj / _nst - 0.5\n_f1 = (_sj + 1) / _nst - 0.5\n_tp = tan(pitch * PI / 180)\n_c0 = _f0 * _ch\n_c1 = _f1 * _ch\n_tap = max(0.05, bladeTaper)\n_x1 = _r0 * _cth - _c0 * _tap * _sth\n_y1 = _r0 * _sth + _c0 * _tap * _cth\n_x2 = _r1 * _cth - _c0 * _sth\n_y2 = _r1 * _sth + _c0 * _cth\n_x3 = _r1 * _cth - _c1 * _sth\n_y3 = _r1 * _sth + _c1 * _cth\n_x4 = _r0 * _cth - _c1 * _tap * _sth\n_y4 = _r0 * _sth + _c1 * _tap * _cth\n_zm = _bladeZ + (_f0 + _f1) / 2 * _ch * _tp\nQ = hcat(_x1, _y1, _x2, _y2, _x3, _y3, _x4, _y4, _zm - _bT / 2, _zm + _bT / 2, fill(rows(_bi),1,1))\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBlades3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nBladesPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\n# Down rod, canopy and hub — vertical axis segments for Tube rows\n_ROD = hcat(0, 0, _hubTop, 0, 0, _ceil, _rodR)\n_CAN = hcat(0, 0, _ceil - 0.05 * _s, 0, 0, _ceil, _hubR * 0.7)\n_HUB = hcat(0, 0, _hubBot, 0, 0, _hubTop, _hubR)\n_t1u = _cu + col(_ROD,0)\n_t1v = _cv + col(_ROD,1)\n_t2u = _cu + col(_ROD,3)\n_t2v = _cv + col(_ROD,4)\nRod3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_ROD,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_ROD,5), col(_ROD,6))\n_t1u = _cu + col(_CAN,0)\n_t1v = _cv + col(_CAN,1)\n_t2u = _cu + col(_CAN,3)\n_t2v = _cv + col(_CAN,4)\nCanopy3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_CAN,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_CAN,5), col(_CAN,6))\n_t1u = _cu + col(_HUB,0)\n_t1v = _cv + col(_HUB,1)\n_t2u = _cu + col(_HUB,3)\n_t2v = _cv + col(_HUB,4)\nHub3D = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(_HUB,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(_HUB,5), col(_HUB,6))\n_wcx = _cu * _ux + _cv * _vx\n_wcy = _cu * _uy + _cv * _vy\n# Light kit — a revolved dome, because a Sphere row is DIMENSIONED and no wire can drive it\n_nls = 12\n_lk = arange(_nls) + 1\n_lth = PI / 2 * _lk / _nls\n_lt = _ltR * 0.85 * (1 - cos(_lth))\n_lr = _ltR * sin(_lth)\n_lprof = vcat(hcat(0, 0), hcat(_lt, _lr), hcat(_ltR * 0.85, 0))\n_lseg = hcat(_wcx, _wcy, _hubBot, _wcx, _wcy, _hubBot - 1)\n_LKr = mlathe(_lseg, _lprof, 24)\nLight3D = lightKit > 0 ? _LKr : zeros(0, 4)\n# Plan symbol — the hub as a circle with its own radius in the third column\nHubPlan = hcat(_wcx, _wcy, _hubR)\nSweepPlan = hcat(_wcx, _wcy, _hubR + _bL)\n# Metrics\nsweepDiameter = _span\nbladeCount = _nb\nbladeSpan = _bL\nsweptArea = PI * (_hubR + _bL) * (_hubR + _bL)\nbladeArea = _nb * _bL * _ch * (1 + _tap) / 2\nsolidity = sweptArea > 0 ? bladeArea / sweptArea : 0\nbladeElevation = _bladeZ\nhangDown = _ceil - (lightKit > 0 ? (_hubBot - _ltR * 0.85) : _hubBot)\nclearHeadroom = lightKit > 0 ? (_hubBot - _ltR * 0.85) : _hubBot"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Blades — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Light kit — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Down rod — tube"
+            },
+            {
+              "id": "s4",
+              "label": "Canopy — tube"
+            },
+            {
+              "id": "s5",
+              "label": "Hub — tube"
+            },
+            {
+              "id": "s6",
+              "label": "Blades — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Hub — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Sweep circle — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Sweep diameter (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Blades"
+            },
+            {
+              "id": "s11",
+              "label": "Blade length (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Swept area (m²)"
+            },
+            {
+              "id": "s13",
+              "label": "Blade area (m²)"
+            },
+            {
+              "id": "s14",
+              "label": "Solidity ratio"
+            },
+            {
+              "id": "s15",
+              "label": "Blade elevation (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Clear headroom (m)"
+            },
+            {
+              "id": "s17",
+              "label": "Hang-down from ceiling (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_sweep",
+              "kind": "circle",
+              "name": "Sweep circle",
+              "color": "#e2e8f0",
+              "layer": "Ceiling Fan",
+              "radius": 0.71,
+              "show": true
+            },
+            {
+              "id": "p2_blades",
+              "kind": "polygon",
+              "name": "Blades",
+              "color": "#78716c",
+              "layer": "Ceiling Fan",
+              "show": true
+            },
+            {
+              "id": "p2_hub",
+              "kind": "circle",
+              "name": "Hub",
+              "color": "#3f3f46",
+              "layer": "Ceiling Fan",
+              "radius": 0.09,
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_blades",
+              "kind": "polyhedron",
+              "name": "Blades",
+              "color": "#78716c",
+              "layer": "Ceiling Fan",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_hub",
+              "kind": "tube",
+              "name": "Hub",
+              "color": "#3f3f46",
+              "layer": "Ceiling Fan",
+              "radius": 0.09,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_rod",
+              "kind": "tube",
+              "name": "Down rod",
+              "color": "#52525b",
+              "layer": "Ceiling Fan",
+              "radius": 0.015,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_can",
+              "kind": "tube",
+              "name": "Canopy",
+              "color": "#52525b",
+              "layer": "Ceiling Fan",
+              "radius": 0.063,
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_light",
+              "kind": "polyhedron",
+              "name": "Light kit",
+              "color": "#fef3c7",
+              "layer": "Ceiling Fan",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_blades",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-blades",
+      "targetHandle": "valin-blades"
+    },
+    {
+      "id": "e_props_math_bladeLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bladeLength",
+      "targetHandle": "valin-bladeLength"
+    },
+    {
+      "id": "e_props_math_bladeChord",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bladeChord",
+      "targetHandle": "valin-bladeChord"
+    },
+    {
+      "id": "e_props_math_bladeThk",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bladeThk",
+      "targetHandle": "valin-bladeThk"
+    },
+    {
+      "id": "e_props_math_bladeTaper",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-bladeTaper",
+      "targetHandle": "valin-bladeTaper"
+    },
+    {
+      "id": "e_props_math_pitch",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pitch",
+      "targetHandle": "valin-pitch"
+    },
+    {
+      "id": "e_props_math_pitchSteps",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-pitchSteps",
+      "targetHandle": "valin-pitchSteps"
+    },
+    {
+      "id": "e_props_math_hubRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-hubRadius",
+      "targetHandle": "valin-hubRadius"
+    },
+    {
+      "id": "e_props_math_hubHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-hubHeight",
+      "targetHandle": "valin-hubHeight"
+    },
+    {
+      "id": "e_props_math_rodLength",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rodLength",
+      "targetHandle": "valin-rodLength"
+    },
+    {
+      "id": "e_props_math_rodRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rodRadius",
+      "targetHandle": "valin-rodRadius"
+    },
+    {
+      "id": "e_props_math_ceilingHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-ceilingHeight",
+      "targetHandle": "valin-ceilingHeight"
+    },
+    {
+      "id": "e_props_math_lightKit",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lightKit",
+      "targetHandle": "valin-lightKit"
+    },
+    {
+      "id": "e_props_math_lightRadius",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-lightRadius",
+      "targetHandle": "valin-lightRadius"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Blades3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Light3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Rod3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Canopy3D",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Hub3D",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-BladesPlan",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-HubPlan",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-SweepPlan",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sweepDiameter",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bladeCount",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bladeSpan",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-sweptArea",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bladeArea",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-solidity",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bladeElevation",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-clearHeadroom",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-hangDown",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_out_r2d_p2_sweep",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s8",
+      "targetHandle": "valin-p2_sweep"
+    },
+    {
+      "id": "e_out_r2d_p2_blades",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s6",
+      "targetHandle": "valin-p2_blades"
+    },
+    {
+      "id": "e_out_r2d_p2_hub",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s7",
+      "targetHandle": "valin-p2_hub"
+    },
+    {
+      "id": "e_out_r3d_p3_blades",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_blades"
+    },
+    {
+      "id": "e_out_r3d_p3_hub",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p3_hub"
+    },
+    {
+      "id": "e_out_r3d_p3_rod",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_rod"
+    },
+    {
+      "id": "e_out_r3d_p3_can",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p3_can"
+    },
+    {
+      "id": "e_out_r3d_p3_light",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_light"
+    }
+  ]
+}

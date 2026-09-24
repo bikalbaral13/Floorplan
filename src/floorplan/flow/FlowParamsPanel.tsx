@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FLOW_TOOLS, type FlowToolType, type ParamField } from "./flowTypes";
 import { PlaceObjectEditor } from "./PlaceObjectEditor";
 import { DimensionEdgesEditor } from "./DimensionEdgesEditor";
@@ -15,8 +16,20 @@ const CUSTOM_EDITOR_TOOLS = new Set<FlowToolType>(["place-object", "input-props"
 const PROPS_EDITOR_TOOLS = new Set<string>(["input-props", "pobj-source"]);
 
 /** Which canvas component the panel is surfacing flow params for. Each scope roots on a different
- *  input: Space → the "source" node; Node → Node/Canvas(out-1 Nodes); Segment → Segment/Canvas(out-2). */
-export type FlowParamsScope = "space" | "node" | "segment";
+ *  input: Space → the "source" node; Node → Node/Canvas(out-1 Nodes); Segment → Segment/Canvas(out-2);
+ *  Image → the Image node / Canvas(out-4 Images).
+ *
+ *  IMAGE is the odd one and deliberately behaves like SPACE, not like Node/Segment: the underlay is a
+ *  singleton (`history.state.imageUnderlay`), so there is no element id to scope a brief to and no
+ *  `graphAttrs` row to store a per-element override in. Its edits therefore go to the FLOW node — see
+ *  `perElement` below. */
+/*  CANVAS is the no-selection scope. The other four each root on a canvas COMPONENT, so they only have
+ *  something to say once one is selected; this one roots on the drawing as a whole, which is what an
+ *  Input Properties node already describes — its parameters are global, applied to whatever the flow
+ *  builds, not to any one wall or room. So when nothing is selected the Properties tab shows those
+ *  parameters rather than only the outliner, and a flow reading the canvas (Canvas / Plan JSON / a
+ *  Geometry node wired into Input Properties) is adjustable without first having to click something. */
+export type FlowParamsScope = "space" | "node" | "segment" | "image" | "canvas";
 
 /** Properties-tab renderer for the attached Flow. Surfaces the parameters of whatever node(s) the
  *  relevant input (Space source / Canvas Nodes / Canvas Segments) is wired to — so editing them here is
@@ -55,6 +68,14 @@ interface FlowParamsPanelProps {
    *  overlay. The toggle is hidden when `onToggleLive` is absent. */
   live?: boolean;
   onToggleLive?: () => void;
+  /** Press Detect on every Object Detection node the flow carries — the brief's own "Run", offered here so a
+   *  read-the-drawing pipeline can be driven from the Properties tab without opening the overlay. The button
+   *  appears only when the flow actually holds a detection node, so a flow with nothing to detect shows
+   *  nothing. Awaited, so the button can show its own progress. */
+  onRunAll?: () => void | Promise<void>;
+  /** What a `button` parameter fires from here — commit the flow's Set Object Param writes. Separate
+   *  from `onRunAll`, which is the Detect-all button and is gated on there being a detection node. */
+  onRunApply?: () => void | Promise<void>;
   /** Place Object node id + object index to emphasise — set while that object is dragged on the canvas,
    *  so its properties scroll into view and highlight here. */
   highlightNodeId?: string;
@@ -66,12 +87,18 @@ interface FlowParamsPanelProps {
  *  out-2 Segments). */
 const connectedInputNodes = (flow: SerializedFlow, scope: FlowParamsScope, elementId?: string): SerializedFlowNode[] => {
   const nodes = flow.nodes ?? [];
+  // Canvas scope has no root to walk from — nothing is selected, so there is no element for an edge to
+  // lead back to. Its content is the props nodes THEMSELVES: an Input Properties node is global by
+  // construction, one set of values for the whole flow, so every one of them belongs here. That also
+  // means no `elementId` filtering — there is no element to pin them to.
+  if (scope === "canvas") return nodes.filter((n) => PROPS_EDITOR_TOOLS.has(n.data?.tool ?? ""));
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const isRoot = (n: SerializedFlowNode | undefined, sourceHandle: string | null | undefined): boolean => {
     if (!n) return false;
     const tool = n.data?.tool;
     if (scope === "space") return tool === "source";
     if (scope === "node") return tool === "node-source" || (tool === "canvas-source" && sourceHandle === "out-1");
+    if (scope === "image") return tool === "image" || (tool === "canvas-source" && sourceHandle === "out-4");
     return tool === "segment-source" || (tool === "canvas-source" && sourceHandle === "out-2");
   };
   const targetIds = new Set<string>();
@@ -95,6 +122,10 @@ const ROOT_TOOLS: Record<FlowParamsScope, string[]> = {
   space: ["source"],
   node: ["node-source", "canvas-source"],
   segment: ["segment-source", "canvas-source"],
+  image: ["image", "canvas-source"],
+  // Canvas never reaches briefNodes (it short-circuits above), but the map is exhaustive over the scope
+  // union, so the entry has to exist. These are the roots that read the drawing as a whole.
+  canvas: ["canvas-source", "plan-json", "source", "graph-source"],
 };
 
 /** Does a root node reference the selected element? This is what scopes a brief to ONE component, so many
@@ -105,7 +136,9 @@ const ROOT_TOOLS: Record<FlowParamsScope, string[]> = {
  *  A pinned root with an EMPTY id references nothing, so it claims no element (rather than all of them). */
 const rootMatchesElement = (root: SerializedFlowNode | undefined, elementId?: string): boolean => {
   if (!root) return false;
-  if (root.data?.tool === "canvas-source") return true;
+  // Whole-canvas and Image roots reference their subject unconditionally — the canvas node reads every
+  // item of a kind, and the underlay is a singleton with no id to pin.
+  if (root.data?.tool === "canvas-source" || root.data?.tool === "image") return true;
   const params = (root.data?.params ?? {}) as Record<string, unknown>;
   if (params.grabFromSelection !== false) return true;
   if (!elementId) return true; // caller didn't scope → keep the old global behaviour
@@ -118,12 +151,32 @@ const rootMatchesElement = (root: SerializedFlowNode | undefined, elementId?: st
  *  carries no data — it declares "this parameter panel belongs to that component". When one is present it
  *  REPLACES the downstream ops in the panel: the brief is what the user tunes, and the ops are driven from
  *  its `val-*` wires (a param fed by a wire is overridden on every eval, so showing the op's own control
- *  there would be a lie). Scoped by `elementId` — a brief wired to the Node001 root shows only on Node001. */
+ *  there would be a lie). Scoped by `elementId` — a brief wired to the Node001 root shows only on Node001.
+ *
+ *  IMAGE reverses the edge, of necessity. Every other root has an input endpoint to hang the association
+ *  off; the Image node has `hasInput: false`, so nothing can be wired INTO it and the association form is
+ *  unreachable. What an image brief looks like instead is the real data path — `image val-matrix →
+ *  props valin-<id>`, the raster arriving on a text parameter — so for this scope the root is read as the
+ *  edge's SOURCE. The rule it earns is the same one: found this way the brief still replaces the ops, which
+ *  is what keeps a Vectorisation node's own sliders from showing beside the brief that drives them. */
 const briefNodes = (flow: SerializedFlow, scope: FlowParamsScope, elementId?: string): SerializedFlowNode[] => {
+  // A brief is a props node standing IN FOR a selected element. Canvas scope has no element, and its
+  // props nodes are the content rather than a stand-in, so it collects them in connectedInputNodes and
+  // never has a brief — returning some here would only duplicate them.
+  if (scope === "canvas") return [];
   const nodes = flow.nodes ?? [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const roots = ROOT_TOOLS[scope];
   const ids = new Set<string>();
+  if (scope === "image") {
+    for (const e of flow.edges ?? []) {
+      const root = byId.get(e.source);
+      if (!roots.includes(root?.data?.tool ?? "")) continue;
+      if (!rootMatchesElement(root, elementId)) continue;
+      if (PROPS_EDITOR_TOOLS.has(byId.get(e.target)?.data?.tool ?? "")) ids.add(e.target);
+    }
+    return nodes.filter((n) => ids.has(n.id));
+  }
   for (const e of flow.edges ?? []) {
     // `valin-*` is a value wire into one param — not an association. `gin-*` IS accepted: a Node root has no
     // plain input (`"input": false`), so its Stamp endpoint (the green dot) is the ONLY way to wire an
@@ -278,7 +331,10 @@ const Field = ({
   );
 };
 
-export const FlowParamsPanel = ({ flow, scope = "space", segmentType, attrs, elementId, attachedObjectIds, onParamChange, onFlowParamChange, onEdit, live, onToggleLive, highlightNodeId, highlightObjectIndex }: FlowParamsPanelProps) => {
+export const FlowParamsPanel = ({ flow, scope = "space", segmentType, attrs, elementId, attachedObjectIds, onParamChange, onFlowParamChange, onEdit, live, onToggleLive, onRunAll, onRunApply, highlightNodeId, highlightObjectIndex }: FlowParamsPanelProps) => {
+  // FIRST STATEMENT IN THE COMPONENT, deliberately: there is an early `return null` further down for a
+  // scope with no brief in it, and a hook below that bail would be skipped on exactly those renders.
+  const [runBusy, setRunBusy] = useState(false);
   // Hide type-specific segment processors that don't match the selected segment: a Door shows only
   // "Segment to Door" params, a Window only "Segment to Window" (other processors apply to any segment).
   // A props-driven node wired into this scope's root is the component's brief — it REPLACES the downstream
@@ -303,8 +359,16 @@ export const FlowParamsPanel = ({ flow, scope = "space", segmentType, attrs, ele
   ];
   if (inputNodes.length === 0) return null;
   // A brief is a single FLOW node shared by every component of this kind, so it is never per-element —
-  // its values live on the flow node, not on the selected element's graphAttrs.
-  const perElement = scope !== "space" && brief.length === 0;
+  // its values live on the flow node, not on the selected element's graphAttrs. Image scope is likewise
+  // never per-element: the underlay is a singleton with no graphAttrs row to write an override into.
+  // Canvas joins Space and Image as never-per-element: with nothing selected there is no graphAttrs row
+  // to write an override into, so an edit here is an edit to the FLOW node's own value — the default
+  // that every component built from it inherits.
+  const perElement = scope !== "space" && scope !== "image" && scope !== "canvas" && brief.length === 0;
+  // How many detection nodes "Run" would press. Read off the graph, not off a baked `_detectCount`: the
+  // mirrored graph this panel is given has every `_`-prefixed param stripped, so the node's own count never
+  // arrives here — and "does this flow detect anything" is a question about the flow either way.
+  const detectCount = (flow?.nodes ?? []).filter((n) => n.data?.tool === "object-detection").length;
   return (
     <div className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
       <div className="flex items-center justify-between">
@@ -331,6 +395,17 @@ export const FlowParamsPanel = ({ flow, scope = "space", segmentType, attrs, ele
           )}
         </div>
       </div>
+      {onRunAll && detectCount > 0 && (
+        <button
+          type="button"
+          disabled={runBusy}
+          className="h-7 w-full rounded border border-teal-600 bg-teal-600 px-2 text-[11px] font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+          onClick={() => { setRunBusy(true); void Promise.resolve(onRunAll()).finally(() => setRunBusy(false)); }}
+          title="Press Detect on every Object Detection node in this flow, in order."
+        >
+          {runBusy ? "Running…" : `Run — detect all (${detectCount})`}
+        </button>
+      )}
       {inputNodes.map((node) => {
         const def = FLOW_TOOLS[node.data.tool as FlowToolType];
         const params = node.data.params ?? {};
@@ -363,6 +438,8 @@ export const FlowParamsPanel = ({ flow, scope = "space", segmentType, attrs, ele
                 onParamChange={(key, val) => (onFlowParamChange ?? onParamChange)(node.id, key, val)}
                 valuesOnly
                 hideGated
+                // A `button` parameter here means the same thing it means on the node: solve, then commit.
+                onRunAction={onRunApply ? () => { void onRunApply(); } : undefined}
               />
             ) : (
               <>

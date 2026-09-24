@@ -1,0 +1,606 @@
+{
+  "version": 1,
+  "id": "dimension-with-math",
+  "title": "Dimension — a linear dimension on a segment, with its measured length",
+  "category": "Building",
+  "object": {
+    "hostKind": "segment",
+    "name": "Dimension"
+  },
+  "description": "A LINEAR DIMENSION attached to a wall segment, on the six-node spine:\n\n  Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render\n\nAttach it to a segment and it measures that segment: two extension lines standing off the host, a dimension line at `offset`, and an end mark at each end. `flip` puts it on the other side, so a run of dimensions along a boundary sits consistently outside it.\n\nLINE TYPE is geometry, not style. A Stroke row draws one band per segment, so Dashed and Dotted are built as N segments along the line rather than as a dash pattern — which is why they scale with the drawing instead of with the zoom.\n\nNO TEXT. 2D Render has three kinds — polygon, circle, stroke — and none of them letters a string, so this object cannot draw its own value on the canvas. The measured length is published as a metric instead: it reads out in the Properties panel, travels on a wire, and is what `show_value_only` leaves behind when it suppresses every drawn piece.\n\n3D is empty on purpose. A dimension is an annotation; it has no solid.",
+  "nodes": [
+    {
+      "id": "source",
+      "position": {
+        "x": -1040,
+        "y": 80
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -700,
+        "y": 80
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — dimensioned segment [[x1, y1], [x2, y2]]",
+              "type": "text",
+              "value": "[]",
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "color",
+              "name": "Colour",
+              "type": "select",
+              "value": "Black",
+              "options": [
+                "Black",
+                "Red",
+                "Blue",
+                "Green",
+                "Orange"
+              ],
+              "editable": true
+            },
+            {
+              "id": "offset",
+              "name": "Offset from segment (m)",
+              "type": "range",
+              "value": 0.4,
+              "min": -3,
+              "max": 3,
+              "step": 0.05,
+              "options": [],
+              "editable": true
+            },
+            {
+              "id": "flip",
+              "name": "Flip to the other side",
+              "type": "checkbox",
+              "value": false,
+              "options": [],
+              "editable": true
+            },
+            {
+              "id": "lineType",
+              "name": "Line type",
+              "type": "select",
+              "value": "Solid",
+              "options": [
+                "Solid",
+                "Dashed",
+                "Dotted"
+              ],
+              "editable": true
+            },
+            {
+              "id": "endType",
+              "name": "End marks",
+              "type": "select",
+              "value": "Arrow",
+              "options": [
+                "Arrow",
+                "Tick",
+                "Open",
+                "None"
+              ],
+              "editable": true
+            },
+            {
+              "id": "show_value_only",
+              "name": "Show value only (hide the rule)",
+              "type": "checkbox",
+              "value": false,
+              "options": [],
+              "editable": true
+            },
+            {
+              "id": "valueUnit",
+              "name": "Value unit",
+              "type": "select",
+              "value": "m",
+              "options": [
+                "m",
+                "mm"
+              ],
+              "editable": true
+            },
+            {
+              "id": "lineWeight",
+              "name": "Line weight (m)",
+              "type": "range",
+              "value": 0.001,
+              "min": 0.001,
+              "max": 0.05,
+              "step": 0.001,
+              "options": [],
+              "editable": true
+            },
+            {
+              "id": "markSize",
+              "name": "End mark size (m)",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.02,
+              "max": 0.5,
+              "step": 0.01,
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "extGap",
+              "name": "Extension-line gap (m)",
+              "type": "range",
+              "value": 0.05,
+              "min": 0,
+              "max": 0.3,
+              "step": 0.01,
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "extOver",
+              "name": "Extension-line overshoot (m)",
+              "type": "range",
+              "value": 0.08,
+              "min": 0,
+              "max": 0.4,
+              "step": 0.01,
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "dashLength",
+              "name": "Dash length (m)",
+              "type": "range",
+              "value": 0.15,
+              "min": 0.02,
+              "max": 1,
+              "step": 0.01,
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "dashGap",
+              "name": "Dash gap (m)",
+              "type": "range",
+              "value": 0.1,
+              "min": 0.02,
+              "max": 1,
+              "step": 0.01,
+              "options": [],
+              "editable": false
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "technical drafting annotation, precise, understated",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -240,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Dimension maths",
+          "expr": "# ── Host ─────────────────────────────────────────────────────────────────────\n# P arrives as the host segment's endpoints [[x1, y1], [x2, y2]] in metres, local to the anchor.\n# Only the FIRST TWO rows are read, so a host that arrives with more (a Space) dimensions its first\n# edge instead of failing outright. Every published figure and every drawn row is gated on _ok, so an\n# unhosted instance measures 0 and draws nothing rather than putting a phantom line at the origin.\n_n = rows(P)\n_hasP = _n >= 2 ? 1 : 0\n_Q = _hasP > 0 ? sub(P, 0, 0, 2, 2) : vcat(hcat(0, 0), hcat(0, 0))\n_a = row(_Q, 0)\n_b = row(_Q, 1)\n_v = _b - _a\n_L = min(len(_v))\n_ok = _hasP > 0 && _L > 1e-9 ? 1 : 0\n\n# Unit vector along the segment, and the perpendicular the dimension is offset along. `perp` of\n# (ux, uy) is (-uy, ux); `flip` mirrors it to the other side of the segment, which is what makes a\n# run of dimensions sit consistently outside a boundary rather than alternating.\n_u = _ok > 0 ? normalize(_v) : hcat(1, 0)\n_ux = min(col(_u, 0))\n_uy = min(col(_u, 1))\n_side = flip > 0 ? -1 : 1\n_nx = 0 - _uy * _side\n_ny = _ux * _side\n\n_ax = min(col(_a, 0))\n_ay = min(col(_a, 1))\n_bx = min(col(_b, 0))\n_by = min(col(_b, 1))\n\n# ── Dimension line ───────────────────────────────────────────────────────────\n# The measured line, parallel to the host at `offset`. A NEGATIVE offset is legal and puts it on the\n# other side; `_m` carries that sign so the extension lines below still run outward from the host\n# rather than back through it.\n_off = offset\n_m = _off >= 0 ? 1 : -1\n_A1x = _ax + _nx * _off\n_A1y = _ay + _ny * _off\n_B1x = _bx + _nx * _off\n_B1y = _by + _ny * _off\n\n# ── Extension lines ──────────────────────────────────────────────────────────\n# From just clear of the host point (`extGap` — the gap is what keeps the witness line from touching\n# the wall it measures) to just past the dimension line (`extOver`).\n# NOTE: every call stays on ONE LINE. The body is split on newlines before it is parsed, so a call\n# broken across lines is not a continuation — the opening line fails to parse and the rest is dropped\n# as \"not an assignment\", which shows up as a silent 0 rather than an error.\n_g0 = _m * extGap\n_g1 = _off + _m * extOver\n_ExtA = hcat(_ax + _nx * _g0, _ay + _ny * _g0, _ax + _nx * _g1, _ay + _ny * _g1)\n_ExtB = hcat(_bx + _nx * _g0, _by + _ny * _g0, _bx + _nx * _g1, _by + _ny * _g1)\n_Ext = vcat(_ExtA, _ExtB)\n\n# ── Line type: solid / dashed / dotted ───────────────────────────────────────\n# A Stroke row draws one band per segment, so a dashed line is not a style — it is N segments. Built\n# by BROADCAST rather than a loop: `arange` gives the dash index, and every dash's start and end come\n# out as a column. A dash that would start past the end of the line collapses to zero length, and the\n# renderer drops zero-length segments, so the count needs no exact fit.\n_solid = lineType == 'Solid'\n_dotted = lineType == 'Dotted'\n_dash = _dotted ? 0.02 : dashLength\n_gap = _dotted ? dashGap * 0.6 : dashGap\n_per = max(0.005, _dash + _gap)\n_nd = _solid ? 1 : min(400, max(1, floor(_L / _per) + 1))\n_t0 = _solid ? zeros(1, 1) : arange(_nd) * _per\n_t1 = _solid ? fill(1, 1, _L) : min(_t0 + _dash, _L)\n_Dim = hcat(_A1x + _ux * _t0, _A1y + _uy * _t0, _A1x + _ux * _t1, _A1y + _uy * _t1)\n\n# ── End marks ────────────────────────────────────────────────────────────────\n# `_h` is the half-length of a 45 degree tick; `_ah` / `_aw` are the length and half-width of an\n# arrowhead. Both heads point INWARD along the dimension line, which is why the barbs at B run along\n# -u while the ones at A run along +u.\n_h = markSize / 2\n_tx = (_ux + _nx) / sqrt(2)\n_ty = (_uy + _ny) / sqrt(2)\n_TickA = hcat(_A1x - _tx * _h, _A1y - _ty * _h, _A1x + _tx * _h, _A1y + _ty * _h)\n_TickB = hcat(_B1x - _tx * _h, _B1y - _ty * _h, _B1x + _tx * _h, _B1y + _ty * _h)\n_Tick = vcat(_TickA, _TickB)\n_ah = markSize\n_aw = markSize * 0.35\n_A2x = _A1x + _ux * _ah\n_A2y = _A1y + _uy * _ah\n_B2x = _B1x - _ux * _ah\n_B2y = _B1y - _uy * _ah\n_OpA1 = hcat(_A1x, _A1y, _A2x + _nx * _aw, _A2y + _ny * _aw)\n_OpA2 = hcat(_A1x, _A1y, _A2x - _nx * _aw, _A2y - _ny * _aw)\n_OpB1 = hcat(_B1x, _B1y, _B2x + _nx * _aw, _B2y + _ny * _aw)\n_OpB2 = hcat(_B1x, _B1y, _B2x - _nx * _aw, _B2y - _ny * _aw)\n_Open = vcat(_OpA1, _OpA2, _OpB1, _OpB2)\n# Filled heads are POLYGONS, not strokes: a third column groups the rows, so both triangles travel as\n# one list and the row draws them as two separate pieces.\n_HdA0 = hcat(_A1x, _A1y, 0)\n_HdA1 = hcat(_A2x + _nx * _aw, _A2y + _ny * _aw, 0)\n_HdA2 = hcat(_A2x - _nx * _aw, _A2y - _ny * _aw, 0)\n_HdB0 = hcat(_B1x, _B1y, 1)\n_HdB1 = hcat(_B2x + _nx * _aw, _B2y + _ny * _aw, 1)\n_HdB2 = hcat(_B2x - _nx * _aw, _B2y - _ny * _aw, 1)\n_Head = vcat(_HdA0, _HdA1, _HdA2, _HdB0, _HdB1, _HdB2)\n\n# ── The value ────────────────────────────────────────────────────────────────\n# The figure is NOT drawn here. An Output slot marked `showInCanvas` is rendered by the canvas as real\n# TEXT at the host's anchor — a segment's midpoint — so the measurement reads as type rather than as\n# geometry, and it stays upright and legible at any zoom. `valueUnit` picks what that number means:\n# metres to two decimals, or whole millimetres.\n_mm = valueUnit == 'mm'\nvalue = _mm ? round(_L * 1000) : round(_L * 100) / 100\n\n# ── What actually gets drawn ─────────────────────────────────────────────────\n# `show_value_only` drops the extension lines, the dimension line and the end marks. The measured\n# value is unaffected: it is canvas TEXT driven by the Output slot below, not geometry, so what is\n# left is a bare figure floating where the dimension would have been.\n_draw = _ok > 0 && show_value_only < 1 ? 1 : 0\n_arrow = endType == 'Arrow'\n_tick = endType == 'Tick'\n_open = endType == 'Open'\n_Marks = _tick ? _Tick : (_open ? _Open : zeros(0, 4))\n_Rule = _draw > 0 ? vcat(_Ext, _Dim, _Marks) : zeros(0, 4)\n# HAIRLINE. A Stroke row does not draw a line — it draws a BAND of the row's width, which the canvas\n# then outlines. At any useful zoom a band wide enough to see is wide enough to read as TWO parallel\n# lines with a wash between them, which is what a dimension must never look like. A fifth column gives\n# each segment its own width, so the band collapses to `lineWeight` (1 mm by default, the engine's\n# floor) and the two long edges land on the same pixel: one hairline, at whatever zoom.\n_lw = max(0.001, lineWeight)\n_nL = rows(_Rule)\n_Lines = _nL > 0 ? hcat(_Rule, fill(_nL, 1, _lw)) : zeros(0, 5)\n_Heads = _draw > 0 && _arrow ? _Head : zeros(0, 3)\n\n# ── Colour -> which row gets the geometry ────────────────────────────────────\n# A 2D Render row's colour is a property OF THE ROW: a Math Engine can only put numbers on a wire, so\n# one row cannot change hue on a condition. Five rows can, and the switch becomes a question of WHICH\n# ROW GETS THE GEOMETRY. Every other row receives an empty list and is skipped outright, so exactly\n# one colour is ever on screen and two can never stack.\nLinesBlack = color == 'Black' ? _Lines : zeros(0, 4)\nLinesRed = color == 'Red' ? _Lines : zeros(0, 4)\nLinesBlue = color == 'Blue' ? _Lines : zeros(0, 4)\nLinesGreen = color == 'Green' ? _Lines : zeros(0, 4)\nLinesOrange = color == 'Orange' ? _Lines : zeros(0, 4)\nHeadsBlack = color == 'Black' ? _Heads : zeros(0, 3)\nHeadsRed = color == 'Red' ? _Heads : zeros(0, 3)\nHeadsBlue = color == 'Blue' ? _Heads : zeros(0, 3)\nHeadsGreen = color == 'Green' ? _Heads : zeros(0, 3)\nHeadsOrange = color == 'Orange' ? _Heads : zeros(0, 3)\n\n# ── Metrics ──────────────────────────────────────────────────────────────────\nlength = _ok * _L\nlengthMm = _ok * _L * 1000\nbearing = _ok * min(angle(_v))\noffsetUsed = _ok * _off\nmidX = _ok * (_ax + _bx) / 2\nmidY = _ok * (_ay + _by) / 2\n"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 80
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s0",
+              "label": "Length",
+              "showInCanvas": true
+            },
+            {
+              "id": "s1",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s2",
+              "label": "Length (mm)"
+            },
+            {
+              "id": "s3",
+              "label": "Bearing (deg)"
+            },
+            {
+              "id": "s4",
+              "label": "Offset used (m)"
+            },
+            {
+              "id": "s5",
+              "label": "Midpoint X (m)"
+            },
+            {
+              "id": "s6",
+              "label": "Midpoint Y (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 660,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "dim_lines_black",
+              "kind": "stroke",
+              "name": "Dimension lines — Black",
+              "color": "#000000",
+              "layer": "",
+              "width": 0.001,
+              "show": true
+            },
+            {
+              "id": "dim_lines_red",
+              "kind": "stroke",
+              "name": "Dimension lines — Red",
+              "color": "#dc2626",
+              "layer": "",
+              "width": 0.001,
+              "show": true
+            },
+            {
+              "id": "dim_lines_blue",
+              "kind": "stroke",
+              "name": "Dimension lines — Blue",
+              "color": "#2563eb",
+              "layer": "",
+              "width": 0.001,
+              "show": true
+            },
+            {
+              "id": "dim_lines_green",
+              "kind": "stroke",
+              "name": "Dimension lines — Green",
+              "color": "#16a34a",
+              "layer": "",
+              "width": 0.001,
+              "show": true
+            },
+            {
+              "id": "dim_lines_orange",
+              "kind": "stroke",
+              "name": "Dimension lines — Orange",
+              "color": "#ea580c",
+              "layer": "",
+              "width": 0.001,
+              "show": true
+            },
+            {
+              "id": "dim_heads_black",
+              "kind": "polygon",
+              "name": "Arrowheads — Black",
+              "color": "#000000",
+              "layer": "",
+              "fillMode": "filled",
+              "show": true
+            },
+            {
+              "id": "dim_heads_red",
+              "kind": "polygon",
+              "name": "Arrowheads — Red",
+              "color": "#dc2626",
+              "layer": "",
+              "fillMode": "filled",
+              "show": true
+            },
+            {
+              "id": "dim_heads_blue",
+              "kind": "polygon",
+              "name": "Arrowheads — Blue",
+              "color": "#2563eb",
+              "layer": "",
+              "fillMode": "filled",
+              "show": true
+            },
+            {
+              "id": "dim_heads_green",
+              "kind": "polygon",
+              "name": "Arrowheads — Green",
+              "color": "#16a34a",
+              "layer": "",
+              "fillMode": "filled",
+              "show": true
+            },
+            {
+              "id": "dim_heads_orange",
+              "kind": "polygon",
+              "name": "Arrowheads — Orange",
+              "color": "#ea580c",
+              "layer": "",
+              "fillMode": "filled",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 950,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": []
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_source_points_props_P",
+      "source": "source",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_P_math",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_color_math",
+      "source": "props",
+      "sourceHandle": "val-color",
+      "target": "math",
+      "targetHandle": "valin-color"
+    },
+    {
+      "id": "e_props_offset_math",
+      "source": "props",
+      "sourceHandle": "val-offset",
+      "target": "math",
+      "targetHandle": "valin-offset"
+    },
+    {
+      "id": "e_props_flip_math",
+      "source": "props",
+      "sourceHandle": "val-flip",
+      "target": "math",
+      "targetHandle": "valin-flip"
+    },
+    {
+      "id": "e_props_lineType_math",
+      "source": "props",
+      "sourceHandle": "val-lineType",
+      "target": "math",
+      "targetHandle": "valin-lineType"
+    },
+    {
+      "id": "e_props_endType_math",
+      "source": "props",
+      "sourceHandle": "val-endType",
+      "target": "math",
+      "targetHandle": "valin-endType"
+    },
+    {
+      "id": "e_props_show_value_only_math",
+      "source": "props",
+      "sourceHandle": "val-show_value_only",
+      "target": "math",
+      "targetHandle": "valin-show_value_only"
+    },
+    {
+      "id": "e_props_valueUnit_math",
+      "source": "props",
+      "sourceHandle": "val-valueUnit",
+      "target": "math",
+      "targetHandle": "valin-valueUnit"
+    },
+    {
+      "id": "e_props_lineWeight_math",
+      "source": "props",
+      "sourceHandle": "val-lineWeight",
+      "target": "math",
+      "targetHandle": "valin-lineWeight"
+    },
+    {
+      "id": "e_props_markSize_math",
+      "source": "props",
+      "sourceHandle": "val-markSize",
+      "target": "math",
+      "targetHandle": "valin-markSize"
+    },
+    {
+      "id": "e_props_extGap_math",
+      "source": "props",
+      "sourceHandle": "val-extGap",
+      "target": "math",
+      "targetHandle": "valin-extGap"
+    },
+    {
+      "id": "e_props_extOver_math",
+      "source": "props",
+      "sourceHandle": "val-extOver",
+      "target": "math",
+      "targetHandle": "valin-extOver"
+    },
+    {
+      "id": "e_props_dashLength_math",
+      "source": "props",
+      "sourceHandle": "val-dashLength",
+      "target": "math",
+      "targetHandle": "valin-dashLength"
+    },
+    {
+      "id": "e_props_dashGap_math",
+      "source": "props",
+      "sourceHandle": "val-dashGap",
+      "target": "math",
+      "targetHandle": "valin-dashGap"
+    },
+    {
+      "id": "e_math_value_out_s0",
+      "source": "math",
+      "sourceHandle": "val-value",
+      "target": "out",
+      "targetHandle": "valin-s0"
+    },
+    {
+      "id": "e_math_length_out_s1",
+      "source": "math",
+      "sourceHandle": "val-length",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_lengthMm_out_s2",
+      "source": "math",
+      "sourceHandle": "val-lengthMm",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_bearing_out_s3",
+      "source": "math",
+      "sourceHandle": "val-bearing",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_offsetUsed_out_s4",
+      "source": "math",
+      "sourceHandle": "val-offsetUsed",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_midX_out_s5",
+      "source": "math",
+      "sourceHandle": "val-midX",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_midY_out_s6",
+      "source": "math",
+      "sourceHandle": "val-midY",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_LinesBlack_r2d",
+      "source": "math",
+      "sourceHandle": "val-LinesBlack",
+      "target": "r2d",
+      "targetHandle": "valin-dim_lines_black"
+    },
+    {
+      "id": "e_math_LinesRed_r2d",
+      "source": "math",
+      "sourceHandle": "val-LinesRed",
+      "target": "r2d",
+      "targetHandle": "valin-dim_lines_red"
+    },
+    {
+      "id": "e_math_LinesBlue_r2d",
+      "source": "math",
+      "sourceHandle": "val-LinesBlue",
+      "target": "r2d",
+      "targetHandle": "valin-dim_lines_blue"
+    },
+    {
+      "id": "e_math_LinesGreen_r2d",
+      "source": "math",
+      "sourceHandle": "val-LinesGreen",
+      "target": "r2d",
+      "targetHandle": "valin-dim_lines_green"
+    },
+    {
+      "id": "e_math_LinesOrange_r2d",
+      "source": "math",
+      "sourceHandle": "val-LinesOrange",
+      "target": "r2d",
+      "targetHandle": "valin-dim_lines_orange"
+    },
+    {
+      "id": "e_math_HeadsBlack_r2d",
+      "source": "math",
+      "sourceHandle": "val-HeadsBlack",
+      "target": "r2d",
+      "targetHandle": "valin-dim_heads_black"
+    },
+    {
+      "id": "e_math_HeadsRed_r2d",
+      "source": "math",
+      "sourceHandle": "val-HeadsRed",
+      "target": "r2d",
+      "targetHandle": "valin-dim_heads_red"
+    },
+    {
+      "id": "e_math_HeadsBlue_r2d",
+      "source": "math",
+      "sourceHandle": "val-HeadsBlue",
+      "target": "r2d",
+      "targetHandle": "valin-dim_heads_blue"
+    },
+    {
+      "id": "e_math_HeadsGreen_r2d",
+      "source": "math",
+      "sourceHandle": "val-HeadsGreen",
+      "target": "r2d",
+      "targetHandle": "valin-dim_heads_green"
+    },
+    {
+      "id": "e_math_HeadsOrange_r2d",
+      "source": "math",
+      "sourceHandle": "val-HeadsOrange",
+      "target": "r2d",
+      "targetHandle": "valin-dim_heads_orange"
+    }
+  ]
+}

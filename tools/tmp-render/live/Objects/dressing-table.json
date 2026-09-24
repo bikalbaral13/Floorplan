@@ -1,0 +1,740 @@
+{
+  "version": 1,
+  "id": "dressing-table-with-math",
+  "title": "Dressing Table — one Math Engine, top, drawers, mirror",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Dressing Table",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 14h16",
+        "M4 14v6",
+        "M20 14v6",
+        "M12 3m-5 0a5 5 0 1010 0 5 5 0 10-10 0",
+        "M7 17h4"
+      ]
+    }
+  },
+  "description": "A parametric DRESSING TABLE on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nTWO MIRROR SHAPES, TWO GEOMETRIES. A rectangular mirror is a quad row like everything else; a round one is a 24-point ring, because it is the one part of this object the quad table cannot express. They are separate slots with separate rows, and \"None\" empties both — so the shape is a real choice rather than a rectangle with rounded corners drawn on it.\n\nTHE MIRROR STANDS ON THE BACK EDGE, not on the object's centre, so a dressing table pushed against a wall puts its mirror on that wall. It is drawn in plan as a thin sliver at the back edge, which is what a plan should show — the mirror is a vertical thing and pretending otherwise clutters the drawing.\n\nKNEE CLEARANCE is published because it is the figure that decides whether a chair fits: the underside of the drawer band, not the underside of the top.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Width",
+              "type": "range",
+              "value": 1.1,
+              "min": 0.6,
+              "max": 1.8,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.45,
+              "min": 0.3,
+              "max": 0.7,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Top height",
+              "type": "range",
+              "value": 0.75,
+              "min": 0.6,
+              "max": 0.95,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "topThk",
+              "name": "Top thickness",
+              "type": "range",
+              "value": 0.03,
+              "min": 0.015,
+              "max": 0.08,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "legSize",
+              "name": "Leg size",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.02,
+              "max": 0.12,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "drawerHeight",
+              "name": "Drawer band height",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.06,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "mirrorWidth",
+              "name": "Mirror width",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.2,
+              "max": 1.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "mirrorHeight",
+              "name": "Mirror height",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.3,
+              "max": 1.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "mirrorShape",
+              "name": "Mirror shape",
+              "type": "select",
+              "value": "Round",
+              "options": [
+                "Round",
+                "Rectangular",
+                "None"
+              ]
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "white dressing table with round mirror, two drawers, slim tapered legs",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Dressing Table maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Wd = width * _s\n_Ht = height * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_tT = min(topThk * _s, _Ht * 0.2)\n_lg = legSize * _s\n_dH = min(drawerHeight * _s, _Ht * 0.4)\n_topZ0 = _Ht - _tT\n_drwZ1 = _topZ0\n_drwZ0 = _topZ0 - _dH\n_mW = min(mirrorWidth * _s, _Ln)\n_mH = mirrorHeight * _s\n_round = mirrorShape == 'Round' ? 1 : 0\n_rect = mirrorShape == 'Rectangular' ? 1 : 0\n_mR = min(_mW, _mH) / 2\n_mz0 = _Ht + 0.06 * _s\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_TOP = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _topZ0, _Ht, 1)\n_DRW = hcat(_u0 + 0.06 * _s, _v0, _u1 - 0.06 * _s, _v0, _u1 - 0.06 * _s, _v1 - 0.02 * _s, _u0 + 0.06 * _s, _v1 - 0.02 * _s, _drwZ0, _drwZ1, 2)\n_L1 = hcat(_u0, _v0, _u0 + _lg, _v0, _u0 + _lg, _v0 + _lg, _u0, _v0 + _lg, 0, _topZ0, 3)\n_L2 = hcat(_u1 - _lg, _v0, _u1, _v0, _u1, _v0 + _lg, _u1 - _lg, _v0 + _lg, 0, _topZ0, 3)\n_L3 = hcat(_u1 - _lg, _v1 - _lg, _u1, _v1 - _lg, _u1, _v1, _u1 - _lg, _v1, 0, _topZ0, 3)\n_L4 = hcat(_u0, _v1 - _lg, _u0 + _lg, _v1 - _lg, _u0 + _lg, _v1, _u0, _v1, 0, _topZ0, 3)\n_LEGS = vcat(vcat(_L1, _L2), vcat(_L3, _L4))\n_MRQ = hcat(0 - _mW / 2, _v1 - 0.03 * _s, _mW / 2, _v1 - 0.03 * _s, _mW / 2, _v1, 0 - _mW / 2, _v1, _mz0, _mz0 + _mH, 4)\n_MIR = _rect > 0 ? _MRQ : zeros(0, 11)\nQ = vcat(vcat(_TOP, _DRW), vcat(_LEGS, _MIR))\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nTop3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nTopPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nDrawers3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nDrawersPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nLegs3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nLegsPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nMirror3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nMirrorPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\n_mk = arange(24)\n_mt = _mk * 2 * PI / 24\n_mL = hcat(_mR * cos(_mt), (_v1 - 0.015 * _s) + 0.015 * _s * sin(_mt))\n_mW2 = hcat((_cu + col(_mL,0)) * _ux + (_cv + col(_mL,1)) * _vx, (_cu + col(_mL,0)) * _uy + (_cv + col(_mL,1)) * _vy)\nMirrorRoundPlan = _round > 0 ? _mW2 : zeros(0, 2)\nMirrorRound3D = _round > 0 ? mprism(_mW2, _mz0, _mz0 + 2 * _mR) : zeros(0, 4)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\ntopLevel = _Ht\nmirrorArea = _round > 0 ? PI * _mR * _mR : (_rect > 0 ? _mW * _mH : 0)\nkneeClear = _drwZ0"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Top — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Drawer band — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Legs — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Mirror (rect) — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Mirror (round) — solid"
+            },
+            {
+              "id": "s6",
+              "label": "Top — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Drawer band — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Legs — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Mirror (rect) — plan"
+            },
+            {
+              "id": "s10",
+              "label": "Mirror (round) — plan"
+            },
+            {
+              "id": "s11",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Top level (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Mirror area (m²)"
+            },
+            {
+              "id": "s17",
+              "label": "Knee clearance (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_top",
+              "kind": "polygon",
+              "name": "Top",
+              "color": "#f5f5f4",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_drawers",
+              "kind": "polygon",
+              "name": "Drawer band",
+              "color": "#e7e5e4",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_legs",
+              "kind": "polygon",
+              "name": "Legs",
+              "color": "#a8a29e",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_mirror",
+              "kind": "polygon",
+              "name": "Mirror (rect)",
+              "color": "#bae6fd",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_mirrorround",
+              "kind": "polygon",
+              "name": "Mirror (round)",
+              "color": "#bae6fd",
+              "layer": "Furniture",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_top",
+              "kind": "polyhedron",
+              "name": "Top",
+              "color": "#f5f5f4",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_drawers",
+              "kind": "polyhedron",
+              "name": "Drawer band",
+              "color": "#e7e5e4",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_legs",
+              "kind": "polyhedron",
+              "name": "Legs",
+              "color": "#a8a29e",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_mirror",
+              "kind": "polyhedron",
+              "name": "Mirror (rect)",
+              "color": "#bae6fd",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_mirrorround",
+              "kind": "polyhedron",
+              "name": "Mirror (round)",
+              "color": "#bae6fd",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-length__math_valin-length",
+      "source": "props",
+      "sourceHandle": "val-length",
+      "target": "math",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-height__math_valin-height",
+      "source": "props",
+      "sourceHandle": "val-height",
+      "target": "math",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e6_props_val-topThk__math_valin-topThk",
+      "source": "props",
+      "sourceHandle": "val-topThk",
+      "target": "math",
+      "targetHandle": "valin-topThk"
+    },
+    {
+      "id": "e7_props_val-legSize__math_valin-legSize",
+      "source": "props",
+      "sourceHandle": "val-legSize",
+      "target": "math",
+      "targetHandle": "valin-legSize"
+    },
+    {
+      "id": "e8_props_val-drawerHeight__math_valin-drawerHeight",
+      "source": "props",
+      "sourceHandle": "val-drawerHeight",
+      "target": "math",
+      "targetHandle": "valin-drawerHeight"
+    },
+    {
+      "id": "e9_props_val-mirrorWidth__math_valin-mirrorWidth",
+      "source": "props",
+      "sourceHandle": "val-mirrorWidth",
+      "target": "math",
+      "targetHandle": "valin-mirrorWidth"
+    },
+    {
+      "id": "e10_props_val-mirrorHeight__math_valin-mirrorHeight",
+      "source": "props",
+      "sourceHandle": "val-mirrorHeight",
+      "target": "math",
+      "targetHandle": "valin-mirrorHeight"
+    },
+    {
+      "id": "e11_props_val-mirrorShape__math_valin-mirrorShape",
+      "source": "props",
+      "sourceHandle": "val-mirrorShape",
+      "target": "math",
+      "targetHandle": "valin-mirrorShape"
+    },
+    {
+      "id": "e12_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e13_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e14_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e15_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e16_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e17_math_val-Top3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Top3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e18_out_val-s1__r3d_valin-p3_top",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_top"
+    },
+    {
+      "id": "e19_math_val-Drawers3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Drawers3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e20_out_val-s2__r3d_valin-p3_drawers",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_drawers"
+    },
+    {
+      "id": "e21_math_val-Legs3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Legs3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e22_out_val-s3__r3d_valin-p3_legs",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_legs"
+    },
+    {
+      "id": "e23_math_val-Mirror3D__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-Mirror3D",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e24_out_val-s4__r3d_valin-p3_mirror",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r3d",
+      "targetHandle": "valin-p3_mirror"
+    },
+    {
+      "id": "e25_math_val-MirrorRound3D__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-MirrorRound3D",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e26_out_val-s5__r3d_valin-p3_mirrorround",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r3d",
+      "targetHandle": "valin-p3_mirrorround"
+    },
+    {
+      "id": "e27_math_val-TopPlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-TopPlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e28_out_val-s6__r2d_valin-p2_top",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_top"
+    },
+    {
+      "id": "e29_math_val-DrawersPlan__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-DrawersPlan",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e30_out_val-s7__r2d_valin-p2_drawers",
+      "source": "out",
+      "sourceHandle": "val-s7",
+      "target": "r2d",
+      "targetHandle": "valin-p2_drawers"
+    },
+    {
+      "id": "e31_math_val-LegsPlan__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-LegsPlan",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e32_out_val-s8__r2d_valin-p2_legs",
+      "source": "out",
+      "sourceHandle": "val-s8",
+      "target": "r2d",
+      "targetHandle": "valin-p2_legs"
+    },
+    {
+      "id": "e33_math_val-MirrorPlan__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-MirrorPlan",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e34_out_val-s9__r2d_valin-p2_mirror",
+      "source": "out",
+      "sourceHandle": "val-s9",
+      "target": "r2d",
+      "targetHandle": "valin-p2_mirror"
+    },
+    {
+      "id": "e35_math_val-MirrorRoundPlan__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-MirrorRoundPlan",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e36_out_val-s10__r2d_valin-p2_mirrorround",
+      "source": "out",
+      "sourceHandle": "val-s10",
+      "target": "r2d",
+      "targetHandle": "valin-p2_mirrorround"
+    },
+    {
+      "id": "e37_math_val-overallLength__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e38_math_val-overallWidth__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e39_math_val-overallHeight__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e40_math_val-footprint__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e41_math_val-topLevel__out_valin-s15",
+      "source": "math",
+      "sourceHandle": "val-topLevel",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e42_math_val-mirrorArea__out_valin-s16",
+      "source": "math",
+      "sourceHandle": "val-mirrorArea",
+      "target": "out",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e43_math_val-kneeClear__out_valin-s17",
+      "source": "math",
+      "sourceHandle": "val-kneeClear",
+      "target": "out",
+      "targetHandle": "valin-s17"
+    }
+  ]
+}

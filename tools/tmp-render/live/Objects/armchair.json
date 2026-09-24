@@ -1,0 +1,769 @@
+{
+  "version": 1,
+  "id": "armchair-with-math",
+  "title": "Armchair — one Math Engine, seat, back, arms, legs",
+  "category": "Furniture",
+  "object": {
+    "hostKind": "node",
+    "name": "Armchair",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M5 11V7a2 2 0 012-2h10a2 2 0 012 2v4",
+        "M4 11h16v6H4z",
+        "M4 11a1 1 0 012 0v6",
+        "M18 11a1 1 0 012 0v6",
+        "M6 17v3",
+        "M18 17v3"
+      ]
+    }
+  },
+  "description": "A parametric ARMCHAIR on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nTHE ARMS EAT INTO THE SEAT, which is the detail that makes the published seat area honest. The cushion runs between the arms and behind the back, not across the whole footprint, so a chair with fat arms reports the smaller seat it actually has rather than the box it occupies.\n\nTHREE STYLES on one ternary: an Armchair with arms at arm height, a Tub chair whose arms rise to meet the back, and a Bench with neither back nor arms. The frame, cushion and legs are identical in all three — a bench is not a different object, it is this one with two pieces emptied.\n\nSEAT DEPTH AND FRONT CLEARANCE are published rather than drawn. Depth is what decides comfort, clearance is what decides whether the chair can be got out of, and neither is visible in a plan.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "length",
+              "name": "Width",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.5,
+              "max": 1.4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Depth",
+              "type": "range",
+              "value": 0.85,
+              "min": 0.5,
+              "max": 1.2,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Back height",
+              "type": "range",
+              "value": 0.8,
+              "min": 0.5,
+              "max": 1.3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "seatHeight",
+              "name": "Seat height",
+              "type": "range",
+              "value": 0.42,
+              "min": 0.25,
+              "max": 0.6,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "seatThk",
+              "name": "Cushion thickness",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.05,
+              "max": 0.3,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "backThk",
+              "name": "Back thickness",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.05,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "armWidth",
+              "name": "Arm width",
+              "type": "range",
+              "value": 0.14,
+              "min": 0.06,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "armHeight",
+              "name": "Arm height",
+              "type": "range",
+              "value": 0.62,
+              "min": 0.3,
+              "max": 0.9,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "legHeight",
+              "name": "Leg height",
+              "type": "range",
+              "value": 0.12,
+              "min": 0.02,
+              "max": 0.35,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "style",
+              "name": "Style",
+              "type": "select",
+              "value": "Armchair",
+              "options": [
+                "Armchair",
+                "Tub chair",
+                "Bench (no back)"
+              ]
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "mid-century armchair, boucle upholstery, walnut splayed legs",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Armchair maths",
+          "expr": "_natL = length\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_Ln = length * _s\n_Wd = width * _s\n_Ht = height * _s\n_bodyL = _Ln\n_bodyW = _Wd\n_u0 = 0 - _Ln / 2\n_u1 = _Ln / 2\n_v0 = 0 - _Wd / 2\n_v1 = _Wd / 2\n_seatZ = min(seatHeight * _s, _Ht * 0.8)\n_sT = min(seatThk * _s, _seatZ * 0.9)\n_bT = min(backThk * _s, _Wd * 0.4)\n_aW = min(armWidth * _s, _Ln * 0.35)\n_aH = min(armHeight * _s, _Ht)\n_lgH = min(legHeight * _s, _seatZ - _sT)\n_noBack = style == 'Bench (no back)' ? 1 : 0\n_isTub = style == 'Tub chair' ? 1 : 0\n_backZ1 = _noBack > 0 ? _seatZ : _Ht\n_armZ1 = _isTub > 0 ? min(_Ht, _aH + 0.08 * _s) : _aH\n_lg = max(0.03 * _s, _aW * 0.4)\n_seatZ0 = _seatZ - _sT\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_FRM = hcat(_u0, _v0, _u1, _v0, _u1, _v1, _u0, _v1, _lgH, _seatZ0, 1)\n_CUS = hcat(_u0 + _aW, _v0 + _bT, _u1 - _aW, _v0 + _bT, _u1 - _aW, _v1, _u0 + _aW, _v1, _seatZ0, _seatZ, 2)\n_BCK = hcat(_u0, _v0, _u1, _v0, _u1, _v0 + _bT, _u0, _v0 + _bT, _seatZ0, _backZ1, 3)\n_BK = _noBack > 0 ? zeros(0, 11) : _BCK\n_A1 = hcat(_u0, _v0, _u0 + _aW, _v0, _u0 + _aW, _v1, _u0, _v1, _seatZ0, _armZ1, 4)\n_A2 = hcat(_u1 - _aW, _v0, _u1, _v0, _u1, _v1, _u1 - _aW, _v1, _seatZ0, _armZ1, 4)\n_ARM = _noBack > 0 ? zeros(0, 11) : vcat(_A1, _A2)\n_G1 = hcat(_u0, _v0, _u0 + _lg, _v0, _u0 + _lg, _v0 + _lg, _u0, _v0 + _lg, 0, _lgH, 5)\n_G2 = hcat(_u1 - _lg, _v0, _u1, _v0, _u1, _v0 + _lg, _u1 - _lg, _v0 + _lg, 0, _lgH, 5)\n_G3 = hcat(_u1 - _lg, _v1 - _lg, _u1, _v1 - _lg, _u1, _v1, _u1 - _lg, _v1, 0, _lgH, 5)\n_G4 = hcat(_u0, _v1 - _lg, _u0 + _lg, _v1 - _lg, _u0 + _lg, _v1, _u0, _v1, 0, _lgH, 5)\n_LEG = vcat(vcat(_G1, _G2), vcat(_G3, _G4))\nQ = vcat(vcat(_FRM, _CUS), vcat(_BK, vcat(_ARM, _LEG)))\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nFrame3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nFramePlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nCushion3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nCushionPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nBack3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nBackPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\nArms3D = sub(compress(_W, eq(col(_W,4), 4)), 0, 0, _nw, 4)\nArmsPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\nLegs3D = sub(compress(_W, eq(col(_W,4), 5)), 0, 0, _nw, 4)\nLegsPlan = sub(compress(_WP, eq(col(_WP,3), 5)), 0, 0, _nwp, 3)\n# Metrics\noverallLength = _Ln\noverallWidth = _Wd\noverallHeight = _Ht\nfootprint = _Ln * _Wd\nseatLevel = _seatZ\nseatArea = max(0, _Ln - 2 * _aW) * max(0, _Wd - _bT)\nseatDepth = max(0, _Wd - _bT)\nfrontClear = 0.45 * _s"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Frame — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Seat cushion — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Back — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Arms — solid"
+            },
+            {
+              "id": "s5",
+              "label": "Legs — solid"
+            },
+            {
+              "id": "s6",
+              "label": "Frame — plan"
+            },
+            {
+              "id": "s7",
+              "label": "Seat cushion — plan"
+            },
+            {
+              "id": "s8",
+              "label": "Back — plan"
+            },
+            {
+              "id": "s9",
+              "label": "Arms — plan"
+            },
+            {
+              "id": "s10",
+              "label": "Legs — plan"
+            },
+            {
+              "id": "s11",
+              "label": "Length (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Depth (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Height (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Footprint (m²)"
+            },
+            {
+              "id": "s15",
+              "label": "Seat level (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Seat area (m²)"
+            },
+            {
+              "id": "s17",
+              "label": "Seat depth (m)"
+            },
+            {
+              "id": "s18",
+              "label": "Clearance in front (m)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_frame",
+              "kind": "polygon",
+              "name": "Frame",
+              "color": "#9a8478",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_cushion",
+              "kind": "polygon",
+              "name": "Seat cushion",
+              "color": "#d6c7bb",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_back",
+              "kind": "polygon",
+              "name": "Back",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_arms",
+              "kind": "polygon",
+              "name": "Arms",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "show": true
+            },
+            {
+              "id": "p2_legs",
+              "kind": "polygon",
+              "name": "Legs",
+              "color": "#57534e",
+              "layer": "Furniture",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_frame",
+              "kind": "polyhedron",
+              "name": "Frame",
+              "color": "#9a8478",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_cushion",
+              "kind": "polyhedron",
+              "name": "Seat cushion",
+              "color": "#d6c7bb",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_back",
+              "kind": "polyhedron",
+              "name": "Back",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_arms",
+              "kind": "polyhedron",
+              "name": "Arms",
+              "color": "#c4b2a4",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_legs",
+              "kind": "polyhedron",
+              "name": "Legs",
+              "color": "#57534e",
+              "layer": "Furniture",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1_geo_val-points__props_valin-P",
+      "source": "geo",
+      "sourceHandle": "val-points",
+      "target": "props",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e2_props_val-P__math_valin-P",
+      "source": "props",
+      "sourceHandle": "val-P",
+      "target": "math",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e3_props_val-length__math_valin-length",
+      "source": "props",
+      "sourceHandle": "val-length",
+      "target": "math",
+      "targetHandle": "valin-length"
+    },
+    {
+      "id": "e4_props_val-width__math_valin-width",
+      "source": "props",
+      "sourceHandle": "val-width",
+      "target": "math",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e5_props_val-height__math_valin-height",
+      "source": "props",
+      "sourceHandle": "val-height",
+      "target": "math",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e6_props_val-seatHeight__math_valin-seatHeight",
+      "source": "props",
+      "sourceHandle": "val-seatHeight",
+      "target": "math",
+      "targetHandle": "valin-seatHeight"
+    },
+    {
+      "id": "e7_props_val-seatThk__math_valin-seatThk",
+      "source": "props",
+      "sourceHandle": "val-seatThk",
+      "target": "math",
+      "targetHandle": "valin-seatThk"
+    },
+    {
+      "id": "e8_props_val-backThk__math_valin-backThk",
+      "source": "props",
+      "sourceHandle": "val-backThk",
+      "target": "math",
+      "targetHandle": "valin-backThk"
+    },
+    {
+      "id": "e9_props_val-armWidth__math_valin-armWidth",
+      "source": "props",
+      "sourceHandle": "val-armWidth",
+      "target": "math",
+      "targetHandle": "valin-armWidth"
+    },
+    {
+      "id": "e10_props_val-armHeight__math_valin-armHeight",
+      "source": "props",
+      "sourceHandle": "val-armHeight",
+      "target": "math",
+      "targetHandle": "valin-armHeight"
+    },
+    {
+      "id": "e11_props_val-legHeight__math_valin-legHeight",
+      "source": "props",
+      "sourceHandle": "val-legHeight",
+      "target": "math",
+      "targetHandle": "valin-legHeight"
+    },
+    {
+      "id": "e12_props_val-style__math_valin-style",
+      "source": "props",
+      "sourceHandle": "val-style",
+      "target": "math",
+      "targetHandle": "valin-style"
+    },
+    {
+      "id": "e13_props_val-rotation__math_valin-rotation",
+      "source": "props",
+      "sourceHandle": "val-rotation",
+      "target": "math",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e14_props_val-anchorDir__math_valin-anchorDir",
+      "source": "props",
+      "sourceHandle": "val-anchorDir",
+      "target": "math",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e15_props_val-fitMode__math_valin-fitMode",
+      "source": "props",
+      "sourceHandle": "val-fitMode",
+      "target": "math",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e16_props_val-margin__math_valin-margin",
+      "source": "props",
+      "sourceHandle": "val-margin",
+      "target": "math",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e17_props_val-flipSide__math_valin-flipSide",
+      "source": "props",
+      "sourceHandle": "val-flipSide",
+      "target": "math",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e18_math_val-Frame3D__out_valin-s1",
+      "source": "math",
+      "sourceHandle": "val-Frame3D",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e19_out_val-s1__r3d_valin-p3_frame",
+      "source": "out",
+      "sourceHandle": "val-s1",
+      "target": "r3d",
+      "targetHandle": "valin-p3_frame"
+    },
+    {
+      "id": "e20_math_val-Cushion3D__out_valin-s2",
+      "source": "math",
+      "sourceHandle": "val-Cushion3D",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e21_out_val-s2__r3d_valin-p3_cushion",
+      "source": "out",
+      "sourceHandle": "val-s2",
+      "target": "r3d",
+      "targetHandle": "valin-p3_cushion"
+    },
+    {
+      "id": "e22_math_val-Back3D__out_valin-s3",
+      "source": "math",
+      "sourceHandle": "val-Back3D",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e23_out_val-s3__r3d_valin-p3_back",
+      "source": "out",
+      "sourceHandle": "val-s3",
+      "target": "r3d",
+      "targetHandle": "valin-p3_back"
+    },
+    {
+      "id": "e24_math_val-Arms3D__out_valin-s4",
+      "source": "math",
+      "sourceHandle": "val-Arms3D",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e25_out_val-s4__r3d_valin-p3_arms",
+      "source": "out",
+      "sourceHandle": "val-s4",
+      "target": "r3d",
+      "targetHandle": "valin-p3_arms"
+    },
+    {
+      "id": "e26_math_val-Legs3D__out_valin-s5",
+      "source": "math",
+      "sourceHandle": "val-Legs3D",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e27_out_val-s5__r3d_valin-p3_legs",
+      "source": "out",
+      "sourceHandle": "val-s5",
+      "target": "r3d",
+      "targetHandle": "valin-p3_legs"
+    },
+    {
+      "id": "e28_math_val-FramePlan__out_valin-s6",
+      "source": "math",
+      "sourceHandle": "val-FramePlan",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e29_out_val-s6__r2d_valin-p2_frame",
+      "source": "out",
+      "sourceHandle": "val-s6",
+      "target": "r2d",
+      "targetHandle": "valin-p2_frame"
+    },
+    {
+      "id": "e30_math_val-CushionPlan__out_valin-s7",
+      "source": "math",
+      "sourceHandle": "val-CushionPlan",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e31_out_val-s7__r2d_valin-p2_cushion",
+      "source": "out",
+      "sourceHandle": "val-s7",
+      "target": "r2d",
+      "targetHandle": "valin-p2_cushion"
+    },
+    {
+      "id": "e32_math_val-BackPlan__out_valin-s8",
+      "source": "math",
+      "sourceHandle": "val-BackPlan",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e33_out_val-s8__r2d_valin-p2_back",
+      "source": "out",
+      "sourceHandle": "val-s8",
+      "target": "r2d",
+      "targetHandle": "valin-p2_back"
+    },
+    {
+      "id": "e34_math_val-ArmsPlan__out_valin-s9",
+      "source": "math",
+      "sourceHandle": "val-ArmsPlan",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e35_out_val-s9__r2d_valin-p2_arms",
+      "source": "out",
+      "sourceHandle": "val-s9",
+      "target": "r2d",
+      "targetHandle": "valin-p2_arms"
+    },
+    {
+      "id": "e36_math_val-LegsPlan__out_valin-s10",
+      "source": "math",
+      "sourceHandle": "val-LegsPlan",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e37_out_val-s10__r2d_valin-p2_legs",
+      "source": "out",
+      "sourceHandle": "val-s10",
+      "target": "r2d",
+      "targetHandle": "valin-p2_legs"
+    },
+    {
+      "id": "e38_math_val-overallLength__out_valin-s11",
+      "source": "math",
+      "sourceHandle": "val-overallLength",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e39_math_val-overallWidth__out_valin-s12",
+      "source": "math",
+      "sourceHandle": "val-overallWidth",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e40_math_val-overallHeight__out_valin-s13",
+      "source": "math",
+      "sourceHandle": "val-overallHeight",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e41_math_val-footprint__out_valin-s14",
+      "source": "math",
+      "sourceHandle": "val-footprint",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e42_math_val-seatLevel__out_valin-s15",
+      "source": "math",
+      "sourceHandle": "val-seatLevel",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e43_math_val-seatArea__out_valin-s16",
+      "source": "math",
+      "sourceHandle": "val-seatArea",
+      "target": "out",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e44_math_val-seatDepth__out_valin-s17",
+      "source": "math",
+      "sourceHandle": "val-seatDepth",
+      "target": "out",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e45_math_val-frontClear__out_valin-s18",
+      "source": "math",
+      "sourceHandle": "val-frontClear",
+      "target": "out",
+      "targetHandle": "valin-s18"
+    }
+  ]
+}

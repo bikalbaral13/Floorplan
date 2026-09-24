@@ -1,0 +1,13 @@
+{
+ "pxPerFoot": 44.21652974124124,
+ "pixelsPerMeter": 145.06735479409855,
+ "residuals": {
+  "M. BEDROOM  13'0\" (x)": 0.004186519497283214,
+  "M. BEDROOM  12'3\" (y)": -0.037372659950378306,
+  "M. bedroom window 5'0\"": -0.04710113431320906,
+  "M. bedroom entry door 3'0\"": -0.03730707121018417,
+  "BEDROOM lower-right 11'8\" (x)": -0.019438740508229913,
+  "BEDROOM lower-left 13'0\" (x)": 0.004186519497283214,
+  "BEDROOM lower-left 12'0\" (y)": 0.07693148071573752
+ }
+}

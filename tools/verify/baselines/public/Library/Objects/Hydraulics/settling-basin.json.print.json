@@ -1,0 +1,252 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 3,
+          "vertices": 12,
+          "area": 686.0429,
+          "bbox": [
+            -27.0713,
+            -3.8355,
+            23.3713,
+            3.8355
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "8229dd9383bc8b34"
+      },
+      "solids": {
+        "count": 8,
+        "volume": 1073.5214,
+        "hash": "8fdcfb90d585bb3f"
+      },
+      "metrics": [
+        {
+          "key": "settlingVelocity",
+          "name": "Settling velocity (m/s)",
+          "value": "0.0257"
+        },
+        {
+          "key": "particleSize",
+          "name": "Particle size (mm)",
+          "value": "0.2"
+        },
+        {
+          "key": "chamberLength",
+          "name": "Chamber length (m)",
+          "value": "46.1426"
+        },
+        {
+          "key": "chamberWidth",
+          "name": "Chamber width (m)",
+          "value": "7.0711"
+        },
+        {
+          "key": "waterDepth",
+          "name": "Water depth (m)",
+          "value": "2.357"
+        },
+        {
+          "key": "totalDepth",
+          "name": "Total depth (m)",
+          "value": "2.957"
+        },
+        {
+          "key": "settlingTime",
+          "name": "Settling time (s)",
+          "value": "128.1739"
+        },
+        {
+          "key": "horizontalVelocity",
+          "name": "Horizontal velocity (m/s)",
+          "value": "0.3"
+        },
+        {
+          "key": "surfaceArea",
+          "name": "Surface area (m²)",
+          "value": "326.2774"
+        },
+        {
+          "key": "surfaceLoading",
+          "name": "Surface loading (m/s)",
+          "value": "0.0153"
+        },
+        {
+          "key": "retentionTime",
+          "name": "Retention time (s)",
+          "value": "153.8086"
+        },
+        {
+          "key": "storageVolume",
+          "name": "Storage volume (m³)",
+          "value": "97.8832"
+        },
+        {
+          "key": "waterVolume",
+          "name": "Water volume (m³)",
+          "value": "769.0431"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "203.0466"
+        },
+        {
+          "key": "excavationVolume",
+          "name": "Excavation volume (m³)",
+          "value": "1167.8561"
+        },
+        {
+          "key": "inletLengthOut",
+          "name": "Inlet length (m)",
+          "value": "4"
+        },
+        {
+          "key": "efficiencyFactor",
+          "name": "Turbulence factor",
+          "value": "1.4"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 3,
+          "vertices": 12,
+          "area": 686.0429,
+          "bbox": [
+            -27.0713,
+            -3.8355,
+            23.3713,
+            3.8355
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "8229dd9383bc8b34"
+      },
+      "solids": {
+        "count": 8,
+        "volume": 1073.5214,
+        "hash": "8fdcfb90d585bb3f"
+      },
+      "metrics": [
+        {
+          "key": "settlingVelocity",
+          "name": "Settling velocity (m/s)",
+          "value": "0.0257"
+        },
+        {
+          "key": "particleSize",
+          "name": "Particle size (mm)",
+          "value": "0.2"
+        },
+        {
+          "key": "chamberLength",
+          "name": "Chamber length (m)",
+          "value": "46.1426"
+        },
+        {
+          "key": "chamberWidth",
+          "name": "Chamber width (m)",
+          "value": "7.0711"
+        },
+        {
+          "key": "waterDepth",
+          "name": "Water depth (m)",
+          "value": "2.357"
+        },
+        {
+          "key": "totalDepth",
+          "name": "Total depth (m)",
+          "value": "2.957"
+        },
+        {
+          "key": "settlingTime",
+          "name": "Settling time (s)",
+          "value": "128.1739"
+        },
+        {
+          "key": "horizontalVelocity",
+          "name": "Horizontal velocity (m/s)",
+          "value": "0.3"
+        },
+        {
+          "key": "surfaceArea",
+          "name": "Surface area (m²)",
+          "value": "326.2774"
+        },
+        {
+          "key": "surfaceLoading",
+          "name": "Surface loading (m/s)",
+          "value": "0.0153"
+        },
+        {
+          "key": "retentionTime",
+          "name": "Retention time (s)",
+          "value": "153.8086"
+        },
+        {
+          "key": "storageVolume",
+          "name": "Storage volume (m³)",
+          "value": "97.8832"
+        },
+        {
+          "key": "waterVolume",
+          "name": "Water volume (m³)",
+          "value": "769.0431"
+        },
+        {
+          "key": "concreteVolume",
+          "name": "Concrete volume (m³)",
+          "value": "203.0466"
+        },
+        {
+          "key": "excavationVolume",
+          "name": "Excavation volume (m³)",
+          "value": "1167.8561"
+        },
+        {
+          "key": "inletLengthOut",
+          "name": "Inlet length (m)",
+          "value": "4"
+        },
+        {
+          "key": "efficiencyFactor",
+          "name": "Turbulence factor",
+          "value": "1.4"
+        }
+      ]
+    }
+  }
+}

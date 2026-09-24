@@ -1,0 +1,732 @@
+{
+  "version": 1,
+  "id": "wall-art-with-math",
+  "title": "Wall Art — one Math Engine, framed pieces arranged as a row, a pair, a triptych or a grid",
+  "category": "Architectural",
+  "object": {
+    "hostKind": "segment",
+    "name": "Wall Art",
+    "units": "m",
+    "icon": {
+      "paths": [
+        "M4 4h7v7H4z",
+        "M13 4h7v7h-7z",
+        "M4 13h7v7H4z",
+        "M13 13h7v7h-7z"
+      ]
+    }
+  },
+  "description": "A parametric WALL ART arrangement on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SEGMENT. It hangs one piece or a whole wall of them, which is why the plan's \"one framed art piece or a pair of decorative panels\" is one object and not a decision taken at modelling time.\n\nARRANGEMENT SETS THE COUNTS AND NOTHING ELSE. `_nc` and `_nr` are the only two numbers the five arrangements disagree about — Single is 1 × 1, Pair is 2 × 1, Triptych is 3 × 1, Row is `count` × 1, Grid is `count` × `rows`. Every piece position, the overall size and all the metrics are written in those two, so there is no fifth body hiding anywhere.\n\nEVERY PIECE IS ONE BROADCAST. `kron(arange(_nc), ones(_nr,1))` crossed with `kron(ones(_nc,1), arange(_nr))` is every column-and-row pair at once, so a 1 × 1 single and a 4 × 3 grid take the identical path.\n\nTHE FRAME CORNERS BUTT, THEY DO NOT OVERLAP. The stiles run full height and the rails sit between them, so no millimetre of frame is counted twice and the mitre-free joint is the honest one for a box frame.\n\nTHE HANG IS FROM THE CENTRE. `centreHeight` is the centre of the whole arrangement, not of the first piece — so adding a row grows the group about its centre line and the hang stays where you put it.\n\nTHE MAT IS A SECOND FRAME INSIDE THE FIRST, in its own group. Turn it off and the art sheet takes the full opening, because the art's bounds are written in terms of the mat width, which is then zero.\n\nDIMENSIONS AT THE DEFAULTS: one 0.60 × 0.90 m piece centred at 1.50 m, 40 mm frame, 50 mm mat, 0.54 m² of wall covered and 0.30 m² of visible art.\n\nWHAT THIS CANNOT DO. Every piece is the same size — a salon hang of mixed frames is several of these. Frames are rectangular and square-sectioned, with no moulding profile, and there is no glass, no reflection and no canvas wrap.",
+  "nodes": [
+    {
+      "id": "geo",
+      "position": {
+        "x": -960,
+        "y": 60
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -640,
+        "y": 60
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "P",
+              "name": "Host — node / segment / space [[x, y], …]",
+              "type": "text",
+              "value": "[[0, 0]]",
+              "options": []
+            },
+            {
+              "id": "width",
+              "name": "Piece width",
+              "type": "range",
+              "value": 0.6,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "height",
+              "name": "Piece height",
+              "type": "range",
+              "value": 0.9,
+              "min": 0.1,
+              "max": 3,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "centreHeight",
+              "name": "Centre height",
+              "type": "range",
+              "value": 1.5,
+              "min": 0.2,
+              "max": 4,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "arrangement",
+              "name": "Arrangement",
+              "type": "select",
+              "value": "Single",
+              "options": [
+                "Single",
+                "Pair",
+                "Triptych",
+                "Row",
+                "Grid"
+              ]
+            },
+            {
+              "id": "count",
+              "name": "Columns",
+              "type": "range",
+              "value": 3,
+              "min": 1,
+              "max": 8,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "rows",
+              "name": "Rows",
+              "type": "range",
+              "value": 2,
+              "min": 1,
+              "max": 6,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "spacing",
+              "name": "Spacing",
+              "type": "range",
+              "value": 0.1,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "frameWidth",
+              "name": "Frame width",
+              "type": "range",
+              "value": 0.04,
+              "min": 0.005,
+              "max": 0.2,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "frameDepth",
+              "name": "Frame depth",
+              "type": "range",
+              "value": 0.035,
+              "min": 0.005,
+              "max": 0.15,
+              "step": 0.002,
+              "options": []
+            },
+            {
+              "id": "showMat",
+              "name": "Mount / mat board",
+              "type": "checkbox",
+              "value": true,
+              "options": []
+            },
+            {
+              "id": "matWidth",
+              "name": "Mat width",
+              "type": "range",
+              "value": 0.05,
+              "min": 0.01,
+              "max": 0.25,
+              "step": 0.005,
+              "options": []
+            },
+            {
+              "id": "artDepth",
+              "name": "Art sheet thickness",
+              "type": "range",
+              "value": 0.008,
+              "min": 0.002,
+              "max": 0.05,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "rotation",
+              "name": "Rotation (deg)",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 360,
+              "step": 1,
+              "options": []
+            },
+            {
+              "id": "anchorDir",
+              "name": "Anchor Direction",
+              "type": "select",
+              "value": "Center",
+              "options": [
+                "Top-Left",
+                "Top-Center",
+                "Top-Right",
+                "Left-Center",
+                "Center",
+                "Right-Center",
+                "Bottom-Left",
+                "Bottom-Center",
+                "Bottom-Right"
+              ]
+            },
+            {
+              "id": "fitMode",
+              "name": "Fit to host",
+              "type": "select",
+              "value": "Off",
+              "options": [
+                "Off",
+                "Max",
+                "Exact"
+              ]
+            },
+            {
+              "id": "margin",
+              "name": "Margin from host",
+              "type": "range",
+              "value": 0,
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "options": []
+            },
+            {
+              "id": "flipSide",
+              "name": "Flip side",
+              "type": "checkbox",
+              "value": false,
+              "options": []
+            },
+            {
+              "id": "material",
+              "name": "Material",
+              "type": "text",
+              "value": "stained oak frame, ivory mount board, matte print",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            },
+            {
+              "id": "semantics",
+              "name": "Semantics",
+              "type": "text",
+              "value": "understated framed artwork, neutral tones, gallery hang, calm",
+              "min": 0,
+              "max": 10,
+              "step": 1,
+              "options": [],
+              "editable": true,
+              "showInCanvas": false,
+              "necessary": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -180,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Wall Art maths",
+          "expr": "# Arrangement is the ONLY thing that sets the counts; everything after is written in _nc / _nr.\n_isSingle = arrangement == 'Single'\n_isPair = arrangement == 'Pair'\n_isTri = arrangement == 'Triptych'\n_isGrid = arrangement == 'Grid'\n_nc = _isSingle ? 1 : (_isPair ? 2 : (_isTri ? 3 : max(1, round(count))))\n_nr = _isGrid ? max(1, round(rows)) : 1\n_sp = spacing\n_natL = _nc * width + (_nc - 1) * _sp\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_w = width * _s\n_h = height * _s\n_gap = _sp * _s\n_fw = min(frameWidth * _s, min(_w, _h) / 4)\n_fd = frameDepth * _s\n_ad = artDepth * _s\n_mw = showMat > 0 ? min(matWidth * _s, min(_w, _h) / 2 - _fw - 0.005) : 0\n_TW = _nc * _w + (_nc - 1) * _gap\n_TH = _nr * _h + (_nr - 1) * _gap\n_bodyL = _TW\n_bodyW = _fd\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\n_v1 = _fd / 2\n_wall = _v1\n_fv0 = _wall - _fd\n# Every piece's corner in one broadcast — columns crossed with rows.\n_N = _nc * _nr\n_ic = kron(arange(_nc), ones(_nr, 1))\n_ir = kron(ones(_nc, 1), arange(_nr))\n_pu0 = 0 - _TW / 2 + _ic * (_w + _gap)\n_pu1 = _pu0 + _w\n_pz0 = centreHeight - _TH / 2 + _ir * (_h + _gap)\n_pz1 = _pz0 + _h\n_one = fill(_N, 1, 1)\n_vA = _one * _fv0\n_vB = _one * _wall\n# Frame — four rails per piece. Left and right run the full height; top and bottom sit between\n# them, so the corners butt rather than overlap and the frame area is not double-counted.\n_RL1 = hcat(_pu0, _vA, _pu0 + _fw, _vA, _pu0 + _fw, _vB, _pu0, _vB, _pz0, _pz1, _one)\n_FR = hcat(_pu1 - _fw, _vA, _pu1, _vA, _pu1, _vB, _pu1 - _fw, _vB, _pz0, _pz1, _one)\n_FB = hcat(_pu0 + _fw, _vA, _pu1 - _fw, _vA, _pu1 - _fw, _vB, _pu0 + _fw, _vB, _pz0, _pz0 + _fw, _one)\n_FT = hcat(_pu0 + _fw, _vA, _pu1 - _fw, _vA, _pu1 - _fw, _vB, _pu0 + _fw, _vB, _pz1 - _fw, _pz1, _one)\n_FRAME = vcat(_RL1, _FR, _FB, _FT)\n# Mat board — a second frame just inside the first, in its own group so it can be a different\n# colour without being a different body.\n_mu0 = _pu0 + _fw\n_mu1 = _pu1 - _fw\n_mz0 = _pz0 + _fw\n_mz1 = _pz1 - _fw\n_mv0 = _one * (_wall - _fd * 0.55)\n_mvB = _one * (_wall - _fd * 0.35)\n_two = _one * 2\n_ML = hcat(_mu0, _mv0, _mu0 + _mw, _mv0, _mu0 + _mw, _mvB, _mu0, _mvB, _mz0, _mz1, _two)\n_MR = hcat(_mu1 - _mw, _mv0, _mu1, _mv0, _mu1, _mvB, _mu1 - _mw, _mvB, _mz0, _mz1, _two)\n_MB = hcat(_mu0 + _mw, _mv0, _mu1 - _mw, _mv0, _mu1 - _mw, _mvB, _mu0 + _mw, _mvB, _mz0, _mz0 + _mw, _two)\n_MT = hcat(_mu0 + _mw, _mv0, _mu1 - _mw, _mv0, _mu1 - _mw, _mvB, _mu0 + _mw, _mvB, _mz1 - _mw, _mz1, _two)\n_MAT = _mw > 0.001 ? vcat(_ML, _MR, _MB, _MT) : zeros(0, 11)\n# Art sheet — inside the mat if there is one, otherwise inside the frame.\n_au0 = _mu0 + _mw\n_au1 = _mu1 - _mw\n_az0 = _mz0 + _mw\n_az1 = _mz1 - _mw\n_av0 = _one * (_wall - _fd * 0.4 - _ad)\n_av1 = _one * (_wall - _fd * 0.4)\n_three = _one * 3\n_ART = hcat(_au0, _av0, _au1, _av0, _au1, _av1, _au0, _av1, _az0, _az1, _three)\nQ = vcat(_FRAME, _MAT, _ART)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nFrames3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nMats3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nArt3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nFramesPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nArtPlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\n# Metrics\npieceCount = _N\ncolumns = _nc\nrowCount = _nr\npieceWidth = _w\npieceHeight = _h\ntotalWidth = _TW\ntotalHeight = _TH\nbottomOfFrame = centreHeight - _TH / 2\ntopOfFrame = centreHeight + _TH / 2\nprojection = _fd\ncoverageArea = _TW * _TH\nartArea = sum(max(0, _au1 - _au0) * max(0, _az1 - _az0))"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 240,
+        "y": 60
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Frames — solid"
+            },
+            {
+              "id": "s2",
+              "label": "Mats — solid"
+            },
+            {
+              "id": "s3",
+              "label": "Art — solid"
+            },
+            {
+              "id": "s4",
+              "label": "Frames — plan"
+            },
+            {
+              "id": "s5",
+              "label": "Art — plan"
+            },
+            {
+              "id": "s6",
+              "label": "Pieces"
+            },
+            {
+              "id": "s7",
+              "label": "Columns"
+            },
+            {
+              "id": "s8",
+              "label": "Rows"
+            },
+            {
+              "id": "s9",
+              "label": "Piece width (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Piece height (m)"
+            },
+            {
+              "id": "s11",
+              "label": "Overall width (m)"
+            },
+            {
+              "id": "s12",
+              "label": "Overall height (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Bottom of arrangement (m)"
+            },
+            {
+              "id": "s14",
+              "label": "Top of arrangement (m)"
+            },
+            {
+              "id": "s15",
+              "label": "Projection from wall (m)"
+            },
+            {
+              "id": "s16",
+              "label": "Wall coverage (m²)"
+            },
+            {
+              "id": "s17",
+              "label": "Visible art area (m²)"
+            },
+            {
+              "id": "s18",
+              "label": "Fit scale"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r2d",
+      "position": {
+        "x": 620,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-2d",
+        "params": {
+          "prims": [
+            {
+              "id": "p2_fr",
+              "kind": "polygon",
+              "name": "Frames",
+              "color": "#57534e",
+              "layer": "Wall art",
+              "show": true
+            },
+            {
+              "id": "p2_art",
+              "kind": "polygon",
+              "name": "Art",
+              "color": "#d6d3d1",
+              "layer": "Wall art",
+              "show": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "r3d",
+      "position": {
+        "x": 900,
+        "y": -80
+      },
+      "data": {
+        "tool": "render-3d",
+        "params": {
+          "prims": [
+            {
+              "id": "p3_fr",
+              "kind": "polyhedron",
+              "name": "Frames",
+              "color": "#6e4b31",
+              "layer": "Wall art",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_mat",
+              "kind": "polyhedron",
+              "name": "Mats",
+              "color": "#f8f6f1",
+              "layer": "Wall art",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            },
+            {
+              "id": "p3_art",
+              "kind": "polyhedron",
+              "name": "Art",
+              "color": "#b8b5ae",
+              "layer": "Wall art",
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "show": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_geo_props",
+      "source": "geo",
+      "target": "props",
+      "sourceHandle": "val-points",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_P",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-P",
+      "targetHandle": "valin-P"
+    },
+    {
+      "id": "e_props_math_width",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-width",
+      "targetHandle": "valin-width"
+    },
+    {
+      "id": "e_props_math_height",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-height",
+      "targetHandle": "valin-height"
+    },
+    {
+      "id": "e_props_math_centreHeight",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-centreHeight",
+      "targetHandle": "valin-centreHeight"
+    },
+    {
+      "id": "e_props_math_arrangement",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-arrangement",
+      "targetHandle": "valin-arrangement"
+    },
+    {
+      "id": "e_props_math_count",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-count",
+      "targetHandle": "valin-count"
+    },
+    {
+      "id": "e_props_math_rows",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rows",
+      "targetHandle": "valin-rows"
+    },
+    {
+      "id": "e_props_math_spacing",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-spacing",
+      "targetHandle": "valin-spacing"
+    },
+    {
+      "id": "e_props_math_frameWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-frameWidth",
+      "targetHandle": "valin-frameWidth"
+    },
+    {
+      "id": "e_props_math_frameDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-frameDepth",
+      "targetHandle": "valin-frameDepth"
+    },
+    {
+      "id": "e_props_math_showMat",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-showMat",
+      "targetHandle": "valin-showMat"
+    },
+    {
+      "id": "e_props_math_matWidth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-matWidth",
+      "targetHandle": "valin-matWidth"
+    },
+    {
+      "id": "e_props_math_artDepth",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-artDepth",
+      "targetHandle": "valin-artDepth"
+    },
+    {
+      "id": "e_props_math_rotation",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-rotation",
+      "targetHandle": "valin-rotation"
+    },
+    {
+      "id": "e_props_math_anchorDir",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-anchorDir",
+      "targetHandle": "valin-anchorDir"
+    },
+    {
+      "id": "e_props_math_fitMode",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-fitMode",
+      "targetHandle": "valin-fitMode"
+    },
+    {
+      "id": "e_props_math_margin",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-margin",
+      "targetHandle": "valin-margin"
+    },
+    {
+      "id": "e_props_math_flipSide",
+      "source": "props",
+      "target": "math",
+      "sourceHandle": "val-flipSide",
+      "targetHandle": "valin-flipSide"
+    },
+    {
+      "id": "e_math_out_s1",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Frames3D",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_out_s2",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Mats3D",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_out_s3",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-Art3D",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_out_s4",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-FramesPlan",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_out_s5",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-ArtPlan",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_out_s6",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-pieceCount",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_out_s7",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-columns",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_out_s8",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-rowCount",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_out_s9",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-pieceWidth",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_out_s10",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-pieceHeight",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_out_s11",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-totalWidth",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_out_s12",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-totalHeight",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_out_s13",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-bottomOfFrame",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_out_s14",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-topOfFrame",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_out_s15",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-projection",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_out_s16",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-coverageArea",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_out_s17",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-artArea",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_out_s18",
+      "source": "math",
+      "target": "out",
+      "sourceHandle": "val-scale",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_out_r2d_p2_fr",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s4",
+      "targetHandle": "valin-p2_fr"
+    },
+    {
+      "id": "e_out_r2d_p2_art",
+      "source": "out",
+      "target": "r2d",
+      "sourceHandle": "val-s5",
+      "targetHandle": "valin-p2_art"
+    },
+    {
+      "id": "e_out_r3d_p3_fr",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s1",
+      "targetHandle": "valin-p3_fr"
+    },
+    {
+      "id": "e_out_r3d_p3_mat",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s2",
+      "targetHandle": "valin-p3_mat"
+    },
+    {
+      "id": "e_out_r3d_p3_art",
+      "source": "out",
+      "target": "r3d",
+      "sourceHandle": "val-s3",
+      "targetHandle": "valin-p3_art"
+    }
+  ]
+}

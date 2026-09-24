@@ -1,0 +1,46 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "filter-by-label",
+  "meta": {
+    "label": "Filter by Label",
+    "category": "Image",
+    "color": "#a21caf"
+  },
+  "description": "A pure CALCULATION node — keep only the detections whose label matches. Splits ONE Object Detection result into families (doors / windows / rooms) so a single API call replaces one call per class. Draws nothing on canvas.",
+  "instructions": "A value-only node: it takes a labelled detection and returns the subset whose label matches, on the SAME endpoint names Object Detection publishes — so it drops straight into wiring that already expects a detection.\n\nWHY IT EXISTS: asking Gemini for \"door, window, room\" in ONE call costs a fraction of three separate calls, but every box then arrives on one pair of endpoints. Wire that one detection into three of these — match \"door\", \"window\", \"room\" — and you get the three families back, each ready for Label Graph and Merge Graph.\n\nINPUT: wire Object Detection's val-polygons into valin-polygons AND its val-labels into valin-labels. Filtering is by INDEX — label i belongs to ring i — so BOTH must come from the same detection node, and the labels endpoint is not optional. You may wire val-graph into valin-graph instead of polygons; components are then filtered by the same index rule. Polygons win when both are supplied, because a ring list carries the boundary vertices exactly.\n\nMATCH is a comma-separated list of terms: \"door\" keeps every label containing \"door\" (so \"door\", \"Door\", \"sliding door\" and \"doorway\" all match), and \"door, gate\" keeps either. Matching is case-insensitive and matches in BOTH directions, so the term \"door\" also keeps a label of \"dr\" only if one contains the other — set Match mode to \"Exact\" when you need the label to equal the term. Invert keeps everything that does NOT match, which is how you collect the leftovers into a \"furniture\" catch-all after the named families have been taken. An EMPTY match passes everything through unchanged (inverted: nothing), so an unconfigured node is visibly inert rather than silently emptying the branch.\n\nOUTPUT: val-polygons (the kept rings as a nested [[[x,y],…],…] metre list), val-graph (the kept rings as node/edge JSON, one closed component per ring, each edge already carrying its `label`), val-labels (the kept names, same order), val-count and val-area (m²). Chain val-graph + val-labels into Label Graph to stamp the family's type and thickness, then Merge Graph.\n\nEvery parameter is wireable (valin-*).",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      { "key": "polygons", "label": "Polygons" },
+      { "key": "labels", "label": "Labels" },
+      { "key": "graph", "label": "Graph" },
+      { "key": "match", "label": "Match" }
+    ],
+    "valueOutputs": [
+      { "key": "polygons", "label": "Polygons (JSON)" },
+      { "key": "graph", "label": "Graph (JSON)" },
+      { "key": "labels", "label": "Labels (JSON)" },
+      { "key": "count", "label": "Kept" },
+      { "key": "area", "label": "Total area", "unit": "m²" }
+    ]
+  },
+  "parameters": [
+    { "key": "polygons", "label": "Polygons (JSON)", "kind": "text", "default": "" },
+    { "key": "labels", "label": "Labels (JSON array)", "kind": "text", "default": "", "placeholder": "[\"door\", \"window\"]" },
+    { "key": "graph", "label": "Graph (JSON)", "kind": "text", "default": "" },
+    { "key": "match", "label": "Match", "kind": "text", "default": "", "placeholder": "door, doorway" },
+    {
+      "key": "mode",
+      "label": "Match mode",
+      "kind": "select",
+      "default": "contains",
+      "options": [
+        { "value": "contains", "label": "Contains (loose)" },
+        { "value": "exact", "label": "Exact" }
+      ]
+    },
+    { "key": "invert", "label": "Invert (keep non-matching)", "kind": "checkbox", "default": false }
+  ]
+}

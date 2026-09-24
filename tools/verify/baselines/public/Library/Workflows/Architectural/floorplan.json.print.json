@@ -1,0 +1,260 @@
+{
+  "kind": "flow",
+  "status": "ok",
+  "nodeCount": 16,
+  "edgeCount": 92,
+  "items": [
+    {
+      "nodeId": "gAll",
+      "tool": "merge-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "gDoor",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "graph",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "gWin",
+      "tool": "matrix-to-graph",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "mitre",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "network_2",
+      "tool": "network",
+      "polygons": {
+        "rings": 42,
+        "vertices": 84,
+        "area": 0,
+        "bbox": [
+          -4.9497,
+          -3.5355,
+          4.9497,
+          3.5355
+        ],
+        "nonFinite": 0
+      },
+      "hash": "3185cae335cd9e98"
+    },
+    {
+      "nodeId": "open",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "out",
+      "tool": "output",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "plan",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "props",
+      "tool": "input-props",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "r2d__p2_arc",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 80,
+        "vertices": 320,
+        "area": 0.0707,
+        "bbox": [
+          -3.2062,
+          -3.5358,
+          2.6488,
+          1.9516
+        ],
+        "nonFinite": 0
+      },
+      "hash": "9e7a5e5ca3deadb0"
+    },
+    {
+      "nodeId": "r2d__p2_glass",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 8,
+        "vertices": 32,
+        "area": 0.1152,
+        "bbox": [
+          -4.9557,
+          -3.5415,
+          4.9557,
+          3.5415
+        ],
+        "nonFinite": 0
+      },
+      "hash": "09af72356b11f2d4"
+    },
+    {
+      "nodeId": "r2d__p2_jamb",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 10,
+        "vertices": 40,
+        "area": 0.0199,
+        "bbox": [
+          -3.2129,
+          -3.6505,
+          2.6508,
+          1.9536
+        ],
+        "nonFinite": 0
+      },
+      "hash": "84cb1bb6c5e826a5"
+    },
+    {
+      "nodeId": "r2d__p2_leaf",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 5,
+        "vertices": 20,
+        "area": 0.18,
+        "bbox": [
+          -3.2459,
+          -3.5355,
+          2.5167,
+          1.0466
+        ],
+        "nonFinite": 0
+      },
+      "hash": "29b7180c4494b876"
+    },
+    {
+      "nodeId": "r2d__p2_walls",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 9,
+        "vertices": 80,
+        "area": 7.4832,
+        "bbox": [
+          -5.0647,
+          -3.6505,
+          5.0647,
+          3.6505
+        ],
+        "nonFinite": 0
+      },
+      "hash": "5109082136087adf"
+    },
+    {
+      "nodeId": "r2d__p2_win",
+      "tool": "render-2d",
+      "polygons": {
+        "rings": 8,
+        "vertices": 32,
+        "area": 2.208,
+        "bbox": [
+          -5.0647,
+          -3.6505,
+          5.0647,
+          3.6505
+        ],
+        "nonFinite": 0
+      },
+      "hash": "8e7413490265f423"
+    },
+    {
+      "nodeId": "solid",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    },
+    {
+      "nodeId": "weld",
+      "tool": "expr",
+      "polygons": {
+        "rings": 0,
+        "vertices": 0,
+        "area": 0,
+        "bbox": null,
+        "nonFinite": 0
+      },
+      "hash": "e3b0c44298fc1c14"
+    }
+  ],
+  "hash": "661bd8f1ac1c03b0"
+}

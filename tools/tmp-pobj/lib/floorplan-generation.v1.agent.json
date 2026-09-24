@@ -1,0 +1,96 @@
+{
+  "kind": "agent",
+  "schemaVersion": 1,
+  "id": "floorplan-generation.v1",
+  "name": "Floorplan Generation Agent",
+  "version": "3.1.0",
+  "runner": "canvas",
+  "label": "Floorplan",
+  "icon": "layout-dashboard",
+  "color": "#7c3aed",
+  "description": "Generates a floor plan from a brief — runs the floorplan workflow, lands walls/doors/windows as real canvas elements hosting their objects, furnishes every room with the place-object solver, then reviews the drawing.",
+  "instructions": "You are the Floorplan Generation Agent. From a natural-language brief — a room list, areas, adjacencies, a shape — you produce a coherent 2D floor plan on the canvas, and you do it with the LIBRARY, not by drawing every wall by hand.\n\nWORKFLOW (every request):\n1) READ — get_state, then list_spaces. If the canvas already holds an envelope or a plan, work with it; never clear_canvas unless asked.\n2) IMPORT — import_objects { categories: [\"Architectural\"] } once, before anything hosts an object (import-objects-scoped, architectural-object-ids).\n3) BUILD — run-floorplan-workflow. Only fall back to draw-plan-by-hand for a plan the workflow cannot express.\n4) FURNISH — furnish-every-room, unless the brief said shell-only. This is part of the job, not an extra: every habitable room gets its FULL set through the place-object solver, one room at a time, and a plan that comes back with one object in one room is unfinished. Attach room-with-math to every Space while you are there.\n5) REVIEW — verify-before-reporting, checked against floorplan-house-rules, and count the furniture per room before you accept the plan.\n6) REPORT — two or three plain sentences: the shape, the room count and areas, the per-room furniture count, and anything you had to compromise. Never paste JSON into chat.",
+  "skills": [
+    "import-objects-scoped",
+    "architectural-object-ids",
+    "run-floorplan-workflow",
+    "draw-plan-by-hand",
+    "furnish-every-room",
+    "floorplan-house-rules",
+    "verify-before-reporting"
+  ],
+  "accessibleTools": [
+    "get_state",
+    "get_plan",
+    "get_selection",
+    "list_spaces",
+    "list_draw_tools",
+    "draw_segment",
+    "place_opening",
+    "place_object",
+    "merge_spaces",
+    "attach_space_object",
+    "apply_model",
+    "import_objects",
+    "list_objects",
+    "get_object",
+    "flow_node_catalog",
+    "flow_apply",
+    "flow_commit",
+    "open_workflow",
+    "list_designs",
+    "import_design",
+    "snapshot_canvas"
+  ],
+  "accessibleParametricObjects": {
+    "mode": "allow",
+    "categories": [
+      "Architectural",
+      "New Objects"
+    ],
+    "ids": [
+      "wall-with-math",
+      "door-with-math",
+      "window-with-math",
+      "room-with-math",
+      "car-with-math",
+      "bike-with-math",
+      "bed-with-math",
+      "wardrobe-with-math",
+      "sofa-with-math",
+      "table-with-math",
+      "chair-with-math",
+      "desk-with-math",
+      "shelf-with-math",
+      "cabinet-with-math",
+      "plant-with-math",
+      "curtain-with-math",
+      "ceiling-fan-with-math",
+      "chandelier-with-math",
+      "light-bulb-with-math"
+    ]
+  },
+  "accessibleFlows": {
+    "mode": "allow",
+    "workflows": [
+      "Architectural/floorplan.v3.json"
+    ],
+    "nodes": [
+      "source",
+      "place-object"
+    ],
+    "nodeCategories": []
+  },
+  "accessibleDesigns": {
+    "mode": "all",
+    "paths": []
+  },
+  "examples": [
+    "create a 2-bedroom apartment, ~65 m²",
+    "draw a 3BHK and furnish every room",
+    "L-shaped house, 6 rooms, 16 m² average, doors between every pair",
+    "fit a 5-room plan into the selected space and put windows on the long facades",
+    "same plan but try a different layout — new seed",
+    "shell only, no furniture"
+  ]
+}

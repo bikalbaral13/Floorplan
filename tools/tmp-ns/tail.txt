@@ -1,0 +1,133 @@
+Case3D = sub(compress(_ALL, eq(_LGP, 1)), 0, 0, _nAll, 4)
+Drawers3D = sub(compress(_ALL, eq(_LGP, 2)), 0, 0, _nAll, 4)
+Led3D = sub(compress(_ALL, eq(_LGP, 3)), 0, 0, _nAll, 4)
+
+# ===========================================================================
+# STEP 3 — SPLAYED TAPERED LEGS: horizontal slices of a tilted cone, as in
+# chair.json — the foot sits flat on the floor, the top flat under the case
+# ===========================================================================
+_nLg = _dB ? 8 : (_dM ? 12 : 20)
+_la = arange(_nLg) / _nLg * 2 * PI
+_ol = ones(_nLg, 1)
+_rT = 0.022 * _s
+_rF = 0.013 * _s
+_spl = tan(legSplay * PI / 180) * _legH
+_in = 0.055 * _s
+_lgU = vcat(_u0 + _in, _u1 - _in, _u1 - _in, _u0 + _in)
+_lgV = vcat(_v0 + _in, _v0 + _in, _v1 - _in, _v1 - _in)
+_sgU = vcat(-1, 1, 1, -1)
+_sgV = vcat(-1, -1, 1, 1)
+_lz = vcat(0, 0.003 * _s, _legH + 0.004 * _s)
+_lr = vcat(_rF - 0.002 * _s, _rF, _rT)
+_LG = zeros(0, 4)
+loop i in (_isLegs && _legH > 0.01 * _s ? 4 : 0):
+  _cu0 = sub(_lgU, i, 0, 1, 1)
+  _cv0 = sub(_lgV, i, 0, 1, 1)
+  _su = sub(_sgU, i, 0, 1, 1)
+  _sv = sub(_sgV, i, 0, 1, 1)
+  _fz = kron(_lz, _ol)
+  _off = 1 - _fz / max(0.001, _legH)
+  _lu = _cu0 + _su * _spl * 0.7 * _off + kron(_lr, _ol) * kron(ones(3, 1), cos(_la))
+  _lv = _cv0 + _sv * _spl * 0.7 * _off + kron(_lr, _ol) * kron(ones(3, 1), sin(_la))
+  _LG = vcat(_LG, Solid.Skin(hcat(_lu, _lv, _lift + _fz, kron(arange(3), _ol)), (i + 1) * 100000))
+end
+
+# ===========================================================================
+# STEP 4 — TURNED PIECES: knobs, and the lamp, plant pot and mug on top.
+# Each is a LATHE: a profile in (r, z) revolved into rings and skinned.
+# ===========================================================================
+_nR = _dB ? 10 : (_dM ? 16 : 28)
+_th = arange(_nR) / _nR * 2 * PI
+_cth = cos(_th)
+_sth = sin(_th)
+_oR = ones(_nR, 1)
+# a lathe about the z axis at (cx, cy, cz)
+_KN = zeros(0, 4)
+_CER = zeros(0, 4)
+_SHD = zeros(0, 4)
+_BUL = zeros(0, 4)
+_LEAF = zeros(0, 4)
+# knobs lie along -v, so their "lathe" axis is v: revolve in the (u, z) plane and push along -v
+_knOn = pullType == 'Knob'
+_kR = vcat(0, 0.009, 0.012, 0.0125, 0.01, 0) * _s
+_kP = vcat(0, 0, 0.006, 0.016, 0.024, 0.025) * _s
+loop i in (_knOn ? _nDr : 0):
+  _zc = sub(_hc, i, 0, 1, 1)
+  _sec = hcat(kron(_kR, _cth), (_v0 + _set) - kron(_kP, _oR), _zc + kron(_kR, _sth), kron(arange(6), _oR))
+  _KN = vcat(_KN, Solid.Skin(_sec, i * 10000))
+end
+# table lamp: a gourd base in white ceramic, a brass neck, a drum shade (a thin shell), a warm bulb
+_lampOn = lamp > 0
+# viewer's left is +u (fronts face -v): the lamp sits just left of centre, the plant far left, the mug right
+_lc = 0.06 * _L
+_lv = 0.04 * _s
+_lh = lampHeight * _s
+_bR = vcat(0, 0.055, 0.075, 0.085, 0.08, 0.06, 0.035, 0.018, 0.012, 0) * _s * (_lh / (0.55 * _s))
+_bZ = vcat(0, 0, 0.01, 0.05, 0.11, 0.16, 0.2, 0.23, 0.25, 0.25) * _lh / 0.55
+_sd = shadeDia * _s / 2
+_sz0 = _z1 + 0.25 * _lh / 0.55 + 0.02 * _s
+_sz1 = _z1 + _lh
+_shR = vcat(_sd, _sd * 0.84, _sd * 0.84 - 0.004 * _s, _sd - 0.004 * _s)
+_shZ = vcat(_sz0, _sz1, _sz1, _sz0)
+_ulR = vcat(0, 0.03, 0.032, 0.02, 0) * _s
+_ulZ = _sz0 + vcat(0.02, 0.03, 0.07, 0.1, 0.105) * _s
+_CER = _lampOn ? vcat(_CER, Solid.Skin(hcat(_lc + kron(_bR, _cth), _lv + kron(_bR, _sth), _z1 + kron(_bZ, _oR), kron(arange(10), _oR)), 1000000)) : _CER
+_SHD = _lampOn ? Solid.Skin(hcat(_lc + kron(_shR, _cth), _lv + kron(_shR, _sth), kron(_shZ, _oR), kron(arange(4), _oR)), 2000000) : _SHD
+_BUL = _lampOn ? Solid.Skin(hcat(_lc + kron(_ulR, _cth), _lv + kron(_ulR, _sth), kron(_ulZ, _oR), kron(arange(5), _oR)), 3000000) : _BUL
+# decor: a small white pot with a sprig (green dome), and a mug
+_decOn = decor > 0
+_pc = _u1 - 0.17 * _L
+_pR = vcat(0, 0.035, 0.04, 0.04, 0.036, 0) * _s
+_pZ = vcat(0, 0, 0.01, 0.1, 0.1, 0.095) * _s
+_gR = vcat(0, 0.03, 0.06, 0.07, 0.05, 0.02, 0) * _s
+_gZ = vcat(0.09, 0.1, 0.14, 0.2, 0.26, 0.29, 0.3) * _s
+_mc = _u0 + 0.15 * _L
+_mR = vcat(0, 0.035, 0.037, 0.037, 0.033, 0.033, 0) * _s
+_mZ = vcat(0, 0, 0.004, 0.095, 0.095, 0.008, 0.008) * _s
+_CER = _decOn ? vcat(_CER, Solid.Skin(hcat(_pc + kron(_pR, _cth), -0.03 * _s + kron(_pR, _sth), _z1 + kron(_pZ, _oR), kron(arange(6), _oR)), 4000000), Solid.Skin(hcat(_mc + kron(_mR, _cth), -0.06 * _s + kron(_mR, _sth), _z1 + kron(_mZ, _oR), kron(arange(7), _oR)), 5000000)) : _CER
+_LEAF = _decOn ? Solid.Skin(hcat(_pc + kron(_gR, _cth), -0.03 * _s + kron(_gR, _sth), _z1 + kron(_gZ, _oR), kron(arange(7), _oR)), 0) : _LEAF
+
+# ===========================================================================
+# THE FRAME RULE for the non-box parts
+# ===========================================================================
+_fU = _cu + col(_LG, 0)
+_fV = _cv + col(_LG, 1)
+Legs3D = rows(_LG) > 0 ? hcat(_fU * _ux + _fV * _vx, _fU * _uy + _fV * _vy, col(_LG, 2), col(_LG, 3)) : zeros(0, 4)
+_fU = _cu + col(_KN, 0)
+_fV = _cv + col(_KN, 1)
+Knobs3D = rows(_KN) > 0 ? hcat(_fU * _ux + _fV * _vx, _fU * _uy + _fV * _vy, col(_KN, 2), col(_KN, 3)) : zeros(0, 4)
+_fU = _cu + col(_CER, 0)
+_fV = _cv + col(_CER, 1)
+Ceramic3D = rows(_CER) > 0 ? hcat(_fU * _ux + _fV * _vx, _fU * _uy + _fV * _vy, col(_CER, 2), col(_CER, 3)) : zeros(0, 4)
+_fU = _cu + col(_SHD, 0)
+_fV = _cv + col(_SHD, 1)
+Shade3D = rows(_SHD) > 0 ? hcat(_fU * _ux + _fV * _vx, _fU * _uy + _fV * _vy, col(_SHD, 2), col(_SHD, 3)) : zeros(0, 4)
+_fU = _cu + col(_BUL, 0)
+_fV = _cv + col(_BUL, 1)
+Bulb3D = rows(_BUL) > 0 ? hcat(_fU * _ux + _fV * _vx, _fU * _uy + _fV * _vy, col(_BUL, 2), col(_BUL, 3)) : zeros(0, 4)
+_fU = _cu + col(_LEAF, 0)
+_fV = _cv + col(_LEAF, 1)
+Foliage3D = rows(_LEAF) > 0 ? hcat(_fU * _ux + _fV * _vx, _fU * _uy + _fV * _vy, col(_LEAF, 2), col(_LEAF, 3)) : zeros(0, 4)
+
+# ===========================================================================
+# PLAN — the case outline
+# ===========================================================================
+_r4u = vcat(0, 1, 1, 0)
+_r4v = vcat(0, 0, 1, 1)
+_pu = _cu + _u0 + _r4u * _L
+_pv = _cv + _v0 + _r4v * _D
+CasePlan = hcat(_pu * _ux + _pv * _vx, _pu * _uy + _pv * _vy, fill(4, 1, 1))
+
+# ===========================================================================
+# METRICS
+# ===========================================================================
+overallWidth = _L + (_isLegs ? 1.4 * _spl : 0)
+overallDepth = _D + (_knOn ? 0.03 * _s : 0)
+topHeight = _z1
+overallHeight = _lampOn ? (_z1 + _lh) : _z1
+drawerCount = _nDr
+drawerHeight = _dp
+lampOn = _lampOn ? 1 : 0
+mountLift = _lift
+footprint = _L * _D
+boxCount = _nb

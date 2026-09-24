@@ -1,7 +1,59 @@
 const API_URL = import.meta.env.VITE_API_URL;
+
+/** Where an unauthenticated caller is sent. */
+const SIGNIN_PATH = "/signin";
+
+/** LOGIN BYPASS. When on, a 401 is left alone: the token is not cleared and nothing navigates, so the
+ *  app keeps running signed-out. The platform calls still fail — nothing here can invent a valid session —
+ *  but the editor, the flow overlay and the library do not need one, and being bounced to /signin every
+ *  time a project list refreshes makes local work impossible.
+ *
+ *  ON BY DEFAULT IN DEV, OFF IN A BUILD. That is the whole point: the bypass is a property of the machine
+ *  it runs on, not a credential baked into the bundle. A deployed build redirects properly unless someone
+ *  sets VITE_AUTH_BYPASS=true on purpose, and there is no expiring secret to go stale — which is what the
+ *  pre-seeded JWT this replaces did, silently, in April.
+ *
+ *  Set VITE_AUTH_BYPASS=false in .env to get the real behaviour while running `npm run dev`.
+ */
+const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "true"
+  || (import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS !== "false");
+
+/** Every platform request in this file goes through here rather than through `fetch` directly.
+ *
+ *  WHILE BYPASSING WITH NO TOKEN, THE REQUEST IS NOT MADE. There is nothing to authenticate with, so the
+ *  server can only answer 401 — and a 401 the browser actually performed is logged as a red network error
+ *  on every page that lists projects, which buries the errors that matter. Skipping it answers with the
+ *  SAME 401 the server would have sent, synthesised locally: every caller's `res.status === 401` branch
+ *  runs exactly as before, so behaviour is unchanged and only the noise goes away.
+ *
+ *  The moment a token exists — signed in, or bypass off — this is a plain `fetch` again.
+ */
+const apiFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  if (AUTH_BYPASS && !localStorage.getItem("token")) {
+    return Promise.resolve(
+      new Response(JSON.stringify({ error: "Not signed in" }), {
+        status: 401,
+        statusText: "Unauthorized",
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }
+  return fetch(input, init);
+};
+
+/** Auth headers for a call to the platform API.
+ *
+ *  NO FALLBACK TOKEN. There used to be a JWT literal here, used whenever `localStorage.token` was empty,
+ *  so a signed-out session still made calls — as a `customer` that had been minted in March and expired on
+ *  11 April. Every request then came back 401 from a server that was behaving correctly, which reads as an
+ *  outage rather than as "you are not signed in". A hardcoded credential also cannot be revoked and ships
+ *  readable in the bundle.
+ *
+ *  With no token the Authorization header is simply omitted: the server answers 401 immediately, and
+ *  {@link handleUnauthorized} turns that into a trip to the sign-in page.
+ */
 export const getAuthHeaders = () => {
-  const token = localStorage.getItem("token") || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3ZGE1N2JkZmE2OThhNWFhMzFiMWZkZCIsInVzZXJUeXBlIjoiY3VzdG9tZXIiLCJpYXQiOjE3NzMyOTAxNzMsImV4cCI6MTc3NTg4MjE3M30._4jAm_0FAtGqHEnTFVCstvvHS1hiHtbRlTS2ONbNCFM";
-  const role = localStorage.getItem("role") || "customer";
+  const token = localStorage.getItem("token");
 
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -9,10 +61,27 @@ export const getAuthHeaders = () => {
   };
 };
 
+/** Called by every request that comes back 401. Drops the credential that failed and sends the user to
+ *  sign in.
+ *
+ *  GUARDED TWICE. A page load fires several of these calls at once, so a naive redirect would be issued
+ *  once per in-flight request; `redirecting` makes the first one win. And the sign-in page itself calls
+ *  nothing here, but a 401 raised while already on it would otherwise reload the page in a loop — hence
+ *  the path check.
+ *
+ *  `assign` rather than a router navigate: this module is not a component and has no access to the router,
+ *  and a full load is the right thing after a session ends — it clears whatever the old session left in
+ *  memory rather than carrying it to the next one.
+ */
+let redirecting = false;
 const handleUnauthorized = () => {
-  // Dev login bypass: swallow 401s instead of clearing the token and
-  // redirecting to /signin. The default token in getAuthHeaders keeps
-  // requests going; failures just bubble to the caller.
+  if (AUTH_BYPASS) return;
+  localStorage.removeItem("token");
+  localStorage.removeItem("role");
+  if (redirecting || typeof window === "undefined") return;
+  if (window.location.pathname === SIGNIN_PATH) return;
+  redirecting = true;
+  window.location.assign(SIGNIN_PATH);
 };
 
 export const postServiceByEntity = async (
@@ -22,7 +91,7 @@ export const postServiceByEntity = async (
   const isFormData = formData instanceof FormData;
   console.log("postServiceByEntity", entityId, formData);
 
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_URL}/api/user/service/${entityId}`,
     {
       method: "POST",
@@ -46,7 +115,7 @@ export const postServiceByEntity = async (
 export const getDataSpecificById = async (entityId: string, dataId: string) => {
   try {
 console.log("getDataSpecificById", entityId, dataId);
-    const response = await fetch(`${API_URL}/api/user/service/field/${entityId}/${dataId}`, {
+    const response = await apiFetch(`${API_URL}/api/user/service/field/${entityId}/${dataId}`, {
       method: 'GET',
       headers: getAuthHeaders(),
 
@@ -93,7 +162,7 @@ export const getServiceByEntity = async (
   }
   const query = queryParams.toString();
 
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_URL}/api/user/service/${entityId}?${query}`,
     {
       method: "GET",
@@ -115,7 +184,7 @@ export const updateServiceByEntity = async (
   const isFormData = formData instanceof FormData;
   console.log("updateServiceByEntity", entityId, editingId, formData);
 
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_URL}/api/user/service/${entityId}/${editingId}`,
     {
       method: "PUT",
@@ -134,7 +203,7 @@ export const updateServiceByEntity = async (
 };
 
 export const deleteServiceByEntity = async (entityId: string, deletingId: string) => {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_URL}/api/user/service/${entityId}/${deletingId}`,
     {
       method: "DELETE",
@@ -191,7 +260,7 @@ export const uploadImageToS3 = async (file: File | Blob): Promise<string | null>
 
     console.log("file.type", file.type, "resolvedMime", mimeType, "filename", filename)
     // api / file / upload
-    const response = await fetch(`${API_URL}/api/r2/upload`, {
+    const response = await apiFetch(`${API_URL}/api/r2/upload`, {
       method: "POST",
       body: formData,
     });
@@ -242,7 +311,7 @@ export const generateMoodboardCard = async (
     ? { userId, query, previousCardData }
     : { userId, query };
 
-  const res = await fetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.moodboard}`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.moodboard}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -275,7 +344,7 @@ export const generateRoomLayoutCard = async (
     ? { userId, query:JSON.stringify(previousCardData) }
     : { userId, query };
 
-  const res = await fetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.roomLayout}`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.roomLayout}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -307,7 +376,7 @@ export const generateFurnitureBundleCard = async (
     ? { userId, query:JSON.stringify(previousCardData) }
     : { userId, query };
 
-  const res = await fetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.furnitureBundle}`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.furnitureBundle}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -340,7 +409,7 @@ export const generateBOQCard = async (
     ? { userId, query:JSON.stringify(previousCardData) }
     : { userId, query };
 
-  const res = await fetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.boq}`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.boq}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -368,7 +437,7 @@ export const getAgentById = async (agentId: string): Promise<{
 }> => {
   try {
     const headers = getAuthHeaders();
-    const res = await fetch(`${API_URL}/api/user/agentlog/${agentId}`, {
+    const res = await apiFetch(`${API_URL}/api/user/agentlog/${agentId}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -405,7 +474,7 @@ export const generateFurnitureBundleCardByInspiration = async (
 
   const body = { userId, query:JSON.stringify(query) };
 
-  const res = await fetch(`${API_URL}/api/user/agent/start/69219f6e48fe8962dff62722`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/69219f6e48fe8962dff62722`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -427,7 +496,7 @@ export  const generateFurnitureBundleCardBySelectedImages = async(
   const { userId, files, query } = params;
   const headers = getAuthHeaders();
   const body = { userId, files: files, query };
-  const res = await fetch(`${API_URL}/api/user/agent/start/6911d8fe2222bd196b5cee73`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/6911d8fe2222bd196b5cee73`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -452,7 +521,7 @@ export const generateRoomGenerationCard = async (
   const { userId, query, files } = params;
   const headers = getAuthHeaders();
   const body = { userId, query, files };
-  const res = await fetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.roomGeneration}`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/${AGENT_IDS.roomGeneration}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -476,7 +545,7 @@ export const generateFloorplanRoomGenerationCard = async (
   const { userId, query } = params;
   const headers = getAuthHeaders();
   const body = { userId, query };
-  const res = await fetch(`${API_URL}/api/user/agent/start/692d4e0d48fe8962dff7819e`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/692d4e0d48fe8962dff7819e`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -504,7 +573,7 @@ export const generateAgent = async (
 
   const headers = getAuthHeaders();
   const body = { userId, query };
-  const res = await fetch(`${API_URL}/api/user/agent/start/${id}`, {
+  const res = await apiFetch(`${API_URL}/api/user/agent/start/${id}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -524,7 +593,7 @@ export const generateAgent = async (
 };
 
 export const schemaGetServiceByEntity = async (entityId: string) => {
-  const response = await fetch(`${API_URL}/api/v2/data/${entityId}`, {
+  const response = await apiFetch(`${API_URL}/api/v2/data/${entityId}`, {
     method: "GET",  
     headers: getAuthHeaders(),
   });
@@ -536,7 +605,7 @@ export const fetchBlobFromProxy = async (url: string) => {
   try {
     const headers = getAuthHeaders();
 
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_URL}/api/user/agent/start/694e19d307e8c30156bff227`,
       {
         method: "POST",

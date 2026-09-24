@@ -2,11 +2,34 @@
   "kind": "flow-node",
   "version": 2,
   "tool": "freehand-source",
-  "meta": { "label": "Freehand", "category": "Canvas", "color": "#ea580c" },
+  "meta": {
+    "label": "Freehand",
+    "category": "Canvas",
+    "color": "#ea580c"
+  },
   "description": "Pipeline input — the freehand strokes drawn on the canvas, as a polyline network (a graph). Optionally filtered by stroke colour. Feeds the Graph nodes.",
-  "instructions": "Pipeline input — emits the canvas's freehand drawing as connected polylines (a graph). Set `Colour` to grab only strokes of that hex colour (blank = every freehand stroke).\n\nFreehand is already VECTOR, so no raster Vectorise is needed — wire this straight into a Graph Reduce (Dissolve merges chains, Prune drops spurs) to tidy the wobble into a clean node/edge graph, then Mitered Join / Graph to Spaces as usual.",
-  "handles": { "input": false, "output": true },
+  "instructions": "GEOMETRY NODE: this is the single \"Geometry\" node — there is no kind selector, because THE CANVAS SELECTION IS THE SELECTOR. With \"Grab ID from selection\" on, selecting a canvas node makes it a Point source, a segment makes it a Segment source, a graph a Graph source, a space a Space source and a picture an Image source; the node keeps its id, name, position and wires across the change. That is what lets one input carry a host whose TYPE changes — the anchor of a parametric object stays wired while you switch from a node to a wall to a room. Turn the toggle off and type an id to pin it to one element. (Freehand is not selection-driven — its strokes are matched by colour — so it stays its own node.)\n\nEvery kind publishes its geometry in the same anchor-relative metre frame: a point list on `val-points` (Point → one row, Segment → two, Space → its outline) or nodes+links on `val-graph` (Graph, Freehand).\n\nPipeline input — emits the canvas's freehand drawing as connected polylines (a graph). Set `Colour` to grab only strokes of that hex colour (blank = every freehand stroke).\n\nFreehand is already VECTOR, so no raster Vectorise is needed — wire this straight into a Graph Reduce (Dissolve merges chains, Prune drops spurs) to tidy the wobble into a clean node/edge graph, then Mitered Join / Graph to Spaces as usual.\n\nVALUE OUTPUT: `val-graph` publishes the strokes as graph JSON (anchor-relative metres), the same serialisation Freehand Geometry emits — so the pure-value Graph nodes (Set Thickness, Merge Graph, Mitered Join, Graph to Points) can consume the drawing directly and the Geometry hop is optional.\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.\n\nCANVAS JSON. `val-canvasJson` publishes the WHOLE canvas as the model behind the drawing — every wall, door, window and object with its real position, dimensions and `semantics`, the payload the Plan JSON node used to be a separate node for. It is deliberately NOT scoped to this node's own geometry: this node says what the region IS, and narrowing the payload to that region is Filter by Space's job (wire this output into its `json` input and the region into its geometry input). One node now answers both halves — the shape on the geometry output, the model on this one — so a flow can no longer hold two nodes with two different ideas of which room it means.",
+  "handles": {
+    "input": false,
+    "output": true,
+    "valueOutputs": [
+      {
+        "key": "graph",
+        "label": "Graph (JSON)"
+      },
+      {
+        "key": "canvasJson",
+        "label": "Canvas JSON"
+      }
+    ]
+  },
   "parameters": [
-    { "key": "color", "label": "Colour", "kind": "text", "default": "", "placeholder": "#ea580c (blank = all)" }
+    {
+      "key": "color",
+      "label": "Colour",
+      "kind": "text",
+      "default": "",
+      "placeholder": "#ea580c (blank = all)"
+    }
   ]
 }

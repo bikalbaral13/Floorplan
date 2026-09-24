@@ -1,0 +1,571 @@
+{
+  "version": 1,
+  "id": "gga-pipe-network",
+  "title": "Global Gradient Algorithm — Pipe Network",
+  "category": "Mathematics",
+  "description": "The Todini–Pilati Global Gradient Algorithm — the solver at the heart of EPANET — in ONE Math Engine. It was twenty-five matrix and vector nodes and forty-four wires; the algebra is unchanged, but `T`, `inv`, `@`, `pow` and element-wise arithmetic are all operators the engine already has, so each node became one line.\n\nTHE SYSTEM. Unknowns are pipe flows Q (np×1) and junction heads H (nn×1).\n  Energy   A11·Q + A12·H + A10·H0 = 0      with A11 = diag(r|Q|ⁿ⁻¹)\n  Continuity          A21·Q − q = 0        with A21 = A12ᵀ\nA12 is the pipe→junction incidence matrix (−1 at the from-node, +1 at the to-node), A10 the same against fixed-head nodes, H0 the reservoir heads, r the pipe resistances, q the nodal demands.\n\nTHE NEWTON STEP. Eliminating dQ from the Jacobian gives the 'global gradient' form:\n  A  = A21·D11⁻¹·A12          (nn×nn, symmetric positive definite)\n  dH = A⁻¹·[ C − A21·D11⁻¹·E ]\n  dQ = −D11⁻¹·( E + A12·dH )\nwhere E is the energy residual, C the continuity residual and D11 = diag(n·r|Q|ⁿ⁻¹). No diagonal-matrix node is needed: D11⁻¹·A12 is the np×1 column `dinv` broadcast across A12's columns, which is what element-wise multiplication already means.\n\nEVERY INTERMEDIATE IS STILL AN OUTPUT. A11, E, D11⁻¹, A21, A, A⁻¹, C, the RHS, dH and dQ each have their own endpoint and their own row in Output Metrics — the same twenty-five results the twenty-five nodes showed, in one place. Wiring one onward reads exactly as wiring its node did.\n\nTWO THINGS THE NODE CHAIN COULD NOT DO.\n\n  • ANY EXPONENT. The old flow was pinned to n = 2 (Darcy–Weisbach, h = rQ²) because raising a column element-wise needed a node that did not exist. `pow` is in the engine, so `Head-loss exponent n` is now a parameter — 1.852 for Hazen–Williams solves as readily as 2.\n  • MORE THAN ONE STEP. `Newton iterations` repeats the step on its own result. At 1 the outputs are exactly the old flow's, so nothing about the original demonstration changes; raise it and `Q — solved` / `H — solved` carry the converged answer, with the residuals to prove it.\n\nTHE SAMPLE NETWORK is one reservoir at 100 m feeding three junctions through four pipes, demands of 60 and 40 l/s. One step moves the flows to [0.1, 0.0478, 0.0522, −0.0122] m³/s; by eight iterations they settle at [0.1, 0.046445, 0.053555, −0.013555] with heads [99.670573, 99.685273] and a continuity residual of exactly zero. The negative fourth flow is the algorithm telling you that pipe runs the other way.\n\nWHAT IT DOES NOT DO. Demand-driven analysis of a single loading, no pressure-dependent demand, no pumps or valves (no A11 augmentation for head-gain elements), no minor losses, and no check that A is non-singular — a network with an unconnected junction returns an empty inverse rather than an error. The step is undamped Newton: a wildly wrong initial Q can overshoot, which is what the iteration count and the residual outputs are there to show.",
+  "nodes": [
+    {
+      "id": "data",
+      "position": {
+        "x": -720,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "A12",
+              "name": "A12 — pipe → junction incidence",
+              "type": "text",
+              "value": "[[1,0,0],[-1,1,0],[-1,0,1],[0,-1,1]]",
+              "options": []
+            },
+            {
+              "id": "A10",
+              "name": "A10 — pipe → fixed-head incidence",
+              "type": "text",
+              "value": "[[-1],[0],[0],[0]]",
+              "options": []
+            },
+            {
+              "id": "H0",
+              "name": "H0 — reservoir heads",
+              "type": "text",
+              "value": "[[100]]",
+              "options": []
+            },
+            {
+              "id": "r",
+              "name": "r — pipe resistances",
+              "type": "text",
+              "value": "[[20],[60],[40],[80]]",
+              "options": []
+            },
+            {
+              "id": "q",
+              "name": "q — nodal demands",
+              "type": "text",
+              "value": "[[0],[0.06],[0.04]]",
+              "options": []
+            },
+            {
+              "id": "Q",
+              "name": "Q — initial pipe flows",
+              "type": "text",
+              "value": "[[0.1],[0.05],[0.05],[0.01]]",
+              "options": []
+            },
+            {
+              "id": "H",
+              "name": "H — initial junction heads",
+              "type": "text",
+              "value": "[[95],[93],[92]]",
+              "options": []
+            },
+            {
+              "id": "nExp",
+              "name": "Head-loss exponent n",
+              "type": "range",
+              "value": 2,
+              "min": 1.05,
+              "max": 3,
+              "step": 0.001,
+              "options": []
+            },
+            {
+              "id": "iterations",
+              "name": "Newton iterations",
+              "type": "range",
+              "value": 1,
+              "min": 1,
+              "max": 50,
+              "step": 1,
+              "options": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -220,
+        "y": 0
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "name": "Global Gradient Algorithm",
+          "expr": "_ne = max(1.05, min(3, nExp))\n_more = max(0, min(50, round(iterations)) - 1)\nabsQ = max(abs(Q), 1e-9)\nA11 = r * pow(absQ, _ne - 1)\nheadLoss = A11 * Q\nA12H = A12 @ H\nA10H0 = A10 @ H0\nE = headLoss + A12H + A10H0\nD11 = _ne * A11\ndinv = 1 / D11\nA21 = T(A12)\nA12s = A12 * dinv\nAmat = A21 @ A12s\nAinv = inv(Amat)\nA21Q = A21 @ Q\nC = A21Q - q\ndE = E * dinv\nA21dE = A21 @ dE\nrhs = C - A21dE\ndH = Ainv @ rhs\nHnew = H + dH\nA12dH = A12 @ dH\nEpA = E + A12dH\ndQ = 0 - EpA * dinv\nQnew = Q + dQ\n_Qk = Qnew\n_Hk = Hnew\nloop it in _more:\n  _aq = max(abs(_Qk), 1e-9)\n  _a11 = r * pow(_aq, _ne - 1)\n  _e = _a11 * _Qk + A12 @ _Hk + A10 @ H0\n  _di = 1 / (_ne * _a11)\n  _am = A21 @ (A12 * _di)\n  _c = A21 @ _Qk - q\n  _dh = inv(_am) @ (_c - A21 @ (_e * _di))\n  _dq = 0 - (_e + A12 @ _dh) * _di\n  _Qk = _Qk + _dq\n  _Hk = _Hk + _dh\nend\nQsolved = _Qk\nHsolved = _Hk\n_aqf = max(abs(_Qk), 1e-9)\n_a11f = r * pow(_aqf, _ne - 1)\n_Ef = _a11f * _Qk + A12 @ _Hk + A10 @ H0\n_Cf = A21 @ _Qk - q\nheadLossSolved = _a11f * _Qk\npipes = rows(r)\njunctions = rows(q)\niterationsRun = _more + 1\nexponent = _ne\nmaxEnergyResidual = max(abs(E))\nmaxContinuityResidual = max(abs(C))\nmaxDQ = max(abs(dQ))\nmaxDH = max(abs(dH))\nfinalEnergyResidual = max(abs(_Ef))\nfinalContinuityResidual = max(abs(_Cf))\n"
+        }
+      }
+    },
+    {
+      "id": "out",
+      "position": {
+        "x": 320,
+        "y": 40
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "A11 = r·|Q|ⁿ⁻¹"
+            },
+            {
+              "id": "s2",
+              "label": "Head loss r|Q|ⁿ⁻¹Q"
+            },
+            {
+              "id": "s3",
+              "label": "A12·H"
+            },
+            {
+              "id": "s4",
+              "label": "A10·H0"
+            },
+            {
+              "id": "s5",
+              "label": "E — energy residual"
+            },
+            {
+              "id": "s6",
+              "label": "D11 = n·A11"
+            },
+            {
+              "id": "s7",
+              "label": "D11⁻¹ (column)"
+            },
+            {
+              "id": "s8",
+              "label": "A21 = A12ᵀ"
+            },
+            {
+              "id": "s9",
+              "label": "D11⁻¹·A12"
+            },
+            {
+              "id": "s10",
+              "label": "A = A21·D11⁻¹·A12"
+            },
+            {
+              "id": "s11",
+              "label": "A⁻¹"
+            },
+            {
+              "id": "s12",
+              "label": "A21·Q"
+            },
+            {
+              "id": "s13",
+              "label": "C — continuity residual"
+            },
+            {
+              "id": "s14",
+              "label": "D11⁻¹·E"
+            },
+            {
+              "id": "s15",
+              "label": "A21·D11⁻¹·E"
+            },
+            {
+              "id": "s16",
+              "label": "RHS = C − A21·D11⁻¹·E"
+            },
+            {
+              "id": "s17",
+              "label": "dH"
+            },
+            {
+              "id": "s18",
+              "label": "A12·dH"
+            },
+            {
+              "id": "s19",
+              "label": "E + A12·dH"
+            },
+            {
+              "id": "s20",
+              "label": "dQ"
+            },
+            {
+              "id": "s21",
+              "label": "H after one step"
+            },
+            {
+              "id": "s22",
+              "label": "Q after one step"
+            },
+            {
+              "id": "s23",
+              "label": "Q — solved"
+            },
+            {
+              "id": "s24",
+              "label": "H — solved"
+            },
+            {
+              "id": "s25",
+              "label": "Head loss — solved"
+            },
+            {
+              "id": "s26",
+              "label": "Pipes"
+            },
+            {
+              "id": "s27",
+              "label": "Junctions"
+            },
+            {
+              "id": "s28",
+              "label": "Iterations run"
+            },
+            {
+              "id": "s29",
+              "label": "Exponent n"
+            },
+            {
+              "id": "s30",
+              "label": "max |E| — first step"
+            },
+            {
+              "id": "s31",
+              "label": "max |C| — first step"
+            },
+            {
+              "id": "s32",
+              "label": "max |dQ| — first step"
+            },
+            {
+              "id": "s33",
+              "label": "max |dH| — first step"
+            },
+            {
+              "id": "s34",
+              "label": "max |E| — solved"
+            },
+            {
+              "id": "s35",
+              "label": "max |C| — solved"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_data_nExp",
+      "source": "data",
+      "sourceHandle": "val-nExp",
+      "target": "math",
+      "targetHandle": "valin-nExp"
+    },
+    {
+      "id": "e_data_iterations",
+      "source": "data",
+      "sourceHandle": "val-iterations",
+      "target": "math",
+      "targetHandle": "valin-iterations"
+    },
+    {
+      "id": "e_data_Q",
+      "source": "data",
+      "sourceHandle": "val-Q",
+      "target": "math",
+      "targetHandle": "valin-Q"
+    },
+    {
+      "id": "e_data_r",
+      "source": "data",
+      "sourceHandle": "val-r",
+      "target": "math",
+      "targetHandle": "valin-r"
+    },
+    {
+      "id": "e_data_A12",
+      "source": "data",
+      "sourceHandle": "val-A12",
+      "target": "math",
+      "targetHandle": "valin-A12"
+    },
+    {
+      "id": "e_data_H",
+      "source": "data",
+      "sourceHandle": "val-H",
+      "target": "math",
+      "targetHandle": "valin-H"
+    },
+    {
+      "id": "e_data_A10",
+      "source": "data",
+      "sourceHandle": "val-A10",
+      "target": "math",
+      "targetHandle": "valin-A10"
+    },
+    {
+      "id": "e_data_H0",
+      "source": "data",
+      "sourceHandle": "val-H0",
+      "target": "math",
+      "targetHandle": "valin-H0"
+    },
+    {
+      "id": "e_data_q",
+      "source": "data",
+      "sourceHandle": "val-q",
+      "target": "math",
+      "targetHandle": "valin-q"
+    },
+    {
+      "id": "e_math_s1",
+      "source": "math",
+      "sourceHandle": "val-A11",
+      "target": "out",
+      "targetHandle": "valin-s1"
+    },
+    {
+      "id": "e_math_s2",
+      "source": "math",
+      "sourceHandle": "val-headLoss",
+      "target": "out",
+      "targetHandle": "valin-s2"
+    },
+    {
+      "id": "e_math_s3",
+      "source": "math",
+      "sourceHandle": "val-A12H",
+      "target": "out",
+      "targetHandle": "valin-s3"
+    },
+    {
+      "id": "e_math_s4",
+      "source": "math",
+      "sourceHandle": "val-A10H0",
+      "target": "out",
+      "targetHandle": "valin-s4"
+    },
+    {
+      "id": "e_math_s5",
+      "source": "math",
+      "sourceHandle": "val-E",
+      "target": "out",
+      "targetHandle": "valin-s5"
+    },
+    {
+      "id": "e_math_s6",
+      "source": "math",
+      "sourceHandle": "val-D11",
+      "target": "out",
+      "targetHandle": "valin-s6"
+    },
+    {
+      "id": "e_math_s7",
+      "source": "math",
+      "sourceHandle": "val-dinv",
+      "target": "out",
+      "targetHandle": "valin-s7"
+    },
+    {
+      "id": "e_math_s8",
+      "source": "math",
+      "sourceHandle": "val-A21",
+      "target": "out",
+      "targetHandle": "valin-s8"
+    },
+    {
+      "id": "e_math_s9",
+      "source": "math",
+      "sourceHandle": "val-A12s",
+      "target": "out",
+      "targetHandle": "valin-s9"
+    },
+    {
+      "id": "e_math_s10",
+      "source": "math",
+      "sourceHandle": "val-Amat",
+      "target": "out",
+      "targetHandle": "valin-s10"
+    },
+    {
+      "id": "e_math_s11",
+      "source": "math",
+      "sourceHandle": "val-Ainv",
+      "target": "out",
+      "targetHandle": "valin-s11"
+    },
+    {
+      "id": "e_math_s12",
+      "source": "math",
+      "sourceHandle": "val-A21Q",
+      "target": "out",
+      "targetHandle": "valin-s12"
+    },
+    {
+      "id": "e_math_s13",
+      "source": "math",
+      "sourceHandle": "val-C",
+      "target": "out",
+      "targetHandle": "valin-s13"
+    },
+    {
+      "id": "e_math_s14",
+      "source": "math",
+      "sourceHandle": "val-dE",
+      "target": "out",
+      "targetHandle": "valin-s14"
+    },
+    {
+      "id": "e_math_s15",
+      "source": "math",
+      "sourceHandle": "val-A21dE",
+      "target": "out",
+      "targetHandle": "valin-s15"
+    },
+    {
+      "id": "e_math_s16",
+      "source": "math",
+      "sourceHandle": "val-rhs",
+      "target": "out",
+      "targetHandle": "valin-s16"
+    },
+    {
+      "id": "e_math_s17",
+      "source": "math",
+      "sourceHandle": "val-dH",
+      "target": "out",
+      "targetHandle": "valin-s17"
+    },
+    {
+      "id": "e_math_s18",
+      "source": "math",
+      "sourceHandle": "val-A12dH",
+      "target": "out",
+      "targetHandle": "valin-s18"
+    },
+    {
+      "id": "e_math_s19",
+      "source": "math",
+      "sourceHandle": "val-EpA",
+      "target": "out",
+      "targetHandle": "valin-s19"
+    },
+    {
+      "id": "e_math_s20",
+      "source": "math",
+      "sourceHandle": "val-dQ",
+      "target": "out",
+      "targetHandle": "valin-s20"
+    },
+    {
+      "id": "e_math_s21",
+      "source": "math",
+      "sourceHandle": "val-Hnew",
+      "target": "out",
+      "targetHandle": "valin-s21"
+    },
+    {
+      "id": "e_math_s22",
+      "source": "math",
+      "sourceHandle": "val-Qnew",
+      "target": "out",
+      "targetHandle": "valin-s22"
+    },
+    {
+      "id": "e_math_s23",
+      "source": "math",
+      "sourceHandle": "val-Qsolved",
+      "target": "out",
+      "targetHandle": "valin-s23"
+    },
+    {
+      "id": "e_math_s24",
+      "source": "math",
+      "sourceHandle": "val-Hsolved",
+      "target": "out",
+      "targetHandle": "valin-s24"
+    },
+    {
+      "id": "e_math_s25",
+      "source": "math",
+      "sourceHandle": "val-headLossSolved",
+      "target": "out",
+      "targetHandle": "valin-s25"
+    },
+    {
+      "id": "e_math_s26",
+      "source": "math",
+      "sourceHandle": "val-pipes",
+      "target": "out",
+      "targetHandle": "valin-s26"
+    },
+    {
+      "id": "e_math_s27",
+      "source": "math",
+      "sourceHandle": "val-junctions",
+      "target": "out",
+      "targetHandle": "valin-s27"
+    },
+    {
+      "id": "e_math_s28",
+      "source": "math",
+      "sourceHandle": "val-iterationsRun",
+      "target": "out",
+      "targetHandle": "valin-s28"
+    },
+    {
+      "id": "e_math_s29",
+      "source": "math",
+      "sourceHandle": "val-exponent",
+      "target": "out",
+      "targetHandle": "valin-s29"
+    },
+    {
+      "id": "e_math_s30",
+      "source": "math",
+      "sourceHandle": "val-maxEnergyResidual",
+      "target": "out",
+      "targetHandle": "valin-s30"
+    },
+    {
+      "id": "e_math_s31",
+      "source": "math",
+      "sourceHandle": "val-maxContinuityResidual",
+      "target": "out",
+      "targetHandle": "valin-s31"
+    },
+    {
+      "id": "e_math_s32",
+      "source": "math",
+      "sourceHandle": "val-maxDQ",
+      "target": "out",
+      "targetHandle": "valin-s32"
+    },
+    {
+      "id": "e_math_s33",
+      "source": "math",
+      "sourceHandle": "val-maxDH",
+      "target": "out",
+      "targetHandle": "valin-s33"
+    },
+    {
+      "id": "e_math_s34",
+      "source": "math",
+      "sourceHandle": "val-finalEnergyResidual",
+      "target": "out",
+      "targetHandle": "valin-s34"
+    },
+    {
+      "id": "e_math_s35",
+      "source": "math",
+      "sourceHandle": "val-finalContinuityResidual",
+      "target": "out",
+      "targetHandle": "valin-s35"
+    }
+  ]
+}
+

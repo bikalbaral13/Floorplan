@@ -11,7 +11,7 @@ import { buildToolDefFromDeclaration, type NodeDeclaration } from "./nodeDeclara
 // The complete node declarations (full param schema + handles + showWhen + instructions) drive these tools'
 // FLOW_TOOLS entries at build time — the whole "Reshape" category is now data-declared. Vite can't import
 // from public/, so the BUNDLED copies live here under src/declarations/; the byte-identical copies under
-// public/Library/Flows/Nodes/Reshape/ are what the Import-Nodes picker + agent fetch at runtime. Keep the
+// public/Library/Tools/Reshape/ are what the Import picker + agent fetch at runtime. Keep the
 // two in sync (a full migration would load one copy via import.meta.glob and retire the other).
 import optimiseRectDecl from "./declarations/optimise-rect.node.json";
 import densifyDecl from "./declarations/densify.node.json";
@@ -44,6 +44,9 @@ import randomDecl from "./declarations/random.node.json";
 import exprDecl from "./declarations/expr.node.json";
 import fileUploadDecl from "./declarations/file-upload.node.json";
 import textDecl from "./declarations/text.node.json";
+import promptBuilderDecl from "./declarations/prompt-builder.node.json";
+import planJsonDecl from "./declarations/plan-json.node.json";
+import filterBySpaceDecl from "./declarations/filter-by-space.node.json";
 // 3d primitives
 import cuboidDecl from "./declarations/cuboid.node.json";
 import cylinderDecl from "./declarations/cylinder.node.json";
@@ -56,6 +59,7 @@ import capsuleDecl from "./declarations/capsule.node.json";
 import transform3dDecl from "./declarations/transform-3d.node.json";
 import boolean3dDecl from "./declarations/boolean-3d.node.json";
 import display3dDecl from "./declarations/display-3d.node.json";
+import materialDecl from "./declarations/material.node.json";
 // Segment
 import segmentSourceDecl from "./declarations/segment-source.node.json";
 import segmentSplitDecl from "./declarations/segment-split.node.json";
@@ -71,6 +75,9 @@ import canvasSourceDecl from "./declarations/canvas-source.node.json";
 import freehandSourceDecl from "./declarations/freehand-source.node.json";
 import freehandGeometryDecl from "./declarations/freehand-geometry.node.json";
 import separateDecl from "./declarations/separate.node.json";
+import filterByTypeDecl from "./declarations/filter-by-type.node.json";
+import setObjectParamDecl from "./declarations/set-object-param.node.json";
+import getObjectParamDecl from "./declarations/get-object-param.node.json";
 // Mass
 import massDecl from "./declarations/mass.node.json";
 import inset3dDecl from "./declarations/inset-3d.node.json";
@@ -94,9 +101,29 @@ import gridGeometryDecl from "./declarations/grid-geometry.node.json";
 import renderGridDecl from "./declarations/render-grid.node.json";
 import matrixTransposeDecl from "./declarations/matrix-transpose.node.json";
 import matrixInverseDecl from "./declarations/matrix-inverse.node.json";
+import matrixSolveDecl from "./declarations/matrix-solve.node.json";
+import leastSquaresDecl from "./declarations/least-squares.node.json";
+import matrixOpsDecl from "./declarations/matrix-ops.node.json";
+import matrixShiftDecl from "./declarations/matrix-shift.node.json";
+import vectorOpsDecl from "./declarations/vector-ops.node.json";
+import vectorProductDecl from "./declarations/vector-product.node.json";
+import matrixToGraphDecl from "./declarations/matrix-to-graph.node.json";
+import render2dDecl from "./declarations/render-2d.node.json";
+import render3dDecl from "./declarations/render-3d.node.json";
+import exportDxfDecl from "./declarations/export-dxf.node.json";
+import export3dDecl from "./declarations/export-3d.node.json";
+import exportCanvasDecl from "./declarations/export-canvas.node.json";
+import graphToMatrixDecl from "./declarations/graph-to-matrix.node.json";
+import graphInterpreterDecl from "./declarations/graph-interpreter.node.json";
+import canvasEncoderDecl from "./declarations/canvas-encoder.node.json";
+import matrixReduceDecl from "./declarations/matrix-reduce.node.json";
+import matrixEigenDecl from "./declarations/matrix-eigen.node.json";
+import snapshotDecl from "./declarations/snapshot.node.json";
 import setThicknessDecl from "./declarations/set-thickness.node.json";
 import mergeGraphDecl from "./declarations/merge-graph.node.json";
 import graphToOpeningsDecl from "./declarations/graph-to-openings.node.json";
+import labelGraphDecl from "./declarations/label-graph.node.json";
+import filterByLabelDecl from "./declarations/filter-by-label.node.json";
 import voronoiBloomDecl from "./declarations/voronoi-bloom.node.json";
 import springLayoutDecl from "./declarations/spring-layout.node.json";
 import pipeSolverDecl from "./declarations/pipe-solver.node.json";
@@ -159,11 +186,48 @@ export const parseDimEdges = (v: unknown): number[] => {
 };
 export const serializeDimEdges = (idx: number[]): string => [...new Set(idx)].sort((a, b) => a - b).join(", ");
 
-export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "segment-geometry" | "node-source" | "node-geometry" | "canvas-source" | "freehand-source" | "freehand-geometry" | "separate" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "corridoor" | "core-racking" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-geometry" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "grid-geometry" | "render-grid" | "matrix-transpose" | "matrix-inverse" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "graph-simplify" | "graph-clip" | "graph-fit-lines" | "graph-classify" | "set-thickness" | "merge-graph" | "graph-to-openings" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "boolean-2d" | "file-upload" | "text" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "pobj-source" | "grab-object" | "param-object" | "param-grab" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "rectangle" | "arc" | "circle" | "polygon" | "polyline" | "vertices" | "network" | "cuboid" | "cylinder" | "sphere" | "cone" | "transform-3d" | "boolean-3d" | "display-3d" | "agent" | "loop" | "match" | "loop-3d" | "line" | "ngon" | "ellipse" | "rounded-rect" | "sector" | "frustum" | "tapered-box" | "torus" | "capsule";
+export type FlowToolType = "source" | "space-creator" | "graph-source" | "segment-source" | "segment-geometry" | "node-source" | "node-geometry" | "canvas-source" | "freehand-source" | "freehand-geometry" | "separate" | "filter-by-type" | "set-object-param" | "get-object-param" | "buffer" | "bloom" | "pull" | "transform" | "show-direction" | "densify" | "inset" | "split" | "optimise-rect" | "skeleton" | "place-object" | "bsp" | "corridoor" | "core-racking" | "voronoi" | "conditional" | "param-manip" | "bounding-shape" | "convex-hull" | "convex-decomp" | "smoothing" | "contour" | "floor-massing" | "mitered-join" | "graph-smooth" | "graph-metrics" | "graph-geometry" | "graph-to-spaces" | "graph-to-grid" | "grid-source" | "grid-field" | "cellular-automaton" | "laplace-solver" | "fill-depressions" | "flow-direction" | "flow-accumulation" | "watershed" | "morphology" | "grid-distance" | "grid-threshold" | "marching-squares" | "grid-geometry" | "render-grid" | "matrix-transpose" | "matrix-inverse" | "matrix-solve" | "least-squares" | "matrix-ops" | "matrix-shift" | "vector-ops" | "vector-product" | "matrix-to-graph" | "graph-to-matrix" | "graph-interpreter" | "canvas-encoder" | "render-2d" | "render-3d" | "matrix-reduce" | "matrix-eigen" | "dimension" | "area-dimension" | "longest-branch" | "graph-reduce" | "graph-simplify" | "graph-clip" | "graph-fit-lines" | "graph-classify" | "set-thickness" | "label-graph" | "merge-graph" | "graph-to-openings" | "voronoi-bloom" | "spring-layout" | "pipe-solver" | "schema" | "output-schema" | "segment-split" | "image" | "vectorise" | "object-detection" | "filter-by-label" | "mesh" | "circle-packing" | "treemap" | "rect-pack" | "point" | "visibility" | "render" | "bua" | "math" | "random" | "output" | "space-geometry" | "input-props" | "merge" | "boolean-2d" | "file-upload" | "text" | "prompt-builder" | "plan-json" | "filter-by-space" | "analyse" | "generate" | "hatching" | "display-segment" | "display-node" | "frame-builder" | "wall-builder" | "segment-to-door" | "segment-to-window" | "node-to-object" | "node-to-staircase" | "node-to-footing" | "footing" | "footing-to-plan" | "footing-to-elevation" | "footing-to-3d-mesh" | "mesh-to-3d" | "staircase" | "staircase-to-plan" | "staircase-to-left-elevation" | "staircase-to-right-elevation" | "staircase-to-front-elevation" | "staircase-to-back-elevation" | "staircase-to-3d-mesh" | "schema-to-drawing" | "schema-to-layers" | "floorplan-to-front-elevation" | "floorplan-to-back-elevation" | "floorplan-to-left-elevation" | "floorplan-to-right-elevation" | "views-layout" | "segment-to-3d" | "space-to-3d" | "pobj-source" | "grab-object" | "param-object" | "param-grab" | "param-geometry" | "param-output-metrics" | "layout-gen" | "expr" | "rectangle" | "arc" | "circle" | "polygon" | "polyline" | "vertices" | "network" | "cuboid" | "cylinder" | "sphere" | "cone" | "transform-3d" | "boolean-3d" | "display-3d" | "material" | "agent" | "loop" | "match" | "loop-3d" | "line" | "ngon" | "ellipse" | "rounded-rect" | "sector" | "frustum" | "tapered-box" | "torus" | "capsule" | "snapshot" | "export-dxf" | "export-3d" | "export-canvas";
+
+// ── The "Geometry" node ─────────────────────────────────────────────────────────────────────────────
+// ONE node in the Library, five canvas-source kernels behind it. The node's `kind` parameter IS its
+// identity: switching it rewrites the node's `tool` to that kind's existing source tool (see
+// FlowOverlay's onParamChange), carrying the shared identity params across. Deliberately a UI-level
+// merge — the five tool ids stay the discriminator in evaluateFlow / compileFlow / the host resolvers,
+// so nothing downstream changes and every saved flow keeps loading. The header reads "Geometry" (its
+// `nodeLabel`) with the live kind as the muted suffix, so the node still says what it currently is.
+
+/** Kind → the source tool that implements it. The order is the order the dropdown shows. */
+export const GEOMETRY_KINDS: { value: string; label: string; tool: FlowToolType }[] = [
+  { value: "point", label: "Point (node)", tool: "node-source" },
+  { value: "segment", label: "Segment", tool: "segment-source" },
+  { value: "space", label: "Space", tool: "source" },
+  { value: "graph", label: "Graph", tool: "graph-source" },
+  { value: "freehand", label: "Freehand", tool: "freehand-source" },
+  // A picture is a canvas element like the rest now — it carries an `image_<uid>`, it has its own select
+  // scope, and it answers to Grab from selection — so it belongs in the same node rather than beside it.
+  // Selecting one retargets a grabbing Geometry node onto the Image kernel, whose outputs are the raster
+  // ones: `val-image` (the data URL), `val-matrix`, and the underlay's placement in metres. It publishes
+  // no `val-points`, which is the honest answer to "what are this thing's vertices" for a photograph.
+  { value: "image", label: "Image", tool: "image" },
+];
+export const GEOMETRY_TOOL_BY_KIND: Record<string, FlowToolType> =
+  Object.fromEntries(GEOMETRY_KINDS.map((k) => [k.value, k.tool]));
+export const GEOMETRY_KIND_BY_TOOL: Partial<Record<FlowToolType, string>> =
+  Object.fromEntries(GEOMETRY_KINDS.map((k) => [k.tool, k.value]));
+/** True for the five tools the Geometry node can switch between. */
+export const isGeometryTool = (tool: string): boolean => tool in GEOMETRY_KIND_BY_TOOL;
 
 /** A user-defined adjustable parameter on the Input Properties node. Each one renders a control
  *  (slider / options / checkbox / textbox) and exposes its current value as a `val-<id>` output. */
-export type InputPropType = "range" | "select" | "checkbox" | "text" | "color";
+export type InputPropType = "range" | "select" | "checkbox" | "text" | "color" | "button";
+
+/** A `button` prop is an ACTION, and its value is a RUN COUNTER. Pressing it increments that number,
+ *  which is the only form an action can take here: a flow re-evaluates whenever anything changes, so a
+ *  press has to leave a trace in the graph or nothing downstream can tell it happened. A Math Engine
+ *  gates expensive work on it (`iterations = run > 0 ? maxIter : 0`), so the work stays undone until
+ *  asked for, and every press is a NEW value, so pressing again re-runs rather than being deduplicated
+ *  as "no change". Where a run action is available (the flow editor) the press also applies the flow's
+ *  pending Set Object Param writes, which is what makes one button mean "solve and commit". */
 
 /** A `color` prop publishes its `#rrggbb` string on `val-<propId>`; wire it into a `valin-color`
  *  endpoint (Rectangle / Circle …) to drive a node's tint. */
@@ -180,6 +244,19 @@ export interface InputProp {
   step: number;
   /** select only */
   options: string[];
+  /** Whether the CONSUMER (Properties tab) may change this value. Author-set; the flow canvas editor
+   *  always stays editable, or a parameter locked by mistake could never be unlocked. Defaults to
+   *  true, and a file saved before this existed has no `editable` key — {@link inputProps} reads
+   *  "missing" as true, so every previous version keeps behaving exactly as it did. */
+  editable: boolean;
+  /** Draw this parameter's live value as a label on the 2D canvas, on the host the object is attached to:
+   *  a Space labels its CENTROID, a Segment its MIDPOINT, a Node the point itself. Author-set; defaults to
+   *  FALSE, so a file written before this existed labels nothing and looks exactly as it did. */
+  showInCanvas: boolean;
+  /** Whether this parameter is required. Author-set, defaults to true (a file without the key reads as
+   *  necessary), so marking one `false` is the deliberate act. Carried on the schema for consumers; it does
+   *  not gate evaluation. */
+  necessary: boolean;
   /** Optional conditional visibility: show this parameter only when a sibling prop (`when` = its id) has a
    *  matching value — a `select` option, or `true`/`false` for a `checkbox`. Author-set in the editor. UI-only:
    *  a hidden parameter keeps its value and still publishes its `val-<id>` output, so wiring is unaffected. */
@@ -202,10 +279,13 @@ export const inputProps = (params: Record<string, unknown>): InputProp[] => {
   if (!Array.isArray(raw)) return [];
   return raw.map((r, i) => {
     const o = (r ?? {}) as Record<string, unknown>;
-    const type = (["range", "select", "checkbox", "text", "color"].includes(o.type as string) ? o.type : "range") as InputPropType;
+    const type = (["range", "select", "checkbox", "text", "color", "button"].includes(o.type as string) ? o.type : "range") as InputPropType;
     const value: string | number | boolean =
       type === "checkbox" ? o.value === true
       : type === "range" ? (Number(o.value) || 0)
+      // A button carries its run counter, so it is a number like a range rather than the empty string
+      // the text branch below would give it (which would reach the Math Engine as an inert string).
+      : type === "button" ? (Number(o.value) || 0)
       // `<input type="color">` silently rejects anything that isn't #rrggbb, so a missing / short / named
       // colour falls back to the default rather than leaving the swatch stuck on black.
       : type === "color" ? (typeof o.value === "string" && HEX6_RE.test(o.value) ? o.value.toLowerCase() : DEFAULT_PROP_COLOR)
@@ -224,6 +304,14 @@ export const inputProps = (params: Record<string, unknown>): InputProp[] => {
       max: Number.isFinite(Number(o.max)) ? Number(o.max) : 10,
       step: Number(o.step) || 1,
       options: Array.isArray(o.options) ? o.options.map(String) : [],
+      // `!== false`, not `=== true`: a file authored before this field existed omits it entirely, and
+      // must keep its parameters editable. Only an explicit false locks one.
+      editable: o.editable !== false,
+      // Opposite defaults, and each matches the safe reading of a file that predates the field: canvas
+      // labels are opt-IN (`=== true`), so nothing starts drawing text over an existing plan, while
+      // `necessary` is opt-OUT (`!== false`), so a parameter is required unless the author says otherwise.
+      showInCanvas: o.showInCanvas === true,
+      necessary: o.necessary !== false,
       ...(showIf ? { showIf } : {}),
     };
   });
@@ -409,7 +497,156 @@ export const schemaNodeToSchemas = (params: Record<string, unknown>): {
 
 /** One named metric slot on the Output node. Each slot exposes a value-input endpoint (`valin-<id>`)
  *  you wire a node's `val-*` output into; `label` is the user-entered display name. */
-export interface OutputSlot { id: string; label: string; }
+export interface OutputSlot {
+  id: string;
+  label: string;
+  /** Draw this metric's live value on the 2D canvas at the host's anchor — Space centroid, Segment midpoint,
+   *  over a Node. The measured counterpart of {@link InputProp.showInCanvas}; same opt-in default of FALSE. */
+  showInCanvas: boolean;
+  /** Whether this metric is required. Defaults to true, so only an explicit `false` marks one optional. */
+  necessary: boolean;
+}
+
+/** One primitive ROW on a 2D / 3D Render node — the drawing counterpart of an Input Properties parameter.
+ *  A row is a KIND plus its style, not a single shape: fed a point list with several entries it draws one
+ *  piece per entry (a Polygon row splits on its third column, a Circle row draws a circle per point), so a
+ *  computed result of any size needs ONE row rather than one node per shape.
+ *
+ *  Each row exposes its own value-input endpoint (`valin-<id>`) for that geometry, and everything that is
+ *  NOT a number — colour, layer name — lives here on the row, because a Math Engine can only put numbers on
+ *  a wire. */
+export interface RenderPrim {
+  id: string;
+  /** 2D: "polygon" | "circle" | "stroke".
+   *  3D: "cuboid" | "cylinder" | "sphere" | "cone" | "capsule" | "frustum" | "tapered-box" | "torus"
+   *      | "polyhedron" | "tube" | "ring" | "loft". */
+  kind: string;
+  /** Optional row label (falls back to the kind). */
+  name: string;
+  color: string;
+  /** Canvas layer the pieces this row draws are created on — 2D rows put their geometry there on commit,
+   *  3D rows carry it as the mass's layer label. Blank = the flow's default layer. */
+  layer: string;
+  /** 2D outline style — how the row's edges are stroked. */
+  lineStyle: "solid" | "dashed" | "dotted";
+  /** 2D fill — "filled" paints the ring (hatched when `hatch` is set), "outlined" draws the edge only. */
+  fillMode: "filled" | "outlined";
+  /** 2D poché pattern for a filled row: "none" = flat colour, else the canvas hatch pattern. */
+  hatch: "none" | "diagonal" | "dots";
+  /** Hatch pitch (px) and line weight — only read when `hatch` isn't "none". */
+  hatchSpacing: number;
+  hatchWeight: number;
+  /** 3D material, per row: opacity (<1 → transparent), solid vs wireframe, and whether the mesh draws its
+   *  edge outline. These are what a downstream Display 3D node sets for a WHOLE node — on the row they can
+   *  differ per material, so one 3D Render node can carry grey walls, red leaves and glazing at once. */
+  opacity: number;
+  displayType: "solid" | "wireframe";
+  showEdges: boolean;
+  /** Circle: radius (m) — overridden per point by a third column on the wired list.
+   *  Cylinder: radius (m). Tube: the cylinder's radius; Ring: the RING radius (hole centre → tube centre). */
+  radius: number;
+  /** Stroke: the band's full width (m) — overridden per segment by a FIFTH column on the wired list. */
+  width: number;
+  /** Ring / Torus: the tube (minor) radius (m) — on a Ring, overridden per axis segment by an EIGHTH column. */
+  tubeRadius: number;
+  /** Torus: the sweep in DEGREES (5–360). 360 is a closed donut; less leaves an open arc, so a partial ring
+   *  needs no boolean. Unused by every other kind. */
+  arcDeg: number;
+  /** Cuboid / Tapered Box plan dimensions (m). Capsule: the MID length — the straight cylinder between the
+   *  two hemispherical caps, so the pill's overall height is `length + 2 × radius`. */
+  length: number;
+  breadth: number;
+  /** Cuboid / Cylinder / Cone / Frustum / Tapered Box height (m). */
+  height: number;
+  /** Frustum: the TOP radius (m) — `radius` is the bottom one, so top < bottom tapers inward and 0 gives a
+   *  cone. Unused by every other kind. */
+  radiusTop: number;
+  /** Tapered Box: the TOP plan dimensions (m) that `length` × `breadth` taper to over `height`. */
+  topLength: number;
+  topBreadth: number;
+  /** Own position (m) — used when nothing is wired into the row. Plan frame: x across, y down the plan.
+   *  On a POLYHEDRON row the mesh carries its own absolute coordinates, so these are an OFFSET instead. */
+  x: number;
+  y: number;
+  /** Base elevation (m) for 3D rows; a third column on the wired list overrides it per point. */
+  z: number;
+  show: boolean;
+}
+
+// STROKE is the open-path row: the fill kinds (Polygon, Circle) can only draw a CLOSED ring, so a centreline
+// — a frame member, a pipe run, a bar — had to be thickened into a quad by hand before it could be drawn.
+// It takes a SEGMENT list instead of a point list and strokes each one to a band.
+const RENDER_2D_KINDS = new Set(["polygon", "circle", "stroke"]);
+// POLYHEDRON is the 3D twin of the 2D Polygon row: its dimensions are not fields at all — the wired FACE
+// LIST is the whole shape — which is what lets a Math Engine emit a solid whose size is parametric, where a
+// Cuboid row's Length / Breadth / Height are fixed numbers.
+// TUBE and RING are the 3D twins of the Stroke row, and read the same AXIS-SEGMENT list as each other: a
+// Cuboid / Cylinder row is axis-aligned and positioned by a point, so nothing wired could ever tilt one —
+// an off-axis member (a bike's down tube, a strut, a handrail) was unreachable except by hand-building its
+// faces. Tube fills the segment as a cylinder; Ring treats it as the AXIS of a torus.
+// LOFT reads the same grouped point list a Polyhedron row does, but each run is a CROSS-SECTION rather than
+// a finished face: it skins them. Polyhedron can already draw any solid — provided the Math Engine
+// enumerates every face, which for a curved body means hand-writing the same quad-stitching loop every time.
+// Sections are what varies between one lofted thing and the next; the stitching is not.
+// The SOLID-OF-REVOLUTION / TAPERED kinds (Sphere, Cone, Capsule, Frustum, Tapered Box) are the row twins of
+// the standalone 3D-primitive nodes: same shapes, same meshing (the 3D canvas keys off `shape`, which is the
+// kind string), but reached through a row — so one node covers a whole operation's solids, and a wired
+// position list builds one per point instead of needing one node per instance.
+// TORUS is the point-positioned donut — distinct from RING, which is the same solid oriented by a wired AXIS
+// SEGMENT. Keep both: a wheel driven by its axle needs Ring, a flat ring at an X/Y/Z needs Torus.
+const RENDER_3D_KINDS = new Set([
+  "cuboid", "cylinder", "polyhedron", "tube", "ring", "loft",
+  "sphere", "cone", "capsule", "frustum", "tapered-box", "torus",
+]);
+
+/** Read a Render node's primitive rows from its params. Missing fields fall back to sane defaults, so a row
+ *  authored before a field existed still loads. `is3d` only decides which kind a bad/blank value falls back
+ *  to, so the two nodes share one reader. */
+export const renderPrims = (params: Record<string, unknown>, is3d = false): RenderPrim[] => {
+  const raw = Array.isArray(params.prims) ? (params.prims as unknown[]) : [];
+  const num = (v: unknown, d: number): number => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  const str = (v: unknown, d: string): string => (typeof v === "string" && v ? v : d);
+  const kinds = is3d ? RENDER_3D_KINDS : RENDER_2D_KINDS;
+  const fallbackKind = is3d ? "cuboid" : "polygon";
+  return raw.map((r, i) => {
+    const o = (r ?? {}) as Record<string, unknown>;
+    const kind = typeof o.kind === "string" && kinds.has(o.kind) ? o.kind : fallbackKind;
+    return {
+      id: str(o.id, `pr${i + 1}`),
+      kind,
+      name: typeof o.name === "string" ? o.name : "",
+      color: str(o.color, is3d ? "#94a3b8" : "#0891b2"),
+      layer: typeof o.layer === "string" ? o.layer : "",
+      radius: num(o.radius, 1),
+      width: num(o.width, 0.1),
+      tubeRadius: num(o.tubeRadius, 0.1),
+      length: num(o.length, 3),
+      breadth: num(o.breadth, 2),
+      height: num(o.height, 3),
+      // Taper dimensions. Defaults match the standalone Frustum / Tapered Box nodes, so switching a chain
+      // over to a row reproduces the same solid rather than a differently-proportioned one.
+      radiusTop: num(o.radiusTop, 0.8),
+      topLength: num(o.topLength, 2),
+      topBreadth: num(o.topBreadth, 1.5),
+      // Torus sweep. The canvas clamps to 5–360; the default is the closed donut the standalone node ships.
+      arcDeg: num(o.arcDeg, 360),
+      x: num(o.x, 0),
+      y: num(o.y, 0),
+      z: num(o.z, 0),
+      // Style, per row. Defaults reproduce the old fixed behaviour exactly — a solid, filled, unhatched 2D
+      // row and an opaque solid 3D row with no edges — so a flow authored before these fields loads unchanged.
+      lineStyle: o.lineStyle === "dashed" ? "dashed" : o.lineStyle === "dotted" ? "dotted" : "solid",
+      fillMode: o.fillMode === "outlined" ? "outlined" : "filled",
+      hatch: o.hatch === "diagonal" ? "diagonal" : o.hatch === "dots" ? "dots" : "none",
+      hatchSpacing: num(o.hatchSpacing, 8),
+      hatchWeight: num(o.hatchWeight, 1),
+      opacity: Math.max(0, Math.min(1, num(o.opacity, 1))),
+      displayType: o.displayType === "wireframe" ? "wireframe" : "solid",
+      showEdges: o.showEdges === true,
+      show: o.show !== false,
+    };
+  });
+};
 
 /** Read an Output node's slots from its params (defaults to one empty slot). */
 export const outputSlots = (params: Record<string, unknown>): OutputSlot[] => {
@@ -417,10 +654,32 @@ export const outputSlots = (params: Record<string, unknown>): OutputSlot[] => {
   if (Array.isArray(raw) && raw.length) {
     return raw.map((s, i) => {
       const o = (s ?? {}) as Record<string, unknown>;
-      return { id: typeof o.id === "string" && o.id ? o.id : `s${i + 1}`, label: typeof o.label === "string" ? o.label : "" };
+      return {
+        id: typeof o.id === "string" && o.id ? o.id : `s${i + 1}`,
+        label: typeof o.label === "string" ? o.label : "",
+        // Same defaults as an Input Properties row: labelling is opt-in, `necessary` opt-out.
+        showInCanvas: o.showInCanvas === true,
+        necessary: o.necessary !== false,
+      };
     });
   }
-  return [{ id: "s1", label: "" }];
+  return [{ id: "s1", label: "", showInCanvas: false, necessary: true }];
+};
+
+/** One detection target on the Object Detection node — added with "Add object". The name is BOTH what
+ *  Gemini is asked for (all names go into one prompt, so it stays a single call) and the term the reply
+ *  is split back on, which is the point: the ask and the split can no longer drift apart. */
+export interface DetectionObject { id: string; name: string }
+
+/** The Object Detection node's target rows. An EMPTY list means "no rows configured" — the node then
+ *  falls back to the free-text `targets` param and its fixed endpoints, so pre-rows flows keep working. */
+export const detectionObjects = (params: Record<string, unknown>): DetectionObject[] => {
+  const raw = params.objects;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((o, i) => {
+    const r = (o ?? {}) as Record<string, unknown>;
+    return { id: typeof r.id === "string" && r.id ? r.id : `o${i + 1}`, name: typeof r.name === "string" ? r.name : "" };
+  });
 };
 
 /** One furniture/fixture footprint placed along a Space's boundary by the Place Object node. The node
@@ -557,6 +816,10 @@ export interface ParamField {
   step?: number;
   /** Unit suffix shown next to a range/number value (e.g. "m", "°"). */
   unit?: string;
+  /** `textarea` only — split the value into FOLDABLE REGIONS on `# <title>` marker lines (see
+   *  ExprSectionsEditor). Purely presentational: the value stays one string and a body with no markers
+   *  renders as the ordinary textarea. */
+  sections?: boolean;
   /** Render a text field as a password input (e.g. an API key). */
   secret?: boolean;
   /** Placeholder for text / textarea inputs. */
@@ -594,6 +857,10 @@ export interface FlowToolDef {
    *  handles (id `val-<key>`) below the geometry outputs; the live value is shown on the node and
    *  baked under params._values for the badge. When `alignField` is set, the endpoint instead sits on
    *  that existing field's row (no separate readout row) — e.g. Massing's "floors" on the "n" slider. */
+  /** True for a node that takes a geometry INPUT but draws nothing on canvas (Vectorisation: image in,
+   *  graph JSON out). The canvas-visibility (eye) toggle is hidden for these — `hasInput || hasOutput`
+   *  alone would show a control with nothing to hide. */
+  drawsNothing?: boolean;
   valueOutputs?: { key: string; label: string; unit?: string; alignField?: string }[];
   /** SCALAR input endpoints (amber target handles, id `valin-<key>`) — when wired from another node's
    *  value output, the incoming number OVERRIDES the param named `key` (e.g. Massing's `n` floors). */
@@ -620,6 +887,17 @@ export interface FlowToolDef {
    *  endpoints in this model, so junctions appear automatically where segments meet — "graph as nodes and
    *  segments". The open-path counterpart of `materialisesSpace`; carried from `materialisesSegments`. */
   materialisesSegments?: boolean;
+  /** Whether a `materialisesSpace` node also OWNS the boundary of the Spaces it makes, i.e. whether Live
+   *  should draw one editable wall per boundary edge alongside the Space. Defaults to true, which is right
+   *  for a node that invents its boundary (Inset, Optimise Rectangle, Corridoor, Voronoi): the edges are
+   *  its output and nothing else is drawing them.
+   *
+   *  FALSE for a node that DERIVES faces from geometry already on the canvas — Graph to Spaces, whose whole
+   *  purpose is to add rooms to a graph a Network node has already materialised. There the boundary edges
+   *  are a duplicate of segments that exist, at the editor's default thickness rather than the real wall's,
+   *  on a layer painted above them; and because the faces close across every door and window, the duplicates
+   *  are drawn straight over the openings, filling them in. Carried from `materialisesSpaceEdges`. */
+  materialisesSpaceEdges?: boolean;
 }
 
 /** Default Metrics-tab result rows for the Frame Builder, used when no Output Schema node overrides
@@ -672,7 +950,12 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // (shared computePerimeterPlacement). Each object's length runs along the boundary edge; breadth +
     // setback push into the space from the wall. The `fields` below are the PER-OBJECT editor template —
     // the renderers special-case this node to repeat them per object row rather than reading flat params.
-    defaultParams: { objects: [{ ...PLACE_OBJECT_DEFAULT_ENTRY }], seed: 1 },
+    // `boundary` is the LIST-DRIVEN input (see LIST_INPUT_PARAM in evaluateFlow): wire an N×2 point matrix
+    // — metres, local to the flow anchor — and the node solves against THAT outline with no canvas Space
+    // wired in, exactly as Inset's `polygon` / Skeleton's `vertices` do. That is what lets a computed room
+    // (a Math Engine rectangle) host objects without first materialising it as a Space.
+    valueInputs: [{ key: "boundary", label: "Boundary (JSON)" }],
+    defaultParams: { objects: [{ ...PLACE_OBJECT_DEFAULT_ENTRY }], seed: 1, boundary: "" },
     fields: [
       { key: "kind", label: "Type", kind: "select", options: PLACE_OBJECT_KIND_OPTIONS },
       { key: "length", label: "Length", kind: "range", min: 0.2, max: 5, step: 0.05, unit: "m" },
@@ -876,6 +1159,15 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "freehand-geometry": buildToolDefFromDeclaration(freehandGeometryDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/separate.node.json) — behaviour stays in code.
   separate: buildToolDefFromDeclaration(separateDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/filter-by-type.node.json) — behaviour stays in code (reads the
+  // attached object's params out of canvasContent.spaceMeta and splits the bundle in two).
+  "filter-by-type": buildToolDefFromDeclaration(filterByTypeDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/set-object-param.node.json) — behaviour stays in code (computes the
+  // writes in evaluateFlow; the host applies them on Apply, as one undoable history step).
+  "set-object-param": buildToolDefFromDeclaration(setObjectParamDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/get-object-param.node.json) — behaviour stays in code (reads the
+  // attached object params out of canvasContent.spaceMeta into a matrix).
+  "get-object-param": buildToolDefFromDeclaration(getObjectParamDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/segment-split.node.json) — behaviour stays in code. NOTE: the
   // declaration's outputCount matches the baked-handleCount path exactly; the pre-bake ratio-mode estimate
   // is approximated (falls to 2) since it needs parseSplitRatios — the live count bakes on evaluation.
@@ -1311,9 +1603,18 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // Draws nothing — chain into Marching Squares (streamlines) or Render Grid.
     hasInput: false,
     hasOutput: false,
-    valueInputs: [{ key: "matrix", label: "Matrix" }, { key: "op", label: "Test" }, { key: "threshold", label: "Threshold" }],
+    // WHERE THE MATRIX IS — and this is the node that decides it for the whole chain. A bare matrix is
+    // only numbers; the FIRST node to lift one into a grid field fixes its world frame, and every node
+    // downstream inherits that field rather than re-reading the matrix (fieldInputOf follows any incoming
+    // edge, value edges included). So placing a contour on the picture it came from means setting Cell
+    // size / Origin here, not on Marching Squares, where the same params are silently overridden by the
+    // field arriving from this node.
+    valueInputs: [
+      { key: "matrix", label: "Matrix" }, { key: "op", label: "Test" }, { key: "threshold", label: "Threshold" },
+      { key: "cellSize", label: "Cell size" }, { key: "originX", label: "Origin X" }, { key: "originY", label: "Origin Y" },
+    ],
     valueOutputs: [{ key: "matrix", label: "Matrix (JSON)" }],
-    defaultParams: { matrix: "", op: ">", threshold: 0 },
+    defaultParams: { matrix: "", op: ">", threshold: 0, cellSize: 1, originX: 0, originY: 0 },
     fields: [
       { key: "matrix", label: "Matrix", kind: "text" },
       {
@@ -1342,13 +1643,25 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // OUTPUT so the contours render / chain into Polygon / Network / Mitered Join.
     hasInput: true,
     hasOutput: true,
-    valueInputs: [{ key: "matrix", label: "Matrix" }, { key: "levels", label: "Levels" }],
-    defaultParams: { matrix: "", levels: 5 },
+    // WHERE THE MATRIX IS. A wired grid-FIELD carries its own world frame; a bare MATRIX does not — it is
+    // just numbers — so `gridFieldFromMatrix` places it by Cell size + Origin X/Y. Those three were params
+    // only, which meant a contour traced off an IMAGE could not be put back on the picture it was read
+    // from: the Image node publishes the underlay's real `val-cellM` / `val-originX` / `val-originY` for
+    // exactly that purpose, and there was no endpoint to wire them into. Now there is, so the contour
+    // lands registered on the drawing and follows it when the underlay is moved or rescaled.
+    valueInputs: [
+      { key: "matrix", label: "Matrix" }, { key: "levels", label: "Levels" },
+      { key: "cellSize", label: "Cell size" }, { key: "originX", label: "Origin X" }, { key: "originY", label: "Origin Y" },
+    ],
+    defaultParams: { matrix: "", levels: 5, cellSize: 1, originX: 0, originY: 0 },
     fields: [
       { key: "matrix", label: "Matrix", kind: "text" },
       { key: "levels", label: "Contour levels", kind: "range", min: 1, max: 12, step: 1 },
+      { key: "cellSize", label: "Cell size", kind: "number", unit: "m" },
+      { key: "originX", label: "Origin X", kind: "number", unit: "m" },
+      { key: "originY", label: "Origin Y", kind: "number", unit: "m" },
     ],
-    hint: "Extract iso-contours from a MATRIX / grid field — N evenly-spaced levels between min and max → contour lines (a graph). Feed a Grid Threshold mask (val-matrix) for streamlines, or any grid-field. Chain into Polygon / Network / Mitered Join.",
+    hint: "Extract iso-contours from a MATRIX / grid field — N evenly-spaced levels between min and max → contour lines (a graph). Feed a Grid Threshold mask (val-matrix) for streamlines, or any grid-field. A bare matrix has no world frame: wire an Image node's Cell size / Origin X / Origin Y to land the contour on the picture it was traced from. Levels 1 over a 0/1 mask gives the single boundary of that mask — the outline of the black region. Chain into Polygon / Network / Graph Geometry → Graph to Spaces.",
   },
   // Data-declared (see ./declarations/area-dimension.node.json) — behaviour stays in code.
   "area-dimension": buildToolDefFromDeclaration(areaDimensionDecl as unknown as NodeDeclaration),
@@ -1378,12 +1691,42 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "render-grid": buildToolDefFromDeclaration(renderGridDecl as unknown as NodeDeclaration),
   "matrix-transpose": buildToolDefFromDeclaration(matrixTransposeDecl as unknown as NodeDeclaration),
   "matrix-inverse": buildToolDefFromDeclaration(matrixInverseDecl as unknown as NodeDeclaration),
+  "matrix-solve": buildToolDefFromDeclaration(matrixSolveDecl as unknown as NodeDeclaration),
+  "least-squares": buildToolDefFromDeclaration(leastSquaresDecl as unknown as NodeDeclaration),
+  "matrix-ops": buildToolDefFromDeclaration(matrixOpsDecl as unknown as NodeDeclaration),
+  "matrix-shift": buildToolDefFromDeclaration(matrixShiftDecl as unknown as NodeDeclaration),
+  "vector-ops": buildToolDefFromDeclaration(vectorOpsDecl as unknown as NodeDeclaration),
+  "vector-product": buildToolDefFromDeclaration(vectorProductDecl as unknown as NodeDeclaration),
+  "matrix-to-graph": buildToolDefFromDeclaration(matrixToGraphDecl as unknown as NodeDeclaration),
+  "graph-to-matrix": buildToolDefFromDeclaration(graphToMatrixDecl as unknown as NodeDeclaration),
+  "graph-interpreter": buildToolDefFromDeclaration(graphInterpreterDecl as unknown as NodeDeclaration),
+  "canvas-encoder": buildToolDefFromDeclaration(canvasEncoderDecl as unknown as NodeDeclaration),
+  // 2D / 3D Render — one node per operation's whole drawing output; the ROWS (params.prims) are dynamic,
+  // so behaviour lives in code (renderPrims + the per-row editor/handles) exactly like Input Properties.
+  "render-2d": buildToolDefFromDeclaration(render2dDecl as unknown as NodeDeclaration),
+  "render-3d": buildToolDefFromDeclaration(render3dDecl as unknown as NodeDeclaration),
+  // Material — a LINK to a Library/Materials file, wired into a 3D Render row's own `matin-<rowId>`
+  // endpoint. It holds a path and nothing else: the file is resolved by whoever renders (viewport,
+  // glTF, DXF, the Blender addon), so retuning one material restyles every row pointing at it.
+  material: buildToolDefFromDeclaration(materialDecl as unknown as NodeDeclaration),
+  // Export sinks: they draw nothing and commit nothing — the node body's Download button writes the file
+  // from what is wired in (2D preview pieces → DXF; 3D primitive descriptors → glTF/OBJ/STL/PLY).
+  "export-dxf": buildToolDefFromDeclaration(exportDxfDecl as unknown as NodeDeclaration),
+  "export-3d": buildToolDefFromDeclaration(export3dDecl as unknown as NodeDeclaration),
+  // The third sink: same "read what is wired in, produce nothing" shape, but it writes to the PLAN rather
+  // than to a file — the wired node's polygons land as ordinary Spaces + segments (see onExportToCanvas).
+  "export-canvas": buildToolDefFromDeclaration(exportCanvasDecl as unknown as NodeDeclaration),
+  "matrix-reduce": buildToolDefFromDeclaration(matrixReduceDecl as unknown as NodeDeclaration),
+  "matrix-eigen": buildToolDefFromDeclaration(matrixEigenDecl as unknown as NodeDeclaration),
+  snapshot: buildToolDefFromDeclaration(snapshotDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/set-thickness.node.json) — behaviour stays in code.
   "set-thickness": buildToolDefFromDeclaration(setThicknessDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/merge-graph.node.json) — behaviour stays in code.
   "merge-graph": buildToolDefFromDeclaration(mergeGraphDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/graph-to-openings.node.json) — behaviour stays in code.
   "graph-to-openings": buildToolDefFromDeclaration(graphToOpeningsDecl as unknown as NodeDeclaration),
+  "label-graph": buildToolDefFromDeclaration(labelGraphDecl as unknown as NodeDeclaration),
+  "filter-by-label": buildToolDefFromDeclaration(filterByLabelDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/voronoi-bloom.node.json) — behaviour stays in code.
   "voronoi-bloom": buildToolDefFromDeclaration(voronoiBloomDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/spring-layout.node.json) — behaviour stays in code.
@@ -1744,13 +2087,19 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // OUTPUT metrics inline — both DECLARED outputs (a top-level `outputs` array of named expressions) and a
     // few DERIVED ones (bounding W×D×H, footprint area, volume, shape count). The host bakes the evaluated
     // values into `_outputs`. Passes the definition through on `val-def`. No geometry of its own.
+    //
+    // EVERY METRIC IS WIREABLE: besides the declared `def` pass-through, the node grows one DYNAMIC
+    // `val-<key>` endpoint per metric — declared outputs first, then the derived ones — each anchored to its
+    // own readout row. The key is the metric's name reduced to an identifier ("Built-up area" →
+    // `val-Built_up_area`), from the shared `paramOutputEntries` so the row, the handle and the value the
+    // evaluator publishes always agree. Wire a metric into a Math Engine, an Output slot or any param.
     hasInput: false,
     hasOutput: false,
     valueInputs: [{ key: "def", label: "Definition" }],
     valueOutputs: [{ key: "def", label: "Definition" }],
     defaultParams: {},
     fields: [],
-    hint: "Read a wired Parametric Object's output metrics (declared `outputs` + derived size/area/volume). Passes the definition through.",
+    hint: "Read a wired Parametric Object's output metrics (declared `outputs` + derived size/area/volume). Each metric gets its own output endpoint; the definition passes through.",
   },
   "node-to-staircase": {
     type: "node-to-staircase",
@@ -2301,9 +2650,73 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // feeds the Image nodes (Vectorisation). Carries no geometry itself.
     hasInput: false,
     hasOutput: true,
-    defaultParams: {},
-    fields: [],
-    hint: "The imported underlay image (auto-connects to the canvas image). Feeds Vectorisation.",
+    // The image AS A MATRIX (`val-matrix`) — the bridge from the raster into the Matrix / Grid nodes,
+    // mirroring what Grid Geometry does for a grid-field. Per-pixel luminance 0..1, row-major, and
+    // DOWNSAMPLED (long edge capped, see IMAGE_MATRIX_MAX_EDGE in evaluateFlow) because values travel
+    // between nodes as JSON strings and a full-resolution photo would be megabytes on every eval. The
+    // node body shows no matrix box — the data lives on the wire, not on the node.
+    // `matrix` is the pixels; the five that follow are WHERE THOSE PIXELS ARE. The matrix alone is just
+    // numbers on a wire with no world box, so anything derived from it had to be placed BY HAND — a typed
+    // image width and origin that only ever approximated the underlay, and drifted the moment the picture
+    // was moved or rescaled. These publish the real placement in the same anchor-relative METRES every
+    // other value output speaks, so a Math Engine can put its result back exactly on top of the picture it
+    // read. `cellM` is the one to reach for: the matrix is DOWNSAMPLED, so one cell is several image
+    // pixels, and this is that cell's size in metres — exact, unlike width ÷ columns, which smears the
+    // last partial cell's rounding across every cell.
+    // `image` is the picture ITSELF as a `data:` URL — the underlay's own bytes, not a re-render. It is
+    // what an Analyse / Render node's File / Image input wants, so the plan already on canvas can be sent
+    // to a model without a File Upload node asking for the same file a second time. The matrix cannot
+    // serve that purpose: it is downsampled to a luminance grid, which is unreadable as a drawing.
+    valueOutputs: [
+      { key: "id", label: "Image id" },
+      { key: "image", label: "Image (data URL)" },
+      { key: "matrix", label: "Matrix (JSON)" },
+      { key: "matrixR", label: "Red (JSON)" },
+      { key: "matrixG", label: "Green (JSON)" },
+      { key: "matrixB", label: "Blue (JSON)" },
+      { key: "originX", label: "Origin X", unit: "m" },
+      { key: "originY", label: "Origin Y", unit: "m" },
+      { key: "cellM", label: "Cell size", unit: "m" },
+      { key: "widthM", label: "Image width", unit: "m" },
+      { key: "heightM", label: "Image height", unit: "m" },
+    ],
+    // WHICH PICTURE. Blank is the base underlay — the imported drawing, and what every flow written
+    // before overlays existed goes on reading. Naming an overlay ("render-1") points this node, and the
+    // Vectorisation / Object Detection chain hanging off it, at that picture instead. A name with no
+    // overlay behind it falls back to the base rather than going dark, so deleting an overlay degrades
+    // to the original drawing instead of silently emptying the branch.
+    // Which channel `val-matrix` carries. Every option is oriented LOW = INK, so one `value ≤ threshold`
+    // test downstream means "ink" whichever is picked. Distance to colour is the general form of the
+    // Vectorisation node's Colour + Tolerance pair — any target colour, with the consumer's own threshold
+    // acting as the tolerance. These live on the node rather than being wireable BY DESIGN: the Image node
+    // is a root, so an edge back into it from an Input Properties brief would close a cycle, and
+    // evaluateFlow's topological sort bails on one.
+    defaultParams: { grabFromSelection: true, id: "", channel: "luma", inkColor: "#000000", pooling: "mean" },
+    fields: [
+      // POOLING is a property of the SOURCE - how the raster is sampled - which is why it belongs here
+      // and the removed "Read" selector did not: which channel counts as ink is a question about the
+      // trace. Mean box-filters and is right for a photograph; Ink reports each block's darkest pixel,
+      // which is what keeps a 1 px coloured hairline alive through the 128-cell downsample instead of
+      // averaging it into the paper. Mean stays the default so existing flows are untouched.
+      { key: "pooling", label: "Sampling", kind: "select", options: [
+        { value: "mean", label: "Mean (photographic)" },
+        { value: "ink", label: "Ink (keep hairlines)" },
+      ] },
+      // Same pair every other source node carries: a checkbox that FOLLOWS the canvas selection, and the
+      // id it writes, which stays editable when the checkbox is off. On by default, matching Graph /
+      // Segment / Node — a node dropped while a picture is selected should already be reading it.
+      { key: "grabFromSelection", label: "Grab from selection", kind: "checkbox" },
+      { key: "id", label: "Image", kind: "text", placeholder: "blank = the imported plan; or render-1 …" },
+      // NO "Read" SELECTOR. `channel` and `inkColor` are still read below and still drive `val-matrix`,
+      // so a flow that sets them keeps working — they simply have no control on the node any more.
+      // They were a Vectorisation-era detail on a node that is now the Geometry node's Image kind, and
+      // the wrong place for it either way: which channel counts as ink is a question about the TRACE,
+      // and Vectorisation has its own Colour mode for exactly that. Leaving the pair here offered two
+      // answers to one question, on two different nodes, with only one of them consulted by the tracer.
+      // `inkColor` goes with it: it only ever appeared for `channel: "dist"`, which is now unreachable
+      // from the UI, so a colour swatch that can never be shown is not a control, it is dead weight.
+    ],
+    hint: "The imported underlay image (auto-connects to the canvas image, or to whichever picture is selected). `val-image` is the picture's own bytes as a data URL — what an Analyse or Render node's File input wants. `val-matrix` publishes it as a downsampled 0..1 luminance matrix (LOW = ink) for the Matrix / Grid nodes, and the four placement outputs say where those pixels are, in metres. Feeds Vectorisation, which picks its own colour to trace.",
   },
   vectorise: {
     type: "vectorise",
@@ -2314,16 +2727,38 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     // (T-junctions) → ortho straighten → collinear merge. Output feeds the Graph nodes (Mitered Join /
     // Graph to Spaces / Metrics).
     hasInput: true,
-    hasOutput: true,
+    // VALUE-ONLY: the trace leaves on `val-graph`, never as geometry, and the node draws nothing —
+    // `drawsNothing` therefore hides the canvas-visibility (eye) toggle, which would have nothing to
+    // toggle. Wire the graph into Network / Polygon to see it, or into any Graph node to work on it.
+    hasOutput: false,
+    drawsNothing: true,
+    // EVERY tracing parameter is wireable, not just the four that used to be. The kernel already reads
+    // them all through `{ ...data.params, ...vin }`, so the list below was the only thing standing between
+    // a brief and the trace: a flow that puts the whole tuning set on ONE Input Properties node — the
+    // shape detect_* flows already use — needs an endpoint per row, or half the brief silently does
+    // nothing. Ordered as the sliders are, so the endpoints read top-to-bottom like the panel.
     valueInputs: [
+      { key: "colorMode", label: "Colour" },
       { key: "tolerance", label: "Tolerance" },
+      { key: "despeckle", label: "Despeckle" },
+      { key: "dilate", label: "Gap close" },
+      { key: "spurLength", label: "Prune spurs" },
+      { key: "simplifyEpsilon", label: "Simplify" },
       { key: "minLength", label: "Min length" },
       { key: "snapTolerance", label: "Node snap" },
       { key: "connectGap", label: "Bridge gaps" },
+      { key: "mergeAngle", label: "Straighten" },
+      { key: "orthoSnap", label: "Ortho snap" },
+      { key: "orthoTol", label: "Ortho window" },
+      { key: "tuneMinArea", label: "Min space area" },
+      { key: "tuneColour", label: "Tune colour too" },
     ],
-    // Live trace quality readouts (also the Auto-Tune objective): closed faces ≥ Min space area,
-    // dangling degree-1 endpoints (broken loops), and traced polyline count.
+    // The vector result, plus the live trace-quality readouts (also the Auto-Tune objective): closed
+    // faces ≥ Min space area, dangling degree-1 endpoints (broken loops), and traced polyline count.
     valueOutputs: [
+      { key: "graph", label: "Graph (JSON)" },
+      { key: "nodes", label: "Nodes" },
+      { key: "edges", label: "Edges" },
       { key: "spaces", label: "Spaces" },
       { key: "openEnds", label: "Open ends" },
       { key: "lines", label: "Lines" },
@@ -2374,56 +2809,128 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
       // Auto-Tune also sweeps the colour mode (for drawings whose line colour is unknown).
       { key: "tuneColour", label: "Tune colour too", kind: "checkbox" },
     ],
-    hint: "Trace the image's lines into a connected node/edge graph — colour filter, despeckle, gap-close, spur pruning, simplify, vertex snap, endpoint bridging (T-junctions), ortho straightening and collinear merging. Feeds the Graph nodes. AUTO-TUNE loops these parameters against the image, scores each combo on closed spaces found (minus noise faces and open ends) and bakes the best values back into the sliders — no manual hit-and-trial.",
+    hint: "Trace the image's lines into a connected node/edge graph — colour filter, despeckle, gap-close, spur pruning, simplify, vertex snap, endpoint bridging (T-junctions), ortho straightening and collinear merging. VECTOR OUT ONLY: the result leaves on val-graph as node/edge JSON in metres (with val-nodes / val-edges counts) and the node draws nothing — wire the graph into Fit Lines, Graph to Spaces, Network or Polygon. AUTO-TUNE loops these parameters against the image, scores each combo on closed spaces found (minus noise faces and open ends) and bakes the best values back into the sliders — no manual hit-and-trial; judge it on the Spaces / Open ends / Lines readouts.",
   },
   "object-detection": {
     type: "object-detection",
     label: "Object Detection",
     color: "#a21caf",
-    // Action node: detects objects in the input image (Gemini) and outputs one Space (bounding box) per
-    // object. The async detect bakes `_boxes` (world polygons); the eval reads them. Mirrors Image Tools →
-    // Object Detection (box mode).
+    // Pure VALUE node: detects objects in the input image (Gemini) and publishes their bounding boxes as
+    // MATH values — a nested polygon list and a node/edge graph — instead of emitting geometry. The async
+    // detect bakes `_boxes` (world polygons); the eval reads them and republishes in anchor-relative
+    // metres. It has NO geometry output: wire `val-polygons` into a Polygon node, or `val-graph` into a
+    // Network node, to draw the boxes — which keeps the detection composable with the Math / Graph nodes
+    // rather than dumping one Space per object. Mirrors Image Tools → Object Detection (box mode).
     hasInput: true,
-    hasOutput: true,
-    outputCount: (p) => p.outputMode === "single" ? 1 : Math.max(1, Math.min(80, Math.round(Number(p.handleCount) || 1))),
-    defaultParams: { api_key: "", model: "gemini-robotics-er-1.6-preview", targets: "", maxItems: 20, outputMode: "perCell" },
+    hasOutput: false,
+    // THE THREE SETTINGS A BRIEF NEEDS TO REACH. Key, model and Max items were params only, so a flow
+    // that gathers every input into one Input Properties panel had nowhere to put them and the detection
+    // node stayed a second place to configure. Wired values are baked back onto the params (see the
+    // object-detection branch in FlowOverlay's bake pass), because DETECT is a button that reads params
+    // rather than the live graph — without that bake a wired key would resolve in the preview and still
+    // be missing at the moment it is pressed.
+    valueInputs: [
+      { key: "api_key", label: "API key" },
+      { key: "model", label: "Model" },
+      { key: "maxItems", label: "Max items" },
+    ],
+    // On top of these fixed endpoints the node publishes ONE DYNAMIC endpoint per "Add object" row
+    // (`val-<rowId>`, rendered from params.objects like Input Properties renders its props) plus
+    // `val-unmatched` — see the detection branch in evaluateFlow.
+    valueOutputs: [
+      { key: "polygons", label: "Polygons (JSON)" },
+      // FLAT corner matrix — one row per box [x0,y0,x1,y1,x2,y2,x3,y3], anchor-relative metres. The form
+      // a Math Engine can lift directly: the nested ring list on `polygons` parses to zeros there (a ring
+      // is not a number), so this is the endpoint that lets detection wire straight into `expr` with no
+      // Graph to Matrix bridge. Per-row twins exist too (`val-<rowId>_corners`).
+      { key: "corners", label: "Corners (N×8, row per box)" },
+      { key: "points", label: "Points (JSON)" },
+      { key: "labels", label: "Labels (JSON)" },
+      { key: "graph", label: "Graph (JSON)" },
+      { key: "count", label: "Objects" },
+      { key: "area", label: "Total area", unit: "m²" },
+    ],
+    defaultParams: { api_key: "", model: "gemini-robotics-er-2-preview", targets: "", maxItems: 20, shape: "polygon", objects: [] },
     fields: [
       { key: "api_key", label: "API key", kind: "text", secret: true, placeholder: "Gemini API key" },
-      { key: "model", label: "Model", kind: "text", placeholder: "gemini-robotics-er-1.6-preview" },
-      { key: "targets", label: "Detect", kind: "text", placeholder: "e.g. trees, cars (blank = all)" },
+      { key: "model", label: "Model", kind: "text", placeholder: "gemini-robotics-er-2-preview" },
+      // Free-text fallback — only meaningful when NO object rows are configured (rows drive the ask).
+      { key: "targets", label: "Detect", kind: "text", placeholder: "e.g. trees, cars (blank = all)", showIf: (p) => !(Array.isArray(p.objects) && p.objects.length) },
+      // PER OBJECT once rows exist: the cap sent to the model is this × the number of rows, so adding a
+      // row can't starve the classes listed after it.
       { key: "maxItems", label: "Max items", kind: "range", min: 1, max: 50, step: 1 },
+      // WHAT the model is asked to return: the object's boundary, a point on it, or both in one call.
+      // Gemini's spatial models answer either form natively — this is the ask, not a post-process.
       {
-        key: "outputMode",
-        label: "Outputs",
+        key: "shape",
+        label: "Shape",
         kind: "select",
         options: [
-          { value: "perCell", label: "Per object (one each)" },
-          { value: "single", label: "Single (all)" },
+          { value: "polygon", label: "Polygon (boundary)" },
+          { value: "point", label: "Point" },
+          { value: "both", label: "Both" },
         ],
       },
     ],
-    hint: "Detect objects in the image → one Space (bounding box) per object. Needs a Gemini key; click Detect.",
+    hint: "Detect objects in the image → their geometry as MATH values. ADD OBJECT lists what to find (door, window, room, …): every row goes into ONE prompt, so it stays a single API call, and the reply is split back so each row gets its OWN endpoint. Because the row name is both the ask and the split term, the two can't drift apart. Shape is chosen once for the whole node — Polygon (boundary), Point, or Both — so every row endpoint carries the same kind of value: a nested [[[x,y],…],…] metre ring list, or an N×2 metre point matrix. `val-unmatched` collects anything the model returned that no row claimed, so nothing is silently lost. The fixed endpoints still publish the whole reply: val-polygons, val-points, val-labels, val-graph, val-count, val-area. With no rows added it falls back to the free-text Detect field. No geometry output — wire a row into a Polygon node, a Label Graph, or a Point / Place Object node. Needs a Gemini key; click Detect.",
+    instructions: "Reads the drawing SEMANTICALLY — what a thing IS and roughly WHERE — and publishes it as values. Vectorisation reads geometry and cannot tell a door from a gap; this can, and the two are meant to be used together.\n\nSETUP\n1. Paste a Gemini API key. Without one this node produces nothing while everything downstream still evaluates, so a missing key looks exactly like \"the drawing had no doors\" — check the key before believing an empty result.\n2. Wire an Image node in (plain geometry edge, no handles). It reads whatever is on the canvas, title block and legend included.\n3. Press DETECT. It is an ASYNCHRONOUS, MANUAL action: the pass runs against the image and bakes its result into the node. Nothing detects on its own, and re-running the flow does NOT re-detect — press it again after changing the image or the rows.\n\nADD OBJECT ROWS — the main control\nEach row is one class to find: \"Door\", \"Window\", \"Room\", \"Furniture\". Every row goes into a SINGLE prompt, so four rows still cost ONE API call — billed per image, so four separate nodes would cost roughly four times as much for the same reading. The reply is split back by row, and each row publishes:\n  • val-<rowId>         — its own geometry (rings, or points)\n  • val-<rowId>_labels  — the individual names the model returned for that row\n  • val-<rowId>_count   — how many it claimed\nMatching is CASE-INSENSITIVE and BIDIRECTIONAL containment, so a row named \"door\" claims \"Door\", \"sliding door\" and \"doorway\". Name rows in the singular and keep them short.\n\nSHAPE is chosen ONCE for the whole node, so every row carries the same kind of value:\n  • Polygon — a nested [[[x,y],…],…] metre ring list. Draw with a Render 2D POLYGON row.\n  • Point   — an N×2 metre matrix (which IS a point list). Draw with a Render 2D CIRCLE row.\n  • Both    — a boundary and a point per object, paired by index.\nPick the one the downstream node wants: a boundary to outline a room, a point to place an object.\n\nMAX ITEMS is PER ROW once rows exist, so adding a row cannot starve the classes after it. Keep it near the real count — a 6-room plan does not need 50.\n\nCHECK val-unmatched. It collects everything the model returned that no row claimed. A row reading 0 while unmatched is full means the model used a different word — rename the row to match, do not raise Max items.\n\nWHAT THE RESULT IS, AND IS NOT\nThis node has NO geometry output and commits nothing: a detection is a READING of the image, not a decision about the plan, so you choose what to draw. Boundaries are axis-aligned and approximate — NEVER take a boundary edge as a wall line. Use detection for what a thing IS and roughly WHERE; use Vectorisation / Fit Lines for exactly where its edges are. Good uses: naming traced Spaces by overlapping detected rooms, placing openings where the drawing actually shows them rather than by rule, and putting objects at detected points.\n\nFilter by Label splits one mixed detection into families; Label Graph names each component from a labels array; Merge Graph unions the families into one typed graph.",
   },
   render: {
     type: "render",
     label: "Render",
     color: "#1d4ed8",
-    hasInput: true,
+    hasInput: false,
     hasOutput: false,
-    // Action node (not a geometry/recipe op): captures the 3D view's isometric snapshot and sends it
-    // with the prompt to a Google AI image model, then shows the result + a download link. Mirrors the
-    // Render tool in Global Tools.
+    // Action node (not a geometry/recipe op): sends the wired image(s) with the prompt to a Google AI
+    // image model, then shows the result + a download link.
+    //
+    // WHAT IT SENDS IS EXACTLY WHAT YOU GAVE IT — the system prompt, the prompt and the wired image(s),
+    // and nothing else. It used to do more: a geometry input framed a camera, a `padding` slider grew
+    // that frame, and an unwired Image input fell back to photographing the 3D view. Every one of those
+    // put content into the request that the author never wrote, which is indefensible for a node whose
+    // whole job is to carry an instruction faithfully — a prompt asking for a schematic line drawing
+    // would be answered with a rendering of a 3D view it silently captured. There is no camera to aim
+    // any more, so the geometry input is gone with it, and a missing image is an ERROR rather than a
+    // substitution. `generationConfig.responseModalities` is the one thing still set here: it is the
+    // wire protocol for asking the endpoint for an image at all, not content.
+    //
+    // The PROMPT is a value input as well as a field, so a Text / Math Engine / Analyse node can compose
+    // it in the flow (the Agent node cannot: it only ever writes range/number/select/checkbox params).
+    //
+    // THREE INPUTS, and they are three different things:
+    //  • IMAGE — what to render. Wire a Snapshot's `val-image` (the 2D plan as drawn) or an Image node's
+    //    `val-image` (the underlay's own bytes). REQUIRED: one of Image / 3D image must resolve to a
+    //    data URL, or the run stops and says so.
+    //  • 3D IMAGE — the SAME subject from above, for a Snapshot's `val-image-3d`. Both images are sent
+    //    together when both are wired, in that order, so the model reads the plan for what the geometry IS
+    //    and the 3D shot for how it stands. Either alone works; the pair is the point.
+    //  • PROMPT — what to render THIS time. The per-run instruction.
+    //  • SYSTEM PROMPT — how the model should behave, every time. Sent as Gemini's `systemInstruction`
+    //    rather than folded into the prompt, so the standing rules ("hold the geometry, never move
+    //    anything") cannot be diluted by whatever the per-run prompt happens to say.
+    valueInputs: [{ key: "image", label: "Image" }, { key: "image3d", label: "3D image" }, { key: "prompt", label: "Prompt" }, { key: "systemPrompt", label: "System prompt" }],
+    // The generated picture, as a data URL. Empty until the button has been pressed — this is an ACTION
+    // node, so the value appears when a run bakes `_resultUrl` and not on evaluation.
+    valueOutputs: [{ key: "image", label: "Image (data URL)" }],
+    // A fresh Render node starts BLANK — every field included. The system prompt used to ship an
+    // architectural-visualiser persona ending "Render materials and light only", which is a reasonable
+    // default for exactly one use and silently contradicts every other: a prompt asking for a flat
+    // schematic of coloured lines would be overruled by a standing rule the author never wrote and had
+    // no reason to look for. What the model is told is now entirely what is typed or wired here.
     defaultParams: {
+      name: "",
       api_key: "",
       model: "gemini-3.1-flash-image-preview",
-      prompt: "Edit the attached architectural massing snapshot into a photorealistic render with daylight, realistic facade materials, landscaping, and sky.",
+      systemPrompt: "",
+      prompt: "",
     },
     fields: [
       { key: "api_key", label: "API key", kind: "text", secret: true, placeholder: "Google AI Studio key" },
       { key: "model", label: "Model", kind: "text", placeholder: "gemini-3.1-flash-image-preview" },
-      { key: "prompt", label: "Prompt", kind: "textarea", placeholder: "Describe the render style…" },
+      { key: "systemPrompt", label: "System prompt", kind: "textarea", placeholder: "How the model should behave — the standing rules…" },
+      { key: "prompt", label: "Prompt", kind: "textarea", placeholder: "What to render this time…" },
     ],
-    hint: "Render the 3D isometric view into a photorealistic image (Google AI).",
+    hint: "Render an image with Google AI. Four inputs: Image and 3D image (wire an Image node's underlay bytes, or a Snapshot's plan and top-view outputs — both are sent together when both are wired; one of the two is required), Prompt (what to render now) and System prompt (the standing rules, sent as systemInstruction). All four can be wired or typed. Only these are sent — the node adds nothing of its own.",
   },
   // Data-declared (see ./declarations/hatching.node.json) — behaviour stays in code.
   hatching: buildToolDefFromDeclaration(hatchingDecl as unknown as NodeDeclaration),
@@ -2447,14 +2954,19 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
     type: "output",
     label: "Output Metrics",
     color: "#0d9488",
-    // A terminal collector: wire any node's `val-*` output into one of its named slots; the slot's value
-    // is surfaced live on the node and in the Space's Metrics tab. Slots auto-grow + are user-named, so
-    // its endpoints are dynamic (driven by params.slots) rather than the static valueInputs list.
+    // A collector: wire any node's `val-*` output into one of its named slots; the slot's value is surfaced
+    // live on the node and in the Space's Metrics tab. Slots auto-grow + are user-named, so its endpoints
+    // are dynamic (driven by params.slots) rather than the static valueInputs list.
+    //
+    // Each slot PUBLISHES what it collected too, on `val-<slotId>` — the mirror of its own `valin-<slotId>`,
+    // on the same row — so the node can sit mid-chain rather than only terminating: read a metric, show it,
+    // pass it on. Both endpoints are keyed by the SLOT ID, never the label, so renaming a slot cannot move a
+    // wire. An unwired slot publishes nothing, leaving a downstream consumer on its own value.
     hasInput: false,
     hasOutput: false,
     defaultParams: { slots: [{ id: "s1", label: "" }] },
     fields: [],
-    hint: "Collect values from any node into named metrics (shown in the Metrics tab).",
+    hint: "Collect values from any node into named metrics (shown in the Metrics tab). Each slot also re-publishes its value.",
   },
   // Data-declared (see ./declarations/space-geometry.node.json) — behaviour stays in code.
   "space-geometry": buildToolDefFromDeclaration(spaceGeometryDecl as unknown as NodeDeclaration),
@@ -2468,6 +2980,16 @@ export const FLOW_TOOLS: Record<FlowToolType, FlowToolDef> = {
   "file-upload": buildToolDefFromDeclaration(fileUploadDecl as unknown as NodeDeclaration),
   // Data-declared (see ./declarations/text.node.json) — behaviour stays in code.
   text: buildToolDefFromDeclaration(textDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/prompt-builder.node.json) — fills a {name} template from its
+  // wired values. The step between the flow's numbers and a model's words: the Math Engine cannot
+  // concatenate strings and Text only passes one through, so nothing else can build a prompt.
+  "prompt-builder": buildToolDefFromDeclaration(promptBuilderDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/plan-json.node.json) — the canvas model as JSON on a wire,
+  // scoped to the wired Space. The only node that can say what a segment IS and what object is on it.
+  "plan-json": buildToolDefFromDeclaration(planJsonDecl as unknown as NodeDeclaration),
+  // Data-declared (see ./declarations/filter-by-space.node.json) — the scoping half of Plan JSON, split
+  // out so the region can be any wired Space rather than only the canvas selection.
+  "filter-by-space": buildToolDefFromDeclaration(filterBySpaceDecl as unknown as NodeDeclaration),
   analyse: {
     type: "analyse",
     label: "Analyse",
@@ -2557,6 +3079,16 @@ export interface FlowNodeData extends Record<string, unknown> {
   /** Injected by the host — the Agent node's "Run" action: analyses the wired Space with the selected
    *  Library agent and bakes the suggested parameters into the nodes chained downstream. */
   onRunAgent?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Export DXF node's "Download" action: serialises the wired 2D geometry to
+   *  an R12 DXF and saves it. */
+  onExportDxf?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Export 3D node's "Download" action: serialises the wired 3D solids to
+   *  glTF / OBJ / STL / PLY and saves it. */
+  onExport3d?: (nodeId: string, params: Record<string, unknown>) => void;
+  /** Injected by the host — the Export to Canvas node's "Reflect" action: stamps the wired 2D geometry onto
+   *  the plan as ordinary Spaces + segments (not flow-owned, so nothing rewrites it afterwards). */
+  onExportToCanvas?: (nodeId: string, params: Record<string, unknown>) => void;
+  onSetObjectParams?: (nodeId: string, params: Record<string, unknown>) => void;
   /** Injected by the host — the Object Node's "decompile" toggle: hide/show every node + edge DOWNSTREAM of
    *  this one (the materialised Inset / Circle Packing / Cylinder … chain), collapsing it back to the lone
    *  Object Node. Reflected by the transient `_decompileHidden` param. */

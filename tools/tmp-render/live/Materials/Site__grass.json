@@ -1,0 +1,38 @@
+{
+  "schema": "material/1",
+  "id": "grass.lawn",
+  "title": "Grass — mown lawn",
+  "category": "Site",
+  "description": "Mown lawn. Dense high-frequency noise; the 3D side would drive a displacement or a hair system from the same numbers.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 120,
+      "detail": 8,
+      "roughness": 0.7,
+      "lacunarity": 2.2,
+      "distortion": 0.4,
+      "noiseDimensions": "3D",
+      "colorA": "#5c8c3a",
+      "colorB": "#42682a"
+    }
+  },
+  "pbr": {
+    "baseColor": "#4f7a32",
+    "roughness": 0.95,
+    "metallic": 0
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 6,
+    "angle": 0,
+    "weight": 1,
+    "color": "#4f7a32"
+  },
+  "dxf": {
+    "pattern": "GRASS",
+    "scale": 1,
+    "angle": 0
+  }
+}

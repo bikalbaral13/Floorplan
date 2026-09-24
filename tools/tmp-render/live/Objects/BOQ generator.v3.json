@@ -1,0 +1,646 @@
+{
+  "version": 1,
+  "id": "boq-generator-v3",
+  "title": "BOQ generator v3 — four nodes: the interpreter folded into the Math Engine",
+  "category": "Architectural",
+  "description": "BOQ GENERATOR v3 — v2 in four nodes. Geometry → Input Properties → Math Engine → Output Metrics named BOQ. The Graph Interpreter is no longer a node; it is the Math Engine's DECODE section, running before the formulas.\n\nTHE WIRES BECOME NAMES. v2 wired five matrices out of the interpreter and into the Math Engine — thickness, length, types, spaces, areas — five edges carrying values the body immediately renamed. Decode now puts those matrices into scope BY NAME, so the body reads `types` and `spaces` as ordinary free variables and the five edges are gone. Nothing else about the measurement changed.\n\nThe plan still arrives the way v2 chose: the Geometry node's canvas JSON goes into an Input Properties text parameter, which republishes it, so what the flow is reading is visible in the Properties tab rather than implied. Decode's `from` names the scope key holding it.\n\nONE RENAME, AND WHY IT MATTERS. v2's body called the space matrix `Rooms`, because that is the name its wire targeted. Folded, there is no wire to do the renaming — decode injects under the DECODER's names — so the body reads `spaces` instead. That single word was worth a paragraph: on the first run everything measured correctly except the room perimeter, which came out 0.00 and dragged skirting to -1.80, because `Rooms` had quietly become a free variable nobody fed. An unwired free variable is not zero; it makes the loop that reads it run no iterations, and it says nothing while doing so. The build now asserts that every name the body reads arrives either on a wire or from decode — ignoring `#` comment lines, since the engine ignores them too.\n\nNOTHING IS HIDDEN BY FOLDING. The decode section publishes its matrices as `val-` outputs exactly as the standalone node does, so every intermediate stays inspectable and any other node can still read it. Folding removes the obligation to wire, not the ability to look. It is also the same code: `decodeCanvasJson` is a free function that the standalone Graph Interpreter and this section both call.\n\nWHEN NOT TO FOLD. A flow that decodes TWICE — v1 read the same graph two ways — needs the standalone node, because a Math Engine has one decode stage. So does a flow that reads a plan without computing anything, where folding would force an empty Math Engine into the middle.\n\nWHAT IT MEASURES is v2's, unchanged: doors and windows told apart by the plan's own type codes rather than by a width guess, masonry net of openings measured band by band at each run's own length and thickness, plaster, painting, skirting, slab, and a cost line against each at rates you set. See BOQ generator v2 for the full account.\n\nVERIFIED AGAINST v2, on the same two-room plan of 19 segments:\n\n    read       19 segments · 2 spaces · 18 nodes · 17 edges measured\n    rooms      2 · floor area 96.04 m2 · perimeter 58.80 m\n    walls      12 segments · centreline 43.60 m · elevation 117.72 m2\n    openings   5 · 5.40 m · 2 doors · 3 windows\n    quantities masonry 22.38 m3 · plaster 248.41 m2 · painting 344.45 m2 · slab 12.01 m3\n    cost       570,082 at the placeholder rates\n\nEvery line matches v2. Rates are placeholders and mean nothing until you set them. Still absent, as in v2: reinforcement, formwork, excavation, MEP, and any wet-area split of the finishes.",
+  "nodes": [
+    {
+      "id": "geom",
+      "position": {
+        "x": -1400,
+        "y": 40
+      },
+      "data": {
+        "tool": "source",
+        "params": {
+          "grabFromSelection": true,
+          "id": "",
+          "nodeLabel": "Geometry — the plan on the canvas"
+        }
+      }
+    },
+    {
+      "id": "props",
+      "position": {
+        "x": -1020,
+        "y": 40
+      },
+      "data": {
+        "tool": "input-props",
+        "params": {
+          "props": [
+            {
+              "id": "canvasJson",
+              "name": "Canvas JSON — the plan, from the Geometry node",
+              "type": "text",
+              "value": "",
+              "options": []
+            },
+            {
+              "id": "wallHeight",
+              "name": "Wall height (m)",
+              "type": "number",
+              "value": 2.7,
+              "options": []
+            },
+            {
+              "id": "wallThkOverride",
+              "name": "Wall thickness override (m) — 0 = use each segment's own",
+              "type": "number",
+              "value": 0,
+              "options": []
+            },
+            {
+              "id": "doorLintel",
+              "name": "Door lintel height (m)",
+              "type": "number",
+              "value": 2.1,
+              "options": []
+            },
+            {
+              "id": "winSill",
+              "name": "Window sill height (m)",
+              "type": "number",
+              "value": 0.9,
+              "options": []
+            },
+            {
+              "id": "winLintel",
+              "name": "Window lintel height (m)",
+              "type": "number",
+              "value": 2.1,
+              "options": []
+            },
+            {
+              "id": "plasterFaces",
+              "name": "Plastered faces per wall (2 = both sides)",
+              "type": "number",
+              "value": 2,
+              "options": []
+            },
+            {
+              "id": "skirtHeight",
+              "name": "Skirting height (m)",
+              "type": "number",
+              "value": 0.1,
+              "options": []
+            },
+            {
+              "id": "slabThk",
+              "name": "Slab thickness (m)",
+              "type": "number",
+              "value": 0.125,
+              "options": []
+            },
+            {
+              "id": "ceilingPaint",
+              "name": "Paint the ceiling too (1 = yes)",
+              "type": "number",
+              "value": 1,
+              "options": []
+            },
+            {
+              "id": "rateMasonry",
+              "name": "Rate — masonry (per m3)",
+              "type": "number",
+              "value": 6500,
+              "options": []
+            },
+            {
+              "id": "ratePlaster",
+              "name": "Rate — plaster (per m2)",
+              "type": "number",
+              "value": 320,
+              "options": []
+            },
+            {
+              "id": "ratePaint",
+              "name": "Rate — paint (per m2)",
+              "type": "number",
+              "value": 180,
+              "options": []
+            },
+            {
+              "id": "rateFloor",
+              "name": "Rate — flooring (per m2)",
+              "type": "number",
+              "value": 1450,
+              "options": []
+            },
+            {
+              "id": "rateSlab",
+              "name": "Rate — slab concrete (per m3)",
+              "type": "number",
+              "value": 8200,
+              "options": []
+            },
+            {
+              "id": "rateDoor",
+              "name": "Rate — door (each)",
+              "type": "number",
+              "value": 12500,
+              "options": []
+            },
+            {
+              "id": "rateWindow",
+              "name": "Rate — window (each)",
+              "type": "number",
+              "value": 6800,
+              "options": []
+            }
+          ],
+          "nodeLabel": "Input Properties — the plan, plus heights, finishes and rates"
+        }
+      }
+    },
+    {
+      "id": "math",
+      "position": {
+        "x": -300,
+        "y": 40
+      },
+      "data": {
+        "tool": "expr",
+        "params": {
+          "expr": "# Edges\n# Lengths arrive MEASURED, straight off the payload's `lengthM` — not recomputed from the endpoints here.\n_LA = length\n\n# A segment running from a node to ITSELF is a furniture marker, not fabric — this plan has two, the bed\n# and the chair. Zero length, so it adds nothing to a total, but it would still be COUNTED.\n_kA = gt(_LA, 0.001)\nedgeCount = sum(_kA)\n\n# Doors and windows, read from the PLAN\n# v1 told them apart by width, comparing every edge against a door width and a window width, because the\n# graph reached it through Graph Geometry — rebuilt from polylines, with every segment's type stripped on\n# the way. That guess is gone. Graph Interpreter reads the payload, where the type and the attached\n# objects survive, and publishes a code column: 1 wall, 2 door, 3 window, per `typeNames`.\n#\n# It also removes three inputs. Door width, window width and the matching tolerance existed only to run\n# the guess; a door's width is now simply the length of the segment it is on.\n_isWall = eq(types, 1) * _kA\n_isDoor = eq(types, 2) * _kA\n_isWin = eq(types, 3) * _kA\n_isOpen = _isDoor + _isWin\n\ndoors = sum(_isDoor)\nwindows = sum(_isWin)\nopenings = doors + windows\nopeningLength = sum(_LA * _isOpen)\nwallSegs = sum(_isWall)\nwallLength = sum(_LA * _isWall)\n\n# Wall thickness\n# Every edge carries its OWN thickness, from the segment it was drawn as. The override exists because a\n# segment's drawn width and its Wall object's `thickness` need not agree — in this plan the segments are\n# 0.20 / 0.10 m while every Wall object says 0.15. Leave it 0 to measure what is actually drawn.\n_TW = wallThkOverride > 0 ? fill(rows(thickness), 1, wallThkOverride) : thickness\n\n# Masonry\nwallAreaGross = wallLength * wallHeight\n# Each band is summed against its own mask, so every run is measured at ITS length and ITS thickness — no\n# average stands in for the plan. An opening run carries masonry too: above a door's lintel, and both\n# below a window's sill and above its lintel, which is what the 3D canvas builds around an opening.\n_wallVol = sum(_LA * _TW * _isWall) * wallHeight\n_doorVol = sum(_LA * _TW * _isDoor) * (wallHeight - doorLintel)\n_winVol = sum(_LA * _TW * _isWin) * (winSill + wallHeight - winLintel)\nmasonryVol = _wallVol + _doorVol + _winVol\n\n# Openings measured — the width is the opening segment's own length, so nothing is assumed.\ndoorArea = sum(_LA * _isDoor) * doorLintel\nwindowArea = sum(_LA * _isWin) * (winLintel - winSill)\n\n# Plaster — the full elevation, opening runs included, less the voids on every face counted.\nplasterArea = (wallLength + openingLength) * wallHeight * plasterFaces - (doorArea + windowArea) * plasterFaces\n\n# spaces\n# Areas arrive already measured, one row per space, so the floor area is a sum rather than a shoelace.\n# The boundaries still come as ONE flat [x, y, groupIndex] matrix — the shape a nested list of rings\n# cannot take, being ragged when rooms differ in vertex count — and the group column is what walks them\n# back apart for the perimeter.\nfloorArea = sum(areas)\nrooms = rows(areas)\n_gN = rows(spaces) > 0 ? max(col(spaces, 2)) + 1 : 0\nperimeter = 0\nloop g in _gN:\n  _sel = eq(col(spaces, 2), g)\n  _P = compress(spaces, _sel)\n  _X = col(_P, 0)\n  _Y = col(_P, 1)\n  _X2 = shift(_X, 0 - 1)\n  _Y2 = shift(_Y, 0 - 1)\n  perimeter = perimeter + sum(len(hcat(_X2 - _X, _Y2 - _Y)))\nend\n\n# Finishes\nskirtingLength = perimeter - sum(_LA * _isDoor)\nskirtingArea = skirtingLength * skirtHeight\npaintArea = plasterArea + (ceilingPaint > 0 ? floorArea : 0)\nslabVolume = floorArea * slabThk\n\n# Cost\ncostMasonry = masonryVol * rateMasonry\ncostPlaster = plasterArea * ratePlaster\ncostPaint = paintArea * ratePaint\ncostFloor = floorArea * rateFloor\ncostSlab = slabVolume * rateSlab\ncostDoors = doors * rateDoor\ncostWindows = windows * rateWindow\ncostTotal = costMasonry + costPlaster + costPaint + costFloor + costSlab + costDoors + costWindows",
+          "nodeLabel": "Math Engine — decode + the quantities",
+          "decode": "{\n  \"from\": \"canvasJson\",\n  \"typeNames\": [\n    \"wall\",\n    \"door\",\n    \"window\"\n  ]\n}"
+        }
+      }
+    },
+    {
+      "id": "boq",
+      "position": {
+        "x": 60,
+        "y": 40
+      },
+      "data": {
+        "tool": "output",
+        "params": {
+          "slots": [
+            {
+              "id": "s1",
+              "label": "Plan read — segments"
+            },
+            {
+              "id": "s2",
+              "label": "Plan read — spaces"
+            },
+            {
+              "id": "s3",
+              "label": "Plan read — nodes"
+            },
+            {
+              "id": "s4",
+              "label": "Plan read — edges measured"
+            },
+            {
+              "id": "s5",
+              "label": "Rooms measured (nos)"
+            },
+            {
+              "id": "s6",
+              "label": "Floor area (m2)"
+            },
+            {
+              "id": "s7",
+              "label": "Room perimeter (m)"
+            },
+            {
+              "id": "s8",
+              "label": "Wall segments (nos)"
+            },
+            {
+              "id": "s9",
+              "label": "Wall centreline length (m)"
+            },
+            {
+              "id": "s10",
+              "label": "Wall elevation area, gross (m2)"
+            },
+            {
+              "id": "s11",
+              "label": "Openings (nos)"
+            },
+            {
+              "id": "s12",
+              "label": "Opening width, total (m)"
+            },
+            {
+              "id": "s13",
+              "label": "Doors (nos)"
+            },
+            {
+              "id": "s14",
+              "label": "Windows (nos)"
+            },
+            {
+              "id": "s15",
+              "label": "Door leaf area (m2)"
+            },
+            {
+              "id": "s16",
+              "label": "Window glazing area (m2)"
+            },
+            {
+              "id": "s17",
+              "label": "Masonry, net of openings (m3)"
+            },
+            {
+              "id": "s18",
+              "label": "Plaster (m2)"
+            },
+            {
+              "id": "s19",
+              "label": "Painting, walls + ceiling (m2)"
+            },
+            {
+              "id": "s20",
+              "label": "Skirting (m)"
+            },
+            {
+              "id": "s21",
+              "label": "Skirting area (m2)"
+            },
+            {
+              "id": "s22",
+              "label": "Slab concrete (m3)"
+            },
+            {
+              "id": "s23",
+              "label": "Cost — masonry"
+            },
+            {
+              "id": "s24",
+              "label": "Cost — plaster"
+            },
+            {
+              "id": "s25",
+              "label": "Cost — painting"
+            },
+            {
+              "id": "s26",
+              "label": "Cost — flooring"
+            },
+            {
+              "id": "s27",
+              "label": "Cost — slab concrete"
+            },
+            {
+              "id": "s28",
+              "label": "Cost — doors"
+            },
+            {
+              "id": "s29",
+              "label": "Cost — windows"
+            },
+            {
+              "id": "s30",
+              "label": "COST — TOTAL"
+            }
+          ],
+          "nodeLabel": "BOQ"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "geom",
+      "sourceHandle": "val-canvasJson",
+      "target": "props",
+      "targetHandle": "valin-canvasJson",
+      "id": "e1_geom_val-canvasJson__props_valin-canvasJson"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-wallHeight",
+      "target": "math",
+      "targetHandle": "valin-wallHeight",
+      "id": "e2_props_val-wallHeight__math_valin-wallHeight"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-wallThkOverride",
+      "target": "math",
+      "targetHandle": "valin-wallThkOverride",
+      "id": "e3_props_val-wallThkOverride__math_valin-wallThkOverride"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-doorLintel",
+      "target": "math",
+      "targetHandle": "valin-doorLintel",
+      "id": "e4_props_val-doorLintel__math_valin-doorLintel"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-winSill",
+      "target": "math",
+      "targetHandle": "valin-winSill",
+      "id": "e5_props_val-winSill__math_valin-winSill"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-winLintel",
+      "target": "math",
+      "targetHandle": "valin-winLintel",
+      "id": "e6_props_val-winLintel__math_valin-winLintel"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-plasterFaces",
+      "target": "math",
+      "targetHandle": "valin-plasterFaces",
+      "id": "e7_props_val-plasterFaces__math_valin-plasterFaces"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-skirtHeight",
+      "target": "math",
+      "targetHandle": "valin-skirtHeight",
+      "id": "e8_props_val-skirtHeight__math_valin-skirtHeight"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-slabThk",
+      "target": "math",
+      "targetHandle": "valin-slabThk",
+      "id": "e9_props_val-slabThk__math_valin-slabThk"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-ceilingPaint",
+      "target": "math",
+      "targetHandle": "valin-ceilingPaint",
+      "id": "e10_props_val-ceilingPaint__math_valin-ceilingPaint"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-rateMasonry",
+      "target": "math",
+      "targetHandle": "valin-rateMasonry",
+      "id": "e11_props_val-rateMasonry__math_valin-rateMasonry"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-ratePlaster",
+      "target": "math",
+      "targetHandle": "valin-ratePlaster",
+      "id": "e12_props_val-ratePlaster__math_valin-ratePlaster"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-ratePaint",
+      "target": "math",
+      "targetHandle": "valin-ratePaint",
+      "id": "e13_props_val-ratePaint__math_valin-ratePaint"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-rateFloor",
+      "target": "math",
+      "targetHandle": "valin-rateFloor",
+      "id": "e14_props_val-rateFloor__math_valin-rateFloor"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-rateSlab",
+      "target": "math",
+      "targetHandle": "valin-rateSlab",
+      "id": "e15_props_val-rateSlab__math_valin-rateSlab"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-rateDoor",
+      "target": "math",
+      "targetHandle": "valin-rateDoor",
+      "id": "e16_props_val-rateDoor__math_valin-rateDoor"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-rateWindow",
+      "target": "math",
+      "targetHandle": "valin-rateWindow",
+      "id": "e17_props_val-rateWindow__math_valin-rateWindow"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-segmentCount",
+      "target": "boq",
+      "targetHandle": "valin-s1",
+      "id": "e18_math_val-segmentCount__boq_valin-s1"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-spaceCount",
+      "target": "boq",
+      "targetHandle": "valin-s2",
+      "id": "e19_math_val-spaceCount__boq_valin-s2"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-nodeCount",
+      "target": "boq",
+      "targetHandle": "valin-s3",
+      "id": "e20_math_val-nodeCount__boq_valin-s3"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-edgeCount",
+      "target": "boq",
+      "targetHandle": "valin-s4",
+      "id": "e21_math_val-edgeCount__boq_valin-s4"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-rooms",
+      "target": "boq",
+      "targetHandle": "valin-s5",
+      "id": "e22_math_val-rooms__boq_valin-s5"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-floorArea",
+      "target": "boq",
+      "targetHandle": "valin-s6",
+      "id": "e23_math_val-floorArea__boq_valin-s6"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-perimeter",
+      "target": "boq",
+      "targetHandle": "valin-s7",
+      "id": "e24_math_val-perimeter__boq_valin-s7"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-wallSegs",
+      "target": "boq",
+      "targetHandle": "valin-s8",
+      "id": "e25_math_val-wallSegs__boq_valin-s8"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-wallLength",
+      "target": "boq",
+      "targetHandle": "valin-s9",
+      "id": "e26_math_val-wallLength__boq_valin-s9"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-wallAreaGross",
+      "target": "boq",
+      "targetHandle": "valin-s10",
+      "id": "e27_math_val-wallAreaGross__boq_valin-s10"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-openings",
+      "target": "boq",
+      "targetHandle": "valin-s11",
+      "id": "e28_math_val-openings__boq_valin-s11"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-openingLength",
+      "target": "boq",
+      "targetHandle": "valin-s12",
+      "id": "e29_math_val-openingLength__boq_valin-s12"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-doors",
+      "target": "boq",
+      "targetHandle": "valin-s13",
+      "id": "e30_math_val-doors__boq_valin-s13"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-windows",
+      "target": "boq",
+      "targetHandle": "valin-s14",
+      "id": "e31_math_val-windows__boq_valin-s14"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-doorArea",
+      "target": "boq",
+      "targetHandle": "valin-s15",
+      "id": "e32_math_val-doorArea__boq_valin-s15"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-windowArea",
+      "target": "boq",
+      "targetHandle": "valin-s16",
+      "id": "e33_math_val-windowArea__boq_valin-s16"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-masonryVol",
+      "target": "boq",
+      "targetHandle": "valin-s17",
+      "id": "e34_math_val-masonryVol__boq_valin-s17"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-plasterArea",
+      "target": "boq",
+      "targetHandle": "valin-s18",
+      "id": "e35_math_val-plasterArea__boq_valin-s18"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-paintArea",
+      "target": "boq",
+      "targetHandle": "valin-s19",
+      "id": "e36_math_val-paintArea__boq_valin-s19"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-skirtingLength",
+      "target": "boq",
+      "targetHandle": "valin-s20",
+      "id": "e37_math_val-skirtingLength__boq_valin-s20"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-skirtingArea",
+      "target": "boq",
+      "targetHandle": "valin-s21",
+      "id": "e38_math_val-skirtingArea__boq_valin-s21"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-slabVolume",
+      "target": "boq",
+      "targetHandle": "valin-s22",
+      "id": "e39_math_val-slabVolume__boq_valin-s22"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costMasonry",
+      "target": "boq",
+      "targetHandle": "valin-s23",
+      "id": "e40_math_val-costMasonry__boq_valin-s23"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costPlaster",
+      "target": "boq",
+      "targetHandle": "valin-s24",
+      "id": "e41_math_val-costPlaster__boq_valin-s24"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costPaint",
+      "target": "boq",
+      "targetHandle": "valin-s25",
+      "id": "e42_math_val-costPaint__boq_valin-s25"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costFloor",
+      "target": "boq",
+      "targetHandle": "valin-s26",
+      "id": "e43_math_val-costFloor__boq_valin-s26"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costSlab",
+      "target": "boq",
+      "targetHandle": "valin-s27",
+      "id": "e44_math_val-costSlab__boq_valin-s27"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costDoors",
+      "target": "boq",
+      "targetHandle": "valin-s28",
+      "id": "e45_math_val-costDoors__boq_valin-s28"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costWindows",
+      "target": "boq",
+      "targetHandle": "valin-s29",
+      "id": "e46_math_val-costWindows__boq_valin-s29"
+    },
+    {
+      "source": "math",
+      "sourceHandle": "val-costTotal",
+      "target": "boq",
+      "targetHandle": "valin-s30",
+      "id": "e47_math_val-costTotal__boq_valin-s30"
+    },
+    {
+      "source": "props",
+      "sourceHandle": "val-canvasJson",
+      "target": "math",
+      "targetHandle": "valin-canvasJson",
+      "id": "e48_props_val-canvasJson__math_valin-canvasJson"
+    }
+  ]
+}

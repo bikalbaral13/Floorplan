@@ -1,0 +1,202 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 20,
+          "vertices": 192,
+          "area": 17.1763,
+          "bbox": [
+            -1.62,
+            -1.62,
+            1.62,
+            1.62
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "31558040cc2d2b6c"
+      },
+      "solids": {
+        "count": 21,
+        "volume": 10.0607,
+        "hash": "c5aea9d21a2fd567"
+      },
+      "metrics": [
+        {
+          "key": "powerkW",
+          "name": "Power (kW)",
+          "value": "8632.8"
+        },
+        {
+          "key": "syncSpeedRpm",
+          "name": "Synchronous speed (rpm)",
+          "value": "1000"
+        },
+        {
+          "key": "specificSpeed",
+          "name": "Specific speed Nₛ",
+          "value": "123.5345"
+        },
+        {
+          "key": "runnerSpeed",
+          "name": "Runner peripheral speed (m/s)",
+          "value": "73.3038"
+        },
+        {
+          "key": "jetVelocity",
+          "name": "Jet velocity (m/s)",
+          "value": "62.6418"
+        },
+        {
+          "key": "speedRatio",
+          "name": "Speed ratio u / V",
+          "value": "1.1702"
+        },
+        {
+          "key": "netHead",
+          "name": "Net head (m)",
+          "value": "200"
+        },
+        {
+          "key": "throughput",
+          "name": "Flow (m³/s)",
+          "value": "5"
+        },
+        {
+          "key": "efficiency",
+          "name": "Efficiency",
+          "value": "0.88"
+        },
+        {
+          "key": "runnerDia",
+          "name": "Runner diameter (m)",
+          "value": "1.4"
+        },
+        {
+          "key": "casingDia",
+          "name": "Casing diameter (m)",
+          "value": "3"
+        },
+        {
+          "key": "bladeCount",
+          "name": "Blades",
+          "value": "16"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 20,
+          "vertices": 192,
+          "area": 17.1763,
+          "bbox": [
+            -1.62,
+            -1.62,
+            1.62,
+            1.62
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "31558040cc2d2b6c"
+      },
+      "solids": {
+        "count": 21,
+        "volume": 10.0607,
+        "hash": "c5aea9d21a2fd567"
+      },
+      "metrics": [
+        {
+          "key": "powerkW",
+          "name": "Power (kW)",
+          "value": "8632.8"
+        },
+        {
+          "key": "syncSpeedRpm",
+          "name": "Synchronous speed (rpm)",
+          "value": "1000"
+        },
+        {
+          "key": "specificSpeed",
+          "name": "Specific speed Nₛ",
+          "value": "123.5345"
+        },
+        {
+          "key": "runnerSpeed",
+          "name": "Runner peripheral speed (m/s)",
+          "value": "73.3038"
+        },
+        {
+          "key": "jetVelocity",
+          "name": "Jet velocity (m/s)",
+          "value": "62.6418"
+        },
+        {
+          "key": "speedRatio",
+          "name": "Speed ratio u / V",
+          "value": "1.1702"
+        },
+        {
+          "key": "netHead",
+          "name": "Net head (m)",
+          "value": "200"
+        },
+        {
+          "key": "throughput",
+          "name": "Flow (m³/s)",
+          "value": "5"
+        },
+        {
+          "key": "efficiency",
+          "name": "Efficiency",
+          "value": "0.88"
+        },
+        {
+          "key": "runnerDia",
+          "name": "Runner diameter (m)",
+          "value": "1.4"
+        },
+        {
+          "key": "casingDia",
+          "name": "Casing diameter (m)",
+          "value": "3"
+        },
+        {
+          "key": "bladeCount",
+          "name": "Blades",
+          "value": "16"
+        }
+      ]
+    }
+  }
+}

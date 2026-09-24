@@ -1,0 +1,212 @@
+{
+  "kind": "object",
+  "status": "ok",
+  "cases": {
+    "free": {
+      "geometry": {
+        "fill": {
+          "rings": 3,
+          "vertices": 12,
+          "area": 130.4,
+          "bbox": [
+            -4,
+            -3.7,
+            4,
+            3.7
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "1f34dbc3aa653af3"
+      },
+      "solids": {
+        "count": 19,
+        "volume": 60.6,
+        "hash": "f757a26678e63acf"
+      },
+      "metrics": [
+        {
+          "key": "flowArea",
+          "name": "Flow area (m²)",
+          "value": "6.375"
+        },
+        {
+          "key": "wettedPerimeter",
+          "name": "Wetted perimeter (m)",
+          "value": "7.4083"
+        },
+        {
+          "key": "hydraulicRadius",
+          "name": "Hydraulic radius (m)",
+          "value": "0.8605"
+        },
+        {
+          "key": "velocity",
+          "name": "Velocity — Manning (m/s)",
+          "value": "2.0435"
+        },
+        {
+          "key": "capacity",
+          "name": "Capacity (m³/s)",
+          "value": "13.0274"
+        },
+        {
+          "key": "designFlow",
+          "name": "Design flow (m³/s)",
+          "value": "5"
+        },
+        {
+          "key": "capacityRatio",
+          "name": "Capacity / design",
+          "value": "2.6055"
+        },
+        {
+          "key": "froude",
+          "name": "Froude number",
+          "value": "0.6588"
+        },
+        {
+          "key": "topWidth",
+          "name": "Top width (m)",
+          "value": "6.5"
+        },
+        {
+          "key": "normalDepth",
+          "name": "Normal depth (m)",
+          "value": "1.5"
+        },
+        {
+          "key": "freeboardOut",
+          "name": "Freeboard (m)",
+          "value": "0.3"
+        },
+        {
+          "key": "liningVolume",
+          "name": "Lining volume (m³)",
+          "value": "14.224"
+        },
+        {
+          "key": "excavationVolume",
+          "name": "Excavation volume (m³)",
+          "value": "67.68"
+        }
+      ]
+    },
+    "hosted": {
+      "geometry": {
+        "fill": {
+          "rings": 3,
+          "vertices": 12,
+          "area": 130.4,
+          "bbox": [
+            -4,
+            -3.7,
+            4,
+            3.7
+          ],
+          "nonFinite": 0
+        },
+        "lines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "refLines": {
+          "rings": 0,
+          "vertices": 0,
+          "area": 0,
+          "bbox": null,
+          "nonFinite": 0
+        },
+        "hash": "1f34dbc3aa653af3"
+      },
+      "solids": {
+        "count": 19,
+        "volume": 60.6,
+        "hash": "f757a26678e63acf"
+      },
+      "metrics": [
+        {
+          "key": "flowArea",
+          "name": "Flow area (m²)",
+          "value": "6.375"
+        },
+        {
+          "key": "wettedPerimeter",
+          "name": "Wetted perimeter (m)",
+          "value": "7.4083"
+        },
+        {
+          "key": "hydraulicRadius",
+          "name": "Hydraulic radius (m)",
+          "value": "0.8605"
+        },
+        {
+          "key": "velocity",
+          "name": "Velocity — Manning (m/s)",
+          "value": "2.0435"
+        },
+        {
+          "key": "capacity",
+          "name": "Capacity (m³/s)",
+          "value": "13.0274"
+        },
+        {
+          "key": "designFlow",
+          "name": "Design flow (m³/s)",
+          "value": "5"
+        },
+        {
+          "key": "capacityRatio",
+          "name": "Capacity / design",
+          "value": "2.6055"
+        },
+        {
+          "key": "froude",
+          "name": "Froude number",
+          "value": "0.6588"
+        },
+        {
+          "key": "topWidth",
+          "name": "Top width (m)",
+          "value": "6.5"
+        },
+        {
+          "key": "normalDepth",
+          "name": "Normal depth (m)",
+          "value": "1.5"
+        },
+        {
+          "key": "freeboardOut",
+          "name": "Freeboard (m)",
+          "value": "0.3"
+        },
+        {
+          "key": "liningVolume",
+          "name": "Lining volume (m³)",
+          "value": "14.224"
+        },
+        {
+          "key": "excavationVolume",
+          "name": "Excavation volume (m³)",
+          "value": "67.68"
+        }
+      ]
+    }
+  }
+}

@@ -6,9 +6,9 @@
  *  dangling open ends. Async with progress callbacks so the node can show live "trying …" status; results
  *  are memoised per combo so the second descent pass is nearly free. */
 
-import { vectorizeImage, type VectorizeParams, type VectorizeColorMode } from "../algorithms/vector/vectorizeImage";
+import { vectorizeImage, type VectorizeParams, type VectorizeColorMode } from "@builderpluss/engine";
 import { evalGraphToSpaces, type GraphPathEdge } from "./eval/evalNodes";
-import { polygonArea } from "../algorithms/geometry/polygon";
+import { polygonArea } from "@builderpluss/engine";
 import type { Point } from "../types";
 
 export interface VectorTuneImage {

@@ -1,0 +1,107 @@
+{
+  "kind": "flow-node",
+  "version": 2,
+  "tool": "plan-json",
+  "meta": {
+    "label": "Plan JSON",
+    "category": "Canvas",
+    "color": "#0f766e"
+  },
+  "description": "The canvas as JSON — the selected Space's outline, the segments and nodes inside it, and the parametric object plus resolved parameters attached to each. A ROOT: it reads the canvas itself, so nothing is wired into it. Publishes on `val-json`. SUPERSEDED: the Geometry node now publishes the same payload on `val-canvasJson`, so new flows need one node where this took two. Kept so every saved flow that already holds one keeps loading and evaluating exactly as it did.",
+  "instructions": "SUPERSEDED BY THE GEOMETRY NODE, which carries this payload on its own `val-canvasJson` output — one node for the shape AND the model behind it, instead of a pair that could disagree about what the selection was. This node is kept, unchanged, so existing flows keep working; it is no longer offered in the Add-node list.\n\nThe bridge from the canvas MODEL to a wire, and a ROOT — it reads the canvas directly, so it has NO geometry input. Its one value input is optional: wire a number into Catchment buffer to drive that slider from elsewhere, or leave it unwired and use the slider.\n\nONE NODE, FOUR ANSWERS. It used to take two nodes to ask the canvas anything — a Geometry node for the shape and this one for the data — and they could disagree about what \"the selection\" meant. Now the target is resolved once and published every way at once:\n• a NODE selected (or its id typed) → `val-points` is ONE point `[[x,y]]`,\n• a SEGMENT → its two endpoints `[[x1,y1],[x2,y2]]`,\n• a SPACE → its outline, one [x, y] pair per vertex,\n• NOTHING selected → no points, and `val-json` carries the WHOLE canvas.\n`val-kind` says which of the four you got (\"node\" / \"segment\" / \"space\" / \"canvas\"), so a flow can branch on it instead of guessing from the row count. The resolved target also leaves the GEOMETRY output on the right, so it feeds Filter by Space, Snapshot, Render or any op directly — no Vertices or Polygon hop to turn a list back into a shape.\n\nPRECEDENCE, when more than one thing could answer: a SPACE wins over a segment, a segment over a node, and anything over the whole canvas. That mirrors the canvas's own Select scope, which already makes node and segment mutually exclusive. Ids are resolved the same way — space first, then segment, then node — so a typed id that exists in two tables resolves as the larger thing, and `val-kind` tells you which it picked rather than leaving you to infer it.\n\nSCOPE OF THE JSON. With Grab from selection ON it follows the canvas: select a Space and the payload narrows to that room; select nothing and you get the whole canvas. Turn the toggle off to pin a target by id. Scoping is the point — a render prompt for one bedroom should not carry the other eleven rooms.\n\nThe GEOMETRY and the JSON are independent on purpose. A flow that wants the selection as its region AND the whole canvas as its payload — the shape Filter by Space is built for — turns Grab from selection OFF, types no id, and still gets the live selection on `val-points` and on the geometry output.\n\nWHAT IS INSIDE the JSON. A node counts when its point is inside the outline. A segment counts when its MIDPOINT is inside, or within Catchment buffer of the boundary — because the walls that BOUND a room lie ON its outline, and a point exactly on the edge is undefined under even-odd ray casting, so a strict test keeps some bounding walls and drops others depending on the room's coordinates. The tolerance is what makes the answer deterministic. It is ALSO the catchment: applied to nodes as well as segments, so 2 m is exactly \"everything within 2 m of this room\". Small values (0.15) mean strictly this room.\n\nWHAT COMES OUT, as one JSON object on `val-json`:\n• `space` — the outline (anchor-relative metres), its area, and the attached object's `objectId` + resolved `params`.\n• `segments` — one entry each: `id`, `type` (wall / door / window — the fact no attachment carries), the two endpoints, length, thickness, and the attached object's id + params when there is one.\n• `nodes` — one entry each: `id`, position, and the attached object's id + params.\nParameters are the object's DEFAULTS with that instance's overrides on top, so a parameter added to a definition after the object was placed still reports — the same merge Filter by Type and Grab Object use. That is also how each object's `semantics` reaches the wire.\n\nDEFINITIONS ARE NOT INCLUDED, only references. That is the same decision the canvas's own JSON export made and for the same measured reason: on a 23-plot layout the two object definitions came to 15.9 KB against 4.6 KB for all 24 attachments put together. A model needs to know a Door object is on this segment and how wide its leaf is; it does not need the maths body that draws one.\n\nMETRES, anchor-relative — the shared frame every other value output speaks.\n\nWIRE IT INTO a Prompt Builder slot (it substitutes as text like any other value), an Output slot to read it, or Filter by Space's `json` when the region is decided elsewhere in the flow.",
+  "handles": {
+    "input": false,
+    "output": false,
+    "valueInputs": [
+      {
+        "key": "edgeTolerance",
+        "label": "Catchment buffer"
+      }
+    ],
+    "valueOutputs": [
+      {
+        "key": "json",
+        "label": "Plan (JSON)"
+      },
+      {
+        "key": "spaceCount",
+        "label": "Spaces"
+      },
+      {
+        "key": "segmentCount",
+        "label": "Segments"
+      },
+      {
+        "key": "nodeCount",
+        "label": "Nodes"
+      },
+      {
+        "key": "objectCount",
+        "label": "Attached objects"
+      },
+      {
+        "key": "bytes",
+        "label": "JSON size",
+        "unit": "B"
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "key": "grabFromSelection",
+      "label": "Grab from selection",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "id",
+      "label": "Space ID",
+      "kind": "text",
+      "default": "",
+      "placeholder": "e.g. Space001 — blank = whole canvas",
+      "showIf": {
+        "when": "grabFromSelection",
+        "equals": false
+      }
+    },
+    {
+      "key": "edgeTolerance",
+      "label": "Catchment buffer",
+      "kind": "range",
+      "default": 0.15,
+      "min": 0,
+      "max": 5,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "key": "includeParams",
+      "label": "Include object parameters",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "includeNodes",
+      "label": "Include nodes",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "decimals",
+      "label": "Decimals",
+      "kind": "range",
+      "default": 3,
+      "min": 0,
+      "max": 6,
+      "step": 1
+    }
+  ],
+  "defaults": {
+    "grabFromSelection": true,
+    "id": "",
+    "edgeTolerance": 0.15,
+    "includeParams": true,
+    "includeNodes": true,
+    "decimals": 3
+  }
+}
