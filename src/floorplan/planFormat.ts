@@ -6,7 +6,12 @@
  * rather than inlined. That is what lets a reader that knows nothing about this editor — a Python
  * backend, a viewer, an agent — draw the plan from six top-level keys.
  *
- *   settings · nodes · segments · spaces · layers · imageUnderlay
+ *   settings · nodes · segments · spaces · moodboards · layers · imageUnderlay
+ *
+ * MULTI-STOREY (schemaVersion 2): the geometry moves into `levels[]` — each entry is
+ * `{ id, name, elevation, height, nodes, segments, spaces, imageUnderlay, …its own open tail }` — and the
+ * top-level nodes/segments/spaces are empty. Settings, layers, moodboards and the type registries stay at
+ * the top: they belong to the project, not to a floor. A single-level plan is written exactly as before.
  *
  * OPEN SCHEMA, deliberately. Every entity carries its four fixed fields and then **whatever else it
  * has**: a segment's thickness and segmentType, a space's roomType and FSI parameters, a node's column
@@ -24,6 +29,7 @@ import {
   type FloorPlanModel,
   type ImageUnderlay,
   type Layer,
+  type MoodboardSelection,
   type NodeMeta,
   type ParametricObjectFile,
   type Point,
@@ -31,6 +37,7 @@ import {
   type SegmentAttachment,
   type Wall,
 } from "./types";
+import { bareSheet, unpackLevels } from "./levels";
 
 /** Bumped when the shape changes in a way a reader must notice. Written on export, read on import —
  *  a file with no version is a pre-standard export and is handled by the legacy branch. */
@@ -89,6 +96,9 @@ export interface StandardPlan {
   nodes: PlanNode[];
   segments: PlanSegment[];
   spaces: PlanSpace[];
+  /** Moodboard decisions: the chosen option per room, per board — never the whole board. Always
+   *  written (`[]` when none), like `spaces`, so a reader sees the slot. */
+  moodboards: MoodboardSelection[];
   layers: Layer[];
   imageUnderlay: ImageUnderlay | null;
   [key: string]: unknown;
@@ -156,6 +166,39 @@ function stableKeys(segments: { id: string; fromNodeId: string; toNodeId: string
 /** Model → standard plan. Every field the model carries survives: the fixed four are named, everything
  *  else rides along on the same object. */
 export function toStandardPlan(model: FloorPlanModel, frame: PlanFrame): StandardPlan {
+  const packed = model.levels?.length ? unpackLevels(model) : null;
+  if (packed && packed.meta.length > 1) return toMultiLevelPlan(packed, frame);
+  return toSingleLevelPlan(bareSheet(model), frame);
+}
+
+/** Keys that describe the project rather than one floor — hoisted out of each level to the top. */
+const PROJECT_KEYS = ["schemaVersion", "settings", "layers", "moodboards", "customRoomTypes", "customSegmentTypes"] as const;
+
+function toMultiLevelPlan(packed: NonNullable<ReturnType<typeof unpackLevels>>, frame: PlanFrame): StandardPlan {
+  const { active, activeId, meta, sheets } = packed;
+  const top = toSingleLevelPlan(active, frame);
+  const levels = meta.map((l) => {
+    const std = toSingleLevelPlan(l.id === activeId ? active : sheets[l.id], frame) as Record<string, unknown>;
+    for (const k of PROJECT_KEYS) delete std[k];
+    return { id: l.id, name: l.name, elevation: l.elevation, height: l.height, ...std };
+  });
+  const project = Object.fromEntries(PROJECT_KEYS.filter((k) => k !== "schemaVersion" && k in top).map((k) => [k, top[k]]));
+  return {
+    ...project,
+    schemaVersion: 2,
+    settings: top.settings,
+    nodes: [],
+    segments: [],
+    spaces: [],
+    moodboards: top.moodboards,
+    layers: top.layers,
+    imageUnderlay: null,
+    activeLevelId: activeId,
+    levels,
+  } as StandardPlan;
+}
+
+function toSingleLevelPlan(model: FloorPlanModel, frame: PlanFrame): StandardPlan {
   const table = new NodeTable();
   // Definitions are NOT written (see buildExportJson) — an attachment is a REFERENCE. Naming that
   // reference by id alone makes the file readable only by something that can already resolve ids,
@@ -236,7 +279,7 @@ export function toStandardPlan(model: FloorPlanModel, frame: PlanFrame): Standar
   // would be a format that is only sometimes addressable.
   const {
     walls: _walls, rooms: _rooms, nodeMeta: _nodeMeta, layers: _layers,
-    imageUnderlay: _underlay, objectLibrary: _library,
+    imageUnderlay: _underlay, objectLibrary: _library, moodboards: _moodboards, levels: _levels, activeLevelId: _activeLevel,
     pathSpaceAttachments, canvasObjects, imageObjects, ...extras
   } = model;
 
@@ -262,6 +305,7 @@ export function toStandardPlan(model: FloorPlanModel, frame: PlanFrame): Standar
     nodes,
     segments,
     spaces,
+    moodboards: model.moodboards ?? [],
     layers: model.layers ?? [],
     imageUnderlay: model.imageUnderlay ?? null,
     ...open,
@@ -312,6 +356,34 @@ const mapValues = <V,>(rec: Record<string, V>, f: (v: V) => V): Record<string, V
 /** Standard plan → model. Missing optional fields fall back to the defaults above, so a MINIMAL file —
  *  one written by another tool with only the fixed fields — imports and draws. */
 export function fromStandardPlan(plan: StandardPlan): { model: Partial<FloorPlanModel>; frame: PlanFrame } {
+  const levels = (plan as { levels?: unknown }).levels;
+  if (Array.isArray(levels) && levels.length) return fromMultiLevelPlan(plan, levels as Record<string, unknown>[]);
+  return fromSingleLevelPlan(plan);
+}
+
+/** schemaVersion 2 → a PACKED model (see ./levels): the active level's body plus `levels[]` carrying the
+ *  others. The editor unpacks it into sheets on arrival. Each level is read as a single-level plan with the
+ *  project keys (settings, layers, moodboards, registries) lent from the top. */
+function fromMultiLevelPlan(plan: StandardPlan, levels: Record<string, unknown>[]): { model: Partial<FloorPlanModel>; frame: PlanFrame } {
+  const project = Object.fromEntries(PROJECT_KEYS.filter((k) => k in plan).map((k) => [k, plan[k]]));
+  const read = levels.map((lv) => {
+    const { id, name, elevation, height, ...geom } = lv;
+    const one = fromSingleLevelPlan({ ...(geom as object), ...project } as StandardPlan);
+    return { meta: { id: String(id), name: String(name ?? id), elevation: Number(elevation) || 0, height: Number(height) || 3 }, one };
+  });
+  const wanted = (plan as { activeLevelId?: unknown }).activeLevelId;
+  const active = read.find((r) => r.meta.id === wanted) ?? read[0];
+  return {
+    model: {
+      ...active.one.model,
+      activeLevelId: active.meta.id,
+      levels: read.map((r) => (r === active ? { ...r.meta } : { ...r.meta, model: r.one.model as FloorPlanModel })),
+    },
+    frame: active.one.frame,
+  };
+}
+
+function fromSingleLevelPlan(plan: StandardPlan): { model: Partial<FloorPlanModel>; frame: PlanFrame } {
   const at = new Map<string, Point>();
   for (const n of plan.nodes ?? []) at.set(n.id, { x: Number(n.x) || 0, y: Number(n.y) || 0 });
   const point = (id: string): Point => at.get(id) ?? { x: 0, y: 0 };
@@ -362,7 +434,7 @@ export function fromStandardPlan(plan: StandardPlan): { model: Partial<FloorPlan
   }
 
   const {
-    schemaVersion: _v, settings: _s, nodes: _n, segments: _seg, spaces: _sp,
+    schemaVersion: _v, settings: _s, nodes: _n, segments: _seg, spaces: _sp, moodboards: _mb,
     layers: _l, imageUnderlay: _iu, nodeMeta: _nm, ...extras
   } = plan;
 
@@ -372,6 +444,7 @@ export function fromStandardPlan(plan: StandardPlan): { model: Partial<FloorPlan
       ...(extras as Partial<FloorPlanModel>),
       walls,
       rooms,
+      ...(Array.isArray(plan.moodboards) && plan.moodboards.length ? { moodboards: plan.moodboards } : {}),
       ...(Object.keys(nodeMeta).length ? { nodeMeta } : {}),
       layers: plan.layers ?? [],
       imageUnderlay: resolveUnderlay(plan.imageUnderlay, settings.library_path),

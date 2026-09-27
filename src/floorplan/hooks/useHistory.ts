@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
-interface HistoryState<T> {
+export interface HistoryState<T> {
   past: T[];
   present: T;
   future: T[];
@@ -81,12 +81,23 @@ export const useHistory = <T,>(initial: T) => {
     setState(updated);
   };
 
+  /** The whole undo stack — past, present and future. Used to park a level's history while another level
+   *  is being edited, so switching floors neither loses nor mixes undo steps. */
+  const snapshot = (): HistoryState<T> => shadowRef.current;
+  /** Install a parked stack (or a fresh one: `{ past: [], present, future: [] }`). */
+  const restore = (next: HistoryState<T>) => {
+    shadowRef.current = next;
+    setState(next);
+  };
+
   const actions = useMemo(
     () => ({
       set,
       replace,
       undo,
       redo,
+      snapshot,
+      restore,
     }),
     []
   );

@@ -1,0 +1,5554 @@
+{
+ "schemaVersion": 2,
+ "settings": {
+  "library_path": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library",
+  "units": "m",
+  "northbearing": 0,
+  "pixelsPerMeter": 50,
+  "keywords": "test 2BHK, 2.5 storeys, parametric objects"
+ },
+ "nodes": [],
+ "segments": [],
+ "spaces": [],
+ "moodboards": [],
+ "layers": [
+  {
+   "id": "0",
+   "name": "0",
+   "color": "#334155",
+   "visible": true,
+   "locked": false,
+   "order": 0
+  },
+  {
+   "id": "wall",
+   "name": "Wall",
+   "color": "#1e293b",
+   "visible": true,
+   "locked": false,
+   "order": 1
+  },
+  {
+   "id": "door",
+   "name": "Door",
+   "color": "#b45309",
+   "visible": true,
+   "locked": false,
+   "order": 2
+  },
+  {
+   "id": "window",
+   "name": "Window",
+   "color": "#0284c7",
+   "visible": true,
+   "locked": false,
+   "order": 3
+  },
+  {
+   "id": "space",
+   "name": "Space",
+   "color": "#16a34a",
+   "visible": true,
+   "locked": false,
+   "order": 4
+  },
+  {
+   "id": "furniture",
+   "name": "Furniture",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 5
+  }
+ ],
+ "imageUnderlay": null,
+ "activeLevelId": "L0",
+ "levels": [
+  {
+   "id": "L0",
+   "name": "Ground floor",
+   "elevation": 0.0,
+   "height": 3.0,
+   "nodes": [
+    {
+     "id": "L0-n0",
+     "x": 100,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n1",
+     "x": 100,
+     "y": 187.5,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n2",
+     "x": 100,
+     "y": 262.5,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n3",
+     "x": 100,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n4",
+     "x": 155.0,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n5",
+     "x": 205.0,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n6",
+     "x": 250,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n7",
+     "x": 100,
+     "y": 435.0,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n8",
+     "x": 100,
+     "y": 465.0,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n9",
+     "x": 100,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n10",
+     "x": 250,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n11",
+     "x": 250,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n12",
+     "x": 287.5,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n13",
+     "x": 362.5,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n14",
+     "x": 400,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n15",
+     "x": 250,
+     "y": 391.25,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n16",
+     "x": 250,
+     "y": 428.75,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n17",
+     "x": 302.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n18",
+     "x": 347.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n19",
+     "x": 400,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n20",
+     "x": 320.0,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n21",
+     "x": 380.0,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n22",
+     "x": 400,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n23",
+     "x": 450,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n24",
+     "x": 405.0,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n25",
+     "x": 445.0,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n26",
+     "x": 450,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n27",
+     "x": 450,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n28",
+     "x": 470.0,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n29",
+     "x": 530.0,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n30",
+     "x": 600,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n31",
+     "x": 450,
+     "y": 387.5,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n32",
+     "x": 450,
+     "y": 432.5,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n33",
+     "x": 600,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n34",
+     "x": 600,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n35",
+     "x": 600,
+     "y": 195.0,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n36",
+     "x": 600,
+     "y": 255.0,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n37",
+     "x": 600,
+     "y": 425.0,
+     "layer": "0"
+    },
+    {
+     "id": "L0-n38",
+     "x": 600,
+     "y": 475.0,
+     "layer": "0"
+    },
+    {
+     "id": "L0-fn0",
+     "x": 250.0,
+     "y": 315.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att54",
+       "objectId": "sofa-with-math",
+       "objectPath": "Objects/Architectural/sofa.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn1",
+     "x": 250.0,
+     "y": 250.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att55",
+       "objectId": "table-with-math",
+       "objectPath": "Objects/Architectural/table.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off",
+        "length": 1.0,
+        "width": 0.5
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn2",
+     "x": 250.0,
+     "y": 117.5,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att56",
+       "objectId": "tv-unit-with-math",
+       "objectPath": "Objects/Architectural/tv-unit.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn3",
+     "x": 250.0,
+     "y": 250.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att57",
+       "objectId": "rug-with-math",
+       "objectPath": "Objects/Architectural/rug.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn4",
+     "x": 375.0,
+     "y": 125.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att58",
+       "objectId": "plant-potted-with-math",
+       "objectPath": "Objects/Architectural/plant-potted.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn5",
+     "x": 500.0,
+     "y": 120.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att59",
+       "objectId": "kitchen-counter-with-math",
+       "objectPath": "Objects/Architectural/kitchen-counter.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off",
+        "length": 3.4
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn6",
+     "x": 530.0,
+     "y": 120.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att60",
+       "objectId": "stove-with-math",
+       "objectPath": "Objects/Architectural/stove.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn7",
+     "x": 575.0,
+     "y": 320.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att61",
+       "objectId": "refrigerator-with-math",
+       "objectPath": "Objects/Architectural/refrigerator.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn8",
+     "x": 350.0,
+     "y": 460.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att62",
+       "objectId": "table-with-math",
+       "objectPath": "Objects/Architectural/table.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off",
+        "length": 1.6,
+        "width": 0.9
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn9",
+     "x": 325.0,
+     "y": 425.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att63",
+       "objectId": "chair-with-math",
+       "objectPath": "Objects/Architectural/chair.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn10",
+     "x": 375.0,
+     "y": 425.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att64",
+       "objectId": "chair-with-math",
+       "objectPath": "Objects/Architectural/chair.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn11",
+     "x": 325.0,
+     "y": 495.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att65",
+       "objectId": "chair-with-math",
+       "objectPath": "Objects/Architectural/chair.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn12",
+     "x": 375.0,
+     "y": 495.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att66",
+       "objectId": "chair-with-math",
+       "objectPath": "Objects/Architectural/chair.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn13",
+     "x": 122.5,
+     "y": 515.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att67",
+       "objectId": "toilet-with-math",
+       "objectPath": "Objects/Architectural/toilet.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn14",
+     "x": 230.0,
+     "y": 535.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att68",
+       "objectId": "washbasin-with-math",
+       "objectPath": "Objects/Architectural/washbasin.json",
+       "params": {
+        "rotation": 90,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-fn15",
+     "x": 250.0,
+     "y": 225.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L0-att69",
+       "objectId": "ceiling-fan-with-math",
+       "objectPath": "Objects/Architectural/ceiling-fan.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "id": "L0-s0",
+     "fromNodeId": "L0-n0",
+     "toNodeId": "L0-n1",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att1",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s1",
+     "fromNodeId": "L0-n1",
+     "toNodeId": "L0-n2",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att2",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.5,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s2",
+     "fromNodeId": "L0-n2",
+     "toNodeId": "L0-n3",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att3",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s3",
+     "fromNodeId": "L0-n0",
+     "toNodeId": "L0-n4",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att4",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s4",
+     "fromNodeId": "L0-n4",
+     "toNodeId": "L0-n5",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att5",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 1.0,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s5",
+     "fromNodeId": "L0-n5",
+     "toNodeId": "L0-n6",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att6",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s6",
+     "fromNodeId": "L0-n3",
+     "toNodeId": "L0-n7",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att7",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s7",
+     "fromNodeId": "L0-n7",
+     "toNodeId": "L0-n8",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att8",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 0.6,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s8",
+     "fromNodeId": "L0-n8",
+     "toNodeId": "L0-n9",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att9",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s9",
+     "fromNodeId": "L0-n3",
+     "toNodeId": "L0-n10",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att10",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s10",
+     "fromNodeId": "L0-n9",
+     "toNodeId": "L0-n11",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att11",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s11",
+     "fromNodeId": "L0-n6",
+     "toNodeId": "L0-n12",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att12",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s12",
+     "fromNodeId": "L0-n12",
+     "toNodeId": "L0-n13",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att13",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.5,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s13",
+     "fromNodeId": "L0-n13",
+     "toNodeId": "L0-n14",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att14",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s14",
+     "fromNodeId": "L0-n10",
+     "toNodeId": "L0-n15",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att15",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s15",
+     "fromNodeId": "L0-n15",
+     "toNodeId": "L0-n16",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att16",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.75,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s16",
+     "fromNodeId": "L0-n16",
+     "toNodeId": "L0-n11",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att17",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s17",
+     "fromNodeId": "L0-n10",
+     "toNodeId": "L0-n17",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att18",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s18",
+     "fromNodeId": "L0-n17",
+     "toNodeId": "L0-n18",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att19",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.9,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s19",
+     "fromNodeId": "L0-n18",
+     "toNodeId": "L0-n19",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att20",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s20",
+     "fromNodeId": "L0-n11",
+     "toNodeId": "L0-n20",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att21",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s21",
+     "fromNodeId": "L0-n20",
+     "toNodeId": "L0-n21",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att22",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.2,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s22",
+     "fromNodeId": "L0-n21",
+     "toNodeId": "L0-n22",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att23",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s23",
+     "fromNodeId": "L0-n14",
+     "toNodeId": "L0-n19",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att24",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s24",
+     "fromNodeId": "L0-n14",
+     "toNodeId": "L0-n23",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att25",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s25",
+     "fromNodeId": "L0-n19",
+     "toNodeId": "L0-n24",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att26",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s26",
+     "fromNodeId": "L0-n24",
+     "toNodeId": "L0-n25",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att27",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.8,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s27",
+     "fromNodeId": "L0-n25",
+     "toNodeId": "L0-n26",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att28",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s28",
+     "fromNodeId": "L0-n22",
+     "toNodeId": "L0-n27",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att29",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s29",
+     "fromNodeId": "L0-n23",
+     "toNodeId": "L0-n28",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att30",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s30",
+     "fromNodeId": "L0-n28",
+     "toNodeId": "L0-n29",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att31",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.2,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s31",
+     "fromNodeId": "L0-n29",
+     "toNodeId": "L0-n30",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att32",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s32",
+     "fromNodeId": "L0-n26",
+     "toNodeId": "L0-n31",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att33",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s33",
+     "fromNodeId": "L0-n31",
+     "toNodeId": "L0-n32",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att34",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.9,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s34",
+     "fromNodeId": "L0-n32",
+     "toNodeId": "L0-n27",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att35",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s35",
+     "fromNodeId": "L0-n26",
+     "toNodeId": "L0-n33",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att36",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s36",
+     "fromNodeId": "L0-n27",
+     "toNodeId": "L0-n34",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att37",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s37",
+     "fromNodeId": "L0-n30",
+     "toNodeId": "L0-n35",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att38",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s38",
+     "fromNodeId": "L0-n35",
+     "toNodeId": "L0-n36",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att39",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.2,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s39",
+     "fromNodeId": "L0-n36",
+     "toNodeId": "L0-n33",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att40",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s40",
+     "fromNodeId": "L0-n33",
+     "toNodeId": "L0-n37",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att41",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s41",
+     "fromNodeId": "L0-n37",
+     "toNodeId": "L0-n38",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L0-att42",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.0,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-s42",
+     "fromNodeId": "L0-n38",
+     "toNodeId": "L0-n34",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L0-att43",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L0-obj0",
+     "fromNodeId": "L0-fn0",
+     "toNodeId": "L0-fn0",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj1",
+     "fromNodeId": "L0-fn1",
+     "toNodeId": "L0-fn1",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj2",
+     "fromNodeId": "L0-fn2",
+     "toNodeId": "L0-fn2",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj3",
+     "fromNodeId": "L0-fn3",
+     "toNodeId": "L0-fn3",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj4",
+     "fromNodeId": "L0-fn4",
+     "toNodeId": "L0-fn4",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj5",
+     "fromNodeId": "L0-fn5",
+     "toNodeId": "L0-fn5",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj6",
+     "fromNodeId": "L0-fn6",
+     "toNodeId": "L0-fn6",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj7",
+     "fromNodeId": "L0-fn7",
+     "toNodeId": "L0-fn7",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj8",
+     "fromNodeId": "L0-fn8",
+     "toNodeId": "L0-fn8",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj9",
+     "fromNodeId": "L0-fn9",
+     "toNodeId": "L0-fn9",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj10",
+     "fromNodeId": "L0-fn10",
+     "toNodeId": "L0-fn10",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj11",
+     "fromNodeId": "L0-fn11",
+     "toNodeId": "L0-fn11",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj12",
+     "fromNodeId": "L0-fn12",
+     "toNodeId": "L0-fn12",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj13",
+     "fromNodeId": "L0-fn13",
+     "toNodeId": "L0-fn13",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj14",
+     "fromNodeId": "L0-fn14",
+     "toNodeId": "L0-fn14",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L0-obj15",
+     "fromNodeId": "L0-fn15",
+     "toNodeId": "L0-fn15",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    }
+   ],
+   "spaces": [
+    {
+     "id": "L0-sp0",
+     "nodeIds": [
+      "L0-n0",
+      "L0-n14",
+      "L0-n19",
+      "L0-n3"
+     ],
+     "layer": "space",
+     "label": "LIVING",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L0-att44",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L0-att45",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/marble.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L0-sp1",
+     "nodeIds": [
+      "L0-n14",
+      "L0-n30",
+      "L0-n33",
+      "L0-n19"
+     ],
+     "layer": "space",
+     "label": "KITCHEN",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L0-att46",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L0-att47",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/marble.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L0-sp2",
+     "nodeIds": [
+      "L0-n3",
+      "L0-n10",
+      "L0-n11",
+      "L0-n9"
+     ],
+     "layer": "space",
+     "label": "TOILET",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L0-att48",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L0-att49",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.3,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/ceramic.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L0-sp3",
+     "nodeIds": [
+      "L0-n10",
+      "L0-n26",
+      "L0-n27",
+      "L0-n11"
+     ],
+     "layer": "space",
+     "label": "DINING",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L0-att50",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L0-att51",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/marble.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L0-sp4",
+     "nodeIds": [
+      "L0-n26",
+      "L0-n33",
+      "L0-n34",
+      "L0-n27"
+     ],
+     "layer": "space",
+     "label": "STAIRCASE",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L0-att52",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L0-att53",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/marble.json"
+       }
+      }
+     ]
+    }
+   ],
+   "imageUnderlay": null,
+   "graphAttrs": {
+    "nodes": {
+     "L0-obj0:end|L0-obj0:start": {
+      "node-type": "object"
+     },
+     "L0-obj1:end|L0-obj1:start": {
+      "node-type": "object"
+     },
+     "L0-obj2:end|L0-obj2:start": {
+      "node-type": "object"
+     },
+     "L0-obj3:end|L0-obj3:start": {
+      "node-type": "object"
+     },
+     "L0-obj4:end|L0-obj4:start": {
+      "node-type": "object"
+     },
+     "L0-obj5:end|L0-obj5:start": {
+      "node-type": "object"
+     },
+     "L0-obj6:end|L0-obj6:start": {
+      "node-type": "object"
+     },
+     "L0-obj7:end|L0-obj7:start": {
+      "node-type": "object"
+     },
+     "L0-obj8:end|L0-obj8:start": {
+      "node-type": "object"
+     },
+     "L0-obj9:end|L0-obj9:start": {
+      "node-type": "object"
+     },
+     "L0-obj10:end|L0-obj10:start": {
+      "node-type": "object"
+     },
+     "L0-obj11:end|L0-obj11:start": {
+      "node-type": "object"
+     },
+     "L0-obj12:end|L0-obj12:start": {
+      "node-type": "object"
+     },
+     "L0-obj13:end|L0-obj13:start": {
+      "node-type": "object"
+     },
+     "L0-obj14:end|L0-obj14:start": {
+      "node-type": "object"
+     },
+     "L0-obj15:end|L0-obj15:start": {
+      "node-type": "object"
+     }
+    }
+   }
+  },
+  {
+   "id": "L1",
+   "name": "First floor",
+   "elevation": 3.0,
+   "height": 3.0,
+   "nodes": [
+    {
+     "id": "L1-n0",
+     "x": 100,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n1",
+     "x": 100,
+     "y": 195.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n2",
+     "x": 100,
+     "y": 255.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n3",
+     "x": 100,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n4",
+     "x": 250,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n5",
+     "x": 100,
+     "y": 435.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n6",
+     "x": 100,
+     "y": 465.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n7",
+     "x": 100,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n8",
+     "x": 250,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n9",
+     "x": 250,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n10",
+     "x": 287.5,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n11",
+     "x": 362.5,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n12",
+     "x": 400,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n13",
+     "x": 250,
+     "y": 391.25,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n14",
+     "x": 250,
+     "y": 428.75,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n15",
+     "x": 302.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n16",
+     "x": 347.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n17",
+     "x": 400,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n18",
+     "x": 320.0,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n19",
+     "x": 380.0,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n20",
+     "x": 400,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n21",
+     "x": 450,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n22",
+     "x": 405.0,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n23",
+     "x": 445.0,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n24",
+     "x": 450,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n25",
+     "x": 450,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n26",
+     "x": 462.5,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n27",
+     "x": 537.5,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n28",
+     "x": 600,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n29",
+     "x": 450,
+     "y": 387.5,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n30",
+     "x": 450,
+     "y": 432.5,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n31",
+     "x": 600,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n32",
+     "x": 600,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n33",
+     "x": 600,
+     "y": 195.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n34",
+     "x": 600,
+     "y": 255.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n35",
+     "x": 600,
+     "y": 425.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-n36",
+     "x": 600,
+     "y": 475.0,
+     "layer": "0"
+    },
+    {
+     "id": "L1-fn0",
+     "x": 210.0,
+     "y": 200.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att52",
+       "objectId": "bed-with-math",
+       "objectPath": "Objects/Architectural/bed.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn1",
+     "x": 210.0,
+     "y": 115.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att53",
+       "objectId": "nightstand-with-math",
+       "objectPath": "Objects/Architectural/nightstand.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn2",
+     "x": 350.0,
+     "y": 117.5,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att54",
+       "objectId": "wardrobe-with-math",
+       "objectPath": "Objects/Architectural/wardrobe.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off",
+        "length": 1.6
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn3",
+     "x": 500.0,
+     "y": 200.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att55",
+       "objectId": "bed-with-math",
+       "objectPath": "Objects/Architectural/bed.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn4",
+     "x": 580.0,
+     "y": 290.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att56",
+       "objectId": "wardrobe-with-math",
+       "objectPath": "Objects/Architectural/wardrobe.json",
+       "params": {
+        "rotation": 90,
+        "anchorDir": "Center",
+        "fitMode": "Off",
+        "length": 1.2
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn5",
+     "x": 450.0,
+     "y": 330.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att57",
+       "objectId": "desk-with-math",
+       "objectPath": "Objects/Architectural/desk.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn6",
+     "x": 450.0,
+     "y": 300.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att58",
+       "objectId": "chair-with-math",
+       "objectPath": "Objects/Architectural/chair.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn7",
+     "x": 122.5,
+     "y": 515.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att59",
+       "objectId": "toilet-with-math",
+       "objectPath": "Objects/Architectural/toilet.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn8",
+     "x": 230.0,
+     "y": 535.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att60",
+       "objectId": "washbasin-with-math",
+       "objectPath": "Objects/Architectural/washbasin.json",
+       "params": {
+        "rotation": 90,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn9",
+     "x": 130.0,
+     "y": 385.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att61",
+       "objectId": "shower-with-math",
+       "objectPath": "Objects/Architectural/shower.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn10",
+     "x": 250.0,
+     "y": 225.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att62",
+       "objectId": "ceiling-fan-with-math",
+       "objectPath": "Objects/Architectural/ceiling-fan.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-fn11",
+     "x": 500.0,
+     "y": 225.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L1-att63",
+       "objectId": "ceiling-fan-with-math",
+       "objectPath": "Objects/Architectural/ceiling-fan.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "id": "L1-s0",
+     "fromNodeId": "L1-n0",
+     "toNodeId": "L1-n1",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att1",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s1",
+     "fromNodeId": "L1-n1",
+     "toNodeId": "L1-n2",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att2",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.2,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s2",
+     "fromNodeId": "L1-n2",
+     "toNodeId": "L1-n3",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att3",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s3",
+     "fromNodeId": "L1-n0",
+     "toNodeId": "L1-n4",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att4",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s4",
+     "fromNodeId": "L1-n3",
+     "toNodeId": "L1-n5",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att5",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s5",
+     "fromNodeId": "L1-n5",
+     "toNodeId": "L1-n6",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att6",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 0.6,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s6",
+     "fromNodeId": "L1-n6",
+     "toNodeId": "L1-n7",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att7",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s7",
+     "fromNodeId": "L1-n3",
+     "toNodeId": "L1-n8",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att8",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s8",
+     "fromNodeId": "L1-n7",
+     "toNodeId": "L1-n9",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att9",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s9",
+     "fromNodeId": "L1-n4",
+     "toNodeId": "L1-n10",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att10",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s10",
+     "fromNodeId": "L1-n10",
+     "toNodeId": "L1-n11",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att11",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.5,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s11",
+     "fromNodeId": "L1-n11",
+     "toNodeId": "L1-n12",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att12",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s12",
+     "fromNodeId": "L1-n8",
+     "toNodeId": "L1-n13",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att13",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s13",
+     "fromNodeId": "L1-n13",
+     "toNodeId": "L1-n14",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att14",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.75,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s14",
+     "fromNodeId": "L1-n14",
+     "toNodeId": "L1-n9",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att15",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s15",
+     "fromNodeId": "L1-n8",
+     "toNodeId": "L1-n15",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att16",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s16",
+     "fromNodeId": "L1-n15",
+     "toNodeId": "L1-n16",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att17",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.9,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s17",
+     "fromNodeId": "L1-n16",
+     "toNodeId": "L1-n17",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att18",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s18",
+     "fromNodeId": "L1-n9",
+     "toNodeId": "L1-n18",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att19",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s19",
+     "fromNodeId": "L1-n18",
+     "toNodeId": "L1-n19",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att20",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.2,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s20",
+     "fromNodeId": "L1-n19",
+     "toNodeId": "L1-n20",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att21",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s21",
+     "fromNodeId": "L1-n12",
+     "toNodeId": "L1-n17",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att22",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s22",
+     "fromNodeId": "L1-n12",
+     "toNodeId": "L1-n21",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att23",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s23",
+     "fromNodeId": "L1-n17",
+     "toNodeId": "L1-n22",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att24",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s24",
+     "fromNodeId": "L1-n22",
+     "toNodeId": "L1-n23",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att25",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.8,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s25",
+     "fromNodeId": "L1-n23",
+     "toNodeId": "L1-n24",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att26",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s26",
+     "fromNodeId": "L1-n20",
+     "toNodeId": "L1-n25",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att27",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s27",
+     "fromNodeId": "L1-n21",
+     "toNodeId": "L1-n26",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att28",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s28",
+     "fromNodeId": "L1-n26",
+     "toNodeId": "L1-n27",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att29",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.5,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s29",
+     "fromNodeId": "L1-n27",
+     "toNodeId": "L1-n28",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att30",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s30",
+     "fromNodeId": "L1-n24",
+     "toNodeId": "L1-n29",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att31",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s31",
+     "fromNodeId": "L1-n29",
+     "toNodeId": "L1-n30",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att32",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.9,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s32",
+     "fromNodeId": "L1-n30",
+     "toNodeId": "L1-n25",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att33",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s33",
+     "fromNodeId": "L1-n24",
+     "toNodeId": "L1-n31",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att34",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s34",
+     "fromNodeId": "L1-n25",
+     "toNodeId": "L1-n32",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att35",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s35",
+     "fromNodeId": "L1-n28",
+     "toNodeId": "L1-n33",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att36",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s36",
+     "fromNodeId": "L1-n33",
+     "toNodeId": "L1-n34",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att37",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.2,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s37",
+     "fromNodeId": "L1-n34",
+     "toNodeId": "L1-n31",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att38",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s38",
+     "fromNodeId": "L1-n31",
+     "toNodeId": "L1-n35",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att39",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s39",
+     "fromNodeId": "L1-n35",
+     "toNodeId": "L1-n36",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L1-att40",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.0,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-s40",
+     "fromNodeId": "L1-n36",
+     "toNodeId": "L1-n32",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L1-att41",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 3.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L1-obj0",
+     "fromNodeId": "L1-fn0",
+     "toNodeId": "L1-fn0",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj1",
+     "fromNodeId": "L1-fn1",
+     "toNodeId": "L1-fn1",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj2",
+     "fromNodeId": "L1-fn2",
+     "toNodeId": "L1-fn2",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj3",
+     "fromNodeId": "L1-fn3",
+     "toNodeId": "L1-fn3",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj4",
+     "fromNodeId": "L1-fn4",
+     "toNodeId": "L1-fn4",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj5",
+     "fromNodeId": "L1-fn5",
+     "toNodeId": "L1-fn5",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj6",
+     "fromNodeId": "L1-fn6",
+     "toNodeId": "L1-fn6",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj7",
+     "fromNodeId": "L1-fn7",
+     "toNodeId": "L1-fn7",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj8",
+     "fromNodeId": "L1-fn8",
+     "toNodeId": "L1-fn8",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj9",
+     "fromNodeId": "L1-fn9",
+     "toNodeId": "L1-fn9",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj10",
+     "fromNodeId": "L1-fn10",
+     "toNodeId": "L1-fn10",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L1-obj11",
+     "fromNodeId": "L1-fn11",
+     "toNodeId": "L1-fn11",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    }
+   ],
+   "spaces": [
+    {
+     "id": "L1-sp0",
+     "nodeIds": [
+      "L1-n0",
+      "L1-n12",
+      "L1-n17",
+      "L1-n3"
+     ],
+     "layer": "space",
+     "label": "BEDROOM 1",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L1-att42",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L1-att43",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Brick",
+        "cellSize": 0.2,
+        "cellLength": 1.2,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/light-oak.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L1-sp1",
+     "nodeIds": [
+      "L1-n12",
+      "L1-n28",
+      "L1-n31",
+      "L1-n17"
+     ],
+     "layer": "space",
+     "label": "BEDROOM 2",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L1-att44",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L1-att45",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Brick",
+        "cellSize": 0.2,
+        "cellLength": 1.2,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/light-oak.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L1-sp2",
+     "nodeIds": [
+      "L1-n3",
+      "L1-n8",
+      "L1-n9",
+      "L1-n7"
+     ],
+     "layer": "space",
+     "label": "TOILET",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L1-att46",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L1-att47",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.3,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/ceramic.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L1-sp3",
+     "nodeIds": [
+      "L1-n8",
+      "L1-n24",
+      "L1-n25",
+      "L1-n9"
+     ],
+     "layer": "space",
+     "label": "LOBBY",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L1-att48",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L1-att49",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/marble.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L1-sp4",
+     "nodeIds": [
+      "L1-n24",
+      "L1-n31",
+      "L1-n32",
+      "L1-n25"
+     ],
+     "layer": "space",
+     "label": "STAIRCASE",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L1-att50",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L1-att51",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/marble.json"
+       }
+      }
+     ]
+    }
+   ],
+   "imageUnderlay": null,
+   "graphAttrs": {
+    "nodes": {
+     "L1-obj0:end|L1-obj0:start": {
+      "node-type": "object"
+     },
+     "L1-obj1:end|L1-obj1:start": {
+      "node-type": "object"
+     },
+     "L1-obj2:end|L1-obj2:start": {
+      "node-type": "object"
+     },
+     "L1-obj3:end|L1-obj3:start": {
+      "node-type": "object"
+     },
+     "L1-obj4:end|L1-obj4:start": {
+      "node-type": "object"
+     },
+     "L1-obj5:end|L1-obj5:start": {
+      "node-type": "object"
+     },
+     "L1-obj6:end|L1-obj6:start": {
+      "node-type": "object"
+     },
+     "L1-obj7:end|L1-obj7:start": {
+      "node-type": "object"
+     },
+     "L1-obj8:end|L1-obj8:start": {
+      "node-type": "object"
+     },
+     "L1-obj9:end|L1-obj9:start": {
+      "node-type": "object"
+     },
+     "L1-obj10:end|L1-obj10:start": {
+      "node-type": "object"
+     },
+     "L1-obj11:end|L1-obj11:start": {
+      "node-type": "object"
+     }
+    }
+   }
+  },
+  {
+   "id": "L2",
+   "name": "Terrace (half storey)",
+   "elevation": 6.0,
+   "height": 2.7,
+   "nodes": [
+    {
+     "id": "L2-n0",
+     "x": 250,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n1",
+     "x": 250,
+     "y": 425.0,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n2",
+     "x": 250,
+     "y": 475.0,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n3",
+     "x": 250,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n4",
+     "x": 327.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n5",
+     "x": 372.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n6",
+     "x": 450,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n7",
+     "x": 320.0,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n8",
+     "x": 380.0,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n9",
+     "x": 450,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n10",
+     "x": 502.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n11",
+     "x": 547.5,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n12",
+     "x": 600,
+     "y": 350,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n13",
+     "x": 600,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n14",
+     "x": 600,
+     "y": 425.0,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n15",
+     "x": 600,
+     "y": 475.0,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n16",
+     "x": 100,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n17",
+     "x": 600,
+     "y": 100,
+     "layer": "0"
+    },
+    {
+     "id": "L2-n18",
+     "x": 100,
+     "y": 550,
+     "layer": "0"
+    },
+    {
+     "id": "L2-fn0",
+     "x": 350.0,
+     "y": 525.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L2-att27",
+       "objectId": "desk-with-math",
+       "objectPath": "Objects/Architectural/desk.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-fn1",
+     "x": 350.0,
+     "y": 490.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L2-att28",
+       "objectId": "chair-with-math",
+       "objectPath": "Objects/Architectural/chair.json",
+       "params": {
+        "rotation": 180,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-fn2",
+     "x": 435.0,
+     "y": 450.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L2-att29",
+       "objectId": "shelf-with-math",
+       "objectPath": "Objects/Architectural/shelf.json",
+       "params": {
+        "rotation": 90,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-fn3",
+     "x": 290.0,
+     "y": 390.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L2-att30",
+       "objectId": "armchair-with-math",
+       "objectPath": "Objects/Architectural/armchair.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-fn4",
+     "x": 150.0,
+     "y": 125.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L2-att31",
+       "objectId": "planter-box-with-math",
+       "objectPath": "Objects/Architectural/planter-box.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-fn5",
+     "x": 550.0,
+     "y": 125.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L2-att32",
+       "objectId": "planter-box-with-math",
+       "objectPath": "Objects/Architectural/planter-box.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-fn6",
+     "x": 200.0,
+     "y": 200.0,
+     "layer": "0",
+     "attachments": [
+      {
+       "id": "L2-att33",
+       "objectId": "plant-potted-with-math",
+       "objectPath": "Objects/Architectural/plant-potted.json",
+       "params": {
+        "rotation": 0,
+        "anchorDir": "Center",
+        "fitMode": "Off"
+       },
+       "t": 0,
+       "flip": false
+      }
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "id": "L2-s0",
+     "fromNodeId": "L2-n0",
+     "toNodeId": "L2-n1",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att1",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s1",
+     "fromNodeId": "L2-n1",
+     "toNodeId": "L2-n2",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L2-att2",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.0,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s2",
+     "fromNodeId": "L2-n2",
+     "toNodeId": "L2-n3",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att3",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s3",
+     "fromNodeId": "L2-n0",
+     "toNodeId": "L2-n4",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att4",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s4",
+     "fromNodeId": "L2-n4",
+     "toNodeId": "L2-n5",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L2-att5",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.9,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s5",
+     "fromNodeId": "L2-n5",
+     "toNodeId": "L2-n6",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att6",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s6",
+     "fromNodeId": "L2-n3",
+     "toNodeId": "L2-n7",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att7",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s7",
+     "fromNodeId": "L2-n7",
+     "toNodeId": "L2-n8",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L2-att8",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.2,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s8",
+     "fromNodeId": "L2-n8",
+     "toNodeId": "L2-n9",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att9",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s9",
+     "fromNodeId": "L2-n6",
+     "toNodeId": "L2-n9",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att10",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s10",
+     "fromNodeId": "L2-n6",
+     "toNodeId": "L2-n10",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att11",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s11",
+     "fromNodeId": "L2-n10",
+     "toNodeId": "L2-n11",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "door",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L2-att12",
+       "objectId": "door-with-math",
+       "objectPath": "Objects/Architectural/door.json",
+       "params": {
+        "width": 0.9,
+        "leaves": "Single",
+        "hinge": "left",
+        "swing": "left",
+        "openAngle": 90,
+        "fitMode": "Fill segment",
+        "frameDepth": 0.2,
+        "lintelHeight": 2.1
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s12",
+     "fromNodeId": "L2-n11",
+     "toNodeId": "L2-n12",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att13",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s13",
+     "fromNodeId": "L2-n9",
+     "toNodeId": "L2-n13",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att14",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s14",
+     "fromNodeId": "L2-n12",
+     "toNodeId": "L2-n14",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att15",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s15",
+     "fromNodeId": "L2-n14",
+     "toNodeId": "L2-n15",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "window",
+     "isObjectOpening": true,
+     "attachments": [
+      {
+       "id": "L2-att16",
+       "objectId": "window-with-math",
+       "objectPath": "Objects/Architectural/window.json",
+       "params": {
+        "width": 1.0,
+        "fitMode": "Fill wall",
+        "sillHeight": 0.9,
+        "lintelHeight": 2.1,
+        "wallDepth": 0.2,
+        "panes": 2,
+        "operation": "Casement",
+        "showFrame": true
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s16",
+     "fromNodeId": "L2-n15",
+     "toNodeId": "L2-n13",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att17",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 2.7,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ]
+    },
+    {
+     "id": "L2-s17",
+     "fromNodeId": "L2-n16",
+     "toNodeId": "L2-n17",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att18",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 1.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ],
+     "label": "Parapet"
+    },
+    {
+     "id": "L2-s18",
+     "fromNodeId": "L2-n16",
+     "toNodeId": "L2-n18",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att19",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 1.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ],
+     "label": "Parapet"
+    },
+    {
+     "id": "L2-s19",
+     "fromNodeId": "L2-n18",
+     "toNodeId": "L2-n3",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att20",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 1.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ],
+     "label": "Parapet"
+    },
+    {
+     "id": "L2-s20",
+     "fromNodeId": "L2-n17",
+     "toNodeId": "L2-n12",
+     "thickness": 10.0,
+     "color": "#1e293b",
+     "mode": "fill",
+     "method": "center",
+     "segmentType": "line",
+     "bufferStyle": "flat",
+     "layer": "wall",
+     "attachments": [
+      {
+       "id": "L2-att21",
+       "objectId": "wall-with-math",
+       "objectPath": "Objects/Architectural/wall.json",
+       "params": {
+        "thickness": 0.2,
+        "height": 1.0,
+        "mode": "Buffered",
+        "hatch": false,
+        "fitMode": "Fill segment"
+       },
+       "t": 0.5,
+       "flip": false
+      }
+     ],
+     "label": "Parapet"
+    },
+    {
+     "id": "L2-obj0",
+     "fromNodeId": "L2-fn0",
+     "toNodeId": "L2-fn0",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L2-obj1",
+     "fromNodeId": "L2-fn1",
+     "toNodeId": "L2-fn1",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L2-obj2",
+     "fromNodeId": "L2-fn2",
+     "toNodeId": "L2-fn2",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L2-obj3",
+     "fromNodeId": "L2-fn3",
+     "toNodeId": "L2-fn3",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L2-obj4",
+     "fromNodeId": "L2-fn4",
+     "toNodeId": "L2-fn4",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L2-obj5",
+     "fromNodeId": "L2-fn5",
+     "toNodeId": "L2-fn5",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    },
+    {
+     "id": "L2-obj6",
+     "fromNodeId": "L2-fn6",
+     "toNodeId": "L2-fn6",
+     "layer": "furniture",
+     "thickness": 0.5,
+     "color": "#1e293b",
+     "dashed": false,
+     "mode": "line",
+     "method": "center",
+     "segmentType": "wall"
+    }
+   ],
+   "spaces": [
+    {
+     "id": "L2-sp0",
+     "nodeIds": [
+      "L2-n0",
+      "L2-n6",
+      "L2-n9",
+      "L2-n3"
+     ],
+     "layer": "space",
+     "label": "STUDY",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L2-att22",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L2-att23",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Brick",
+        "cellSize": 0.2,
+        "cellLength": 1.2,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/light-oak.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L2-sp1",
+     "nodeIds": [
+      "L2-n6",
+      "L2-n12",
+      "L2-n13",
+      "L2-n9"
+     ],
+     "layer": "space",
+     "label": "STAIRCASE",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(226,232,240,0.5)",
+     "stroke": "#475569",
+     "attachments": [
+      {
+       "id": "L2-att24",
+       "objectId": "room-with-math",
+       "objectPath": "Objects/Architectural/room.json",
+       "params": {
+        "color": "Grey"
+       },
+       "t": 0,
+       "flip": false
+      },
+      {
+       "id": "L2-att25",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.002,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Finishes/marble.json"
+       }
+      }
+     ]
+    },
+    {
+     "id": "L2-open0",
+     "nodeIds": [
+      "L2-n16",
+      "L2-n17",
+      "L2-n12",
+      "L2-n0",
+      "L2-n3",
+      "L2-n18"
+     ],
+     "layer": "space",
+     "label": "OPEN TERRACE",
+     "showLabel": true,
+     "roomType": "room",
+     "fill": "rgba(14,165,233,0.12)",
+     "stroke": "#0EA5E9",
+     "attachments": [
+      {
+       "id": "L2-att26",
+       "objectId": "tessellation-with-math",
+       "objectPath": "Objects/Architectural/tessellation.json",
+       "t": 0.5,
+       "flip": false,
+       "params": {
+        "pattern": "Square",
+        "cellSize": 0.6,
+        "cellLength": 0,
+        "joint": 0.003,
+        "angle": 0,
+        "originCorner": "SW",
+        "fitMode": "Clip to boundary",
+        "height": 0.01,
+        "materialPath": "Masonry/stone.json"
+       }
+      }
+     ]
+    }
+   ],
+   "imageUnderlay": null,
+   "graphAttrs": {
+    "nodes": {
+     "L2-obj0:end|L2-obj0:start": {
+      "node-type": "object"
+     },
+     "L2-obj1:end|L2-obj1:start": {
+      "node-type": "object"
+     },
+     "L2-obj2:end|L2-obj2:start": {
+      "node-type": "object"
+     },
+     "L2-obj3:end|L2-obj3:start": {
+      "node-type": "object"
+     },
+     "L2-obj4:end|L2-obj4:start": {
+      "node-type": "object"
+     },
+     "L2-obj5:end|L2-obj5:start": {
+      "node-type": "object"
+     },
+     "L2-obj6:end|L2-obj6:start": {
+      "node-type": "object"
+     }
+    }
+   }
+  }
+ ]
+}

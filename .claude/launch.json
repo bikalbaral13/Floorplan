@@ -74,6 +74,19 @@
       ],
       "port": 2501,
       "autoPort": false
+    },
+    {
+      "name": "moodboard-picker",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "skills-moodboard-picker",
+        "--port",
+        "2612",
+        "--strictPort"
+      ],
+      "port": 2612,
+      "autoPort": false
     }
   ]
 }

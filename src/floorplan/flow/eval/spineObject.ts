@@ -295,6 +295,9 @@ export const resolveSpineObject = (
   host?: Point[],
   env?: SpineEnv,
 ): SpineResolved | null => {
+  // Render Mode "Basic" / "Nothing" (see parametricObject.ts): the Math Engine never runs for this attachment.
+  const rm = overrides?.renderMode;
+  if (rm === "Basic" || rm === "Nothing") return null;
   const f = parseSpineObject(defText);
   if (!f) return null;
   const math = byTool(f, "expr");

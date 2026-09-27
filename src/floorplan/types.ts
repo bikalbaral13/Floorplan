@@ -1093,6 +1093,47 @@ export function gridCellValue(g: GridDef, ordinal: number): number | null {
   return null;
 }
 
+/** One room's decision from a moodboard — a COPY of the chosen option, not a pointer to it, so the plan
+ *  still reads and renders if the library board is re-issued. `optionId` + the parent's `source` are the
+ *  way back for re-picking. Only `status: "locked"` picks should drive materials/objects downstream;
+ *  `shortlisted` is kept as a record of an undecided room. See R2 library/Skills/Moodboard Creator. */
+export interface MoodboardPick {
+  /** `rooms[].roomKey` in the source board ("toilet", "living-a"). */
+  roomKey: string;
+  label?: string;
+  /** Space ids in THIS plan the pick applies to — resolved once at import from the board's
+   *  `bind.spaceNames` / `bind.roomType`, so consumers never re-match names. May be empty. */
+  spaces: string[];
+  status: "shortlisted" | "locked";
+  /** `references[].id` of the chosen option ("toilet-3"). */
+  optionId: string;
+  /** Bucket key of the chosen image ("library/Images/Moodboards/…/toilet-3.jpg"). */
+  image: string;
+  takeaway?: string;
+  tags?: string[];
+  palette?: string[];
+  note?: string | null;
+  by?: string | null;
+  at?: string;
+  /** Filled after the pick (never guessed at import) — same shapes as moodboard/1. */
+  materials?: { surface: string; materialPath?: string; note?: string }[];
+  objects?: { category: string; objectPath?: string; params?: Record<string, unknown> }[];
+  lighting?: { cct?: number; style?: string[]; hero?: string | null } | null;
+}
+
+/** The selected part of one moodboard, stored on the plan. A plan may carry several (one board for
+ *  the apartments, another for the clubhouse); re-importing the same `source` replaces its entry. */
+export interface MoodboardSelection {
+  /** Board id (`moodboard/1` `id`). */
+  id: string;
+  title?: string;
+  /** Library-relative path of the board it was picked from ("Moodboards/<id>.json"), or the file name
+   *  for a board opened from the device. */
+  source: string;
+  selectedAt: string;
+  picks: MoodboardPick[];
+}
+
 export interface FloorPlanModel {
   walls: Wall[];
   rooms: Room[];
@@ -1129,6 +1170,15 @@ export interface FloorPlanModel {
   /** Canvas scale: pixels per metre. Persisted so an imported file renders at the same scale
    *  it was authored at. Defaults to 50 when absent. */
   pixelsPerMeter?: number;
+  /** Moodboard decisions — only what was picked, per board. A fixed top-level key of the plan file
+   *  beside nodes / segments / spaces. See {@link MoodboardSelection}. */
+  moodboards?: MoodboardSelection[];
+  /** Storeys. PACKED form only (save / export / import): the level table, with each INACTIVE level's
+   *  model inline; this model's own body is the active level. The editor unpacks it on arrival — see
+   *  ./levels.ts. Absent on a single-level plan. */
+  levels?: import("./levels").PackedLevel[];
+  /** Which entry of `levels` this model's body is. */
+  activeLevelId?: string;
   /** Per-node metadata (label / column / tree), keyed by node stableKey. See {@link NodeMeta}. */
   nodeMeta?: Record<string, NodeMeta>;
   /** Parametric objects attached to LIVE Path spaces (Display mode "Path"), keyed by the derived

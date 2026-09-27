@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Moodboard Picker - Sample</title>
+<!--
+  Moodboard picker — reads a moodboard/1 JSON, lets the user choose one option per room,
+  and exports the same JSON with rooms[].selection filled. The JSON stays the source of truth.
+
+  Load:  ?src=library/Moodboards/<id>.json   (R2 key, resolved against the public bucket)
+         ?src=https://...                    (any URL with CORS)
+         or "Open file" / drag a .json onto the page.
+  Draft picks are kept in this browser only (localStorage) until exported.
+
+  EMBEDDED (?embed=1, inside the floorplan editor): the page does not fetch — it posts
+  {type:"moodboard:ready"} to its parent and waits for {type:"moodboard:load", json, name}.
+  "Save to plan" posts {type:"moodboard:save", moodboard} and Cancel posts {type:"moodboard:cancel"};
+  the editor stores only the picked options on the plan. No localStorage drafts in this mode — the
+  plan's own picks arrive already merged into json.rooms[].selection.
+  Images carry crossorigin="anonymous": the editor's dev server sends COEP require-corp (web-ifc
+  threads), which blocks a plain cross-origin <img>; a CORS request passes (the bucket allows *).
+  ?public=<origin> overrides the bucket images resolve against (the app passes its Library Path).
+-->
+<style>
+:root{
+  --bg:#f7f5f1; --panel:#ffffff; --ink:#1f1d1a; --muted:#6f6a62; --line:#e4dfd6;
+  --accent:#8a6a3b; --accent-ink:#fff; --open:#b9b3a8; --short:#c7902f; --lock:#2f7d57;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#161513; --panel:#1f1d1a; --ink:#ece8e1; --muted:#a39d93; --line:#34312c;
+  --accent:#c9a46a; --accent-ink:#1a1712; --open:#5d5850; --short:#d9a54a; --lock:#4fb383;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}}
+:root[data-theme="dark"]{
+  --bg:#161513; --panel:#1f1d1a; --ink:#ece8e1; --muted:#a39d93; --line:#34312c;
+  --accent:#c9a46a; --accent-ink:#1a1712; --open:#5d5850; --short:#d9a54a; --lock:#4fb383;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif}
+button,input,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 20px;max-width:1500px;margin:0 auto}
+.title h1{margin:0;font-size:18px;letter-spacing:.02em}
+.title div{color:var(--muted);font-size:12px}
+.grow{flex:1}
+.progress{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.progress .track{width:140px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.progress .fill{height:100%;background:var(--lock);width:0;transition:width .3s}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.menuwrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 6px);min-width:210px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);padding:4px;z-index:20;display:none}
+.menu.on{display:block}
+.menu button{display:flex;flex-direction:column;align-items:flex-start;width:100%;border:0;background:none;text-align:left;padding:8px 10px;border-radius:7px;cursor:pointer}
+.menu button:hover{background:var(--bg)}
+.menu button b{font-size:13px;font-weight:600}
+.menu button span{font-size:11px;color:var(--muted)}
+.busy{cursor:progress;opacity:.7}
+.by{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 10px;width:150px}
+.tabs{display:flex;gap:4px}
+.tab{border:0;background:none;padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+.layout{display:grid;grid-template-columns:230px 1fr;gap:24px;max-width:1500px;margin:0 auto;padding:20px}
+nav{position:sticky;top:78px;align-self:start;max-height:calc(100vh - 100px);overflow:auto}
+nav a{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;color:var(--ink);text-decoration:none;font-size:13px}
+nav a:hover{background:var(--panel)}
+nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 8px 4px}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--open)}
+.dot.shortlisted{background:var(--short)} .dot.locked{background:var(--lock)}
+nav .thumb{width:26px;height:26px;border-radius:4px;object-fit:cover;margin-left:auto;opacity:.9}
+section.room{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:22px;box-shadow:var(--shadow);scroll-margin-top:90px}
+.rhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px;margin-bottom:12px}
+.rhead h2{margin:0;font-size:17px}
+.rhead .bind{font-size:12px;color:var(--muted)}
+.status{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-left:auto}
+.status button{border:0;background:none;padding:5px 10px;cursor:pointer;font-size:12px;color:var(--muted)}
+.status button.on[data-s="open"]{background:var(--open);color:#fff}
+.status button.on[data-s="shortlisted"]{background:var(--short);color:#fff}
+.status button.on[data-s="locked"]{background:var(--lock);color:#fff}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.card{position:relative;border:2px solid transparent;border-radius:12px;overflow:hidden;background:var(--bg);cursor:pointer;transition:border-color .15s,transform .15s}
+.card:hover{transform:translateY(-2px)}
+.card.sel{border-color:var(--accent)}
+.card.dim{opacity:.55}
+.card .img{position:relative;aspect-ratio:3/4;background:var(--line)}
+.card img{width:100%;height:100%;object-fit:cover;display:block}
+.card .zoom{position:absolute;right:8px;top:8px;border:0;border-radius:6px;background:rgba(0,0,0,.55);color:#fff;padding:3px 7px;cursor:zoom-in;font-size:12px}
+.card .badge{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.55);color:#fff;border-radius:6px;padding:2px 8px;font-size:12px}
+.card.sel .badge{background:var(--accent);color:var(--accent-ink)}
+.card .body{padding:10px 12px 12px}
+.card .take{font-size:13px;margin-bottom:8px}
+.pal{display:flex;height:10px;border-radius:3px;overflow:hidden;margin-bottom:8px}
+.pal span{flex:1}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+details.more{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;font-size:12px}
+details.more summary{cursor:pointer;color:var(--accent);font-weight:600;list-style:none;display:flex;align-items:center;gap:6px}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::before{content:"▸";transition:transform .15s}
+details.more[open] summary::before{transform:rotate(90deg)}
+details.more h4{margin:8px 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+details.more ul{margin:0;padding-left:16px}
+details.more li{margin:1px 0}
+details.more .mat{display:grid;grid-template-columns:auto 1fr;gap:2px 8px}
+details.more .mat .sf{color:var(--muted);text-transform:capitalize}
+.card .dflt{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.55);color:#fff;border-radius:6px;padding:2px 7px;font-size:11px}
+.tags span{font-size:11px;border:1px solid var(--line);border-radius:10px;padding:1px 7px;color:var(--muted)}
+.note{margin-top:12px;width:100%;min-height:38px;resize:vertical;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px}
+.summary{display:flex;gap:8px;overflow-x:auto;padding:4px 20px 12px;max-width:1500px;margin:0 auto}
+.summary .s{flex:none;width:64px;text-align:center;font-size:10px;color:var(--muted);cursor:pointer}
+.summary .s .ph{width:64px;height:64px;border-radius:8px;background:var(--line);overflow:hidden;border:2px solid transparent}
+.summary .s .ph.locked{border-color:var(--lock)} .summary .s .ph.shortlisted{border-color:var(--short)}
+.summary img{width:100%;height:100%;object-fit:cover}
+.empty{max-width:560px;margin:80px auto;text-align:center;color:var(--muted)}
+.empty.drag{outline:2px dashed var(--accent);outline-offset:12px;border-radius:12px}
+dialog{border:0;padding:0;background:transparent;max-width:94vw;max-height:94vh}
+dialog::backdrop{background:rgba(0,0,0,.8)}
+dialog img{max-width:94vw;max-height:88vh;display:block;border-radius:8px}
+dialog .cap{color:#eee;padding:8px 2px;font-size:13px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (max-width:820px){
+  header{position:static}
+  .by{width:120px}
+  .layout{grid-template-columns:1fr;padding:16px}
+  nav{display:none}
+  .bar{padding:10px 16px}
+  .progress .track{width:80px}
+  .cards{grid-template-columns:repeat(2,1fr);gap:10px}
+  .summary{padding:4px 16px 10px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="title"><h1 id="t">Moodboard picker</h1><div id="st">Load a moodboard to start</div></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="grow"></div>
+    <div class="progress"><span id="pc">0 / 0 locked</span><div class="track"><div class="fill" id="pf"></div></div></div>
+    <input class="by" id="by" placeholder="Your name" aria-label="Picked by">
+    <label class="btn">Open file<input type="file" id="file" accept=".json,application/json" hidden></label>
+    <div class="menuwrap">
+      <button class="btn primary" id="exp" disabled aria-haspopup="menu" aria-expanded="false">Export ▾</button>
+      <div class="menu" id="expmenu" role="menu">
+        <button role="menuitem" data-exp="json"><b>Export JSON</b><span>Selected option per room (option 1 if none)</span></button>
+        <button role="menuitem" data-exp="pdf"><b>Export PDF</b><span>Whole board — every room, all options</span></button>
+        <button role="menuitem" data-exp="pdf-selected"><b>Export Selected PDF</b><span>One page per room, chosen option only</span></button>
+      </div>
+    </div>
+  </div>
+  <div class="summary" id="sum"></div>
+</header>
+<div id="app"><div class="empty" id="drop">
+  <p>Loading…</p>
+</div></div>
+<dialog id="lb"><img id="lbi" alt="" crossorigin="anonymous"><div class="cap" id="lbc"></div></dialog>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const QS = new URLSearchParams(location.search);
+const PUBLIC = (QS.get("public") || "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev").replace(/\/+$/, "");
+const EMBED = QS.get("embed") === "1";
+const DEFAULT_SRC = "library/Moodboards/ramanadhapuram-apartment-interior.json";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const url = k => /^https?:|^data:|^blob:/.test(k) ? k : `${PUBLIC}/${k.split("/").map(encodeURIComponent).join("/")}`;
+const store = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k){ try { localStorage.removeItem(k); } catch {} }
+};
+let mb = null, group = "all", srcName = "moodboard.json";
+
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("on"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("on"),1800); }
+const draftKey = () => `mbpick:${mb.id}`;
+function saveDraft(){
+  if (EMBED) return;
+  store.set(draftKey(), Object.fromEntries(mb.rooms.map(r => [r.roomKey, r.selection])));
+  store.set("mbpick:by", $("#by").value);
+}
+
+function load(json, name){
+  if (json?.schema !== "moodboard/1" || !Array.isArray(json.rooms)) { fail("Not a moodboard/1 file."); return; }
+  mb = json; srcName = name || `${mb.id}.json`;
+  const draft = EMBED ? {} : (store.get(draftKey()) || {});
+  for (const r of mb.rooms) {
+    r.selection = { optionId:null, status:"open", by:null, note:null, ...(r.selection||{}), ...(draft[r.roomKey]||{}) };
+  }
+  $("#by").value = store.get("mbpick:by") || "";
+  $("#t").textContent = mb.title || mb.id;
+  $("#st").textContent = [mb.project, mb.author, mb.issued].filter(Boolean).join(" · ");
+  const groups = [...new Set(mb.rooms.map(r => r.group || "rooms"))];
+  $("#tabs").innerHTML = groups.length > 1
+    ? ["all", ...groups].map(g => `<button class="tab${g===group?" on":""}" data-g="${esc(g)}">${esc(g[0].toUpperCase()+g.slice(1))}</button>`).join("") : "";
+  $("#exp").disabled = false;
+  render();
+}
+function fail(m){ $("#app").innerHTML = `<div class="empty" id="drop"><p>${esc(m)}</p><p>Open a moodboard JSON file or drag one here.</p></div>`; }
+
+function roomSel(r){ return r.references.find(x => x.id === r.selection.optionId); }
+
+function render(){
+  const rooms = mb.rooms.filter(r => group === "all" || (r.group||"rooms") === group);
+  const groups = [...new Set(rooms.map(r => r.group || "rooms"))];
+  $("#app").innerHTML = `<div class="layout"><nav>${groups.map(g => `<div class="grp">${esc(g)}</div>` +
+    rooms.filter(r => (r.group||"rooms")===g).map(r => { const s=roomSel(r);
+      return `<a href="#${esc(r.roomKey)}"><span class="dot ${r.selection.status}"></span>${esc(r.label)}${s?`<img class="thumb" crossorigin="anonymous" src="${esc(url(s.src))}" alt="">`:""}</a>`; }).join("")).join("")}
+    </nav><main>${rooms.map(roomHtml).join("")}</main></div>`;
+  summary(); progress();
+}
+/** Objects and materials of one option, folded under "Details" so the card stays an image first. */
+function detailsHtml(o){
+  const objs = o.objects || [], mats = o.materials || [];
+  if (!objs.length && !mats.length) return "";
+  return `<details class="more"><summary>Details · ${objs.length} objects · ${mats.length} materials</summary>
+    ${objs.length ? `<h4>Objects</h4><ul>${objs.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+    ${mats.length ? `<h4>Materials</h4><div class="mat">${mats.map(m => `<span class="sf">${esc(m.surface)}</span><span>${esc(m.name)}</span>`).join("")}</div>` : ""}
+  </details>`;
+}
+function roomHtml(r){
+  const b = r.bind || {}, st = r.selection.status;
+  return `<section class="room" id="${esc(r.roomKey)}" data-room="${esc(r.roomKey)}">
+    <div class="rhead"><h2>${esc(r.label)}</h2>
+      <span class="bind">${esc(b.roomType||"")}${b.spaceNames?.length?` · matches ${esc(b.spaceNames.join(", "))}`:""}</span>
+      <div class="status">${["open","shortlisted","locked"].map(s => `<button data-s="${s}" class="${s===st?"on":""}">${s[0].toUpperCase()+s.slice(1)}</button>`).join("")}</div>
+    </div>
+    <div class="cards">${r.references.map(o => { const sel = o.id === r.selection.optionId;
+      return `<div class="card${sel?" sel":""}${r.selection.optionId&&!sel?" dim":""}" data-opt="${esc(o.id)}" tabindex="0" role="button" aria-pressed="${sel}">
+        <div class="img"><img loading="lazy" crossorigin="anonymous" src="${esc(url(o.src))}" alt="${esc(o.takeaway)}">
+          <span class="badge">${sel?"✓ ":""}Option ${o.option}</span><button class="zoom" data-zoom="${esc(o.id)}" aria-label="Enlarge">⤢</button>
+          ${!r.selection.optionId && o.option === 1 ? `<span class="dflt" title="Exported for this room unless you pick another">Default</span>` : ""}</div>
+        <div class="body"><div class="take">${esc(o.takeaway)}</div>
+          ${o.palette?.length?`<div class="pal">${o.palette.map(h=>`<span style="background:${esc(h)}" title="${esc(h)}"></span>`).join("")}</div>`:""}
+          <div class="tags">${(o.tags||[]).map(t=>`<span>${esc(t)}</span>`).join("")}</div>
+          ${detailsHtml(o)}</div></div>`; }).join("")}</div>
+    <textarea class="note" placeholder="Note for this room (optional)">${esc(r.selection.note||"")}</textarea>
+  </section>`;
+}
+function summary(){
+  $("#sum").innerHTML = mb.rooms.map(r => { const s = roomSel(r);
+    return `<div class="s" data-jump="${esc(r.roomKey)}" title="${esc(r.label)}"><div class="ph ${r.selection.status}">${s?`<img crossorigin="anonymous" src="${esc(url(s.src))}" alt="">`:""}</div>${esc(r.label.split(":")[0].replace("Clubhouse","Club"))}</div>`; }).join("");
+}
+function progress(){
+  const n = mb.rooms.length, l = mb.rooms.filter(r => r.selection.status==="locked").length;
+  $("#pc").textContent = `${l} / ${n} locked`; $("#pf").style.width = `${n?100*l/n:0}%`;
+}
+const findRoom = k => mb.rooms.find(r => r.roomKey === k);
+function touch(r){ r.selection.by = $("#by").value.trim() || null; r.selection.at = new Date().toISOString(); saveDraft(); }
+
+function pick(r, id){
+  if (r.selection.status === "locked") { toast("Unlock the room to change its pick"); return; }
+  r.selection.optionId = r.selection.optionId === id ? null : id;
+  r.selection.status = r.selection.optionId ? "shortlisted" : "open";
+  touch(r); refreshRoom(r);
+}
+function setStatus(r, s){
+  if (s !== "open" && !r.selection.optionId) { toast("Pick an option first"); return; }
+  r.selection.status = s; if (s === "open") r.selection.optionId = null;
+  touch(r); refreshRoom(r);
+}
+function refreshRoom(r){
+  const el = document.querySelector(`section[data-room="${CSS.escape(r.roomKey)}"]`);
+  const note = el.querySelector(".note").value;
+  el.outerHTML = roomHtml(r);
+  const fresh = document.querySelector(`section[data-room="${CSS.escape(r.roomKey)}"]`);
+  fresh.querySelector(".note").value = note;
+  const a = document.querySelector(`nav a[href="#${CSS.escape(r.roomKey)}"]`);
+  if (a) { const s = roomSel(r); a.innerHTML = `<span class="dot ${r.selection.status}"></span>${esc(r.label)}${s?`<img class="thumb" crossorigin="anonymous" src="${esc(url(s.src))}" alt="">`:""}`; }
+  summary(); progress();
+}
+
+document.addEventListener("click", e => {
+  const t = e.target;
+  if (t.closest(".tab")) { group = t.closest(".tab").dataset.g; document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.g===group)); render(); return; }
+  if (t.closest("[data-jump]")) { const k=t.closest("[data-jump]").dataset.jump; if (group!=="all" && (findRoom(k).group||"rooms")!==group){ group="all"; document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.g===group)); render(); } document.getElementById(k)?.scrollIntoView({behavior:"smooth"}); return; }
+  const sec = t.closest("section.room"); if (!sec) return;
+  const r = findRoom(sec.dataset.room);
+  if (t.closest("[data-zoom]")) { const o = r.references.find(x => x.id === t.closest("[data-zoom]").dataset.zoom);
+    $("#lbi").src = url(o.src); $("#lbc").textContent = `${r.label} · Option ${o.option} — ${o.takeaway}`; $("#lb").showModal(); return; }
+  if (t.closest(".status button")) { setStatus(r, t.closest(".status button").dataset.s); return; }
+  if (t.closest("details.more")) return;   // reading the details is not a pick
+  if (t.closest(".card")) pick(r, t.closest(".card").dataset.opt);
+});
+document.addEventListener("keydown", e => {
+  const c = e.target.closest?.(".card"); if (c && (e.key==="Enter"||e.key===" ")) { e.preventDefault(); c.click(); }
+});
+document.addEventListener("input", e => {
+  if (e.target.classList.contains("note")) { const r = findRoom(e.target.closest("section").dataset.room); r.selection.note = e.target.value || null; touch(r); }
+  if (e.target.id === "by") store.set("mbpick:by", e.target.value);
+});
+$("#lb").addEventListener("click", () => $("#lb").close());
+
+/** The export: per room ONLY the chosen option — not the other three. A room nobody picked exports
+ *  option 1 and says so (`defaulted: true`, status "default"), so a consumer can tell a decision from a
+ *  fallback. Board-level fields other than identity are left out: they describe the menu, not the order. */
+function selectionExport(){
+  return {
+    schema: "moodboard-selection/1",
+    board: mb.id, title: mb.title, project: mb.project,
+    source: srcName,
+    exportedAt: new Date().toISOString(),
+    by: $("#by").value.trim() || null,
+    rooms: mb.rooms.map((r) => {
+      const chosen = roomSel(r);
+      const o = chosen || r.references.find((x) => x.option === 1) || r.references[0];
+      const { source: _src, ...option } = o;
+      return {
+        roomKey: r.roomKey, label: r.label, group: r.group, bind: r.bind,
+        status: chosen ? r.selection.status : "default",
+        defaulted: !chosen,
+        note: r.selection.note || null,
+        at: chosen ? r.selection.at || null : null,
+        option: { ...option, image: url(o.src) },
+      };
+    }),
+  };
+}
+
+$("#exp").addEventListener("click", (e) => {
+  if (EMBED) { const out = structuredClone(mb); out.selectionExportedAt = new Date().toISOString(); parent.postMessage({type:"moodboard:save", moodboard: out}, "*"); return; }
+  e.stopPropagation();
+  const on = $("#expmenu").classList.toggle("on");
+  $("#exp").setAttribute("aria-expanded", String(on));
+});
+document.addEventListener("click", (e) => { if (!e.target.closest(".menuwrap")) { $("#expmenu").classList.remove("on"); $("#exp").setAttribute("aria-expanded", "false"); } });
+$("#expmenu").addEventListener("click", (e) => {
+  const kind = e.target.closest("[data-exp]")?.dataset.exp;
+  if (!kind) return;
+  $("#expmenu").classList.remove("on");
+  if (kind === "json") exportJson();
+  else exportPdf(kind === "pdf-selected");
+});
+
+const baseName = () => srcName.replace(/\.json$/, "");
+function download(blob, name){
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: name });
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function exportJson(){
+  const sel = selectionExport();
+  download(new Blob([JSON.stringify(sel, null, 2)], { type: "application/json" }), `${baseName()}.selected.json`);
+  const d = sel.rooms.filter((x) => x.defaulted).length;
+  toast(`Exported ${sel.rooms.length} rooms · ${sel.rooms.length - d} picked, ${d} on option 1 by default`);
+}
+
+/* ── PDF ────────────────────────────────────────────────────────────────────────────────────────
+   jsPDF, A4 landscape, drawn directly (not a print of the page) so the file downloads in one click
+   and looks the same everywhere. Images are fetched through a CORS-clean <img> onto a canvas and
+   embedded as JPEG, scaled to what the page needs — a full board stays a few MB, not 50. */
+const imgCache = new Map();
+function loadImage(src, maxPx = 900){
+  if (imgCache.has(src + maxPx)) return imgCache.get(src + maxPx);
+  const p = new Promise((resolve) => {
+    const im = new Image(); im.crossOrigin = "anonymous";
+    im.onload = () => {
+      const k = Math.min(1, maxPx / Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+      c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+      resolve({ data: c.toDataURL("image/jpeg", 0.82), w: c.width, h: c.height });
+    };
+    im.onerror = () => resolve(null);
+    im.src = src;
+  });
+  imgCache.set(src + maxPx, p);
+  return p;
+}
+const hexRgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); const n = m ? parseInt(m[1], 16) : 0xcccccc; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+async function exportPdf(selectedOnly){
+  if (!window.jspdf) { toast("PDF library did not load — check the internet connection"); return; }
+  const btn = $("#exp"); btn.classList.add("busy"); btn.textContent = "Preparing PDF…";
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const W = 297, H = 210, M = 12;
+    const INK = [31, 29, 26], MUTED = [111, 106, 98], ACC = [138, 106, 59], LINE = [228, 223, 214];
+    const sel = selectionExport();
+    const text = (t, x, y, { size = 10, color = INK, bold = false, maxW = null, lh = 1.25 } = {}) => {
+      doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(...color);
+      const lines = maxW ? doc.splitTextToSize(String(t ?? ""), maxW) : [String(t ?? "")];
+      doc.text(lines, x, y, { lineHeightFactor: lh });
+      return y + lines.length * size * 0.3528 * lh;
+    };
+    const fitImage = async (src, x, y, w, h, px) => {
+      const im = await loadImage(url(src), px);
+      doc.setFillColor(...LINE); doc.rect(x, y, w, h, "F");
+      if (!im) return;
+      const k = Math.min(w / im.w, h / im.h), iw = im.w * k, ih = im.h * k;
+      doc.addImage(im.data, "JPEG", x + (w - iw) / 2, y + (h - ih) / 2, iw, ih);
+    };
+    const palette = (pal, x, y, w) => { (pal || []).forEach((h, i, a) => { doc.setFillColor(...hexRgb(h)); doc.rect(x + (w / a.length) * i, y, w / a.length, 2.2, "F"); }); };
+    const footer = (n) => { text(`${mb.title || mb.id}  ·  ${mb.project || ""}`, M, H - 6, { size: 7, color: MUTED }); text(String(n), W - M, H - 6, { size: 7, color: MUTED }); };
+    const heading = (r, sub) => {
+      text(r.label, M, M + 6, { size: 18, bold: true });
+      text(sub, M, M + 12, { size: 9, color: MUTED });
+      doc.setDrawColor(...LINE); doc.line(M, M + 15, W - M, M + 15);
+    };
+    const detailBlock = (o, x, y, w, size) => {
+      if (o.objects?.length) { y = text("OBJECTS", x, y, { size: size - 1.5, color: MUTED, bold: true }) + 0.5; y = text(o.objects.map((n) => `• ${n}`).join("\n"), x, y, { size, maxW: w }) + 1.5; }
+      if (o.materials?.length) { y = text("MATERIALS", x, y, { size: size - 1.5, color: MUTED, bold: true }) + 0.5; y = text(o.materials.map((m) => `${m.surface}: ${m.name}`).join("\n"), x, y, { size, maxW: w }); }
+      return y;
+    };
+
+    // cover
+    text(mb.title || mb.id, M, 60, { size: 26, bold: true, maxW: W - 2 * M });
+    text([mb.project, mb.author, mb.issued].filter(Boolean).join("  ·  "), M, 74, { size: 11, color: MUTED });
+    text(selectedOnly ? "Selected options — one per room" : "All options", M, 84, { size: 12, color: ACC, bold: true });
+    const d = sel.rooms.filter((x) => x.defaulted).length;
+    text(`${sel.rooms.length} rooms · ${sel.rooms.length - d} picked · ${d} on option 1 by default${sel.by ? ` · by ${sel.by}` : ""}  ·  ${new Date().toLocaleDateString()}`, M, 92, { size: 9, color: MUTED });
+    if (mb.cover) await fitImage(mb.cover, W - M - 120, 40, 120, 90, 1200);
+    let page = 1; footer(page);
+
+    for (const r of mb.rooms) {
+      const s = sel.rooms.find((x) => x.roomKey === r.roomKey);
+      doc.addPage(); page++;
+      if (selectedOnly) {
+        const o = s.option;
+        heading(r, `${s.defaulted ? "Option 1 (default — not picked)" : `Option ${o.option} · ${s.status}`}${s.note ? `  ·  Note: ${s.note}` : ""}`);
+        const top = M + 20, ih = H - top - 18, iw = 150;
+        await fitImage(o.src, M, top, iw, ih, 1400);
+        let y = top + 2, x = M + iw + 8, w = W - x - M;
+        y = text(o.takeaway || "", x, y + 4, { size: 12, bold: true, maxW: w }) + 2;
+        palette(o.palette, x, y, w); y += 6;
+        if (o.tags?.length) y = text(o.tags.join("  ·  "), x, y, { size: 8.5, color: MUTED, maxW: w }) + 3;
+        detailBlock(o, x, y, w, 9.5);
+      } else {
+        heading(r, `${r.references.length} options${s.defaulted ? "" : `  ·  chosen: option ${s.option.option} (${s.status})`}`);
+        const top = M + 20, gap = 5, n = r.references.length, cw = (W - 2 * M - gap * (n - 1)) / n, ih = 72;
+        for (const [i, o] of r.references.entries()) {
+          const x = M + i * (cw + gap);
+          await fitImage(o.src, x, top, cw, ih, 700);
+          const chosen = !s.defaulted && o.id === s.option.id;
+          if (chosen) { doc.setDrawColor(...ACC); doc.setLineWidth(0.8); doc.rect(x, top, cw, ih); doc.setLineWidth(0.2); }
+          let y = text(`Option ${o.option}${chosen ? "  (chosen)" : ""}`, x, top + ih + 5, { size: 9, bold: true, color: chosen ? ACC : INK });
+          y = text(o.takeaway || "", x, y + 0.5, { size: 7.5, maxW: cw }) + 1;
+          palette(o.palette, x, y, cw); y += 4.5;
+          detailBlock(o, x, y, cw, 6.8);
+        }
+      }
+      footer(page);
+    }
+    doc.save(`${baseName()}${selectedOnly ? ".selected" : ""}.pdf`);
+    toast(`PDF saved · ${page} pages`);
+  } catch (err) {
+    console.error(err); toast("PDF export failed — see the console");
+  } finally {
+    btn.classList.remove("busy"); btn.textContent = "Export ▾";
+  }
+}
+
+function readFile(f){ f.text().then(t => { try { load(JSON.parse(t), f.name); } catch { fail("That file is not valid JSON."); } }); }
+$("#file").addEventListener("change", e => e.target.files[0] && readFile(e.target.files[0]));
+document.addEventListener("dragover", e => { e.preventDefault(); $("#drop")?.classList.add("drag"); });
+document.addEventListener("dragleave", () => $("#drop")?.classList.remove("drag"));
+document.addEventListener("drop", e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) readFile(f); });
+
+// SAMPLE BUILD: the Ramanadhapuram board is embedded below, so this file opens by double-click with no
+// fetch. ?src=... still loads another board; "Open file" / drag-drop still work.
+const SAMPLE_BOARD = {"schema": "moodboard/1", "id": "ramanadhapuram-apartment-interior", "project": "Kingswood Ramanathapuram", "title": "Apartment and Clubhouse Interior Moodboard", "author": "Spacemote", "issued": "2026-08-18", "source": {"file": "RAMANADHAPURAM_APARTMENT_INTERIOR MOODBOARD_18.08.2026.pdf", "pages": 16}, "cover": "library/Images/Moodboards/Ramanadhapuram/cover.jpg", "concept": {"title": null, "keywords": ["warm neutrals", "marble", "brass", "walnut", "wall panelling", "arches"], "note": "Keywords inferred from the images; the PDF has no written concept."}, "globalPalette": [], "notes": ["Each room lists 4 options (reference images); none is selected yet.", "references[].palette is auto-extracted dominant colours (most frequent first), not a designer palette.", "references[].objects / .materials describe what each option image shows (names only, read from the image)."], "rooms": [{"roomKey": "foyer", "label": "Foyer", "group": "apartment", "bind": {"roomType": "foyer", "spaceNames": ["FOYER", "ENTRANCE", "LOBBY"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "foyer-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/foyer-1.jpg", "takeaway": "Fluted brass sideboard, framed abstract art, grey-white checkerboard floor", "tags": ["console", "art", "checkerboard floor", "brass"], "palette": ["#292018", "#695D4D", "#827968", "#9F9788", "#BCB6AD"], "source": {"pdfPage": 3, "slot": 1}, "objects": ["Sideboard (fluted brass fronts)", "Framed abstract art", "Sculpture / vase set", "Candle holders"], "materials": [{"surface": "floor", "name": "Grey–white checkerboard marble"}, {"surface": "joinery", "name": "Brushed brass sideboard fronts"}, {"surface": "wall", "name": "Warm white paint with panel moulding"}, {"surface": "frame", "name": "Black frame"}]}, {"id": "foyer-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/foyer-2.jpg", "takeaway": "Marble wall panel, oval brass mirror, twin sconces, walnut console", "tags": ["marble wall", "mirror", "sconce", "console"], "palette": ["#6D6155", "#43372D", "#8D8378", "#A69D93", "#BEB9B3"], "source": {"pdfPage": 3, "slot": 2}, "objects": ["Console table (walnut, black top)", "Oval brass mirror", "Wall sconces (pair)", "Vases with dried stems", "Patterned rug"], "materials": [{"surface": "accentWall", "name": "Grey marble wall panel"}, {"surface": "joinery", "name": "Walnut veneer"}, {"surface": "metal", "name": "Brass mirror frame + sconces"}, {"surface": "floor", "name": "Light stone floor"}]}, {"id": "foyer-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/foyer-3.jpg", "takeaway": "Panelled cream wall, arched walnut mirror, cane sideboard, brass pendant", "tags": ["wall panelling", "mirror", "pendant", "cane"], "palette": ["#B4A797", "#513F31", "#9C8F80", "#C3B6A6", "#DAD1C5"], "source": {"pdfPage": 3, "slot": 3}, "objects": ["Cane sideboard (walnut)", "Arched walnut mirror", "Brass pendant", "Globe wall sconces (pair)", "Potted olive tree", "Striped runner rug"], "materials": [{"surface": "wall", "name": "Cream square panelling"}, {"surface": "joinery", "name": "Walnut + cane"}, {"surface": "joinery", "name": "Cane weave"}, {"surface": "metal", "name": "Brass pendant"}, {"surface": "floor", "name": "Light oak"}]}, {"id": "foyer-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/foyer-4.jpg", "takeaway": "Pillars with cove lighting and mouldings, marble-top console, herringbone floor", "tags": ["cove light", "console", "herringbone floor"], "palette": ["#9E8E7D", "#79644F", "#433529", "#B2A79A", "#CDC4B8"], "source": {"pdfPage": 3, "slot": 4}, "objects": ["Marble-top console on brass base", "Vases with branches", "Cove LED strip in pillars", "Track lights"], "materials": [{"surface": "counter", "name": "White veined marble top"}, {"surface": "metal", "name": "Brass + black base"}, {"surface": "floor", "name": "Herringbone oak"}, {"surface": "wall", "name": "Cream moulded pillars"}]}]}, {"roomKey": "living-a", "label": "Living: TV wall options", "group": "apartment", "bind": {"roomType": "living", "spaceNames": ["LIVING", "LOUNGE", "FAMILY"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "living-a-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/living-a-1.jpg", "takeaway": "Minimal beige TV wall, floating walnut console, open shelving", "tags": ["tv wall", "shelving", "minimal"], "palette": ["#B7B0A9", "#55483E", "#9F958A", "#BDB8B2", "#C6C1BB"], "source": {"pdfPage": 4, "slot": 1}, "objects": ["Floating TV console", "TV", "Open shelving (oak)", "Decor objects", "Rug"], "materials": [{"surface": "wall", "name": "Beige panelled wall"}, {"surface": "joinery", "name": "Walnut console + shelving"}, {"surface": "floor", "name": "Pale grey rug"}]}, {"id": "living-a-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/living-a-2.jpg", "takeaway": "Chevron walnut TV wall, crystal ring chandelier, wall mouldings", "tags": ["tv wall", "chandelier", "chevron wood"], "palette": ["#685D54", "#2E2823", "#AAA49F", "#C9C5C2", "#DEDCD8"], "source": {"pdfPage": 4, "slot": 2}, "objects": ["Crystal ring chandelier", "TV wall with media unit", "Lounge armchair", "Round coffee table (black marble)", "Wall sconces (disc)", "Shag rug"], "materials": [{"surface": "accentWall", "name": "Chevron walnut panelling"}, {"surface": "wall", "name": "Grey moulded panels"}, {"surface": "upholstery", "name": "Light grey fabric chair"}, {"surface": "counter", "name": "Black marble table top"}, {"surface": "metal", "name": "Chrome / crystal"}]}, {"id": "living-a-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/living-a-3.jpg", "takeaway": "Coffered ceiling, panelled TV wall with dark shelving, white armchairs", "tags": ["coffered ceiling", "tv wall", "shelving"], "palette": ["#807B6F", "#4A463F", "#A5A095", "#BAB7AF", "#CBC9C4"], "source": {"pdfPage": 4, "slot": 3}, "objects": ["Brass chandelier with shades", "Panelled TV wall + built-in shelving", "Navy media cabinet", "Armchairs (4)", "Round marble coffee table", "Geometric rug"], "materials": [{"surface": "ceiling", "name": "Coffered white ceiling"}, {"surface": "wall", "name": "Grey panelling"}, {"surface": "joinery", "name": "Navy lacquer cabinets"}, {"surface": "upholstery", "name": "Ivory fabric armchairs"}, {"surface": "counter", "name": "White marble table"}]}, {"id": "living-a-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/living-a-4.jpg", "takeaway": "Panelled walls, tiered crystal chandelier, rust lounge chairs", "tags": ["wall panelling", "chandelier", "accent chairs"], "palette": ["#837569", "#988B7F", "#4D382D", "#A4988E", "#B2A69C"], "source": {"pdfPage": 4, "slot": 4}, "objects": ["Tiered crystal chandelier", "Wall-mounted TV", "Low walnut media console", "Rust lounge chairs (tubular)", "Patterned rug", "Branch arrangement"], "materials": [{"surface": "wall", "name": "Taupe panelled walls"}, {"surface": "upholstery", "name": "Rust velvet chairs"}, {"surface": "joinery", "name": "Walnut console"}, {"surface": "metal", "name": "Matte black chair frames"}, {"surface": "curtain", "name": "Sand drapes"}]}]}, {"roomKey": "living-b", "label": "Living: seating options", "group": "apartment", "bind": {"roomType": "living", "spaceNames": ["LIVING", "LOUNGE", "FAMILY"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "living-b-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/living-b-1.jpg", "takeaway": "Arched niches with cove lighting, cream modular sofas, dark stone coffee table", "tags": ["arches", "cove light", "sofa"], "palette": ["#837568", "#9F9287", "#44382F", "#B3A89F", "#CFC6BF"], "source": {"pdfPage": 5, "slot": 1}, "objects": ["Modular cream sofas", "Dark stone coffee table", "Sculptural pendant", "Pouf / side chair", "Potted tree", "Rug"], "materials": [{"surface": "wall", "name": "Arched niches with cove light"}, {"surface": "accentWall", "name": "Textured stone niche backs"}, {"surface": "upholstery", "name": "Cream bouclé"}, {"surface": "counter", "name": "Dark stone table"}, {"surface": "metal", "name": "Brass pendant rods"}]}, {"id": "living-b-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/living-b-2.jpg", "takeaway": "Wall mouldings, brass candle chandelier, cream sectional, marble table", "tags": ["wall panelling", "chandelier", "sofa"], "palette": ["#A09489", "#BDB4AB", "#594E45", "#CBC4BD", "#DED8D0"], "source": {"pdfPage": 5, "slot": 2}, "objects": ["Cream sectional sofa", "Brass candle chandelier", "Nesting tables (marble + walnut)", "Cushions", "Grey rug"], "materials": [{"surface": "wall", "name": "White moulded panels"}, {"surface": "upholstery", "name": "Cream velvet sofa"}, {"surface": "counter", "name": "White marble table"}, {"surface": "metal", "name": "Brass chandelier + legs"}, {"surface": "floor", "name": "Charcoal rug"}]}, {"id": "living-b-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/living-b-3.jpg", "takeaway": "Walnut and textured panel feature wall, geometric rug, grey sofas", "tags": ["feature wall", "rug", "sofa"], "palette": ["#4F4239", "#1B1511", "#8A8179", "#746962", "#A19992"], "source": {"pdfPage": 5, "slot": 3}, "objects": ["Grey sofas (pair)", "Black coffee table", "Floor lamp (tall shade)", "Framed art (3)", "Geometric rug", "Cushions"], "materials": [{"surface": "accentWall", "name": "Walnut vertical panelling"}, {"surface": "accentWall", "name": "Textured fabric panel"}, {"surface": "upholstery", "name": "Grey chenille"}, {"surface": "joinery", "name": "Black lacquer table"}, {"surface": "floor", "name": "Black/white patterned rug"}]}, {"id": "living-b-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/living-b-4.jpg", "takeaway": "Grey marble panels with LED strips, crystal ring chandelier, marble tables", "tags": ["marble wall", "led strip", "chandelier"], "palette": ["#9E9786", "#50473A", "#887F6D", "#A9A293", "#C7C1B3"], "source": {"pdfPage": 5, "slot": 4}, "objects": ["Crystal ring chandelier", "Grey sofa + armchairs", "Marble coffee tables", "Floral arrangements", "LED strip in panels"], "materials": [{"surface": "accentWall", "name": "Grey marble slabs with LED reveals"}, {"surface": "wall", "name": "White moulded panels"}, {"surface": "upholstery", "name": "Grey velvet"}, {"surface": "counter", "name": "White marble tables"}, {"surface": "metal", "name": "Brass accents"}]}]}, {"roomKey": "dining", "label": "Dining", "group": "apartment", "bind": {"roomType": "dining", "spaceNames": ["DINING", "DINNING"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "dining-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/dining-1.jpg", "takeaway": "Round table, starburst chandelier, fluted mirror screen, cognac chairs", "tags": ["round table", "chandelier", "screen"], "palette": ["#73665B", "#978F88", "#3E2D22", "#8C827A", "#AAA29B"], "source": {"pdfPage": 6, "slot": 1}, "objects": ["Round pedestal dining table", "Dining chairs (6)", "Starburst chandelier", "Fluted mirror screen", "Gallery wall art", "Track lights"], "materials": [{"surface": "upholstery", "name": "Cognac + ivory chairs"}, {"surface": "joinery", "name": "Dark walnut table"}, {"surface": "floor", "name": "Polished beige marble"}, {"surface": "wall", "name": "Taupe paint"}, {"surface": "glazing", "name": "Mirror strips"}]}, {"id": "dining-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/dining-2.jpg", "takeaway": "Stacked brass disc pendant, panelled walls, boucle chairs, pedestal table", "tags": ["pendant", "wall panelling", "boucle"], "palette": ["#8D7D6F", "#9D9083", "#54473C", "#A79D94", "#B4ACA4"], "source": {"pdfPage": 6, "slot": 2}, "objects": ["Pedestal dining table", "Bouclé dining chairs", "Stacked brass disc pendant", "Wall sconces", "Candles + branches", "Rug"], "materials": [{"surface": "wall", "name": "Panelled greige walls"}, {"surface": "upholstery", "name": "Grey bouclé"}, {"surface": "joinery", "name": "Stone-grey table"}, {"surface": "metal", "name": "Brass pendant"}]}, {"id": "dining-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/dining-3.jpg", "takeaway": "Glass globe pendant, black-grid mirror wall, white chairs, marble floor", "tags": ["pendant", "mirror", "marble floor"], "palette": ["#A39889", "#B4AB9F", "#BFB8AD", "#645B4E", "#D6D5D0"], "source": {"pdfPage": 6, "slot": 3}, "objects": ["Rectangular dining table", "Upholstered chairs (8)", "Glass globe pendant", "Wall sconces", "Black-grid mirror", "Potted tree"], "materials": [{"surface": "counter", "name": "Light stone table top"}, {"surface": "upholstery", "name": "Ivory fabric chairs"}, {"surface": "floor", "name": "Polished white marble"}, {"surface": "glazing", "name": "Glass globe"}, {"surface": "metal", "name": "Black grid frame"}]}, {"id": "dining-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/dining-4.jpg", "takeaway": "Black globe cluster pendant, burgundy chairs, panelled lilac walls", "tags": ["pendant", "accent chairs", "wall panelling"], "palette": ["#A9A1AB", "#302120", "#B7B0BA", "#897B80", "#C4BEC5"], "source": {"pdfPage": 6, "slot": 4}, "objects": ["Round black dining table", "Burgundy dining chairs (6)", "Black globe cluster pendant", "Linear ceiling lights", "Pampas arrangement"], "materials": [{"surface": "upholstery", "name": "Burgundy velvet"}, {"surface": "joinery", "name": "Black lacquer table"}, {"surface": "wall", "name": "Lilac-grey panelling"}, {"surface": "floor", "name": "Herringbone wood"}, {"surface": "metal", "name": "Brass mirror trims"}]}]}, {"roomKey": "kitchen", "label": "Kitchen", "group": "apartment", "bind": {"roomType": "kitchen", "spaceNames": ["KITCHEN"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "kitchen-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/kitchen-1.jpg", "takeaway": "Black cabinets with oak, black marble counters, opal globe pendants", "tags": ["dark cabinets", "marble counter", "pendant"], "palette": ["#656058", "#ABA08F", "#241F1B", "#3F3D38", "#524132"], "source": {"pdfPage": 7, "slot": 1}, "objects": ["Kitchen island", "Range + hood", "Glass-front wall cabinets", "Opal globe pendants", "Bar stools", "Brass tap"], "materials": [{"surface": "joinery", "name": "Black lacquer + oak cabinets"}, {"surface": "joinery", "name": "Oak cabinetry"}, {"surface": "counter", "name": "Black veined marble"}, {"surface": "backsplash", "name": "Black marble slab"}, {"surface": "metal", "name": "Brass hardware"}]}, {"id": "kitchen-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/kitchen-2.jpg", "takeaway": "Greige and oak kitchen, round breakfast table, brass pendants", "tags": ["wood cabinets", "breakfast table", "pendant"], "palette": ["#A79788", "#C4BEB8", "#746457", "#D4D2CF", "#DFDFDF"], "source": {"pdfPage": 7, "slot": 2}, "objects": ["L-kitchen with tall units", "Wall cabinets", "Built-in oven", "Round breakfast table", "Chairs (4)", "Brass pendants"], "materials": [{"surface": "joinery", "name": "Greige lacquer uppers"}, {"surface": "joinery", "name": "Oak lower + tall units"}, {"surface": "backsplash", "name": "Beige marble"}, {"surface": "upholstery", "name": "Ivory bouclé chairs"}, {"surface": "floor", "name": "Light oak"}]}, {"id": "kitchen-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/kitchen-3.jpg", "takeaway": "Cream shaker cabinets, granite-top oak island, leather barstools", "tags": ["island", "barstools", "shaker"], "palette": ["#A69F95", "#3B2818", "#827565", "#BBB7B2", "#DBDAD9"], "source": {"pdfPage": 7, "slot": 3}, "objects": ["Island with oak base", "Shaker wall cabinets", "Drum pendants (pair)", "Leather bar stools", "Sink + tap"], "materials": [{"surface": "joinery", "name": "Cream shaker cabinets"}, {"surface": "joinery", "name": "Oak island base"}, {"surface": "counter", "name": "Black granite"}, {"surface": "upholstery", "name": "Brown leather stools"}, {"surface": "floor", "name": "Light grey stone"}]}, {"id": "kitchen-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/kitchen-4.jpg", "takeaway": "Grey gloss U-kitchen, marble backsplash, brass glass pendants", "tags": ["gloss cabinets", "backsplash", "pendant"], "palette": ["#8C847C", "#AEA59D", "#575045", "#C1B7B0", "#D7CFC8"], "source": {"pdfPage": 7, "slot": 4}, "objects": ["U-shaped kitchen", "Wall cabinets", "Built-in oven + hob", "Glass pendants (3)", "Dining table + chairs", "Plants"], "materials": [{"surface": "joinery", "name": "Grey gloss lacquer"}, {"surface": "counter", "name": "White marble"}, {"surface": "backsplash", "name": "Marble with LED under-cabinet"}, {"surface": "metal", "name": "Brass handles + pendants"}, {"surface": "floor", "name": "Light stone tile"}]}]}, {"roomKey": "bedroom", "label": "Bedroom", "group": "apartment", "bind": {"roomType": "bedroom", "spaceNames": ["BEDROOM", "MASTER BEDROOM", "GUEST BEDROOM"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "bedroom-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/bedroom-1.jpg", "takeaway": "Green marble and upholstered headboard wall, green boucle lounge chairs", "tags": ["marble wall", "headboard", "boucle"], "palette": ["#675B4C", "#342A1F", "#928475", "#9F9182", "#CCBAA6"], "source": {"pdfPage": 8, "slot": 1}, "objects": ["Bed with upholstered headboard wall", "Lounge chairs (pair)", "Side table", "Table lamp", "Linear ceiling lights", "Rug"], "materials": [{"surface": "accentWall", "name": "Green marble panels"}, {"surface": "upholstery", "name": "Taupe fabric headboard wall"}, {"surface": "upholstery", "name": "Olive bouclé chairs"}, {"surface": "metal", "name": "Bronze trims"}, {"surface": "floor", "name": "Herringbone oak"}]}, {"id": "bedroom-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/bedroom-2.jpg", "takeaway": "Walnut and white marble strips, classical mouldings, concrete pendants", "tags": ["marble wall", "wall panelling", "pendant"], "palette": ["#877E79", "#6D635D", "#423831", "#968E87", "#ABA49B"], "source": {"pdfPage": 8, "slot": 2}, "objects": ["Upholstered bed", "Nightstands (pair)", "Concrete dome pendants (pair)", "Bedding", "AC unit"], "materials": [{"surface": "accentWall", "name": "White marble strips"}, {"surface": "accentWall", "name": "Walnut panels"}, {"surface": "wall", "name": "Classical white mouldings"}, {"surface": "upholstery", "name": "Grey linen bed"}, {"surface": "metal", "name": "Concrete-look pendants"}]}, {"id": "bedroom-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/bedroom-3.jpg", "takeaway": "Green marble inset in panelled wall, curved upholstered headboard", "tags": ["marble wall", "headboard", "wall panelling"], "palette": ["#867C6F", "#554B40", "#AFA79D", "#C6BFB7", "#DFDCD7"], "source": {"pdfPage": 8, "slot": 3}, "objects": ["Bed with curved headboard", "Nightstand", "Table lamp", "Upholstered wall panels", "Spot lights", "Curtains"], "materials": [{"surface": "accentWall", "name": "Green marble inset"}, {"surface": "wall", "name": "Beige square panelling"}, {"surface": "upholstery", "name": "Orange check headboard"}, {"surface": "upholstery", "name": "Taupe bedding"}, {"surface": "floor", "name": "Grey stone"}]}, {"id": "bedroom-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/bedroom-4.jpg", "takeaway": "3D coffered panel headboard wall, track lights, upholstered bench", "tags": ["headboard", "track light", "bench"], "palette": ["#1F1B19", "#968D85", "#A89F98", "#655D57", "#CEC9C5"], "source": {"pdfPage": 8, "slot": 4}, "objects": ["Bed with 3D coffered headboard", "Bench", "Nightstands (pair)", "Neon wall light", "Track lights", "Side table"], "materials": [{"surface": "accentWall", "name": "Cream 3D coffered panel"}, {"surface": "upholstery", "name": "Taupe + charcoal bedding"}, {"surface": "upholstery", "name": "Navy throw"}, {"surface": "wall", "name": "Dark slatted wood"}, {"surface": "floor", "name": "Striped rug"}]}]}, {"roomKey": "toilet", "label": "Toilet / bath", "group": "apartment", "bind": {"roomType": "bathroom", "spaceNames": ["TOILET", "BATH", "MB.TOILET", "P. TOILET"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "toilet-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/toilet-1.jpg", "takeaway": "Green marble double vanity and tub surround, patterned marble floor", "tags": ["double vanity", "bathtub", "marble"], "palette": ["#776C5E", "#999084", "#342B22", "#AEA79B", "#CEC9BF"], "source": {"pdfPage": 9, "slot": 1}, "objects": ["Double vanity (stone)", "Mirrors (pair)", "Wall sconce", "Bathtub (marble surround)", "Wall-hung WC", "Glass shower screen"], "materials": [{"surface": "counter", "name": "Green marble vanity"}, {"surface": "floor", "name": "Patterned green/white marble"}, {"surface": "wall", "name": "Grey plaster"}, {"surface": "metal", "name": "Bronze taps + frames"}, {"surface": "joinery", "name": "Walnut bench"}]}, {"id": "toilet-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/toilet-2.jpg", "takeaway": "Green marble counter, black wall-hung WC, floating walnut shelf", "tags": ["vanity", "wall-hung wc", "marble"], "palette": ["#695A46", "#32281E", "#CABDAE", "#A59583", "#D9CEC1"], "source": {"pdfPage": 9, "slot": 2}, "objects": ["Floating vanity counter", "Wall-hung WC (black)", "Flush plate", "Wall shelf (walnut)", "Wall tap (black)"], "materials": [{"surface": "counter", "name": "Green marble"}, {"surface": "wall", "name": "Beige large-format stone"}, {"surface": "joinery", "name": "Walnut shelf + panel"}, {"surface": "metal", "name": "Matte black fittings"}]}, {"id": "toilet-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/toilet-3.jpg", "takeaway": "Calacatta Viola double vanity, freestanding marble tub, walnut joinery", "tags": ["double vanity", "freestanding tub", "marble"], "palette": ["#2F221C", "#58473F", "#7F746D", "#99928D", "#AFA9A4"], "source": {"pdfPage": 9, "slot": 3}, "objects": ["Double vanity", "Freestanding marble bathtub", "Organic mirrors (pair)", "Globe sconces", "Tall storage cabinet", "WC + bidet"], "materials": [{"surface": "counter", "name": "Calacatta Viola marble"}, {"surface": "joinery", "name": "Walnut vanity"}, {"surface": "wall", "name": "White fluted tile"}, {"surface": "joinery", "name": "Plum lacquer cabinet"}, {"surface": "floor", "name": "Grey microcement"}, {"surface": "metal", "name": "Brass taps"}]}, {"id": "toilet-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/toilet-4.jpg", "takeaway": "Limestone double vanity, backlit mirrors, oak drawers", "tags": ["double vanity", "backlit mirror", "limestone"], "palette": ["#A79583", "#C0B2A4", "#605245", "#D0C5B9", "#E6DFD6"], "source": {"pdfPage": 9, "slot": 4}, "objects": ["Double vanity with vessel basins", "Backlit mirrors (pair)", "Globe sconces (3)", "Wall taps", "Towel rail"], "materials": [{"surface": "counter", "name": "Limestone vanity top"}, {"surface": "wall", "name": "Limestone walls"}, {"surface": "joinery", "name": "Oak drawers"}, {"surface": "metal", "name": "Gunmetal taps"}]}]}, {"roomKey": "deck", "label": "Deck / balcony", "group": "apartment", "bind": {"roomType": "balcony", "spaceNames": ["DECK", "BALCONY", "SIT OUT"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "deck-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/deck-1.jpg", "takeaway": "Arched niche, fluted cabinet, dark wood deck floor, palms", "tags": ["niche", "planters", "wood floor"], "palette": ["#AB9A82", "#786F5A", "#433A2E", "#C3B7A5", "#E0D9D1"], "source": {"pdfPage": 10, "slot": 1}, "objects": ["Fluted storage cabinet", "Arched niche with shelves", "Wall globe light", "Potted palms", "Trailing plant"], "materials": [{"surface": "wall", "name": "Textured plaster"}, {"surface": "joinery", "name": "Fluted oak cabinet"}, {"surface": "floor", "name": "Dark wood deck"}, {"surface": "counter", "name": "Light stone top"}]}, {"id": "deck-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/deck-2.jpg", "takeaway": "Fluted walnut wall, boucle lounge chair, glass sliders", "tags": ["fluted wall", "lounge chair"], "palette": ["#776D62", "#362F28", "#AAA49A", "#D0CCC5", "#E7E3DE"], "source": {"pdfPage": 10, "slot": 2}, "objects": ["Bouclé lounge chair", "Side table", "Wall shelves", "Vase with stems", "Sofa"], "materials": [{"surface": "accentWall", "name": "Fluted walnut wall"}, {"surface": "upholstery", "name": "Cream bouclé"}, {"surface": "floor", "name": "Light stone"}, {"surface": "glazing", "name": "Glass sliders, black frames"}]}, {"id": "deck-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/deck-3.jpg", "takeaway": "Burgundy lounge chair, patterned cement tile, venetian blinds", "tags": ["lounge chair", "cement tile"], "palette": ["#857C6F", "#B1A89A", "#3D322E", "#D4D0C7", "#F1EEEA"], "source": {"pdfPage": 10, "slot": 3}, "objects": ["Burgundy lounge chair", "Metal side table", "Wall sconce", "Venetian blinds", "Plant"], "materials": [{"surface": "upholstery", "name": "Burgundy velvet"}, {"surface": "floor", "name": "Black/white cement tile"}, {"surface": "wall", "name": "White moulded wall"}, {"surface": "metal", "name": "Black side table"}]}, {"id": "deck-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/deck-4.jpg", "takeaway": "Rust boucle chairs, olive trees, jute rug, full-height glass", "tags": ["lounge chair", "planters", "rug"], "palette": ["#402C1E", "#24170E", "#73523A", "#D6C7B9", "#AC9683"], "source": {"pdfPage": 10, "slot": 4}, "objects": ["Rust bouclé chairs (pair)", "Round side table", "Olive trees", "Jute rug", "Wall sconces"], "materials": [{"surface": "upholstery", "name": "Rust bouclé"}, {"surface": "floor", "name": "Jute rug"}, {"surface": "wall", "name": "Olive panelled wall"}, {"surface": "glazing", "name": "Full-height glass"}]}]}, {"roomKey": "club-pool", "label": "Clubhouse: swimming pool and deck", "group": "clubhouse", "bind": {"roomType": "pool", "spaceNames": ["POOL", "SWIMMING"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "club-pool-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/club-pool-1.jpg", "takeaway": "Linear skylight over mosaic pool, timber ceiling, loungers", "tags": ["skylight", "mosaic", "loungers"], "palette": ["#71847D", "#393026", "#C8CDC5", "#474A43", "#645B4B"], "source": {"pdfPage": 11, "slot": 1}, "objects": ["Lap pool", "Sun loungers", "Linear skylight", "Cove lighting"], "materials": [{"surface": "floor", "name": "Blue mosaic pool tile"}, {"surface": "ceiling", "name": "Timber slat ceiling"}, {"surface": "wall", "name": "Stone cladding"}, {"surface": "floor", "name": "Dark stone deck"}]}, {"id": "club-pool-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/club-pool-2.jpg", "takeaway": "Classical columns, arched windows, patterned stone deck", "tags": ["columns", "arched windows", "loungers"], "palette": ["#6C6759", "#3D3E36", "#918B7C", "#ACA89E", "#D4D3CB"], "source": {"pdfPage": 11, "slot": 2}, "objects": ["Pool", "Loungers", "Potted trees", "Classical columns", "Arched windows"], "materials": [{"surface": "wall", "name": "Carved stone columns"}, {"surface": "floor", "name": "Patterned stone deck"}, {"surface": "upholstery", "name": "White lounger cushions"}]}, {"id": "club-pool-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/club-pool-3.jpg", "takeaway": "Travertine colonnade opening to garden, shallow pool", "tags": ["colonnade", "travertine", "garden view"], "palette": ["#B4B1AC", "#A39E97", "#7B7368", "#E2E2E1", "#C6C7C4"], "source": {"pdfPage": 11, "slot": 3}, "objects": ["Shallow infinity pool", "Colonnade", "Pool ladder", "Garden view"], "materials": [{"surface": "wall", "name": "Travertine columns + beams"}, {"surface": "floor", "name": "Travertine deck"}, {"surface": "metal", "name": "Brass ladder"}]}, {"id": "club-pool-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/club-pool-4.jpg", "takeaway": "Glazed coffered skylight, patterned tile deck, iron balustrade", "tags": ["skylight", "patterned tile", "loungers"], "palette": ["#989188", "#A4A09B", "#787068", "#B7B0A8", "#DDD2C5"], "source": {"pdfPage": 11, "slot": 4}, "objects": ["Lap pool", "Loungers", "Coffered glazed skylight", "Iron balustrade", "Wall sconces"], "materials": [{"surface": "ceiling", "name": "Glazed coffered skylight"}, {"surface": "floor", "name": "Patterned mosaic deck"}, {"surface": "wall", "name": "Cream classical walls"}, {"surface": "metal", "name": "Wrought iron"}]}]}, {"roomKey": "club-mph", "label": "Clubhouse: multi-purpose hall", "group": "clubhouse", "bind": {"roomType": "hall", "spaceNames": ["MULTIPURPOSE", "MULTI-PURPOSE", "HALL"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "club-mph-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/club-mph-1.jpg", "takeaway": "Auditorium seating, walnut stage wall, ring pendant lights", "tags": ["auditorium", "walnut", "ring light"], "palette": ["#928476", "#BEB6AC", "#3A2B20", "#533F31", "#6D5B4B"], "source": {"pdfPage": 12, "slot": 1}, "objects": ["Auditorium seating", "Stage + screen", "Ring pendant lights", "Emblem wall"], "materials": [{"surface": "wall", "name": "Walnut stage wall"}, {"surface": "upholstery", "name": "Beige fabric seats"}, {"surface": "floor", "name": "Light timber"}, {"surface": "glazing", "name": "Full-height windows"}]}, {"id": "club-mph-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/club-mph-2.jpg", "takeaway": "Coffered ceiling, brass chandeliers, arched windows, banquet dining", "tags": ["coffered ceiling", "chandelier", "arched windows"], "palette": ["#A39483", "#BDB1A2", "#5F4A3E", "#CCC3B5", "#DCD5CA"], "source": {"pdfPage": 12, "slot": 2}, "objects": ["Banquet tables", "Dining chairs", "Brass chandeliers", "Buffet counter", "Arched windows"], "materials": [{"surface": "ceiling", "name": "White coffered ceiling"}, {"surface": "wall", "name": "Walnut wainscot"}, {"surface": "floor", "name": "Polished white marble"}, {"surface": "upholstery", "name": "Burgundy + green velvet"}]}, {"id": "club-mph-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/club-mph-3.jpg", "takeaway": "Arched timber windows, grey marble floor with black inlay, sculptures", "tags": ["arched windows", "marble inlay", "art"], "palette": ["#A8A098", "#422F26", "#8B8177", "#BAB3AC", "#D6D3D0"], "source": {"pdfPage": 12, "slot": 3}, "objects": ["Arched timber windows", "Plinths with sculptures"], "materials": [{"surface": "floor", "name": "Grey marble with black inlay"}, {"surface": "joinery", "name": "Mahogany window frames"}, {"surface": "wall", "name": "White plaster"}]}, {"id": "club-mph-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/club-mph-4.jpg", "takeaway": "Arched glass doors, marble inlay floor, brass chandelier", "tags": ["arched doors", "marble inlay", "chandelier"], "palette": ["#8E7F6D", "#4F4234", "#B8AEA3", "#A59A8B", "#C3BCB1"], "source": {"pdfPage": 12, "slot": 4}, "objects": ["Arched glass doors", "Brass chandelier", "Wall sconces"], "materials": [{"surface": "floor", "name": "Cream marble with dark inlay border"}, {"surface": "wall", "name": "White moulded plaster"}, {"surface": "metal", "name": "Bronze door frames"}]}]}, {"roomKey": "club-play", "label": "Clubhouse: indoor play area", "group": "clubhouse", "bind": {"roomType": "games", "spaceNames": ["GAMES", "PLAY", "INDOOR GAMES"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "club-play-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/club-play-1.jpg", "takeaway": "Table tennis, checkerboard floor, mirrored ceiling coffer", "tags": ["table tennis", "checkerboard floor"], "palette": ["#674B32", "#252C28", "#9E8667", "#EBCFAB", "#C4C0B5"], "source": {"pdfPage": 13, "slot": 1}, "objects": ["Table tennis table", "Mirrored ceiling coffer", "Cluster pendants", "Seating"], "materials": [{"surface": "floor", "name": "Checkerboard vinyl + herringbone wood"}, {"surface": "ceiling", "name": "Mirror coffer"}, {"surface": "wall", "name": "Glass partitions"}]}, {"id": "club-play-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/club-play-2.jpg", "takeaway": "Pool table, backlit bar with stools, panelled walls", "tags": ["pool table", "bar", "wall panelling"], "palette": ["#6B645C", "#40362D", "#91887D", "#B4AB9E", "#D5CBBD"], "source": {"pdfPage": 13, "slot": 2}, "objects": ["Pool table", "Bar counter + stools", "Dome pendant", "Lounge sofa", "Backlit bar shelving"], "materials": [{"surface": "upholstery", "name": "Blue felt"}, {"surface": "joinery", "name": "Light oak pool table"}, {"surface": "wall", "name": "Grey panelled walls"}, {"surface": "floor", "name": "Beige carpet"}]}, {"id": "club-play-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/club-play-3.jpg", "takeaway": "Arched windows, cream pool table, dark coffered ceiling", "tags": ["pool table", "arched windows"], "palette": ["#2C1C12", "#AA9F93", "#78695B", "#BFBCB6", "#DFDDD8"], "source": {"pdfPage": 13, "slot": 3}, "objects": ["Pool table (cream)", "Bar + stools", "Globe chandelier", "Armchairs", "TV"], "materials": [{"surface": "ceiling", "name": "Dark timber coffered ceiling"}, {"surface": "floor", "name": "Dark wood"}, {"surface": "joinery", "name": "Cream lacquer table"}, {"surface": "glazing", "name": "Arched windows"}]}, {"id": "club-play-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/club-play-4.jpg", "takeaway": "Walnut-panelled billiards room, drop pendants", "tags": ["pool table", "wood panelling", "pendant"], "palette": ["#7D6349", "#543923", "#A39380", "#B8AC9E", "#CCC2B5"], "source": {"pdfPage": 13, "slot": 4}, "objects": ["Pool table (cream, sculptural)", "Drop pendants", "Cue rack", "Bar counter"], "materials": [{"surface": "wall", "name": "Walnut panelling"}, {"surface": "joinery", "name": "Cream lacquer table"}, {"surface": "floor", "name": "Light oak + jute rug"}]}]}, {"roomKey": "club-gym", "label": "Clubhouse: gym", "group": "clubhouse", "bind": {"roomType": "gym", "spaceNames": ["GYM", "FITNESS"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "club-gym-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/club-gym-1.jpg", "takeaway": "Timber ceiling, black rubber floor, mirror wall", "tags": ["wood ceiling", "rubber floor", "mirror"], "palette": ["#513D2D", "#251B15", "#A99D90", "#7D6B5A", "#CAC1B6"], "source": {"pdfPage": 14, "slot": 1}, "objects": ["Power rack", "Weight bench", "Mirror wall", "Exercise balls", "Spot downlights"], "materials": [{"surface": "ceiling", "name": "Timber ceiling"}, {"surface": "floor", "name": "Black rubber"}, {"surface": "wall", "name": "White plaster"}]}, {"id": "club-gym-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/club-gym-2.jpg", "takeaway": "Fluted ceiling with linear lights, full-height glass", "tags": ["linear light", "glazing", "cardio"], "palette": ["#8F8171", "#55463D", "#C1B9B0", "#3C3028", "#68584C"], "source": {"pdfPage": 14, "slot": 2}, "objects": ["Exercise bike", "Rowing machine", "Punch bag", "Storage wall", "Linear lights"], "materials": [{"surface": "ceiling", "name": "Fluted dark timber"}, {"surface": "floor", "name": "Grey carpet tile"}, {"surface": "glazing", "name": "Full-height glass"}]}, {"id": "club-gym-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/club-gym-3.jpg", "takeaway": "Cove-lit ceiling, mirrored walls, dumbbell racks", "tags": ["cove light", "mirror", "weights"], "palette": ["#928170", "#372E26", "#6A5A4C", "#A89380", "#C7B8A8"], "source": {"pdfPage": 14, "slot": 3}, "objects": ["Dumbbell racks", "Cable machine", "Mirrors", "Cove lighting"], "materials": [{"surface": "wall", "name": "Beige panelling"}, {"surface": "floor", "name": "Dark rubber"}, {"surface": "metal", "name": "Chrome equipment"}]}, {"id": "club-gym-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/club-gym-4.jpg", "takeaway": "Arched shelving niches, slatted timber floor, treadmills", "tags": ["niche shelving", "wood floor", "cardio"], "palette": ["#7A6D5F", "#A69C92", "#3C2F23", "#594C3F", "#685746"], "source": {"pdfPage": 14, "slot": 4}, "objects": ["Treadmills", "Arched shelving niches", "Exercise balls + weights", "Track lights"], "materials": [{"surface": "floor", "name": "Slatted timber"}, {"surface": "joinery", "name": "Oak niches"}, {"surface": "ceiling", "name": "Slatted timber"}]}]}, {"roomKey": "club-stair-corridor", "label": "Clubhouse: staircase and corridor", "group": "clubhouse", "bind": {"roomType": "corridor", "spaceNames": ["CORRIDOR", "STAIRCASE", "LOBBY"], "spaceId": null}, "mood": null, "palette": [], "materials": [], "lighting": null, "objects": [], "selection": {"optionId": null, "status": "open"}, "references": [{"id": "club-stair-corridor-1", "option": 1, "src": "library/Images/Moodboards/Ramanadhapuram/club-stair-corridor-1.jpg", "takeaway": "Floating timber stair, travertine wall, water below", "tags": ["floating stair", "travertine", "water"], "palette": ["#4E4C4B", "#282220", "#7A7673", "#929191", "#B6BDBF"], "source": {"pdfPage": 15, "slot": 1}, "objects": ["Floating timber stair", "Steel rod balustrade", "Water feature"], "materials": [{"surface": "wall", "name": "Travertine cladding"}, {"surface": "joinery", "name": "Timber treads"}, {"surface": "floor", "name": "Dark stone"}, {"surface": "metal", "name": "Black steel rods"}]}, {"id": "club-stair-corridor-2", "option": 2, "src": "library/Images/Moodboards/Ramanadhapuram/club-stair-corridor-2.jpg", "takeaway": "Floating white stair over reflecting pool, olive tree", "tags": ["floating stair", "reflecting pool"], "palette": ["#898782", "#464C43", "#B6B5B2", "#E0DFDD", "#F3F2F1"], "source": {"pdfPage": 15, "slot": 2}, "objects": ["Floating concrete stair", "Reflecting pool", "Olive tree in planter"], "materials": [{"surface": "joinery", "name": "White concrete treads"}, {"surface": "wall", "name": "White painted brick"}, {"surface": "floor", "name": "Grey stone"}]}, {"id": "club-stair-corridor-3", "option": 3, "src": "library/Images/Moodboards/Ramanadhapuram/club-stair-corridor-3.jpg", "takeaway": "Grand gallery, crystal chandeliers, statues, parquet floor", "tags": ["gallery", "chandelier", "parquet"], "palette": ["#554122", "#31230D", "#7A6342", "#AB9674", "#DBD4C8"], "source": {"pdfPage": 15, "slot": 3}, "objects": ["Crystal chandeliers", "Statues on consoles", "Runner rug", "Tall windows"], "materials": [{"surface": "floor", "name": "Parquet"}, {"surface": "wall", "name": "Gilded moulding"}, {"surface": "ceiling", "name": "Ornate plaster"}]}, {"id": "club-stair-corridor-4", "option": 4, "src": "library/Images/Moodboards/Ramanadhapuram/club-stair-corridor-4.jpg", "takeaway": "Arched glazed corridor, white marble floor, olive trees, art", "tags": ["arched glazing", "marble floor", "art"], "palette": ["#938471", "#BAAC9B", "#4A402E", "#CFC6BD", "#E1DDD9"], "source": {"pdfPage": 15, "slot": 4}, "objects": ["Arched glazing", "Olive trees in planters", "Large abstract art", "Track lights"], "materials": [{"surface": "floor", "name": "White marble"}, {"surface": "wall", "name": "Warm white plaster"}, {"surface": "metal", "name": "Black window frames"}, {"surface": "planter", "name": "Stone planters"}]}]}]};
+if (!EMBED && !QS.get("src")) { load(SAMPLE_BOARD, "ramanadhapuram-apartment-interior.json"); }
+else if (EMBED) {
+  $("#exp").textContent = "Save to plan";
+  const cancel = Object.assign(document.createElement("button"), {className:"btn", textContent:"Cancel"});
+  cancel.addEventListener("click", () => parent.postMessage({type:"moodboard:cancel"}, "*"));
+  $("#exp").before(cancel);
+  document.querySelector("label.btn").style.display = "none";
+  window.addEventListener("message", e => {
+    if (e.source !== parent || e.data?.type !== "moodboard:load") return;
+    load(e.data.json, e.data.name);
+  });
+  parent.postMessage({type:"moodboard:ready"}, "*");
+} else {
+const src = QS.get("src") || DEFAULT_SRC;
+fetch(url(src)).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(j => load(j, src.split("/").pop()))
+  .catch(err => fail(`Could not load ${src} (${err.message}).`));
+}
+</script>
+</body>
+</html>

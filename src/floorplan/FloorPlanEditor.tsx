@@ -85,9 +85,11 @@ import {
   Upload,
   X,
   ZoomIn,
+  Palette,
 } from "lucide-react";
 import { useCanvas } from "./hooks/useCanvas";
-import { useHistory } from "./hooks/useHistory";
+import { useHistory, type HistoryState } from "./hooks/useHistory";
+import { DEFAULT_LEVEL_HEIGHT, defaultLevelName, emptySheet, newLevelId, nextElevation, packLevels, sortLevels, unpackLevels, withShared, type LevelMeta } from "./levels";
 import { useSelection } from "./hooks/useSelection";
 import { FurnitureRenderer } from "./furniture";
 import { ObjectSymbol } from "./components/ObjectSymbol";
@@ -195,6 +197,7 @@ import { Export3DDialog, DEFAULT_EXPORT_3D, type Export3DSettings } from "./comp
 import { ExportJsonDialog } from "./components/dialogs/ExportJsonDialog";
 import { R2KeysSettings } from "./components/R2KeysSettings";
 import { CloudInspectDialog } from "./components/dialogs/CloudInspectDialog";
+import { ImportMoodboardDialog } from "./components/dialogs/ImportMoodboardDialog";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
 import { MESH3D_FORMATS } from "./export/flowMesh3d";
 import type { DrawPathStyle, PathJustify } from "./types";
@@ -2083,13 +2086,32 @@ const compassLabel = (bearing: number): string =>
     Math.round((((bearing % 360) + 360) % 360) / 22.5) % 16
   ];
 
+/** A library object's definition as text, stringified once per object instance. The same string instance on
+ *  every call also lets the evaluator's geometry memo hit without re-hashing a long key. */
+const objTextCache = new WeakMap<object, string>();
+const objText = (o: object): string => {
+  let t = objTextCache.get(o);
+  if (t === undefined) { t = JSON.stringify(o); objTextCache.set(o, t); }
+  return t;
+};
+
 export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const loadKeyFromRoute = searchParams.get("loadKey") ?? "";
   const projectIdRef = useRef(projectId);
   projectIdRef.current = projectId;
-  const { containerRef, size, scale, setScale, position, setPosition } = useCanvas();
+  const { containerRef, size, scale, setScale: setScaleRaw, position, setPosition: setPositionRaw } = useCanvas();
+  // Live zoom/pan gesture state (see previewView). Any OTHER view change (Fit, zoom buttons, focus …) drops a
+  // pending gesture first, or its delayed commit would overwrite that change.
+  const liveViewRef = useRef<{ scale: number; x: number; y: number } | null>(null);
+  const liveViewTimerRef = useRef<number | null>(null);
+  const dropLiveView = () => {
+    if (liveViewTimerRef.current != null) { window.clearTimeout(liveViewTimerRef.current); liveViewTimerRef.current = null; }
+    liveViewRef.current = null;
+  };
+  const setScale: typeof setScaleRaw = (v) => { dropLiveView(); setScaleRaw(v); };
+  const setPosition: typeof setPositionRaw = (v) => { dropLiveView(); setPositionRaw(v); };
   const history = useHistory<FloorPlanModel>(initialModel);
   const selection = useSelection();
   /** Always-fresh mirror of the selection (and the selected wall NODE, whose state is declared further
@@ -3220,7 +3242,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const nodeObjectBBox = useCallback((objId: string, params: Record<string, number | string | boolean>) => {
     const obj = (historyRef.current.state.objectLibrary ?? {})[objId];
     if (!objHasGeometry(obj)) return null;
-    const g = evalParametricGeometry(JSON.stringify(obj), { x: 0, y: 0 }, pixelsPerMeter, params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef);
+    const g = evalParametricGeometry(objText(obj), { x: 0, y: 0 }, pixelsPerMeter, params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef);
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const poly of [...g.fill, ...g.lines]) for (const p of poly) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
     return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
@@ -3324,7 +3346,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const obj = lib[att.objectId];
         if (!obj?.cutsWall || !objHasGeometry(obj)) continue;
         try {
-          const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef, att.childParams);
+          const g = evalParametricGeometry(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, undefined, resolveObjectDef, att.childParams);
           for (const poly of g.fill) if (poly.length >= 3) polys.push(poly);
         } catch { /* a broken definition must never take the walls down with it */ }
       }
@@ -3397,6 +3419,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return w?.color ?? "#334155";
   }, [history.state.walls]);
   const [viewMode, setViewMode] = useState<"2d" | "3d" | "both" | "views" | "layout">("2d");
+  /** The 3D canvas is mounted only in these modes. The mesh builders feeding it (wall bands, openings,
+   *  parametric objects, other levels) are skipped otherwise — they re-ran on every 2D edit for a view
+   *  nobody was looking at. */
+  const is3dOpen = viewMode === "3d" || viewMode === "both";
   // Layout sheet's "Information" record. One sheet for now (key by id so multi-sheet is a non-breaking
   // extension later); `infoSelected` drives the title-block highlight + Properties-tab editor.
   const INFO_SHEET_ID = "sheet-1";
@@ -3453,6 +3479,24 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [exportJsonOpen, setExportJsonOpen] = useState(false);
   // Files ▸ Inspect → read-only listing of the Cloudflare R2 bucket as a folder hierarchy.
   const [cloudInspectOpen, setCloudInspectOpen] = useState(false);
+  // Files ▸ Import Moodboard — pick from a moodboard/1 board; only the picks land on `model.moodboards`.
+  const [moodboardOpen, setMoodboardOpen] = useState(false);
+  // ── Levels (storeys), Option B — see ./levels.ts. `history` holds ONLY the active level, so every tool
+  // keeps seeing one floor. The other levels live here: their model (drawn stacked in 3D, written on save /
+  // export) and their parked undo stack. `levelMeta` empty = a single-level plan, as every file used to be.
+  const [levelMeta, setLevelMeta] = useState<LevelMeta[]>([]);
+  /** "All" level tab: 3D stacks every storey. Off = 3D shows only the active level. 2D is unaffected either way. */
+  const [show3dAllLevels, setShow3dAllLevels] = useState(false);
+  const [activeLevelId, setActiveLevelId] = useState<string | null>(null);
+  const [levelSheets, setLevelSheets] = useState<Record<string, FloorPlanModel>>({});
+  const levelStacksRef = useRef<Record<string, HistoryState<FloorPlanModel>>>({});
+  const [levelSettingsOpen, setLevelSettingsOpen] = useState(false);
+  /** A level's model completed to the editor's full shape. A sheet read from a file carries only what the
+   *  file had; the active model is always `initialModel` + the file (see importPlanText), and a sheet swapped
+   *  in must be the same, or code reading e.g. `constraints` / `graphAttrs` crashes on the switch. */
+  const asSheet = (m: FloorPlanModel): FloorPlanModel => withLayerDefaults({ ...initialModel, ...m });
+  /** The model as it is SAVED: the active level plus every other level packed in (a no-op for one level). */
+  const packedForSave = (m: FloorPlanModel): FloorPlanModel => packLevels(m, activeLevelId, levelMeta, levelSheets);
   const [importDesignOpen, setImportDesignOpen] = useState(false);
   const [importImageOpen, setImportImageOpen] = useState(false);
   // Set Scale → By Area: state for the polygon-area calibration workflow.
@@ -4083,6 +4127,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // height), shown in the 3D view via the same Mesh-to-3D path as the Flow editor. Anchored at each node,
   // with the instance's edited params overriding the file defaults.
   const parametricObjectMeshes = useMemo<FlowMesh[]>(() => {
+    if (!is3dOpen) return [];
     const lib = history.state.objectLibrary ?? {};
     const meta = history.state.nodeMeta ?? {};
     const out: FlowMesh[] = [];
@@ -4091,12 +4136,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const obj = lib[att.objectId];
         if (!objHasGeometry(obj)) continue;
         // A spine places itself from the host points, so a NODE host is the anchor itself: (0,0) local.
-        const prisms = evalParametricPrisms(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
+        const prisms = evalParametricPrisms(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
         if (prisms.length) out.push({ id: `pobj-${node.stableKey}-${att.id}`, prisms });
       }
     }
     return out;
-  }, [wallNodes, history.state.nodeMeta, history.state.objectLibrary, pixelsPerMeter]);
+  }, [wallNodes, history.state.nodeMeta, history.state.objectLibrary, pixelsPerMeter, is3dOpen]);
   // Floor slabs (attached to a Space) + Wall bands (attached to a Segment) → 3D meshes. Each takes its
   // footprint from the HOST — a floor uses the room polygon, a wall uses the segment band at its canvas
   // thickness — and extrudes by the object's param: a floor by `thickness` below `level`, a wall by `height`
@@ -4127,12 +4172,20 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return m;
   }, [history.state.rooms, visibleRooms]);
 
-  const floorWallMeshes = useMemo<FlowMesh[]>(() => {
-    const lib = history.state.objectLibrary ?? {};
+  /** Space-floor + segment wall/door/window meshes for ONE sheet. The active level calls it through the memo
+   *  below; the other levels call it for the "All" 3D stack (without column carves or inscribed-rect fitting
+   *  inputs from the active sheet — those are recomputed or skipped per sheet). */
+  const buildFloorWallMeshes = (
+    sheet: { rooms: Room[]; walls: FloorPlanModel["walls"]; objectLibrary?: FloorPlanModel["objectLibrary"] },
+    miteredPolygons: Map<string, Point[]>,
+    roomInscribedRects: Map<string, { cx: number; cy: number; angleRad: number; wPx: number; hPx: number }>,
+    wallCarveFootprints: Point[][],
+  ): FlowMesh[] => {
+    const lib = sheet.objectLibrary ?? {};
     const out: FlowMesh[] = [];
     const pnum = (att: SegmentAttachment, k: string, d: number): number => { const v = att.params[k]; const x = typeof v === "number" ? v : Number(v); return isFinite(x) ? x : d; };
     const pcol = (att: SegmentAttachment, d: string): string => (typeof att.params.color === "string" && att.params.color ? att.params.color : d);
-    for (const room of history.state.rooms) {
+    for (const room of sheet.rooms) {
       if (room.points.length < 3) continue;
       // Host footprint → local-metre coords centred on the room centroid; the engine's `placer(anchor, ppm)`
       // reconstructs world pixels. Any space-attached parametric object with a `geometry` block extrudes its
@@ -4143,7 +4196,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       for (const att of room.attachments ?? []) {
         const obj = lib[att.objectId];
         if (!objHasGeometry(obj)) continue;
-        const defText = JSON.stringify(obj);
+        const defText = objText(obj);
         let prisms = evalParametricPrisms(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams);
         // Generic FIT-TO-SPACE (mirrors the 2D overlay): a non-host-aware object is fitted INSIDE the Space's
         // largest inscribed rectangle at that rectangle's orientation (falling back to the room bbox); heights
@@ -4168,7 +4221,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (prisms.length) out.push({ id: `pobj-space-${room.id}-${att.id}`, prisms });
       }
     }
-    for (const w of history.state.walls) {
+    for (const w of sheet.walls) {
       // The 3D canvas suppresses its own extrusion for a segment hosting a Wall object because THIS band is
       // its 3D — so a hidden layer has to be honoured here too, or hiding the layer would leave the band
       // behind as the only thing still drawn.
@@ -4247,7 +4300,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (!objIsSpine(oObj) && objHasGeometry(oObj)) {
           const cx = (w.start.x + w.end.x) / 2, cy = (w.start.y + w.end.y) / 2;
           const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-          const prisms = evalParametricPrisms(JSON.stringify(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle }, undefined, resolveObjectDef, openAtt.childParams);
+          const prisms = evalParametricPrisms(objText(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle }, undefined, resolveObjectDef, openAtt.childParams);
           const lifted = wbase ? prisms.map((p) => ({ ...p, yBottom: p.yBottom + wbase, yTop: p.yTop + wbase })) : prisms;
           if (lifted.length) out.push({ id: `opening-${w.id}-${openAtt.id}`, prisms: lifted });
         }
@@ -4262,11 +4315,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         // prisms through untouched, exactly as the 2D branch does.
         if (objIsSpine(gObj)) {
           const hostPts = [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / pixelsPerMeter, y: (p.y - mid.y) / pixelsPerMeter }));
-          const sp = evalParametricPrisms(JSON.stringify(gObj), mid, pixelsPerMeter, att.params, hostPts, resolveObjectDef, att.childParams);
+          const sp = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, att.params, hostPts, resolveObjectDef, att.childParams);
           if (sp.length) out.push({ id: `pobj-seg-${w.id}-${att.id}`, prisms: sp });
           continue;
         }
-        const prisms = evalParametricPrisms(JSON.stringify(gObj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
+        const prisms = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
         if (!prisms.length) continue;
         const gb = polysBBox(prisms.flatMap((p) => [p.bottom, p.top]));
         if (!gb) continue;
@@ -4281,7 +4334,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }
     }
     return out;
-  }, [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects, wallCarveFootprints, isLayerVisible]);
+  };
+  const floorWallMeshes = useMemo<FlowMesh[]>(
+    () => (is3dOpen ? buildFloorWallMeshes(history.state, miteredPolygons, roomInscribedRects, wallCarveFootprints) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- buildFloorWallMeshes reads pixelsPerMeter / isLayerVisible, listed
+    [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects, wallCarveFootprints, isLayerVisible, is3dOpen]);
   // ── Attached SPINE objects whose solids are NOT straight prisms — a bike's tubes and wheels, a car's lofted
   // body, anything booleaned. `FlowMeshPrism` is a bottom outline plus a top outline, so it cannot hold them;
   // the 3D canvas already draws general FACE LISTS for a Render node's Polyhedron row, and this feeds attached
@@ -4764,7 +4821,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       for (const att of room.attachments ?? []) {
         const obj = objLib[att.objectId];
         if (!obj?.geometry) continue;
-        const defText = JSON.stringify(obj);
+        const defText = objText(obj);
         if (!pobjIsHostAware(defText)) continue; // non-host-aware → keep the fit-to-rect overlay
         let steps: { op: string; polygons: Point[][] }[] = [];
         try { steps = evalParametricPipelineSteps(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams); } catch { steps = []; }
@@ -7812,7 +7869,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             // can be well-formed JSON yet render nothing (rules outside cases[], expression typos, every
             // h0 == h1, a `when` gate that never fires). Space objects get a dummy 10×10 m host so
             // host/pipeline rules evaluate; `ref` rules resolve against the live library.
-            const defText = JSON.stringify(obj);
+            const defText = objText(obj);
             const dummyHost = obj.hostKind === "space" ? [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] : undefined;
             const resolveLib = (rid: string): string | null => { const o = (historyRef.current.state.objectLibrary ?? {})[rid]; return o ? JSON.stringify(o) : null; };
             let render = { plan2dShapes: 0, planLines: 0, prisms3d: 0 };
@@ -9771,7 +9828,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const outputs = objIsSpine(obj)
           ? resolveSpineObject(JSON.stringify(obj), { x: 0, y: 0 }, pixelsPerMeter || 1, att.params, undefined,
               { canvasJson: canvasPlanJson, decode: decodeCanvasJson })?.outputs
-          : evalParametricOutputs(JSON.stringify(obj), att.params, undefined, resolveObjectDef);
+          : evalParametricOutputs(objText(obj), att.params, undefined, resolveObjectDef);
         entries = paramOutputEntries(outputs);
       } catch { entries = []; }
       out.push({ attId: att.id, name: obj.meta.name, entries });
@@ -9981,7 +10038,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
               { image: imageHostPayload, detections: att.detections, detectionValues, encode: encodePlan })
           : null;
         const outputs = spine ? spine.outputs
-          : evalParametricOutputs(JSON.stringify(obj), att.params, undefined, resolveObjectDef);
+          : evalParametricOutputs(objText(obj), att.params, undefined, resolveObjectDef);
         entries = paramOutputEntries(outputs);
         plan = spine?.planJson;
       } catch { entries = []; }
@@ -14064,8 +14121,8 @@ User request: ${aiPrompt.trim()}`;
   const wallClickIntent = useCallback((wall: Wall, stage: Konva.Stage | null | undefined): { kind: "wall" } | { kind: "node"; key: string } | { kind: "none" } => {
     const pointer = stage?.getPointerPosition();
     if (!pointer) return { kind: "wall" };
-    const wx = (pointer.x - position.x) / scale;
-    const wy = (pointer.y - position.y) / scale;
+    const wx = (pointer.x - currentView().x) / currentView().scale;
+    const wy = (pointer.y - currentView().y) / currentView().scale;
     // Node snapping has priority: if the cursor is within snap radius of any node, select that node.
     const NODE_SNAP_PX = 14 / scale;
     let best: { key: string; d: number } | null = null;
@@ -23022,10 +23079,10 @@ User request: ${aiPrompt.trim()}`;
 
   useEffect(() => {
     if (size.width > 0 && size.height > 0 && !hasCenteredRef.current) {
-      setPosition({ x: size.width / 2, y: size.height / 2 });
+      setPositionRaw({ x: size.width / 2, y: size.height / 2 });
       hasCenteredRef.current = true;
     }
-  }, [size.width, size.height, setPosition]);
+  }, [size.width, size.height, setPositionRaw]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -23531,7 +23588,7 @@ User request: ${aiPrompt.trim()}`;
       toast.error("Open the editor from a project (with API configured) to save to the server.");
       return;
     }
-    const ok = await saveProjectFloorPlanStudioViaApi(projectId, history.state);
+    const ok = await saveProjectFloorPlanStudioViaApi(projectId, packedForSave(history.state));
     if (ok) {
       toast.success("Floor plan saved to project.");
     }
@@ -23704,10 +23761,26 @@ User request: ${aiPrompt.trim()}`;
       return;
     }
     const t = window.setTimeout(() => {
-      void saveProjectFloorPlanStudioViaApi(projectId, history.state);
+      void saveProjectFloorPlanStudioViaApi(projectId, packedForSave(history.state));
     }, 2000);
     return () => window.clearTimeout(t);
-  }, [history.state, projectId, hydrationDone]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- packedForSave reads the three level states listed
+  }, [history.state, projectId, hydrationDone, levelMeta, levelSheets, activeLevelId]);
+
+  // A model that arrives PACKED (a multi-storey file import, a project reload, an agent apply) is split into
+  // sheets here, once, whatever path brought it — so no loader has to know about levels. The load itself
+  // starts a fresh undo history: undoing "past" a whole-building import would leave the other floors behind.
+  useEffect(() => {
+    if (!history.state.levels?.length) return;
+    const up = unpackLevels(history.state);
+    if (!up) return;
+    levelStacksRef.current = {};
+    setLevelMeta(up.meta);
+    setActiveLevelId(up.activeId);
+    setLevelSheets(Object.fromEntries(Object.entries(up.sheets).map(([k, m]) => [k, asSheet(m)])));
+    history.restore({ past: [], present: asSheet(up.active), future: [] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to a packed model arriving, nothing else
+  }, [history.state.levels]);
 
   const duplicateSelected = () => {
     if (!selectedSingleId) {
@@ -23982,6 +24055,30 @@ User request: ${aiPrompt.trim()}`;
     selection.clearSelection();
   };
 
+  // ── LIVE VIEWPORT during zoom / pan gestures ──────────────────────────────────────────────────────────
+  // Every wheel tick / pan mousemove used to setScale / setPosition, re-rendering the whole editor and
+  // rebuilding every Konva node per frame. Now a gesture moves the world-viewport groups IMPERATIVELY and
+  // commits to React state once it goes idle (or before any other stage interaction reads the view).
+  // Between, `liveViewRef` is the truth; react-konva leaves the groups alone because their props are unchanged.
+  const currentView = () => liveViewRef.current ?? { scale, x: position.x, y: position.y };
+  const commitLiveView = () => {
+    if (liveViewTimerRef.current != null) { window.clearTimeout(liveViewTimerRef.current); liveViewTimerRef.current = null; }
+    const v = liveViewRef.current;
+    if (!v) return;
+    liveViewRef.current = null;
+    setScaleRaw(v.scale);
+    setPositionRaw({ x: v.x, y: v.y });
+  };
+  const previewView = (v: { scale: number; x: number; y: number }) => {
+    const stage = stageRef.current;
+    if (!stage) { setScale(v.scale); setPosition({ x: v.x, y: v.y }); return; }
+    liveViewRef.current = v;
+    stage.find(".world-viewport").forEach((g) => g.setAttrs({ x: v.x, y: v.y, scaleX: v.scale, scaleY: v.scale }));
+    stage.batchDraw();
+    if (liveViewTimerRef.current != null) window.clearTimeout(liveViewTimerRef.current);
+    liveViewTimerRef.current = window.setTimeout(commitLiveView, 140);
+  };
+
   const onStageWheel = (event: Konva.KonvaEventObject<WheelEvent>) => {
     event.evt.preventDefault();
     const stage = stageRef.current;
@@ -23992,15 +24089,16 @@ User request: ${aiPrompt.trim()}`;
     if (!pointer) {
       return;
     }
-    const oldScale = scale;
+    const cur = currentView();
+    const oldScale = cur.scale;
     const scaleFactor = event.evt.deltaY > 0 ? 1 / 1.08 : 1.08;
-    const newScale = Math.min(16, Math.max(0.05, oldScale * scaleFactor));
+    const newScale = Number(Math.min(16, Math.max(0.05, oldScale * scaleFactor)).toFixed(3));
     const mousePointTo = {
-      x: (pointer.x - position.x) / oldScale,
-      y: (pointer.y - position.y) / oldScale,
+      x: (pointer.x - cur.x) / oldScale,
+      y: (pointer.y - cur.y) / oldScale,
     };
-    setScale(Number(newScale.toFixed(3)));
-    setPosition({
+    previewView({
+      scale: newScale,
       x: pointer.x - mousePointTo.x * newScale,
       y: pointer.y - mousePointTo.y * newScale,
     });
@@ -24016,8 +24114,8 @@ User request: ${aiPrompt.trim()}`;
       return null;
     }
     return {
-      x: (pointer.x - position.x) / scale,
-      y: (pointer.y - position.y) / scale,
+      x: (pointer.x - currentView().x) / currentView().scale,
+      y: (pointer.y - currentView().y) / currentView().scale,
     };
   };
 
@@ -24385,6 +24483,8 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onStageMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    // A click reads the view (world coords, hit tests) from React state — land any pending gesture first.
+    commitLiveView();
     // A Ctrl+copy placement awaiting confirmation: a left-click drops the copy at its current spot (Enter
     // does the same; Esc cancels). Consume the click so it doesn't start a fresh selection/drag.
     if (event.evt.button === 0 && stageGroupDragRef.current?.placing) {
@@ -24675,8 +24775,8 @@ User request: ${aiPrompt.trim()}`;
       if (stage) {
         const pointer = stage.getPointerPosition();
         if (pointer) {
-          const worldX = (pointer.x - position.x) / scale;
-          const worldY = (pointer.y - position.y) / scale;
+          const worldX = (pointer.x - currentView().x) / currentView().scale;
+          const worldY = (pointer.y - currentView().y) / currentView().scale;
           const ppm = pixelsPerMeter;
           // Convert to meters for seed position
           setAddRoomClickPos({ x: worldX / ppm, y: worldY / ppm });
@@ -25556,7 +25656,8 @@ User request: ${aiPrompt.trim()}`;
       const dx = event.evt.clientX - panLastScreen.current.x;
       const dy = event.evt.clientY - panLastScreen.current.y;
       panLastScreen.current = { x: event.evt.clientX, y: event.evt.clientY };
-      setPosition((p) => ({ x: p.x + dx, y: p.y + dy }));
+      const cur = currentView();
+      previewView({ scale: cur.scale, x: cur.x + dx, y: cur.y + dy });
       return;
     }
     // A stage drag is live from here on — auto-room detection reads this to hold its last result rather
@@ -25976,6 +26077,7 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onStageMouseUp = () => {
+    commitLiveView();
     // Release the auto-room freeze and force one fresh detection against the committed geometry. Bumped
     // only when a drag actually ran, so an ordinary click costs no extra render.
     if (dragActiveRef.current) { dragActiveRef.current = false; setDragEndTick((t) => t + 1); }
@@ -26120,12 +26222,13 @@ User request: ${aiPrompt.trim()}`;
     if (!prev || prev.dist < 1 || dist < 1) return; // first move of the gesture — just seed the baseline
     const local = stageLocalPoint(cx, cy);
     if (!local) return;
-    const oldScale = scale;
-    const newScale = Math.min(16, Math.max(0.05, oldScale * (dist / prev.dist)));
-    const worldX = (local.x - position.x) / oldScale;
-    const worldY = (local.y - position.y) / oldScale;
-    setScale(Number(newScale.toFixed(3)));
-    setPosition({
+    const cur = currentView();
+    const oldScale = cur.scale;
+    const newScale = Number(Math.min(16, Math.max(0.05, oldScale * (dist / prev.dist))).toFixed(3));
+    const worldX = (local.x - cur.x) / oldScale;
+    const worldY = (local.y - cur.y) / oldScale;
+    previewView({
+      scale: newScale,
       x: local.x - worldX * newScale + (cx - prev.cx),
       y: local.y - worldY * newScale + (cy - prev.cy),
     });
@@ -26727,8 +26830,8 @@ User request: ${aiPrompt.trim()}`;
       const cx = size.width / 2;
       const cy = size.height / 2;
       seed = {
-        x: (cx - position.x) / scale,
-        y: (cy - position.y) / scale,
+        x: (cx - currentView().x) / currentView().scale,
+        y: (cy - currentView().y) / currentView().scale,
       };
     }
     const hit = snapPointerToNearestWall(seed, history.state.walls, Number.POSITIVE_INFINITY);
@@ -27073,7 +27176,7 @@ User request: ${aiPrompt.trim()}`;
         resolveObjectDef,
       },
     );
-    const plan = toStandardPlan(baked, {
+    const plan = toStandardPlan(packedForSave(baked), {
       pixelsPerMeter,
       keywords,
       northBearing: northBearing ?? 0,
@@ -27124,7 +27227,7 @@ User request: ${aiPrompt.trim()}`;
     };
     const evalAt = (obj: ParametricObjectFile, att: SegmentAttachment, anchor: Point, host?: Point[]) => {
       try {
-        take(evalParametricGeometry(JSON.stringify(obj), anchor, pixelsPerMeter, att.params, host, resolveObjectDef, att.childParams));
+        take(evalParametricGeometry(objText(obj), anchor, pixelsPerMeter, att.params, host, resolveObjectDef, att.childParams));
       } catch { /* a broken definition must never take the export down */ }
     };
 
@@ -27279,6 +27382,14 @@ User request: ${aiPrompt.trim()}`;
       if (model.rooms) {
         model.rooms = model.rooms.filter((r) => !isAutoRoom(r));
       }
+      // A multi-storey file carries the other levels in `levels[].model` (see ./levels.ts). They get the same
+      // clean-up as the active body here, and their objects are resolved in the same passes below — the
+      // unpack effect then splits them into sheets.
+      const levelModelsIn = (model.levels ?? []).filter((l) => l.model);
+      for (const l of levelModelsIn) {
+        const lm = l.model!;
+        l.model = { ...lm, rooms: (lm.rooms ?? []).filter((r) => !isAutoRoom(r)), walls: splitWallsAtIntersections(lm.walls ?? []) };
+      }
       // Build the library the plan will render against: the file's own definitions win, falling back to
       // whatever the session already had loaded. Older exports shipped NO definitions at all, so in a
       // fresh session every attachment pointed at an id nothing could resolve — which is what the
@@ -27293,11 +27404,13 @@ User request: ${aiPrompt.trim()}`;
       // objects are pulled with the drawing and their ids stamped back onto the attachments. Only then
       // does the id-based pass below have ids to work with.
       const objectPaths = unresolvedObjectPaths(model, objectLibrary);
+      for (const l of levelModelsIn) for (const op of unresolvedObjectPaths(l.model!, objectLibrary)) objectPaths.add(op);
       let byPath: Record<string, ParametricObjectFile> = {};
       if (objectPaths.size) {
         byPath = await resolveLibraryObjectsByPaths(objectPaths, importedLibraryPath).catch(() => ({}));
         objectLibrary = { ...objectLibrary, ...Object.fromEntries(Object.values(byPath).map((o) => [o.meta.id, o])) };
         model = applyResolvedObjectPaths(model, byPath);
+        for (const l of levelModelsIn) l.model = applyResolvedObjectPaths(l.model!, byPath) as FloorPlanModel;
         const unresolved = [...objectPaths].filter((p) => !byPath[p]);
         const found = objectPaths.size - unresolved.length;
         if (found) toast.success(`Imported ${found} parametric object${found === 1 ? "" : "s"} from ${importedLibraryPath || "the library"}`);
@@ -27305,7 +27418,7 @@ User request: ${aiPrompt.trim()}`;
       }
       // Then BY ID — the ids the plan names directly, plus the nested components a path-resolved
       // definition `ref`s (already in the library, so the filter below would never ask for them).
-      const missing = new Set([...referencedObjectIds(model), ...nestedRefIds(Object.values(byPath))].filter((id) => !objectLibrary[id]));
+      const missing = new Set([...referencedObjectIds(model), ...levelModelsIn.flatMap((l) => [...referencedObjectIds(l.model!)]), ...nestedRefIds(Object.values(byPath))].filter((id) => !objectLibrary[id]));
       if (missing.size) {
         const resolved = await resolveLibraryObjectsByIds(missing).catch(() => ({}));
         objectLibrary = { ...objectLibrary, ...resolved };
@@ -28984,12 +29097,127 @@ User request: ${aiPrompt.trim()}`;
 
   // "New" (File ▸ New) — wipe the document to a blank canvas after confirming. Lives in the top-right
   // Files dropdown; also wired as the toolbar's onClearCanvas.
+  // ── Level actions ──────────────────────────────────────────────────────────────────────────────────
+  /** Park the active level (model + undo stack) and bring `id` in. The project-wide registries (object
+   *  library, layers, types, moodboards) travel with the switch so every floor resolves the same objects. */
+  const switchLevel = (id: string) => {
+    if (!activeLevelId || id === activeLevelId) return;
+    const target = levelSheets[id];
+    if (!target) return;
+    const cur = history.state;
+    levelStacksRef.current[activeLevelId] = history.snapshot();
+    const parked = levelStacksRef.current[id];
+    delete levelStacksRef.current[id];
+    const present = asSheet(withShared(parked?.present ?? target, cur));
+    setLevelSheets((prev) => { const next = { ...prev, [activeLevelId]: cur }; delete next[id]; return next; });
+    history.restore(parked ? { ...parked, present } : { past: [], present, future: [] });
+    setActiveLevelId(id);
+    selection.clearSelection();
+  };
+  /** Add a level on top of the stack and switch to it. The first press turns the single-level plan into
+   *  "Ground floor" + "First floor". */
+  const addLevel = () => {
+    const cur = history.state;
+    let meta = levelMeta;
+    let curId = activeLevelId;
+    if (!curId || !meta.length) {
+      curId = newLevelId();
+      meta = [{ id: curId, name: defaultLevelName(0), elevation: 0, height: DEFAULT_LEVEL_HEIGHT }];
+    }
+    const lv: LevelMeta = { id: newLevelId(), name: defaultLevelName(meta.length), elevation: nextElevation(meta), height: DEFAULT_LEVEL_HEIGHT };
+    const parkId = curId;
+    levelStacksRef.current[parkId] = history.snapshot();
+    setLevelMeta([...meta, lv]);
+    setLevelSheets((prev) => ({ ...prev, [parkId]: cur }));
+    history.restore({ past: [], present: asSheet(emptySheet(cur)), future: [] });
+    setActiveLevelId(lv.id);
+    selection.clearSelection();
+    toast.success(`Added ${lv.name} at +${lv.elevation.toFixed(2)} m`);
+  };
+  const updateLevel = (id: string, patch: Partial<LevelMeta>) =>
+    setLevelMeta((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  /** Delete a level (with its drawing). Down to one level, the plan becomes single-level again. */
+  const deleteLevel = (id: string) => {
+    const lv = levelMeta.find((l) => l.id === id);
+    if (!lv || levelMeta.length < 2) return;
+    if (!window.confirm(`Delete ${lv.name} and everything drawn on it?`)) return;
+    const rest = sortLevels(levelMeta.filter((l) => l.id !== id));
+    let sheets = { ...levelSheets };
+    let active = activeLevelId;
+    if (id === activeLevelId) {
+      // Bring the nearest remaining level in as the active one.
+      const next = rest.reduce((a, b) => (Math.abs(b.elevation - lv.elevation) < Math.abs(a.elevation - lv.elevation) ? b : a));
+      const parked = levelStacksRef.current[next.id];
+      const present = asSheet(withShared(parked?.present ?? sheets[next.id], history.state));
+      delete sheets[next.id];
+      history.restore(parked ? { ...parked, present } : { past: [], present, future: [] });
+      active = next.id;
+    } else {
+      delete sheets[id];
+    }
+    delete levelStacksRef.current[id];
+    if (rest.length === 1) { sheets = {}; levelStacksRef.current = {}; setLevelMeta([]); setActiveLevelId(null); }
+    else { setLevelMeta(rest); setActiveLevelId(active); }
+    setLevelSheets(sheets);
+    setLevelSettingsOpen(false);
+    selection.clearSelection();
+  };
+  /** A sheet as the 3D view draws it: hidden layers dropped, a hosted Wall object's height driving the
+   *  extrusion — the same two rules the active level's model gets in the 3D props. */
+  const model3dForSheet = (sheet: FloorPlanModel): FloorPlanModel => {
+    // Parked sheets may lack the project registries (objectLibrary …); without them a hosted Wall object is
+    // not recognised and the floor draws as a bare slab.
+    const m = withShared(sheet, history.state);
+    return {
+    ...m,
+    walls: m.walls.filter((w) => isLayerVisible(w.layerId)).map((w) => {
+      if (w.segmentType !== "wall" && w.segmentType != null) return w;
+      const wallAtt = (w.attachments ?? []).find((at) => (m.objectLibrary ?? {})[at.objectId]?.meta.symbol === "wall");
+      const hM = typeof wallAtt?.params?.height === "number" ? wallAtt.params.height : null;
+      return hM != null && hM > 0 ? { ...w, extrude3dHeightM: hM, extrude3dDir: "up" as const } : w;
+    }),
+    objects: m.objects.filter((o) => isLayerVisible(o.layerId)),
+    furniture: m.furniture.filter((f) => isLayerVisible(f.layerId)),
+  };
+  };
+
+  // The other levels as the 3D view draws them — MEMOISED: they only change on a level switch or edit of
+  // the level table, and a fresh array every editor render made the 3D view rebuild every other floor's
+  // meshes on each mouse move.
+  const levels3d = useMemo(
+    () => !show3dAllLevels || !is3dOpen ? [] : levelMeta.filter((l) => l.id !== activeLevelId && levelSheets[l.id]).map((l) => ({
+      id: l.id,
+      elevationM: l.elevation,
+      model: model3dForSheet(levelSheets[l.id]),
+      rooms: levelSheets[l.id].rooms,
+      meshPreview: (() => {
+        const sh = withShared(levelSheets[l.id], history.state);
+        const rects = new Map<string, { cx: number; cy: number; angleRad: number; wPx: number; hPx: number }>();
+        for (const room of sh.rooms) {
+          if (!room.attachments?.length || room.points.length < 3) continue;
+          const r = largestInscribedRectangle(room.points);
+          if (!r || r.corners.length < 4) continue;
+          const [c0, c1, c2] = r.corners;
+          rects.set(room.id, { cx: (c0.x + c2.x) / 2, cy: (c0.y + c2.y) / 2, angleRad: Math.atan2(c1.y - c0.y, c1.x - c0.x),
+            wPx: Math.max(1e-6, Math.hypot(c1.x - c0.x, c1.y - c0.y)), hPx: Math.max(1e-6, Math.hypot(c2.x - c1.x, c2.y - c1.y)) });
+        }
+        const m = buildFloorWallMeshes(sh, computeMiteredWallPolygons(sh.walls), rects, []);
+        return m.length ? m : undefined;
+      })(),
+      floorHeightM: l.height,
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- model3dForSheet reads isLayerVisible, listed
+    [levelMeta, levelSheets, activeLevelId, isLayerVisible, show3dAllLevels, history.state.objectLibrary, pixelsPerMeter, is3dOpen],
+  );
+
   const handleNewDocument = () => {
     if (!window.confirm("Start a new drawing? This removes all walls, rooms, furniture, objects, freehand sketches, and the image underlay. (Undo will restore.)")) return;
     const h = historyRef.current;
     // `objects: []` already drops committed freehand sketches; also drop the overlaid image underlay so a
     // "new drawing" is a truly blank canvas, not one still showing the traced image.
     h.set({ ...h.state, walls: [], rooms: [], furniture: [], objects: [], imageUnderlay: null, imageOverlays: [] });
+    // A new drawing is one floor again.
+    setLevelMeta([]); setActiveLevelId(null); setLevelSheets({}); levelStacksRef.current = {};
     // Clear any in-progress freehand stroke and reset the image-underlay UI flags (nothing left to select /
     // calibrate now that the underlay is gone).
     setFreehandDraft([]);
@@ -29267,6 +29495,7 @@ User request: ${aiPrompt.trim()}`;
                 {/* Import Image (image underlay) + Import Map (GeoJSON) — moved here from the Drawing toolbar. */}
                 {imageUnderlayPopover}
                 <ToolButton active={false} icon={<MapPin className="h-4 w-4 text-sky-600" />} label="Import Map" onClick={() => geojsonInputRef.current?.click()} />
+                <ToolButton active={false} icon={<Palette className="h-4 w-4 text-amber-600" />} label="Import Moodboard" onClick={() => setMoodboardOpen(true)} />
                 <ToolButton active={false} icon={<Save className="h-4 w-4" />} label="Save to project" onClick={() => void saveModel()} />
                 <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Reload from project" onClick={() => void loadModel()} />
                 <ToolButton active={false} icon={<FileJson className="h-4 w-4" />} label="Export JSON" onClick={exportJsonFile} />
@@ -29848,6 +30077,8 @@ User request: ${aiPrompt.trim()}`;
                     furniture: history.state.furniture.filter((f) => isLayerVisible(f.layerId)),
                   }}
                   rooms={visibleRooms}
+                  activeElevationM={levelMeta.find((l) => l.id === activeLevelId)?.elevation ?? 0}
+                  levels={levels3d}
                   spaceMasses={spaceMasses}
                   primitiveMasses={primitiveMassesAll}
                   booleanMasses={booleanMasses}
@@ -29899,6 +30130,75 @@ User request: ${aiPrompt.trim()}`;
               </Suspense>
             </div>
           ) : null}
+          {/* LEVEL TABS — one sheet per storey (see ./levels.ts). 2D edits the active sheet; 3D stacks them all.
+              Bottom-right (bottom-left is taken by the Flow button); hidden in Layout (paper-space) mode. */}
+          {viewMode !== "layout" && (
+            <div className="absolute bottom-2 right-2 z-30 flex max-w-[70%] items-center gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm" role="tablist" aria-label="Levels">
+              {levelMeta.length === 0 ? (
+                <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white" role="tab" aria-selected="true">Single level</span>
+              ) : (<>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={show3dAllLevels}
+                  title="3D: show every level stacked (2D keeps editing the selected level)"
+                  onClick={() => setShow3dAllLevels(true)}
+                  className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${show3dAllLevels ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                >All</button>
+                {sortLevels(levelMeta).map((l) => {
+                  const on = l.id === activeLevelId && !show3dAllLevels;
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      title={`${l.name} — +${l.elevation.toFixed(2)} m, ${l.height.toFixed(2)} m high${on ? " (double-click to edit)" : ""}`}
+                      onClick={() => { setShow3dAllLevels(false); switchLevel(l.id); }}
+                      onDoubleClick={() => on && setLevelSettingsOpen(true)}
+                      className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${on ? "bg-slate-900 text-white" : l.id === activeLevelId ? "bg-slate-200 text-slate-800" : "text-slate-600 hover:bg-slate-100"}`}
+                    >
+                      {l.name}
+                      <span className={`ml-1 font-normal ${on ? "text-slate-300" : "text-slate-400"}`}>+{l.elevation.toFixed(1)}</span>
+                    </button>
+                  );
+                })}
+              </>)}
+              {levelMeta.length > 0 && activeLevelId && (
+                <Popover open={levelSettingsOpen} onOpenChange={setLevelSettingsOpen}>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="shrink-0 rounded px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100" title="Level settings" aria-label="Level settings">⚙</button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="start" className="w-64 space-y-2 p-3 text-xs">
+                    {(() => {
+                      const l = levelMeta.find((x) => x.id === activeLevelId);
+                      if (!l) return null;
+                      return (
+                        <>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Level</p>
+                          <label className="block">Name
+                            <input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.name} onChange={(e) => updateLevel(l.id, { name: e.target.value })} />
+                          </label>
+                          <div className="flex gap-2">
+                            <label className="block flex-1">Elevation (m)
+                              <input type="number" step="0.05" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.elevation}
+                                onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) updateLevel(l.id, { elevation: v }); }} />
+                            </label>
+                            <label className="block flex-1">Height (m)
+                              <input type="number" step="0.05" min="0.5" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.height}
+                                onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) updateLevel(l.id, { height: v }); }} />
+                            </label>
+                          </div>
+                          <button type="button" className="w-full rounded border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50" onClick={() => deleteLevel(l.id)}>Delete this level</button>
+                        </>
+                      );
+                    })()}
+                  </PopoverContent>
+                </Popover>
+              )}
+              <button type="button" onClick={addLevel} className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50" title="Add a level on top" aria-label="Add level">+ Level</button>
+            </div>
+          )}
           <Stage
             ref={stageRef}
             width={size.width}
@@ -31238,7 +31538,7 @@ User request: ${aiPrompt.trim()}`;
                         const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
                         // The host, in the anchor-relative metres every object evaluator is given.
                         const hostPts = [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / pixelsPerMeter, y: (p.y - mid.y) / pixelsPerMeter }));
-                        const g = evalParametricGeometry(JSON.stringify(obj), mid, pixelsPerMeter, att.params, hostPts, resolveObjectDef, att.childParams);
+                        const g = evalParametricGeometry(objText(obj), mid, pixelsPerMeter, att.params, hostPts, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
                         const pts = (poly: Point[]) => poly.flatMap((p) => [p.x, p.y]);
                         return (
@@ -31255,7 +31555,7 @@ User request: ${aiPrompt.trim()}`;
                       // whole thing rotates with the segment. Door / window / wall keep their symbol branches.
                       if (obj?.geometry && symbol !== "door" && symbol !== "window" && symbol !== "wall") {
                         const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
-                        const g = evalParametricGeometry(JSON.stringify(obj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
+                        const g = evalParametricGeometry(objText(obj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
                         const gb = polysBBox([...g.fill, ...g.lines]);
                         if (!gb) return null;
@@ -31356,7 +31656,7 @@ User request: ${aiPrompt.trim()}`;
                       // (the instance's edited params override the file defaults). Falls back to the
                       // hardcoded staircase placeholder below for objects without geometry.
                       if (objHasGeometry(obj)) {
-                        const g = evalParametricGeometry(JSON.stringify(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
+                        const g = evalParametricGeometry(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
                         // Selected NESTED component (Components editor / canvas click) → overdraw in accent.
                         const selPath = selectedComponent?.attId === att.id ? selectedComponent.path : null;
@@ -31421,7 +31721,7 @@ User request: ${aiPrompt.trim()}`;
                       if (liveFlow && liveOwnedAttIdsRef.current.has(att.id)) return null;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!objHasGeometry(obj)) return null;
-                      const defText = JSON.stringify(obj);
+                      const defText = objText(obj);
                       const g = evalParametricGeometry(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams);
                       if (!g.fill.length && !g.lines.length && !g.refLines.length) return null;
                       // Generic FIT-TO-SPACE: an object that doesn't adapt itself to the host (no host vars /
@@ -33381,8 +33681,8 @@ User request: ${aiPrompt.trim()}`;
                         const rightN = history.state.walls.find((w) => w.id !== wall.id && w.segmentType !== "door" && w.segmentType !== "window" && Math.hypot(w.start.x - wall.end.x, w.start.y - wall.end.y) < tol);
                         const stage = e.target.getStage();
                         const pointer = stage?.getPointerPosition();
-                        const worldX = pointer ? (pointer.x - position.x) / scale : 0;
-                        const worldY = pointer ? (pointer.y - position.y) / scale : 0;
+                        const worldX = pointer ? (pointer.x - currentView().x) / currentView().scale : 0;
+                        const worldY = pointer ? (pointer.y - currentView().y) / currentView().scale : 0;
                         const startT = worldX * dux + worldY * duy;
                         const leftBoundT = leftN ? leftN.start.x * dux + leftN.start.y * duy : wall.start.x * dux + wall.start.y * duy;
                         const rightBoundT = rightN ? rightN.end.x * dux + rightN.end.y * duy : wall.end.x * dux + wall.end.y * duy;
@@ -33399,8 +33699,8 @@ User request: ${aiPrompt.trim()}`;
                         const stage = e.target.getStage();
                         const pointer = stage?.getPointerPosition();
                         if (!pointer) return;
-                        const worldX = (pointer.x - position.x) / scale;
-                        const worldY = (pointer.y - position.y) / scale;
+                        const worldX = (pointer.x - currentView().x) / currentView().scale;
+                        const worldY = (pointer.y - currentView().y) / currentView().scale;
                         const curT = worldX * drag.ux + worldY * drag.uy;
                         let delta = curT - drag.startT;
                         const origStartT = drag.origStart.x * drag.ux + drag.origStart.y * drag.uy;
@@ -33826,8 +34126,8 @@ User request: ${aiPrompt.trim()}`;
                               );
                               const stage = e.target.getStage();
                               const pointer = stage?.getPointerPosition();
-                              const worldX = pointer ? (pointer.x - position.x) / scale : 0;
-                              const worldY = pointer ? (pointer.y - position.y) / scale : 0;
+                              const worldX = pointer ? (pointer.x - currentView().x) / currentView().scale : 0;
+                              const worldY = pointer ? (pointer.y - currentView().y) / currentView().scale : 0;
                               const startT = worldX * ux + worldY * uy;
                               const segLen = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
                               // Compute bounds: how far left/right the segment can slide
@@ -33856,8 +34156,8 @@ User request: ${aiPrompt.trim()}`;
                               const stage = e.target.getStage();
                               const pointer = stage?.getPointerPosition();
                               if (!pointer) return;
-                              const worldX = (pointer.x - position.x) / scale;
-                              const worldY = (pointer.y - position.y) / scale;
+                              const worldX = (pointer.x - currentView().x) / currentView().scale;
+                              const worldY = (pointer.y - currentView().y) / currentView().scale;
                               const curT = worldX * drag.ux + worldY * drag.uy;
                               let delta = curT - drag.startT;
                               // Clamp: door start can't go past left bound, door end can't go past right bound
@@ -35979,8 +36279,8 @@ User request: ${aiPrompt.trim()}`;
                           const stage = e.target.getStage();
                           const pointer = stage?.getPointerPosition();
                           if (!pointer) return;
-                          const worldX = (pointer.x - position.x) / scale;
-                          const worldY = (pointer.y - position.y) / scale;
+                          const worldX = (pointer.x - currentView().x) / currentView().scale;
+                          const worldY = (pointer.y - currentView().y) / currentView().scale;
                           const projDist = (worldX - dim.fromX) * dim.nx + (worldY - dim.fromY) * dim.ny;
                           const newSbPx = Math.max(0, projDist);
                           const newSbM = +(newSbPx / pixelsPerMeter).toFixed(1);
@@ -36100,8 +36400,8 @@ User request: ${aiPrompt.trim()}`;
                           // Capture the pointer position in world coords at drag start
                           const stage = e.target.getStage();
                           const pointer = stage?.getPointerPosition();
-                          const worldX = pointer ? (pointer.x - position.x) / scale : hd.cx;
-                          const worldY = pointer ? (pointer.y - position.y) / scale : hd.cy;
+                          const worldX = pointer ? (pointer.x - currentView().x) / currentView().scale : hd.cx;
+                          const worldY = pointer ? (pointer.y - currentView().y) / currentView().scale : hd.cy;
                           fixedResizeDragRef.current = {
                             handleId: hd.id,
                             label,
@@ -36121,8 +36421,8 @@ User request: ${aiPrompt.trim()}`;
                           const stage = e.target.getStage();
                           const pointer = stage?.getPointerPosition();
                           if (!pointer) return;
-                          const worldX = (pointer.x - position.x) / scale;
-                          const worldY = (pointer.y - position.y) / scale;
+                          const worldX = (pointer.x - currentView().x) / currentView().scale;
+                          const worldY = (pointer.y - currentView().y) / currentView().scale;
                           const dxM = (worldX - drag.startMouseX) / ppm;
                           const dyM = (worldY - drag.startMouseY) / ppm;
                           const MIN_SIZE = 0.5;
@@ -36534,7 +36834,7 @@ User request: ${aiPrompt.trim()}`;
                     const obj = (history.state.objectLibrary ?? {})[placingNodeObjectId];
                     if (!objHasGeometry(obj)) return null;
                     const params = { ...armedNodeParams(placingNodeObjectId), rotation: nodePlaceRotation };
-                    const g = evalParametricGeometry(JSON.stringify(obj), { x: 0, y: 0 }, pixelsPerMeter, params, undefined, resolveObjectDef);
+                    const g = evalParametricGeometry(objText(obj), { x: 0, y: 0 }, pixelsPerMeter, params, undefined, resolveObjectDef);
                     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                     for (const poly of [...g.fill, ...g.lines]) for (const p of poly) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
                     if (!isFinite(minX)) return null;
@@ -39714,7 +40014,7 @@ User request: ${aiPrompt.trim()}`;
                         for (const att of atts) {
                           const obj = (history.state.objectLibrary ?? {})[att.objectId];
                           if (!objHasGeometry(obj)) continue;
-                          const out = evalParametricOutputs(JSON.stringify(obj), att.params, host, resolveObjectDef);
+                          const out = evalParametricOutputs(objText(obj), att.params, host, resolveObjectDef);
                           if (out.ok) rows.push(...out.declared, ...out.derived);
                         }
                         if (!rows.length) return null;
@@ -42276,6 +42576,13 @@ User request: ${aiPrompt.trim()}`;
           the dev-server bridge because enumerating an S3 keyspace needs a signature the browser
           must never hold. */}
       <CloudInspectDialog open={cloudInspectOpen} onOpenChange={setCloudInspectOpen} />
+      <ImportMoodboardDialog
+        open={moodboardOpen}
+        onOpenChange={setMoodboardOpen}
+        rooms={[...history.state.rooms, ...Object.values(levelSheets).flatMap((m) => m.rooms ?? [])]}
+        moodboards={history.state.moodboards}
+        onStore={(next) => { const h = historyRef.current; h.set({ ...h.state, moodboards: next.length ? next : undefined }); }}
+      />
       {/* Files ▸ Import from Library. Hands the design's raw text to the SAME loader the file
           picker uses, so a library plan and a dropped file cannot diverge in how they load. */}
       <ImportDesignDialog open={importDesignOpen} onOpenChange={setImportDesignOpen} onImportText={importPlanText} />

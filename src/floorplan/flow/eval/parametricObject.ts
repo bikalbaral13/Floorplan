@@ -1025,6 +1025,83 @@ const placer = (anchor: Point, ppm: number, rotDeg: number) => {
   return (x: number, y: number): Point => ({ x: anchor.x + (x * cs - y * sn) * ppm, y: anchor.y + (x * sn + y * cs) * ppm });
 };
 
+// ── RENDER MODE ───────────────────────────────────────────────────────────────────────────────────────────
+// Every library object (except wall and door) carries a `renderMode` select: "Nothing" | "Basic" | "Full".
+//   Nothing — the attachment stays on its node / segment / space and draws nothing in 2D or 3D.
+//   Basic   — a bounding rectangle in plan and a bounding cuboid in 3D, built from the object's SIZE PARAMS
+//             only; its Math Engine / rules never run. This is what lets a plan with hundreds of objects load.
+//   Full    — the object's own geometry, as before (the default).
+// The gate sits in the evaluators below, so every consumer (canvas, 3D, metrics, exports) honours it.
+export type RenderMode = "Nothing" | "Basic" | "Full";
+export const renderModeOf = (overrides?: Record<string, unknown>): RenderMode => {
+  const v = overrides?.renderMode;
+  return v === "Nothing" || v === "Basic" ? v : "Full";
+};
+/** Default param values of a definition, parsed once per definition text. */
+const defaultsCache = new Map<string, Record<string, unknown>>();
+const defDefaults = (defText: string): Record<string, unknown> => {
+  let d = defaultsCache.get(defText);
+  if (d) return d;
+  d = {};
+  try {
+    const def = JSON.parse(defText) as { nodes?: { data?: { tool?: string; params?: { props?: { id: string; value: unknown }[] } } }[]; params?: { id?: string; name?: string; value?: unknown; default?: unknown }[] };
+    const props = def.nodes?.find((n) => n.data?.tool === "input-props")?.data?.params?.props;
+    if (props) for (const p of props) d[p.id] = p.value;
+    for (const p of def.params ?? []) { const k = p.id ?? p.name; if (k) d[k] = p.value ?? p.default; }
+  } catch { /* unparseable → no defaults */ }
+  if (defaultsCache.size > 500) defaultsCache.clear();
+  defaultsCache.set(defText, d);
+  return d;
+};
+const numP = (v: unknown): number | undefined => { const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN; return Number.isFinite(n) ? n : undefined; };
+/** The bounding box a Basic object stands for, from its size params: plan rectangle (anchor-relative metres,
+ *  before rotation), vertical span, rotation, and — for a space host — the host outline instead. */
+function basicBox(defText: string, overrides: Record<string, unknown> | undefined, host?: Point[]) {
+  const P = { ...defDefaults(defText), ...(overrides ?? {}) };
+  const g = (k: string) => numP(P[k]);
+  if (host && host.length >= 3) return { outline: host };
+  let L: number, W: number, rot = g("rotation") ?? 0;
+  if (host && host.length === 2) {                                 // segment-hosted: along the host, own depth across it
+    const [a, b] = host; L = Math.hypot(b.x - a.x, b.y - a.y) || (g("length") ?? 1);
+    if (P.fitMode === "Off" && g("length")) L = g("length")!;
+    W = g("thickness") ?? g("depth") ?? g("projection") ?? 0.05;
+    rot = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    return { cx: mx, cy: my, L, W, rot, ...zSpan(P, g) };
+  }
+  if (g("length") !== undefined) { L = g("length")!; W = g("width") ?? g("depth") ?? L; }
+  else if (g("width") !== undefined) { L = g("width")!; W = g("depth") ?? g("width")!; }
+  else { const s = g("size") ?? g("diameter") ?? (g("radius") ? g("radius")! * 2 : 0.5); L = s; W = s; }
+  return { cx: 0, cy: 0, L: Math.max(0.02, L), W: Math.max(0.02, W), rot, ...zSpan(P, g) };
+}
+function zSpan(_P: Record<string, unknown>, g: (k: string) => number | undefined) {
+  const mount = g("mountHeight") ?? g("ceilingHeight") ?? g("bandSoffit");
+  const h = g("height");
+  if (mount !== undefined && (h === undefined || h > mount)) return { z0: Math.max(0, mount - 0.15), z1: mount };
+  const base = g("base") ?? g("sillHeight") ?? 0;
+  return { z0: base, z1: base + (h ?? 0.8) };
+}
+function basicGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[]): ParametricGeometry {
+  const b = basicBox(defText, overrides, host);
+  if ("outline" in b) {
+    const ring = b.outline!.map((p) => ({ x: anchor.x + p.x * ppm, y: anchor.y + p.y * ppm }));
+    return { fill: [], lines: [[...ring, ring[0]]], color: "#64748b", refLines: [] };
+  }
+  const xf = placer(anchor, ppm, 0), th = (b.rot * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th);
+  const ring = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map(([u, v]) => {
+    const x = (u * b.L) / 2, y = (v * b.W) / 2;
+    return xf(b.cx + x * c - y * s, b.cy + x * s + y * c);
+  });
+  return { fill: [ring], lines: [ring], color: "#94a3b8", refLines: [] };
+}
+function basicPrisms(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[]): FlowMeshPrism[] {
+  const b = basicBox(defText, overrides, host);
+  if ("outline" in b) return [];                                  // a space object in Basic is its outline only
+  const [ring] = basicGeometry(defText, anchor, ppm, overrides, host).fill;
+  const foot = ring.slice(0, 4);
+  return [{ bottom: foot, top: foot, yBottom: b.z0!, yTop: Math.max(b.z0! + 0.01, b.z1!), color: "#94a3b8" }];
+}
+
 /** Does this object produce REAL geometry, as opposed to only a `meta.symbol` placeholder?
  *
  *  Two providers now answer yes: the rules DSL (`geometry`) and a six-node spine flow (`spine`). Every
@@ -1094,7 +1171,36 @@ export const canvasMetricLines = (
 /** Parse + evaluate a parametric definition into canvas polylines anchored at `anchor` (the top-down PLAN
  *  projection). Closed shapes fill + outline; open shapes only stroke. Empty on parse error.
  *  `childParams` = per-instance overrides for nested `ref` components (keyed by instance path). */
+/** Memo for evalParametricGeometry. The editor re-renders the whole 2D canvas on every zoom tick, hover and
+ *  edit, and each render re-evaluated EVERY attached object; the result is a pure function of its inputs, so
+ *  identical calls now return the cached geometry. Keyed resolver → defText → args: the resolver is recreated
+ *  whenever the object library changes (dropping stale child definitions with it), and a defText string that
+ *  is the same instance each call (see the editor's objText) hashes once. Callers must not mutate the result. */
+const NO_RESOLVER = {};
+const geomCache = new WeakMap<object, Map<string, Map<string, ParametricGeometry>>>();
+let geomCacheSize = 0;
+const GEOM_CACHE_MAX = 20000;
+
 export function evalParametricGeometry(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): ParametricGeometry {
+  const rk: object = resolve ?? NO_RESOLVER;
+  let byDef = geomCache.get(rk);
+  if (!byDef) { byDef = new Map(); geomCache.set(rk, byDef); }
+  let byArgs = byDef.get(defText);
+  if (!byArgs) { byArgs = new Map(); byDef.set(defText, byArgs); }
+  const argKey = JSON.stringify([anchor.x, anchor.y, ppm, overrides ?? null, host ?? null, childParams ?? null]);
+  const hit = byArgs.get(argKey);
+  if (hit) return hit;
+  if (geomCacheSize >= GEOM_CACHE_MAX) { byDef.clear(); byDef.set(defText, byArgs = new Map()); geomCacheSize = 0; }
+  const g = evalParametricGeometryUncached(defText, anchor, ppm, overrides, host, resolve, childParams);
+  byArgs.set(argKey, g);
+  geomCacheSize++;
+  return g;
+}
+
+function evalParametricGeometryUncached(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): ParametricGeometry {
+  const mode = renderModeOf(overrides);
+  if (mode === "Nothing") return { fill: [], lines: [], color: "#0f766e", refLines: [] };
+  if (mode === "Basic") return basicGeometry(defText, anchor, ppm, overrides, host);
   // A SPINE object produces its plan by running its own Math Engine instead of these rules. Branching here
   // rather than at the call sites is deliberate: all 20-odd consumers of an attached object — the canvas
   // layers, hit-testing, the wall carve, exports — keep working without knowing which kind of definition they
@@ -1138,6 +1244,7 @@ export function evalParametricGeometry(defText: string, anchor: Point, ppm: numb
  *  optimise footprints, each on a "Site · Inset / Split / Optimise" layer) instead of only the final result.
  *  Objects without a pipeline (rule/case objects) return []. */
 export function evalParametricPipelineSteps(defText: string, anchor: Point, ppm: number, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver, childParams?: ChildParams): { op: string; polygons: Point[][] }[] {
+  if (renderModeOf(overrides) !== "Full") return [];
   const steps: PipelineStep[] = [];
   const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams }, steps);
   if (!built) return [];
@@ -1155,6 +1262,9 @@ export function evalParametricPrisms(defText: string, anchor: Point, ppm: number
   // A SPINE object's solids arrive as face lists; the prismatic ones (everything `mprism` builds, which is
   // every architectural member) convert exactly, and a rounded or booleaned solid is skipped rather than
   // approximated — see spinePrisms.
+  const mode = renderModeOf(overrides);
+  if (mode === "Nothing") return [];
+  if (mode === "Basic") return basicPrisms(defText, anchor, ppm, overrides, host);
   const spineP = resolveSpineObject(defText, anchor, ppm, overrides, host);
   if (spineP) return spinePrisms(spineP.meshes, anchor, ppm);
   const built = buildParametricShapes(defText, overrides, host, { resolve, depth: 0, seen: new Set(), childParams });
@@ -1420,9 +1530,10 @@ export const paramOutputEntries = (out: ParamOutputs | undefined): ParamOutputEn
 export function evalParametricOutputs(defText: string, overrides?: Record<string, unknown>, host?: Point[], resolve?: ObjectResolver): ParamOutputs {
   // Metrics are frame-independent, so the anchor / scale passed here are immaterial — `host` is already in
   // anchor-relative metres and the scalars the Output slots carry are metres, degrees and areas.
+  const empty: ParamOutputs = { ok: false, declared: [], derived: [] };
+  if (renderModeOf(overrides) !== "Full") return empty;          // metrics need the full evaluation
   const spineO = resolveSpineObject(defText, { x: 0, y: 0 }, 1, overrides, host);
   if (spineO) return spineO.outputs;
-  const empty: ParamOutputs = { ok: false, declared: [], derived: [] };
   let parsed: unknown;
   try { parsed = JSON.parse(defText); } catch { return empty; }
   const def = asObj(parsed);

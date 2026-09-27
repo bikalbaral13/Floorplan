@@ -288,8 +288,25 @@ type BoolNode3D = { op: string; a: BoolOperand3D; b: BoolOperand3D };
 /** A render-root Boolean group: id + tree + optional Display 3D style. */
 type BoolMass3D = { id: string; op: string; a: BoolOperand3D; b: BoolOperand3D; display?: Display3DStyle };
 
+/** Another storey to draw beside the active one: its own model, raised to its elevation. */
+export interface Level3D {
+  id: string;
+  elevationM: number;
+  model: FloorPlanModel;
+  rooms?: Room[];
+  floorHeightM?: number;
+  /** This level's editor-built object meshes (hosted Wall bands, doors, windows, floors). */
+  meshPreview?: FlowMesh[];
+}
+
 interface Props {
   model: FloorPlanModel;
+  /** Other levels of a multi-storey plan, stacked at their elevations (the active one is `model`). */
+  levels?: Level3D[];
+  /** Elevation of the active level (`model`), metres. */
+  activeElevationM?: number;
+  /** Render only the model content, no Canvas — used for the extra levels inside one scene. */
+  contentOnly?: boolean;
   pixelsPerMeter: number;
   placementMode?: "polygon" | "2dSymbol" | "rendered";
   /** Imperative bridge — when set, exposes captureAll() to render the scene from
@@ -856,7 +873,7 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode = "polygon", rooms, objectsOnly = false, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, levels, activeElevationM, contentOnly = false, pixelsPerMeter, placementMode = "polygon", rooms, objectsOnly = false, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
@@ -1136,51 +1153,10 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
   const bcX = cx / ppm;
   const bcY = -cy / ppm;
 
-  return (
-    <Canvas
-      // Z-UP scene (see the rotation group below): 3/4 view from the +X / −Y side, above. `up:[0,0,1]` is set
-      // in the CAMERA PROP (applied at camera creation, BEFORE OrbitControls initialises — onCreated alone
-      // fires too late, leaving the orbit pole on Y). The ZUpController re-asserts it after mount. So the XY
-      // plane reads as the floor and height rises vertically. Framed on the building centre (bcX, bcY).
-      camera={{ position: [bcX + camDist, bcY - camDist, camDist * 0.8], up: [0, 0, 1], fov: 45, near: 0.1, far: 1000 }}
-      style={{ width: "100%", height: "100%", background: "#eef2f7" }}
-      gl={{ preserveDrawingBuffer: true }}
-      onCreated={({ camera }) => camera.up.set(0, 0, 1)}
-      onPointerMissed={() => onSelectWall?.(null, false)}
-    >
-      {snapshotApiRef && (
-        <SnapshotBridge
-          ref={snapshotApiRef}
-          widthM={widthM}
-          depthM={depthM}
-          floorHeightM={FLOOR_H}
-          centerX={bcX}
-          centerY={bcY}
-        />
-      )}
-      <ambientLight intensity={1.1} />
-      <directionalLight position={[20, 30, 15]} intensity={0.5} />
-      <directionalLight position={[-15, 20, -10]} intensity={0.35} />
-      <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[bcX, bcY, 1]} />
-      <ZUpController />
-
-      {/* Origin axis indicator at WORLD (0,0,0) — which is now the 2D origin (the wall junction), since
-          toScene no longer recentres. X (red, east/right) / Y (green, south) / Z (blue, UP), matching the
-          2D canvas. Kept in WORLD space (OUTSIDE the rotation group below) so it reads the true Z-up frame. */}
-      <SceneAxes length={5} />
-
-      {/* ── Z-UP CONVENTION ─────────────────────────────────────────────────────────────────────────
-          Rotate ALL model content +90° about X so the 2D floor plane (plan X, Y) becomes the 3D XY
-          ground plane and building height rises along +Z — keeping the 2D and 3D canvases axis-synced
-          from the origin. Geometry is still authored Y-up internally; this ONE group flips the whole
-          scene, so nothing below had to change. Picking (onClick raycasts) and drei Html labels project
-          through the rotation correctly. The SnapshotBridge captures use the matching Z-up view frame.
-
-          NAMED because the mesh export walks this group rather than the whole scene: everything the
-          user drew is inside it, and the scene furniture that must never reach a file — the origin
-          axis arrows, lights, controls — sits outside. Structural exclusion beats a deny-list, which
-          would silently miss the next helper someone adds. */}
-      <group name={MODEL_CONTENT_GROUP} rotation={[Math.PI / 2, 0, 0]}>
+  // Everything the user drew for THIS model. Lifted into a value so the same component can render it for
+  // another level too (`contentOnly`), inside the one Canvas — see the level stack below.
+  const modelContent = (
+    <>
 
       {/* Georeferenced map underlay as a ground plane (Approach A) — the building/massing sits on the map. */}
       {mapUnderlay && mapGroundGeom && (
@@ -3150,6 +3126,74 @@ export default function FloorPlan3DCanvas({ model, pixelsPerMeter, placementMode
         );
       })}
 
+    </>
+  );
+  if (contentOnly) return modelContent;
+
+  return (
+    <Canvas
+      // Z-UP scene (see the rotation group below): 3/4 view from the +X / −Y side, above. `up:[0,0,1]` is set
+      // in the CAMERA PROP (applied at camera creation, BEFORE OrbitControls initialises — onCreated alone
+      // fires too late, leaving the orbit pole on Y). The ZUpController re-asserts it after mount. So the XY
+      // plane reads as the floor and height rises vertically. Framed on the building centre (bcX, bcY).
+      camera={{ position: [bcX + camDist, bcY - camDist, camDist * 0.8], up: [0, 0, 1], fov: 45, near: 0.1, far: 1000 }}
+      style={{ width: "100%", height: "100%", background: "#eef2f7" }}
+      gl={{ preserveDrawingBuffer: true }}
+      onCreated={({ camera }) => camera.up.set(0, 0, 1)}
+      onPointerMissed={() => onSelectWall?.(null, false)}
+    >
+      {snapshotApiRef && (
+        <SnapshotBridge
+          ref={snapshotApiRef}
+          widthM={widthM}
+          depthM={depthM}
+          floorHeightM={FLOOR_H}
+          centerX={bcX}
+          centerY={bcY}
+        />
+      )}
+      <ambientLight intensity={1.1} />
+      <directionalLight position={[20, 30, 15]} intensity={0.5} />
+      <directionalLight position={[-15, 20, -10]} intensity={0.35} />
+      <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[bcX, bcY, 1]} />
+      <ZUpController />
+
+      {/* Origin axis indicator at WORLD (0,0,0) — which is now the 2D origin (the wall junction), since
+          toScene no longer recentres. X (red, east/right) / Y (green, south) / Z (blue, UP), matching the
+          2D canvas. Kept in WORLD space (OUTSIDE the rotation group below) so it reads the true Z-up frame. */}
+      <SceneAxes length={5} />
+
+      {/* ── Z-UP CONVENTION ─────────────────────────────────────────────────────────────────────────
+          Rotate ALL model content +90° about X so the 2D floor plane (plan X, Y) becomes the 3D XY
+          ground plane and building height rises along +Z — keeping the 2D and 3D canvases axis-synced
+          from the origin. Geometry is still authored Y-up internally; this ONE group flips the whole
+          scene, so nothing below had to change. Picking (onClick raycasts) and drei Html labels project
+          through the rotation correctly. The SnapshotBridge captures use the matching Z-up view frame.
+
+          NAMED because the mesh export walks this group rather than the whole scene: everything the
+          user drew is inside it, and the scene furniture that must never reach a file — the origin
+          axis arrows, lights, controls — sits outside. Structural exclusion beats a deny-list, which
+          would silently miss the next helper someone adds. */}
+      <group name={MODEL_CONTENT_GROUP} rotation={[Math.PI / 2, 0, 0]}>
+        {/* The ACTIVE level at its own elevation, then every other level stacked at theirs — one
+            assembled building from per-floor sheets (see ../levels.ts). Content is authored Y-up inside
+            this rotation group, so a storey is simply a +Y offset. */}
+        <group name="level-active" position={[0, activeElevationM ?? 0, 0]}>{modelContent}</group>
+        {(levels ?? []).map((lv) => (
+          <group key={`level-${lv.id}`} name={`level-${lv.id}`} position={[0, lv.elevationM, 0]}>
+            <FloorPlan3DCanvas
+              contentOnly
+              model={lv.model}
+              rooms={lv.rooms}
+              pixelsPerMeter={pixelsPerMeter}
+              placementMode={placementMode}
+              lowPoly={lowPoly}
+              architectural={architectural}
+              floorHeightM={lv.floorHeightM}
+              meshPreview={lv.meshPreview}
+            />
+          </group>
+        ))}
       </group>
     </Canvas>
   );
