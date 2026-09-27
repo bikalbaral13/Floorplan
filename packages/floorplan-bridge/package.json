@@ -8,6 +8,7 @@
   },
   "files": [
     "floorplan-bridge.mjs",
+    "tools.mjs",
     "README.md"
   ],
   "engines": {

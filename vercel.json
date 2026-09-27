@@ -5,6 +5,14 @@
       "destination": "/api/r2?route=:route*"
     },
     {
+      "source": "/__relay/:route*",
+      "destination": "/api/relay?route=:route*"
+    },
+    {
+      "source": "/mcp",
+      "destination": "/api/relay?route=mcp"
+    },
+    {
       "source": "/meshy-assets/:match*",
       "destination": "https://assets.meshy.ai/:match*"
     },
@@ -12,5 +20,10 @@
       "source": "/(.*)",
       "destination": "/"
     }
-  ]
+  ],
+  "functions": {
+    "api/relay.mjs": {
+      "maxDuration": 60
+    }
+  }
 }

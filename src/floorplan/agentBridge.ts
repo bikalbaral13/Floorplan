@@ -21,9 +21,46 @@ export function registerAgentCommand(name: string, fn: AgentHandler): void {
   handlers.set(name, fn);
 }
 
+/* ── Hosted relay (Connect Claude) ────────────────────────────────────────────────────────────────────
+ * The same command loop, pointed at this app's own `/__relay` routes (server/relayCore.mjs) instead of a
+ * local bridge. The session lives in sessionStorage so a reload keeps the connection and a new tab does not. */
+export interface RelaySession { sessionId: string; tabToken: string; agentToken?: string; command?: string; mcpUrl?: string; expiresAt: number }
+export type RelayState = "off" | "connecting" | "connected" | "idle" | "offline" | "expired";
+const RELAY_KEY = "bp.relaySession";
+export function getRelaySession(): RelaySession | null {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(RELAY_KEY) || "null") as RelaySession | null;
+    return s && s.tabToken && s.expiresAt > Date.now() ? s : null;
+  } catch { return null; }
+}
+export function setRelaySession(s: RelaySession | null): void {
+  try { if (s) sessionStorage.setItem(RELAY_KEY, JSON.stringify(s)); else sessionStorage.removeItem(RELAY_KEY); } catch { /* storage blocked */ }
+  window.dispatchEvent(new CustomEvent("bp-relay-change", { detail: s }));
+}
+const emitRelayState = (state: RelayState, extra: Record<string, unknown> = {}) =>
+  window.dispatchEvent(new CustomEvent("bp-relay-state", { detail: { state, at: Date.now(), ...extra } }));
+
+/** Create a relay session (anonymous) and remember it in this tab. */
+export async function pairRelay(): Promise<RelaySession> {
+  const res = await fetch("/__relay/pair", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.ok) throw new Error(j.error || `could not connect (${res.status})`);
+  const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, expiresAt: j.expiresAt };
+  setRelaySession(s);
+  return s;
+}
+/** End the session: the relay deletes everything it held for it. */
+export async function disconnectRelay(): Promise<void> {
+  const s = getRelaySession();
+  if (s) await fetch("/__relay/session", { method: "DELETE", headers: { authorization: `Bearer ${s.tabToken}` } }).catch(() => {});
+  setRelaySession(null);
+  emitRelayState("off");
+}
+
 /** True when the bridge should run (opt-in, so it's inert in normal use). */
 export function agentBridgeEnabled(): boolean {
   try {
+    if (getRelaySession()) return true;
     if (localStorage.getItem("bp.agentBridge") === "1") return true;
     return new URLSearchParams(window.location.search).has("agent");
   } catch {
@@ -55,6 +92,10 @@ export function startAgentBridge(base = bridgeBase()): () => void {
   if (running) return () => { /* already running */ };
   running = true;
   let stopped = false;
+  const relay = getRelaySession();
+  if (relay) base = "/__relay";
+  const auth: Record<string, string> = relay ? { authorization: `Bearer ${relay.tabToken}` } : {};
+  if (relay) emitRelayState("connecting");
 
   /** Run one command and post its result back. Every handler runs inside an agent-write span so the
    *  revision log can tell the agent's changes from the user's (see agentRevisions.ts). */
@@ -73,10 +114,21 @@ export function startAgentBridge(base = bridgeBase()): () => void {
     } finally {
       endAgentWrite();
     }
+    let body = JSON.stringify({ id: cmd.id, ok, result, error });
+    // Over the relay a function body is capped (~4.5 MB): a bigger result goes straight to the bucket.
+    if (relay && body.length > 4_000_000) {
+      try {
+        const b = await fetch(`${base}/blob`, { method: "POST", headers: { "content-type": "application/json", ...auth }, body: JSON.stringify({ id: cmd.id }) }).then((r) => r.json());
+        await fetch(b.putUrl, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(result) });
+        body = JSON.stringify({ id: cmd.id, ok, blob: true, error });
+      } catch {
+        body = JSON.stringify({ id: cmd.id, ok: false, error: "result too large to send over the relay" });
+      }
+    }
     await fetch(`${base}/result`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: cmd.id, ok, result, error }),
+      headers: { "content-type": "application/json", ...auth },
+      body,
     }).catch(() => { /* result post is best-effort */ });
   };
 
@@ -84,15 +136,21 @@ export function startAgentBridge(base = bridgeBase()): () => void {
     while (!stopped) {
       try {
         const focused = typeof document !== "undefined" && document.hasFocus() ? "1" : "0";
-        const res = await fetch(`${base}/next?client=${CLIENT_ID}&focused=${focused}`, { method: "GET" });
-        const cmd = (await res.json()) as { id?: string; tool?: string; args?: Record<string, unknown> };
+        const res = await fetch(`${base}/next?client=${CLIENT_ID}&focused=${focused}`, { method: "GET", headers: auth });
+        if (relay && res.status === 401) { setRelaySession(null); emitRelayState("expired"); stopped = true; running = false; break; }
+        const cmd = (await res.json()) as { id?: string; tool?: string; args?: Record<string, unknown>; latched?: boolean };
+        if (relay) emitRelayState(cmd.latched === false ? "idle" : "connected");
         if (cmd && cmd.id && cmd.tool) {
           const job = { id: cmd.id, tool: cmd.tool, args: cmd.args };
           if (DETACHED_TOOLS.has(cmd.tool)) void run(job); // keep polling while it waits on the user
           else await run(job);
+        } else if (relay) {
+          // The relay answers at once (a function cannot hold a long-poll cheaply): poll about once a second.
+          await new Promise((r) => setTimeout(r, 1000));
         }
       } catch {
         // Server not reachable (not started yet / restarted) — back off, then retry.
+        if (relay) emitRelayState("offline");
         await new Promise((r) => setTimeout(r, 1500));
       }
     }

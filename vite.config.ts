@@ -6,6 +6,8 @@ import { componentTagger } from "lovable-tagger";
 import { r2ConfigFrom } from "./tools/r2.mjs";
 // @ts-expect-error — plain ESM, no type declarations; shared with the Vercel function api/r2.mjs.
 import { handleR2 } from "./server/r2Bridge.mjs";
+// @ts-expect-error — plain ESM, no type declarations; shared with the Vercel function api/relay.mjs.
+import { handleRelay, relayConfig } from "./server/relayCore.mjs";
 
 // ── Cloudflare R2 bridge (dev server) ─────────────────────────────────────────────────────────────
 // `/__r2/*` — list / tree / get / save / upload / delete, signed with keys that stay in Node. The logic
@@ -19,6 +21,22 @@ const r2Bridge = (cfg: R2Config): Plugin => ({
     server.middlewares.use("/__r2", (req, res) => {
       const url = new URL(req.url ?? "/", "http://local");
       void handleR2(req, res, cfg, url.pathname, url, { allowEnvConfig: true });
+    });
+  },
+});
+
+// ── Hosted MCP relay (dev server) — `/mcp` + `/__relay/*`, the same code as api/relay.mjs. Uses RELAY_R2_*
+// from .env, falling back to the R2_* keys (it only ever writes under relay/). ──
+const relayDev = (env: Record<string, string>): Plugin => ({
+  name: "mcp-relay",
+  configureServer(server) {
+    const cfg = relayConfig(env);
+    server.middlewares.use("/__relay", (req, res) => {
+      const url = new URL(req.url ?? "/", "http://local");
+      void handleRelay(req, res, url.pathname, url, cfg);
+    });
+    server.middlewares.use("/mcp", (req, res) => {
+      void handleRelay(req, res, "/mcp", new URL(req.url ?? "/", "http://local"), cfg);
     });
   },
 });
@@ -61,7 +79,7 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     react(),
-    r2Bridge(r2),
+    r2Bridge(r2), relayDev(env),
     mode === "development" && componentTagger(),
   ].filter(Boolean),
   resolve: {

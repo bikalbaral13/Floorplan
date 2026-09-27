@@ -215,7 +215,8 @@ import { runFlowAgent, FLOW_AGENT_SYSTEM_PROMPT, buildFlowToolCatalog, validateF
 import { grantItems, type AgentDefinition } from "./ai/agentDefs";
 import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
-import { registerAgentCommand, startAgentBridge, agentBridgeEnabled } from "./agentBridge";
+import { registerAgentCommand, startAgentBridge, agentBridgeEnabled, getRelaySession } from "./agentBridge";
+import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
 import { recordRevision, currentRev, getChangesSince, userEditsSince, asUserInteraction } from "./agentRevisions";
 import { showCheckpoint, resolveOpenCheckpoint, isCheckpointOpen } from "./checkpointHud";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
@@ -8140,6 +8141,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   })();
   /** Always the latest export builder — the bridge effect must not hold a stale one (see export_plan). */
   const exportJsonRef = useRef<() => string>(() => "{}");
+  // Connect Claude (hosted relay) can switch the bridge on mid-session, so the bridge effects re-run on it.
+  const [relayOn, setRelayOn] = useState(() => !!getRelaySession());
+  useEffect(() => {
+    const on = () => setRelayOn(!!getRelaySession());
+    window.addEventListener("bp-relay-change", on);
+    return () => window.removeEventListener("bp-relay-change", on);
+  }, []);
   useEffect(() => {
     if (!agentBridgeEnabled()) return;
     registerAgentCommand("get_state", () => {
@@ -8352,14 +8360,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const stop = startAgentBridge();
     return () => stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [relayOn]);
 
   /** Fingerprint every committed plan state into the revision log, so `get_changes_since` / `checkpoint`
    *  can report what changed and attribute it to the agent or the user. Bridge-only. */
   useEffect(() => {
     if (!agentBridgeEnabled()) return;
     recordRevision(history.state, bridgePpmRef.current);
-  }, [history.state]);
+  }, [history.state, relayOn]);
 
   /** Attach a library object to a segment (seeded with the object's default param values), cutting an
    *  opening in the host wall: it's split into pre · opening · post, the opening piece carries the
@@ -29515,6 +29523,7 @@ User request: ${aiPrompt.trim()}`;
           {settingsPopover}
           {layersPopover}
           {viewModePopover}
+          <ConnectClaudeButton />
           {defaultSettingsPopover}
         </div>
         <input ref={jsonInputRef} type="file" accept=".json" onChange={importJsonFile} className="hidden" />
@@ -29899,6 +29908,7 @@ User request: ${aiPrompt.trim()}`;
                     {settingsPopover}
                     {layersPopover}
                     {viewModePopover}
+                    <ConnectClaudeButton />
                   </>
                 )}
                 defaultSettingsPopover={defaultSettingsPopover}

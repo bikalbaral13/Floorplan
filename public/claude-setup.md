@@ -16,6 +16,27 @@ Work through the steps in order. **Ask the user whenever you need an input or a 
 below says which ones), confirm before installing anything, and explain each step in plain words.
 Keep going until Step 6 passes — do not stop half-way with a list of things for the user to do.
 
+### The quick way: Connect Claude (nothing to install)
+
+The editor has a **Connect Claude** button (plug icon, top right). It pairs the open tab with a hosted relay
+on this same site, so there is no local server and no Node.js to install.
+
+1. Ask the user to open `https://floorplan-indol.vercel.app/floorplan-editor`, click **Connect Claude**, then
+   **Connect**, and paste you the command it shows. It looks like:
+   `claude mcp add --transport http floorplan https://floorplan-indol.vercel.app/mcp --header "Authorization: Bearer fpa_…"`
+2. Ask permission, then run it with `--scope user` added so it works from any folder. If a `floorplan`
+   server already exists, ask whether to replace it (`claude mcp remove floorplan --scope user`).
+3. Tell the user to **restart Claude Code** so it loads the new server, keep the editor tab **visible**, and
+   ask for a drawing. Check with `get_state`.
+
+Over this link a tool that takes longer than about 50 seconds (a `checkpoint` waiting for the user, a big
+`apply_model`) returns `{ "pending": true, "ticket": "…" }`. Call **`await_result`** with that ticket, again
+until it returns the real result. The token lasts 12 hours; after that (or after **Disconnect**) the user
+connects again and you re-run the new command. No sign-up is involved.
+
+Use the steps below only when the user wants the **local** bridge instead (offline work, or a browser that
+cannot reach the site).
+
 ### Step 1 — Check the prerequisites
 
 1. Run `node --version`. It must be **18 or newer**.

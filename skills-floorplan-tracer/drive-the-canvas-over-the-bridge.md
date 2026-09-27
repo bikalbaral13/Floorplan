@@ -9,6 +9,18 @@ requires: [scope-the-trace]
 
 The bridge is how geometry reaches the live editor. Everything below was paid for once already; none of it announces itself, because every one of these calls **returns success** while doing something other than what was asked.
 
+## Over the hosted link (Connect Claude): pending results and `await_result`
+
+When the user connected with the editor's **Connect Claude** button, your `floorplan` server is the hosted
+relay (`…/mcp`), not the local bridge. Same tools, one difference: a call the editor has not answered within
+about 50 seconds returns `{ "pending": true, "ticket": "c_…", "tool": "…" }` instead of blocking. That is
+normal for a `checkpoint` (the user is still reading the card) and for a big `apply_model`. Call
+**`await_result`** with the ticket, and keep calling it until it returns the real result; do not re-issue
+the original call, or it would run twice. Each call takes about 2–3 s end to end, so prefer whole-model
+builds (`apply_model`) to hundreds of small draw calls. `EDITOR_NOT_CONNECTED` means the tab is closed or
+hidden: ask the user to bring it back. `TAB_CHANGED` means the tab reloaded mid-call: read
+`get_changes_since` before retrying a drawing call.
+
 ## When the MCP connection is down, use the HTTP channel
 
 `floorplan-bridge` often starts a session as `failed / Connection closed`, usually a **port collision** — another chat's bridge already holds 41414. It is not reconnectable from your side: it is a `project` server, so only the user can re-dial it from `/mcp`.
