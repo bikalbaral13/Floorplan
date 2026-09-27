@@ -8,6 +8,8 @@ import { r2ConfigFrom } from "./tools/r2.mjs";
 import { handleR2 } from "./server/r2Bridge.mjs";
 // @ts-expect-error — plain ESM, no type declarations; shared with the Vercel function api/relay.mjs.
 import { handleRelay, relayConfig } from "./server/relayCore.mjs";
+// @ts-expect-error — plain ESM, no type declarations; shared with the Vercel function api/mcp.mjs.
+import { handleLibraryMcp, libraryMcpConfig } from "./server/libraryMcp.mjs";
 
 // ── Cloudflare R2 bridge (dev server) ─────────────────────────────────────────────────────────────
 // `/__r2/*` — list / tree / get / save / upload / delete, signed with keys that stay in Node. The logic
@@ -38,6 +40,9 @@ const relayDev = (env: Record<string, string>): Plugin => ({
     server.middlewares.use("/mcp", (req, res) => {
       void handleRelay(req, res, "/mcp", new URL(req.url ?? "/", "http://local"), cfg);
     });
+    // Headless library MCP — the same code as api/mcp.mjs.
+    const lib = libraryMcpConfig(env);
+    server.middlewares.use("/api/mcp", (req, res) => { void handleLibraryMcp(req, res, lib); });
   },
 });
 
