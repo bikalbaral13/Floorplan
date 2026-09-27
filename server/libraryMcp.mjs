@@ -58,11 +58,13 @@ const readBody = (req, limit = WRITE_LIMIT + 200_000) => new Promise((resolve, r
 const text = (v) => ({ content: [{ type: "text", text: typeof v === "string" ? v : JSON.stringify(v, null, 1) }] });
 const errText = (msg) => ({ content: [{ type: "text", text: `Error: ${msg}` }], isError: true });
 
-/** The caller's name, or null. */
+/** The caller's name, or null. The token comes from `Authorization: Bearer …` (Claude Code) or `?token=…` —
+ *  claude.ai's custom-connector form takes only a URL, with no field for headers. */
 function who(cfg, req) {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? "");
-  if (!m) return null;
-  const h = sha(m[1].trim());
+  const token = m?.[1] ?? new URL(req.url ?? "/", "http://x").searchParams.get("token");
+  if (!token) return null;
+  const h = sha(token.trim());
   return cfg.tokens.find((t) => crypto.timingSafeEqual(t.hash, h))?.name ?? null;
 }
 
@@ -215,7 +217,7 @@ export async function handleLibraryMcp(req, res, cfg = libraryMcpConfig()) {
   if (req.method !== "POST") return send(res, 405, { error: "POST only" }, { Allow: "POST" });
 
   const user = who(cfg, req);
-  if (!user) return send(res, 401, { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Missing or unknown token. Ask the project owner for a floorplan library token and pass it as: --header \"Authorization: Bearer <token>\"" } }, { "WWW-Authenticate": "Bearer" });
+  if (!user) return send(res, 401, { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Missing or unknown token. Ask the project owner for a floorplan library token and pass it as --header \"Authorization: Bearer <token>\", or as ?token=<token> on the URL" } });
 
   let msg;
   try { msg = JSON.parse(await readBody(req)); } catch { return send(res, 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }); }
