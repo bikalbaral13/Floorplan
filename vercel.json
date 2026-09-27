@@ -17,7 +17,7 @@
       "destination": "https://assets.meshy.ai/:match*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!\\.well-known/).*)",
       "destination": "/"
     }
   ],
