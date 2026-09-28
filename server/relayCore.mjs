@@ -106,6 +106,7 @@ async function sessionFor(cfg, req, kind) {
 
 /* ── pairing ────────────────────────────────────────────────────────────────────────────────────────── */
 const pairsByIp = new Map(); // best-effort per-instance limit: 30 pairings / hour / IP
+const LINK_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // no 0/O/1/I: the code is read aloud and retyped
 async function pair(cfg, req, res, url) {
   const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "?").split(",")[0].trim();
   const now = Date.now(), hist = (pairsByIp.get(ip) || []).filter((t) => now - t < 3_600_000);
@@ -117,8 +118,12 @@ async function pair(cfg, req, res, url) {
   const proto = String(req.headers["x-forwarded-proto"] || (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) ? "http" : "https")).split(",")[0];
   const origin = req.headers.origin || `${proto}://${host}`;
   await putJson(cfg, `${P(sid)}/session.json`, { createdAt: now, expiresAt: now + SESSION_TTL_MS, agentHash: sha(agentToken), tabHash: sha(tabToken), latch: null, run: newRunState() });
+  // A short code the library connector (/api/mcp) trades for this session with connect_editor, so a
+  // claude.ai connector — which can carry no Authorization header — can drive this tab too.
+  const linkCode = Array.from(crypto.randomBytes(6), (b) => LINK_ALPHABET[b % LINK_ALPHABET.length]).join("");
+  await putJson(cfg, `relay/links/${linkCode}.json`, { sid, expiresAt: now + SESSION_TTL_MS });
   const mcpUrl = `${origin.replace(/\/+$/, "")}/mcp`;
-  send(res, 200, { ok: true, sessionId: sid, tabToken, agentToken, mcpUrl, expiresAt: now + SESSION_TTL_MS,
+  send(res, 200, { ok: true, sessionId: sid, tabToken, agentToken, mcpUrl, linkCode, expiresAt: now + SESSION_TTL_MS,
     command: `claude mcp add --transport http floorplan ${mcpUrl} --header "Authorization: Bearer ${agentToken}"` });
   void url;
 }
@@ -322,6 +327,54 @@ async function mcp(cfg, req, res) {
   }
   const out = await one(msg);
   return out ? send(res, 200, out) : send(res, 202, "");
+}
+
+/* ── the library connector's way in ─────────────────────────────────────────────────────────────────────
+ * /api/mcp authenticates by MCP_TOKENS name, not by an agent token, so each connector user gets a session of
+ * their own: HEADLESS until connect_editor links it to a tab's session (by the code the tab shows), after
+ * which the same canvas tools drive that tab live. The link outlives nothing: when the tab's session ends
+ * or expires the user falls back to a fresh headless session. */
+export const CONNECTOR_RELAY_TOOLS = RELAY_TOOLS;
+const PERSONAL_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const userKey = (user) => `relay/users/${sha(`user:${user}`).slice(0, 32)}.json`;
+const live = (s) => !!s && Date.now() <= s.expiresAt;
+const tabUpFor = (s) => !!s?.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000;
+
+/** The session id this connector user's canvas calls go to (creating a headless one when needed). */
+export async function connectorSession(cfg, user) {
+  const link = await getJson(cfg, userKey(user));
+  if (link?.sid && live(await getJson(cfg, `${P(link.sid)}/session.json`))) return link.sid;
+  const now = Date.now();
+  const sid = `u${now.toString(36)}${crypto.randomBytes(6).toString("hex")}`;
+  await putJson(cfg, `${P(sid)}/session.json`, { createdAt: now, expiresAt: now + PERSONAL_TTL_MS, agentHash: "", tabHash: "", latch: null, run: newRunState(), personal: true });
+  await putJson(cfg, userKey(user), { sid, linked: false, at: now });
+  return sid;
+}
+
+/** Link this connector user to the tab that shows `code`. Carries over the design picked with use_design. */
+export async function linkConnector(cfg, user, code) {
+  const c = String(code ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const l = c ? await getJson(cfg, `relay/links/${c}.json`) : null;
+  const s = l && Date.now() <= l.expiresAt ? await getJson(cfg, `${P(l.sid)}/session.json`) : null;
+  if (!live(s)) return { ok: false, error: `no editor is waiting with code ${c || "(empty)"} — open ${ALLOWED_ORIGINS[0]}/floorplan-editor, click Connect Claude and read the code it shows` };
+  const prev = await getJson(cfg, userKey(user));
+  const old = prev?.sid && prev.sid !== l.sid ? await getJson(cfg, `${P(prev.sid)}/session.json`) : null;
+  if (old?.design && !s.design) { s.design = old.design; s.designSetBy = "agent"; await putJson(cfg, `${P(l.sid)}/session.json`, s); }
+  await putJson(cfg, userKey(user), { sid: l.sid, linked: true, at: Date.now() });
+  return { ok: true, linked: true, tabConnected: tabUpFor(s), design: s.design ?? null, expiresAt: s.expiresAt };
+}
+
+export async function connectorStatus(cfg, user) {
+  const link = await getJson(cfg, userKey(user));
+  const s = link?.sid ? await getJson(cfg, `${P(link.sid)}/session.json`) : null;
+  const linked = !!link?.linked && live(s);
+  return { linked, tabConnected: linked && tabUpFor(s), design: live(s) ? s.design ?? null : null, stepState: live(s) ? stepGate(s.run ?? newRunState()).stepState() : null,
+    mode: linked && tabUpFor(s) ? "LIVE — canvas tools drive the open editor tab" : "HEADLESS — canvas tools edit the use_design file in the Library; call connect_editor with the code the editor shows to go live" };
+}
+
+/** One canvas / relay tool call for a connector user. */
+export async function callConnectorTool(cfg, user, name, args) {
+  return callTool(cfg, await connectorSession(cfg, user), name, args);
 }
 
 /* ── router ─────────────────────────────────────────────────────────────────────────────────────────── */

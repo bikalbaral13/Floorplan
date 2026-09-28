@@ -20,6 +20,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
+import { relayConfig, CONNECTOR_RELAY_TOOLS, linkConnector, connectorStatus, callConnectorTool } from "./relayCore.mjs";
 
 const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const READ_LIMIT = 1_000_000;           // one read_file chunk
@@ -105,7 +106,7 @@ const LIBRARY_TOOLS = [
     name: "read_file",
     description: "Read one text file (JSON, Markdown, …) from the library. Large files come back in 1 MB chunks: if `truncated` is true, call again with `offset` = the returned `nextOffset`. Binary files (images, .glb, .blend) are not read — you get their public URL instead.",
     inputSchema: { type: "object", properties: {
-      path: { type: "string", description: "e.g. \"Designs/Windsor_park_B1.json\" or \"Skills/Floorplan Tracer/SKILL.md\"" },
+      path: { type: "string", description: "e.g. \"Designs/Windsor_park_B1.json\" or \"Skills/Floorplan Tracer/scope-the-trace.md\"" },
       offset: { type: "number", description: "byte offset to start from (default 0)" },
     }, required: ["path"] },
   },
@@ -120,7 +121,98 @@ const LIBRARY_TOOLS = [
   },
 ];
 
-const TOOLS = [...LIBRARY_TOOLS, ...DESIGN_TOOLS];
+/** Skills and the live-editor link. A prompt is routed to a skill (list_skills → read_skill), and the skill's
+ *  steps run through the canvas tools, which drive a linked editor tab live or fall back to headless. */
+const CONNECTOR_TOOLS = [
+  {
+    name: "list_skills",
+    description: "List every workflow skill in the library — each Skills/<folder> is one skill made of .md playbooks, listed with their descriptions — Floorplan Tracer, Improver, Renderer, Parametric Object Creator, Material Creator, Moodboard Creator … Call this FIRST for any request bigger than a single edit, pick the skill that fits, then read_skill it.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "read_skill",
+    description: "Read a skill: a folder name (e.g. 'Floorplan Tracer') returns all its playbooks, 'Folder/file.md' returns one. Follow its steps with the canvas tools; read other referenced files with read_file.",
+    inputSchema: { type: "object", properties: { name: { type: "string", description: "skill folder, or Folder/file.md" } }, required: ["name"] },
+  },
+  {
+    name: "connect_editor",
+    description: "Link this connector to the user's OPEN editor tab so canvas tools draw on it LIVE. The user opens https://floorplan-indol.vercel.app/floorplan-editor, clicks Connect Claude and reads you the short code shown there. Without a link, canvas tools edit a Library design headlessly (pick it with use_design).",
+    inputSchema: { type: "object", properties: { code: { type: "string", description: "the code the editor's Connect Claude dialog shows, e.g. K7PX2M" } }, required: ["code"] },
+  },
+  {
+    name: "editor_status",
+    description: "Is a live editor tab linked and connected, which Library design headless edits go to, and the step-gate state. Call before a multi-step job to know whether the user is watching live.",
+    inputSchema: { type: "object", properties: {} },
+  },
+];
+
+/** Built on first use: relayCore imports this module back (through relayHeadless), so its tool list may not
+ *  exist yet while this module is evaluating. Our own tools win a name clash (list_objects). */
+let toolList = null;
+const OWN_NAMES = new Set([...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...CONNECTOR_TOOLS].map((t) => t.name));
+function allTools() {
+  if (!toolList) toolList = [...LIBRARY_TOOLS, ...DESIGN_TOOLS, ...CONNECTOR_TOOLS, ...CONNECTOR_RELAY_TOOLS.filter((t) => !OWN_NAMES.has(t.name))];
+  return toolList;
+}
+
+const INSTRUCTIONS = `BuilderPluss floor plan designer: the shared R2 library (Designs/, Objects/, Materials/, Moodboards/, Skills/) plus the full editor canvas toolset.
+
+HOW TO HANDLE A REQUEST
+1. Anything beyond a single small edit: call list_skills, pick the skill whose description fits the request, read_skill it, and follow it step by step. Read files it references with read_file. If no skill fits, work directly with the canvas tools.
+2. Call editor_status. If no editor is linked, ask the user once whether they want to watch live: they open https://floorplan-indol.vercel.app/floorplan-editor, click Connect Claude, and tell you the code — then call connect_editor. If they don't, work headless: use_design picks (or creates) Designs/<name>.json and the canvas tools edit that file.
+3. Draw with the canvas tools (import_objects first, then draw_segment / place_opening / place_object / attach_* / flow_*; coordinates in METRES), or batch edits with edit_design. Check your work with snapshot_canvas.
+4. Multi-step skills: begin_step → work → checkpoint for each step; the user answers in the editor. If a call returns { pending: true, ticket }, call await_result with the ticket until it finishes.
+5. Steps a skill runs on the user's own PC (Blender renders, Python/DXF, .skp export) cannot run here: finish everything else, save the design, and tell the user the exact local command to run.
+Flows, underlays, selection and checkpoints need a linked, open tab.`;
+
+/** A skill is a folder under Skills/; each .md in it is one playbook with a `description:` in its front matter. */
+const describe = (t) => {
+  const fm = /^---\s*\r?\n([\s\S]*?)\r?\n---/.exec(t)?.[1] ?? "";
+  const d = /^description:\s*(.+)$/m.exec(fm)?.[1] ?? t.replace(/^---[\s\S]*?---/, "").split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? "";
+  return d.trim().replace(/^["'>|]\s*|["']$/g, "").slice(0, 300);
+};
+
+async function listSkills(cfg) {
+  const all = await listObjectsDetailed(cfg, `${keyFor(cfg, "Skills", { dir: true })}/`);
+  const mds = all.filter((o) => /\.md$/i.test(o.key));
+  const out = new Array(mds.length);
+  for (let i = 0; i < mds.length; i += 24) {                           // a couple of dozen reads at a time
+    await Promise.all(mds.slice(i, i + 24).map(async (o, j) => {
+      let description = "";
+      try { description = describe((await getObjectText(cfg, o.key, 6_000)).text); } catch { /* list it anyway */ }
+      out[i + j] = { path: relOf(cfg, o.key), description };
+    }));
+  }
+  const skills = {};
+  for (const f of out) {
+    const [, folder, file] = /^Skills\/(.+)\/([^/]+)$/.exec(f.path) ?? [];
+    if (folder) (skills[folder] ??= []).push({ file, description: f.description });
+  }
+  return { count: Object.keys(skills).length, note: "Each folder is a skill; read_skill a folder for all its playbooks, or \"Folder/file.md\" for one.", skills };
+}
+
+async function readSkill(cfg, { name }) {
+  const rel = String(name ?? "").trim().replace(/^Skills\//i, "");
+  if (/\.md$/i.test(rel)) {
+    const r = await getObjectText(cfg, keyFor(cfg, `Skills/${rel}`), READ_LIMIT).catch(() => null);
+    if (!r) throw new Error(`no skill file "${rel}" — call list_skills for the names`);
+    return { content: [{ type: "text", text: r.text }] };
+  }
+  const base = keyFor(cfg, `Skills/${rel}`, { dir: true });
+  const files = await listObjectsDetailed(cfg, `${base}/`);
+  const mds = files.filter((o) => /\.md$/i.test(o.key));
+  if (!mds.length) throw new Error(`no skill "${rel}" — call list_skills for the names`);
+  const parts = []; let size = 0;
+  for (const o of mds) {
+    const t = (await getObjectText(cfg, o.key, READ_LIMIT)).text;
+    if (size + t.length > READ_LIMIT) { parts.push(`\n\n(… ${relOf(cfg, o.key)} and later files left out for size — read them with read_skill "${rel}/<file>.md")`); break; }
+    parts.push(`\n\n===== ${relOf(cfg, o.key)} =====\n${t}`); size += t.length;
+  }
+  return { content: [
+    { type: "text", text: JSON.stringify({ skill: rel, otherFiles: files.filter((o) => !/\.md$/i.test(o.key)).map((o) => relOf(cfg, o.key)).slice(0, 200) }) },
+    { type: "text", text: parts.join("") },
+  ] };
+}
 
 async function listLibrary(cfg, { folder, recursive = true }) {
   const base = keyFor(cfg, folder, { dir: true });
@@ -228,7 +320,13 @@ async function callTool(cfg, name, args, user) {
     return { content: [{ type: "text", text: JSON.stringify(meta) }, { type: "text", text: content }] };
   }
   if (name === "write_file") return text(await writeFile(cfg, args, user));
-  throw new Error(`unknown tool: ${name}`);
+  if (name === "list_skills") return text(await listSkills(cfg));
+  if (name === "read_skill") return readSkill(cfg, args);
+  const rcfg = relayConfig();
+  if (!rcfg) throw new Error("the live editor relay is not configured on this server (RELAY_R2_* keys)");
+  if (name === "connect_editor") return text(await linkConnector(rcfg, user, args.code));
+  if (name === "editor_status") return text(await connectorStatus(rcfg, user));
+  return callConnectorTool(rcfg, user, name, args);
 }
 
 /* ── MCP over HTTP (JSON responses, no SSE) ─────────────────────────────────────────────────────────── */
@@ -255,14 +353,13 @@ export async function handleLibraryMcp(req, res, cfg = libraryMcpConfig()) {
     const fail = (code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
     if (method === "initialize") {
       const v = PROTOCOL_VERSIONS.includes(params?.protocolVersion) ? params.protocolVersion : "2025-03-26";
-      return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-library", version: "0.2.0" },
-        instructions: "The shared BuilderPluss R2 library, with no editor tab needed: list, search, read and save designs (Designs/), parametric objects (Objects/), materials, moodboards and skills (Skills/ — read a skill's SKILL.md before following it). Saved designs open in the deployed editor at https://floorplan-indol.vercel.app/floorplan-editor. Draw designs HEADLESS with create_design / get_design / edit_design / list_objects — walls, doors, windows, furniture and spaces written straight into the design file in metres; the editor evaluates the objects when the design is opened. To watch it draw on a live canvas instead, use the editor's Connect Claude relay." });
+      return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-library", version: "0.3.0" }, instructions: INSTRUCTIONS });
     }
     if (method === "ping") return reply({});
-    if (method === "tools/list") return reply({ tools: TOOLS });
+    if (method === "tools/list") return reply({ tools: allTools() });
     if (method === "tools/call") {
       const name = params?.name, args = params?.arguments ?? {};
-      if (!TOOLS.some((t) => t.name === name)) return fail(-32602, `unknown tool: ${name}`);
+      if (!allTools().some((t) => t.name === name)) return fail(-32602, `unknown tool: ${name}`);
       try { return reply(await callTool(cfg, name, args, user)); } catch (e) { return reply(errText(e?.message || "library error")); }
     }
     return fail(-32601, `method not found: ${method}`);

@@ -59,7 +59,7 @@ export function ConnectClaudeButton() {
             <div className="space-y-3 text-sm">
               <ol className="list-decimal space-y-1 pl-5 text-slate-600">
                 <li>Click Connect to start a session for this tab.</li>
-                <li>Paste the command it shows into a terminal where Claude Code runs.</li>
+                <li>Tell Claude (connector) the code it shows, or paste the command into Claude Code.</li>
                 <li>Ask Claude to work on the plan. Keep this tab visible while it works.</li>
               </ol>
               <Button onClick={connect} disabled={busy} className="gap-2">
@@ -69,9 +69,15 @@ export function ConnectClaudeButton() {
           ) : (
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${light}`} /><span>{label}</span></div>
+              {session.linkCode ? (
+                <div className="space-y-1">
+                  <p className="text-slate-600">Using the Floorplan designer connector in Claude? Tell Claude:</p>
+                  <p className="rounded border border-slate-200 bg-slate-50 p-2 text-center font-mono text-base tracking-widest select-all">connect editor {session.linkCode}</p>
+                </div>
+              ) : null}
               {session.command ? (
                 <div className="space-y-1.5">
-                  <p className="text-slate-600">Run this once in your terminal:</p>
+                  <p className="text-slate-600">{session.linkCode ? "Or, in Claude Code, run this once in your terminal:" : "Run this once in your terminal:"}</p>
                   <pre id="relay-command" className="whitespace-pre-wrap break-all rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] select-all">{session.command}</pre>
                   <Button variant="outline" size="sm" onClick={copy} className="gap-1.5">
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy command"}

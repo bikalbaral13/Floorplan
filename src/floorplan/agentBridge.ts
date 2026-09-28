@@ -24,7 +24,7 @@ export function registerAgentCommand(name: string, fn: AgentHandler): void {
 /* ── Hosted relay (Connect Claude) ────────────────────────────────────────────────────────────────────
  * The same command loop, pointed at this app's own `/__relay` routes (server/relayCore.mjs) instead of a
  * local bridge. The session lives in sessionStorage so a reload keeps the connection and a new tab does not. */
-export interface RelaySession { sessionId: string; tabToken: string; agentToken?: string; command?: string; mcpUrl?: string; expiresAt: number }
+export interface RelaySession { sessionId: string; tabToken: string; agentToken?: string; command?: string; mcpUrl?: string; linkCode?: string; expiresAt: number }
 export type RelayState = "off" | "connecting" | "connected" | "idle" | "offline" | "expired";
 const RELAY_KEY = "bp.relaySession";
 export function getRelaySession(): RelaySession | null {
@@ -45,7 +45,7 @@ export async function pairRelay(): Promise<RelaySession> {
   const res = await fetch("/__relay/pair", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || !j.ok) throw new Error(j.error || `could not connect (${res.status})`);
-  const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, expiresAt: j.expiresAt };
+  const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, linkCode: j.linkCode, expiresAt: j.expiresAt };
   setRelaySession(s);
   return s;
 }
