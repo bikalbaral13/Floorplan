@@ -196,7 +196,7 @@ async function writeFile(cfg, { path: rel, content, overwrite = false }, user) {
 
 /** The design tools see the library through this: library-relative paths, confined by keyFor. */
 const DESIGN_READ_LIMIT = 20_000_000;
-function libraryStore(cfg) {
+export function libraryStore(cfg) {
   return {
     get: async (rel) => (await getObjectText(cfg, keyFor(cfg, rel), DESIGN_READ_LIMIT)).text,
     put: async (rel, body) => {

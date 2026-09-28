@@ -70,6 +70,13 @@ export function agentBridgeEnabled(): boolean {
 
 let running = false;
 
+/** The Library design this tab has open (its live-sync link), reported to the relay with every poll so
+ *  the relay can keep editing that file headlessly if the tab goes away. Set by the editor. */
+let linkedDesignPath: string | null = null;
+export function setBridgeLinkedDesign(path: string | null): void {
+  linkedDesignPath = path;
+}
+
 /** Per-tab identity for the bridge's single-client latch: the server only feeds commands to ONE tab
  *  (preferring the focused one), so a duplicate/stale ?agent=1 tab can never steal half the stream. */
 const CLIENT_ID = Math.random().toString(36).slice(2, 10);
@@ -136,7 +143,8 @@ export function startAgentBridge(base = bridgeBase()): () => void {
     while (!stopped) {
       try {
         const focused = typeof document !== "undefined" && document.hasFocus() ? "1" : "0";
-        const res = await fetch(`${base}/next?client=${CLIENT_ID}&focused=${focused}`, { method: "GET", headers: auth });
+        const design = relay && linkedDesignPath ? `&design=${encodeURIComponent(linkedDesignPath)}` : "";
+        const res = await fetch(`${base}/next?client=${CLIENT_ID}&focused=${focused}${design}`, { method: "GET", headers: auth });
         if (relay && res.status === 401) { setRelaySession(null); emitRelayState("expired"); stopped = true; running = false; break; }
         const cmd = (await res.json()) as { id?: string; tool?: string; args?: Record<string, unknown>; latched?: boolean };
         if (relay) emitRelayState(cmd.latched === false ? "idle" : "connected");

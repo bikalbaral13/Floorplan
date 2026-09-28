@@ -21,6 +21,7 @@
 import crypto from "node:crypto";
 import { putObject, getObjectText, listObjects, deleteObject } from "../tools/r2.mjs";
 import { TOOLS, timeoutFor, newRunState, stepGate } from "../packages/floorplan-bridge/tools.mjs";
+import { RELAY_HEADLESS_TOOLS, HEADLESS_TOOL_NAMES, runHeadless, validDesignPath } from "./relayHeadless.mjs";
 
 const WAIT_MS = Number(process.env.RELAY_WAIT_MS || 50_000);      // one /mcp request waits this long, then tickets
 const POLL_MS = 400;                                              // how often /mcp checks for the result
@@ -37,7 +38,7 @@ const AWAIT_TOOL = {
   description: "Keep waiting for a call that returned { pending: true, ticket }. Relay-only: over the hosted link a call the editor has not answered within ~50 s (a checkpoint waiting on the user, a big apply_model) comes back as a ticket instead of blocking. Call this with that ticket, again and again, until it returns the real result.",
   inputSchema: { type: "object", properties: { ticket: { type: "string", description: "the ticket from a pending result" } }, required: ["ticket"] },
 };
-const RELAY_TOOLS = [...TOOLS, AWAIT_TOOL];
+const RELAY_TOOLS = [...TOOLS, AWAIT_TOOL, ...RELAY_HEADLESS_TOOLS];
 
 /* ── config ─────────────────────────────────────────────────────────────────────────────────────────── */
 const unquote = (v) => String(v ?? "").trim().replace(/^["']|["']$/g, "");
@@ -134,6 +135,10 @@ async function next(cfg, req, res, url) {
   let changed = false;
   if (!s.latch || (s.latch.client !== client && (focused || stale))) { s.latch = { client, seenAt: now }; changed = true; }
   else if (s.latch.client === client && now - s.latch.seenAt > 10_000) { s.latch.seenAt = now; changed = true; }  // refresh at most every 10 s
+  // The Library design this tab has open (its live-sync link) is the one headless fallback edits when
+  // the tab goes away. Only the latched tab speaks for the session.
+  const design = url.searchParams.get("design");
+  if (s.latch.client === client && design && validDesignPath(design) && design !== s.design) { s.design = design; s.designSetBy = "tab"; changed = true; }
   if (changed) await putJson(cfg, `${P(sid)}/session.json`, s);
   if (s.latch.client !== client) return send(res, 200, { idle: true, latched: false });
   const keys = (await listObjects(cfg, `${P(sid)}/calls/`)).sort();
@@ -250,11 +255,18 @@ async function callTool(cfg, sid, name, args) {
     try { const out = g.beginStep(args); await putJson(cfg, `${P(sid)}/session.json`, s); return text(out); }
     catch (e) { return errText(e.message); }
   }
-  try { g.assertWritable(name); } catch (e) { return errText(e.message); }
+  // edit_design / create_design write as surely as draw_segment does, so the step gate covers them too.
+  try { g.assertWritable(name === "edit_design" || name === "create_design" ? "draw_segment" : name); } catch (e) { return errText(e.message); }
 
-  // Is a tab there at all? (a latch refreshed within 30 s)
-  if (!s.latch || Date.now() - s.latch.seenAt > LATCH_STALE_MS + 15_000)
-    return errText("EDITOR_NOT_CONNECTED: open https://floorplan-indol.vercel.app/floorplan-editor, click Connect Claude, and keep that tab visible.");
+  // The explicit design tools always run headless; the canvas tools do only when no tab is connected (a
+  // latch refreshed within ~45 s). A connected-but-slow tab keeps the ticket path, so no call runs twice.
+  const tabUp = !!s.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000;
+  if (HEADLESS_TOOL_NAMES.has(name) || !tabUp) {
+    const before = s.design;
+    const out = await runHeadless(s, name, args);
+    if (s.design !== before) await putJson(cfg, `${P(sid)}/session.json`, s);
+    return out;
+  }
   if ((await listObjects(cfg, `${P(sid)}/calls/`)).length >= MAX_QUEUED) return errText("too many queued calls — wait for the editor to catch up");
 
   const now = Date.now();
@@ -292,8 +304,8 @@ async function mcp(cfg, req, res) {
     const fail = (code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
     if (method === "initialize") {
       const v = PROTOCOL_VERSIONS.includes(params?.protocolVersion) ? params.protocolVersion : "2025-03-26";
-      return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-relay", version: "0.1.0" },
-        instructions: "Drives the user's own tab of the BuilderPluss floor plan editor. If a tool returns { pending: true, ticket }, call await_result with that ticket until it finishes." });
+      return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-relay", version: "0.2.0" },
+        instructions: "Drives the user's own tab of the BuilderPluss floor plan editor. If a tool returns { pending: true, ticket }, call await_result with that ticket until it finishes. With NO tab connected, canvas tools fall back to editing a Library design headlessly (the one the tab last had open, or the one set with use_design); snapshot_canvas then returns a server-rendered preview. Tools that need the live canvas or the user (checkpoint, flows, underlays, selection) still need the tab." });
     }
     if (method === "ping") return reply({});
     if (method === "tools/list") return reply({ tools: RELAY_TOOLS });

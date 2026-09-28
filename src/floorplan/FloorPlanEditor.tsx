@@ -216,7 +216,7 @@ import { runFlowAgent, FLOW_AGENT_SYSTEM_PROMPT, buildFlowToolCatalog, validateF
 import { grantItems, type AgentDefinition } from "./ai/agentDefs";
 import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
-import { registerAgentCommand, startAgentBridge, agentBridgeEnabled, getRelaySession } from "./agentBridge";
+import { registerAgentCommand, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
 import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
 import { recordRevision, currentRev, getChangesSince, userEditsSince, asUserInteraction } from "./agentRevisions";
 import { showCheckpoint, resolveOpenCheckpoint, isCheckpointOpen } from "./checkpointHud";
@@ -27503,6 +27503,8 @@ User request: ${aiPrompt.trim()}`;
   };
   const importPlanTextRef = useRef(importPlanText);
   importPlanTextRef.current = importPlanText;
+
+  useEffect(() => { setBridgeLinkedDesign(linkedDesign); }, [linkedDesign]);
 
   useEffect(() => {
     if (!linkedDesign) return;
