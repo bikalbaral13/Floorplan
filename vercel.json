@@ -24,6 +24,10 @@
   "functions": {
     "api/relay.mjs": {
       "maxDuration": 60
+    },
+    "api/mcp.mjs": {
+      "maxDuration": 60,
+      "includeFiles": "server/fonts/**"
     }
   }
 }

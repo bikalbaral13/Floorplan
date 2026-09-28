@@ -14,6 +14,8 @@
  *
  *  All tool coordinates are METRES; the file stores world pixels (metres × pixelsPerMeter). */
 
+import { renderDesignSvg, svgToPng } from "./designRender.mjs";
+
 const DEFAULT_PPM = 50;
 const DEFAULT_LIBRARY = "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library";
 const WALL_REF = { objectId: "wall-with-math", objectPath: "Objects/Architectural/wall.json" };
@@ -64,6 +66,16 @@ export const DESIGN_TOOLS = [
       expectedRevision: { type: "number", description: "refuse to save if the file's revision has moved on (someone else edited it)" },
       dryRun: { type: "boolean", description: "run the ops and report, but do not save" },
     }, required: ["path", "ops"] },
+  },
+  {
+    name: "render_design",
+    description: "Render a design to a PNG PREVIEW so you can SEE it — call after edit_design to check your work. Draws walls at their thickness, doors with leaf and swing, windows, spaces with label and area, and every placed object as a labelled footprint box (from its width/depth params, turned by rotation), plus overall dimensions and a scale bar. Objects are NOT evaluated, so it shows layout, not appearance. `save: true` also writes it next to the design as <name>.preview.png.",
+    inputSchema: { type: "object", properties: {
+      path: { type: "string" },
+      level: { type: "string", description: "level id or name (multi-storey plans only)" },
+      widthPx: { type: "number", description: "image width in pixels, 400–2400 (default 1200)" },
+      save: { type: "boolean", description: "also save the PNG beside the design in the library (default false)" },
+    }, required: ["path"] },
   },
   {
     name: "list_objects",
@@ -507,8 +519,9 @@ export function summarize(plan, level) {
 }
 
 /* ── tool dispatch ──────────────────────────────────────────────────────────────────────────────────── */
-/** `store` is library-relative: get(rel) → text, put(rel, text), exists(rel), list(prefix) → rel paths.
- *  Returns a plain object; the caller wraps it as MCP content. */
+/** `store` is library-relative: get(rel) → text, put(rel, text), putBinary(rel, buf, mime), exists(rel),
+ *  list(prefix) → rel paths. Returns a plain object the caller wraps as MCP content — or, when it carries
+ *  `__content`, content already (render_design's image). */
 export async function callDesignTool(store, name, args, user = "user") {
   const rel = (p) => {
     const s = String(p ?? "").trim();
@@ -557,6 +570,36 @@ export async function callDesignTool(store, name, args, user = "user") {
     await store.put(p, JSON.stringify(plan, null, 1));
     const c = pickLevel(plan, args.level);
     return { ok: true, path: p, revision: rev + 1, results, counts: { nodes: c.nodes.length, segments: c.segments.length, spaces: c.spaces.length } };
+  }
+  if (name === "render_design") {
+    const p = rel(args.path);
+    const plan = await load(p);
+    const c = pickLevel(plan, args.level);
+    // Object DEFAULTS size the footprints (a bed placed with no params is still 2 m long): resolve each
+    // distinct object once, by path and then by id. One that cannot be found draws at a 0.6 m square.
+    const objects = makeObjectResolver(store);
+    const atts = [...(c.nodes ?? []), ...(c.segments ?? [])].flatMap((e) => e.attachments ?? []);
+    const refs = [...new Set(atts.map((a) => a.objectPath || a.objectId).filter(Boolean))];
+    const byRef = new Map();
+    await Promise.all(refs.map(async (r) => {
+      try { byRef.set(r, (await objects.resolve(r)).defaults); } catch { /* unknown object: default box */ }
+    }));
+    const { svg, widthPx, heightPx, legend, boundsM } = renderDesignSvg(plan, {
+      level: args.level, widthPx: args.widthPx,
+      defaultsFor: (a) => byRef.get(a.objectPath || a.objectId),
+      title: `${p.split("/").pop().replace(/\.json$/, "")} · revision ${plan.settings.revision ?? 0}`,
+    });
+    const png = Buffer.from(await svgToPng(svg));
+    let saved;
+    if (args.save) {
+      saved = p.replace(/\.json$/i, ".preview.png");
+      await store.putBinary(saved, png, "image/png");
+    }
+    return { __content: [
+      { type: "image", data: png.toString("base64"), mimeType: "image/png" },
+      { type: "text", text: JSON.stringify({ path: p, revision: plan.settings.revision ?? 0, widthPx, heightPx, boundsM, drawn: legend, ...(saved ? { saved } : {}),
+        note: "preview: objects are footprint boxes from their params, not evaluated geometry" }) },
+    ] };
   }
   if (name === "list_objects") {
     const objects = makeObjectResolver(store);

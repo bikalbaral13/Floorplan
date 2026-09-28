@@ -203,6 +203,10 @@ function libraryStore(cfg) {
       if (Buffer.byteLength(body, "utf8") > DESIGN_READ_LIMIT) throw new Error("design is too large to save");
       await putObject(cfg, keyFor(cfg, rel), body, WRITE_MIME[".json"]);
     },
+    putBinary: async (rel, buf, mime) => {
+      if (!/\.png$/i.test(rel)) throw new Error("only .png previews can be written as binary");
+      await putObject(cfg, keyFor(cfg, rel), buf, mime);
+    },
     exists: (rel) => exists(cfg, keyFor(cfg, rel)),
     list: async (prefix) => (await listObjectsDetailed(cfg, `${keyFor(cfg, prefix, { dir: true })}/`)).map((o) => relOf(cfg, o.key)),
   };
@@ -211,6 +215,7 @@ function libraryStore(cfg) {
 async function callTool(cfg, name, args, user) {
   if (DESIGN_TOOLS.some((t) => t.name === name)) {
     const r = await callDesignTool(libraryStore(cfg), name, args, user);
+    if (r?.__content) return { content: r.__content };
     if (name === "edit_design" && !args.dryRun) console.log(`[library-mcp] ${user} edited ${r.path} → revision ${r.revision} (${args.ops.length} ops)`);
     return text(r);
   }
