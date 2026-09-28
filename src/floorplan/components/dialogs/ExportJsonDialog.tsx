@@ -21,6 +21,8 @@ export interface ExportJsonDialogProps {
   /** Suggested file name without extension. */
   defaultName: string;
   onClose: () => void;
+  /** Called after a successful Cloud Library save with the Library-relative path it went to. */
+  onSavedToLibrary?: (relPath: string) => void;
 }
 
 /** Where a design goes when you export it.
@@ -36,7 +38,7 @@ export interface ExportJsonDialogProps {
  *  Unavailable destinations are shown disabled with the reason, rather than hidden: "no cloud in a
  *  production build" is a fact worth stating once, and a button that vanishes reads as a bug.
  */
-export function ExportJsonDialog({ open, getPayload, defaultName, onClose }: ExportJsonDialogProps) {
+export function ExportJsonDialog({ open, getPayload, defaultName, onClose, onSavedToLibrary }: ExportJsonDialogProps) {
   const [name, setName] = useState(defaultName);
   const [cloud, setCloud] = useState<CloudLibraryStatus | null>(null);
   const [busy, setBusy] = useState<"" | "cloud">("");
@@ -72,6 +74,7 @@ export function ExportJsonDialog({ open, getPayload, defaultName, onClose }: Exp
     const r = await saveToCloudLibrary(relPath, getPayload());
     setBusy("");
     if (!r.ok) return toast.error(`Could not save to the Cloud Library: ${r.error ?? "unknown error"}`);
+    onSavedToLibrary?.(relPath);
     // The public URL is the point of saving here — it is what another app fetches — so it is shown
     // rather than just the key.
     toast.success(`Saved to the Cloud Library — ${r.key}`, {

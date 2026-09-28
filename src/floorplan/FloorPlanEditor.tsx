@@ -5,6 +5,7 @@ const FloorPlan3DCanvas = lazy(() => import("./three/FloorPlan3DCanvas"));
 import type { SnapshotApi } from "./three/FloorPlan3DCanvas";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { designStamp, designVersion, fetchDesignText, watchDesign, type DesignWatch } from "./designLiveSync";
 import {
   fetchProjectByIdFromApi,
   isProjectsApiConfigured,
@@ -27351,7 +27352,20 @@ User request: ${aiPrompt.trim()}`;
    *  file the user chose and a plan a flow computed — the Canvas Encoder's Import button hands its JSON
    *  straight here. Everything the file route did happens once, in one place, rather than in two that
    *  could drift: both formats, the object library resolved by path and then by id, and the frame. */
-  const importPlanText = async (raw: string): Promise<boolean> => {
+  /** LIVE SYNC (./designLiveSync). The Library design this canvas was opened from or last saved to, so
+   *  edits written to that file by anyone else — the headless design MCP, another tab — show up here.
+   *  `linkedBaselineRef` is the undo-stack depth right after the design loaded: a deeper (or shallower)
+   *  stack means the user has edited since, and a remote change then ASKS instead of replacing their work. */
+  const [linkedDesign, setLinkedDesign] = useState<string | null>(null);
+  const linkedBaselineRef = useRef(0);
+  const designWatchRef = useRef<DesignWatch | null>(null);
+  /** Taken after the load settles: importing can push more than one undo step (level unpacking, object
+   *  resolution), and those are not the user's edits. */
+  const markLinkedClean = () => {
+    window.setTimeout(() => { linkedBaselineRef.current = history.snapshot().past.length; }, 1500);
+  };
+
+  const importPlanText = async (raw: string, libraryRelPath?: string): Promise<boolean> => {
       try {
       const parsed: unknown = JSON.parse(raw);
       // TWO FORMATS, and the file says which by its own shape rather than by a version number: the
@@ -27476,12 +27490,61 @@ User request: ${aiPrompt.trim()}`;
       // against it, and the next export writes it back rather than re-pointing the plan at this
       // session's own bucket. Absent key leaves the session's value alone, same as the two above.
       if (importedLibraryPath) setPlanLibraryPath(importedLibraryPath);
+      // Opened from the Library → keep watching that file. Any other import replaces the canvas with
+      // something that file no longer describes, so the link ends.
+      setLinkedDesign(libraryRelPath ?? null);
+      if (libraryRelPath) markLinkedClean();
         return true;
       } catch (err) {
         console.error("Failed to parse floorplan JSON", err);
         toast.error("Couldn't import the floorplan JSON");
         return false;
       }
+  };
+  const importPlanTextRef = useRef(importPlanText);
+  importPlanTextRef.current = importPlanText;
+
+  useEffect(() => {
+    if (!linkedDesign) return;
+    let alive = true;
+    const name = linkedDesign.replace(/^Designs\//, "");
+    void designVersion(linkedDesign).then((version) => {
+      if (!alive) return;
+      designWatchRef.current = watchDesign(linkedDesign, version, async () => {
+        const text = await fetchDesignText(linkedDesign);
+        if (!text || !alive) return;
+        const { revision, editedBy } = designStamp(text);
+        const by = editedBy ? ` by ${editedBy}` : "";
+        const label = `${name}${revision !== undefined ? ` · revision ${revision}` : ""}`;
+        const apply = async () => {
+          if (await importPlanTextRef.current(text, linkedDesign)) toast.success(`Updated from the Library${by}`, { description: label });
+        };
+        if (history.snapshot().past.length === linkedBaselineRef.current) {
+          await apply();
+          return;
+        }
+        toast(`${name} changed in the Library${by}`, {
+          id: `live-sync-${linkedDesign}`,
+          description: "You have edits here that aren't in that version. Reload takes the Library version — Undo brings yours back.",
+          duration: Infinity,
+          action: { label: "Reload", onClick: () => void apply() },
+          cancel: { label: "Keep mine", onClick: () => {} },
+        });
+      });
+    });
+    return () => {
+      alive = false;
+      designWatchRef.current?.stop();
+      designWatchRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedDesign]);
+
+  /** This tab saved to the Library: link that file, and don't report our own write back as a remote edit. */
+  const onDesignSavedToLibrary = (relPath: string) => {
+    linkedBaselineRef.current = history.snapshot().past.length;
+    if (relPath === linkedDesign) void designVersion(relPath).then((v) => designWatchRef.current?.acknowledge(v));
+    else setLinkedDesign(relPath);
   };
 
   const importJsonFile = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -30142,6 +30205,16 @@ User request: ${aiPrompt.trim()}`;
           ) : null}
           {/* LEVEL TABS — one sheet per storey (see ./levels.ts). 2D edits the active sheet; 3D stacks them all.
               Bottom-right (bottom-left is taken by the Flow button); hidden in Layout (paper-space) mode. */}
+          {linkedDesign && viewMode !== "layout" && (
+            <div
+              className="absolute bottom-12 right-2 z-30 flex items-center gap-1.5 rounded-md border border-emerald-200 bg-white/95 px-2 py-1 text-[11px] text-slate-600 shadow-sm"
+              title={`Live: edits saved to ${linkedDesign} in the Library (by the design MCP, another tab or a script) appear here automatically`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+              <span className="max-w-[16rem] truncate">Live · {linkedDesign.replace(/^Designs\//, "")}</span>
+              <button type="button" className="ml-1 text-slate-400 hover:text-slate-700" aria-label="Stop live sync" title="Stop live sync" onClick={() => setLinkedDesign(null)}>×</button>
+            </div>
+          )}
           {viewMode !== "layout" && (
             <div className="absolute bottom-2 right-2 z-30 flex max-w-[70%] items-center gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm" role="tablist" aria-label="Levels">
               {levelMeta.length === 0 ? (
@@ -42580,6 +42653,7 @@ User request: ${aiPrompt.trim()}`;
         getPayload={buildExportJson}
         defaultName={`floorplan-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}`}
         onClose={() => setExportJsonOpen(false)}
+        onSavedToLibrary={onDesignSavedToLibrary}
       />
 
       {/* Inspect — Files ▸ Inspect Cloud storage. Read-only listing of the R2 bucket, fetched through

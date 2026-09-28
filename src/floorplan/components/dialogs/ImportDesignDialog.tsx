@@ -20,7 +20,8 @@ export interface ImportDesignDialogProps {
   kind?: "design" | "image";
   /** Hand the chosen design's RAW TEXT to the host, which parses and applies it — the same
    *  entry point the file picker uses, so a library design and a dropped file take one path. */
-  onImportText?: (text: string) => Promise<boolean> | boolean;
+  /** `relPath` is the file's Library-relative path, so the host can keep the design linked (live sync). */
+  onImportText?: (text: string, relPath: string) => Promise<boolean> | boolean;
   /** Hand the chosen image to the host as a DATA URL. Fetched and inlined rather than passed as a
    *  remote URL, for the same two reasons the file picker produces one: the underlay's `src` is
    *  SAVED INTO THE PLAN (a bucket URL would rot), and a same-origin image cannot taint the canvas
@@ -136,7 +137,7 @@ export const ImportDesignDialog = ({ open, onOpenChange, kind = "design", onImpo
         });
         onImportImage?.(dataUrl, row.name);
         onOpenChange(false);
-      } else if (await onImportText?.(await res.text())) {
+      } else if (await onImportText?.(await res.text(), `${cfg.folder}/${row.rel}`)) {
         onOpenChange(false);
       }
     } catch (err) {
