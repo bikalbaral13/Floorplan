@@ -19,6 +19,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
+import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
 
 const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const READ_LIMIT = 1_000_000;           // one read_file chunk
@@ -86,7 +87,7 @@ async function exists(cfg, key) {
 }
 
 /* ── tools ──────────────────────────────────────────────────────────────────────────────────────────── */
-const TOOLS = [
+const LIBRARY_TOOLS = [
   {
     name: "list_library",
     description: "List files in the shared R2 library. `folder` is relative to the library root, e.g. \"Designs\", \"Objects\", \"Materials\", \"Moodboards\", \"Skills/Floorplan Tracer\". Omit it to see the top-level folders with file counts. Designs (floor plan JSONs the editor opens) live in Designs/.",
@@ -118,6 +119,8 @@ const TOOLS = [
     }, required: ["path", "content"] },
   },
 ];
+
+const TOOLS = [...LIBRARY_TOOLS, ...DESIGN_TOOLS];
 
 async function listLibrary(cfg, { folder, recursive = true }) {
   const base = keyFor(cfg, folder, { dir: true });
@@ -191,7 +194,26 @@ async function writeFile(cfg, { path: rel, content, overwrite = false }, user) {
   return { ok: true, path: relOf(cfg, key), bytes: Buffer.byteLength(body, "utf8"), replaced: existed, url: publicUrl(cfg, key) };
 }
 
+/** The design tools see the library through this: library-relative paths, confined by keyFor. */
+const DESIGN_READ_LIMIT = 20_000_000;
+function libraryStore(cfg) {
+  return {
+    get: async (rel) => (await getObjectText(cfg, keyFor(cfg, rel), DESIGN_READ_LIMIT)).text,
+    put: async (rel, body) => {
+      if (Buffer.byteLength(body, "utf8") > DESIGN_READ_LIMIT) throw new Error("design is too large to save");
+      await putObject(cfg, keyFor(cfg, rel), body, WRITE_MIME[".json"]);
+    },
+    exists: (rel) => exists(cfg, keyFor(cfg, rel)),
+    list: async (prefix) => (await listObjectsDetailed(cfg, `${keyFor(cfg, prefix, { dir: true })}/`)).map((o) => relOf(cfg, o.key)),
+  };
+}
+
 async function callTool(cfg, name, args, user) {
+  if (DESIGN_TOOLS.some((t) => t.name === name)) {
+    const r = await callDesignTool(libraryStore(cfg), name, args, user);
+    if (name === "edit_design" && !args.dryRun) console.log(`[library-mcp] ${user} edited ${r.path} → revision ${r.revision} (${args.ops.length} ops)`);
+    return text(r);
+  }
   if (name === "list_library") return text(await listLibrary(cfg, args));
   if (name === "search_library") return text(await searchLibrary(cfg, args));
   if (name === "read_file") {
@@ -228,8 +250,8 @@ export async function handleLibraryMcp(req, res, cfg = libraryMcpConfig()) {
     const fail = (code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
     if (method === "initialize") {
       const v = PROTOCOL_VERSIONS.includes(params?.protocolVersion) ? params.protocolVersion : "2025-03-26";
-      return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-library", version: "0.1.0" },
-        instructions: "The shared BuilderPluss R2 library, with no editor tab needed: list, search, read and save designs (Designs/), parametric objects (Objects/), materials, moodboards and skills (Skills/ — read a skill's SKILL.md before following it). Saved designs open in the deployed editor at https://floorplan-indol.vercel.app/floorplan-editor. To draw on a live canvas, use the editor's Connect Claude relay instead." });
+      return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-library", version: "0.2.0" },
+        instructions: "The shared BuilderPluss R2 library, with no editor tab needed: list, search, read and save designs (Designs/), parametric objects (Objects/), materials, moodboards and skills (Skills/ — read a skill's SKILL.md before following it). Saved designs open in the deployed editor at https://floorplan-indol.vercel.app/floorplan-editor. Draw designs HEADLESS with create_design / get_design / edit_design / list_objects — walls, doors, windows, furniture and spaces written straight into the design file in metres; the editor evaluates the objects when the design is opened. To watch it draw on a live canvas instead, use the editor's Connect Claude relay." });
     }
     if (method === "ping") return reply({});
     if (method === "tools/list") return reply({ tools: TOOLS });
