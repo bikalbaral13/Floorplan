@@ -7,7 +7,7 @@
 export const DEFAULT_TIMEOUT_MS = 60000;
 export const CHECKPOINT_TIMEOUT_MS = Number((typeof process !== "undefined" && process.env?.FP_CHECKPOINT_TIMEOUT_MS) || 30 * 60 * 1000);
 export const LONG_TIMEOUT_MS = 5 * 60 * 1000;
-export const timeoutFor = (tool) => (tool === "checkpoint" ? CHECKPOINT_TIMEOUT_MS : tool === "apply_model" || tool === "import_objects" ? LONG_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
+export const timeoutFor = (tool) => (tool === "checkpoint" ? CHECKPOINT_TIMEOUT_MS : tool === "apply_model" || tool === "import_objects" || tool === "import_plan" ? LONG_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
 
 // ── Tool catalogue (schemas). Each tool name maps to a browser command handler (agentBridge.ts). ──
 export const TOOLS = [

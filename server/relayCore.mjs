@@ -21,7 +21,7 @@
 import crypto from "node:crypto";
 import { putObject, getObjectText, listObjects, deleteObject } from "../tools/r2.mjs";
 import { TOOLS, timeoutFor, newRunState, stepGate } from "../packages/floorplan-bridge/tools.mjs";
-import { RELAY_HEADLESS_TOOLS, HEADLESS_TOOL_NAMES, runHeadless, validDesignPath } from "./relayHeadless.mjs";
+import { RELAY_HEADLESS_TOOLS, HEADLESS_TOOL_NAMES, runHeadless, validDesignPath, saveDesignJson } from "./relayHeadless.mjs";
 
 const WAIT_MS = Number(process.env.RELAY_WAIT_MS || 50_000);      // one /mcp request waits this long, then tickets
 const POLL_MS = 400;                                              // how often /mcp checks for the result
@@ -261,17 +261,32 @@ async function callTool(cfg, sid, name, args) {
     catch (e) { return errText(e.message); }
   }
   // edit_design / create_design write as surely as draw_segment does, so the step gate covers them too.
-  try { g.assertWritable(name === "edit_design" || name === "create_design" ? "draw_segment" : name); } catch (e) { return errText(e.message); }
+  try { g.assertWritable(name === "edit_design" || name === "create_design" || name === "load_design" ? "draw_segment" : name); } catch (e) { return errText(e.message); }
 
   // The explicit design tools always run headless; the canvas tools do only when no tab is connected (a
   // latch refreshed within ~45 s). A connected-but-slow tab keeps the ticket path, so no call runs twice.
   const tabUp = !!s.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000;
+
+  // load_design: save the whole plan, then (tab connected) ONE import_plan command — the tab's own Import JSON.
+  if (name === "load_design") {
+    let saved;
+    try { saved = await saveDesignJson(s, args); } catch (e) { return errText(e.message); }
+    await putJson(cfg, `${P(sid)}/session.json`, s);
+    const info = { saved: saved.path, replaced: saved.replaced, ...saved.counts };
+    if (!tabUp) return text({ ...info, live: false, note: "no editor tab connected — saved to the Library only; it opens from Library ▸ Designs, and connect_editor makes later loads show live" });
+    return enqueue(cfg, sid, s, "import_plan", { json: saved.text, path: saved.path }, info);
+  }
   if (HEADLESS_TOOL_NAMES.has(name) || !tabUp) {
     const before = s.design;
     const out = await runHeadless(s, name, args);
     if (s.design !== before) await putJson(cfg, `${P(sid)}/session.json`, s);
     return out;
   }
+  return enqueue(cfg, sid, s, name, args);
+}
+
+/** Queue one command for the tab and wait for it (or hand back a ticket). `extra` is merged into a success result. */
+async function enqueue(cfg, sid, s, name, args, extra) {
   if ((await listObjects(cfg, `${P(sid)}/calls/`)).length >= MAX_QUEUED) return errText("too many queued calls — wait for the editor to catch up");
 
   const now = Date.now();
@@ -288,7 +303,7 @@ async function callTool(cfg, sid, name, args) {
   s.lastAgentCallAt = now; await putJson(cfg, `${P(sid)}/session.json`, s);
 
   const r = await waitResult(cfg, sid, id, Math.min(deadline, now + WAIT_MS));
-  if (r) return finish(cfg, sid, call, r);
+  if (r) return extra && r.ok ? text({ ...extra, live: true, tab: r.result }) : finish(cfg, sid, call, r);
   await putJson(cfg, `${P(sid)}/tickets/${id}.json`, { ...call, args: undefined });
   return text({ pending: true, ticket: id, tool: name,
     hint: name === "checkpoint" ? "The card is open in the app. Call await_result with this ticket to keep waiting for the user." : "Still running in the editor. Call await_result with this ticket to keep waiting." });

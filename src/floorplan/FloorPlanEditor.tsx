@@ -8185,6 +8185,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       h.set({ ...h.state, walls: [...h.state.walls, wall] });
       return { wallId: wall.id };
     });
+    // load_design (server/relayCore.mjs): a whole plan JSON through the SAME path as Import JSON, linked to
+    // its Library file so later edit_design batches on it arrive here through live sync.
+    registerAgentCommand("import_plan", async (a) => {
+      const json = typeof a.json === "string" ? a.json : JSON.stringify(a.json);
+      const path = typeof a.path === "string" && a.path ? a.path : undefined;
+      if (!(await importPlanTextRef.current(json, path))) throw new Error("the editor could not import that plan JSON");
+      return { imported: true, linkedDesign: path ?? null };
+    });
     registerAgentCommand("apply_model", (a) => {
       const before = historyRef.current.state;
       const merged = applyAiReply(before, JSON.stringify((a as { model: unknown }).model));

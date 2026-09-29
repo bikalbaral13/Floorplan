@@ -26,6 +26,8 @@ const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25
 const READ_LIMIT = 1_000_000;           // one read_file chunk
 const WRITE_LIMIT = 4_000_000;          // Vercel caps a request body at ~4.5 MB
 const WRITE_MIME = { ".json": "application/json", ".md": "text/markdown; charset=utf-8" };
+const IMAGE_MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
+const IMAGE_READ_LIMIT = 3_500_000;     // raw bytes; base64 grows it by a third and the response must stay under Vercel's cap
 
 /* ── config ─────────────────────────────────────────────────────────────────────────────────────────── */
 const unquote = (v) => String(v ?? "").trim().replace(/^["']|["']$/g, "");
@@ -66,7 +68,7 @@ function who(cfg, req) {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? "");
   const token = m?.[1] ?? new URL(req.url ?? "/", "http://x").searchParams.get("token");
   if (!token) return null;
-  const h = sha(token.trim());
+  const h = sha(token.trim().replace(/^["']+|["']+$/g, ""));   // pasted URLs often keep the quotes
   return cfg.tokens.find((t) => crypto.timingSafeEqual(t.hash, h))?.name ?? null;
 }
 
@@ -91,7 +93,7 @@ async function exists(cfg, key) {
 const LIBRARY_TOOLS = [
   {
     name: "list_library",
-    description: "List files in the shared R2 library. `folder` is relative to the library root, e.g. \"Designs\", \"Objects\", \"Materials\", \"Moodboards\", \"Skills/Floorplan Tracer\". Omit it to see the top-level folders with file counts. Designs (floor plan JSONs the editor opens) live in Designs/.",
+    description: "List files in the shared R2 library. `folder` is relative to the library root, e.g. \"Designs\", \"Objects\", \"Materials\", \"Moodboards\", \"Images\", \"Workflows\", \"Skills/Floorplan Tracer\". Omit it to see the top-level folders with file counts. Designs (floor plan JSONs the editor opens) live in Designs/; pictures (moodboards, plan scans, references) in Images/; workflow definitions in Workflows/.",
     inputSchema: { type: "object", properties: {
       folder: { type: "string", description: "folder relative to the library root; omit for the overview" },
       recursive: { type: "boolean", description: "include files in sub-folders (default true)" },
@@ -104,7 +106,7 @@ const LIBRARY_TOOLS = [
   },
   {
     name: "read_file",
-    description: "Read one text file (JSON, Markdown, …) from the library. Large files come back in 1 MB chunks: if `truncated` is true, call again with `offset` = the returned `nextOffset`. Binary files (images, .glb, .blend) are not read — you get their public URL instead.",
+    description: "Read one text file (JSON, Markdown, …) from the library. Large files come back in 1 MB chunks: if `truncated` is true, call again with `offset` = the returned `nextOffset`. Images (.png .jpg .webp .gif, up to 3.5 MB) come back as an image you can look at, e.g. Images/<name>.png. Other binary files (.glb, .blend) are not read — you get their public URL instead.",
     inputSchema: { type: "object", properties: {
       path: { type: "string", description: "e.g. \"Designs/Windsor_park_B1.json\" or \"Skills/Floorplan Tracer/scope-the-trace.md\"" },
       offset: { type: "number", description: "byte offset to start from (default 0)" },
@@ -112,12 +114,13 @@ const LIBRARY_TOOLS = [
   },
   {
     name: "write_file",
-    description: "Save a .json or .md file into the library — a new design in Designs/, an object in Objects/, a material, a skill note. JSON must be valid. An existing file is only replaced when `overwrite` is true, so read it first and keep what you did not mean to change. Anyone opening the deployed editor sees the result in the library.",
+    description: "Save a file into the library — a .json or .md (a new design in Designs/, an object in Objects/, a material, a skill note), or an image (.png .jpg .webp .gif, up to ~3 MB) into Images/ with `base64` set to the image bytes, e.g. a picture the user attached in chat. JSON must be valid. An existing file is only replaced when `overwrite` is true, so read it first and keep what you did not mean to change. Anyone opening the deployed editor sees the result in the library.",
     inputSchema: { type: "object", properties: {
       path: { type: "string", description: "library-relative path ending in .json or .md" },
       content: { description: "the file body: a string, or a JSON value for a .json file" },
+      base64: { type: "string", description: "for an image: its bytes, base64-encoded (a data: URL prefix is accepted); use instead of content" },
       overwrite: { type: "boolean", description: "replace the file if it already exists (default false)" },
-    }, required: ["path", "content"] },
+    }, required: ["path"] },
   },
 ];
 
@@ -155,12 +158,12 @@ function allTools() {
   return toolList;
 }
 
-const INSTRUCTIONS = `BuilderPluss floor plan designer: the shared R2 library (Designs/, Objects/, Materials/, Moodboards/, Skills/) plus the full editor canvas toolset.
+const INSTRUCTIONS = `BuilderPluss floor plan designer: the shared R2 library (Designs/, Objects/, Materials/, Moodboards/, Skills/, Images/, Workflows/) plus the full editor canvas toolset.
 
 HOW TO HANDLE A REQUEST
 1. Anything beyond a single small edit: call list_skills, pick the skill whose description fits the request, read_skill it, and follow it step by step. Read files it references with read_file. If no skill fits, work directly with the canvas tools.
 2. Call editor_status. If no editor is linked, ask the user once whether they want to watch live: they open https://floorplan-indol.vercel.app/floorplan-editor, click Connect Claude, and tell you the code — then call connect_editor. If they don't, work headless: use_design picks (or creates) Designs/<name>.json and the canvas tools edit that file.
-3. Draw with the canvas tools (import_objects first, then draw_segment / place_opening / place_object / attach_* / flow_*; coordinates in METRES), or batch edits with edit_design. Check your work with snapshot_canvas.
+3. Draw JSON-FIRST — it is many times faster than drawing piece by piece. To lay down or replace a whole plan, build the complete plan JSON (the standard format: read an existing one with read_file for the shape) and call load_design ONCE: it saves to Designs/ and loads into the linked tab in one step, like the editor's Import JSON. To change an existing design, batch every change of a step into ONE edit_design call (up to 500 ops; a linked tab showing that design picks it up live). Use the single canvas tools (draw_segment / place_opening / place_object / attach_* / flow_*; METRES) only for a few small touch-ups. Check your work with snapshot_canvas.
 4. Multi-step skills: begin_step → work → checkpoint for each step; the user answers in the editor. If a call returns { pending: true, ticket }, call await_result with the ticket until it finishes.
 5. Steps a skill runs on the user's own PC (Blender renders, Python/DXF, .skp export) cannot run here: finish everything else, save the design, and tell the user the exact local command to run.
 Flows, underlays, selection and checkpoints need a linked, open tab.`;
@@ -242,6 +245,8 @@ async function searchLibrary(cfg, { query, folder }) {
 const TEXT_EXT = /\.(json|md|txt|csv|svg|xml|yaml|yml|inp|dxf|py|mjs|js|ts)$/i;
 async function readFile(cfg, { path: rel, offset = 0 }) {
   const key = keyFor(cfg, rel);
+  const imageMime = IMAGE_MIME[path.posix.extname(key).toLowerCase()];
+  if (imageMime) return readImage(cfg, key, imageMime);
   if (!TEXT_EXT.test(key)) return { path: relOf(cfg, key), binary: true, url: publicUrl(cfg, key), note: "binary file — not read; fetch the URL if you need it" };
   const start = Math.max(0, Math.floor(Number(offset) || 0));
   let r;
@@ -256,6 +261,15 @@ async function readFile(cfg, { path: rel, offset = 0 }) {
   const end = start + Buffer.byteLength(r.text, "utf8");
   return { path: relOf(cfg, key), size: r.size, offset: start, truncated: end < r.size, ...(end < r.size ? { nextOffset: end } : {}), content: r.text };
 }
+async function readImage(cfg, key, mime) {
+  const { signedRequest } = await import("../tools/r2.mjs");
+  const meta = { path: relOf(cfg, key), url: publicUrl(cfg, key) };
+  const size = (await listObjectsDetailed(cfg, key)).find((o) => o.key === key)?.size;
+  if (size === undefined) throw new Error(`no such file: ${meta.path}`);
+  if (size > IMAGE_READ_LIMIT) return { ...meta, size, binary: true, note: `image is ${(size / 1e6).toFixed(1)} MB — too large to return inline (limit ${IMAGE_READ_LIMIT / 1e6} MB); fetch the URL instead` };
+  const buf = Buffer.from(await (await signedRequest(cfg, "GET", key)).arrayBuffer());
+  return { ...meta, size, mimeType: mime, image: buf.toString("base64") };
+}
 /** getObjectText always starts at byte 0; later chunks go through the same signed GET with a moved range. */
 async function rangedText(cfg, key, start) {
   const { signedRequest } = await import("../tools/r2.mjs");
@@ -265,12 +279,20 @@ async function rangedText(cfg, key, start) {
   return { text: body.toString("utf8"), size: Number.isFinite(total) ? total : start + body.length };
 }
 
-async function writeFile(cfg, { path: rel, content, overwrite = false }, user) {
+async function writeFile(cfg, { path: rel, content, base64, overwrite = false }, user) {
   const key = keyFor(cfg, rel);
   const ext = path.posix.extname(key).toLowerCase();
-  if (!WRITE_MIME[ext]) throw new Error("only .json and .md files can be written");
+  const mime = WRITE_MIME[ext] ?? IMAGE_MIME[ext];
+  if (!mime) throw new Error("only .json, .md and image files (.png .jpg .jpeg .webp .gif) can be written");
   let body;
-  if (ext === ".json") {
+  if (IMAGE_MIME[ext]) {
+    const b64 = String(base64 ?? (typeof content === "string" ? content : "")).replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+    if (!b64) throw new Error("an image needs its bytes in `base64`");
+    body = Buffer.from(b64, "base64");
+    if (!body.length) throw new Error("`base64` did not decode to any bytes");
+  } else if (content === undefined) {
+    throw new Error("`content` is required for a .json or .md file");
+  } else if (ext === ".json") {
     let value = content;
     if (typeof content === "string") { try { value = JSON.parse(content); } catch (e) { throw new Error(`content is not valid JSON: ${e.message}`); } }
     body = JSON.stringify(value, null, 2);
@@ -278,12 +300,13 @@ async function writeFile(cfg, { path: rel, content, overwrite = false }, user) {
     if (typeof content !== "string") throw new Error("a .md file needs string content");
     body = content;
   }
-  if (Buffer.byteLength(body, "utf8") > WRITE_LIMIT) throw new Error(`file is larger than ${WRITE_LIMIT / 1e6} MB`);
+  const bytes = Buffer.isBuffer(body) ? body.length : Buffer.byteLength(body, "utf8");
+  if (bytes > WRITE_LIMIT) throw new Error(`file is larger than ${WRITE_LIMIT / 1e6} MB`);
   const existed = await exists(cfg, key);
   if (existed && !overwrite) throw new Error(`${relOf(cfg, key)} already exists — read it, then call again with overwrite: true to replace it, or pick a new name`);
-  await putObject(cfg, key, body, WRITE_MIME[ext]);
-  console.log(`[library-mcp] ${user} wrote ${key} (${body.length} bytes${existed ? ", replaced" : ""})`);
-  return { ok: true, path: relOf(cfg, key), bytes: Buffer.byteLength(body, "utf8"), replaced: existed, url: publicUrl(cfg, key) };
+  await putObject(cfg, key, body, mime);
+  console.log(`[library-mcp] ${user} wrote ${key} (${bytes} bytes${existed ? ", replaced" : ""})`);
+  return { ok: true, path: relOf(cfg, key), bytes, replaced: existed, url: publicUrl(cfg, key) };
 }
 
 /** The design tools see the library through this: library-relative paths, confined by keyFor. */
@@ -315,6 +338,7 @@ async function callTool(cfg, name, args, user) {
   if (name === "search_library") return text(await searchLibrary(cfg, args));
   if (name === "read_file") {
     const r = await readFile(cfg, args);
+    if (r.image) { const { image, mimeType, ...meta } = r; return { content: [{ type: "text", text: JSON.stringify(meta) }, { type: "image", data: image, mimeType }] }; }
     if (r.content === undefined) return text(r);
     const { content, ...meta } = r;
     return { content: [{ type: "text", text: JSON.stringify(meta) }, { type: "text", text: content }] };
