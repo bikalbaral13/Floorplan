@@ -106,6 +106,20 @@ function polyhedronGeometry(faces: number[][][]): THREE.BufferGeometry {
   return geom;
 }
 
+/** An indexed triangle mesh (a Python object's output): shared vertices, so computeVertexNormals SMOOTHS — cloth
+ *  and cushions read as soft surfaces instead of the polyhedron path's per-face facets. */
+function indexedMeshGeometry(mesh: { positions: Float32Array; indices: Uint32Array }): THREE.BufferGeometry {
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
+  geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+  geom.computeVertexNormals();
+  return geom;
+}
+function IndexedMeshGeom({ mesh }: { mesh: { positions: Float32Array; indices: Uint32Array } }) {
+  const geom = useMemo(() => indexedMeshGeometry(mesh), [mesh]);
+  return <primitive object={geom} attach="geometry" />;
+}
+
 /** The polyhedron's geometry as a child element, so the build is memoized on the face list rather than
  *  re-running (and re-allocating a GPU buffer) on every re-render of the scene. */
 function PolyhedronGeom({ faces }: { faces: number[][][] }) {
@@ -135,6 +149,7 @@ function buildPrimitiveMesh(d: PrimMass3D): THREE.Mesh {
   else if (d.shape === "capsule") { const mid = Math.max(0, d.length); y = mid / 2 + d.radius; geom = new THREE.CapsuleGeometry(d.radius, mid, 8, 16); }
   // A polyhedron's vertices are absolute, so there is no half-height to lift it onto the floor.
   else if (d.shape === "polyhedron") { y = 0; geom = polyhedronGeometry(d.faces ?? []); }
+  else if (d.shape === "mesh" && d.mesh) { y = 0; geom = indexedMeshGeometry(d.mesh); }
   else { y = d.length / 2; geom = new THREE.BoxGeometry(d.length, d.length, d.length); }
   const mesh = new THREE.Mesh(geom);
   const tf = d.transform;
@@ -280,7 +295,7 @@ export interface SnapshotApi {
 type Display3DStyle = { color: string; opacity: number; wireframe: boolean; showEdges: boolean };
 /** A resolved 3D primitive: shape + (scale-baked) dimensions + baked transform (translate m, rotate rad,
  *  mirror ±1 per axis) + optional Display 3D style. Mirrors FloorPlanEditor's PrimMass3D. */
-type PrimMass3D = { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string; layer?: string; faces?: number[][][]; transform?: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number }; display?: Display3DStyle };
+type PrimMass3D = { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string; layer?: string; faces?: number[][][]; mesh?: { positions: Float32Array; indices: Uint32Array }; transform?: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number }; display?: Display3DStyle };
 /** One operand of a Boolean op: a primitive, or a nested Boolean subtree (so Booleans chain). */
 type BoolOperand3D = { prim: PrimMass3D } | { bool: BoolNode3D };
 /** A Boolean (CSG) node: operation + two operands (each a primitive or another Boolean). */
@@ -1245,6 +1260,9 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
           // half-height lift — the transform is a pure offset.
           y = 0;
           geom = <PolyhedronGeom faces={pm.faces ?? []} />;
+        } else if (pm.shape === "mesh" && pm.mesh) {
+          y = 0;
+          geom = <IndexedMeshGeom mesh={pm.mesh} />;
         } else {
           // cube
           y = pm.length / 2;
@@ -1258,7 +1276,7 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
         const ds = pm.display;
         // A polyhedron's faces come from data, so their winding is whatever the author's ring order was —
         // draw it double-sided rather than punching holes wherever a ring happens to be back-wound.
-        const mirrored = (tf ? tf.mx * tf.my * tf.mz < 0 : false) || pm.shape === "polyhedron";
+        const mirrored = (tf ? tf.mx * tf.my * tf.mz < 0 : false) || pm.shape === "polyhedron" || pm.shape === "mesh";
         return (
           <mesh
             key={`prim-mass-${pm.id}`}

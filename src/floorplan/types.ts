@@ -42,6 +42,8 @@ export interface Wall {
   id: string;
   start: Point;
   end: Point;
+  /** Group of a grouped document this segment came from (see ./planGroups). */
+  groupId?: string;
   /** Layer this wall lives on. Missing/unknown values resolve to `DEFAULT_LAYER_ID` (`"0"`). */
   layerId?: string;
   /** Flow node id that OWNS this segment in "Live" mode (materialised from that node's live output).
@@ -450,8 +452,32 @@ export interface AreaTypeDef {
  *  `FloorPlanModel.pathSpaceAttachments`. */
 export const PATH_SPACE_ID_PREFIX = "path-space:";
 
+/** A whole design placed on a master-plan site (`Master Plans/<project>/master_plan.json`). The design stays in
+ *  its own Library file; this is only the reference and the transform, carried by the plot or footprint space. */
+export interface DesignInstance {
+  /** Design key in master_plan.json, e.g. "villa-2". */
+  design: string;
+  /** Library-relative path of the design file, e.g. "Designs/Ramanadhapuram_Villa2_improved.json". */
+  path: string;
+  /** Degrees, applied after `mirror` (mirror flips x). */
+  rotation: number;
+  mirror: boolean;
+  /** Site metres of the design's (0,0). */
+  position: [number, number];
+  offsetFromPlotNW?: [number, number];
+  baseElevation?: number;
+  /** Design level id → site level key. */
+  levelMap?: Record<string, string>;
+  /** How the placement was derived (method, matched columns, rms…), for the record. */
+  fit?: Record<string, unknown>;
+}
+
 export interface Room {
   id: string;
+  /** Group of a grouped document this space came from (see ./planGroups). */
+  groupId?: string;
+  /** Set when this space stands for a placed design (a plot or its footprint on a master plan). */
+  designInstance?: DesignInstance;
   /** True for a room DETECTED from a closed wall loop rather than drawn. Every space id is `space_<uuid>`
    *  whichever it is, so the fact needs its own field — see the engine's `isAutoRoom`, which falls back to
    *  the legacy id prefixes for plans saved before this existed. */
@@ -585,7 +611,8 @@ export type ObjectKind = "rect" | "circle" | "polygon" | "freehand" | "text" | "
  *  - "graph": clicking any segment selects its whole connected component (links + shared-endpoint
  *    nodes) — a flood-fill across junctions, so a drawn network selects as one unit.
  *  Doors/windows/objects always fall back to "all" — only available without a scope. */
-export type SelectFilter = "all" | "node" | "segment" | "space" | "graph" | "image" | "grid" | "dimension";
+/** "group": whole groups of a grouped document (see ./planGroups) — click the outermost, double-click to enter. */
+export type SelectFilter = "all" | "node" | "segment" | "space" | "group" | "graph" | "image" | "grid" | "dimension";
 
 export type Tool =
   | "select"
@@ -778,6 +805,11 @@ export interface ParametricObjectFile {
    *  the Properties params, attachment, layers — behaves identically, which is the point: the two kinds of
    *  definition differ only in how geometry is produced. */
   spine?: { object?: Record<string, unknown>; nodes: unknown[]; edges?: unknown[] };
+  /** A PYTHON object: `source` defines `entry(params) -> {meshes, plan}` and is run in the browser by Pyodide
+   *  (see python/pythonObjects.ts). Present INSTEAD of `geometry` / `spine`; `parameters` above are its inputs.
+   *  Each mesh is `{name, color, positions: [x,y,z,…], indices: […]}` in object-local metres (+x across, +y
+   *  away from the host anchor's "back", +z up); `plan` is a list of closed outlines for the 2D symbol. */
+  python?: { runtime?: string; entry: string; source: string };
   /** Optional explicit Flow decompilation: an ordered semantic node list that the "Edit in Flow" / import-to-
    *  flow path materialises into a wired graph (Object Node → these nodes). Positions + edges are DERIVED
    *  (never stored) so it survives node-schema changes. See {@link PobjFlowNode}. */
@@ -1135,6 +1167,9 @@ export interface MoodboardSelection {
 }
 
 export interface FloorPlanModel {
+  /** The group table of a grouped document (schemaVersion 3, see ./planGroups): entities name their group
+   *  by `groupId`; saving splits them back into one canvas per group. Project-wide, like `layers`. */
+  groups?: import("./planGroups").PlanGroup[];
   walls: Wall[];
   rooms: Room[];
   objects: FloorObject[];
@@ -1307,9 +1342,11 @@ export const withLayerDefaults = (model: FloorPlanModel): FloorPlanModel => {
   // Add any built-in default layers (0, Wall, Door, Window) that the loaded model
   // is missing, without disturbing the user's other custom layers or their order.
   const seeds = defaultLayerTable().filter((s) => !haveIds.has(s.id));
-  const layers: Layer[] = [...seeds, ...existing];
+  // Arrays that need nothing come back as the SAME array: per-level caches key on `walls` identity, and a
+  // level switch runs every sheet through here.
+  const layers: Layer[] = seeds.length || !model.layers ? [...seeds, ...existing] : model.layers;
   const stamp = <T extends { layerId?: string }>(arr: T[] | undefined): T[] =>
-    (arr ?? []).map((e) => (e.layerId ? e : { ...e, layerId: DEFAULT_LAYER_ID }));
+    !arr ? [] : arr.every((e) => e.layerId) ? arr : arr.map((e) => (e.layerId ? e : { ...e, layerId: DEFAULT_LAYER_ID }));
   return {
     ...model,
     layers,

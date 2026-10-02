@@ -68,6 +68,8 @@ export const BUNDLED_SKILL_FILES: string[] = [
   "Render/render-scope-and-framing.md",
   "Render/wire-plan-and-3d-into-render.md",
   "Floorplan Tracer/trace-raster-plan-to-canvas.md",
+  "Floorplan Tracer/pdf-intake.md",
+  "Floorplan Tracer/trace-master-plan.md",
   "Floorplan Tracer/trace-multi-storey-plans.md",
   "Floorplan Tracer/trace-raster-plan-live.md",
   "Floorplan Tracer/calibrate-scale-from-printed-dimensions.md",

@@ -30,7 +30,7 @@ export interface PackedLevel extends LevelMeta {
 /** Model-wide registries. They describe the PROJECT, not one floor, so a level switch carries them across
  *  rather than letting each sheet drift into its own copy (an object imported on the ground floor must be
  *  resolvable on the first floor). */
-export const SHARED_KEYS = ["objectLibrary", "layers", "customRoomTypes", "customSegmentTypes", "moodboards"] as const;
+export const SHARED_KEYS = ["objectLibrary", "layers", "customRoomTypes", "customSegmentTypes", "moodboards", "groups"] as const;
 
 export const DEFAULT_LEVEL_HEIGHT = 3.0;
 

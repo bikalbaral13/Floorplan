@@ -64,42 +64,96 @@ export const splitWallsAtIntersections = <T extends Wall>(walls: T[]): T[] => {
     end: { ...w.end },
   }));
 
-  const intersectionPoints: Point[] = [];
-  for (let i = 0; i < segments.length; i++) {
-    for (let j = i + 1; j < segments.length; j++) {
-      let p = lineSegmentsIntersection(
-        segments[i].start,
-        segments[i].end,
-        segments[j].start,
-        segments[j].end
-      );
-      if (p) {
-        for (const seg of segments) {
-          if (Math.hypot(p.x - seg.start.x, p.y - seg.start.y) < 1.0) {
-            p = seg.start;
-            break;
-          }
-          if (Math.hypot(p.x - seg.end.x, p.y - seg.end.y) < 1.0) {
-            p = seg.end;
-            break;
-          }
-        }
-        intersectionPoints.push(p);
+  // Everything below is the all-pairs algorithm with the pairs that cannot matter skipped: a spatial grid
+  // proposes candidates, and each candidate list is put back in index order before it is used, so the
+  // points, their order and therefore the split pieces are exactly what the O(n²) loops produced
+  // (2,300 walls took 1.6 s; a whole master plan took 4.6 s on load).
+  const n = segments.length;
+  let lenSum = 0;
+  for (const s of segments) lenSum += Math.hypot(s.end.x - s.start.x, s.end.y - s.start.y);
+  const cell = Math.max(lenSum / n, 1);
+  const cellKey = (cx: number, cy: number) => cx * 73856093 + cy * 19349663;
+  /** Cells covering a padded box, visited until `f` returns. */
+  const forCells = (x0: number, y0: number, x1: number, y1: number, f: (k: number) => void) => {
+    const cx0 = Math.floor(x0 / cell), cx1 = Math.floor(x1 / cell), cy0 = Math.floor(y0 / cell), cy1 = Math.floor(y1 / cell);
+    for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) f(cellKey(cx, cy));
+  };
+
+  // Segment grid. The pad covers the ±0.001 parameter slack lineSegmentsIntersection accepts past each end.
+  const segGrid = new Map<number, number[]>();
+  const segBox = segments.map((s) => {
+    const pad = 0.0011 * Math.hypot(s.end.x - s.start.x, s.end.y - s.start.y) + 1e-6;
+    return [Math.min(s.start.x, s.end.x) - pad, Math.min(s.start.y, s.end.y) - pad, Math.max(s.start.x, s.end.x) + pad, Math.max(s.start.y, s.end.y) + pad];
+  });
+  segBox.forEach(([x0, y0, x1, y1], i) => forCells(x0, y0, x1, y1, (k) => { const b = segGrid.get(k); if (b) b.push(i); else segGrid.set(k, [i]); }));
+
+  // Endpoint grid for the snap: the first segment (by index, start before end) with an endpoint within 1.0.
+  const endGrid = new Map<number, number[]>();
+  segments.forEach((s, i) => {
+    for (const p of [s.start, s.end]) {
+      const k = cellKey(Math.floor(p.x / cell), Math.floor(p.y / cell));
+      const b = endGrid.get(k);
+      if (b) { if (b[b.length - 1] !== i) b.push(i); } else endGrid.set(k, [i]);
+    }
+  });
+  const snap = (p: Point): Point => {
+    let best = -1;
+    forCells(p.x - 1, p.y - 1, p.x + 1, p.y + 1, (k) => {
+      for (const i of endGrid.get(k) ?? []) {
+        if (best !== -1 && i >= best) continue;
+        const s = segments[i];
+        if (Math.hypot(p.x - s.start.x, p.y - s.start.y) < 1.0 || Math.hypot(p.x - s.end.x, p.y - s.end.y) < 1.0) best = i;
       }
+    });
+    if (best === -1) return p;
+    const s = segments[best];
+    return Math.hypot(p.x - s.start.x, p.y - s.start.y) < 1.0 ? s.start : s.end;
+  };
+
+  const intersectionPoints: Point[] = [];
+  const seen = new Set<number>();
+  for (let i = 0; i < n; i++) {
+    seen.clear();
+    const [x0, y0, x1, y1] = segBox[i];
+    const cands: number[] = [];
+    forCells(x0, y0, x1, y1, (k) => { for (const j of segGrid.get(k) ?? []) if (j > i && !seen.has(j)) { seen.add(j); cands.push(j); } });
+    cands.sort((a, b) => a - b);
+    for (const j of cands) {
+      const p = lineSegmentsIntersection(segments[i].start, segments[i].end, segments[j].start, segments[j].end);
+      if (p) intersectionPoints.push(snap(p));
     }
   }
 
   const allSnapPoints: Point[] = [...segments.flatMap((s) => [s.start, s.end]), ...intersectionPoints];
+  const pointGrid = new Map<number, number[]>();
+  allSnapPoints.forEach((p, idx) => {
+    const k = cellKey(Math.floor(p.x / cell), Math.floor(p.y / cell));
+    const b = pointGrid.get(k);
+    if (b) b.push(idx); else pointGrid.set(k, [idx]);
+  });
 
   const out: T[] = [];
 
   for (const { wall, start, end } of segments) {
     let splitPoints: Point[] = [start, end];
-    allSnapPoints.forEach((p) => {
+    // isPointStrictlyBetweenSegment accepts the ellipse d1 + d2 < d + 0.1, whose half-width is
+    // √(0.05·d + 0.0025); a box that wide around the segment holds every point it can accept.
+    const d = Math.hypot(end.x - start.x, end.y - start.y);
+    const pad = Math.sqrt(0.05 * d + 0.0025) + 0.1;
+    const near: number[] = [];
+    forCells(Math.min(start.x, end.x) - pad, Math.min(start.y, end.y) - pad, Math.max(start.x, end.x) + pad, Math.max(start.y, end.y) + pad, (k) => {
+      for (const idx of pointGrid.get(k) ?? []) near.push(idx);
+    });
+    near.sort((a, b) => a - b);
+    for (let q = 0; q < near.length; q++) {
+      const idx = near[q];
+      if (q > 0 && near[q - 1] === idx) continue; // two cells can share a hash key
+
+      const p = allSnapPoints[idx];
       if (isPointStrictlyBetweenSegment(p, start, end)) {
         splitPoints.push(p);
       }
-    });
+    }
 
     splitPoints.sort(
       (a, b) =>
@@ -672,11 +726,33 @@ export function computeMiteredUnion(
       allEdges.push({ a, b, wallId, idx: allEdges.length });
     }
   }
-  // An edge is "shared" if another polygon has an edge with the same endpoints (possibly reversed)
+  // An edge is "shared" if another polygon has an edge with the same endpoints (possibly reversed).
+  // Each edge pairs with the FIRST later, still-unpaired edge of another wall that coincides with it.
+  // Candidates come from a spatial hash on edge MIDPOINTS rather than a scan of every later edge: two edges
+  // whose ends both lie within EDGE_TOL have midpoints within EDGE_TOL, so with EDGE_TOL cells the 3×3
+  // neighbourhood holds every possible partner, and visiting candidates in index order keeps the pairing
+  // identical to the old O(n²) scan (seconds on a 2,000-wall plan, minutes on a large one).
+  const cellOf = (v: number) => Math.floor(v / EDGE_TOL);
+  const mid = (e: { a: Point; b: Point }) => ({ x: (e.a.x + e.b.x) / 2, y: (e.a.y + e.b.y) / 2 });
+  const buckets = new Map<string, number[]>();
+  for (let i = 0; i < allEdges.length; i++) {
+    const m = mid(allEdges[i]);
+    const k = `${cellOf(m.x)},${cellOf(m.y)}`;
+    const b = buckets.get(k);
+    if (b) b.push(i); else buckets.set(k, [i]);
+  }
   const shared = new Set<number>();
   for (let i = 0; i < allEdges.length; i++) {
     if (shared.has(i)) continue;
-    for (let j = i + 1; j < allEdges.length; j++) {
+    const m = mid(allEdges[i]);
+    const cx = cellOf(m.x), cy = cellOf(m.y);
+    const cands: number[] = [];
+    for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+      const b = buckets.get(`${cx + ox},${cy + oy}`);
+      if (b) for (const j of b) if (j > i) cands.push(j);
+    }
+    cands.sort((p, q) => p - q);
+    for (const j of cands) {
       if (shared.has(j)) continue;
       if (allEdges[i].wallId === allEdges[j].wallId) continue;
       const ei = allEdges[i], ej = allEdges[j];

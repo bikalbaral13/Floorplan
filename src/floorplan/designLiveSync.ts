@@ -18,10 +18,11 @@ const MAX_BACKOFF_MS = 60_000;
 
 /** A version stamp for a Library file: its ETag, else Last-Modified + length. Null when unreachable. */
 export async function designVersion(relPath: string): Promise<string | null> {
+  // `cloudLibraryUrl` already percent-encodes each path segment; encoding again turns a space into %2520.
   const url = await cloudLibraryUrl(relPath);
   if (!url) return null;
   try {
-    const res = await fetch(encodeURI(url), { cache: "no-store", headers: { Range: "bytes=0-0" } });
+    const res = await fetch(url, { cache: "no-store", headers: { Range: "bytes=0-0" } });
     if (!res.ok) return null;
     return res.headers.get("etag") ?? `${res.headers.get("last-modified") ?? ""}|${res.headers.get("content-length") ?? ""}`;
   } catch {
@@ -34,7 +35,7 @@ export async function fetchDesignText(relPath: string): Promise<string | null> {
   const url = await cloudLibraryUrl(relPath);
   if (!url) return null;
   try {
-    const res = await fetch(encodeURI(url), { cache: "no-store" });
+    const res = await fetch(url, { cache: "no-store" });
     return res.ok ? await res.text() : null;
   } catch {
     return null;

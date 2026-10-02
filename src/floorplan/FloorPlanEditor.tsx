@@ -199,9 +199,14 @@ import { ExportJsonDialog } from "./components/dialogs/ExportJsonDialog";
 import { R2KeysSettings } from "./components/R2KeysSettings";
 import { CloudInspectDialog } from "./components/dialogs/CloudInspectDialog";
 import { ImportMoodboardDialog } from "./components/dialogs/ImportMoodboardDialog";
+import { DesignPlacementPanel } from "./components/DesignPlacementPanel";
+import { shellSheet } from "./shell3d";
+import { groupedToMerged, groupToSite, isGroupedPlan, siteToGroup, type PlanGroup } from "./planGroups";
+import { applyInstanceTransform, designLevelFor, loadDesignPaths, uniqueInstances, type DesignPaths } from "./designInstances";
+import { getPythonResult, getPythonError, onPythonResult, objIsPython } from "./python/pythonObjects";
 import { ImportDesignDialog } from "./components/dialogs/ImportDesignDialog";
 import { MESH3D_FORMATS } from "./export/flowMesh3d";
-import type { DrawPathStyle, PathJustify } from "./types";
+import type { DesignInstance, DrawPathStyle, PathJustify } from "./types";
 import { AddSegmentDialog, type AddSegmentConfig } from "./components/dialogs/AddSegmentDialog";
 import { AddNodeDialog, type NodeDisplayConfig } from "./components/dialogs/AddNodeDialog";
 import { AddWallDialog } from "./components/dialogs/AddWallDialog";
@@ -224,6 +229,9 @@ import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialo
 import { ImportObjectsDialog } from "./components/dialogs/ImportObjectsDialog";
 import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
+import { PhaseToggle, usePhase } from "./components/PhaseToggle";
+import { RenderModeToggle, useRenderMode } from "./components/RenderModeToggle";
+import { setUiPref, useUiPrefs } from "./uiPrefs";
 import { ElevationPanels } from "./components/ElevationPanels";
 import { AlignedElevations } from "./components/AlignedElevations";
 import { LayoutSheet, resolveLayoutSheetProps } from "./components/LayoutSheet";
@@ -266,7 +274,7 @@ import { AttachedObjectMetrics } from "./components/AttachedObjectMetrics";
 import { normalizeGraphSchema, PIPE_DEFAULT_RESULTS, type PipeGraphInput, type PipeSolveResult } from "@builderpluss/engine";
 import { schemaNodeToSchemas, schemaNodeToResultDefs, FRAME_DEFAULT_RESULTS, schemaEntries, FLOW_TOOLS, inputProps, renderPrims, coerceSelectWire, type RenderPrim, detectionObjects } from "./flow/flowTypes";
 import { pobjToAttachedFlow } from "./flow/pobjToFlow";
-import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs, evalParametricPipelineSteps, paramOutputEntries, objHasGeometry, objIsSpine, canvasLabelLines, canvasMetricLines, type ParamOutputEntry } from "./flow/eval/parametricObject";
+import { evalParametricGeometry, evalParametricPrisms, evalParametricOutputs, evalParametricPipelineSteps, paramOutputEntries, objHasGeometry, objIsSpine, canvasLabelLines, canvasMetricLines, renderModeOf, type ParamOutputEntry } from "./flow/eval/parametricObject";
 import { setFlowObjectLibrary, findLibraryObject, measureParametricObject } from "./flow/eval/objectFootprints";
 import type { FlowMesh } from "@builderpluss/engine";
 import { tubeFaces, ringFaces, loftFaces, type V3 } from "@builderpluss/engine";
@@ -440,6 +448,23 @@ const nodeMetaKeyForWall = (wallId: string) => [`${wallId}:start`, `${wallId}:en
  * flow ran Live again and regenerated the identical id, so the adopted copy takes a distinct prefix;
  * `graphAttrs.segments` is keyed by wall id and is remapped with them.
  */
+/** Results computed from a level's wall list, kept per LIST rather than per render: `useMemo` holds only
+ *  the last value, so switching floors recomputed every one of these from scratch even for a floor you had
+ *  just left (~1 s on a 2,300-wall floor). A level's `walls` array keeps its identity while it is parked
+ *  (see ./levels and withLayerDefaults), so a revisit hits; any edit makes a new array and a clean miss.
+ *  WeakMaps, so a list nobody holds any more takes its results with it. */
+const miteredPolygonsCache = new WeakMap<Wall[], ReturnType<typeof computeMiteredWallPolygons>>();
+const miteredDimensionsCache = new WeakMap<Wall[], ReturnType<typeof computeMiteredWallDimensions>>();
+const miteredUnionCache = new WeakMap<object, ReturnType<typeof computeMiteredUnion>>();
+const cachedBy = <K extends object, V>(cache: WeakMap<K, V>, key: K, f: () => V): V => {
+  if (cache.has(key)) return cache.get(key)!;
+  const v = f();
+  cache.set(key, v);
+  return v;
+};
+/** Auto-rooms per wall list, valid only for the other inputs they were detected with. */
+const autoRoomsCache = new WeakMap<Wall[], { deps: unknown[]; rooms: Room[] }>();
+
 const adoptFlowOwnedGeometry = <T extends FloorPlanModel>(model: T): T => {
   const isTagged = (e: { flowOwner?: string }) => Boolean(e.flowOwner);
   if (!(model.walls ?? []).some(isTagged) && !(model.rooms ?? []).some(isTagged)) return model;
@@ -1956,6 +1981,9 @@ export type PrimMass3D = {
    *  (x right, y UP, z = plan Y) like `transform`, already mapped from the plan-frame [x, y, z] list the
    *  Render row was wired. No dimensions apply: the list IS the shape, so it stays parametric. */
   faces?: number[][][];
+  /** shape "mesh" only — an INDEXED triangle mesh in scene metres (x right, y up, z = plan Y), shared vertices so
+   *  normals are smoothed. What a Python object's generator produces (see python/pythonObjects.ts). */
+  mesh?: { positions: Float32Array; indices: Uint32Array };
   transform: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number };
   display?: Display3DStyle;
 };
@@ -2144,6 +2172,36 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const DRAG_FREEZE_WALL_COUNT = 150;
   const dragActiveRef = useRef(false);
   const [dragEndTick, setDragEndTick] = useState(0);
+  /** Groups hidden in the Layers panel (grouped documents): hidden themselves or through an ancestor. */
+  const hiddenGroupIds = useMemo(() => {
+    const out = new Set<string>();
+    const gs = history.state.groups ?? [];
+    if (!gs.some((g) => g.visible === false)) return out;
+    const byId = new Map(gs.map((g) => [g.id, g]));
+    for (const g of gs) {
+      const seen = new Set<string>();
+      for (let a: typeof g | undefined = g; a && !seen.has(a.id); a = a.parent ? byId.get(a.parent) : undefined) {
+        seen.add(a.id);
+        if (a.visible === false) { out.add(g.id); break; }
+      }
+    }
+    return out;
+  }, [history.state.groups]);
+  /** Per-group layer overrides (`layerOverrides[layer].visible === false`), own or inherited: `${gid}|${layer}`. */
+  const hiddenGroupLayers = useMemo(() => {
+    const out = new Set<string>();
+    const gs = history.state.groups ?? [];
+    if (!gs.some((g) => g.layerOverrides && Object.values(g.layerOverrides).some((o) => o?.visible === false))) return out;
+    const byId = new Map(gs.map((g) => [g.id, g]));
+    for (const g of gs) {
+      const seen = new Set<string>();
+      for (let a: typeof g | undefined = g; a && !seen.has(a.id); a = a.parent ? byId.get(a.parent) : undefined) {
+        seen.add(a.id);
+        for (const [layer, o] of Object.entries(a.layerOverrides ?? {})) if (o?.visible === false) out.add(`${g.id}|${layer}`);
+      }
+    }
+    return out;
+  }, [history.state.groups]);
   const autoRoomsRef = useRef<Room[]>([]);
   const autoRooms = useMemo<Room[]>(
     // BSP preview walls (isBspPreview) are excluded — same as inset preview walls — so the partition
@@ -2152,6 +2210,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // to non-preview walls). Walls on hidden layers are also excluded so auto-rooms derived from
     // them don't keep surfacing while the user has the layer hidden.
     () => {
+      const cacheDeps = [history.state.layers, history.state.graphAttrs, liveFlowGraph, pixelsPerMeter, hiddenGroupIds, hiddenGroupLayers];
+      const hit = autoRoomsCache.get(history.state.walls);
+      if (hit && hit.deps.every((d, i) => d === cacheDeps[i])) return hit.rooms;
+      const remember = (rooms: Room[]): Room[] => { autoRoomsCache.set(history.state.walls, { deps: cacheDeps, rooms }); return rooms; };
       const layerTable = history.state.layers ?? [];
       const visibleLayerIds = new Set<string>();
       const knownLayerIds = new Set<string>();
@@ -2164,7 +2226,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (!knownLayerIds.has(id)) return true;
         return visibleLayerIds.has(id);
       };
-      const detectWalls = history.state.walls.filter((w) => isWallLayerVisible(w) && !w.flowOwner && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview && !w.isVectorWall && !w.isVectorPreview);
+      const detectWalls = history.state.walls.filter((w) => isWallLayerVisible(w) && !(w.groupId && (hiddenGroupIds.has(w.groupId) || hiddenGroupLayers.has(`${w.groupId}|${w.layerId ?? "0"}`))) && !w.flowOwner && w.segmentType !== "path" && !w.isPathSpacePreview && !w.isSplitWall && !w.isInsetWall && !w.isMaxRectPreview && !w.isPlacementPreview && !w.isVoronoiPreview && !w.isSkeletonPreview && !w.isConvexHullPreview && !w.isBspPreview && !w.isRfpPreview && !w.isRectDecompPreview && !w.isDelaunayPreview && !w.isSmoothingPreview && !w.isMeshPreview && !w.isCvtPreview && !w.isConvexDecompPreview && !w.isCircumcirclePreview && !w.isEllipsePreview && !w.isObbPreview && !w.isNGonPreview && !w.isUnrollPreview && !w.isPrincipalAxisPreview && !w.isContourPreview && !w.isStreamlinePreview && !w.isNoiseTexturePreview && !w.isInCirclePreview && !w.isTilingPreview && !w.isTreemapPreview && !w.isOptLShapePreview && !w.isVectorWall && !w.isVectorPreview);
       // Mid-drag on a plan big enough for detection to cost real time: reuse the last result untouched.
       if (dragActiveRef.current && detectWalls.length > DRAG_FREEZE_WALL_COUNT) return autoRoomsRef.current;
       // "Graph to Room" node present → inset each room face to the inner (clear) room by half each bounding
@@ -2187,12 +2249,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         };
         // Force center so the inner offset reads each wall's half-thickness symmetrically into the room.
         const sized = detectWalls.map((w) => ({ ...w, thickness: thicknessM(w) * pixelsPerMeter, method: "center" as const }));
-        return detectAutoRoomsFromWalls(sized, { innerOffset: true });
+        return remember(detectAutoRoomsFromWalls(sized, { innerOffset: true }));
       }
-      return detectAutoRoomsFromWalls(detectWalls);
+      return remember(detectAutoRoomsFromWalls(detectWalls));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [history.state.walls, history.state.layers, history.state.graphAttrs, liveFlowGraph, pixelsPerMeter, dragEndTick]
+    [history.state.walls, history.state.layers, history.state.graphAttrs, liveFlowGraph, pixelsPerMeter, dragEndTick, hiddenGroupIds, hiddenGroupLayers]
   );
   autoRoomsRef.current = autoRooms;
   const manualRooms = useMemo(
@@ -2245,7 +2307,13 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const id = layerId ?? "0";
     if (!layerTableHasId.has(id)) return true;
     return layerVisibleSet.has(id);
-  }, [layerTableHasId, layerVisibleSet]);
+    // hiddenGroupIds is listed so every memo keyed on this function also re-runs when a group is hidden or
+    // shown — they filter entities through isEntityVisible, which reads both.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layerTableHasId, layerVisibleSet, hiddenGroupIds, hiddenGroupLayers]);
+  /** Layer visible AND group visible (a group is hidden by its own `visible: false` or an ancestor's). */
+  const isEntityVisible = (e: { layerId?: string; groupId?: string }): boolean =>
+    isLayerVisible(e.layerId) && !(e.groupId && (hiddenGroupIds.has(e.groupId) || hiddenGroupLayers.has(`${e.groupId}|${e.layerId ?? "0"}`)));
   /** Suspends viewport culling for one synchronous frame. `snapshot_canvas` captures a zoom-to-EXTENT by
    *  imperatively re-fitting the world-viewport groups and calling stage.draw(), so anything culled out of
    *  the React tree would simply be missing from the shot — it would silently return whatever happened to
@@ -2265,6 +2333,15 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       y0: (0 - my - position.y) / scale, y1: (size.height + my - position.y) / scale,
     };
   }, [cullSuspended, history.state.walls.length, scale, position.x, position.y, size.width, size.height]);
+  /** LEVEL OF DETAIL for large plans (the ones `cullRect` is active for). Below this many screen pixels per
+   *  metre a 0.5 m chair is under ~7 px and a whole estate is on screen, so the per-object plan geometry — segment, node and space attachments —
+   *  is not drawn at all: walls, openings' host segments and space fills still are. Drawing tens of
+   *  thousands of object shapes at site zoom was what made each pan/zoom step of a whole master plan take
+   *  seconds. Zoomed in, the object loops are culled to the viewport like the walls. */
+  const OBJECT_LOD_PX_PER_M = 15;
+  const hideObjectsForZoom = !!cullRect && scale * (pixelsPerMeter || 1) < OBJECT_LOD_PX_PER_M;
+  const inCull = (x0: number, y0: number, x1: number, y1: number): boolean =>
+    !cullRect || (x0 <= cullRect.x1 && x1 >= cullRect.x0 && y0 <= cullRect.y1 && y1 >= cullRect.y0);
   /** Layer-visible walls in paint order — the list four separate places in the render tree were each
    *  building for themselves as `walls.filter(...).slice().sort(compareByLayer)`. That is four filters,
    *  four copies and four O(n log n) sorts of the whole wall list on EVERY render, and the editor
@@ -2272,7 +2349,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  change. (`.slice()` was redundant too: `.filter()` already returns a fresh array.) */
   const wallsInPaintOrder = useMemo(
     () => {
-      const list = history.state.walls.filter((w) => isLayerVisible(w.layerId)).sort(compareByLayer);
+      const list = history.state.walls.filter((w) => isEntityVisible(w)
+        // A zero-length segment is an object's MARKER (its host node); at site zoom its object is hidden too.
+        && !(hideObjectsForZoom && w.start.x === w.end.x && w.start.y === w.end.y)).sort(compareByLayer);
       if (!cullRect) return list;
       // Segment-vs-rect overlap on the segment's own bounding box: cheap, and never rejects a wall that
       // crosses the view (a bbox that straddles the rect always intersects it).
@@ -2280,7 +2359,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         Math.min(w.start.x, w.end.x) <= cullRect.x1 && Math.max(w.start.x, w.end.x) >= cullRect.x0 &&
         Math.min(w.start.y, w.end.y) <= cullRect.y1 && Math.max(w.start.y, w.end.y) >= cullRect.y0);
     },
-    [history.state.walls, isLayerVisible, compareByLayer, cullRect],
+    [history.state.walls, isLayerVisible, compareByLayer, cullRect, hideObjectsForZoom],
   );
   /** Resolve an entity's effective lock state. Unknown layers are unlocked. */
   const isLayerLocked = useCallback((layerId: string | undefined) => {
@@ -2289,7 +2368,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   }, [layerLockedSet]);
 
   /** Mitered wall polygons — computed once when walls change, shared across all mitered wall renders. */
-  const miteredPolygons = useMemo(() => computeMiteredWallPolygons(history.state.walls), [history.state.walls]);
+  const miteredPolygons = useMemo(() => cachedBy(miteredPolygonsCache, history.state.walls, () => computeMiteredWallPolygons(history.state.walls)), [history.state.walls]);
   /** LIVE Path spaces — Display mode "Path" (`bufferStyle` + `asSpace`): each connected group of touching
    *  path bands derives a Space from its union outline. Membership is CONTAGIOUS: any buffered band
    *  (except NURBS ribbons) touching a flagged run joins its Space, so a corridor whose first/last
@@ -2378,9 +2457,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // Layer-aware visibility filter: drop rooms whose layer is hidden.
     // Paint order: sort by layer.order so higher-order layers draw on top.
     const combined = [...filteredAutoRooms, ...pathSpaces, ...manualRooms];
-    return combined.filter((r) => isLayerVisible(r.layerId)).slice().sort(compareByLayer);
+    return combined.filter((r) => isEntityVisible(r)).slice().sort(compareByLayer);
   }, [manualRooms, autoRooms, pathSpaces, isLayerVisible, compareByLayer]);
-  const miteredUnion = useMemo(() => computeMiteredUnion(miteredPolygons), [miteredPolygons]);
+  const miteredUnion = useMemo(() => cachedBy(miteredUnionCache, miteredPolygons, () => computeMiteredUnion(miteredPolygons)), [miteredPolygons]);
   /** All mitered-polygon outline edges, used by the "Mitered Points" snap (Preferences → Snapping) — the
    *  pointer/node projects onto the nearest point ALONG these lines (corners included), not just vertices. */
   const miterSnapEdges = useMemo(() => {
@@ -2670,39 +2749,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return { fills, outerEdges, color, fillUnion: anyFilled || !!hatch, hatch };
   }, [bufferJoinMode, history.state.walls, miteredPolygons]);
 
-  /** Compute capsule polygons (line buffered by thickness/2 with semicircular caps) for all walls. */
-  const capsulePolygons = useMemo(() => {
-    const ARC_PTS = 8;
-    const result = new Map<string, Point[]>();
-    for (const w of history.state.walls) {
-      const sx = w.start.x, sy = w.start.y, ex = w.end.x, ey = w.end.y;
-      const dx = ex - sx, dy = ey - sy;
-      const len = Math.hypot(dx, dy);
-      if (len < 0.01) continue;
-      const ux = dx / len, uy = dy / len;
-      const nx = -uy, ny = ux;
-      const r = (w.thickness ?? 10) / 2;
-      const pts: Point[] = [];
-      pts.push({ x: sx + nx * r, y: sy + ny * r });
-      pts.push({ x: ex + nx * r, y: ey + ny * r });
-      for (let i = 1; i <= ARC_PTS; i++) {
-        const a = (i / (ARC_PTS + 1)) * Math.PI;
-        pts.push({ x: ex + (nx * Math.cos(a) + ux * Math.sin(a)) * r, y: ey + (ny * Math.cos(a) + uy * Math.sin(a)) * r });
-      }
-      pts.push({ x: ex - nx * r, y: ey - ny * r });
-      pts.push({ x: sx - nx * r, y: sy - ny * r });
-      for (let i = 1; i <= ARC_PTS; i++) {
-        const a = Math.PI + (i / (ARC_PTS + 1)) * Math.PI;
-        pts.push({ x: sx + (nx * Math.cos(a) + ux * Math.sin(a)) * r, y: sy + (ny * Math.cos(a) + uy * Math.sin(a)) * r });
-      }
-      result.set(w.id, pts);
-    }
-    return result;
-  }, [history.state.walls]);
-
-  const capsuleUnion = useMemo(() => computeMiteredUnion(capsulePolygons), [capsulePolygons]);
-
-  const miteredDimensions = useMemo(() => computeMiteredWallDimensions(history.state.walls), [history.state.walls]);
+  const miteredDimensions = useMemo(() => cachedBy(miteredDimensionsCache, history.state.walls, () => computeMiteredWallDimensions(history.state.walls)), [history.state.walls]);
+  /** id → wall, for render loops that resolve a wall per item (a `walls.find` per wall dimension was ~30M
+   *  comparisons per render on a 6,000-segment plan). */
+  const wallByIdMap = useMemo(() => { const m = new Map<string, Wall>(); for (const w of history.state.walls) if (!m.has(w.id)) m.set(w.id, w); return m; }, [history.state.walls]);
+  // First entry per wall wins, as the `find` it replaces returned.
+  const miteredDimensionById = useMemo(() => { const m = new Map<string, (typeof miteredDimensions)[number]>(); for (const d of miteredDimensions) if (!m.has(d.wallId)) m.set(d.wallId, d); return m; }, [miteredDimensions]);
 
   /** Unique wall junction nodes — points where wall endpoints coincide (within tolerance). */
   /** Per-wall level derived from the directed graph.
@@ -2718,11 +2770,20 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const TOL = 2.0;
     // Distance-based node clustering so rounding near bucket edges doesn't miss matches.
     const nodes: Array<{ x: number; y: number }> = [];
+    // The LOWEST-index node within TOL, as the old linear scan returned — found through a TOL-cell grid (the
+    // 3×3 neighbourhood holds every node within TOL) instead of scanning every node for every wall end.
+    const grid = new Map<string, number[]>();
     const nodeOf = (p: { x: number; y: number }): number => {
-      for (let i = 0; i < nodes.length; i++) {
-        if (Math.hypot(nodes[i].x - p.x, nodes[i].y - p.y) < TOL) return i;
+      const cx = Math.floor(p.x / TOL), cy = Math.floor(p.y / TOL);
+      let best = -1;
+      for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+        for (const i of grid.get(`${cx + ox},${cy + oy}`) ?? []) {
+          if ((best < 0 || i < best) && Math.hypot(nodes[i].x - p.x, nodes[i].y - p.y) < TOL) best = i;
+        }
       }
+      if (best >= 0) return best;
       nodes.push({ x: p.x, y: p.y });
+      const k = `${cx},${cy}`; const b = grid.get(k); if (b) b.push(nodes.length - 1); else grid.set(k, [nodes.length - 1]);
       return nodes.length - 1;
     };
     const wallStartNode = new Map<string, number>();
@@ -2909,6 +2970,60 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
     return nodes;
   }, [history.state.walls, history.state.layers]);
+  /** The nodes the canvas draws markers, labels and object footprints for: none at a large plan's site zoom
+   *  (see OBJECT_LOD_PX_PER_M — thousands of dots there are neither legible nor clickable), otherwise the
+   *  ones in view. Node-driven LOGIC (snapping, exports, geometry) keeps using the full `wallNodes`. */
+  const wallNodesInView = useMemo(
+    () => (hideObjectsForZoom ? [] : !cullRect ? wallNodes : wallNodes.filter((n) => inCull(n.x, n.y, n.x, n.y))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- inCull reads cullRect
+    [wallNodes, hideObjectsForZoom, cullRect],
+  );
+  /** Per-space DERIVED geometry for the Space render — its holes, net area, the outline inset to the wall faces
+   *  and the label area. Each needs every wall (per edge) or every other space, and it was recomputed for every
+   *  space on every render, pan and zoom tick included: ~56M operations a frame on a 400-space plan. None of it
+   *  depends on the view, so it is kept per space until the geometry it reads changes. Keyed by space id + the
+   *  wall half-thickness in force (the only other input). */
+  const roomGeomCache = useMemo(
+    () => new Map<string, { roomHoles: Point[][]; netAreaPx: number; renderOuter: Point[]; renderHoles: Point[][]; labelAreaPx: number }>(),
+    [history.state.walls, wallNodes, visibleRooms, subtractBufferedFromSpace],
+  );
+  /** Master-plan placements on this sheet, and each placed design's paths once loaded (see ./designInstances). */
+  const placedInstances = useMemo(() => uniqueInstances(history.state.rooms), [history.state.rooms]);
+  const [designPaths, setDesignPaths] = useState<Record<string, DesignPaths | null>>({});
+  const [showPlacedDesigns, setShowPlacedDesigns] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    for (const path of new Set(placedInstances.map((i) => i.path))) {
+      if (path in designPaths) continue;
+      void loadDesignPaths(path).then((d) => { if (alive) setDesignPaths((prev) => (path in prev ? prev : { ...prev, [path]: d })); });
+    }
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- designPaths is read to skip loaded paths, not to re-run
+  }, [placedInstances]);
+  /** The walls a Space's render inset looks for, found by position instead of by scanning every wall for
+   *  every room edge — on a 2,300-wall floor that scan was ~7M checks and most of a level switch.
+   *  `near` holds the buffered, non-path walls bucketed by MIDPOINT (an edge only counts a wall whose
+   *  midpoint is within 8 px of it); `deadEnds` the subset ending at a degree-1 node. */
+  const bufferedWallIndex = useMemo(() => {
+    const CELL = 64;
+    const near = new Map<string, Wall[]>();
+    const buffered = history.state.walls.filter((w) => w.bufferStyle && w.segmentType !== "path");
+    for (const w of buffered) {
+      const k = `${Math.floor((w.start.x + w.end.x) / 2 / CELL)},${Math.floor((w.start.y + w.end.y) / 2 / CELL)}`;
+      const b = near.get(k);
+      if (b) b.push(w); else near.set(k, [w]);
+    }
+    const deadEndIds = new Set<string>();
+    for (const n of wallNodes) if (n.wallIds.length === 1) deadEndIds.add(n.wallIds[0]);
+    /** Buffered walls whose midpoint lies in the box, in no particular order (callers take a max). */
+    const query = (x0: number, y0: number, x1: number, y1: number): Wall[] => {
+      const out: Wall[] = [];
+      for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++)
+        for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) for (const w of near.get(`${cx},${cy}`) ?? []) out.push(w);
+      return out;
+    };
+    return { query, deadEnds: buffered.filter((w) => deadEndIds.has(w.id)) };
+  }, [history.state.walls, wallNodes]);
   /** Latest `wallNodes`, readable from a callback that must not re-create on every node move —
    *  `applyFlowObjectParams` resolves a flow's node indices against it at Apply time. */
   const wallNodesRef = useRef(wallNodes);
@@ -3421,6 +3536,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     return w?.color ?? "#334155";
   }, [history.state.walls]);
   const [viewMode, setViewMode] = useState<"2d" | "3d" | "both" | "views" | "layout">("2d");
+  /** Preferences ▸ Show on screen: Chat AI, Drawing toolbar, Flow engine. */
+  const uiPrefs = useUiPrefs();
+  /** Header ▸ Render mode (Geometry | Primitives | Detailed). Drives how attached objects DRAW on the canvas
+   *  and in 3D: `vp()` replaces the object's own `renderMode` param, which is passive for display. Exports,
+   *  Flow evaluation, metrics and library previews keep reading the object's params untouched. */
+  const uiRenderMode = useRenderMode();
+  /** Header ▸ Plan | Build | Present — drives which workflow buttons lead the Drawing toolbar. */
+  const phase = usePhase();
+  /** Geometry mode draws every segment (walls, doors, windows, opening pieces) as a plain centreline. */
+  const geomOnly = uiRenderMode === "geometry";
+  const viewRenderMode = uiRenderMode === "detailed" ? "Full" : uiRenderMode === "primitives" ? "Basic" : "Nothing";
+  const vp = (params?: Record<string, unknown>): Record<string, unknown> => ({ ...(params ?? {}), renderMode: viewRenderMode });
   /** The 3D canvas is mounted only in these modes. The mesh builders feeding it (wall bands, openings,
    *  parametric objects, other levels) are skipped otherwise — they re-ran on every 2D edit for a view
    *  nobody was looking at. */
@@ -3477,6 +3604,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  the export EXPLICITLY by {@link buildExportJson} and read back by {@link importJsonFile}, since the
    *  `...history.state` spread the rest of the file rides on cannot carry it. */
   const [keywords, setKeywords] = useState("");
+  /** Present ▸ Upload PDF — library-relative path of the walkthrough / video brief; saved as settings.walkthrough. */
+  const [walkthroughPath, setWalkthroughPath] = useState<string | undefined>(undefined);
   // Export JSON → download / local Library / Cloud Library. Opened by the toolbar button.
   const [exportJsonOpen, setExportJsonOpen] = useState(false);
   // Files ▸ Inspect → read-only listing of the Cloudflare R2 bucket as a folder hierarchy.
@@ -3489,6 +3618,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [levelMeta, setLevelMeta] = useState<LevelMeta[]>([]);
   /** "All" level tab: 3D stacks every storey. Off = 3D shows only the active level. 2D is unaffected either way. */
   const [show3dAllLevels, setShow3dAllLevels] = useState(false);
+  /** "All" draws each storey as its SHELL (exterior walls, openings, slabs — see ./shell3d), the active one
+   *  included: a fitted-out storey is tens of thousands of meshes and the stack could not be drawn. */
+  const [show3dShell, setShow3dShell] = useState(true);
   const [activeLevelId, setActiveLevelId] = useState<string | null>(null);
   const [levelSheets, setLevelSheets] = useState<Record<string, FloorPlanModel>>({});
   const levelStacksRef = useRef<Record<string, HistoryState<FloorPlanModel>>>({});
@@ -4138,12 +4270,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const obj = lib[att.objectId];
         if (!objHasGeometry(obj)) continue;
         // A spine places itself from the host points, so a NODE host is the anchor itself: (0,0) local.
-        const prisms = evalParametricPrisms(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
+        const prisms = evalParametricPrisms(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, vp(att.params), objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
         if (prisms.length) out.push({ id: `pobj-${node.stableKey}-${att.id}`, prisms });
       }
     }
     return out;
-  }, [wallNodes, history.state.nodeMeta, history.state.objectLibrary, pixelsPerMeter, is3dOpen]);
+  }, [wallNodes, history.state.nodeMeta, history.state.objectLibrary, pixelsPerMeter, is3dOpen, uiRenderMode]);
   // Floor slabs (attached to a Space) + Wall bands (attached to a Segment) → 3D meshes. Each takes its
   // footprint from the HOST — a floor uses the room polygon, a wall uses the segment band at its canvas
   // thickness — and extrudes by the object's param: a floor by `thickness` below `level`, a wall by `height`
@@ -4159,6 +4291,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const consider = (room: Room) => {
       if (seen.has(room.id) || !(room.attachments?.length) || room.points.length < 3) return;
       seen.add(room.id);
+      // Only a FULL object is fitted into the rectangle. Basic draws the host outline and Nothing draws
+      // nothing, so a space whose objects are all Basic/Nothing skips the search — it costs ~0.1 s per space
+      // and far more on a long polygon, which is what froze a 400-space master plan for a minute.
+      if (room.attachments.every((a) => renderModeOf(vp(a.params)) !== "Full")) return;
       const r = largestInscribedRectangle(room.points);
       if (!r || r.corners.length < 4) return;
       const [c0, c1, c2] = r.corners;
@@ -4172,7 +4308,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     for (const room of history.state.rooms) consider(room);
     for (const room of visibleRooms) consider(room);
     return m;
-  }, [history.state.rooms, visibleRooms]);
+  }, [history.state.rooms, visibleRooms, uiRenderMode]);
 
   /** Space-floor + segment wall/door/window meshes for ONE sheet. The active level calls it through the memo
    *  below; the other levels call it for the "All" 3D stack (without column carves or inscribed-rect fitting
@@ -4199,7 +4335,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const obj = lib[att.objectId];
         if (!objHasGeometry(obj)) continue;
         const defText = objText(obj);
-        let prisms = evalParametricPrisms(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams);
+        let prisms = evalParametricPrisms(defText, c, pixelsPerMeter, vp(att.params), hostLocal, resolveObjectDef, att.childParams);
         // Generic FIT-TO-SPACE (mirrors the 2D overlay): a non-host-aware object is fitted INSIDE the Space's
         // largest inscribed rectangle at that rectangle's orientation (falling back to the room bbox); heights
         // stay true. Host-aware objects extrude as-authored.
@@ -4227,7 +4363,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       // The 3D canvas suppresses its own extrusion for a segment hosting a Wall object because THIS band is
       // its 3D — so a hidden layer has to be honoured here too, or hiding the layer would leave the band
       // behind as the only thing still drawn.
-      if (!isLayerVisible(w.layerId)) continue;
+      if (!isEntityVisible(w)) continue;
       const atts = w.attachments ?? [];
       // A WALL object hands its 3D to the canvas whether it is a spine or a rules object — it names the band's
       // base and height, and the canvas owns the MITRED footprint, which is the only thing that makes corners
@@ -4302,7 +4438,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (!objIsSpine(oObj) && objHasGeometry(oObj)) {
           const cx = (w.start.x + w.end.x) / 2, cy = (w.start.y + w.end.y) / 2;
           const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-          const prisms = evalParametricPrisms(objText(oObj), { x: cx, y: cy }, pixelsPerMeter, { ...openAtt.params, rotation: angle }, undefined, resolveObjectDef, openAtt.childParams);
+          const prisms = evalParametricPrisms(objText(oObj), { x: cx, y: cy }, pixelsPerMeter, vp({ ...openAtt.params, rotation: angle }), undefined, resolveObjectDef, openAtt.childParams);
           const lifted = wbase ? prisms.map((p) => ({ ...p, yBottom: p.yBottom + wbase, yTop: p.yTop + wbase })) : prisms;
           if (lifted.length) out.push({ id: `opening-${w.id}-${openAtt.id}`, prisms: lifted });
         }
@@ -4317,11 +4453,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         // prisms through untouched, exactly as the 2D branch does.
         if (objIsSpine(gObj)) {
           const hostPts = [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / pixelsPerMeter, y: (p.y - mid.y) / pixelsPerMeter }));
-          const sp = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, att.params, hostPts, resolveObjectDef, att.childParams);
+          const sp = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, vp(att.params), hostPts, resolveObjectDef, att.childParams);
           if (sp.length) out.push({ id: `pobj-seg-${w.id}-${att.id}`, prisms: sp });
           continue;
         }
-        const prisms = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
+        const prisms = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, vp({ ...att.params, rotation: 0 }), undefined, resolveObjectDef, att.childParams);
         if (!prisms.length) continue;
         const gb = polysBBox(prisms.flatMap((p) => [p.bottom, p.top]));
         if (!gb) continue;
@@ -4340,7 +4476,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const floorWallMeshes = useMemo<FlowMesh[]>(
     () => (is3dOpen ? buildFloorWallMeshes(history.state, miteredPolygons, roomInscribedRects, wallCarveFootprints) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- buildFloorWallMeshes reads pixelsPerMeter / isLayerVisible, listed
-    [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects, wallCarveFootprints, isLayerVisible, is3dOpen]);
+    [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects, wallCarveFootprints, isLayerVisible, is3dOpen, uiRenderMode]);
   // ── Attached SPINE objects whose solids are NOT straight prisms — a bike's tubes and wheels, a car's lofted
   // body, anything booleaned. `FlowMeshPrism` is a bottom outline plus a top outline, so it cannot hold them;
   // the 3D canvas already draws general FACE LISTS for a Render node's Polyhedron row, and this feeds attached
@@ -4349,14 +4485,45 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // Exactly the meshes the prism path could not take appear here (see spineSolids) — never both, or a solid
   // would be drawn twice and z-fight with itself. Faces arrive in ANCHOR-RELATIVE plan metres, so the mapping
   // is the Polyhedron row's own: plan [x, y, z] → scene (x, z, y), with the host's position as the transform.
+  // Python objects run asynchronously (Pyodide in a worker); bump this when a result lands so the views pick it up.
+  const [pyTick, setPyTick] = useState(0);
+  useEffect(() => onPythonResult(() => setPyTick((t) => t + 1)), []);
   const spineObjectMasses = useMemo<PrimMass3D[]>(() => {
+    // 3D-only output: with the 3D view closed nothing reads it, and resolving every object's solids on a big
+    // plan cost ~10 s per load (same gate as the node-object prisms above).
+    if (!is3dOpen) return [];
     const lib = history.state.objectLibrary ?? {};
     const ppm = pixelsPerMeter || 1;
     const out: PrimMass3D[] = [];
     const push = (idBase: string, anchorPx: Point, hostPts: Point[] | undefined, att: { objectId: string; params: Record<string, number | string | boolean>; id: string }) => {
       const obj = lib[att.objectId];
+      if (objIsPython(obj)) {
+        // Object-local metres (+x across, +y back→front, +z up) → scene metres (x, y up, z = plan Y), turned by
+        // the instance's `rotation` (degrees, plan) about its anchor.
+        const res = getPythonResult(obj, att.params);
+        if (!res) return;
+        const rot = ((Number(att.params.rotation) || 0) * Math.PI) / 180, c = Math.cos(rot), sn = Math.sin(rot);
+        const ax = anchorPx.x / ppm, az = anchorPx.y / ppm;
+        res.meshes.forEach((m, i) => {
+          const src = m.positions, pos = new Float32Array(src.length);
+          for (let k = 0; k < src.length; k += 3) {
+            const lx = src[k], ly = src[k + 1], lz = src[k + 2];
+            pos[k] = ax + lx * c - ly * sn;
+            pos[k + 1] = lz;
+            pos[k + 2] = az + lx * sn + ly * c;
+          }
+          out.push({
+            id: `py-${idBase}-${att.id}-${i}`, shape: "mesh", layer: m.name,
+            length: 0, breadth: 0, height: 0, radius: 0, radiusTop: 0, topLength: 0, topBreadth: 0, tubeRadius: 0, arcDeg: 360,
+            mesh: { positions: pos, indices: m.indices },
+            color: m.color ?? "#cbd5e1",
+            transform: { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0, mx: 1, my: 1, mz: 1 },
+          });
+        });
+        return;
+      }
       if (!objIsSpine(obj)) return;
-      const r = resolveSpineObject(JSON.stringify(obj), anchorPx, ppm, att.params, hostPts);
+      const r = resolveSpineObject(JSON.stringify(obj), anchorPx, ppm, vp(att.params), hostPts);
       if (!r) return;
       const { faceMeshes } = spineSolids(r.meshes, anchorPx, ppm);
       faceMeshes.forEach((m, i) => {
@@ -4394,7 +4561,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       for (const att of room.attachments) push(`room-${room.id}`, c, hostLocal, att);
     }
     return out;
-  }, [history.state.objectLibrary, history.state.nodeMeta, history.state.walls, history.state.rooms, wallNodes, pixelsPerMeter]);
+  }, [history.state.objectLibrary, history.state.nodeMeta, history.state.walls, history.state.rooms, wallNodes, pixelsPerMeter, is3dOpen, pyTick, uiRenderMode]);
 
   // Everything the 3D view shows on the generic mesh channel: Flow "Mesh to 3D" output + node-attached
   // parametric-object meshes + Space-floor / Segment-wall meshes.
@@ -5671,7 +5838,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [infoExpandedEntries, setInfoExpandedEntries] = useState<Set<string>>(() => new Set());
   // Per-panel collapse state (Properties / Tools / Info). Header stays visible; body hides when off.
   // Properties opens expanded on load so the Properties / Metrics tab is visible by default.
-  const [propertiesPanelExpanded, setPropertiesPanelExpanded] = useState<boolean>(true);
+  // Preferences ▸ Show on screen ▸ Properties panel; the canvas-edge chevron flips the same value.
+  const propertiesPanelExpanded = uiPrefs.showProperties;
   const [toolsPanelExpanded, setToolsPanelExpanded] = useState<boolean>(true);
   const [infoPanelExpanded, setInfoPanelExpanded] = useState<boolean>(true);
   // Space Tools — hierarchical algorithm tree replacing the per-block render in the
@@ -5691,6 +5859,253 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // ("All" / "Node" / "Segment" / "Space"). Without this state the popover
   // calls `undefined` on click and the Select button title shows "undefined".
   const [selectFilter, setSelectFilter] = useState<SelectFilter>("all");
+  // ── Groups (grouped documents — see ./planGroups and docs/canvas-groups-schema.md) ───────────────────
+  // Entities carry `groupId`; the group table rides on the model like `layers`. The "group" select scope
+  // picks whole groups: a click takes the group at the CURRENT SCOPE (top level, or the children of the
+  // group you have entered), a double-click enters it, Esc steps back out. While inside a group everything
+  // outside it is locked and dimmed. Locked groups (the site, by default) cannot be picked or edited.
+  const groupTable = history.state.groups;
+  const groupById = useMemo(() => new Map((groupTable ?? []).map((g) => [g.id, g])), [groupTable]);
+  const [enteredGroupId, setEnteredGroupId] = useState<string | null>(null);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
+  /** True when `gid` is `anc` or nested inside it. */
+  const groupWithin = useCallback((gid: string, anc: string): boolean => {
+    const seen = new Set<string>();
+    for (let g: string | null | undefined = gid; g && !seen.has(g); g = groupById.get(g)?.parent) {
+      if (g === anc) return true;
+      seen.add(g);
+    }
+    return false;
+  }, [groupById]);
+  /** Groups that are locked themselves or through an ancestor. */
+  const lockedGroupIds = useMemo(() => {
+    const out = new Set<string>();
+    for (const g of groupById.values()) {
+      const seen = new Set<string>();
+      for (let a: PlanGroup | undefined = g; a && !seen.has(a.id); a = a.parent ? groupById.get(a.parent) : undefined) {
+        seen.add(a.id);
+        if (a.locked) { out.add(g.id); break; }
+      }
+    }
+    return out;
+  }, [groupById]);
+  /** Layer lock, group lock, and "outside the entered group" — the one test every pick and drag makes. */
+  const isEntityLocked = (e: { layerId?: string; groupId?: string }): boolean => {
+    if (isLayerLocked(e.layerId)) return true;
+    if (!groupById.size) return false;
+    if (e.groupId && lockedGroupIds.has(e.groupId)) return true;
+    if (enteredGroupId) return !e.groupId || !groupWithin(e.groupId, enteredGroupId);
+    return false;
+  };
+  // A new document (or one without groups) drops whatever group state the last one left behind.
+  useEffect(() => {
+    if (enteredGroupId && !groupById.has(enteredGroupId)) setEnteredGroupId(null);
+    setSelectedGroupIds((ids) => (ids.every((id) => groupById.has(id)) ? ids : ids.filter((id) => groupById.has(id))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the group table only
+  }, [groupById]);
+  /** Bounding box of each group on the ACTIVE level, its descendants included — what is outlined, hit and
+   *  snapped. A box, not the outline: cheap, and a plot reads as a rectangle anyway. */
+  const groupBoxes = useMemo(() => {
+    const box = new Map<string, { x0: number; y0: number; x1: number; y1: number }>();
+    if (!groupById.size) return box;
+    const add = (gid: string | undefined, x: number, y: number) => {
+      const seen = new Set<string>();
+      for (let g: string | null | undefined = gid; g && !seen.has(g); g = groupById.get(g)?.parent) {
+        seen.add(g);
+        const b = box.get(g);
+        if (!b) box.set(g, { x0: x, y0: y, x1: x, y1: y });
+        else { if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y; }
+      }
+    };
+    for (const w of history.state.walls) if (w.groupId) { add(w.groupId, w.start.x, w.start.y); add(w.groupId, w.end.x, w.end.y); }
+    for (const r of history.state.rooms) if (r.groupId) for (const p of r.points) add(r.groupId, p.x, p.y);
+    return box;
+  }, [history.state.walls, history.state.rooms, groupById]);
+  /** The group under (x, y) at the current scope: a direct child of the entered group (or a top-level group
+   *  when none is entered), unlocked, smallest box first so a nested pick is never shadowed by a big one. */
+  const groupAt = (x: number, y: number): string | null => {
+    let best: string | null = null, bestA = Infinity;
+    for (const [gid, b] of groupBoxes) {
+      if (lockedGroupIds.has(gid)) continue;
+      if ((groupById.get(gid)?.parent ?? null) !== enteredGroupId) continue;
+      if (x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1) continue;
+      const a = (b.x1 - b.x0) * (b.y1 - b.y0);
+      if (a < bestA) { bestA = a; best = gid; }
+    }
+    return best;
+  };
+  /** A group drag in progress: offset so far, and the lines it may snap to (collected once per drag). */
+  const groupDragRef = useRef<{ ids: string[]; sx: number; sy: number; dx: number; dy: number; moved: boolean; xs: number[]; ys: number[] } | null>(null);
+  const [groupDragView, setGroupDragView] = useState<{ dx: number; dy: number; gx: number | null; gy: number | null } | null>(null);
+  /** Snap targets for a moving group: the axis-aligned edges of everything it is NOT — plot boundaries,
+   *  roads, the other plots. */
+  const groupSnapLines = (moving: string[]) => {
+    const xs: number[] = [], ys: number[] = [];
+    const isMoving = (gid?: string) => !!gid && moving.some((m) => groupWithin(gid, m));
+    const edge = (a: Point, b: Point) => {
+      if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 1) xs.push((a.x + b.x) / 2);
+      else if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 1) ys.push((a.y + b.y) / 2);
+    };
+    for (const w of history.state.walls) if (!isMoving(w.groupId)) edge(w.start, w.end);
+    for (const r of history.state.rooms) if (!isMoving(r.groupId)) r.points.forEach((p, i) => edge(p, r.points[(i + 1) % r.points.length]));
+    return { xs, ys };
+  };
+  /** Move groups by (dx, dy) site px on EVERY level: the active sheet through history, the parked sheets and
+   *  their parked undo stacks directly; each moved group's `transform.position` follows. */
+  const moveGroups = (ids: string[], dx: number, dy: number) => {
+    if (!ids.length || (!dx && !dy)) return;
+    const ppm = pixelsPerMeter || 100;
+    const moving = (gid?: string) => !!gid && ids.some((m) => groupWithin(gid, m));
+    const sp = (p: Point): Point => ({ x: p.x + dx, y: p.y + dy });
+    const shift = (m: FloorPlanModel): FloorPlanModel => ({
+      ...m,
+      walls: m.walls.map((w) => (moving(w.groupId) ? { ...w, start: sp(w.start), end: sp(w.end), ...(w.spinePoints ? { spinePoints: w.spinePoints.map((v, i) => v + (i % 2 ? dy : dx)) } : {}) } : w)),
+      rooms: m.rooms.map((r) => (moving(r.groupId) ? { ...r, points: r.points.map(sp), ...(r.holes ? { holes: r.holes.map((h) => h.map(sp)) } : {}) } : r)),
+    });
+    // Only the outermost moved groups change position; a nested one is placed relative to its parent.
+    const tops = ids.filter((id) => !ids.some((o) => o !== id && groupWithin(id, o)));
+    const groups = (history.state.groups ?? []).map((g) => {
+      if (!tops.includes(g.id)) return g;
+      const base = g.parent ? siteToGroup({ x: 0, y: 0 }, g.parent, groupById, ppm) : { x: 0, y: 0 };
+      const d = g.parent ? siteToGroup({ x: dx, y: dy }, g.parent, groupById, ppm) : { x: dx, y: dy };
+      const position: [number, number] = [+(g.transform.position[0] + (d.x - base.x) / ppm).toFixed(4), +(g.transform.position[1] + (d.y - base.y) / ppm).toFixed(4)];
+      return { ...g, transform: { ...g.transform, position } };
+    });
+    // The active level moves through history (so it undoes); the other levels follow the group table — see
+    // the effect below, which also replays undo / redo of a move onto them.
+    history.set({ ...shift(history.state), groups });
+  };
+  /** Group origins (site px) the PARKED level sheets currently reflect. When the table's origins move — a
+   *  group drag, or undo / redo of one — the parked sheets are shifted by the same amount, so every level
+   *  of a group stays together whichever level the history step happened on. */
+  const sheetGroupOriginsRef = useRef<Map<string, Point> | null>(null);
+  useEffect(() => {
+    const ppm = pixelsPerMeter || 100;
+    const origins = new Map<string, Point>();
+    for (const g of groupById.values()) origins.set(g.id, groupToSite({ x: 0, y: 0 }, g.id, groupById, ppm));
+    const prev = sheetGroupOriginsRef.current;
+    sheetGroupOriginsRef.current = origins;
+    // A different set of groups is a different document: nothing to replay.
+    if (!prev || prev.size !== origins.size || [...origins.keys()].some((k) => !prev.has(k))) return;
+    const delta = new Map<string, Point>();
+    for (const [gid, o] of origins) {
+      const q = prev.get(gid)!;
+      if (Math.abs(o.x - q.x) > 1e-6 || Math.abs(o.y - q.y) > 1e-6) delta.set(gid, { x: o.x - q.x, y: o.y - q.y });
+    }
+    if (!delta.size) return;
+    // Each entity moves with its innermost moved group (a nested group's origin moves with its parent's).
+    const dOf = (gid?: string): Point | null => {
+      const seen = new Set<string>();
+      for (let g: string | null | undefined = gid; g && !seen.has(g); g = groupById.get(g)?.parent) { seen.add(g); const d = delta.get(g); if (d) return d; }
+      return null;
+    };
+    const shift = (m: FloorPlanModel): FloorPlanModel => ({
+      ...m,
+      walls: m.walls.map((w) => { const d = dOf(w.groupId); return d ? { ...w, start: { x: w.start.x + d.x, y: w.start.y + d.y }, end: { x: w.end.x + d.x, y: w.end.y + d.y }, ...(w.spinePoints ? { spinePoints: w.spinePoints.map((v, i) => v + (i % 2 ? d.y : d.x)) } : {}) } : w; }),
+      rooms: m.rooms.map((r) => { const d = dOf(r.groupId); return d ? { ...r, points: r.points.map((p) => ({ x: p.x + d.x, y: p.y + d.y })), ...(r.holes ? { holes: r.holes.map((h) => h.map((p) => ({ x: p.x + d.x, y: p.y + d.y }))) } : {}) } : r; }),
+      groups: history.state.groups,
+    });
+    setLevelSheets((prevSheets) => Object.fromEntries(Object.entries(prevSheets).map(([k, m]) => [k, shift(m)])));
+    for (const st of Object.values(levelStacksRef.current)) st.present = shift(st.present);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- driven by the group table alone
+  }, [groupById]);
+  /** Folded-open groups in the Layers panel tree. */
+  const [openGroupIds, setOpenGroupIds] = useState<Set<string>>(() => new Set());
+  /** Own entities per group per layer on the active level — the "contents" rows of the tree. */
+  const groupLayerCounts = useMemo(() => {
+    const out = new Map<string, Map<string, number>>();
+    if (!groupById.size) return out;
+    const add = (gid: string | undefined, layer: string | undefined) => {
+      if (!gid) return;
+      let m = out.get(gid);
+      if (!m) { m = new Map(); out.set(gid, m); }
+      const k = layer ?? "0";
+      m.set(k, (m.get(k) ?? 0) + 1);
+    };
+    for (const w of history.state.walls) add(w.groupId, w.layerId);
+    for (const r of history.state.rooms) add(r.groupId, r.layerId);
+    return out;
+  }, [history.state.walls, history.state.rooms, groupById]);
+  const setGroupLayerVisible = (id: string, layerId: string, visible: boolean) => {
+    const groups = (history.state.groups ?? []).map((g) => {
+      if (g.id !== id) return g;
+      const lo = { ...(g.layerOverrides ?? {}) };
+      if (visible) { const { visible: _v, ...rest } = lo[layerId] ?? {}; if (Object.keys(rest).length) lo[layerId] = rest; else delete lo[layerId]; }
+      else lo[layerId] = { ...(lo[layerId] ?? {}), visible: false };
+      return { ...g, layerOverrides: Object.keys(lo).length ? lo : undefined };
+    });
+    history.set({ ...history.state, groups });
+  };
+  const setGroupFlag = (id: string, patch: { locked?: boolean; visible?: boolean }) => {
+    const groups = (history.state.groups ?? []).map((g) => (g.id === id ? { ...g, ...patch } : g));
+    history.set({ ...history.state, groups });
+  };
+  const groupMouseDown = (additive: boolean) => {
+    const p = pointerPositionInWorld();
+    const gid = p ? groupAt(p.x, p.y) : null;
+    if (!gid || !p) { if (!additive) setSelectedGroupIds([]); return; }
+    const ids = additive
+      ? (selectedGroupIds.includes(gid) ? selectedGroupIds.filter((x) => x !== gid) : [...selectedGroupIds, gid])
+      : selectedGroupIds.includes(gid) ? selectedGroupIds : [gid];
+    setSelectedGroupIds(ids);
+    selection.clearSelection();
+    if (!ids.includes(gid)) return;
+    groupDragRef.current = { ids, sx: p.x, sy: p.y, dx: 0, dy: 0, moved: false, ...groupSnapLines(ids) };
+  };
+  const groupMouseMove = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    const p = pointerPositionInWorld();
+    const drag = groupDragRef.current;
+    if (!drag) {
+      const gid = p ? groupAt(p.x, p.y) : null;
+      setHoveredGroupId((h) => (h === gid ? h : gid));
+      const c = event.target.getStage()?.container();
+      if (c) c.style.cursor = gid && selectedGroupIds.includes(gid) ? "all-scroll" : gid ? "pointer" : "default";
+      return;
+    }
+    if (!p) return;
+    let dx = p.x - drag.sx, dy = p.y - drag.sy;
+    if (!drag.moved && Math.hypot(dx, dy) * scale < 3) return; // a click, not a drag
+    drag.moved = true;
+    // Snap the moving box's edges to the nearest edge line within 8 screen px (Alt held: no snap).
+    let u: { x0: number; y0: number; x1: number; y1: number } | null = null;
+    for (const id of drag.ids) {
+      const b = groupBoxes.get(id);
+      if (b) u = u ? { x0: Math.min(u.x0, b.x0), y0: Math.min(u.y0, b.y0), x1: Math.max(u.x1, b.x1), y1: Math.max(u.y1, b.y1) } : { ...b };
+    }
+    let gx: number | null = null, gy: number | null = null;
+    if (u && !event.evt.altKey) {
+      const tol = 8 / scale;
+      let bx = tol, by = tol;
+      for (const edgeX of [u.x0 + dx, u.x1 + dx]) for (const lx of drag.xs) { const d = lx - edgeX; if (Math.abs(d) < Math.abs(bx)) { bx = d; gx = lx; } }
+      for (const edgeY of [u.y0 + dy, u.y1 + dy]) for (const ly of drag.ys) { const d = ly - edgeY; if (Math.abs(d) < Math.abs(by)) { by = d; gy = ly; } }
+      if (gx !== null) dx += bx;
+      if (gy !== null) dy += by;
+    }
+    drag.dx = dx; drag.dy = dy;
+    setGroupDragView({ dx, dy, gx, gy });
+  };
+  const groupMouseUp = () => {
+    const drag = groupDragRef.current;
+    groupDragRef.current = null;
+    setGroupDragView(null);
+    if (drag?.moved) moveGroups(drag.ids, drag.dx, drag.dy);
+  };
+  const enterGroupAt = (x: number, y: number): boolean => {
+    const gid = groupAt(x, y);
+    if (!gid) return false;
+    setEnteredGroupId(gid);
+    setSelectedGroupIds([]);
+    setHoveredGroupId(null);
+    return true;
+  };
+  /** Esc: cancel a drag, then drop the group selection, then step out one level. */
+  const exitGroupStep = (): boolean => {
+    if (groupDragRef.current) { groupDragRef.current = null; setGroupDragView(null); return true; }
+    if (selectedGroupIds.length) { setSelectedGroupIds([]); return true; }
+    if (enteredGroupId) { setEnteredGroupId(groupById.get(enteredGroupId)?.parent ?? null); return true; }
+    return false;
+  };
   const [spaceToolsTextureExpanded, setSpaceToolsTextureExpanded] = useState<boolean>(false);
   const [spaceToolsUiToolsExpanded, setSpaceToolsUiToolsExpanded] = useState<boolean>(false);
   const [spaceToolsLayoutGenExpanded, setSpaceToolsLayoutGenExpanded] = useState<boolean>(false);
@@ -6264,8 +6679,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     }
   }, [tool]);
 
-  /** Pan tool, Space+drag, or active pan: no dragging/transform on scene nodes; furniture events bubble for pan. */
-  const freezeWorldManipulators = tool === "pan" || spaceHeld || isPanning;
+  /** Pan tool, Space+drag, or active pan: no dragging/transform on scene nodes; furniture events bubble for pan.
+   *  The "group" select scope too: there a press picks and drags a whole group, never one shape inside it. */
+  const freezeWorldManipulators = tool === "pan" || spaceHeld || isPanning || (tool === "select" && selectFilter === "group");
 
   const selectedObject = history.state.objects.find((objectItem) => objectItem.id === selectedSingleId) ?? null;
   const selectedFurniture = history.state.furniture.find((item) => item.id === selectedSingleId) ?? null;
@@ -6856,6 +7272,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       ...(geometry ? { geometry } : {}),
       ...(flowNodes && flowNodes.length ? { flow: { nodes: flowNodes } } : {}),
       ...(parsed.decompile === "primitives" ? { decompile: "primitives" as const } : {}),
+      // A Python object carries its generator source verbatim (see ParametricObjectFile.python).
+      ...(asObj(parsed.python) && typeof (parsed.python as { source?: unknown }).source === "string"
+        ? { python: { runtime: String((parsed.python as { runtime?: unknown }).runtime ?? "pyodide"), entry: String((parsed.python as { entry?: unknown }).entry ?? "build"), source: (parsed.python as { source: string }).source } }
+        : {}),
     };
   }, []);
   // Keep the Chat-AI agent's save_object tool pointed at the live parser (declared above handleAiSend).
@@ -10093,7 +10513,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const segAttrs = history.state.graphAttrs?.segments ?? {};
     const segs: ElevSeg[] = [];
     for (const w of history.state.walls) {
-      if (!isLayerVisible(w.layerId)) continue;
+      if (!isEntityVisible(w)) continue;
       // Type comes from the wall itself (its drawn segmentType / per-element seg-type override) — NOT the
       // schema default, which would mis-type plain walls. Heights below DO come from the schema.
       const segAttrType = segAttrs[w.id]?.["seg-type"];
@@ -23193,6 +23613,7 @@ User request: ${aiPrompt.trim()}`;
         history.redo();
       }
       if (event.key === "Escape") {
+        if (exitGroupStep()) return;
         if (addWindowMode) {
           setAddWindowMode(false);
           toast.dismiss();
@@ -23349,12 +23770,12 @@ User request: ${aiPrompt.trim()}`;
           let anyLockFree = false;
           // Selected segments → both endpoints are anchors (coincident neighbours follow, keeping junctions stitched).
           for (const w of history.state.walls) {
-            if (idSet.has(w.id) && !isLayerLocked(w.layerId)) { anyLockFree = true; addAnchor(w.start); addAnchor(w.end); }
+            if (idSet.has(w.id) && !isEntityLocked(w)) { anyLockFree = true; addAnchor(w.start); addAnchor(w.end); }
           }
           // Selected manual rooms → translate polygon; "with-walls" also makes boundary nodes anchors.
           const roomIds = new Set<string>();
           for (const r of visibleRooms) {
-            if (!idSet.has(r.id) || isLayerLocked(r.layerId)) continue;
+            if (!idSet.has(r.id) || isEntityLocked(r)) continue;
             const pts = r.points ?? [];
             if (pts.length >= 3 && history.state.rooms.some((hr) => hr.id === r.id)) { roomIds.add(r.id); anyLockFree = true; }
             if (areaConnectionConstraint === "with-walls" && pts.length >= 3) {
@@ -23787,15 +24208,23 @@ User request: ${aiPrompt.trim()}`;
   // A model that arrives PACKED (a multi-storey file import, a project reload, an agent apply) is split into
   // sheets here, once, whatever path brought it — so no loader has to know about levels. The load itself
   // starts a fresh undo history: undoing "past" a whole-building import would leave the other floors behind.
-  useEffect(() => {
-    if (!history.state.levels?.length) return;
-    const up = unpackLevels(history.state);
-    if (!up) return;
+  /** Split a packed model into sheets and make its active level the editor's model. False when `m` is
+   *  single-level. A loader that knows it holds a packed model calls this directly instead of `history.set`,
+   *  so the editor never renders the packed model first — every memo on the canvas ran twice per import. */
+  const adoptPacked = (m: FloorPlanModel): boolean => {
+    if (!m.levels?.length) return false;
+    const up = unpackLevels(m);
+    if (!up) return false;
     levelStacksRef.current = {};
+    sheetGroupOriginsRef.current = null; // a new document: its group positions are not a move
     setLevelMeta(up.meta);
     setActiveLevelId(up.activeId);
-    setLevelSheets(Object.fromEntries(Object.entries(up.sheets).map(([k, m]) => [k, asSheet(m)])));
+    setLevelSheets(Object.fromEntries(Object.entries(up.sheets).map(([k, sh]) => [k, asSheet(sh)])));
     history.restore({ past: [], present: asSheet(up.active), future: [] });
+    return true;
+  };
+  useEffect(() => {
+    adoptPacked(history.state);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- react to a packed model arriving, nothing else
   }, [history.state.levels]);
 
@@ -24161,7 +24590,7 @@ User request: ${aiPrompt.trim()}`;
     const R = 12 / scale;
     let best: { id: string; mid: Point; d: number } | null = null;
     for (const w of history.state.walls) {
-      if (isLayerLocked(w.layerId) || !isLayerVisible(w.layerId)) continue;
+      if (isEntityLocked(w) || !isEntityVisible(w)) continue;
       if (w.segmentType === "door" || w.segmentType === "window") continue; // openings have their own drag
       const ax = w.start.x, ay = w.start.y, bx = w.end.x, by = w.end.y;
       const dx = bx - ax, dy = by - ay;
@@ -24191,7 +24620,7 @@ User request: ${aiPrompt.trim()}`;
     let bestArea = Infinity;
     for (const r of visibleRooms) {
       if (!r.points || r.points.length < 3) continue;
-      if (isLayerLocked(r.layerId) || !isLayerVisible(r.layerId)) continue;
+      if (isEntityLocked(r) || !isEntityVisible(r)) continue;
       if (!inside(r.points)) continue;
       const area = Math.abs(polygonArea(r.points));
       if (area < bestArea) { bestArea = area; best = { id: r.id, centroid: polygonCentroid(r.points) }; }
@@ -24299,13 +24728,13 @@ User request: ${aiPrompt.trim()}`;
     const addAnchor = (p: Point) => { if (!anchors.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < TOL)) anchors.push({ x: p.x, y: p.y }); };
     // Selected segments → both endpoints become anchors.
     for (const w of history.state.walls) {
-      if (ids.has(w.id) && !isLayerLocked(w.layerId)) { addAnchor(w.start); addAnchor(w.end); }
+      if (ids.has(w.id) && !isEntityLocked(w)) { addAnchor(w.start); addAnchor(w.end); }
     }
     // Selected manual rooms → snapshot polygon; "with-walls" also makes boundary nodes anchors.
     const roomPoints = new Map<string, Point[]>();
     const boundaryTol = 4;
     for (const r of visibleRooms) {
-      if (!ids.has(r.id) || isLayerLocked(r.layerId)) continue;
+      if (!ids.has(r.id) || isEntityLocked(r)) continue;
       const pts = r.points ?? [];
       // Only manual rooms (present in history.state.rooms) can have their polygon translated.
       if (pts.length >= 3 && history.state.rooms.some((hr) => hr.id === r.id)) roomPoints.set(r.id, pts.map((p) => ({ ...p })));
@@ -24338,7 +24767,7 @@ User request: ${aiPrompt.trim()}`;
    *  so the whole duplicate+move commits as ONE entry on mouse-up; a Ctrl-click with no movement discards them. */
   const startSegmentCopyDrag = (wallIds: string[], pointerX: number, pointerY: number): boolean => {
     const idSet = new Set(wallIds);
-    const toCopy = history.state.walls.filter((w) => idSet.has(w.id) && !isLayerLocked(w.layerId));
+    const toCopy = history.state.walls.filter((w) => idSet.has(w.id) && !isEntityLocked(w));
     if (toCopy.length === 0) return false;
     const ga = history.state.graphAttrs ?? { nodes: {}, segments: {} };
     const newSegAttrs: Record<string, Record<string, unknown>> = { ...(ga.segments ?? {}) };
@@ -24533,6 +24962,11 @@ User request: ${aiPrompt.trim()}`;
       startViewportPan(event.evt.clientX, event.evt.clientY);
       return;
     }
+    // "Group" select scope: pick (and start dragging) the group at the current scope.
+    if (event.evt.button === 0 && tool === "select" && selectFilter === "group") {
+      groupMouseDown(event.evt.shiftKey);
+      return;
+    }
 
     // "Node" select scope: a left-press on the nearest node (within the hover radius) selects it AND
     // begins a stage-level drag — so you can grab a node from anywhere the cross-arrow shows, even when a
@@ -24573,7 +25007,7 @@ User request: ${aiPrompt.trim()}`;
       const seg = pointer ? nearestSegmentAt(pointer.x, pointer.y) : null;
       if (seg && pointer) {
         const wall = history.state.walls.find((w) => w.id === seg.id);
-        if (wall && isLayerLocked(wall.layerId)) return;
+        if (wall && isEntityLocked(wall)) return;
         // Ctrl → duplicate-and-move: copy the pressed segment (or all selected segments if it's part of a
         // multi-selection) and drag the copies, leaving the originals in place.
         if (event.evt.ctrlKey) {
@@ -24623,7 +25057,7 @@ User request: ${aiPrompt.trim()}`;
         // there — still expose their points + boundary walls for the drag.
         const room = visibleRooms.find((r) => r.id === sp.id);
         if (!room) return;
-        if (isLayerLocked(room.layerId)) return;
+        if (isEntityLocked(room)) return;
         // Shift → additively toggle this space in/out of the multi-selection; never starts a drag.
         if (event.evt.shiftKey) {
           selection.toggleSelected(sp.id);
@@ -24713,7 +25147,7 @@ User request: ${aiPrompt.trim()}`;
         const seg = nearestSegmentAt(pointer.x, pointer.y);
         if (seg) {
           const wall = history.state.walls.find((w) => w.id === seg.id);
-          if (wall && isLayerLocked(wall.layerId)) return;
+          if (wall && isEntityLocked(wall)) return;
           // Ctrl → duplicate-and-move the pressed segment (or the whole selected segment set), leaving originals.
           if (event.evt.ctrlKey) {
             const ids = (selection.selectedIds.includes(seg.id) && selection.selectedIds.length > 1)
@@ -24757,7 +25191,7 @@ User request: ${aiPrompt.trim()}`;
             if (group) { stageGroupDragRef.current = group; return; }
           }
           const room = visibleRooms.find((r) => r.id === sp.id);
-          if (room && !isLayerLocked(room.layerId)) {
+          if (room && !isEntityLocked(room)) {
             const roomPts = room.points ?? [];
             const tol = 4; const anchors: Point[] = []; const wallSnaps = new Map<string, { start: Point; end: Point }>();
             if (areaConnectionConstraint === "with-walls" && roomPts.length >= 3) {
@@ -25026,7 +25460,7 @@ User request: ${aiPrompt.trim()}`;
    *  (so chained segments read their true mitered inner/outer). Inner = the shorter (concave / bend-toward)
    *  face; ties (a lone straight segment) fall back to the lower-x / lower-y side. */
   const renderBufferedCommitDims = (w: Wall) => {
-    const dim = miteredDimensions.find((d) => d.wallId === w.id);
+    const dim = miteredDimensionById.get(w.id);
     if (!dim || dim.leftEdge.length < 2 || dim.rightEdge.length < 2) return null;
     const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, len = Math.hypot(dx, dy);
     if (len < 0.5) return null;
@@ -25669,6 +26103,7 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onStageMouseMove = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (tool === "select" && selectFilter === "group" || groupDragRef.current) { groupMouseMove(event); return; }
     if (viewportPanPointerActiveRef.current) {
       const dx = event.evt.clientX - panLastScreen.current.x;
       const dy = event.evt.clientY - panLastScreen.current.y;
@@ -25941,6 +26376,12 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onStageDblClick = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    // "Group" select scope: double-click enters the group under the pointer (one level in).
+    if (tool === "select" && selectFilter === "group") {
+      const p = pointerPositionInWorld();
+      if (p) enterGroupAt(p.x, p.y);
+      return;
+    }
     // Add-Segment polyline: end the chain. The double-click's first click already
     // committed the last segment; the second click would have added a tiny zero-length
     // wall — strip it if present, then return to Select.
@@ -26094,6 +26535,7 @@ User request: ${aiPrompt.trim()}`;
   };
 
   const onStageMouseUp = () => {
+    if (groupDragRef.current) { groupMouseUp(); return; }
     commitLiveView();
     // Release the auto-room freeze and force one fresh detection against the committed geometry. Bumped
     // only when a drag actually ran, so an ordinary click costs no extra render.
@@ -26368,7 +26810,9 @@ User request: ${aiPrompt.trim()}`;
     const furnHit = history.state.furniture.find((f) => f.id === id);
     const roomHit = history.state.rooms.find((r) => r.id === id);
     const hitLayer = wallHit?.layerId ?? objHit?.layerId ?? furnHit?.layerId ?? roomHit?.layerId;
+    const hitEntity = wallHit ?? objHit ?? furnHit ?? roomHit;
     if (hitLayer && isLayerLocked(hitLayer)) return;
+    if (hitEntity && isEntityLocked(hitEntity)) return;
     // Gate selection by the Select-tool scope filter. "all" allows everything; a
     // specific scope only lets clicks of the matching kind through. Nodes are handled
     // by a separate path (setSelectedNodeKey), so a "node" scope blocks everything here.
@@ -27196,6 +27640,7 @@ User request: ${aiPrompt.trim()}`;
     const plan = toStandardPlan(packedForSave(baked), {
       pixelsPerMeter,
       keywords,
+      walkthrough: walkthroughPath,
       northBearing: northBearing ?? 0,
       libraryPath: planLibraryPath || cloudLibraryBase || undefined,
     });
@@ -27234,7 +27679,9 @@ User request: ${aiPrompt.trim()}`;
    * A broken definition must not take the export down, so each evaluation is guarded individually —
    * the same treatment the canvas gives them.
    */
-  const parametricObjectPlanGeometry = useMemo<{ closed: Point[][]; open: Point[][] }>(() => {
+  // Built ON DEMAND by the DXF export (its only reader) rather than memoised: evaluating every attached object
+  // on each plan change cost ~10 s per edit on a large plan for a value nothing on screen uses.
+  const parametricObjectPlanGeometry = (): { closed: Point[][]; open: Point[][] } => {
     const lib = history.state.objectLibrary ?? {};
     const closed: Point[][] = [];
     const open: Point[][] = [];
@@ -27249,7 +27696,7 @@ User request: ${aiPrompt.trim()}`;
     };
 
     for (const w of history.state.walls) {
-      if (!isLayerVisible(w.layerId)) continue;
+      if (!isEntityVisible(w)) continue;
       const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
       const hostPts = [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / pixelsPerMeter, y: (p.y - mid.y) / pixelsPerMeter }));
       for (const att of w.attachments ?? []) {
@@ -27273,10 +27720,10 @@ User request: ${aiPrompt.trim()}`;
       }
     }
     return { closed, open };
-  }, [history.state.walls, history.state.nodeMeta, history.state.objectLibrary, wallNodes, visibleRooms, pixelsPerMeter, resolveObjectDef, isLayerVisible]);
+  };
 
   const exportDxfFile = () => {
-    const visWalls = history.state.walls.filter((w) => isLayerVisible(w.layerId));
+    const visWalls = history.state.walls.filter((w) => isEntityVisible(w));
     const drawing = buildArchitecturalDrawing({
       walls: visWalls,
       rooms: visibleRooms,
@@ -27289,7 +27736,7 @@ User request: ${aiPrompt.trim()}`;
       extraCarvePolys: wallCarveFootprints,
       // Attached parametric objects — staircases, wells, vehicles. Without these a plan whose content
       // is objects rather than walls exported as an empty drawing.
-      objectPolys: parametricObjectPlanGeometry,
+      objectPolys: parametricObjectPlanGeometry(),
     });
     const dxf = architecturalDrawingToDxf(drawing);
     const blob = new Blob([dxf], { type: "application/dxf" });
@@ -27375,7 +27822,21 @@ User request: ${aiPrompt.trim()}`;
 
   const importPlanText = async (raw: string, libraryRelPath?: string): Promise<boolean> => {
       try {
-      const parsed: unknown = JSON.parse(raw);
+      let parsed: unknown = JSON.parse(raw);
+      // A GROUPED document (schemaVersion 3, ./planGroups) is a container of canvases: merge them into one
+      // multi-level plan in site coordinates, every entity tagged with its group, and load that. Groups that
+      // only REFERENCE a library design are fetched first.
+      if (isGroupedPlan(parsed)) {
+        const sources: Record<string, Record<string, unknown>> = {};
+        for (const g of (parsed.groups as Array<{ canvas?: unknown; source?: { path?: string } }>)) {
+          const path = g.source?.path;
+          if (g.canvas || !path || sources[path]) continue;
+          const text = await fetchDesignText(path);
+          if (text) sources[path] = JSON.parse(text);
+          else toast.warning(`Group design not found: ${path}`);
+        }
+        parsed = groupedToMerged(parsed, sources);
+      }
       // TWO FORMATS, and the file says which by its own shape rather than by a version number: the
       // STANDARD one (./planFormat — nodes + segments + spaces, coordinates stored once), and every
       // plan exported before it (walls + rooms, each carrying its own x/y). Both are read, forever —
@@ -27388,6 +27849,7 @@ User request: ${aiPrompt.trim()}`;
       let model: Partial<FloorPlanModel>;
       let importedPpm: number | undefined;
       let importedKeywords: string | undefined;
+      let importedWalkthrough: string | undefined;
       let importedBearing: number | undefined;
       let importedLibraryPath: string | undefined;
       if (isStandardPlan(parsed)) {
@@ -27395,6 +27857,7 @@ User request: ${aiPrompt.trim()}`;
         model = m;
         importedPpm = frame.pixelsPerMeter || undefined;
         importedKeywords = frame.keywords;
+        importedWalkthrough = frame.walkthrough;
         importedBearing = frame.northBearing;
         importedLibraryPath = frame.libraryPath;
       } else {
@@ -27471,14 +27934,16 @@ User request: ${aiPrompt.trim()}`;
       // Files saved BEFORE the export-side adoption below still carry `flowOwner`, and the Flow Live
       // effect deletes every tagged entity while Live is off — which read as "the plan flashes and
       // disappears". Adopt on the way in as well, so those files load as the drawing they show.
-      history.set(withLayerDefaults(adoptFlowOwnedGeometry({
+      const loaded = withLayerDefaults(adoptFlowOwnedGeometry({
         ...initialModel,
         ...model,
         imageUnderlay: keptUnderlay,
         ...(keptOverlays ? { imageOverlays: keptOverlays } : {}),
         objectLibrary,
         walls: splitWallsAtIntersections(model.walls ?? []),
-      })));
+      }));
+      sheetGroupOriginsRef.current = null; // a new document: its group positions are not a move
+      if (!adoptPacked(loaded)) history.set(loaded);
       // Restore the saved scale calibration so dimensions match the export.
       if (typeof importedPpm === "number" && Number.isFinite(importedPpm) && importedPpm > 0) {
         setPixelsPerMeter(importedPpm);
@@ -27489,6 +27954,7 @@ User request: ${aiPrompt.trim()}`;
       // rather than inventing a segment the file never carried. Absent keys leave the session's own
       // values alone, so importing an older file does not wipe what is on screen.
       if (typeof importedKeywords === "string") setKeywords(importedKeywords);
+      if (typeof importedWalkthrough === "string") setWalkthroughPath(importedWalkthrough);
       if (typeof importedBearing === "number" && Number.isFinite(importedBearing)) {
         const deg = ((importedBearing % 360) + 360) % 360;
         setNorthBearing(deg);
@@ -27555,6 +28021,54 @@ User request: ${aiPrompt.trim()}`;
     linkedBaselineRef.current = history.snapshot().past.length;
     if (relPath === linkedDesign) void designVersion(relPath).then((v) => designWatchRef.current?.acknowledge(v));
     else setLinkedDesign(relPath);
+  };
+
+  // A master-plan footprint opens its design in place of the site; the site document is kept here so
+  // "Back to master plan" can restore it exactly (unsaved site edits included) and re-link its file.
+  /** Fit the view to everything drawn. Reads through `historyRef` so it sees a plan imported a moment ago. */
+  const zoomExtents = () => {
+    const st = historyRef.current.state;
+    const pts: { x: number; y: number }[] = [];
+    for (const w of st.walls) { pts.push(w.start, w.end); }
+    for (const r of st.rooms) { for (const p of r.points) pts.push(p); }
+    for (const o of st.objects) { pts.push({ x: o.x, y: o.y }); }
+    for (const f of st.furniture) { pts.push({ x: f.x, y: f.y }); }
+    if (pts.length === 0 || size.width <= 0 || size.height <= 0) return;
+    const minX = Math.min(...pts.map((p) => p.x));
+    const maxX = Math.max(...pts.map((p) => p.x));
+    const minY = Math.min(...pts.map((p) => p.y));
+    const maxY = Math.max(...pts.map((p) => p.y));
+    const w = Math.max(1, maxX - minX);
+    const h = Math.max(1, maxY - minY);
+    const margin = 0.9;
+    const newScale = Math.min(size.width / w, size.height / h) * margin;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setScale(Number(newScale.toFixed(3)));
+    setPosition({
+      x: size.width / 2 - cx * newScale,
+      y: size.height / 2 - cy * newScale,
+    });
+  };
+
+  const [placementReturn, setPlacementReturn] = useState<{ text: string; linked: string | null; design: string } | null>(null);
+  const openDesignPlacement = async (inst: DesignInstance) => {
+    const text = await fetchDesignText(inst.path);
+    if (!text) { toast.error(`Couldn't load ${inst.path}`); return; }
+    const site = { text: buildExportJson(), linked: linkedDesign, design: inst.design };    if (await importPlanText(text, inst.path)) {
+      setPlacementReturn(site);
+      requestAnimationFrame(zoomExtents);
+      toast.success(`Opened ${inst.design}`, { description: inst.path });
+    }
+  };
+  const returnToMasterPlan = async () => {
+    if (!placementReturn) return;
+    if (history.snapshot().past.length !== linkedBaselineRef.current
+      && !window.confirm(`Leave ${placementReturn.design} with unsaved edits? Save it to the Library first to keep them.`)) return;
+    if (await importPlanText(placementReturn.text, placementReturn.linked ?? undefined)) {
+      setPlacementReturn(null);
+      requestAnimationFrame(zoomExtents);
+    }
   };
 
   const importJsonFile = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -27701,6 +28215,86 @@ User request: ${aiPrompt.trim()}`;
             The Site-related layers (Buildable / Footprint / Basement / Inset Area) are pulled out
             into a foldable "Site" group so they don't dominate the list. */}
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Drawing Layers</p>
+
+        {/* Groups (grouped documents): the group tree, foldable. Each group has an eye (hide the group and
+            everything in it, every level), a lock, and — when open — its child groups followed by the layers
+            its own entities sit on, each with a count and an eye of its own (a per-group layer override). */}
+        {groupById.size > 0 && (() => {
+          const kids = new Map<string | null, PlanGroup[]>();
+          for (const g of groupById.values()) {
+            const k = g.parent ?? null;
+            const list = kids.get(k);
+            if (list) list.push(g); else kids.set(k, [g]);
+          }
+          const layerName = (id: string) => (history.state.layers ?? []).find((l) => l.id === id)?.name ?? id;
+          const row = (g: PlanGroup, depth: number): ReactNode => {
+            const children = kids.get(g.id) ?? [];
+            const contents = [...(groupLayerCounts.get(g.id) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
+            const foldable = children.length > 0 || contents.length > 0;
+            const open = openGroupIds.has(g.id);
+            const ownHidden = g.visible === false;
+            const viaParent = !ownHidden && hiddenGroupIds.has(g.id);
+            return (
+              <div key={g.id}>
+                <div className="flex items-center gap-1 rounded py-0.5 pr-1 text-[11px] hover:bg-white" style={{ paddingLeft: 2 + depth * 12 }}>
+                  {foldable ? (
+                    <button type="button" className="rounded p-0.5 hover:bg-orange-100" aria-label={open ? "Fold" : "Unfold"}
+                      onClick={() => setOpenGroupIds((prev) => { const n = new Set(prev); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}>
+                      {open ? <ChevronDown className="h-3 w-3 text-slate-500" /> : <ChevronRight className="h-3 w-3 text-slate-500" />}
+                    </button>
+                  ) : <span className="w-4" />}
+                  <button type="button" className="rounded p-0.5 hover:bg-orange-100" title={ownHidden ? "Show group" : viaParent ? "Hidden by its parent group" : "Hide group"}
+                    onClick={() => setGroupFlag(g.id, { visible: ownHidden })}>
+                    {ownHidden ? <EyeOff className="h-3.5 w-3.5 text-slate-400" /> : <Eye className={`h-3.5 w-3.5 ${viaParent ? "text-slate-300" : "text-slate-700"}`} />}
+                  </button>
+                  <button type="button" className="rounded p-0.5 hover:bg-orange-100" title={g.locked ? "Unlock group" : "Lock group"}
+                    onClick={() => setGroupFlag(g.id, { locked: !g.locked })}>
+                    {g.locked ? <Lock className="h-3 w-3 text-amber-600" /> : <Unlock className="h-3 w-3 text-slate-400" />}
+                  </button>
+                  <button type="button" className={`min-w-0 flex-1 truncate text-left ${ownHidden || viaParent ? "text-slate-400" : "text-slate-800"} ${selectedGroupIds.includes(g.id) ? "font-semibold text-blue-700" : ""}`}
+                    title="Select this group (Group scope)"
+                    onClick={() => { setTool("select"); setSelectFilter("group"); setEnteredGroupId(g.parent ?? null); setSelectedGroupIds([g.id]); }}>
+                    {g.name}
+                  </button>
+                  {children.length > 0 && <span className="text-[10px] text-slate-400">{children.length}</span>}
+                </div>
+                {open && (
+                  <>
+                    {children.map((c) => row(c, depth + 1))}
+                    {contents.map(([layerId, count]) => {
+                      const off = g.layerOverrides?.[layerId]?.visible === false;
+                      return (
+                        <div key={`${g.id}|${layerId}`} className="flex items-center gap-1 py-0.5 pr-1 text-[10.5px] text-slate-600" style={{ paddingLeft: 2 + (depth + 1) * 12 + 16 }}>
+                          <button type="button" className="rounded p-0.5 hover:bg-orange-100" title={off ? `Show ${layerName(layerId)} in this group` : `Hide ${layerName(layerId)} in this group`}
+                            onClick={() => setGroupLayerVisible(g.id, layerId, off)}>
+                            {off ? <EyeOff className="h-3 w-3 text-slate-400" /> : <Eye className="h-3 w-3 text-slate-500" />}
+                          </button>
+                          <span className={`flex-1 truncate ${off ? "text-slate-400" : ""}`}>{layerName(layerId)}</span>
+                          <span className="text-[10px] text-slate-400">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            );
+          };
+          const anyHidden = [...groupById.values()].some((g) => g.visible === false);
+          return (
+            <div className="mb-2 rounded border border-orange-200 bg-orange-50/40 p-1">
+              <div className="flex items-center justify-between px-1 pb-1 text-[11px]">
+                <span className="font-semibold text-orange-800">Groups <span className="font-normal text-slate-500">({groupById.size})</span></span>
+                {anyHidden && (
+                  <button type="button" className="text-sky-700 hover:underline"
+                    onClick={() => history.set({ ...history.state, groups: (history.state.groups ?? []).map((g) => (g.visible === false ? { ...g, visible: true } : g)) })}>
+                    Show all
+                  </button>
+                )}
+              </div>
+              {(kids.get(null) ?? []).map((g) => row(g, 0))}
+            </div>
+          );
+        })()}
 
         {/* Schema-driven layer blocks — live from a "Schema to Layers" flow node (e.g. Floorplan Tracer).
             Each block folds; the header eye toggles the whole group; per-type eyes hide that type on the
@@ -28160,6 +28754,26 @@ User request: ${aiPrompt.trim()}`;
         </div>
 
         <div className="flex flex-col gap-3">
+          {/* Show on screen — per-browser toggles for the big UI pieces (uiPrefs.ts). */}
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Show on screen</p>
+            {([
+              ["showChat", "Chat AI"],
+              ["showDrawingToolbar", "Drawing toolbar"],
+              ["showFlow", "Flow engine"],
+              ["showProperties", "Properties panel"],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 py-0.5 text-[11px] font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5"
+                  checked={uiPrefs[key]}
+                  onChange={(e) => setUiPref(key, e.target.checked)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
           {/* Project — metadata that belongs to the DESIGN rather than to this browser (unlike the Chat AI
               key below, which is deliberately local): it travels in Files ▸ Export JSON and comes back on
               import, so the tags survive a hand-off. */}
@@ -29251,7 +29865,7 @@ User request: ${aiPrompt.trim()}`;
     const m = withShared(sheet, history.state);
     return {
     ...m,
-    walls: m.walls.filter((w) => isLayerVisible(w.layerId)).map((w) => {
+    walls: m.walls.filter((w) => isEntityVisible(w)).map((w) => {
       if (w.segmentType !== "wall" && w.segmentType != null) return w;
       const wallAtt = (w.attachments ?? []).find((at) => (m.objectLibrary ?? {})[at.objectId]?.meta.symbol === "wall");
       const hM = typeof wallAtt?.params?.height === "number" ? wallAtt.params.height : null;
@@ -29265,16 +29879,24 @@ User request: ${aiPrompt.trim()}`;
   // The other levels as the 3D view draws them — MEMOISED: they only change on a level switch or edit of
   // the level table, and a fresh array every editor render made the 3D view rebuild every other floor's
   // meshes on each mouse move.
+  /** All + Shell: every storey, the active one too, goes through `levels3d` as its shell, and the active
+   *  model handed to the 3D view is emptied so it is not drawn twice. */
+  const shell3d = show3dAllLevels && show3dShell && levelMeta.length > 0;
+  const emptyActive3d = useMemo(() => ({ ...history.state, walls: [], rooms: [], objects: [], furniture: [], nodeMeta: {} }), [history.state]);
   const levels3d = useMemo(
-    () => !show3dAllLevels || !is3dOpen ? [] : levelMeta.filter((l) => l.id !== activeLevelId && levelSheets[l.id]).map((l) => ({
+    () => !show3dAllLevels || !is3dOpen ? [] : levelMeta.filter((l) => (shell3d ? l.id === activeLevelId || levelSheets[l.id] : l.id !== activeLevelId && levelSheets[l.id])).map((l) => {
+      const raw = l.id === activeLevelId ? history.state : levelSheets[l.id];
+      const sheet = shell3d ? shellSheet(withShared(raw, history.state), pixelsPerMeter || 100) : raw;
+      return {
       id: l.id,
       elevationM: l.elevation,
-      model: model3dForSheet(levelSheets[l.id]),
-      rooms: levelSheets[l.id].rooms,
+      model: model3dForSheet(sheet),
+      rooms: sheet.rooms,
       meshPreview: (() => {
-        const sh = withShared(levelSheets[l.id], history.state);
+        const sh = withShared(sheet, history.state);
         const rects = new Map<string, { cx: number; cy: number; angleRad: number; wPx: number; hPx: number }>();
-        for (const room of sh.rooms) {
+        // The inscribed rects place furniture-like space objects; a shell has none to place.
+        if (!shell3d) for (const room of sh.rooms) {
           if (!room.attachments?.length || room.points.length < 3) continue;
           const r = largestInscribedRectangle(room.points);
           if (!r || r.corners.length < 4) continue;
@@ -29286,9 +29908,9 @@ User request: ${aiPrompt.trim()}`;
         return m.length ? m : undefined;
       })(),
       floorHeightM: l.height,
-    })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- model3dForSheet reads isLayerVisible, listed
-    [levelMeta, levelSheets, activeLevelId, isLayerVisible, show3dAllLevels, history.state.objectLibrary, pixelsPerMeter, is3dOpen],
+    }; }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- model3dForSheet reads isLayerVisible, listed; history.state is read only in shell mode
+    [levelMeta, levelSheets, activeLevelId, isLayerVisible, show3dAllLevels, history.state.objectLibrary, pixelsPerMeter, is3dOpen, shell3d, shell3d ? history.state : null],
   );
 
   const handleNewDocument = () => {
@@ -29493,6 +30115,8 @@ User request: ${aiPrompt.trim()}`;
           <p className="text-sm font-semibold tracking-wide text-slate-700">
             BUILDER<span className="font-extrabold text-slate-900">PLUSS</span>
           </p>
+          <div className="mx-1 h-6 w-px bg-slate-200" />
+          <PhaseToggle />
         </div>
         {/* Top-center toolbar: Pan / Undo / Redo / Reset view / Zoom extents — navigation
             actions moved out of the Drawing left-sidebar group. */}
@@ -29526,35 +30150,15 @@ User request: ${aiPrompt.trim()}`;
             active={false}
             icon={<Maximize className="h-4 w-4" />}
             label="Zoom extents"
-            onClick={() => {
-              const pts: { x: number; y: number }[] = [];
-              for (const w of history.state.walls) { pts.push(w.start, w.end); }
-              for (const r of history.state.rooms) { for (const p of r.points) pts.push(p); }
-              for (const o of history.state.objects) { pts.push({ x: o.x, y: o.y }); }
-              for (const f of history.state.furniture) { pts.push({ x: f.x, y: f.y }); }
-              if (pts.length === 0 || size.width <= 0 || size.height <= 0) return;
-              const minX = Math.min(...pts.map((p) => p.x));
-              const maxX = Math.max(...pts.map((p) => p.x));
-              const minY = Math.min(...pts.map((p) => p.y));
-              const maxY = Math.max(...pts.map((p) => p.y));
-              const w = Math.max(1, maxX - minX);
-              const h = Math.max(1, maxY - minY);
-              const margin = 0.9;
-              const newScale = Math.min(size.width / w, size.height / h) * margin;
-              const cx = (minX + maxX) / 2;
-              const cy = (minY + maxY) / 2;
-              setScale(Number(newScale.toFixed(3)));
-              setPosition({
-                x: size.width / 2 - cx * newScale,
-                y: size.height / 2 - cy * newScale,
-              });
-            }}
+            onClick={zoomExtents}
           />
         </div>
         {/* Top-right toolbar: Files block + View block moved here from the left
             sidebar. Files first (import/save/load/export), then a thin divider, then
             View (2D/3D toggle, Snapping/Layers/View Mode/Default-Settings popovers). */}
         <div className="flex shrink-0 items-center gap-1">
+          <RenderModeToggle />
+          <div className="mx-1 h-6 w-px bg-slate-200" />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Files (import / save / export)" aria-label="Files">
@@ -29600,15 +30204,24 @@ User request: ${aiPrompt.trim()}`;
           {defaultSettingsPopover}
         </div>
         <input ref={jsonInputRef} type="file" accept=".json" onChange={importJsonFile} className="hidden" />
+        {placementReturn && (
+          <button
+            type="button"
+            onClick={() => void returnToMasterPlan()}
+            className="fixed left-1/2 top-16 z-50 -translate-x-1/2 rounded-full bg-orange-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-orange-700"
+          >
+            ← Back to master plan ({placementReturn.design} open)
+          </button>
+        )}
         <input ref={geojsonInputRef} type="file" accept=".geojson,.json" onChange={importGeojsonFile} className="hidden" />
         <input ref={vestalJsonInputRef} type="file" accept=".json" onChange={importVestalJson} className="hidden" />
       </div>
 
       <div className="flex h-[calc(100%-64px)] gap-2 p-2">
         {/* Floating, draggable Drawing toolbar (SketchUp-style). Fixed-positioned over the canvas; drag
-            it anywhere by the top grip handle. */}
+            it anywhere by the top grip handle. Hidden from Preferences ▸ Show on screen. */}
         <div
-          className="fixed z-30 flex max-h-[calc(100vh-96px)] w-16 flex-col items-center rounded-xl border border-slate-200/80 bg-white/95 shadow-lg backdrop-blur-md"
+          className={`fixed z-30 ${uiPrefs.showDrawingToolbar ? "flex" : "hidden"} max-h-[calc(100vh-96px)] w-16 flex-col items-center rounded-xl border border-slate-200/80 bg-white/95 shadow-lg backdrop-blur-md`}
           style={{ left: toolbarPos.x, top: toolbarPos.y }}
         >
           <div
@@ -29622,6 +30235,14 @@ User request: ${aiPrompt.trim()}`;
           <ScrollArea className="min-h-0 w-full flex-1">
             <div className="flex flex-col items-center gap-2 px-1 pb-2">
               <LeftToolbar
+                phase={phase}
+                planImportSlot={imageUnderlayPopover}
+                onOpenMoodboardPicker={() => setMoodboardOpen(true)}
+                hasUnderlay={!!history.state.imageUnderlay}
+                hasMoodboard={!!history.state.moodboards?.length}
+                hasPlan={history.state.walls.length > 0}
+                walkthroughPath={walkthroughPath}
+                onWalkthroughUploaded={setWalkthroughPath}
                 tool={tool}
                 onToolChange={setTool}
                 selectFilter={selectFilter}
@@ -30035,7 +30656,7 @@ User request: ${aiPrompt.trim()}`;
         {/* Chat AI — foldable bar pinned to the top of the canvas. The built-in Global Agent is always
             present (full tool-loop: canvas + Flow + parametric library); Import loads agent files from
             the Library's Agents/ folder, each with its own instructions, tool allow-list and resource grants. */}
-        <ChatAIPanel
+        {uiPrefs.showChat && <ChatAIPanel
           messages={aiMessages}
           busy={aiSendBusy}
           collapsed={aiCollapsed}
@@ -30075,14 +30696,14 @@ User request: ${aiPrompt.trim()}`;
             },
           } as AgentAccessView}
           examples={aiSelectedAgent?.examples}
-        />
+        />}
         <AgentImportDialog open={aiAgentImportOpen} onOpenChange={setAiAgentImportOpen} onImport={handleAgentsImported} />
         <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner" ref={containerRef}>
           {/* Flow editor — node-graph pipeline that composes the stepwise tools (Inset,
               Optimise Rect, Split, …) and runs them via the existing recipe engine.
               When open it occupies a resizable bottom dock (below) so the canvas + flow
               are visible at once; this button just opens it. */}
-          {!flowOpen && (
+          {!flowOpen && uiPrefs.showFlow && (
             <button
               type="button"
               onClick={() => { setFlowMinimized(false); setFlowOpen(true); }}
@@ -30119,13 +30740,13 @@ User request: ${aiPrompt.trim()}`;
             <div className={`absolute z-20 ${viewMode === "both" ? "left-1/2 right-0 top-0 bottom-0 border-l-2 border-slate-300 bg-white" : "inset-0"}`}>
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-slate-500">Loading 3D…</div>}>
                 <FloorPlan3DCanvas
-                  model={{
+                  model={shell3d ? emptyActive3d : {
                     ...history.state,
                     walls: [
                       // A door/window's 3D lintel/sill come from its per-element flow value (Segment to
                       // Door/Window node → graphAttrs, metres), falling back to the wall's stored value —
                       // so editing Lintel/Sill in Element Parameters drives the 3D opening height.
-                      ...history.state.walls.filter((w) => isLayerVisible(w.layerId)).map((w) => {
+                      ...history.state.walls.filter((w) => isEntityVisible(w)).map((w) => {
                         const a = history.state.graphAttrs?.segments?.[w.id];
                         // Segment to 3D: plain walls get a custom extrude height/direction (per-element → node).
                         if (w.segmentType === "wall" && flow3dExtrude.seg) {
@@ -30159,7 +30780,7 @@ User request: ${aiPrompt.trim()}`;
                     objects: history.state.objects.filter((o) => isLayerVisible(o.layerId)),
                     furniture: history.state.furniture.filter((f) => isLayerVisible(f.layerId)),
                   }}
-                  rooms={visibleRooms}
+                  rooms={shell3d ? [] : visibleRooms}
                   activeElevationM={levelMeta.find((l) => l.id === activeLevelId)?.elevation ?? 0}
                   levels={levels3d}
                   spaceMasses={spaceMasses}
@@ -30191,7 +30812,7 @@ User request: ${aiPrompt.trim()}`;
                   massingShowBlocks={massingShowBlocks}
                   massingExtrudeUpwards={massingExtrudeUpwards}
                   massingPreview={flowMassingPreview}
-                  meshPreview={meshPreviewAll}
+                  meshPreview={shell3d ? undefined : meshPreviewAll}
                   mapUnderlay={(() => {
                     // Prefer the OSM basemap clipped to the site region (the real map under the building);
                     // else fall back to the dropped image underlay textured on the ground (Approach A).
@@ -30213,6 +30834,14 @@ User request: ${aiPrompt.trim()}`;
               </Suspense>
             </div>
           ) : null}
+          {hideObjectsForZoom && viewMode !== "layout" && (
+            <div
+              className="pointer-events-none absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded-full border border-slate-200 bg-white/95 px-3 py-1 text-[11px] text-slate-600 shadow-sm"
+              title={`Large plan: furniture, fittings and other objects are drawn from ${OBJECT_LOD_PX_PER_M} px per metre upward (about a street block on screen)`}
+            >
+              Objects hidden at this zoom · zoom in to see them
+            </div>
+          )}
           {/* LEVEL TABS — one sheet per storey (see ./levels.ts). 2D edits the active sheet; 3D stacks them all.
               Bottom-right (bottom-left is taken by the Flow button); hidden in Layout (paper-space) mode. */}
           {linkedDesign && viewMode !== "layout" && (
@@ -30238,6 +30867,12 @@ User request: ${aiPrompt.trim()}`;
                   onClick={() => setShow3dAllLevels(true)}
                   className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${show3dAllLevels ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
                 >All</button>
+                {show3dAllLevels && (
+                  <label className="flex shrink-0 cursor-pointer items-center gap-1 px-1 text-[11px] text-slate-600" title="Shell: exterior walls, doors, windows and slabs only — fast for a whole building. Off: every object on every level.">
+                    <input type="checkbox" checked={show3dShell} onChange={(e) => setShow3dShell(e.target.checked)} />
+                    Shell
+                  </label>
+                )}
                 {sortLevels(levelMeta).map((l) => {
                   const on = l.id === activeLevelId && !show3dAllLevels;
                   return (
@@ -30292,6 +30927,41 @@ User request: ${aiPrompt.trim()}`;
               <button type="button" onClick={addLevel} className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50" title="Add a level on top" aria-label="Add level">+ Level</button>
             </div>
           )}
+          {/* Group bar (grouped documents): where you are in the group tree, and the selected group. */}
+          {groupById.size > 0 && (tool === "select" && selectFilter === "group" || enteredGroupId) && (() => {
+            const crumbs: PlanGroup[] = [];
+            for (let g = enteredGroupId ? groupById.get(enteredGroupId) : undefined; g; g = g.parent ? groupById.get(g.parent) : undefined) crumbs.unshift(g);
+            const sel = selectedGroupIds.length === 1 ? groupById.get(selectedGroupIds[0]) : undefined;
+            const site = groupById.get("site");
+            return (
+              <div className="absolute left-1/2 top-16 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] shadow-md">
+                <span className="font-semibold text-slate-500">Groups</span>
+                <button type="button" className="text-sky-700 hover:underline" onClick={() => { setEnteredGroupId(null); setSelectedGroupIds([]); }}>Plan</button>
+                {crumbs.map((g) => (
+                  <span key={g.id} className="flex items-center gap-2">
+                    <span className="text-slate-400">›</span>
+                    <button type="button" className="text-sky-700 hover:underline" onClick={() => { setEnteredGroupId(g.id); setSelectedGroupIds([]); }}>{g.name}</button>
+                  </span>
+                ))}
+                {enteredGroupId && <button type="button" className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600 hover:bg-slate-200" onClick={() => exitGroupStep()} title="Step out one level (Esc)">Exit</button>}
+                {sel && (
+                  <span className="flex items-center gap-2 border-l border-slate-200 pl-2">
+                    <span className="font-semibold text-slate-700">{sel.name}</span>
+                    {sel.design && <span className="text-slate-400">{sel.design}</span>}
+                    <span className="font-mono text-slate-500">{sel.transform.position[0].toFixed(2)}, {sel.transform.position[1].toFixed(2)} m</span>
+                    <button type="button" className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600 hover:bg-slate-200" onClick={() => { setEnteredGroupId(sel.id); setSelectedGroupIds([]); }} title="Edit inside this group (double-click)">Enter</button>
+                  </span>
+                )}
+                {selectedGroupIds.length > 1 && <span className="border-l border-slate-200 pl-2 text-slate-600">{selectedGroupIds.length} groups</span>}
+                {site && (
+                  <label className="flex cursor-pointer items-center gap-1 border-l border-slate-200 pl-2 text-slate-600" title="A locked group cannot be picked or edited">
+                    <input type="checkbox" checked={!!site.locked} onChange={(e) => setGroupFlag("site", { locked: e.target.checked })} />
+                    Site locked
+                  </label>
+                )}
+              </div>
+            );
+          })()}
           <Stage
             ref={stageRef}
             width={size.width}
@@ -30720,10 +31390,13 @@ User request: ${aiPrompt.trim()}`;
                     const spaceLabel = displayLabel || room.id;
 
                     // Effective holes (auto-detected: footprints carved out of a plot-boundary).
-                    const roomHoles = getRoomHoles(room, visibleRooms);
+                    const rgKey = `${room.id}|${layerVisibility.viewGraph ? 0 : (getCurrentWallStyle().thickness ?? 10) / 2}`;
+                    const rgHit = roomGeomCache.get(rgKey);
+                    const roomHoles = rgHit ? rgHit.roomHoles : getRoomHoles(room, visibleRooms);
                     // Check constraint violations when auto-generated layout is active.
                     // Area subtracts holes so a plot with a building inside reports buildable area.
-                    const areaM2 = roomNetArea(room, visibleRooms) / (pixelsPerMeter * pixelsPerMeter);
+                    const netAreaPx = rgHit ? rgHit.netAreaPx : roomNetArea(room, visibleRooms);
+                    const areaM2 = netAreaPx / (pixelsPerMeter * pixelsPerMeter);
                     const areaViolated = roomSpec
                       ? (roomSpec.minArea !== undefined && areaM2 < roomSpec.minArea) ||
                         (roomSpec.maxArea !== undefined && areaM2 > roomSpec.maxArea)
@@ -30751,83 +31424,90 @@ User request: ${aiPrompt.trim()}`;
                     // single max across the room) so a room bounded by segments of different widths insets
                     // correctly on each side; centre-justification assumption: inner extent = thickness/2.
                     // Edges with no buffered segment fall back to the default wall half-thickness.
-                    const edgeInsets = (ring: Point[]): number[] => {
-                      const M = ring.length;
-                      const out = new Array<number>(M).fill(wallHalfThicknessPx);
-                      if (!subtractBufferedFromSpace) return out;
-                      for (let i = 0; i < M; i++) {
-                        const a = ring[i], b = ring[(i + 1) % M];
-                        const ex = b.x - a.x, ey = b.y - a.y;
-                        const eL = Math.hypot(ex, ey) || 1e-9;
-                        const eux = ex / eL, euy = ey / eL;
-                        let half = 0;
-                        for (const w of history.state.walls) {
-                          if (!w.bufferStyle || w.segmentType === "path") continue;
-                          // Only a segment collinear with this edge bounds it: its direction must be parallel
-                          // (|sin θ| small) and its midpoint must project onto the edge span (within ~8px).
-                          const wx = w.end.x - w.start.x, wy = w.end.y - w.start.y;
-                          const wL = Math.hypot(wx, wy) || 1e-9;
-                          if (Math.abs((eux * wy - euy * wx) / wL) > 0.2) continue;
-                          const mx = (w.start.x + w.end.x) / 2, my = (w.start.y + w.end.y) / 2;
-                          let t = (mx - a.x) * eux + (my - a.y) * euy;
-                          t = Math.max(0, Math.min(eL, t));
-                          if (Math.hypot(mx - (a.x + t * eux), my - (a.y + t * euy)) < 8) {
-                            half = Math.max(half, (w.thickness ?? 0) / 2);
+                    const rgGeom = rgHit ?? (() => {
+                      const edgeInsets = (ring: Point[]): number[] => {
+                        const M = ring.length;
+                        const out = new Array<number>(M).fill(wallHalfThicknessPx);
+                        if (!subtractBufferedFromSpace) return out;
+                        for (let i = 0; i < M; i++) {
+                          const a = ring[i], b = ring[(i + 1) % M];
+                          const ex = b.x - a.x, ey = b.y - a.y;
+                          const eL = Math.hypot(ex, ey) || 1e-9;
+                          const eux = ex / eL, euy = ey / eL;
+                          let half = 0;
+                          // A counted wall's midpoint is within 8 px of the edge, so it lies in the edge's box + 8.
+                          for (const w of bufferedWallIndex.query(Math.min(a.x, b.x) - 9, Math.min(a.y, b.y) - 9, Math.max(a.x, b.x) + 9, Math.max(a.y, b.y) + 9)) {
+                            // Only a segment collinear with this edge bounds it: its direction must be parallel
+                            // (|sin θ| small) and its midpoint must project onto the edge span (within ~8px).
+                            const wx = w.end.x - w.start.x, wy = w.end.y - w.start.y;
+                            const wL = Math.hypot(wx, wy) || 1e-9;
+                            if (Math.abs((eux * wy - euy * wx) / wL) > 0.2) continue;
+                            const mx = (w.start.x + w.end.x) / 2, my = (w.start.y + w.end.y) / 2;
+                            let t = (mx - a.x) * eux + (my - a.y) * euy;
+                            t = Math.max(0, Math.min(eL, t));
+                            if (Math.hypot(mx - (a.x + t * eux), my - (a.y + t * euy)) < 8) {
+                              half = Math.max(half, (w.thickness ?? 0) / 2);
+                            }
+                          }
+                          out[i] = Math.max(wallHalfThicknessPx, half);
+                        }
+                        return out;
+                      };
+                      const outerInsets = edgeInsets(room.points);
+                      const renderOuterBase = outerInsets.some((d) => d > 0.5)
+                        ? (offsetPolygonInward(room.points, outerInsets) ?? room.points)
+                        : room.points;
+                      // Dead-end (degree-1) buffered segments: the per-edge inset can't cap the free tip, so a
+                      // triangular sliver of green is left under the wall end. Subtract the FULL band rectangle
+                      // of any degree-1 segment overlapping this room so its whole area is removed. (degree>=2
+                      // nodes are already handled correctly by the edge inset above.)
+                      let renderOuter = renderOuterBase;
+                      const bandHoles: Point[][] = [];
+                      if (subtractBufferedFromSpace) {
+                        if (bufferedWallIndex.deadEnds.length > 0) {
+                          let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
+                          for (const p of room.points) { if (p.x < rMinX) rMinX = p.x; if (p.x > rMaxX) rMaxX = p.x; if (p.y < rMinY) rMinY = p.y; if (p.y > rMaxY) rMaxY = p.y; }
+                          const bands: Point[][] = [];
+                          for (const w of bufferedWallIndex.deadEnds) {
+                            // Cheap reject: skip a segment whose bbox is entirely outside the room bbox.
+                            const sMinX = Math.min(w.start.x, w.end.x), sMaxX = Math.max(w.start.x, w.end.x);
+                            const sMinY = Math.min(w.start.y, w.end.y), sMaxY = Math.max(w.start.y, w.end.y);
+                            if (sMaxX < rMinX || sMinX > rMaxX || sMaxY < rMinY || sMinY > rMaxY) continue;
+                            const flat = bufferBandPoints(w.start, w.end, w.thickness ?? 0, w.bufferStyle);
+                            const band: Point[] = [];
+                            for (let i = 0; i + 1 < flat.length; i += 2) band.push({ x: flat[i], y: flat[i + 1] });
+                            if (band.length >= 3) bands.push(band);
+                          }
+                          if (bands.length > 0) {
+                            const clipped = subtractPolygon(renderOuterBase, bands);
+                            if (clipped.length > 0) {
+                              // Keep the largest-area outer ring as the room fill; collect any holes for the area calc.
+                              let best = clipped[0], bestA = Math.abs(polygonArea(clipped[0].outer));
+                              for (let i = 1; i < clipped.length; i++) { const a = Math.abs(polygonArea(clipped[i].outer)); if (a > bestA) { bestA = a; best = clipped[i]; } }
+                              if (best.outer.length >= 3) { renderOuter = best.outer; for (const h of best.holes) bandHoles.push(h); }
+                            }
                           }
                         }
-                        out[i] = Math.max(wallHalfThicknessPx, half);
                       }
-                      return out;
-                    };
-                    const outerInsets = edgeInsets(room.points);
-                    const renderOuterBase = outerInsets.some((d) => d > 0.5)
-                      ? (offsetPolygonInward(room.points, outerInsets) ?? room.points)
-                      : room.points;
-                    // Dead-end (degree-1) buffered segments: the per-edge inset can't cap the free tip, so a
-                    // triangular sliver of green is left under the wall end. Subtract the FULL band rectangle
-                    // of any degree-1 segment overlapping this room so its whole area is removed. (degree>=2
-                    // nodes are already handled correctly by the edge inset above.)
-                    let renderOuter = renderOuterBase;
-                    const bandHoles: Point[][] = [];
-                    if (subtractBufferedFromSpace) {
-                      const deadEndWallIds = new Set<string>();
-                      for (const n of wallNodes) if (n.wallIds.length === 1) deadEndWallIds.add(n.wallIds[0]);
-                      if (deadEndWallIds.size > 0) {
-                        let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
-                        for (const p of room.points) { if (p.x < rMinX) rMinX = p.x; if (p.x > rMaxX) rMaxX = p.x; if (p.y < rMinY) rMinY = p.y; if (p.y > rMaxY) rMaxY = p.y; }
-                        const bands: Point[][] = [];
-                        for (const w of history.state.walls) {
-                          if (!deadEndWallIds.has(w.id) || !w.bufferStyle || w.segmentType === "path") continue;
-                          // Cheap reject: skip a segment whose bbox is entirely outside the room bbox.
-                          const sMinX = Math.min(w.start.x, w.end.x), sMaxX = Math.max(w.start.x, w.end.x);
-                          const sMinY = Math.min(w.start.y, w.end.y), sMaxY = Math.max(w.start.y, w.end.y);
-                          if (sMaxX < rMinX || sMinX > rMaxX || sMaxY < rMinY || sMinY > rMaxY) continue;
-                          const flat = bufferBandPoints(w.start, w.end, w.thickness ?? 0, w.bufferStyle);
-                          const band: Point[] = [];
-                          for (let i = 0; i + 1 < flat.length; i += 2) band.push({ x: flat[i], y: flat[i + 1] });
-                          if (band.length >= 3) bands.push(band);
-                        }
-                        if (bands.length > 0) {
-                          const clipped = subtractPolygon(renderOuterBase, bands);
-                          if (clipped.length > 0) {
-                            // Keep the largest-area outer ring as the room fill; collect any holes for the area calc.
-                            let best = clipped[0], bestA = Math.abs(polygonArea(clipped[0].outer));
-                            for (let i = 1; i < clipped.length; i++) { const a = Math.abs(polygonArea(clipped[i].outer)); if (a > bestA) { bestA = a; best = clipped[i]; } }
-                            if (best.outer.length >= 3) { renderOuter = best.outer; for (const h of best.holes) bandHoles.push(h); }
-                          }
-                        }
-                      }
-                    }
-                    // Holes (boundaries against an inner space) offset OUTWARD: negate each per-edge inset.
-                    const renderHoles = [
-                      ...roomHoles.map((h) => {
-                        const hi = edgeInsets(h);
-                        return hi.some((d) => d > 0.5)
-                          ? (offsetPolygonInward(h, hi.map((d) => -d)) ?? h)
-                          : h;
-                      }),
-                      ...bandHoles,
-                    ];
+                      // Holes (boundaries against an inner space) offset OUTWARD: negate each per-edge inset.
+                      const renderHolesC = [
+                        ...roomHoles.map((h) => {
+                          const hi = edgeInsets(h);
+                          return hi.some((d) => d > 0.5)
+                            ? (offsetPolygonInward(h, hi.map((d) => -d)) ?? h)
+                            : h;
+                        }),
+                        ...bandHoles,
+                      ];
+                      const labelAreaPxC = subtractBufferedFromSpace
+                        ? Math.max(0, Math.abs(polygonArea(renderOuter)) - renderHolesC.reduce((s, h) => s + Math.abs(polygonArea(h)), 0))
+                        : netAreaPx;
+                      const g = { roomHoles, netAreaPx, renderOuter, renderHoles: renderHolesC, labelAreaPx: labelAreaPxC };
+                      roomGeomCache.set(rgKey, g);
+                      return g;
+                    })();
+                    const renderOuter = rgGeom.renderOuter;
+                    const renderHoles = rgGeom.renderHoles;
                     // Centroid label dimensions/area. With "Subtract segment for Space" ON, report the INNER
                     // (inset to the wall faces — `renderOuter`/`renderHoles`) L×B and net area; OFF reports the
                     // centre-to-centre polygon (`room.points`) and the usual net area.
@@ -30841,9 +31521,7 @@ User request: ${aiPrompt.trim()}`;
                       [Math.max(lpBw, lpBh), Math.min(lpBw, lpBh)]; // "max-min" default
                     // ft-inches dims carry their own marks, so the unit suffix is appended once only in decimal mode.
                     const spaceLBLabel = `${fmtLenBare(lbA)} × ${fmtLenBare(lbB)}${lenInlineUnit ? "" : ` ${unit}`}`;
-                    const labelAreaPx = subtractBufferedFromSpace
-                      ? Math.max(0, Math.abs(polygonArea(renderOuter)) - renderHoles.reduce((s, h) => s + Math.abs(polygonArea(h)), 0))
-                      : roomNetArea(room, visibleRooms);
+                    const labelAreaPx = rgGeom.labelAreaPx;
                     const spaceAreaLabel = `Area: ${fmtArea(labelAreaPx)}`;
                     // A WHOLE-SPACE parametric object (Floor / Massing) attached to this Space → its colour
                     // fills the Space in 2D. Keyed on symbol so a SUB-geometry object (e.g. Site: inset /
@@ -31596,7 +32274,8 @@ User request: ${aiPrompt.trim()}`;
                   {/* Parametric object instances attached to segments — a placeholder Door swing symbol
                       (leaf + quarter-arc) sized by the instance's `width` param, positioned at `t` along the
                       host segment. (The file's own generator → full 2D/3D geometry is the next step.) */}
-                  {history.state.walls.filter((w) => isLayerVisible(w.layerId) && (w.attachments?.length ?? 0) > 0).flatMap((w) =>
+                  {!hideObjectsForZoom && history.state.walls.filter((w) => isEntityVisible(w) && (w.attachments?.length ?? 0) > 0
+                    && inCull(Math.min(w.start.x, w.end.x), Math.min(w.start.y, w.end.y), Math.max(w.start.x, w.end.x), Math.max(w.start.y, w.end.y))).flatMap((w) =>
                     (w.attachments ?? []).map((att) => {
                       const dx = w.end.x - w.start.x, dy = w.end.y - w.start.y, L = Math.hypot(dx, dy) || 1;
                       const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
@@ -31631,7 +32310,7 @@ User request: ${aiPrompt.trim()}`;
                         const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
                         // The host, in the anchor-relative metres every object evaluator is given.
                         const hostPts = [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / pixelsPerMeter, y: (p.y - mid.y) / pixelsPerMeter }));
-                        const g = evalParametricGeometry(objText(obj), mid, pixelsPerMeter, att.params, hostPts, resolveObjectDef, att.childParams);
+                        const g = evalParametricGeometry(objText(obj), mid, pixelsPerMeter, vp(att.params), hostPts, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
                         const pts = (poly: Point[]) => poly.flatMap((p) => [p.x, p.y]);
                         return (
@@ -31648,7 +32327,7 @@ User request: ${aiPrompt.trim()}`;
                       // whole thing rotates with the segment. Door / window / wall keep their symbol branches.
                       if (obj?.geometry && symbol !== "door" && symbol !== "window" && symbol !== "wall") {
                         const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
-                        const g = evalParametricGeometry(objText(obj), mid, pixelsPerMeter, { ...att.params, rotation: 0 }, undefined, resolveObjectDef, att.childParams);
+                        const g = evalParametricGeometry(objText(obj), mid, pixelsPerMeter, vp({ ...att.params, rotation: 0 }), undefined, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
                         const gb = polysBBox([...g.fill, ...g.lines]);
                         if (!gb) return null;
@@ -31740,16 +32419,36 @@ User request: ${aiPrompt.trim()}`;
                   {/* Parametric objects attached to NODES — a placeholder Staircase plan symbol (footprint
                       rectangle + tread lines), sized by the instance's width / steps / tread params and
                       rotated by `rotation`, centred on the host node. */}
-                  {wallNodes.flatMap((node) =>
+                  {!hideObjectsForZoom && wallNodes.filter((node) => { const m = 6 * (pixelsPerMeter || 1); return inCull(node.x - m, node.y - m, node.x + m, node.y + m); }).flatMap((node) =>
                     (((history.state.nodeMeta ?? {})[node.stableKey] ?? {}).attachments ?? []).map((att) => {
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       const sw = Math.max(0.75, 1.25 / scale);
                       const color = typeof att.params.color === "string" ? att.params.color : "#0f766e";
+                      // Python object → the generator's own plan outlines (object-local metres), turned by `rotation`.
+                      // Until its first run lands (Pyodide loads once per session) a dashed box from length/width stands in.
+                      if (objIsPython(obj)) {
+                        void pyTick;
+                        const res = getPythonResult(obj, att.params);
+                        const rot = ((Number(att.params.rotation) || 0) * Math.PI) / 180, c = Math.cos(rot), sn = Math.sin(rot);
+                        const toW = (q: number[]) => [node.x + (q[0] * c - q[1] * sn) * pixelsPerMeter, node.y + (q[0] * sn + q[1] * c) * pixelsPerMeter];
+                        const num = (k: string, d: number) => { const v = Number(att.params[k] ?? obj!.parameters.find((p) => p.key === k)?.default); return isFinite(v) && v > 0 ? v : d; };
+                        const L = num("length", 2), Wd = num("width", 1.6);
+                        const outlines = res?.plan?.length ? res.plan : [[[-Wd / 2, -L / 2], [Wd / 2, -L / 2], [Wd / 2, L / 2], [-Wd / 2, L / 2]]];
+                        const err = getPythonError(obj, att.params);
+                        return (
+                          <Group key={att.id} listening={false}>
+                            {outlines.map((ring, i) => (
+                              <Line key={i} points={ring.flatMap(toW)} closed={ring.length > 2} stroke={err ? "#dc2626" : color} strokeWidth={sw}
+                                fill={i === 0 ? `${color}14` : undefined} dash={res ? undefined : [6 / scale, 4 / scale]} lineJoin="round" />
+                            ))}
+                          </Group>
+                        );
+                      }
                       // Parametric object with its own geometry block → evaluate its plan lines at the node
                       // (the instance's edited params override the file defaults). Falls back to the
                       // hardcoded staircase placeholder below for objects without geometry.
                       if (objHasGeometry(obj)) {
-                        const g = evalParametricGeometry(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, att.params, objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
+                        const g = evalParametricGeometry(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, vp(att.params), objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
                         // Selected NESTED component (Components editor / canvas click) → overdraw in accent.
                         const selPath = selectedComponent?.attId === att.id ? selectedComponent.path : null;
@@ -31802,8 +32501,13 @@ User request: ${aiPrompt.trim()}`;
                   {/* Parametric objects attached to SPACES — their plan geometry, evaluated from the file's
                       geometry block + the host (room) polygon. Same engine as nodes; the host footprint is
                       passed in local metres so e.g. a Massing tower draws its per-tier setback rings. */}
-                  {visibleRooms.flatMap((room) => {
-                    if (room.points.length < 3) return [];
+                  {!hideObjectsForZoom && visibleRooms.flatMap((room) => {
+                    if (room.points.length < 3 || !(room.attachments?.length)) return [];
+                    if (cullRect) {
+                      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+                      for (const p of room.points) { if (p.x < x0) x0 = p.x; if (p.y < y0) y0 = p.y; if (p.x > x1) x1 = p.x; if (p.y > y1) y1 = p.y; }
+                      if (!inCull(x0, y0, x1, y1)) return [];
+                    }
                     const c = polygonCentroid(room.points);
                     const hostLocal = room.points.map((p) => ({ x: (p.x - c.x) / pixelsPerMeter, y: (p.y - c.y) / pixelsPerMeter }));
                     const sw = Math.max(0.75, 1.25 / scale);
@@ -31815,7 +32519,7 @@ User request: ${aiPrompt.trim()}`;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!objHasGeometry(obj)) return null;
                       const defText = objText(obj);
-                      const g = evalParametricGeometry(defText, c, pixelsPerMeter, att.params, hostLocal, resolveObjectDef, att.childParams);
+                      const g = evalParametricGeometry(defText, c, pixelsPerMeter, vp(att.params), hostLocal, resolveObjectDef, att.childParams);
                       if (!g.fill.length && !g.lines.length && !g.refLines.length) return null;
                       // Generic FIT-TO-SPACE: an object that doesn't adapt itself to the host (no host vars /
                       // `host` rule / pipeline — e.g. a staircase) is uniformly scaled to the Space bbox and
@@ -31859,7 +32563,7 @@ User request: ${aiPrompt.trim()}`;
                   {/* Parameters an object marks "Show in canvas" — drawn as text at the HOST's anchor, the same
                       anchor its geometry is evaluated at: a Space's centroid, a Segment's midpoint, over a Node.
                       Opt-in per parameter (see InputProp.showInCanvas), so an object that marks none draws none. */}
-                  {(() => {
+                  {!hideObjectsForZoom && (() => {
                     const lib = history.state.objectLibrary ?? {};
                     const fs = Math.max(9, 12 / scale);
                     // `key` must be unique across ALL THREE loops below. An attachment id is only unique
@@ -31896,8 +32600,9 @@ User request: ${aiPrompt.trim()}`;
                     const local = (pts: Point[], at: Point) => pts.map((p) => ({ x: (p.x - at.x) / pixelsPerMeter, y: (p.y - at.y) / pixelsPerMeter }));
                     const out: React.ReactNode[] = [];
                     for (const room of visibleRooms) {
-                      if (room.points.length < 3) continue;
+                      if (room.points.length < 3 || !(room.attachments?.length)) continue;
                       const c = polygonCentroid(room.points);
+                      if (!inCull(c.x, c.y, c.x, c.y)) continue;
                       const host = local(room.points, c);
                       for (const [ai, att] of (room.attachments ?? []).entries()) {
                         const lines = linesFor(att.objectId, att.params, host);
@@ -31905,8 +32610,9 @@ User request: ${aiPrompt.trim()}`;
                       }
                     }
                     for (const w of history.state.walls) {
-                      if (!isLayerVisible(w.layerId)) continue;
+                      if (!isEntityVisible(w) || !(w.attachments?.length)) continue;
                       const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
+                      if (!inCull(mid.x, mid.y, mid.x, mid.y)) continue;
                       const host = local([w.start, w.end], mid);
                       for (const [ai, att] of (w.attachments ?? []).entries()) {
                         const lines = linesFor(att.objectId, att.params, host);
@@ -31915,6 +32621,7 @@ User request: ${aiPrompt.trim()}`;
                     }
                     for (const node of wallNodes) {
                       const at = { x: node.x, y: node.y };
+                      if (!inCull(at.x, at.y, at.x, at.y)) continue;
                       for (const [ai, att] of (((history.state.nodeMeta ?? {})[node.stableKey] ?? {}).attachments ?? []).entries()) {
                         const lines = linesFor(att.objectId, att.params, [{ x: 0, y: 0 }]);
                         if (lines.length) out.push(label(`node:${node.stableKey}:${att.id}:${ai}`, at, lines));
@@ -31945,14 +32652,15 @@ User request: ${aiPrompt.trim()}`;
 
                   {/* Buffered display segments — their committed ACTUAL mitered Outer / Inner dimensions,
                       gated on the Dimension layer like other dimensions. */}
-                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && history.state.walls
-                    .filter((w) => w.bufferStyle && w.segmentType !== "path" && isLayerVisible(w.layerId))
+                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && !hideObjectsForZoom && history.state.walls
+                    .filter((w) => w.bufferStyle && w.segmentType !== "path" && isEntityVisible(w)
+                      && inCull(Math.min(w.start.x, w.end.x), Math.min(w.start.y, w.end.y), Math.max(w.start.x, w.end.x), Math.max(w.start.y, w.end.y)))
                     .map((w) => renderBufferedCommitDims(w))}
 
                   {/* Architectural view: wall band physically clipped by column footprints. Drawn as a
                    *  single even-odd-filled shape so column notches / holes / splits are cut out of the
                    *  wall. Non-interactive — selection still uses the per-wall hit areas below. */}
-                  {architecturalClipActive && (
+                  {architecturalClipActive && !geomOnly && (
                     <Shape
                       key="arch-wall-band"
                       listening={false}
@@ -31984,7 +32692,7 @@ User request: ${aiPrompt.trim()}`;
                   {/* Sharp Union outer edges — only the non-shared boundary lines. Sourced from
                       `wallUnionEdges`, so this also covers walls a flow pinned to "mitered-union"
                       while the canvas-wide Filling + Union view is off. */}
-                  {wallUnionEdges.length > 0 &&
+                  {!geomOnly && wallUnionEdges.length > 0 &&
                     wallUnionEdges
                       .filter((edge) => {
                         const wall = history.state.walls.find((w) => w.id === edge.wallId);
@@ -32004,7 +32712,7 @@ User request: ${aiPrompt.trim()}`;
                       ))
                   }
                   {/* Sharp Union closing lines for hidden door/window segments */}
-                  {wallUnionEdges.length > 0 &&
+                  {!geomOnly && wallUnionEdges.length > 0 &&
                     history.state.walls
                       .filter((w) => (!layerVisibility.doors && w.segmentType === "door") || (!layerVisibility.windows && w.segmentType === "window"))
                       .map((doorWall) => {
@@ -32030,10 +32738,11 @@ User request: ${aiPrompt.trim()}`;
                   }
 
                   {/* Mitered wall architectural dimension lines — inner & outer edges */}
-                  {layerVisibility.measure && (layerVisibility.viewSharp || layerVisibility.viewCurved) &&
+                  {layerVisibility.measure && (layerVisibility.viewSharp || layerVisibility.viewCurved) && !hideObjectsForZoom &&
                     miteredDimensions.map((dim) => {
-                      const wall = history.state.walls.find((w) => w.id === dim.wallId);
+                      const wall = wallByIdMap.get(dim.wallId);
                       if (!wall) return null;
+                      if (!inCull(Math.min(wall.start.x, wall.end.x), Math.min(wall.start.y, wall.end.y), Math.max(wall.start.x, wall.end.x), Math.max(wall.start.y, wall.end.y))) return null;
                       const ppm = pixelsPerMeter;
 
                       // Render a single architectural dimension line
@@ -32186,7 +32895,7 @@ User request: ${aiPrompt.trim()}`;
                   })}
 
                   {/* Graph mode — architectural dimension lines for each wall edge */}
-                  {layerVisibility.viewGraph && layerVisibility.measure && wallsInPaintOrder.map((wall) => {
+                  {layerVisibility.viewGraph && layerVisibility.measure && !hideObjectsForZoom && wallsInPaintOrder.map((wall) => {
                     const ppm = pixelsPerMeter;
                     const dx = wall.end.x - wall.start.x;
                     const dy = wall.end.y - wall.start.y;
@@ -33396,7 +34105,7 @@ User request: ${aiPrompt.trim()}`;
                   {/* Column / Tree footprints from node metadata — Architectural view only, non-interactive.
                    *  In Graph (and Sharp/Curved) view a column node stays a plain point; Architectural mode
                    *  renders its semantic footprint (circle / rectangle, sized in metres; trees as a canopy). */}
-                  {wallNodes.map((node) => {
+                  {wallNodesInView.map((node) => {
                     const meta = (history.state.nodeMeta ?? {})[node.stableKey];
                     // Column / Tree / Object render a footprint; a plain Point (default) renders nothing.
                     if (!meta || (meta.type !== "column" && meta.type !== "tree" && meta.type !== "object")) return null;
@@ -33495,7 +34204,7 @@ User request: ${aiPrompt.trim()}`;
 
                   {/* Per-node labels (Node Properties → Display → Show Label, on by default). Shown only for
                       LABELLED nodes (so plain junctions stay uncluttered), independent of the node-dot layer. */}
-                  {wallNodes.map((node) => {
+                  {wallNodesInView.map((node) => {
                     const meta = (history.state.nodeMeta ?? {})[node.stableKey];
                     if (!meta?.label || (meta.showLabel ?? nodeDisplayDefaults.showLabel) === false) return null;
                     const label = meta.label;
@@ -33517,7 +34226,7 @@ User request: ${aiPrompt.trim()}`;
                       />
                     );
                   })}
-                  {layerVisibility.nodes && (tool === "select" || tool === "single-segment" || tool === "point") && wallNodes.map((node) => {
+                  {layerVisibility.nodes && (tool === "select" || tool === "single-segment" || tool === "point") && wallNodesInView.map((node) => {
                     const isSelected = selectedNodeKey === node.key || selectedNodeKey === node.stableKey;
                     // In "Node" select scope, node-picking is the primary action — give each node a much
                     // bigger, forgiving hit target (and hover feedback) so the user doesn't have to aim
@@ -33731,7 +34440,7 @@ User request: ${aiPrompt.trim()}`;
                     ))
                   )}
 
-                  {layerVisibility.segments && history.state.walls.filter((w) => isLayerVisible(w.layerId) && isSchemaSegShown(w)).slice().sort(compareByLayer).map((wall) => {
+                  {layerVisibility.segments && history.state.walls.filter((w) => isEntityVisible(w) && isSchemaSegShown(w)).slice().sort(compareByLayer).map((wall) => {
                     // In graph mode, hide door/window segments when Doors layer is off
                     if (layerVisibility.viewGraph && !layerVisibility.doors && wall.segmentType === "door") return null;
                     if (layerVisibility.viewGraph && !layerVisibility.windows && wall.segmentType === "window") return null;
@@ -34049,7 +34758,22 @@ User request: ${aiPrompt.trim()}`;
                     const thicknessHandleLayouts = getWallThicknessHandleLayouts(wall, liveThickness);
                     return (
                       <Group key={wall.id} {...segmentDragProps}>
-                        {wall.isObjectOpening ? (
+                        {geomOnly ? (
+                          /* Render mode ▸ Geometry: the segment as a plain line — no mitred band, and an opening
+                             piece (door / window / leaf-less gap) is drawn as a line too, not left as a gap. */
+                          <Line
+                            id={wall.id}
+                            points={[liveStart.x, liveStart.y, liveEnd.x, liveEnd.y]}
+                            stroke={wall.isObjectOpening || wall.segmentType === "door" || wall.segmentType === "window" ? "#0284c7" : (wall.color ?? "#334155")}
+                            strokeWidth={Math.max(1, 1.5 / scale)}
+                            lineCap="round"
+                            hitStrokeWidth={Math.max(14, wStyle.thickness + 10)}
+                            onClick={(event) => {
+                              if (toolRef.current !== "select") return;
+                              onObjectSelect(event.target.id(), event.evt.shiftKey);
+                            }}
+                          />
+                        ) : wall.isObjectOpening ? (
                           /* Opening gap for an attached parametric object — no band; a transparent hit line
                              keeps it selectable so its object can be edited in the Properties tab. */
                           <Line
@@ -35582,7 +36306,7 @@ User request: ${aiPrompt.trim()}`;
                     );
                   })}
                   {/* Per-segment labels at the midpoint (Segment Properties → Show Label, on by default). */}
-                  {history.state.walls.filter((w) => w.showLabel !== false && w.label && isLayerVisible(w.layerId)).slice().sort(compareByLayer).map((wall) => {
+                  {history.state.walls.filter((w) => w.showLabel !== false && w.label && isEntityVisible(w)).slice().sort(compareByLayer).map((wall) => {
                     const mx = (wall.start.x + wall.end.x) / 2;
                     const my = (wall.start.y + wall.end.y) / 2;
                     const fs = Math.max(9, 12 / scale);
@@ -35603,6 +36327,89 @@ User request: ${aiPrompt.trim()}`;
                       />
                     );
                   })}
+                </WorldViewport>
+              </Layer>
+            ) : null}
+
+            {/* Placed designs (master plan): every plot carrying a `designInstance` draws its building's walls,
+                openings and rooms for the active level — one shape for the lot, each design's paths built once
+                and stroked under each plot's transform (see ./designInstances). Read-only. */}
+            {showPlacedDesigns && placedInstances.length > 0 ? (
+              <Layer listening={false}>
+                <WorldViewport x={position.x} y={position.y} scale={scale}>
+                  <Shape
+                    listening={false}
+                    perfectDrawEnabled={false}
+                    sceneFunc={(kctx) => {
+                      const ctx = (kctx as unknown as { _context: CanvasRenderingContext2D })._context;
+                      for (const inst of placedInstances) {
+                        const d = designPaths[inst.path];
+                        if (!d) continue;
+                        const lv = designLevelFor(inst, d, activeLevelId);
+                        if (!lv) continue;
+                        ctx.save();
+                        applyInstanceTransform(ctx, inst, d.ppm, pixelsPerMeter || 100);
+                        const px = 1 / (scale * ((pixelsPerMeter || 100) / d.ppm));
+                        ctx.fillStyle = "rgba(255,255,255,0.55)";
+                        ctx.fill(lv.rooms);
+                        ctx.lineWidth = 0.75 * px;
+                        ctx.strokeStyle = "#94a3b8";
+                        ctx.stroke(lv.rooms);
+                        ctx.fillStyle = "#334155";
+                        ctx.fill(lv.walls);
+                        ctx.lineWidth = 2 * px;
+                        ctx.strokeStyle = "#b45309";
+                        ctx.stroke(lv.doors);
+                        ctx.strokeStyle = "#0891b2";
+                        ctx.stroke(lv.windows);
+                        ctx.restore();
+                      }
+                    }}
+                  />
+                </WorldViewport>
+              </Layer>
+            ) : null}
+
+            {/* Groups overlay (grouped documents): dims everything outside the entered group, outlines the
+                hovered / selected groups with their names, and shows a drag's ghost and snap guides. */}
+            {groupById.size > 0 ? (
+              <Layer listening={false}>
+                <WorldViewport x={position.x} y={position.y} scale={scale}>
+                  {enteredGroupId && groupBoxes.get(enteredGroupId) && (() => {
+                    const b = groupBoxes.get(enteredGroupId)!;
+                    const pad = 12 / scale;
+                    return (
+                      <>
+                        <Shape
+                          listening={false}
+                          sceneFunc={(kctx) => {
+                            const ctx = (kctx as unknown as { _context: CanvasRenderingContext2D })._context;
+                            ctx.beginPath();
+                            ctx.rect(-1e7, -1e7, 2e7, 2e7);
+                            ctx.rect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + 2 * pad, b.y1 - b.y0 + 2 * pad);
+                            ctx.fillStyle = "rgba(241,245,249,0.72)";
+                            ctx.fill("evenodd");
+                          }}
+                        />
+                        <Rect x={b.x0 - pad} y={b.y0 - pad} width={b.x1 - b.x0 + 2 * pad} height={b.y1 - b.y0 + 2 * pad} stroke="#ea580c" strokeWidth={1.5 / scale} dash={[8 / scale, 5 / scale]} />
+                      </>
+                    );
+                  })()}
+                  {[...new Set([...(hoveredGroupId ? [hoveredGroupId] : []), ...selectedGroupIds])].map((gid) => {
+                    const b = groupBoxes.get(gid);
+                    if (!b) return null;
+                    const sel = selectedGroupIds.includes(gid);
+                    const off = sel && groupDragView ? groupDragView : { dx: 0, dy: 0 };
+                    const fs = 12 / scale;
+                    return (
+                      <Group key={`grp-${gid}`} x={off.dx} y={off.dy}>
+                        <Rect x={b.x0} y={b.y0} width={b.x1 - b.x0} height={b.y1 - b.y0} stroke={sel ? "#2563eb" : "#60a5fa"} strokeWidth={(sel ? 2.5 : 1.5) / scale} fill={sel ? "rgba(37,99,235,0.06)" : undefined} dash={sel ? undefined : [6 / scale, 4 / scale]} />
+                        <Text x={b.x0} y={b.y0 - fs * 1.5} text={groupById.get(gid)?.name ?? gid} fontSize={fs} fontStyle="bold" fill={sel ? "#1d4ed8" : "#3b82f6"} />
+                      </Group>
+                    );
+                  })}
+                  {groupDragView?.gx != null && <Line points={[groupDragView.gx, -1e6, groupDragView.gx, 1e6]} stroke="#f43f5e" strokeWidth={1 / scale} dash={[4 / scale, 4 / scale]} />}
+                  {groupDragView?.gy != null && <Line points={[-1e6, groupDragView.gy, 1e6, groupDragView.gy]} stroke="#f43f5e" strokeWidth={1 / scale} dash={[4 / scale, 4 / scale]} />}
                 </WorldViewport>
               </Layer>
             ) : null}
@@ -38264,7 +39071,7 @@ User request: ${aiPrompt.trim()}`;
               "space-circle": "Space · Circle", "single-segment": "Add Segment", dimension: "Dimension",
             };
             const SCOPE_LABELS: Record<string, string> = {
-              all: "All", node: "Node", segment: "Segment", space: "Space", graph: "Graph",
+              all: "All", node: "Node", segment: "Segment", space: "Space", group: "Group", graph: "Graph",
               image: "Image", grid: "Grid", dimension: "Dimension",
             };
             const modeLabel = tool === "select"
@@ -38312,7 +39119,7 @@ User request: ${aiPrompt.trim()}`;
             <button
               type="button"
               className="absolute right-2 top-1/2 z-10 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
-              onClick={() => setPropertiesPanelExpanded((v) => !v)}
+              onClick={() => setUiPref("showProperties", !propertiesPanelExpanded)}
               title={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
               aria-label={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
             >
@@ -38321,12 +39128,12 @@ User request: ${aiPrompt.trim()}`;
           )}
         </div>
         </Panel>
-        {flowOpen && (
+        {flowOpen && uiPrefs.showFlow && (
           <PanelResizeHandle className="group relative h-2 shrink-0 bg-slate-200 transition-colors hover:bg-sky-300">
             <div className="absolute left-1/2 top-1/2 h-1 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-400 group-hover:bg-sky-500" />
           </PanelResizeHandle>
         )}
-        {flowOpen && (
+        {flowOpen && uiPrefs.showFlow && (
           <Panel
             id="flow-panel"
             order={2}
@@ -39968,6 +40775,9 @@ User request: ${aiPrompt.trim()}`;
                     {/* Box 1: Input parameters — shown when Properties tab is active */}
                     {(propsSplitView || roomPropsTab === "properties") && (
                     <div className="rounded border border-slate-200 bg-white p-2">
+                      {selectedRoom.designInstance && (
+                        <DesignPlacementPanel instance={selectedRoom.designInstance} onOpen={() => void openDesignPlacement(selectedRoom.designInstance!)} showBuildings={showPlacedDesigns} onShowBuildings={setShowPlacedDesigns} />
+                      )}
                       {true && (<div>
                       {(() => {
                         const displayId = selectedRoom.id;

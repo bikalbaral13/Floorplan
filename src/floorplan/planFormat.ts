@@ -38,6 +38,7 @@ import {
   type Wall,
 } from "./types";
 import { bareSheet, unpackLevels } from "./levels";
+import { mergedToGrouped } from "./planGroups";
 
 /** Bumped when the shape changes in a way a reader must notice. Written on export, read on import —
  *  a file with no version is a pre-standard export and is handled by the legacy branch. */
@@ -59,6 +60,8 @@ export interface PlanSettings {
   northbearing: number;
   pixelsPerMeter: number;
   keywords?: string;
+  /** Present phase: library-relative path of the uploaded walkthrough / video brief (PDF). */
+  walkthrough?: string;
   [key: string]: unknown;
 }
 
@@ -108,6 +111,7 @@ export interface StandardPlan {
 export interface PlanFrame {
   pixelsPerMeter: number;
   keywords?: string;
+  walkthrough?: string;
   northBearing?: number;
   libraryPath?: string;
 }
@@ -167,12 +171,14 @@ function stableKeys(segments: { id: string; fromNodeId: string; toNodeId: string
  *  else rides along on the same object. */
 export function toStandardPlan(model: FloorPlanModel, frame: PlanFrame): StandardPlan {
   const packed = model.levels?.length ? unpackLevels(model) : null;
-  if (packed && packed.meta.length > 1) return toMultiLevelPlan(packed, frame);
-  return toSingleLevelPlan(bareSheet(model), frame);
+  const plan = packed && packed.meta.length > 1 ? toMultiLevelPlan(packed, frame) : toSingleLevelPlan(bareSheet(model), frame);
+  // A model loaded from a grouped document is written back as one: one canvas per group (./planGroups).
+  // NOT a StandardPlan (no top-level nodes); readers detect it by `schemaVersion: 3` + `groups`.
+  return model.groups?.length ? (mergedToGrouped(plan as unknown as Record<string, unknown>) as unknown as StandardPlan) : plan;
 }
 
 /** Keys that describe the project rather than one floor — hoisted out of each level to the top. */
-const PROJECT_KEYS = ["schemaVersion", "settings", "layers", "moodboards", "customRoomTypes", "customSegmentTypes"] as const;
+const PROJECT_KEYS = ["schemaVersion", "settings", "layers", "moodboards", "customRoomTypes", "customSegmentTypes", "groups"] as const;
 
 function toMultiLevelPlan(packed: NonNullable<ReturnType<typeof unpackLevels>>, frame: PlanFrame): StandardPlan {
   const { active, activeId, meta, sheets } = packed;
@@ -268,6 +274,7 @@ function toSingleLevelPlan(model: FloorPlanModel, frame: PlanFrame): StandardPla
     northbearing: frame.northBearing ?? 0,
     pixelsPerMeter: frame.pixelsPerMeter,
     ...(frame.keywords ? { keywords: frame.keywords } : {}),
+    ...(frame.walkthrough ? { walkthrough: frame.walkthrough } : {}),
   };
 
   // Everything else the model holds — the type registries, path-space attachments, canvas sheet
@@ -452,6 +459,7 @@ function fromSingleLevelPlan(plan: StandardPlan): { model: Partial<FloorPlanMode
     frame: {
       pixelsPerMeter: Number(settings.pixelsPerMeter) || 0,
       keywords: typeof settings.keywords === "string" ? settings.keywords : undefined,
+      walkthrough: typeof settings.walkthrough === "string" ? settings.walkthrough : undefined,
       northBearing: Number(settings.northbearing) || 0,
       libraryPath: typeof settings.library_path === "string" ? settings.library_path : undefined,
     },

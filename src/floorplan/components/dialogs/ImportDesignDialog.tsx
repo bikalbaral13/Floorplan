@@ -32,17 +32,20 @@ export interface ImportDesignDialogProps {
 /** Library root for images. Kept beside LIB_DESIGNS rather than imported, because
  *  `libraryFiles` does not export one. */
 const LIB_IMAGES = "Images";
+/** Library root for master plans: one folder per project holding master_plan.json, the site view, the
+ *  generated preview/flat files and envelopes/. Listed beside Designs so a master plan opens like a design. */
+const LIB_MASTER_PLANS = "Master Plans";
 
 const KIND = {
   design: {
-    folder: LIB_DESIGNS,
+    folders: [LIB_DESIGNS, LIB_MASTER_PLANS],
     title: "Import from Library",
-    blurb: "Open a saved plan from the Library's Designs folder. This replaces what is on the canvas.",
+    blurb: "Open a saved plan from the Library's Designs or Master Plans folder. This replaces what is on the canvas.",
     empty: "No designs in the Library yet.",
     exts: [".json"],
   },
   image: {
-    folder: LIB_IMAGES,
+    folders: [LIB_IMAGES],
     title: "Import image from Library",
     blurb: "Place an image from the Library's Images folder onto the canvas as an underlay.",
     empty: "No images in the Library yet.",
@@ -50,11 +53,15 @@ const KIND = {
   },
 } as const;
 
-/** A listed design: its path under `Designs/`, and the folder it sits in ("" at the top level). */
+/** A listed design: the Library root it came from, its path under that root, and the folder it sits in
+ *  ("" at the top of Designs; master plans always show their root, e.g. "Master Plans/Ramanadhapuram"). */
 interface DesignRow {
+  root: string;
   rel: string;
   folder: string;
   name: string;
+  /** Generated expansions that the editor can barely open — listed, but labelled. */
+  heavy: boolean;
 }
 
 /** Everything the Designs folder holds that is NOT a plan to open.
@@ -67,21 +74,30 @@ const isOpenable = (rel: string, exts: readonly string[]): boolean => {
   if (!exts.some((e) => low.endsWith(e))) return false;
   // `.meta.json` sidecars describe a design; `.baked.json` is a resolved snapshot with the meshes
   // inlined — it imports as a plan but is tens of megabytes and is not what "open a design" means.
-  return !low.endsWith(".meta.json") && !low.endsWith(".baked.json");
+  if (low.endsWith(".meta.json") || low.endsWith(".baked.json")) return false;
+  // A master plan's index and its per-design envelopes are data about plans, not plans to open.
+  return !low.endsWith("/master_plan.json") && low !== "master_plan.json" && !low.includes("/envelopes/");
 };
 
-const rowsFrom = (files: string[], exts: readonly string[]): DesignRow[] =>
+const rowsFrom = (root: string, files: string[], exts: readonly string[]): DesignRow[] =>
   files
     .filter((rel) => isOpenable(rel, exts))
     .map((rel) => {
       const cut = rel.lastIndexOf("/");
+      const sub = cut < 0 ? "" : rel.slice(0, cut);
       return {
+        root,
         rel,
-        folder: cut < 0 ? "" : rel.slice(0, cut),
+        folder: root === LIB_DESIGNS || root === LIB_IMAGES ? sub : [root, sub].filter(Boolean).join("/"),
         name: (cut < 0 ? rel : rel.slice(cut + 1)).replace(/\.(json|png|jpe?g|webp)$/i, ""),
+        heavy: root === LIB_MASTER_PLANS && /_(flat|preview)\.json$/i.test(rel),
       };
-    })
-    .sort((a, b) => (a.folder === b.folder ? a.name.localeCompare(b.name) : a.folder.localeCompare(b.folder)));
+    });
+
+/** Designs first (its own top level, then its sub-folders), then each master-plan project. */
+const byRootThenFolder = (a: DesignRow, b: DesignRow) =>
+  a.root !== b.root ? (a.root === LIB_DESIGNS ? -1 : b.root === LIB_DESIGNS ? 1 : a.root.localeCompare(b.root))
+    : a.folder === b.folder ? a.name.localeCompare(b.name) : a.folder.localeCompare(b.folder);
 
 /** Open a whole plan straight out of the Library's `Designs/` folder (Files ▸ Import from Library).
  *
@@ -108,22 +124,25 @@ export const ImportDesignDialog = ({ open, onOpenChange, kind = "design", onImpo
     setFailed(false);
     void (async () => {
       // An image folder holds several extensions, so it is listed per extension and merged —
-      // `listLibraryFiles` filters by ONE suffix per call.
-      const lists = await Promise.all(cfg.exts.map((e) => listLibraryFiles(cfg.folder, e.slice(1))));
+      // `listLibraryFiles` filters by ONE suffix per call. Each root is listed on its own.
+      const perRoot = await Promise.all(cfg.folders.map(async (root) => {
+        const lists = await Promise.all(cfg.exts.map((e) => listLibraryFiles(root, e.slice(1))));
+        return { root, lists };
+      }));
       if (!alive) return;
-      setFailed(lists.every((l) => l === null));
-      const merged = Array.from(new Set(lists.flatMap((l) => l ?? [])));
-      setRows(rowsFrom(merged, cfg.exts));
+      setFailed(perRoot.every(({ lists }) => lists.every((l) => l === null)));
+      setRows(perRoot.flatMap(({ root, lists }) => rowsFrom(root, Array.from(new Set(lists.flatMap((l) => l ?? []))), cfg.exts))
+        .sort(byRootThenFolder));
     })();
     return () => { alive = false; };
   }, [open, nonce, cfg]);
 
   const pick = async (row: DesignRow) => {
-    setBusy(row.rel);
+    setBusy(`${row.root}/${row.rel}`);
     try {
       // Read the TEXT, not parsed JSON: the host's loader parses it itself, and a design can be
       // megabytes — parsing here only to stringify it again would double the work for nothing.
-      const url = await cloudLibraryUrl(`${cfg.folder}/${row.rel}`);
+      const url = await cloudLibraryUrl(`${row.root}/${row.rel}`);
       if (!url) throw new Error("the Library has no read URL configured");
       const res = await fetch(url, { cache: "no-cache" });
       if (!res.ok) throw new Error(`the Library returned ${res.status}`);
@@ -137,7 +156,7 @@ export const ImportDesignDialog = ({ open, onOpenChange, kind = "design", onImpo
         });
         onImportImage?.(dataUrl, row.name);
         onOpenChange(false);
-      } else if (await onImportText?.(await res.text(), `${cfg.folder}/${row.rel}`)) {
+      } else if (await onImportText?.(await res.text(), `${row.root}/${row.rel}`)) {
         onOpenChange(false);
       }
     } catch (err) {
@@ -180,7 +199,7 @@ export const ImportDesignDialog = ({ open, onOpenChange, kind = "design", onImpo
             const header = row.folder && row.folder !== lastFolder ? row.folder : null;
             lastFolder = row.folder;
             return (
-              <div key={row.rel}>
+              <div key={`${row.root}/${row.rel}`}>
                 {header && (
                   <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-500">
                     <Folder className="h-3 w-3" />
@@ -197,14 +216,19 @@ export const ImportDesignDialog = ({ open, onOpenChange, kind = "design", onImpo
                     ? <ImageIcon className="h-4 w-4 shrink-0 text-slate-400" />
                     : <FileJson className="h-4 w-4 shrink-0 text-slate-400" />}
                   <span className="truncate">{row.name}</span>
-                  {busy === row.rel && <span className="ml-auto text-xs text-slate-400">opening…</span>}
+                  {row.heavy && (
+                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800" title="Generated expansion for tools (Blender, DXF, BOQ). The editor may freeze opening it.">
+                      heavy
+                    </span>
+                  )}
+                  {busy === `${row.root}/${row.rel}` && <span className="ml-auto text-xs text-slate-400">opening…</span>}
                 </button>
               </div>
             );
           })}
         </div>
 
-        <LibrarySourceNote folder={cfg.folder} />
+        <LibrarySourceNote folder={cfg.folders[0]} />
 
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={() => setNonce((n) => n + 1)} disabled={rows === null}>

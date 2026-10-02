@@ -1,353 +1,1226 @@
 {
-  "id": "trace-scope",
-  "name": "Scope the trace",
-  "version": 1,
-  "job": "floorplan-trace",
-  "intro": "Answer these before any pixel is measured. Every answer decides which steps of the pipeline run and what the build script emits — nothing here is a preference.",
-
-  "pipeline": [
-    "measure-wall-bands-from-pixels",
-    "calibrate-scale-from-printed-dimensions",
-    "read-openings-and-fixtures-by-zoom",
-    "author-plan-graph-in-image-pixels",
-    "verify-trace-overlay-and-areas",
-    "floorplan-tracer-scripts"
-  ],
-  "always": [
-    "measure-wall-bands-from-pixels",
-    "author-plan-graph-in-image-pixels",
-    "verify-trace-overlay-and-areas",
-    "floorplan-tracer-scripts"
-  ],
-
-  "sections": [
+ "id": "trace-scope",
+ "name": "Scope the trace",
+ "version": 2,
+ "job": "floorplan-trace",
+ "intro": "Answer these before any pixel is measured. Every answer decides which steps of the pipeline run and what the build script emits — nothing here is a preference.",
+ "pipeline": [
+  "pdf-intake",
+  "trace-multi-storey-plans",
+  "trace-master-plan",
+  "measure-wall-bands-from-pixels",
+  "calibrate-scale-from-printed-dimensions",
+  "read-openings-and-fixtures-by-zoom",
+  "author-plan-graph-in-image-pixels",
+  "verify-trace-overlay-and-areas",
+  "floorplan-tracer-scripts"
+ ],
+ "always": [
+  "measure-wall-bands-from-pixels",
+  "author-plan-graph-in-image-pixels",
+  "verify-trace-overlay-and-areas",
+  "floorplan-tracer-scripts"
+ ],
+ "sections": [
+  {
+   "id": "job",
+   "title": "The job",
+   "lead": "What is being handed back, and whether you want to watch it happen.",
+   "questions": [
     {
-      "id": "job",
-      "title": "The job",
-      "lead": "What is being handed back, and whether you want to watch it happen.",
-      "questions": [
+     "id": "source",
+     "ask": "What are you handing over?",
+     "input": "choice",
+     "default": "image",
+     "options": [
+      {
+       "label": "An image (JPEG / PNG)",
+       "value": "image",
+       "sets": [
         {
-          "id": "image", "ask": "Which image?",
-          "note": "the file in library/Images/, or the path you will hand over",
-          "input": "text", "default": ""
-        },
-        {
-          "id": "sheet", "ask": "Does the sheet hold more than one plan?",
-          "note": "brochure sheets often carry two unit types, a key plan and a title block",
-          "input": "choice", "default": "single",
-          "options": [
-            { "label": "One plan only", "value": "single" },
-            { "label": "Several — I'll say which", "hint": "title block, key plans and legends are masked out first", "value": "several",
-              "sets": [{ "path": "options.maskNonPlan", "value": true }] }
-          ],
-          "sets": [{ "path": "options.sheet", "value": "$" }]
-        },
-        {
-          "id": "which_plan", "ask": "Which plan on the sheet?",
-          "input": "text", "default": "",
-          "showWhen": { "all": [{ "q": "sheet", "is": "several" }] },
-          "sets": [{ "path": "options.whichPlan", "value": "$" }]
-        },
-        {
-          "id": "deliverable", "ask": "What do you want back?",
-          "note": "choose any", "input": "multi", "default": ["canvas"],
-          "options": [
-            { "label": "Canvas plan JSON", "hint": "overlays the image exactly; this is always produced", "value": "canvas" },
-            { "label": "Also a DXF", "hint": "hands off to the Canvas Json to Dxf skill afterwards", "value": "dxf" },
-            { "label": "Also a headless 3D bake", "hint": "proves every attachment resolves", "value": "bake" },
-            { "label": "Also the overlay proof images", "hint": "the pictures, not just the numbers", "value": "proof" }
-          ],
-          "sets": [{ "path": "options.deliverables", "value": "$" }]
-        },
-        {
-          "id": "mode", "ask": "How do you want it run?",
-          "input": "choice", "default": "batch",
-          "options": [
-            { "label": "Run it through and hand me the file", "hint": "fastest; accuracy over steering", "value": "batch",
-              "sets": [{ "path": "mode", "value": "batch" }, { "path": "entry", "value": "trace-raster-plan-to-canvas" }] },
-            { "label": "Trace it on the live canvas while I watch", "hint": "staged, with a checkpoint before each stage; I can nudge a wall or flip a hinge as it goes", "value": "live",
-              "sets": [{ "path": "mode", "value": "live" }, { "path": "entry", "value": "trace-raster-plan-live" }] }
-          ]
+         "path": "options.source",
+         "value": "image"
         }
-      ]
+       ]
+      },
+      {
+       "label": "A PDF",
+       "hint": "a drawing set, a brochure or one sheet: every plan is found, cropped and labelled first, and you confirm the crops",
+       "value": "pdf",
+       "steps": [
+        "pdf-intake"
+       ],
+       "sets": [
+        {
+         "path": "options.source",
+         "value": "pdf"
+        }
+       ]
+      }
+     ]
     },
-
     {
-      "id": "scale",
-      "title": "Scale and orientation",
-      "lead": "Everything downstream inherits the scale. A wrong scale is not a visible mistake — it is a plan that looks right and measures wrong.",
-      "questions": [
-        {
-          "id": "scale_source", "ask": "Where does the scale come from?",
-          "input": "choice", "default": "printed",
-          "options": [
-            { "label": "Printed room dimensions", "hint": "every one of them, fitted by least squares — the accurate route", "value": "printed",
-              "steps": ["calibrate-scale-from-printed-dimensions"],
-              "sets": [{ "path": "options.scaleSource", "value": "printed-dimensions" }] },
-            { "label": "An overall dimension or scale bar", "hint": "one number for the whole sheet", "value": "overall",
-              "steps": ["calibrate-scale-from-printed-dimensions"],
-              "sets": [{ "path": "options.scaleSource", "value": "overall-dimension" }] },
-            { "label": "A dimension I will give you", "value": "given",
-              "steps": ["calibrate-scale-from-printed-dimensions"],
-              "sets": [{ "path": "options.scaleSource", "value": "user-dimension" }] },
-            { "label": "Guess it from a known standard", "hint": "0.9 m door leaf, 0.6 m counter — this is a guess and gets reported as one", "value": "standard",
-              "sets": [{ "path": "options.scaleSource", "value": "standard-guess" }] },
-            { "label": "I will set the scale myself in the app", "hint": "you click two points on a printed dimension; takes about ninety seconds", "value": "user",
-              "sets": [{ "path": "options.scaleSource", "value": "user-sets-in-app" }] }
-          ]
-        },
-        {
-          "id": "scale_value", "ask": "The dimension, and what it spans",
-          "note": "e.g. \"13'0\" across the master bedroom, inner face to inner face\"",
-          "input": "text", "default": "",
-          "showWhen": { "all": [{ "q": "scale_source", "is": "given" }] },
-          "sets": [{ "path": "options.scaleDimension", "value": "$" }]
-        },
-        {
-          "id": "anisotropic", "ask": "Should I check the two axes separately?",
-          "note": "worth it on a photographed or rescaled sheet, where horizontal and vertical scales differ",
-          "input": "bool", "default": false,
-          "sets": [{ "path": "options.checkAnisotropy", "value": "$" }]
-        },
-        {
-          "id": "north_source", "ask": "Where does north come from?",
-          "input": "choice", "default": "arrow",
-          "options": [
-            { "label": "The compass on the drawing", "hint": "usually a small square outside the plan", "value": "arrow",
-              "sets": [{ "path": "options.northSource", "value": "compass-symbol" }] },
-            { "label": "A bearing I will give you", "value": "given",
-              "sets": [{ "path": "options.northSource", "value": "user-bearing" }] },
-            { "label": "Assume the top of the sheet is north", "hint": "fine for a render; wrong for anything solar", "value": "assume",
-              "sets": [{ "path": "options.northSource", "value": "assume-plan-up" }] },
-            { "label": "I will click it myself in the app", "value": "user",
-              "sets": [{ "path": "options.northSource", "value": "user-sets-in-app" }] },
-            { "label": "Not needed", "value": "none",
-              "sets": [{ "path": "options.northSource", "value": "none" }] }
-          ]
-        },
-        {
-          "id": "north_bearing", "ask": "The bearing",
-          "note": "degrees clockwise from the top of the sheet",
-          "input": "number", "default": 0, "min": 0, "max": 359, "step": 1,
-          "showWhen": { "all": [{ "q": "north_source", "is": "given" }] },
-          "sets": [{ "path": "options.northBearing", "value": "$" }]
-        }
-      ]
+     "id": "image",
+     "ask": "Which image or PDF?",
+     "note": "the file in library/Images/ or Designs/, or the path you will hand over",
+     "input": "text",
+     "default": ""
     },
-
     {
-      "id": "trace",
-      "title": "What to trace",
-      "lead": "The levels are a ladder — each one includes everything above it. This is pixel measurement and your own reading of the drawing, not a box detector, so more detail costs time rather than accuracy.",
-      "questions": [
+     "id": "sheet",
+     "ask": "Does the sheet hold more than one plan?",
+     "note": "brochure sheets often carry two unit types, a key plan and a title block",
+     "input": "choice",
+     "default": "single",
+     "options": [
+      {
+       "label": "One plan only",
+       "value": "single"
+      },
+      {
+       "label": "Several — I'll say which",
+       "hint": "title block, key plans and legends are masked out first",
+       "value": "several",
+       "sets": [
         {
-          "id": "detail", "ask": "How far should the trace go?",
-          "input": "choice", "default": "full",
-          "options": [
-            { "label": "Centrelines only", "hint": "nodes and segments, nothing attached — a bare graph", "value": "graph",
-              "sets": [{ "path": "options.emit", "value": ["nodes", "segments"] }] },
-            { "label": "Walls with real thickness", "hint": "adds the Wall object and per-wall thickness", "value": "walls",
-              "sets": [{ "path": "options.emit", "value": ["nodes", "segments", "walls"] }] },
-            { "label": "Walls and openings", "hint": "adds doors, windows and leaf-less openings, cut into the wall runs", "value": "openings",
-              "steps": ["read-openings-and-fixtures-by-zoom"],
-              "sets": [{ "path": "options.emit", "value": ["nodes", "segments", "walls", "doors", "windows", "openings"] }] },
-            { "label": "Everything", "hint": "adds rooms with their printed labels, and the furniture", "value": "full",
-              "steps": ["read-openings-and-fixtures-by-zoom"],
-              "sets": [{ "path": "options.emit", "value": ["nodes", "segments", "walls", "doors", "windows", "openings", "spaces", "furniture"] }] }
-          ]
-        },
-        {
-          "id": "extras", "ask": "Anything else on the sheet?",
-          "note": "choose any", "input": "multi", "default": ["columns", "labels"],
-          "options": [
-            { "label": "RCC columns", "hint": "the darker blocks sitting on the wall lines", "value": "columns" },
-            { "label": "Room labels exactly as printed", "hint": "BEDROOM-2, LIVING / DINING", "value": "labels" },
-            { "label": "The north arrow as an object", "value": "north_object" },
-            { "label": "Ducts and service shafts as spaces", "hint": "the boxes with a dashed X", "value": "ducts" },
-            { "label": "Balcony parapets and open edges", "value": "parapets" }
-          ],
-          "sets": [{ "path": "options.extras", "value": "$" }]
-        },
-        {
-          "id": "scope", "ask": "How much of the plan?",
-          "input": "choice", "default": "whole",
-          "options": [
-            { "label": "The whole plan", "value": "whole",
-              "sets": [{ "path": "options.scope", "value": "whole-plan" }] },
-            { "label": "One room", "hint": "its walls still need their neighbours measured to close; the design questions follow", "value": "room",
-              "sets": [{ "path": "options.scope", "value": "single-room" }] },
-            { "label": "A few rooms", "value": "rooms",
-              "sets": [{ "path": "options.scope", "value": "selected-rooms" }] }
-          ]
-        },
-        {
-          "id": "scope_rooms", "ask": "Which room or rooms?",
-          "note": "name them as the drawing prints them",
-          "input": "text", "default": "",
-          "showWhen": { "any": [{ "q": "scope", "is": "room" }, { "q": "scope", "is": "rooms" }] },
-          "sets": [{ "path": "options.scopeRooms", "value": "$" }]
-        },
-        {
-          "id": "room_type", "ask": "What kind of room is it?",
-          "note": "this picks the design questions that follow the trace",
-          "input": "choice", "default": "bedroom",
-          "showWhen": { "all": [{ "q": "scope", "is": "room" }] },
-          "options": [
-            { "label": "Bedroom", "hint": "questions ready", "value": "bedroom",
-              "sets": [{ "path": "handoff.questions", "value": "rooms/bedroom.questions.json" }] },
-            { "label": "Living room", "hint": "no questions written yet", "value": "living",
-              "sets": [{ "path": "handoff.questions", "value": null }] },
-            { "label": "Kitchen", "hint": "no questions written yet", "value": "kitchen",
-              "sets": [{ "path": "handoff.questions", "value": null }] },
-            { "label": "Bathroom", "hint": "no questions written yet", "value": "bathroom",
-              "sets": [{ "path": "handoff.questions", "value": null }] },
-            { "label": "Something else", "hint": "trace only, no design questions", "value": "other",
-              "sets": [{ "path": "handoff.questions", "value": null }] }
-          ]
-        },
-        {
-          "id": "room_brief", "ask": "After the trace, ask me how the room should look?",
-          "note": "the design questions — headboard, wardrobe shutters, lighting. Say no to trace the room and stop there.",
-          "input": "bool", "default": true,
-          "showWhen": { "all": [{ "q": "scope", "is": "room" }] },
-          "sets": [
-            { "path": "handoff.roomBrief", "value": "$" },
-            { "path": "handoff.skill", "value": "Room Renderer" },
-            { "path": "handoff.prefill", "value": true }
-          ]
+         "path": "options.maskNonPlan",
+         "value": true
         }
+       ]
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.sheet",
+       "value": "$"
+      }
+     ],
+     "showWhen": {
+      "all": [
+       {
+        "q": "source",
+        "is": "image"
+       }
       ]
+     }
     },
-
     {
-      "id": "conventions",
-      "title": "Conventions and checks",
-      "questions": [
-        {
-          "id": "units", "ask": "Report dimensions in",
-          "note": "the canvas is metric either way; this is what the report and the labels read",
-          "input": "choice", "default": "ft-in",
-          "options": [
-            { "label": "Feet and inches", "value": "ft-in" },
-            { "label": "Metres", "value": "m" }
-          ],
-          "sets": [{ "path": "options.units", "value": "$" }]
-        },
-        {
-          "id": "wall_thickness", "ask": "Wall thickness",
-          "input": "choice", "default": "measured",
-          "options": [
-            { "label": "Measure each wall", "hint": "exterior and partitions differ; this is the accurate route", "value": "measured",
-              "sets": [{ "path": "options.wallThickness", "value": "measured" }] },
-            { "label": "One nominal value everywhere", "hint": "faster, and wrong wherever the drawing disagrees", "value": "nominal",
-              "sets": [{ "path": "options.wallThickness", "value": "nominal" }] }
-          ]
-        },
-        {
-          "id": "nominal_mm", "ask": "The nominal thickness",
-          "input": "number", "default": 230, "min": 50, "max": 600, "step": 10,
-          "showWhen": { "all": [{ "q": "wall_thickness", "is": "nominal" }] },
-          "sets": [{ "path": "options.nominalThicknessMm", "value": "$" }]
-        },
-        {
-          "id": "exactness", "ask": "When a printed size and the drawn walls disagree",
-          "note": "they do disagree — a printed 8'×5' toilet often does not fit between the faces at any scale",
-          "input": "choice", "default": "printed",
-          "options": [
-            { "label": "Make the printed numbers exact", "hint": "solve wall lines from the printed spans; every room label then reads as printed", "value": "printed",
-              "sets": [{ "path": "options.solveFrom", "value": "printed-dimensions" }] },
-            { "label": "Follow the drawn walls", "hint": "keep the measured lines; labels may read a few inches off", "value": "drawn",
-              "sets": [{ "path": "options.solveFrom", "value": "measured-faces" }] }
-          ]
-        },
-        {
-          "id": "app_open", "ask": "Will the editor be open with ?agent=1 ?",
-          "note": "the last verification check imports the file through the app's own importer; without it that check cannot run",
-          "input": "bool", "default": true,
-          "sets": [{ "path": "options.inAppCheck", "value": "$" }]
-        },
-        {
-          "id": "notes", "ask": "Anything about this plan I should know?",
-          "note": "a dimension you know is misprinted, an alcove excluded from a printed size, a symbol you want read a particular way",
-          "input": "text", "default": "",
-          "sets": [{ "path": "options.notes", "value": "$" }]
-        }
+     "id": "pdf_set",
+     "ask": "What is in the PDF?",
+     "note": "the intake works this out from the sheet titles; say so only if you already know",
+     "input": "choice",
+     "default": "auto",
+     "showWhen": {
+      "all": [
+       {
+        "q": "source",
+        "is": "pdf"
+       }
       ]
+     },
+     "options": [
+      {
+       "label": "Let the intake decide",
+       "hint": "single, multi-level or master plan, from the titles; you see its answer with the crops",
+       "value": "auto",
+       "steps": [
+        "trace-multi-storey-plans",
+        "trace-master-plan"
+       ],
+       "sets": [
+        {
+         "path": "options.pdfSet",
+         "value": "auto"
+        }
+       ]
+      },
+      {
+       "label": "One floor plan",
+       "value": "single",
+       "sets": [
+        {
+         "path": "options.pdfSet",
+         "value": "single"
+        }
+       ]
+      },
+      {
+       "label": "Several floors of ONE building",
+       "hint": "traced as levels of one plan",
+       "value": "multi-level",
+       "steps": [
+        "trace-multi-storey-plans"
+       ],
+       "sets": [
+        {
+         "path": "options.pdfSet",
+         "value": "multi-level"
+        }
+       ]
+      },
+      {
+       "label": "A master plan",
+       "hint": "site, roads and several buildings: one grouped JSON, each building a group",
+       "value": "masterplan",
+       "steps": [
+        "trace-multi-storey-plans",
+        "trace-master-plan"
+       ],
+       "sets": [
+        {
+         "path": "options.pdfSet",
+         "value": "masterplan"
+        }
+       ]
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.pdfSet",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "pdf_pages",
+     "ask": "Which pages?",
+     "note": "e.g. 11-13,26 — leave empty for all",
+     "input": "text",
+     "default": "",
+     "showWhen": {
+      "all": [
+       {
+        "q": "source",
+        "is": "pdf"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.pdfPages",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "pdf_confirm",
+     "ask": "Before tracing, do you want to check the crops?",
+     "input": "choice",
+     "default": "confirm",
+     "showWhen": {
+      "all": [
+       {
+        "q": "source",
+        "is": "pdf"
+       }
+      ]
+     },
+     "options": [
+      {
+       "label": "Yes, show me every crop and its label first",
+       "hint": "the contact sheets plus a table; nothing is uploaded or traced until you agree",
+       "value": "confirm",
+       "sets": [
+        {
+         "path": "options.confirmCrops",
+         "value": true
+        }
+       ]
+      },
+      {
+       "label": "No, trust the labels",
+       "hint": "wrong labels surface only at the overlay proof",
+       "value": "trust",
+       "sets": [
+        {
+         "path": "options.confirmCrops",
+         "value": false
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "which_plan",
+     "ask": "Which plan on the sheet?",
+     "input": "text",
+     "default": "",
+     "showWhen": {
+      "all": [
+       {
+        "q": "sheet",
+        "is": "several"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.whichPlan",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "deliverable",
+     "ask": "What do you want back?",
+     "note": "choose any",
+     "input": "multi",
+     "default": [
+      "canvas"
+     ],
+     "options": [
+      {
+       "label": "Canvas plan JSON",
+       "hint": "overlays the image exactly; this is always produced",
+       "value": "canvas"
+      },
+      {
+       "label": "Also a DXF",
+       "hint": "hands off to the Canvas Json to Dxf skill afterwards",
+       "value": "dxf"
+      },
+      {
+       "label": "Also a headless 3D bake",
+       "hint": "proves every attachment resolves",
+       "value": "bake"
+      },
+      {
+       "label": "Also the overlay proof images",
+       "hint": "the pictures, not just the numbers",
+       "value": "proof"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.deliverables",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "mode",
+     "ask": "How do you want it run?",
+     "input": "choice",
+     "default": "batch",
+     "options": [
+      {
+       "label": "Run it through and hand me the file",
+       "hint": "fastest; accuracy over steering",
+       "value": "batch",
+       "sets": [
+        {
+         "path": "mode",
+         "value": "batch"
+        },
+        {
+         "path": "entry",
+         "value": "trace-raster-plan-to-canvas"
+        }
+       ]
+      },
+      {
+       "label": "Trace it on the live canvas while I watch",
+       "hint": "staged, with a checkpoint before each stage; I can nudge a wall or flip a hinge as it goes",
+       "value": "live",
+       "sets": [
+        {
+         "path": "mode",
+         "value": "live"
+        },
+        {
+         "path": "entry",
+         "value": "trace-raster-plan-live"
+        }
+       ]
+      }
+     ]
     }
-  ],
-
-  "flags": [
+   ]
+  },
+  {
+   "id": "scale",
+   "title": "Scale and orientation",
+   "lead": "Everything downstream inherits the scale. A wrong scale is not a visible mistake — it is a plan that looks right and measures wrong.",
+   "questions": [
     {
-      "id": "user_scale_in_batch",
-      "severity": "blocker",
-      "when": { "all": [{ "q": "scale_source", "is": "user" }, { "q": "mode", "is": "batch" }] },
-      "says": "You have asked to set the scale yourself, but also for the trace to run straight through and hand back a file. In batch mode there is nobody to hand the app to.",
-      "resolution": "Either switch to the live canvas mode, or let the scale come from the printed dimensions."
+     "id": "scale_source",
+     "ask": "Where does the scale come from?",
+     "input": "choice",
+     "default": "printed",
+     "options": [
+      {
+       "label": "Printed room dimensions",
+       "hint": "every one of them, fitted by least squares — the accurate route",
+       "value": "printed",
+       "steps": [
+        "calibrate-scale-from-printed-dimensions"
+       ],
+       "sets": [
+        {
+         "path": "options.scaleSource",
+         "value": "printed-dimensions"
+        }
+       ]
+      },
+      {
+       "label": "An overall dimension or scale bar",
+       "hint": "one number for the whole sheet",
+       "value": "overall",
+       "steps": [
+        "calibrate-scale-from-printed-dimensions"
+       ],
+       "sets": [
+        {
+         "path": "options.scaleSource",
+         "value": "overall-dimension"
+        }
+       ]
+      },
+      {
+       "label": "A dimension I will give you",
+       "value": "given",
+       "steps": [
+        "calibrate-scale-from-printed-dimensions"
+       ],
+       "sets": [
+        {
+         "path": "options.scaleSource",
+         "value": "user-dimension"
+        }
+       ]
+      },
+      {
+       "label": "Guess it from a known standard",
+       "hint": "0.9 m door leaf, 0.6 m counter — this is a guess and gets reported as one",
+       "value": "standard",
+       "sets": [
+        {
+         "path": "options.scaleSource",
+         "value": "standard-guess"
+        }
+       ]
+      },
+      {
+       "label": "I will set the scale myself in the app",
+       "hint": "you click two points on a printed dimension; takes about ninety seconds",
+       "value": "user",
+       "sets": [
+        {
+         "path": "options.scaleSource",
+         "value": "user-sets-in-app"
+        }
+       ]
+      }
+     ]
     },
     {
-      "id": "user_north_in_batch",
-      "severity": "warning",
-      "when": { "all": [{ "q": "north_source", "is": "user" }, { "q": "mode", "is": "batch" }] },
-      "says": "Clicking north yourself needs the app open, and this run does not stop for you.",
-      "resolution": "Use the compass on the drawing, give a bearing, or switch to live mode."
+     "id": "scale_value",
+     "ask": "The dimension, and what it spans",
+     "note": "e.g. \"13'0\" across the master bedroom, inner face to inner face\"",
+     "input": "text",
+     "default": "",
+     "showWhen": {
+      "all": [
+       {
+        "q": "scale_source",
+        "is": "given"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.scaleDimension",
+       "value": "$"
+      }
+     ]
     },
     {
-      "id": "furniture_without_openings",
-      "severity": "warning",
-      "when": { "all": [{ "q": "detail", "is": "graph" }, { "q": "extras", "includes": "columns" }] },
-      "says": "A centrelines-only trace has nothing for a column to sit on — columns are objects on wall lines.",
-      "resolution": "Take the detail up to walls, or drop the columns."
+     "id": "anisotropic",
+     "ask": "Should I check the two axes separately?",
+     "note": "worth it on a photographed or rescaled sheet, where horizontal and vertical scales differ",
+     "input": "bool",
+     "default": false,
+     "sets": [
+      {
+       "path": "options.checkAnisotropy",
+       "value": "$"
+      }
+     ]
     },
     {
-      "id": "labels_without_spaces",
-      "severity": "warning",
-      "when": { "all": [{ "q": "extras", "includes": "labels" }] },
-      "unless": { "all": [{ "q": "detail", "is": "full" }] },
-      "says": "Room labels are carried by space rings, and this detail level does not emit spaces.",
-      "resolution": "Take the detail to Everything, or drop the labels."
+     "id": "north_source",
+     "ask": "Where does north come from?",
+     "input": "choice",
+     "default": "arrow",
+     "options": [
+      {
+       "label": "The compass on the drawing",
+       "hint": "usually a small square outside the plan",
+       "value": "arrow",
+       "sets": [
+        {
+         "path": "options.northSource",
+         "value": "compass-symbol"
+        }
+       ]
+      },
+      {
+       "label": "A bearing I will give you",
+       "value": "given",
+       "sets": [
+        {
+         "path": "options.northSource",
+         "value": "user-bearing"
+        }
+       ]
+      },
+      {
+       "label": "Assume the top of the sheet is north",
+       "hint": "fine for a render; wrong for anything solar",
+       "value": "assume",
+       "sets": [
+        {
+         "path": "options.northSource",
+         "value": "assume-plan-up"
+        }
+       ]
+      },
+      {
+       "label": "I will click it myself in the app",
+       "value": "user",
+       "sets": [
+        {
+         "path": "options.northSource",
+         "value": "user-sets-in-app"
+        }
+       ]
+      },
+      {
+       "label": "Not needed",
+       "value": "none",
+       "sets": [
+        {
+         "path": "options.northSource",
+         "value": "none"
+        }
+       ]
+      }
+     ]
     },
     {
-      "id": "guessed_scale",
-      "severity": "warning",
-      "when": { "all": [{ "q": "scale_source", "is": "standard" }] },
-      "says": "A scale guessed from a standard door leaf is a guess. Every dimension in the result inherits it.",
-      "resolution": "If the sheet prints any real dimension anywhere — even one — use it instead."
-    },
-    {
-      "id": "nominal_with_printed_exact",
-      "severity": "warning",
-      "when": { "all": [{ "q": "wall_thickness", "is": "nominal" }, { "q": "exactness", "is": "printed" }] },
-      "says": "Solving wall lines from printed spans adds half a thickness at each end, so one nominal thickness will push rooms off wherever the real wall differs.",
-      "resolution": "Measure the thicknesses, or accept that the labels will not read exactly as printed."
-    },
-    {
-      "id": "no_in_app_check",
-      "severity": "warning",
-      "when": { "all": [{ "q": "app_open", "is": false }] },
-      "says": "Without the editor open, the trace can be proved by numbers and by the overlay image, but not through the importer the user actually uses.",
-      "resolution": "Open the editor with ?agent=1 before the run ends, or accept three checks instead of four."
-    },
-    {
-      "id": "no_questions_for_room_type",
-      "severity": "warning",
-      "when": { "all": [{ "q": "room_brief", "is": true }] },
-      "unless": { "all": [{ "q": "room_type", "is": "bedroom" }] },
-      "says": "Only the bedroom has design questions written. This room type would reach the Room Renderer form with nothing to ask.",
-      "resolution": "Trace it and stop there, or write that room type's questions file first."
-    },
-    {
-      "id": "brief_needs_openings",
-      "severity": "warning",
-      "when": { "all": [{ "q": "room_brief", "is": true }, { "q": "detail", "is": "graph" }] },
-      "says": "The design questions are prefilled from the traced openings — window width, which door is the entry — and a centrelines-only trace has none of them.",
-      "resolution": "Take the detail to walls and openings, or expect to type those by hand."
-    },
-    {
-      "id": "single_room_scope",
-      "severity": "warning",
-      "when": { "any": [{ "q": "scope", "is": "room" }, { "q": "scope", "is": "rooms" }] },
-      "says": "A room's walls are shared with its neighbours, so the bands either side still have to be measured for the ring to close.",
-      "resolution": "Nothing to change — the saving is in what gets authored, not in what gets measured."
+     "id": "north_bearing",
+     "ask": "The bearing",
+     "note": "degrees clockwise from the top of the sheet",
+     "input": "number",
+     "default": 0,
+     "min": 0,
+     "max": 359,
+     "step": 1,
+     "showWhen": {
+      "all": [
+       {
+        "q": "north_source",
+        "is": "given"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.northBearing",
+       "value": "$"
+      }
+     ]
     }
-  ]
+   ]
+  },
+  {
+   "id": "trace",
+   "title": "What to trace",
+   "lead": "The levels are a ladder — each one includes everything above it. This is pixel measurement and your own reading of the drawing, not a box detector, so more detail costs time rather than accuracy.",
+   "questions": [
+    {
+     "id": "detail",
+     "ask": "How far should the trace go?",
+     "input": "choice",
+     "default": "full",
+     "options": [
+      {
+       "label": "Centrelines only",
+       "hint": "nodes and segments, nothing attached — a bare graph",
+       "value": "graph",
+       "sets": [
+        {
+         "path": "options.emit",
+         "value": [
+          "nodes",
+          "segments"
+         ]
+        }
+       ]
+      },
+      {
+       "label": "Walls with real thickness",
+       "hint": "adds the Wall object and per-wall thickness",
+       "value": "walls",
+       "sets": [
+        {
+         "path": "options.emit",
+         "value": [
+          "nodes",
+          "segments",
+          "walls"
+         ]
+        }
+       ]
+      },
+      {
+       "label": "Walls and openings",
+       "hint": "adds doors, windows and leaf-less openings, cut into the wall runs",
+       "value": "openings",
+       "steps": [
+        "read-openings-and-fixtures-by-zoom"
+       ],
+       "sets": [
+        {
+         "path": "options.emit",
+         "value": [
+          "nodes",
+          "segments",
+          "walls",
+          "doors",
+          "windows",
+          "openings"
+         ]
+        }
+       ]
+      },
+      {
+       "label": "Everything",
+       "hint": "adds rooms with their printed labels, and the furniture",
+       "value": "full",
+       "steps": [
+        "read-openings-and-fixtures-by-zoom"
+       ],
+       "sets": [
+        {
+         "path": "options.emit",
+         "value": [
+          "nodes",
+          "segments",
+          "walls",
+          "doors",
+          "windows",
+          "openings",
+          "spaces",
+          "furniture"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "extras",
+     "ask": "Anything else on the sheet?",
+     "note": "choose any",
+     "input": "multi",
+     "default": [
+      "columns",
+      "labels"
+     ],
+     "options": [
+      {
+       "label": "RCC columns",
+       "hint": "the darker blocks sitting on the wall lines",
+       "value": "columns"
+      },
+      {
+       "label": "Room labels exactly as printed",
+       "hint": "BEDROOM-2, LIVING / DINING",
+       "value": "labels"
+      },
+      {
+       "label": "The north arrow as an object",
+       "value": "north_object"
+      },
+      {
+       "label": "Ducts and service shafts as spaces",
+       "hint": "the boxes with a dashed X",
+       "value": "ducts"
+      },
+      {
+       "label": "Balcony parapets and open edges",
+       "value": "parapets"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.extras",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "scope",
+     "ask": "How much of the plan?",
+     "input": "choice",
+     "default": "whole",
+     "options": [
+      {
+       "label": "The whole plan",
+       "value": "whole",
+       "sets": [
+        {
+         "path": "options.scope",
+         "value": "whole-plan"
+        }
+       ]
+      },
+      {
+       "label": "One room",
+       "hint": "its walls still need their neighbours measured to close; the design questions follow",
+       "value": "room",
+       "sets": [
+        {
+         "path": "options.scope",
+         "value": "single-room"
+        }
+       ]
+      },
+      {
+       "label": "A few rooms",
+       "value": "rooms",
+       "sets": [
+        {
+         "path": "options.scope",
+         "value": "selected-rooms"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "scope_rooms",
+     "ask": "Which room or rooms?",
+     "note": "name them as the drawing prints them",
+     "input": "text",
+     "default": "",
+     "showWhen": {
+      "any": [
+       {
+        "q": "scope",
+        "is": "room"
+       },
+       {
+        "q": "scope",
+        "is": "rooms"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.scopeRooms",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "room_type",
+     "ask": "What kind of room is it?",
+     "note": "this picks the design questions that follow the trace",
+     "input": "choice",
+     "default": "bedroom",
+     "showWhen": {
+      "all": [
+       {
+        "q": "scope",
+        "is": "room"
+       }
+      ]
+     },
+     "options": [
+      {
+       "label": "Bedroom",
+       "hint": "questions ready",
+       "value": "bedroom",
+       "sets": [
+        {
+         "path": "handoff.questions",
+         "value": "rooms/bedroom.questions.json"
+        }
+       ]
+      },
+      {
+       "label": "Living room",
+       "hint": "no questions written yet",
+       "value": "living",
+       "sets": [
+        {
+         "path": "handoff.questions",
+         "value": null
+        }
+       ]
+      },
+      {
+       "label": "Kitchen",
+       "hint": "no questions written yet",
+       "value": "kitchen",
+       "sets": [
+        {
+         "path": "handoff.questions",
+         "value": null
+        }
+       ]
+      },
+      {
+       "label": "Bathroom",
+       "hint": "no questions written yet",
+       "value": "bathroom",
+       "sets": [
+        {
+         "path": "handoff.questions",
+         "value": null
+        }
+       ]
+      },
+      {
+       "label": "Something else",
+       "hint": "trace only, no design questions",
+       "value": "other",
+       "sets": [
+        {
+         "path": "handoff.questions",
+         "value": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "room_brief",
+     "ask": "After the trace, ask me how the room should look?",
+     "note": "the design questions — headboard, wardrobe shutters, lighting. Say no to trace the room and stop there.",
+     "input": "bool",
+     "default": true,
+     "showWhen": {
+      "all": [
+       {
+        "q": "scope",
+        "is": "room"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "handoff.roomBrief",
+       "value": "$"
+      },
+      {
+       "path": "handoff.skill",
+       "value": "Room Renderer"
+      },
+      {
+       "path": "handoff.prefill",
+       "value": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "conventions",
+   "title": "Conventions and checks",
+   "questions": [
+    {
+     "id": "units",
+     "ask": "Report dimensions in",
+     "note": "the canvas is metric either way; this is what the report and the labels read",
+     "input": "choice",
+     "default": "ft-in",
+     "options": [
+      {
+       "label": "Feet and inches",
+       "value": "ft-in"
+      },
+      {
+       "label": "Metres",
+       "value": "m"
+      }
+     ],
+     "sets": [
+      {
+       "path": "options.units",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "wall_thickness",
+     "ask": "Wall thickness",
+     "input": "choice",
+     "default": "measured",
+     "options": [
+      {
+       "label": "Measure each wall",
+       "hint": "exterior and partitions differ; this is the accurate route",
+       "value": "measured",
+       "sets": [
+        {
+         "path": "options.wallThickness",
+         "value": "measured"
+        }
+       ]
+      },
+      {
+       "label": "One nominal value everywhere",
+       "hint": "faster, and wrong wherever the drawing disagrees",
+       "value": "nominal",
+       "sets": [
+        {
+         "path": "options.wallThickness",
+         "value": "nominal"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "nominal_mm",
+     "ask": "The nominal thickness",
+     "input": "number",
+     "default": 230,
+     "min": 50,
+     "max": 600,
+     "step": 10,
+     "showWhen": {
+      "all": [
+       {
+        "q": "wall_thickness",
+        "is": "nominal"
+       }
+      ]
+     },
+     "sets": [
+      {
+       "path": "options.nominalThicknessMm",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "exactness",
+     "ask": "When a printed size and the drawn walls disagree",
+     "note": "they do disagree — a printed 8'×5' toilet often does not fit between the faces at any scale",
+     "input": "choice",
+     "default": "printed",
+     "options": [
+      {
+       "label": "Make the printed numbers exact",
+       "hint": "solve wall lines from the printed spans; every room label then reads as printed",
+       "value": "printed",
+       "sets": [
+        {
+         "path": "options.solveFrom",
+         "value": "printed-dimensions"
+        }
+       ]
+      },
+      {
+       "label": "Follow the drawn walls",
+       "hint": "keep the measured lines; labels may read a few inches off",
+       "value": "drawn",
+       "sets": [
+        {
+         "path": "options.solveFrom",
+         "value": "measured-faces"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "app_open",
+     "ask": "Will the editor be open with ?agent=1 ?",
+     "note": "the last verification check imports the file through the app's own importer; without it that check cannot run",
+     "input": "bool",
+     "default": true,
+     "sets": [
+      {
+       "path": "options.inAppCheck",
+       "value": "$"
+      }
+     ]
+    },
+    {
+     "id": "notes",
+     "ask": "Anything about this plan I should know?",
+     "note": "a dimension you know is misprinted, an alcove excluded from a printed size, a symbol you want read a particular way",
+     "input": "text",
+     "default": "",
+     "sets": [
+      {
+       "path": "options.notes",
+       "value": "$"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "flags": [
+  {
+   "id": "user_scale_in_batch",
+   "severity": "blocker",
+   "when": {
+    "all": [
+     {
+      "q": "scale_source",
+      "is": "user"
+     },
+     {
+      "q": "mode",
+      "is": "batch"
+     }
+    ]
+   },
+   "says": "You have asked to set the scale yourself, but also for the trace to run straight through and hand back a file. In batch mode there is nobody to hand the app to.",
+   "resolution": "Either switch to the live canvas mode, or let the scale come from the printed dimensions."
+  },
+  {
+   "id": "user_north_in_batch",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "north_source",
+      "is": "user"
+     },
+     {
+      "q": "mode",
+      "is": "batch"
+     }
+    ]
+   },
+   "says": "Clicking north yourself needs the app open, and this run does not stop for you.",
+   "resolution": "Use the compass on the drawing, give a bearing, or switch to live mode."
+  },
+  {
+   "id": "furniture_without_openings",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "detail",
+      "is": "graph"
+     },
+     {
+      "q": "extras",
+      "includes": "columns"
+     }
+    ]
+   },
+   "says": "A centrelines-only trace has nothing for a column to sit on — columns are objects on wall lines.",
+   "resolution": "Take the detail up to walls, or drop the columns."
+  },
+  {
+   "id": "labels_without_spaces",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "extras",
+      "includes": "labels"
+     }
+    ]
+   },
+   "unless": {
+    "all": [
+     {
+      "q": "detail",
+      "is": "full"
+     }
+    ]
+   },
+   "says": "Room labels are carried by space rings, and this detail level does not emit spaces.",
+   "resolution": "Take the detail to Everything, or drop the labels."
+  },
+  {
+   "id": "guessed_scale",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "scale_source",
+      "is": "standard"
+     }
+    ]
+   },
+   "says": "A scale guessed from a standard door leaf is a guess. Every dimension in the result inherits it.",
+   "resolution": "If the sheet prints any real dimension anywhere — even one — use it instead."
+  },
+  {
+   "id": "nominal_with_printed_exact",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "wall_thickness",
+      "is": "nominal"
+     },
+     {
+      "q": "exactness",
+      "is": "printed"
+     }
+    ]
+   },
+   "says": "Solving wall lines from printed spans adds half a thickness at each end, so one nominal thickness will push rooms off wherever the real wall differs.",
+   "resolution": "Measure the thicknesses, or accept that the labels will not read exactly as printed."
+  },
+  {
+   "id": "no_in_app_check",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "app_open",
+      "is": false
+     }
+    ]
+   },
+   "says": "Without the editor open, the trace can be proved by numbers and by the overlay image, but not through the importer the user actually uses.",
+   "resolution": "Open the editor with ?agent=1 before the run ends, or accept three checks instead of four."
+  },
+  {
+   "id": "no_questions_for_room_type",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "room_brief",
+      "is": true
+     }
+    ]
+   },
+   "unless": {
+    "all": [
+     {
+      "q": "room_type",
+      "is": "bedroom"
+     }
+    ]
+   },
+   "says": "Only the bedroom has design questions written. This room type would reach the Room Renderer form with nothing to ask.",
+   "resolution": "Trace it and stop there, or write that room type's questions file first."
+  },
+  {
+   "id": "brief_needs_openings",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "room_brief",
+      "is": true
+     },
+     {
+      "q": "detail",
+      "is": "graph"
+     }
+    ]
+   },
+   "says": "The design questions are prefilled from the traced openings — window width, which door is the entry — and a centrelines-only trace has none of them.",
+   "resolution": "Take the detail to walls and openings, or expect to type those by hand."
+  },
+  {
+   "id": "single_room_scope",
+   "severity": "warning",
+   "when": {
+    "any": [
+     {
+      "q": "scope",
+      "is": "room"
+     },
+     {
+      "q": "scope",
+      "is": "rooms"
+     }
+    ]
+   },
+   "says": "A room's walls are shared with its neighbours, so the bands either side still have to be measured for the ring to close.",
+   "resolution": "Nothing to change — the saving is in what gets authored, not in what gets measured."
+  },
+  {
+   "id": "pdf_set_live",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "source",
+      "is": "pdf"
+     },
+     {
+      "q": "mode",
+      "is": "live"
+     },
+     {
+      "any": [
+       {
+        "q": "pdf_set",
+        "is": "multi-level"
+       },
+       {
+        "q": "pdf_set",
+        "is": "masterplan"
+       }
+      ]
+     }
+    ]
+   },
+   "says": "Several sheets, or a whole site, is not a live job: the live route draws one plan on one canvas.",
+   "resolution": "Run it through (batch), or pick the one sheet you want to watch and trace that crop live."
+  },
+  {
+   "id": "masterplan_one_room",
+   "severity": "blocker",
+   "when": {
+    "all": [
+     {
+      "q": "pdf_set",
+      "is": "masterplan"
+     },
+     {
+      "any": [
+       {
+        "q": "scope",
+        "is": "room"
+       },
+       {
+        "q": "scope",
+        "is": "rooms"
+       }
+      ]
+     }
+    ]
+   },
+   "says": "A master plan places whole buildings on a site; tracing one room of it has no site to place it on.",
+   "resolution": "Trace the whole master plan, or answer 'one floor plan' and name the sheet in Which pages."
+  },
+  {
+   "id": "pdf_trust_auto",
+   "severity": "warning",
+   "when": {
+    "all": [
+     {
+      "q": "pdf_set",
+      "is": "auto"
+     },
+     {
+      "q": "pdf_confirm",
+      "is": "trust"
+     }
+    ]
+   },
+   "says": "Nobody checks what the intake decided. A key plan or a per-floor site sheet labelled wrongly is traced as a building.",
+   "resolution": "Check the crops. It is one look at the contact sheets."
+  }
+ ]
 }

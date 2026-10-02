@@ -87,6 +87,34 @@
       ],
       "port": 2612,
       "autoPort": false
+    },
+    {
+      "name": "viewer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "D:/MAIN/Viewer",
+        "run",
+        "dev"
+      ],
+      "port": 2600,
+      "autoPort": false
+    },
+    {
+      "name": "hydropower",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "D:/MY_CODING_HOBBY/Hydropower",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5190",
+        "--strictPort"
+      ],
+      "port": 5190,
+      "autoPort": false
     }
   ]
 }

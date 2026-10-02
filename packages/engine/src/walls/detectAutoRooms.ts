@@ -207,29 +207,80 @@ export const detectAutoRoomsFromWalls = (walls: Wall[], opts?: { innerOffset?: b
     .map(w => ({ start: { ...w.start }, end: { ...w.end } }));
   const intersectionPoints: Point[] = [];
 
+  // SPATIAL INDEXES. Each step below used to compare everything with everything — every segment pair, every
+  // intersection against every endpoint, every segment against every snap point — which is seconds per edit
+  // at a few thousand walls. The grids only narrow the CANDIDATES; every candidate still goes through the
+  // original test, and candidates are visited in the original index order, so ties resolve exactly as before
+  // and the detected rooms (points, order, ids) are unchanged.
+  const CELL = 64;
+  const cell = (v: number) => Math.floor(v / CELL);
+  const segGrid = new Map<string, number[]>();
+  // getLineIntersection accepts a hit up to 0.1 % of a segment's length past either end (ua/ub ∈ [−0.001, 1.001]),
+  // so each segment is indexed over its bbox grown by that much — two segments that can intersect always share a cell.
+  const segPad = (s: { start: Point; end: Point }) => Math.hypot(s.end.x - s.start.x, s.end.y - s.start.y) * 0.0011 + 0.01;
+  segments.forEach((s, i) => {
+    const pd = segPad(s);
+    const x0 = cell(Math.min(s.start.x, s.end.x) - pd), x1 = cell(Math.max(s.start.x, s.end.x) + pd);
+    const y0 = cell(Math.min(s.start.y, s.end.y) - pd), y1 = cell(Math.max(s.start.y, s.end.y) + pd);
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+      const k = `${cx},${cy}`; const b = segGrid.get(k); if (b) b.push(i); else segGrid.set(k, [i]);
+    }
+  });
+  // Endpoint grid (1-unit cells, matching the < 1.0 snap radius): which segments have an end near a point.
+  const endGrid = new Map<string, number[]>();
+  const ek = (x: number, y: number) => `${Math.floor(x)},${Math.floor(y)}`;
+  segments.forEach((s, i) => {
+    for (const p of [s.start, s.end]) { const k = ek(p.x, p.y); const b = endGrid.get(k); if (b) { if (b[b.length - 1] !== i) b.push(i); } else endGrid.set(k, [i]); }
+  });
+  const snapToEnd = (p: Point): Point => {
+    // The FIRST segment (index order) with its start, then its end, within 1.0 — as the linear scan did.
+    const bx = Math.floor(p.x), by = Math.floor(p.y);
+    const cand: number[] = [];
+    for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) { const b = endGrid.get(`${bx + ox},${by + oy}`); if (b) cand.push(...b); }
+    cand.sort((a, b) => a - b);
+    for (const i of cand) {
+      const seg = segments[i];
+      if (Math.hypot(p.x - seg.start.x, p.y - seg.start.y) < 1.0) return seg.start;
+      if (Math.hypot(p.x - seg.end.x, p.y - seg.end.y) < 1.0) return seg.end;
+    }
+    return p;
+  };
+
   for (let i = 0; i < segments.length; i++) {
-    for (let j = i + 1; j < segments.length; j++) {
-      let p = getLineIntersection(segments[i].start, segments[i].end, segments[j].start, segments[j].end);
-      if (p) {
-        for (const seg of segments) {
-          if (Math.hypot(p.x - seg.start.x, p.y - seg.start.y) < 1.0) { p = seg.start; break; }
-          if (Math.hypot(p.x - seg.end.x, p.y - seg.end.y) < 1.0) { p = seg.end; break; }
-        }
-        intersectionPoints.push(p);
-      }
+    const s = segments[i];
+    const pd = segPad(s);
+    const x0 = cell(Math.min(s.start.x, s.end.x) - pd), x1 = cell(Math.max(s.start.x, s.end.x) + pd);
+    const y0 = cell(Math.min(s.start.y, s.end.y) - pd), y1 = cell(Math.max(s.start.y, s.end.y) + pd);
+    const js = new Set<number>();
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) { const b = segGrid.get(`${cx},${cy}`); if (b) for (const j of b) if (j > i) js.add(j); }
+    for (const j of [...js].sort((a, b) => a - b)) {
+      const p = getLineIntersection(segments[i].start, segments[i].end, segments[j].start, segments[j].end);
+      if (p) intersectionPoints.push(snapToEnd(p));
     }
   }
 
   const allSnapPoints = [...segments.flatMap(s => [s.start, s.end]), ...intersectionPoints];
+  // Snap-point grid for the split step. `isPointStrictlyBetween` accepts a point off the line by up to about
+  // sqrt(0.05·d) (its |d − (d1+d2)| < 0.1 ellipse), so each segment searches its bbox grown by that much.
+  const snapGrid = new Map<string, number[]>();
+  allSnapPoints.forEach((p, i) => { const k = `${cell(p.x)},${cell(p.y)}`; const b = snapGrid.get(k); if (b) b.push(i); else snapGrid.set(k, [i]); });
 
   const finalSegments: Array<{ start: Point; end: Point }> = [];
   segments.forEach(seg => {
     const splitPoints = [seg.start, seg.end];
-    allSnapPoints.forEach(p => {
+    const d = Math.hypot(seg.end.x - seg.start.x, seg.end.y - seg.start.y);
+    const pad = Math.sqrt(0.1 * d) + 1;
+    const x0 = cell(Math.min(seg.start.x, seg.end.x) - pad), x1 = cell(Math.max(seg.start.x, seg.end.x) + pad);
+    const y0 = cell(Math.min(seg.start.y, seg.end.y) - pad), y1 = cell(Math.max(seg.start.y, seg.end.y) + pad);
+    const cand: number[] = [];
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) { const b = snapGrid.get(`${cx},${cy}`); if (b) cand.push(...b); }
+    cand.sort((a, b) => a - b);
+    for (const i of cand) {
+      const p = allSnapPoints[i];
       if (isPointStrictlyBetween(p, seg.start, seg.end)) {
         splitPoints.push(p);
       }
-    });
+    }
 
     splitPoints.sort((a, b) =>
       Math.hypot(a.x - seg.start.x, a.y - seg.start.y) -
@@ -357,16 +408,38 @@ export const detectAutoRoomsFromWalls = (walls: Wall[], opts?: { innerOffset?: b
     });
   });
 
-  const roomsWithNetArea = faces.map(face => {
-    const children = faces.filter(other =>
-      other.id !== face.id &&
-      isCycleInside(other.points, face.points) &&
-      !faces.some(mid =>
-        mid.id !== other.id && mid.id !== face.id &&
-        isCycleInside(other.points, mid.points) &&
-        isCycleInside(mid.points, face.points)
-      )
-    );
+  // Nesting: a face's CHILDREN are the faces inside it with no third face between. That was faces × faces ×
+  // faces calls of `isCycleInside`. Now `inside[o]` (the faces o lies inside) is computed once per pair that
+  // can possibly qualify — the inner centroid must fall in the outer's bbox — and the same predicate decides.
+  const areas = faces.map((f) => polygonArea(f.points));
+  const cents = faces.map((f) => (f.points.length ? polygonCentroid(f.points) : { x: NaN, y: NaN }));
+  const boxes = faces.map((f) => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of f.points) { if (p.x < x0) x0 = p.x; if (p.y < y0) y0 = p.y; if (p.x > x1) x1 = p.x; if (p.y > y1) y1 = p.y; }
+    return { x0, y0, x1, y1 };
+  });
+  // isCycleInside(inner, outer), same predicate, with the areas / centroid precomputed.
+  const inside = (a: number, b: number): boolean => {
+    if (!faces[a].points.length || !faces[b].points.length) return false;
+    if (areas[a] >= areas[b] - 1) return false;
+    const c = cents[a], bb = boxes[b];
+    if (!(c.x >= bb.x0 && c.x <= bb.x1 && c.y >= bb.y0 && c.y <= bb.y1)) return false;
+    return isPointInPolygon(c, faces[b].points);
+  };
+  const containers: number[][] = faces.map(() => []);   // containers[o] = faces o is inside
+  const contained: number[][] = faces.map(() => []);    // contained[f] = faces inside f
+  for (let o = 0; o < faces.length; o++) for (let f = 0; f < faces.length; f++) {
+    if (o !== f && inside(o, f)) { containers[o].push(f); contained[f].push(o); }
+  }
+  const roomsWithNetArea = faces.map((face, fi) => {
+    const children = contained[fi].filter((oi) => {
+      const other = faces[oi];
+      if (other.id === face.id) return false;
+      return !containers[oi].some((mi) => {
+        const mid = faces[mi];
+        return mid.id !== other.id && mid.id !== face.id && contained[fi].includes(mi);
+      });
+    }).sort((a, b) => a - b).map((oi) => faces[oi]);
     const netArea = polygonArea(face.points) - children.reduce((sum, child) => sum + polygonArea(child.points), 0);
     return { ...face, netArea };
   });

@@ -6,6 +6,10 @@ import { OptimisationToolbar } from "./toolbars/OptimisationToolbar";
 import { ViewToolbar } from "./toolbars/ViewToolbar";
 import { AddSemanticsToolbar } from "./toolbars/AddSemanticsToolbar";
 import { TestToolbar } from "./toolbars/TestToolbar";
+import { PlanPhaseToolbar } from "./toolbars/PlanPhaseToolbar";
+import { BuildPhaseToolbar } from "./toolbars/BuildPhaseToolbar";
+import { PresentPhaseToolbar } from "./toolbars/PresentPhaseToolbar";
+import type { Phase } from "./PhaseToggle";
 
 type EdgeMode = "connection" | null;
 
@@ -129,6 +133,19 @@ interface LeftToolbarProps {
   onOpenAddNodeDialog?: () => void;
   /** Opens the GeoJSON file picker and imports polygons onto the OSM map. */
   onImportGeojson?: () => void;
+  /** Header phase toggle. On "plan" the Plan workflow buttons lead and only correction tools follow. */
+  phase?: Phase;
+  /** Plan step ① — the image-underlay import control. */
+  planImportSlot?: ReactNode;
+  /** Plan step ④ — opens the moodboard picker. */
+  onOpenMoodboardPicker?: () => void;
+  hasUnderlay?: boolean;
+  hasMoodboard?: boolean;
+  /** Build step — the canvas has a plan to improve. */
+  hasPlan?: boolean;
+  /** Present step — the uploaded walkthrough brief (library-relative) and its setter. */
+  walkthroughPath?: string;
+  onWalkthroughUploaded?: (relPath: string) => void;
 }
 
 /** Left sidebar composition — thin shell that arranges the per-section foldable
@@ -205,9 +222,29 @@ export const LeftToolbar = ({
   onPlainNodeClick,
   onOpenAddNodeDialog,
   onImportGeojson,
+  phase,
+  planImportSlot,
+  onOpenMoodboardPicker,
+  hasUnderlay,
+  hasMoodboard,
+  hasPlan,
+  walkthroughPath,
+  onWalkthroughUploaded,
 }: LeftToolbarProps) => (
   <div className="flex w-full flex-col items-stretch gap-2">
-    <DrawingToolbar
+    {phase === "plan" && (
+      <PlanPhaseToolbar
+        importSlot={planImportSlot}
+        onOpenMoodboardPicker={() => onOpenMoodboardPicker?.()}
+        hasUnderlay={!!hasUnderlay}
+        hasMoodboard={!!hasMoodboard}
+      />
+    )}
+    {phase === "build" && <BuildPhaseToolbar hasPlan={!!hasPlan} hasMoodboard={!!hasMoodboard} />}
+    {phase === "present" && (
+      <PresentPhaseToolbar walkthroughPath={walkthroughPath} onWalkthroughUploaded={(p) => onWalkthroughUploaded?.(p)} />
+    )}
+    {phase !== "present" && <DrawingToolbar
       tool={tool}
       onToolChange={onToolChange}
       selectFilter={selectFilter}
@@ -264,7 +301,9 @@ export const LeftToolbar = ({
       onPlainNodeClick={onPlainNodeClick}
       onOpenAddNodeDialog={onOpenAddNodeDialog}
       onImportGeojson={onImportGeojson}
-    />
+      planMode={phase === "plan"}
+      buildMode={phase === "build"}
+    />}
 
     {/* Files toolbar moved to the top-right bar. */}
 

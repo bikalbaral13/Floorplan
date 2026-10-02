@@ -24,6 +24,7 @@ import {
   Trash2,
   Type,
   Upload,
+  Boxes,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -37,6 +38,10 @@ type DrawToolEntry = { value: string; label: string; icon?: ParametricObjectIcon
 type EdgeMode = "connection" | null;
 
 export interface DrawingToolbarProps {
+  /** Plan phase: keep only the correction tools (Add Node / Segment / Space, Select, Delete). */
+  planMode?: boolean;
+  /** Build phase: like Plan, but Import Objects stays (furnishing needs the object library). */
+  buildMode?: boolean;
   tool: Tool;
   onToolChange: (tool: Tool) => void;
   /** Active scope filter while Select tool is in use. */
@@ -206,7 +211,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
               or browse `.pobj.json` files / a folder from this device); the imported objects' labels
               populate the Add Node / Add Segment / Add Space dropdowns. Falls back to the inline
               directory input when no dialog handler is provided. */}
-          {p.onImportObjects && (
+          {p.onImportObjects && !p.planMode && (
             <div className="flex flex-col items-center gap-2">
               <ToolButton
                 icon={<Upload className="h-6 w-6 text-teal-600" />}
@@ -490,12 +495,12 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             </PopoverContent>
             </Popover>
             {/* Dimension — click two points to drop a standalone Dimension annotation (own button below Add Space). */}
-            <ToolButton
+            {!p.planMode && !p.buildMode && <ToolButton
               active={!!p.drawingDimension}
               icon={<Ruler className="h-6 w-6 text-amber-600" />}
               label="Dimension"
               onClick={() => p.onAddDimensionClick?.()}
-            />
+            />}
             {/* Path tool retired — its "Path Type" (Straight / NURBS) now lives in the Add Segment dialog,
                 so a single Add Segment draw produces straight lines or NURBS curves. */}
             {/* Grid moved to Preferences (top-right). Connection moved into the Space dropdown.
@@ -516,7 +521,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 variant={p.tool === "select" && !p.addDoorMode && !p.addWindowMode && !p.addEdgeMode ? "default" : "outline"}
                 size="sm"
                 className="h-9 w-9 p-0"
-                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : p.selectFilter === "graph" ? "Graph (connected)" : p.selectFilter === "image" ? "Image only" : p.selectFilter === "grid" ? "Grid only" : p.selectFilter === "dimension" ? "Dimension only" : "Space only"})`}
+                title={`Select (${p.selectFilter === "all" ? "All" : p.selectFilter === "node" ? "Node only" : p.selectFilter === "segment" ? "Segment only" : p.selectFilter === "graph" ? "Graph (connected)" : p.selectFilter === "image" ? "Image only" : p.selectFilter === "grid" ? "Grid only" : p.selectFilter === "dimension" ? "Dimension only" : p.selectFilter === "group" ? "Group" : "Space only"})`}
                 aria-label="Select"
                 onClick={() => {
                   p.onSelectFilterChange("all");
@@ -551,6 +556,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                     { v: "node", label: "Node", Icon: Dot },
                     { v: "segment", label: "Segment", Icon: Slash },
                     { v: "space", label: "Space", Icon: Hexagon },
+                    { v: "group", label: "Group", Icon: Boxes },
                     { v: "graph", label: "Graph (connected)", Icon: Waypoints },
                     { v: "image", label: "Image", Icon: ImageIcon },
                     { v: "grid", label: "Grid", Icon: Grid3x3 },
@@ -584,6 +590,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             {/* Pan moved to the top-center toolbar. */}
             {/* Miscellaneous — a dropdown grouping Text / Measure. The corner chevron matches
                 the Select-scope split button. Active while any of its tools is current. */}
+            {!p.planMode && !p.buildMode && <>
             <Popover open={miscOpen} onOpenChange={setMiscOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -684,6 +691,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 </Popover>
               )}
             </div>
+            </>}
             {/* "New" moved to the top-right Files dropdown (File ▸ New). Merge spaces moved into the
                 Space dropdown. */}
             <ToolButton

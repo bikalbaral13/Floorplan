@@ -346,13 +346,37 @@ export function computeMiteredUnion(
       allEdges.push({ a, b, wallId, idx: allEdges.length });
     }
   }
+  // Pair each edge with the FIRST later, still-unpaired edge of another wall that coincides with it (either
+  // direction). Candidates come from a spatial hash on edge MIDPOINTS instead of a scan of every later edge:
+  // two edges whose ends both lie within EDGE_TOL have midpoints within EDGE_TOL, so with EDGE_TOL cells the
+  // 3×3 neighbourhood holds every possible partner. Candidates are visited in index order, which keeps the
+  // pairing identical to the old O(n²) scan — that scan took seconds on a 2,000-wall plan and minutes on the
+  // ~20-vertex capsules of a large one.
+  const cellOf = (v: number) => Math.floor(v / EDGE_TOL);
+  const mid = (e: { a: Point; b: Point }) => ({ x: (e.a.x + e.b.x) / 2, y: (e.a.y + e.b.y) / 2 });
+  const buckets = new Map<string, number[]>();
+  for (let i = 0; i < allEdges.length; i++) {
+    const m = mid(allEdges[i]);
+    const k = `${cellOf(m.x)},${cellOf(m.y)}`;
+    const b = buckets.get(k);
+    if (b) b.push(i); else buckets.set(k, [i]);
+  }
   const shared = new Set<number>();
   for (let i = 0; i < allEdges.length; i++) {
     if (shared.has(i)) continue;
-    for (let j = i + 1; j < allEdges.length; j++) {
+    const ei = allEdges[i];
+    const m = mid(ei);
+    const cx = cellOf(m.x), cy = cellOf(m.y);
+    const cands: number[] = [];
+    for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+      const b = buckets.get(`${cx + ox},${cy + oy}`);
+      if (b) for (const j of b) if (j > i) cands.push(j);
+    }
+    cands.sort((p, q) => p - q);
+    for (const j of cands) {
       if (shared.has(j)) continue;
-      if (allEdges[i].wallId === allEdges[j].wallId) continue;
-      const ei = allEdges[i], ej = allEdges[j];
+      const ej = allEdges[j];
+      if (ei.wallId === ej.wallId) continue;
       const fwd = Math.hypot(ei.a.x - ej.a.x, ei.a.y - ej.a.y) < EDGE_TOL &&
                   Math.hypot(ei.b.x - ej.b.x, ei.b.y - ej.b.y) < EDGE_TOL;
       const rev = Math.hypot(ei.a.x - ej.b.x, ei.a.y - ej.b.y) < EDGE_TOL &&

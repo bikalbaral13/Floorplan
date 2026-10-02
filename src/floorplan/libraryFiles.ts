@@ -79,7 +79,8 @@ export async function fetchLibraryText(relPath: string): Promise<string | null> 
   const url = await cloudLibraryUrl(relPath.replace(/^\/+/, ""));
   if (!url) return null;
   try {
-    const res = await fetch(encodeURI(url), { cache: "no-cache" });
+    // `cloudLibraryUrl` already percent-encodes each segment; encodeURI again would turn a space into %2520.
+    const res = await fetch(url, { cache: "no-cache" });
     return res.ok ? await res.text() : null;
   } catch {
     return null;

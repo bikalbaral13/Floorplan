@@ -2,7 +2,7 @@
 id: scope-the-trace
 name: Ask what the trace is for before measuring anything
 category: Floorplan Tracer
-when: A raster floorplan has just been handed over and the run has not started — including the short form, "from the image, trace the master bedroom". Before `trace-raster-plan-to-canvas` or `trace-raster-plan-live`.
+when: A raster floorplan or a drawing PDF has just been handed over and the run has not started — including the short form, "from the image, trace the master bedroom". Before `trace-raster-plan-to-canvas` or `trace-raster-plan-live`.
 tools: [Bash, Read]
 requires: []
 files: [trace-scope.questions.json, trace-scope-form.html]
@@ -52,6 +52,20 @@ node tools/fp.mjs get_state '{}'     # stepState.armed must be true before you d
 `armed: false` with `stepIndex: 0` and `completed: []` at the end of a run means no step ever ran. If the run plan said live and that is what `get_state` shows, the run did not do what was asked — say so rather than describing the result as live.
 
 `checkpoint` blocks until the user answers its card, so drive it on its own call and let it wait. It is the only tool here that is *supposed* to hang.
+
+## A PDF instead of an image
+
+The first question, *What are you handing over?*, decides whether `pdf-intake` runs. For a PDF, three more questions appear:
+
+- **What is in it:** *let the intake decide*, one plan, several floors of one building, or a master plan.
+- **Which pages.**
+- **Whether to check the crops.**
+
+The first of these only adds the route skills to the steps. The real route is the `documentKind` the intake writes after reading the sheet titles, and the user sees it with the crops.
+
+Two things to hold to:
+- **The crops gate is the user's.** When `options.confirmCrops` is true, show the contact sheets and the table and stop, exactly as with this form. `manifest.confirmed` is set from their answer, never from yours.
+- **A multi-level or master-plan PDF in live mode raises a warning.** The live route draws one plan on one canvas. Trace one confirmed crop live, or run the set in batch.
 
 ## What the answers actually decide
 
