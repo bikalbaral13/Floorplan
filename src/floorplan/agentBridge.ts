@@ -21,6 +21,13 @@ export function registerAgentCommand(name: string, fn: AgentHandler): void {
   handlers.set(name, fn);
 }
 
+// Dev only: run a registered command from the console / a test (`await __agentRun("get_state", {})`)
+// without a bridge or relay in between. Stripped from production builds.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __agentRun?: (n: string, a?: Record<string, unknown>) => unknown }).__agentRun =
+    (n, a = {}) => handlers.get(n)?.(a) ?? { error: `no handler: ${n}` };
+}
+
 /* ── Hosted relay (Connect Claude) ────────────────────────────────────────────────────────────────────
  * The same command loop, pointed at this app's own `/__relay` routes (server/relayCore.mjs) instead of a
  * local bridge. The session lives in sessionStorage so a reload keeps the connection and a new tab does not. */

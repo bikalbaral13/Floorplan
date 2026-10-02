@@ -116,7 +116,7 @@ import type {
   ImageAttachment,
 } from "./types";
 import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_LAYER_ID, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue, PATH_SPACE_ID_PREFIX } from "./types";
-import { cloudLibraryBaseUrl, libraryPath, setLibraryPath, DEFAULT_LIBRARY_PATH } from "./cloudLibrary";
+import { cloudLibraryBaseUrl, libraryPath, setLibraryPath, DEFAULT_LIBRARY_PATH, fetchFromCloudLibrary } from "./cloudLibrary";
 import { toStandardPlan, fromStandardPlan, isStandardPlan, type StandardPlan } from "./planFormat";
 import { rasterizePdfFirstPage } from "./pdfRaster";
 import { saveLibraryFile, listParametricObjectFiles, deleteLibraryObjectFiles, pobjFolderFor, fetchLibraryJson, LIB_OBJECTS } from "./libraryFiles";
@@ -8709,6 +8709,55 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       setMoodboardInitial(board);
       setMoodboardOpen(true);
       return { opened: true, board: board ?? null, note: "The user picks one option per room and clicks Save to plan; read the result with get_moodboards." };
+    });
+    // ── Flows as tools. A curated folder of saved flows, listed by Workflows/Tools/index.json, each callable
+    //    by name: its Input Properties fields and Polygon nodes are the tool's inputs, and the evaluated
+    //    preview (per node: polygons in plan metres) is the result. Runs in THIS tab, so the user sees it. ──
+    type FlowFile = { title?: string; description?: string; nodes?: { id: string; data?: { tool?: string; params?: Record<string, unknown> } }[]; edges?: unknown[] };
+    const FLOW_TOOLS_DIR = "Workflows/Tools";
+    const flowToolInputs = (f: FlowFile) => (f.nodes ?? []).flatMap((n) => {
+      const p = n.data?.params ?? {};
+      if (n.data?.tool === "input-props") return ((p.props as { id: string; name?: string; type?: string; value?: unknown; min?: number; max?: number }[]) ?? [])
+        .map((q) => ({ name: q.id, label: q.name ?? q.id, type: q.type === "range" ? "number" : q.type ?? "any", default: q.value, min: q.min, max: q.max }));
+      if (n.data?.tool === "polygon") return [{ name: n.id, label: "Polygon (metres, [[x,y],…])", type: "polygon", default: (() => { try { return JSON.parse(String(p.points)); } catch { return p.points; } })() }];
+      return [];
+    });
+    const loadFlowTool = async (name: string) => {
+      const file = name.endsWith(".json") ? name : `${name}.json`;
+      const f = await fetchFromCloudLibrary<FlowFile>(`${FLOW_TOOLS_DIR}/${file}`);
+      if (!f || !Array.isArray(f.nodes)) throw new Error(`no flow tool "${name}" in ${FLOW_TOOLS_DIR}/`);
+      return f;
+    };
+    registerAgentCommand("list_flow_tools", async () => {
+      const index = await fetchFromCloudLibrary<{ tools?: string[] }>(`${FLOW_TOOLS_DIR}/index.json`);
+      const names = index?.tools ?? [];
+      const tools = await Promise.all(names.map(async (n) => {
+        try { const f = await loadFlowTool(n); return { name: n.replace(/\.json$/, ""), title: f.title, description: (f.description ?? "").slice(0, 400), inputs: flowToolInputs(f) }; }
+        catch (e) { return { name: n, error: e instanceof Error ? e.message : String(e) }; }
+      }));
+      return { folder: FLOW_TOOLS_DIR, tools };
+    });
+    registerAgentCommand("run_flow_tool", async (a) => {
+      const name = String(a.name ?? "");
+      const f = structuredClone(await loadFlowTool(name));
+      const inputs = (a.inputs && typeof a.inputs === "object" ? a.inputs : {}) as Record<string, unknown>;
+      const known = new Set(flowToolInputs(f).map((i) => i.name));
+      const unknown = Object.keys(inputs).filter((k) => !known.has(k));
+      if (unknown.length) return { error: `unknown input(s): ${unknown.join(", ")} — this tool takes ${[...known].join(", ")}` };
+      for (const n of f.nodes ?? []) {
+        const p = (n.data ??= {}).params ??= {};
+        if (n.data.tool === "input-props") for (const q of (p.props as { id: string; value?: unknown }[]) ?? []) { if (q.id in inputs) q.value = inputs[q.id]; }
+        if (n.data.tool === "polygon" && n.id in inputs) p.points = typeof inputs[n.id] === "string" ? inputs[n.id] : JSON.stringify(inputs[n.id]);
+      }
+      const applied = await agentApi().flowApply(JSON.stringify(f));
+      const ppm = bridgePpmRef.current || 1;
+      const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+      const outputs = flowPreviewRef.current.map((it) => ({
+        nodeId: it.nodeId, tool: it.tool, ...(it.isFinal ? { final: true } : {}),
+        polygons: it.polygons.slice(0, 50).map((poly) => poly.map((pt) => [r4(pt.x / ppm), r4(pt.y / ppm)])),
+      }));
+      const committed = a.commit === true ? await agentApi().flowCommit() : undefined;
+      return { tool: name, inputs, ok: applied.ok, errors: applied.errors, warnings: applied.warnings, outputs, ...(committed ? { committed } : {}) };
     });
     registerAgentCommand("get_moodboards", () => {
       const mbs = historyRef.current.state.moodboards ?? [];
