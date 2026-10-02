@@ -51,6 +51,10 @@ export const TOOLS = [
   { name: "list_objects", description: "List every object in the live parametric library: id, name, hostKind (node/segment/space/canvas), symbol, category, param count, and whether it has geometry. Read-only inventory of what can be placed / attached.", inputSchema: { type: "object", properties: {} } },
   { name: "get_object", description: "Return one library object's COMPLETE stored .pobj definition (meta + parameters + hostKind + geometry). Use to inspect exactly how an object is parameterised before placing it or overriding params.", inputSchema: { type: "object", properties: { id: { type: "string", description: "object id (see list_objects)" } }, required: ["id"] } },
 
+  // ── Moodboard (Plan step 4): the agent opens the picker, the USER picks, the agent reads the stored picks. ──
+  { name: "open_moodboard_picker", description: "Open the moodboard picker in the user's editor tab (Plan step 4). With `board` (a file under Moodboards/, e.g. \"ramanadhapuram-apartment-interior.json\") it opens straight into that board; without, it shows the board list. The USER chooses one option per room and clicks Save to plan — never pick for them. Then call get_moodboards.", inputSchema: { type: "object", properties: { board: { type: "string", description: "board file under Moodboards/ (optional)" } } } },
+  { name: "get_moodboards", description: "Return the moodboard picks stored on the open design (its `moodboards` key): per board its id, title, source and picks (room, option, status, spaces). Empty until the user saves from the picker.", inputSchema: { type: "object", properties: {} } },
+
   // ── See the result: render the drawn plan to a PNG the (multimodal) client can inspect. ──
   { name: "snapshot_canvas", description: "Render the current canvas (fit to the drawn content) to a PNG data URL so you can SEE the plan and self-review. Returns { dataUrl, widthM, heightM } or { error } when the canvas is empty.", inputSchema: { type: "object", properties: {} } },
 

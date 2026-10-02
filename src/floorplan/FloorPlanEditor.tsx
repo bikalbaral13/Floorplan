@@ -3612,6 +3612,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [cloudInspectOpen, setCloudInspectOpen] = useState(false);
   // Files ▸ Import Moodboard — pick from a moodboard/1 board; only the picks land on `model.moodboards`.
   const [moodboardOpen, setMoodboardOpen] = useState(false);
+  /** Board the bridge's open_moodboard_picker asked for (file under Moodboards/); cleared on close. */
+  const [moodboardInitial, setMoodboardInitial] = useState<string | undefined>(undefined);
   // ── Levels (storeys), Option B — see ./levels.ts. `history` holds ONLY the active level, so every tool
   // keeps seeing one floor. The other levels live here: their model (drawn stacked in 3D, written on save /
   // export) and their parked undo stack. `levelMeta` empty = a single-level plan, as every file used to be.
@@ -8700,6 +8702,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // Designs/, so the file must not be a third, bridge-only flavour of the plan. Read through a ref: this
     // effect re-runs on every Fast Refresh, and a closure captured then would export THAT moment's plan.
     registerAgentCommand("export_plan", () => exportJsonRef.current());
+    // Plan step 4 over the bridge: open the moodboard picker in this tab (optionally straight into one
+    // board), and read back what the user stored. The USER picks; the agent only opens and reads.
+    registerAgentCommand("open_moodboard_picker", (a) => {
+      const board = typeof a.board === "string" && a.board.trim() ? a.board.trim() : undefined;
+      setMoodboardInitial(board);
+      setMoodboardOpen(true);
+      return { opened: true, board: board ?? null, note: "The user picks one option per room and clicks Save to plan; read the result with get_moodboards." };
+    });
+    registerAgentCommand("get_moodboards", () => {
+      const mbs = historyRef.current.state.moodboards ?? [];
+      return { count: mbs.length, moodboards: mbs };
+    });
     // Segment-hosted object along existing segments, no cut — the Wall object on every wall is what the
     // headless route's plans carry, and it is where the parametric band (and its hatch) is rendered from.
     registerAgentCommand("attach_segment_object", (a) => {
@@ -43482,7 +43496,8 @@ User request: ${aiPrompt.trim()}`;
       <CloudInspectDialog open={cloudInspectOpen} onOpenChange={setCloudInspectOpen} />
       <ImportMoodboardDialog
         open={moodboardOpen}
-        onOpenChange={setMoodboardOpen}
+        onOpenChange={(o) => { setMoodboardOpen(o); if (!o) setMoodboardInitial(undefined); }}
+        initialBoard={moodboardInitial}
         rooms={[...history.state.rooms, ...Object.values(levelSheets).flatMap((m) => m.rooms ?? [])]}
         moodboards={history.state.moodboards}
         onStore={(next) => { const h = historyRef.current; h.set({ ...h.state, moodboards: next.length ? next : undefined }); }}

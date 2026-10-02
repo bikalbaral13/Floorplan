@@ -25,6 +25,9 @@ export interface ImportMoodboardDialogProps {
   moodboards: MoodboardSelection[] | undefined;
   /** Write the new list back to the plan (one undoable step). */
   onStore: (next: MoodboardSelection[]) => void;
+  /** Open straight into this board's picker (file name under Moodboards/, e.g. "x.json") — used by the
+   *  bridge's open_moodboard_picker. */
+  initialBoard?: string;
 }
 
 /**
@@ -36,7 +39,7 @@ export interface ImportMoodboardDialogProps {
  *      back; only the picked rooms are stored, bound to this plan's spaces.
  * The user makes every pick here — nothing is chosen on their behalf.
  */
-export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, onStore }: ImportMoodboardDialogProps) {
+export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, onStore, initialBoard }: ImportMoodboardDialogProps) {
   const [files, setFiles] = useState<string[] | null | undefined>(undefined);
   const [loading, setLoading] = useState<string | null>(null);
   const [board, setBoard] = useState<{ json: MoodboardFile; source: string } | null>(null);
@@ -92,6 +95,11 @@ export function ImportMoodboardDialog({ open, onOpenChange, rooms, moodboards, o
       setBoard({ json, source: f.name });
     });
   };
+  // Bridge-opened: go straight to the requested board's picker.
+  useEffect(() => {
+    if (open && initialBoard) void openLibrary(initialBoard.replace(/^Moodboards\//, ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per open / board
+  }, [open, initialBoard]);
   const removeBoard = (id: string) => onStore((moodboards ?? []).filter((m) => m.id !== id));
 
   // Images in a board are BUCKET keys ("library/Images/…"); the picker joins them onto the bucket origin,
