@@ -276,6 +276,10 @@ async function callTool(cfg, sid, name, args) {
     if (!tabUp) return text({ ...info, live: false, note: "no editor tab connected — saved to the Library only; it opens from Library ▸ Designs, and connect_editor makes later loads show live" });
     return enqueue(cfg, sid, s, "import_plan", { json: saved.text, path: saved.path }, info);
   }
+  if (isWorkflowTool(name)) {
+    if (!tabUp) return errText(`${name} runs in the live editor — no editor tab is connected (open the editor and Connect Claude)`);
+    return enqueue(cfg, sid, s, "run_mcp_flow_tool", { tool: name, args });
+  }
   if (HEADLESS_TOOL_NAMES.has(name) || !tabUp) {
     const before = s.design;
     const out = await runHeadless(s, name, args);
@@ -283,6 +287,28 @@ async function callTool(cfg, sid, name, args) {
     return out;
   }
   return enqueue(cfg, sid, s, name, args);
+}
+
+/* ── Workflow tools: opted-in flows (`"mcp": true`) as their own `wf_*` MCP tools. The connected TAB builds
+ *  their definitions (list_mcp_flow_tools) and runs them (run_mcp_flow_tool); with no tab there are none. ── */
+export const isWorkflowTool = (name) => typeof name === "string" && name.startsWith("wf_");
+const wfCache = new Map(); // sid → { at, tools } — best effort (a serverless instance may not keep it)
+
+/** The connected tab's workflow tools for this session (short wait; [] when no tab is up or it is slow). */
+export async function workflowToolsFor(cfg, sid) {
+  const hit = wfCache.get(sid);
+  if (hit && Date.now() - hit.at < 60_000) return hit.tools;
+  const s = await getJson(cfg, `${P(sid)}/session.json`);
+  if (!s || !(!!s.latch && Date.now() - s.latch.seenAt <= LATCH_STALE_MS + 15_000)) return [];
+  const now = Date.now();
+  const id = `c_${now}_${rand(4).replace(/[^A-Za-z0-9]/g, "x")}`;
+  await putJson(cfg, `${P(sid)}/calls/${id}.json`, { id, tool: "list_mcp_flow_tools", args: {}, createdAt: now, deadline: now + 15_000, state: "queued" });
+  const r = await waitResult(cfg, sid, id, now + 12_000);
+  if (!r) return hit?.tools ?? [];
+  await deleteObject(cfg, `${P(sid)}/results/${id}.json`).catch(() => {});
+  const tools = r.ok && Array.isArray(r.result?.tools) ? r.result.tools : [];
+  wfCache.set(sid, { at: Date.now(), tools });
+  return tools;
 }
 
 /** Queue one command for the tab and wait for it (or hand back a ticket). `extra` is merged into a success result. */
@@ -328,10 +354,10 @@ async function mcp(cfg, req, res) {
         instructions: "Drives the user's own tab of the BuilderPluss floor plan editor. If a tool returns { pending: true, ticket }, call await_result with that ticket until it finishes. With NO tab connected, canvas tools fall back to editing a Library design headlessly (the one the tab last had open, or the one set with use_design); snapshot_canvas then returns a server-rendered preview. Tools that need the live canvas or the user (checkpoint, flows, underlays, selection) still need the tab." });
     }
     if (method === "ping") return reply({});
-    if (method === "tools/list") return reply({ tools: RELAY_TOOLS });
+    if (method === "tools/list") return reply({ tools: [...RELAY_TOOLS, ...await workflowToolsFor(cfg, a.sid)] });
     if (method === "tools/call") {
       const name = params?.name, args = params?.arguments ?? {};
-      if (!RELAY_TOOLS.some((t) => t.name === name)) return fail(-32602, `unknown tool: ${name}`);
+      if (!RELAY_TOOLS.some((t) => t.name === name) && !isWorkflowTool(name)) return fail(-32602, `unknown tool: ${name}`);
       try { return reply(await callTool(cfg, a.sid, name, args)); } catch (e) { return reply(errText(e?.message || "relay error")); }
     }
     return fail(-32601, `method not found: ${method}`);
@@ -385,6 +411,13 @@ export async function connectorStatus(cfg, user) {
   const linked = !!link?.linked && live(s);
   return { linked, tabConnected: linked && tabUpFor(s), design: live(s) ? s.design ?? null : null, stepState: live(s) ? stepGate(s.run ?? newRunState()).stepState() : null,
     mode: linked && tabUpFor(s) ? "LIVE — canvas tools drive the open editor tab" : "HEADLESS — canvas tools edit the use_design file in the Library; call connect_editor with the code the editor shows to go live" };
+}
+
+/** The workflow tools of the tab a connector user is linked to ([] when not linked / no tab). */
+export async function connectorWorkflowTools(cfg, user) {
+  const link = await getJson(cfg, userKey(user));
+  if (!link?.sid || !link.linked) return [];
+  return workflowToolsFor(cfg, link.sid);
 }
 
 /** One canvas / relay tool call for a connector user. */

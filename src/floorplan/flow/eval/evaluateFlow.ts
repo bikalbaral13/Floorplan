@@ -1202,6 +1202,12 @@ export interface FlowPreviewItem {
    *  than per tool because a STROKE row must NOT get it: its bands are independently filled quads, and two
    *  that overlap would cancel each other out instead of merging. */
   evenOdd?: boolean;
+  /** 2D Render rows only: which primitive the row draws. Commit reads it — a Polygon row commits its outline, a
+   *  Stroke row its centrelines ({@link renderCentrelines}), a Circle row (markers) nothing. */
+  renderKind?: "polygon" | "stroke" | "circle";
+  /** 2D Render STROKE rows: each drawn band's centreline, so a commit lays ONE segment per stroke rather
+   *  than the four edges of its band. */
+  renderCentrelines?: Point[][];
   /** Scalar value outputs (e.g. Inset's `area` in m²), one per the tool's `valueOutputs`. Surfaced
    *  for the node's amber value endpoints + readout badge. Mostly numbers; a few are string lists
    *  (e.g. BUA's pass-through Ratio "10, 90"). */
@@ -2947,6 +2953,7 @@ export function evaluateFlow(
       for (const p of renderPrims(data.params)) {
         const wired = wiredValueFor(id, p.id);
         let polys: Point[][] = [];
+        const centres: Point[][] = [];
         if (p.kind === "stroke") {
           // STROKE — a SEGMENT list `[[x1,y1,x2,y2],…]`, each thickened to a band of the row's Width about
           // its centreline (a FIFTH column overrides that width per segment, exactly as a Circle row's third
@@ -2963,6 +2970,7 @@ export function evaluateFlow(
             const L = Math.hypot(dx, dy);
             if (L < 1e-6) continue;
             const nx = (-dy / L) * (w / 2), ny = (dx / L) * (w / 2);
+            centres.push([{ x: ax, y: ay }, { x: bx, y: by }]);
             polys.push([
               { x: ax + nx, y: ay + ny }, { x: bx + nx, y: by + ny },
               { x: bx - nx, y: by - ny }, { x: ax - nx, y: ay - ny },
@@ -3002,6 +3010,8 @@ export function evaluateFlow(
           // A Polygon row's rings are read even-odd, so a `subtract(...)` result draws its holes as voids.
           // A Circle row likewise (concentric circles → an annulus). A Stroke row must not — see `evenOdd`.
           evenOdd: p.kind !== "stroke",
+          renderKind: p.kind === "stroke" || p.kind === "circle" ? p.kind : "polygon",
+          ...(p.kind === "stroke" ? { renderCentrelines: centres } : {}),
         });
       }
       outputs.set(id, all);

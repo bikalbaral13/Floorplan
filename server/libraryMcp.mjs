@@ -20,7 +20,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
-import { relayConfig, CONNECTOR_RELAY_TOOLS, linkConnector, connectorStatus, callConnectorTool } from "./relayCore.mjs";
+import { relayConfig, CONNECTOR_RELAY_TOOLS, linkConnector, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
 
 const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const READ_LIMIT = 1_000_000;           // one read_file chunk
@@ -380,10 +380,15 @@ export async function handleLibraryMcp(req, res, cfg = libraryMcpConfig()) {
       return reply({ protocolVersion: v, capabilities: { tools: {} }, serverInfo: { name: "floorplan-library", version: "0.3.0" }, instructions: INSTRUCTIONS });
     }
     if (method === "ping") return reply({});
-    if (method === "tools/list") return reply({ tools: allTools() });
+    if (method === "tools/list") {
+      // Opted-in workflow tools of the editor tab this user is linked to (none when not linked / no tab).
+      const rcfg = relayConfig();
+      const wf = rcfg ? await connectorWorkflowTools(rcfg, user).catch(() => []) : [];
+      return reply({ tools: [...allTools(), ...wf] });
+    }
     if (method === "tools/call") {
       const name = params?.name, args = params?.arguments ?? {};
-      if (!allTools().some((t) => t.name === name)) return fail(-32602, `unknown tool: ${name}`);
+      if (!allTools().some((t) => t.name === name) && !isWorkflowTool(name)) return fail(-32602, `unknown tool: ${name}`);
       try { return reply(await callTool(cfg, name, args, user)); } catch (e) { return reply(errText(e?.message || "library error")); }
     }
     return fail(-32601, `method not found: ${method}`);

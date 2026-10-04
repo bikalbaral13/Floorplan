@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { componentTagger } from "lovable-tagger";
 // @ts-expect-error — plain ESM, no type declarations; it runs in Node only (see the file header).
 import { r2ConfigFrom } from "./tools/r2.mjs";
@@ -46,6 +48,57 @@ const relayDev = (env: Record<string, string>): Plugin => ({
   },
 });
 
+// ── Push to GitHub (dev server only) ──────────────────────────────────────────────────────────────
+//   POST /__git/status → { branch, remote, files, ahead }
+//   POST /__git/push   { message } → git add -A, commit, push origin <branch>
+// Uses this machine's stored git credentials; local requests only. Rendered by src/components/PushButton.tsx.
+const run = promisify(execFile);
+const git = async (...args: string[]) =>
+  (await run("git", args, { cwd: process.cwd(), timeout: 120_000, maxBuffer: 16 * 1024 * 1024, windowsHide: true })).stdout.trim();
+
+const gitPush = (): Plugin => ({
+  name: "git-push",
+  apply: "serve",
+  configureServer(server) {
+    server.middlewares.use("/__git", async (req, res) => {
+      const send = (code: number, body: unknown) => {
+        res.statusCode = code;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify(body));
+      };
+      const ip = req.socket.remoteAddress ?? "";
+      if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(ip)) return send(403, { error: "local requests only" });
+      if (req.method !== "POST") return send(405, { error: "POST only" });
+      try {
+        let raw = "";
+        for await (const chunk of req) raw += chunk;
+        const branch = await git("rev-parse", "--abbrev-ref", "HEAD");
+        if (req.url === "/status") {
+          const remote = await git("remote", "get-url", "origin").catch(() => "");
+          const files = (await git("status", "--porcelain")).split(/\r?\n/).filter(Boolean);
+          const ahead = Number(await git("rev-list", "--count", "@{u}..HEAD").catch(() => "0")) || 0;
+          return send(200, { branch, remote, files, ahead });
+        }
+        if (req.url === "/push") {
+          const { message } = JSON.parse(raw || "{}") as { message?: string };
+          const log: string[] = [];
+          if ((await git("status", "--porcelain")).trim()) {
+            await git("add", "-A");
+            log.push(await git("commit", "-m", message?.trim() || "Update"));
+          }
+          const out = await run("git", ["push", "origin", branch], { cwd: process.cwd(), timeout: 180_000, windowsHide: true });
+          log.push((out.stdout + out.stderr).trim());
+          return send(200, { ok: true, branch, log: log.join("\n\n") });
+        }
+        send(404, { error: "unknown endpoint" });
+      } catch (e) {
+        const err = e as Error & { stderr?: string };
+        send(400, { error: (err.stderr || err.message).trim() });
+      }
+    });
+  },
+});
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Third argument "" loads EVERY variable, not just the VITE_-prefixed ones. That is the point:
@@ -84,7 +137,7 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     react(),
-    r2Bridge(r2), relayDev(env),
+    r2Bridge(r2), relayDev(env), gitPush(),
     mode === "development" && componentTagger(),
   ].filter(Boolean),
   resolve: {

@@ -1,6 +1,7 @@
 import { type Dispatch, type SetStateAction, type ReactNode } from "react";
 import type { SelectFilter, Tool } from "../types";
 import { DrawingToolbar } from "./toolbars/DrawingToolbar";
+import type { ImportedFlowTool } from "../flowTools";
 import { FilesToolbar } from "./toolbars/FilesToolbar";
 import { OptimisationToolbar } from "./toolbars/OptimisationToolbar";
 import { ViewToolbar } from "./toolbars/ViewToolbar";
@@ -46,6 +47,10 @@ interface LeftToolbarProps {
   onImportObjects?: (files: File[]) => void;
   /** Handle the Import Objects button click — the host opens its Import Objects picker dialog. */
   onImportObjectsClick?: () => void;
+  onImportWorkflowsClick?: () => void;
+  workflowTools?: ImportedFlowTool[];
+  onRunWorkflowTool?: (tool: ImportedFlowTool) => void;
+  onRemoveWorkflowTool?: (tool: ImportedFlowTool) => void;
   onSelectedGenElementChange: (value: null) => void;
 
   shapesPopoverOpen: boolean;
@@ -176,6 +181,10 @@ export const LeftToolbar = ({
   templateActive,
   onImportObjects,
   onImportObjectsClick,
+  onImportWorkflowsClick,
+  workflowTools,
+  onRunWorkflowTool,
+  onRemoveWorkflowTool,
   onSelectedGenElementChange,
   shapesPopoverOpen,
   onShapesPopoverOpenChange,
@@ -268,6 +277,10 @@ export const LeftToolbar = ({
       templateActive={templateActive}
       onImportObjects={onImportObjects}
       onImportObjectsClick={onImportObjectsClick}
+      onImportWorkflowsClick={onImportWorkflowsClick}
+      workflowTools={workflowTools}
+      onRunWorkflowTool={onRunWorkflowTool}
+      onRemoveWorkflowTool={onRemoveWorkflowTool}
       onSelectedGenElementChange={onSelectedGenElementChange}
       onAddWallClick={onAddWallClick}
       drawingWall={drawingWall}

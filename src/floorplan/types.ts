@@ -640,6 +640,8 @@ export type Tool =
   | "point"
   /** "Add Space → Shapes → Rectangle" — click-click trace that emits a Space (Room). */
   | "space-rect"
+  /** Workflow tool outline — click corners, then double-click / Enter / click the first corner to run. */
+  | "flow-outline"
   /** "Add Space → Shapes → Circle" — click center, drag for radius, type exact radius. */
   | "space-circle"
   /** "Add Segment" (drawing toolbar) — click-click for a single straight line segment. */
@@ -1208,6 +1210,10 @@ export interface FloorPlanModel {
   /** Moodboard decisions — only what was picked, per board. A fixed top-level key of the plan file
    *  beside nodes / segments / spaces. See {@link MoodboardSelection}. */
   moodboards?: MoodboardSelection[];
+  /** Workflows imported as Drawing-toolbar tools (Import Workflows) — saved with the plan. */
+  flowTools?: import("./flowTools").ImportedFlowTool[];
+  /** Workflow-tool runs linked to the space they ran on, by space id — see ToolAttachment. */
+  toolAttachments?: Record<string, import("./flowTools").ToolAttachment[]>;
   /** Storeys. PACKED form only (save / export / import): the level table, with each INACTIVE level's
    *  model inline; this model's own body is the active level. The editor unpacks it on arrival — see
    *  ./levels.ts. Absent on a single-level plan. */

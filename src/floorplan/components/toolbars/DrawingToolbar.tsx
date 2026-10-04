@@ -25,11 +25,14 @@ import {
   Type,
   Upload,
   Boxes,
+  Workflow,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToolButton } from "@/components/toolbutton";
 import type { ParametricObjectIcon, SelectFilter, Tool } from "../../types";
+import type { ImportedFlowTool } from "../../flowTools";
 
 /** One Add Segment / Node / Space menu entry: `value` commits the type (a schema seg-type or an `obj:<id>`),
  *  `icon` is the object's inline glyph (rendered by {@link typeIcon}), `symbol` picks a built-in Lucide fallback. */
@@ -71,6 +74,12 @@ export interface DrawingToolbarProps {
   /** Handle the Import Objects button click — the host opens its Import Objects picker dialog (select
    *  library objects / folders, or browse this device). When set, it supersedes the inline directory input. */
   onImportObjectsClick?: () => void;
+  /** Open the Import Workflows picker (library Workflows/Tools/). */
+  onImportWorkflowsClick?: () => void;
+  /** Workflows imported as tools — one toolbar icon each. */
+  workflowTools?: ImportedFlowTool[];
+  onRunWorkflowTool?: (tool: ImportedFlowTool) => void;
+  onRemoveWorkflowTool?: (tool: ImportedFlowTool) => void;
   /** Clears any currently-selected generated element when starting a Door/Window/Connection tool. */
   onSelectedGenElementChange: (value: null) => void;
   /** Opens the Add Wall dialog (thickness + justification → polyline wall draw). */
@@ -228,6 +237,42 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
                 {...({ webkitdirectory: "", directory: "" } as unknown as InputHTMLAttributes<HTMLInputElement>)}
                 onChange={(e) => { const files = e.target.files ? Array.from(e.target.files) : []; e.target.value = ""; if (files.length) p.onImportObjects?.(files); }}
               />
+              <hr className="w-full border-slate-200" />
+            </div>
+          )}
+          {/* Import Workflows + one icon per imported workflow (each saved flow acts as a single tool). */}
+          {p.onImportWorkflowsClick && !p.planMode && (
+            <div className="flex flex-col items-center gap-2">
+              <ToolButton
+                icon={<Workflow className="h-6 w-6 text-violet-600" />}
+                label="Import Workflows"
+                onClick={p.onImportWorkflowsClick}
+              />
+              {(p.workflowTools ?? []).map((t) => (
+                <div key={t.name} className="group relative h-9 w-9 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-9 p-0 text-[11px] font-bold tracking-tight text-violet-700"
+                    title={t.title}
+                    aria-label={t.title}
+                    onClick={() => p.onRunWorkflowTool?.(t)}
+                  >
+                    {t.glyph ?? t.title.slice(0, 2)}
+                  </Button>
+                  {p.onRemoveWorkflowTool && (
+                    <button
+                      type="button"
+                      className="absolute -right-1 -top-1 hidden h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-200 hover:bg-red-200 group-hover:flex"
+                      title={`Remove ${t.title} from the toolbar`}
+                      aria-label={`Remove ${t.title}`}
+                      onClick={() => p.onRemoveWorkflowTool?.(t)}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
               <hr className="w-full border-slate-200" />
             </div>
           )}

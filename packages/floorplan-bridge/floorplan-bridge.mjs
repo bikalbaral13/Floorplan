@@ -117,7 +117,7 @@ http.createServer((req, res) => {
         return;
       }
       const { tool, args } = payload;
-      if (!TOOLS.some((t) => t.name === tool)) {
+      if (!TOOLS.some((t) => t.name === tool) && !isWorkflowTool(tool)) {
         res.writeHead(400, { ...CORS, "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: `unknown tool: ${tool}` }));
         return;
@@ -158,6 +158,24 @@ http.createServer((req, res) => {
 function send(msg) { process.stdout.write(JSON.stringify(msg) + "\n"); }
 function reply(id, result) { send({ jsonrpc: "2.0", id, result }); }
 function replyErr(id, code, message) { send({ jsonrpc: "2.0", id, error: { code, message } }); }
+
+// ── Workflow tools: opted-in flows (`"mcp": true` in the flow file) as their own `wf_*` MCP tools. The
+//    connected editor tab builds their definitions (list_mcp_flow_tools) and runs them (run_mcp_flow_tool);
+//    with no tab polling there are none. Refreshed every 30 s; a change is announced with list_changed. ──
+let wfTools = [];
+let wfNames = "";
+const tabActive = () => !!latchedClient && Date.now() - (lastSeen.get(latchedClient) ?? 0) <= LATCH_STALE_MS;
+async function refreshWorkflowTools() {
+  if (!tabActive()) { wfTools = []; }
+  else {
+    try { wfTools = (await enqueueCommand("list_mcp_flow_tools", {}, 15000))?.tools ?? []; } catch { /* keep the last list */ }
+  }
+  const names = wfTools.map((t) => t.name).join(",");
+  if (names !== wfNames) { wfNames = names; send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" }); }
+  return wfTools;
+}
+setInterval(() => { void refreshWorkflowTools(); }, 30000).unref();
+const isWorkflowTool = (name) => typeof name === "string" && name.startsWith("wf_");
 
 // ── Server → client requests (elicitation). Our own id space, prefixed so it can never collide with the
 //    client's. Responses arrive on stdin as messages carrying an id but no method. ──
@@ -231,6 +249,8 @@ async function runCheckpoint(args) {
  *  step gate and the checkpoint's two answer channels apply whichever way a tool is driven. */
 async function callTool(name, args) {
   if (name === "begin_step") return beginStep(args);
+  // A workflow tool writes like draw_segment does, so it passes the same step gate.
+  if (isWorkflowTool(name)) { assertWritable("draw_segment"); return enqueueCommand("run_mcp_flow_tool", { tool: name, args }); }
   assertWritable(name);
   // A resumed session's first question is "where was I" — answer it in the digest it already reads.
   if (name === "get_state") return { ...(await enqueueCommand(name, args)), stepState: stepState() };
@@ -268,17 +288,20 @@ process.stdin.on("data", async (chunk) => {
       // and pinning ourselves to 2024-11-05 would negotiate that capability away.
       const wanted = params?.protocolVersion;
       const protocolVersion = PROTOCOL_VERSIONS.includes(wanted) ? wanted : "2024-11-05";
-      reply(id, { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "floorplan-bridge", version: "0.2.0" } });
+      reply(id, { protocolVersion, capabilities: { tools: { listChanged: true } }, serverInfo: { name: "floorplan-bridge", version: "0.2.0" } });
     } else if (method === "notifications/initialized") {
       // no response for notifications
     } else if (method === "ping") {
       reply(id, {});
     } else if (method === "tools/list") {
-      reply(id, { tools: TOOLS });
+      void (async () => {
+        const wf = tabActive() ? await refreshWorkflowTools() : [];
+        reply(id, { tools: [...TOOLS, ...wf] });
+      })();
     } else if (method === "tools/call") {
       const name = params?.name;
       const args = params?.arguments ?? {};
-      if (!TOOLS.some((t) => t.name === name)) { replyErr(id, -32602, `unknown tool: ${name}`); continue; }
+      if (!TOOLS.some((t) => t.name === name) && !isWorkflowTool(name)) { replyErr(id, -32602, `unknown tool: ${name}`); continue; }
       // Run DETACHED: awaiting here would stall the parse loop for the life of the call, and a checkpoint
       // lives for up to 30 min — the elicitation answer that ends it arrives on this very stream. JSON-RPC
       // matches replies by id, so out-of-order completion is fine.

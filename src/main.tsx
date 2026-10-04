@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { PushButton } from "./components/PushButton";
 
 // NO PRE-SEEDED TOKEN. A JWT literal used to be written here on first load so PublicRoute would bounce
 // past /signin and the app would come up "logged in". It expired on 11 April, after which every platform
@@ -10,4 +11,9 @@ import "./index.css";
 //
 // Nothing is locked away by removing it: ProtectedRoute renders its children unconditionally, so the
 // editor still opens. What changes is that /signin is now reachable, and a 401 leads there.
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <>
+    <App />
+    {import.meta.env.DEV && <PushButton />}
+  </>,
+);

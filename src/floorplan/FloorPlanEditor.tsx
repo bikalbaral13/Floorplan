@@ -116,6 +116,9 @@ import type {
   ImageAttachment,
 } from "./types";
 import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefaultSize, OBJECT_ANCHORS, DEFAULT_LAYER_ID, DEFAULT_SPACE_LAYER_ID, DEFAULT_IMAGE_LAYER_ID, DEFAULT_MAP_LAYER_ID, DEFAULT_BUILDABLE_LAYER_ID, DEFAULT_FOOTPRINT_LAYER_ID, DEFAULT_BASEMENT_LAYER_ID, DEFAULT_INSET_LAYER_ID, DEFAULT_DEDUCTION_LAYER_ID, DEFAULT_DIMENSION_LAYER_ID, DEFAULT_PARTITION_LAYER_ID, SITE_GROUP_LAYER_IDS, DEFAULT_GROUP_LAYER_IDS, layerForRoomType, gridCellValue, PATH_SPACE_ID_PREFIX } from "./types";
+import { compileFlow } from "./flow/compileFlow";
+import { FLOW_TOOLS_DIR, analyseFlowTool, flowToolInputs, listFlowToolNames, loadFlowTool, withFlowToolInputs, loadFlowTool as loadWorkflowTool, listAllFlowTools, isMcpFlow, mcpToolFor, flowToolGlyph, type McpToolDef, type FlowFile as FlowToolFile, type ImportedFlowTool, type ToolAttachment } from "./flowTools";
+import { AttachedToolBlock, ImportWorkflowsDialog, RunWorkflowToolDialog } from "./components/dialogs/FlowToolDialogs";
 import { cloudLibraryBaseUrl, libraryPath, setLibraryPath, DEFAULT_LIBRARY_PATH, fetchFromCloudLibrary } from "./cloudLibrary";
 import { toStandardPlan, fromStandardPlan, isStandardPlan, type StandardPlan } from "./planFormat";
 import { rasterizePdfFirstPage } from "./pdfRaster";
@@ -3398,6 +3401,11 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   const [gridDialogOpen, setGridDialogOpen] = useState<boolean>(false);
   /** Import Objects picker (Drawing toolbar ▸ Import Objects): dialog open state. */
   const [importObjectsDialogOpen, setImportObjectsDialogOpen] = useState<boolean>(false);
+  /** Workflows imported as toolbar tools (Drawing toolbar ▸ Import Workflows), and the one being run. */
+  const [importWorkflowsDialogOpen, setImportWorkflowsDialogOpen] = useState<boolean>(false);
+  const [runningWorkflowTool, setRunningWorkflowTool] = useState<ImportedFlowTool | null>(null);
+  /** True while a workflow tool runs — mounts the Flow panel (the flow engine) even when Preferences hide it. */
+  const [flowToolRun, setFlowToolRun] = useState(false);
   /** Currently selected construction grid (Create Grid) id, or null. */
   const [selectedGridId, setSelectedGridId] = useState<string | null>(null);
   /** Add Wall flow: dialog open + thickness/justification draft inputs. */
@@ -7780,6 +7788,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             const lib = historyRef.current.state.objectLibrary ?? {};
             const ppm = bridgePpmRef.current;
             return visibleRoomsRef.current.map((r, i) => ({
+              // The id is what a workflow tool's `space_id` (and the Properties ID field) takes.
+              id: r.id,
               label: r.label || `Space${String(i + 1).padStart(3, "0")}`,
               roomType: r.roomType ?? "room",
               areaM2: +(Math.abs(polygonArea(r.points)) / (ppm * ppm)).toFixed(2),
@@ -8713,24 +8723,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // ── Flows as tools. A curated folder of saved flows, listed by Workflows/Tools/index.json, each callable
     //    by name: its Input Properties fields and Polygon nodes are the tool's inputs, and the evaluated
     //    preview (per node: polygons in plan metres) is the result. Runs in THIS tab, so the user sees it. ──
-    type FlowFile = { title?: string; description?: string; nodes?: { id: string; data?: { tool?: string; params?: Record<string, unknown> } }[]; edges?: unknown[] };
-    const FLOW_TOOLS_DIR = "Workflows/Tools";
-    const flowToolInputs = (f: FlowFile) => (f.nodes ?? []).flatMap((n) => {
-      const p = n.data?.params ?? {};
-      if (n.data?.tool === "input-props") return ((p.props as { id: string; name?: string; type?: string; value?: unknown; min?: number; max?: number }[]) ?? [])
-        .map((q) => ({ name: q.id, label: q.name ?? q.id, type: q.type === "range" ? "number" : q.type ?? "any", default: q.value, min: q.min, max: q.max }));
-      if (n.data?.tool === "polygon") return [{ name: n.id, label: "Polygon (metres, [[x,y],…])", type: "polygon", default: (() => { try { return JSON.parse(String(p.points)); } catch { return p.points; } })() }];
-      return [];
-    });
-    const loadFlowTool = async (name: string) => {
-      const file = name.endsWith(".json") ? name : `${name}.json`;
-      const f = await fetchFromCloudLibrary<FlowFile>(`${FLOW_TOOLS_DIR}/${file}`);
-      if (!f || !Array.isArray(f.nodes)) throw new Error(`no flow tool "${name}" in ${FLOW_TOOLS_DIR}/`);
-      return f;
-    };
     registerAgentCommand("list_flow_tools", async () => {
-      const index = await fetchFromCloudLibrary<{ tools?: string[] }>(`${FLOW_TOOLS_DIR}/index.json`);
-      const names = index?.tools ?? [];
+      const names = await listFlowToolNames();
       const tools = await Promise.all(names.map(async (n) => {
         try { const f = await loadFlowTool(n); return { name: n.replace(/\.json$/, ""), title: f.title, description: (f.description ?? "").slice(0, 400), inputs: flowToolInputs(f) }; }
         catch (e) { return { name: n, error: e instanceof Error ? e.message : String(e) }; }
@@ -8739,16 +8733,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     });
     registerAgentCommand("run_flow_tool", async (a) => {
       const name = String(a.name ?? "");
-      const f = structuredClone(await loadFlowTool(name));
       const inputs = (a.inputs && typeof a.inputs === "object" ? a.inputs : {}) as Record<string, unknown>;
-      const known = new Set(flowToolInputs(f).map((i) => i.name));
-      const unknown = Object.keys(inputs).filter((k) => !known.has(k));
-      if (unknown.length) return { error: `unknown input(s): ${unknown.join(", ")} — this tool takes ${[...known].join(", ")}` };
-      for (const n of f.nodes ?? []) {
-        const p = (n.data ??= {}).params ??= {};
-        if (n.data.tool === "input-props") for (const q of (p.props as { id: string; value?: unknown }[]) ?? []) { if (q.id in inputs) q.value = inputs[q.id]; }
-        if (n.data.tool === "polygon" && n.id in inputs) p.points = typeof inputs[n.id] === "string" ? inputs[n.id] : JSON.stringify(inputs[n.id]);
-      }
+      let f;
+      try { f = withFlowToolInputs(await loadFlowTool(name), inputs); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
       const applied = await agentApi().flowApply(JSON.stringify(f));
       const ppm = bridgePpmRef.current || 1;
       const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
@@ -8758,6 +8745,53 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       }));
       const committed = a.commit === true ? await agentApi().flowCommit() : undefined;
       return { tool: name, inputs, ok: applied.ok, errors: applied.errors, warnings: applied.warnings, outputs, ...(committed ? { committed } : {}) };
+    });
+    // ── Opted-in flows as their OWN MCP tools (`"mcp": true` in the flow file). The MCP servers call
+    //    list_mcp_flow_tools for their tools/list while this tab is connected, and forward each `wf_*` call to
+    //    run_mcp_flow_tool — which runs it exactly like the toolbar's Run (and links it to space_id). ──
+    registerAgentCommand("list_mcp_flow_tools", async (a) => {
+      const index = await mcpFlowIndex(a.refresh === true);
+      return { tools: index.map((t) => t.def) };
+    });
+    registerAgentCommand("run_mcp_flow_tool", async (a) => {
+      const toolName = String(a.tool ?? "");
+      const entry = (await mcpFlowIndex(false)).find((t) => t.def.name === toolName) ?? (await mcpFlowIndex(true)).find((t) => t.def.name === toolName);
+      if (!entry) return { error: `no opted-in workflow tool "${toolName}" — the flow needs "mcp": true` };
+      const args = (a.args && typeof a.args === "object" ? a.args : {}) as Record<string, unknown>;
+      const flow = await loadFlowTool(entry.flow);
+      const info = analyseFlowTool(flow);
+      const inputs: Record<string, unknown> = {};
+      for (const i of info.fields) if (i.name in args) inputs[i.name] = args[i.name];
+      const spaceId = typeof args.space_id === "string" && args.space_id ? args.space_id : null;
+      let outline: number[][] | null = null;
+      if (spaceId) {
+        const room = visibleRoomsRef.current.find((r) => r.id === spaceId);
+        if (!room) return { error: `no space "${spaceId}" on the canvas` };
+        // Space-source flows read the SELECTION — select it, and let the editor re-render before running.
+        selection.selectOne(spaceId);
+        await new Promise((r) => setTimeout(r, 250));
+        const ppm = bridgePpmRef.current || 1;
+        outline = room.points.map((p) => [Math.round(p.x / ppm * 1e4) / 1e4, Math.round(p.y / ppm * 1e4) / 1e4]);
+      } else if (Array.isArray(args.outline)) outline = args.outline as number[][];
+      if (outline) for (const pg of info.polygons) inputs[pg.name] = outline;
+      if (info.needs.includes("space") && !spaceId) return { error: "this workflow reads a space — pass space_id" };
+      const api = workflowToolApiRef.current;
+      if (!api) return { error: "the editor is still loading" };
+      const s0 = historyRef.current.state;
+      const tool: ImportedFlowTool = { name: entry.flow, title: flow.title ?? entry.flow, glyph: flowToolGlyph(flow, entry.flow) };
+      const err = args.preview === true
+        ? await api.preview(flow, inputs)
+        : await api.run(flow, inputs, spaceId ? { hostId: spaceId, tool } : undefined);
+      if (err) return { error: err };
+      await new Promise((r) => setTimeout(r, 200));
+      const s1 = historyRef.current.state;
+      return {
+        ok: true, tool: toolName, flow: `Workflows/${entry.flow}.json`, inputs: Object.keys(inputs),
+        ...(args.preview === true ? { previewOnly: true } : {
+          addedSegments: s1.walls.length - s0.walls.length, addedSpaces: s1.rooms.length - s0.rooms.length,
+          ...(spaceId ? { linkedTo: spaceId } : {}),
+        }),
+      };
     });
     registerAgentCommand("get_moodboards", () => {
       const mbs = historyRef.current.state.moodboards ?? [];
@@ -25323,6 +25357,7 @@ User request: ${aiPrompt.trim()}`;
       tool === "circle" ||
       tool === "space-rect" ||
       tool === "space-circle" ||
+      tool === "flow-outline" ||
       tool === "single-segment" ||
       tool === "dimension";
     if (!clickedOnStage && !drawHitsShapes) {
@@ -25857,6 +25892,15 @@ User request: ${aiPrompt.trim()}`;
           },
         ],
       });
+      return;
+    }
+
+    if (tool === "flow-outline") {
+      // Workflow outline: each click adds a corner; a double-click or a click on the first corner runs it.
+      const pts = flowOutlinePts;
+      const nearFirst = pts.length >= 3 && Math.hypot(snapped.x - pts[0].x, snapped.y - pts[0].y) * scale < 10;
+      if (pointerClickDetail >= 2 || nearFirst) { finishFlowOutline(); return; }
+      setFlowOutlinePts([...pts, snapped]);
       return;
     }
 
@@ -26404,6 +26448,7 @@ User request: ${aiPrompt.trim()}`;
             setSpaceCircleRadiusInput(rUnit.toFixed(2));
           }
         }
+        if (tool === "flow-outline" && flowOutlinePts.length) setFlowOutlineHover(snapped);
         if (tool === "space-rect" && spaceRectAnchor) {
           setSpaceRectPreview(snapped);
           // Keep L×B inputs synced to the live cursor while the user hasn't manually typed.
@@ -28113,6 +28158,372 @@ User request: ${aiPrompt.trim()}`;
       y: size.height / 2 - cy * newScale,
     });
   };
+
+  /** COMMIT a flow run: the recipe ops, then every terminal preview item the recipe engine does not handle
+   *  (released network segments, mitered paths, graph-to-path spaces, 2D Render rows, …). One function for
+   *  the Flow editor's Run Flow (items = its live preview) and for workflow tools run without the panel. */
+  const commitFlowRun = async (json: string, committedNodeIds: string[], items: FlowPreviewItem[]) => {
+    // An empty `json` means the flow has no recipe work (no ops, nothing to create) — skip the engine, which
+    // would otherwise ask for a selected room it does not need.
+    if (json) await applyRecipeJson(json, "commit");
+    // Network rows with "Release on commit" → HAND THE SEGMENTS OVER. Live-materialised segments
+    // are `flowOwner`-tagged and are wiped the moment Live goes off or the flow re-runs, which is
+    // right while you tune parameters and wrong the moment you move a door by hand. Releasing
+    // writes the same segments — same thickness, `segmentType` and hosted object — as ORDINARY
+    // canvas data the flow no longer owns. Ids are deterministic, so committing twice updates in
+    // place instead of piling up duplicates.
+    const released: Wall[] = [];
+    for (const item of items) {
+      const meta = item.segMeta;
+      if (!meta?.release || !item.polygons.length) continue;
+      const layerId = meta.layer ? `flow-live-${slugifyLayer(meta.layer)}` : `flow-live-${item.nodeId}`;
+      item.polygons.forEach((pl, pi) => {
+        for (let i = 0; i + 1 < pl.length; i++) {
+          const a = pl[i], b = pl[i + 1];
+          if (Math.hypot(b.x - a.x, b.y - a.y) < 1) continue;
+          released.push(flowSegmentWall(`flowbake:${item.nodeId}:seg:${pi}:${i}`, a, b, meta, layerId, undefined, pi));
+        }
+      });
+    }
+    if (released.length) {
+      const h = historyRef.current;
+      const takenIds = new Set(released.map((w) => w.id));
+      h.set({ ...h.state, walls: [...h.state.walls.filter((w) => !takenIds.has(w.id)), ...released] });
+      toast.success(`Released ${released.length} segment${released.length === 1 ? "" : "s"} to the canvas`);
+    }
+    // Mitered Join → lay down real Path walls (segmentType "path") in the document for every
+    // input graph edge, using the node's Width as thickness and Joint type as the path join.
+    const newPathWalls: Wall[] = [];
+    for (const item of items) {
+      const mp = item.miteredPath;
+      if (!mp || mp.segments.length === 0) continue;
+      const pathJoin: PathJoin = mp.join === "curved" ? "round" : "miter";
+      mp.segments.forEach((pl, si) => {
+        // Per-segment width when "Use same width for all" is OFF; else the uniform width.
+        const thicknessPx = Math.max(0.02, mp.segWidthsM?.[si] ?? mp.widthM) * pixelsPerMeter;
+        for (let i = 0; i + 1 < pl.length; i++) {
+          const a = pl[i], b = pl[i + 1];
+          if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue;
+          newPathWalls.push({ id: newSegmentId(), start: a, end: b, thickness: thicknessPx, color: wallColor, mode: "mitered-union", method: "center", segmentType: "path", pathJoin });
+        }
+      });
+    }
+    if (newPathWalls.length) {
+      const h = historyRef.current;
+      h.set({ ...h.state, walls: splitWallsAtIntersections([...h.state.walls, ...newPathWalls]) });
+      toast.success(`Created ${newPathWalls.length} path segment${newPathWalls.length === 1 ? "" : "s"}`);
+    }
+    // Graph to Path → commit each band as a real Corridor-region Space (the decoupled
+    // Make-path; mirrors the Skeleton make-path commit). The generic terminal block below
+    // skips these items (noCommitTools) so the band outline doesn't double-commit as walls.
+    const newPathRooms: Room[] = [];
+    for (const item of items) {
+      if (item.tool !== "graph-to-path") continue;
+      const loops = (item.polygons ?? []).filter((l) => l.length >= 3);
+      loops.forEach((points, i) => {
+        newPathRooms.push({
+          id: newSpaceId(),
+          points: points.map((p) => ({ ...p })),
+          fill: "rgba(14, 165, 233, 0.35)",
+          stroke: "#0369a1",
+          roomType: "room",
+          region: "Corridor",
+          label: loops.length > 1 ? `Path ${i + 1}` : "Path",
+          showLabel: true,
+        });
+      });
+    }
+    if (newPathRooms.length) {
+      const h = historyRef.current;
+      h.set({ ...h.state, rooms: [...h.state.rooms, ...newPathRooms] });
+      toast.success(`Committed ${newPathRooms.length} path Space${newPathRooms.length === 1 ? "" : "s"}`);
+    }
+    // Commit terminal PREVIEW-ONLY geometry (Split Segment pieces, graph lines, buffer/bloom
+    // shapes, …) that the recipe engine doesn't handle, as real wall segments — so non-space
+    // flows (rooted at Segment / Graph / Node / Image / Canvas) produce canvas geometry on Run.
+    const committed = new Set(committedNodeIds);
+    // Overlay / value / already-handled tools whose preview polygons must NOT become walls.
+    // mitered-join is a pure VALUE node now (publishes val-polygons, draws/commits nothing) — it's
+    // excluded so its stroked ribbon never becomes walls on commit; wire val-polygons into a
+    // Polygon node when you want the walls drawn.
+    const noCommitTools = new Set([
+      "place-object", "space-creator", "show-direction", "dimension", "area-dimension",
+      "graph-to-path", "mitered-join",
+      "graph-metrics", "conditional", "param-manip", "pipe-solver", "render", "analyse",
+      "generate", "schema", "output-schema", "bua", "math", "random",
+      "footing", "footing-to-plan", "footing-to-elevation", "footing-to-3d-mesh", "mesh-to-3d",
+      "staircase", "staircase-to-plan", "staircase-to-left-elevation", "staircase-to-right-elevation",
+      "staircase-to-front-elevation", "staircase-to-back-elevation", "staircase-to-3d-mesh",
+      "schema-to-drawing",
+      "floorplan-to-front-elevation", "floorplan-to-back-elevation",
+      "floorplan-to-left-elevation", "floorplan-to-right-elevation", "views-layout",
+    ]);
+    const style = getCurrentWallStyle();
+    const newSegWalls: Wall[] = [];
+    for (const item of items) {
+      if (!item.isFinal || committed.has(item.nodeId)) continue;
+      if (item.miteredPath || item.dimLines || item.massing || item.pipeResults) continue;
+      if (noCommitTools.has(item.tool)) continue;
+      // 2D Render rows commit by what they draw: circles are markers (nothing), strokes their
+      // centrelines (one segment each, not the band's four edges), polygons their outline.
+      if (item.renderKind === "circle") continue;
+      if (item.renderKind === "stroke") {
+        for (const [a, b] of item.renderCentrelines ?? []) {
+          if (a && b && Math.hypot(b.x - a.x, b.y - a.y) >= 1e-6) newSegWalls.push({ id: newSegmentId(), start: { ...a }, end: { ...b }, thickness: style.thickness, color: wallColor, mode: style.mode, method: "center", segmentType: "wall" });
+        }
+        continue;
+      }
+      for (const poly of item.polygons ?? []) {
+        if (poly.length < 2) continue;
+        const closed = !item.openPath && poly.length >= 3;
+        const segCount = closed ? poly.length : poly.length - 1;
+        for (let i = 0; i < segCount; i++) {
+          const a = poly[i], b = poly[(i + 1) % poly.length];
+          if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue;
+          newSegWalls.push({ id: newSegmentId(), start: { ...a }, end: { ...b }, thickness: style.thickness, color: wallColor, mode: style.mode, method: "center", segmentType: "wall" });
+        }
+      }
+    }
+    if (newSegWalls.length) {
+      const h = historyRef.current;
+      h.set({ ...h.state, walls: [...h.state.walls, ...newSegWalls] });
+      toast.success(`Committed ${newSegWalls.length} segment${newSegWalls.length === 1 ? "" : "s"} from flow`);
+    }
+  };
+
+  /** flow_apply's fixed settle time is too short when the Flow panel has only just mounted (a tool run on a
+   *  cold panel committed an EMPTY preview): wait until the preview has items and has stopped changing. */
+  const waitForFlowPreview = async (stale: FlowPreviewItem[] | null, timeoutMs = 8000) => {
+    const t0 = Date.now();
+    let last = flowPreviewRef.current, stableSince = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      const cur = flowPreviewRef.current;
+      if (cur !== last) { last = cur; stableSince = Date.now(); }
+      else if (cur !== stale && cur.some((it) => it.polygons.length) && Date.now() - stableSince >= 400) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  };
+
+  /** Workflow tools run WITHOUT the Flow panel when everything they read from the canvas is something the
+   *  editor can hand `evaluateFlow` directly (the selected space, the whole canvas) — the way parametric
+   *  objects evaluate. A flow that reads segments / graphs / freehand / images / grids still needs the
+   *  resolvers the Flow panel owns, so it falls back to running through the panel. */
+  const toolRunsHeadless = (flow: FlowToolFile) => analyseFlowTool(flow).needs.every((n) => n === "space" || n === "canvas" || n === "manual");
+  const evaluateToolFlow = (flow: FlowToolFile): FlowPreviewItem[] => {
+    const pts = selectedRoom?.points ?? [];
+    return evaluateFlow(
+      (flow.nodes ?? []) as never, (flow.edges ?? []) as never,
+      pts.length >= 3 ? pts : [], pixelsPerMeter,
+      { x: 0, y: 0 }, [], new Map(), [], undefined, canvasContent, pipeGraph,
+    );
+  };
+  const showToolPreview = (items: FlowPreviewItem[]) => { flowPreviewRef.current = items; setFlowPreview(items); };
+
+  /** Run an imported workflow tool with its inputs (polygons in metres) and COMMIT the result. Returns an
+   *  error message, or null when it worked. */
+  const runWorkflowTool = async (
+    flow: FlowToolFile, inputs: Record<string, unknown>,
+    /** Link the run to a space: `hostId` + the tool; `attachmentId` re-uses an existing link (a re-run). */
+    link?: { hostId: string; tool: ImportedFlowTool; attachmentId?: string; quiet?: boolean },
+  ): Promise<string | null> => {
+    let f: FlowToolFile;
+    try { f = withFlowToolInputs(flow, inputs); } catch (e) { return e instanceof Error ? e.message : String(e); }
+    const st0 = historyRef.current.state;
+    const done = async () => {
+      // History lands on the next render — read it after one.
+      await new Promise((r) => setTimeout(r, 150));
+      const st1 = historyRef.current.state;
+      if (link) {
+        // What THIS run created — the outputs a later re-run replaces.
+        const w0 = new Set(st0.walls.map((w) => w.id)), r0 = new Set(st0.rooms.map((r) => r.id));
+        const fieldNames = new Set(analyseFlowTool(flow).fields.map((i) => i.name));
+        const att: ToolAttachment = {
+          id: link.attachmentId ?? `tool_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          name: link.tool.name, title: link.tool.title, glyph: link.tool.glyph,
+          values: Object.fromEntries(Object.entries(inputs).filter(([k]) => fieldNames.has(k))) as ToolAttachment["values"],
+          walls: st1.walls.filter((w) => !w0.has(w.id)).map((w) => w.id),
+          rooms: st1.rooms.filter((r) => !r0.has(r.id)).map((r) => r.id),
+        };
+        const all = { ...(st1.toolAttachments ?? {}) };
+        const list = (all[link.hostId] ?? []).filter((a) => a.id !== att.id);
+        all[link.hostId] = [...list, att];
+        historyRef.current.set({ ...historyRef.current.state, toolAttachments: all });
+        if (link.quiet) return null;
+      }
+      // Say so when the run changed nothing (e.g. the flow only reports values, or needs a button pressed).
+      if (st1.walls === st0.walls && st1.rooms === st0.rooms && st1.objects === st0.objects) {
+        toast.info(`${flow.title ?? "Workflow"} ran, but produced nothing to commit`);
+        return null;
+      }
+      setTimeout(zoomExtents, 50);
+      toast.success(`${flow.title ?? "Workflow"} applied`);
+      return null;
+    };
+    if (toolRunsHeadless(f)) {
+      try {
+        const compiled = compileFlow((f.nodes ?? []) as never, (f.edges ?? []) as never);
+        if (compiled.error) return compiled.error;
+        const items = evaluateToolFlow(f);
+        // Recipe ops act on a Space source's room; a flow rooted on its own Polygon / primitives commits
+        // through its preview items alone, and handing its ops to the engine only asks for a room.
+        const recipeWork = (compiled.opCount > 0 && analyseFlowTool(f).needs.includes("space")) || /"create"\s*:/.test(compiled.json);
+        await commitFlowRun(recipeWork ? compiled.json : "", compiled.committedNodeIds, items);
+        showToolPreview([]);
+        return await done();
+      } catch (e) { return e instanceof Error ? e.message : String(e); }
+    }
+    // Fallback — through the Flow panel (mounted for the run even when Preferences hide it).
+    const api = agentApiRef.current;
+    if (!api) return "The editor is still loading — try again in a moment.";
+    borrowFlowForTool();
+    setFlowToolRun(true);
+    // A preview left from before this run (another tool's, if the panel was closed) must not pass as this
+    // tool's result: on a cold panel, wait for a NEW one. A panel already open (Live) is already current.
+    const before = flowOpen ? null : flowPreviewRef.current;
+    try {
+      const applied = await api.flowApply(JSON.stringify(f)) as { ok?: boolean; errors?: string[] };
+      if (applied.ok === false) return (applied.errors ?? ["the workflow did not evaluate"]).join("\n");
+      await waitForFlowPreview(before);
+      const committed = await api.flowCommit() as { error?: string };
+      if (committed?.error) return committed.error;
+      return await done();
+    } catch (e) { return e instanceof Error ? e.message : String(e); }
+    finally { returnFlowAfterTool(); }
+  };
+
+  /** Live preview of a workflow tool on the canvas, WITHOUT committing. */
+  const previewWorkflowTool = async (flow: FlowToolFile, inputs: Record<string, unknown>): Promise<string | null> => {
+    let f: FlowToolFile;
+    try { f = withFlowToolInputs(flow, inputs); } catch (e) { return e instanceof Error ? e.message : String(e); }
+    if (toolRunsHeadless(f)) {
+      try { showToolPreview(evaluateToolFlow(f)); return null; } catch (e) { return e instanceof Error ? e.message : String(e); }
+    }
+    const api = agentApiRef.current;
+    if (!api) return "The editor is still loading — try again in a moment.";
+    borrowFlowForTool();
+    setFlowToolRun(true);
+    try {
+      const applied = await api.flowApply(JSON.stringify(f)) as { ok?: boolean; errors?: string[] };
+      return applied.ok === false ? (applied.errors ?? ["the workflow did not evaluate"]).join("\n") : null;
+    } catch (e) { return e instanceof Error ? e.message : String(e); }
+  };
+  /** Delete what a linked tool's last run created (its walls / spaces). */
+  const removeToolOutputs = (att: ToolAttachment) => {
+    const h = historyRef.current;
+    const ws = new Set(att.walls), rs = new Set(att.rooms);
+    if (!ws.size && !rs.size) return;
+    h.set({ ...h.state, walls: h.state.walls.filter((w) => !ws.has(w.id)), rooms: h.state.rooms.filter((r) => !rs.has(r.id)) });
+  };
+  /** A linked tool's value changed: REPLACE its result — delete the last outputs, run again on the host space
+   *  with the new values, and record the new outputs on the same link. */
+  const rerunAttachedTool = async (hostId: string, att: ToolAttachment, values: ToolAttachment["values"]): Promise<string | null> => {
+    const host = visibleRoomsRef.current.find((r) => r.id === hostId);
+    if (!host) return "The space this tool is linked to no longer exists.";
+    let flow: FlowToolFile;
+    try { flow = await loadWorkflowTool(att.name); } catch (e) { return e instanceof Error ? e.message : String(e); }
+    removeToolOutputs(att);
+    // The run below reads (and writes from) the current state — wait until the deletion has landed in it.
+    const gone = new Set(att.walls);
+    for (let i = 0; i < 40 && historyRef.current.state.walls.some((w) => gone.has(w.id)); i++) await new Promise((r) => setTimeout(r, 25));
+    const ppm = pixelsPerMeter || 1;
+    const outline = host.points.map((p) => [Math.round(p.x / ppm * 1e4) / 1e4, Math.round(p.y / ppm * 1e4) / 1e4]);
+    const info = analyseFlowTool(flow);
+    const inputs: Record<string, unknown> = { ...values };
+    for (const k of Object.keys(inputs)) if (!info.fields.some((i) => i.name === k)) delete inputs[k];
+    for (const pg of info.polygons) inputs[pg.name] = outline;
+    return runWorkflowTool(flow, inputs, { hostId, tool: att, attachmentId: att.id, quiet: true });
+  };
+  /** Unlink a tool from its space. `removeOutputs` also deletes what it created; otherwise that stays as plain geometry. */
+  const detachTool = (hostId: string, att: ToolAttachment, removeOutputs: boolean) => {
+    // ONE history write: a second `set` in the same tick would start from the pre-delete state and put the
+    // removed outputs back.
+    const h = historyRef.current;
+    const all = { ...(h.state.toolAttachments ?? {}) };
+    const list = (all[hostId] ?? []).filter((a) => a.id !== att.id);
+    if (list.length) all[hostId] = list; else delete all[hostId];
+    const ws = new Set(removeOutputs ? att.walls : []), rs = new Set(removeOutputs ? att.rooms : []);
+    h.set({
+      ...h.state,
+      walls: ws.size ? h.state.walls.filter((w) => !ws.has(w.id)) : h.state.walls,
+      rooms: rs.size ? h.state.rooms.filter((r) => !rs.has(r.id)) : h.state.rooms,
+      toolAttachments: Object.keys(all).length ? all : undefined,
+    });
+  };
+
+  /** For the agent commands (registered once, so they must not close over one render's state). */
+  const workflowToolApiRef = useRef<{ run: typeof runWorkflowTool; preview: typeof previewWorkflowTool } | null>(null);
+  workflowToolApiRef.current = { run: runWorkflowTool, preview: previewWorkflowTool };
+  /** The opted-in (`"mcp": true`) flows under Workflows/, with their MCP tool definitions — cached a minute so
+   *  an MCP client's tools/list does not re-read the whole library each time. Names are de-duplicated. */
+  const mcpFlowIndexRef = useRef<{ at: number; list: { flow: string; def: McpToolDef }[] } | null>(null);
+  const mcpFlowIndex = async (refresh: boolean) => {
+    const c = mcpFlowIndexRef.current;
+    if (c && !refresh && Date.now() - c.at < 60_000) return c.list;
+    const names = await listAllFlowTools();
+    const found = await Promise.all(names.map(async (n) => {
+      try { const f = await loadFlowTool(n); return isMcpFlow(f) ? { flow: n, def: mcpToolFor(n, f) } : null; } catch { return null; }
+    }));
+    const seen = new Map<string, number>();
+    const list = found.filter((x): x is { flow: string; def: McpToolDef } => !!x).map((x) => {
+      const k = seen.get(x.def.name) ?? 0; seen.set(x.def.name, k + 1);
+      return k ? { ...x, def: { ...x.def, name: `${x.def.name}_${k + 1}` } } : x;
+    });
+    mcpFlowIndexRef.current = { at: Date.now(), list };
+    return list;
+  };
+
+  /** Drop a live preview (headless: clear it; panel fallback: closing the panel removes it). */
+  /** A tool that runs THROUGH the Flow panel replaces the panel's graph, and the panel mirrors that into
+   *  `liveFlowGraph` — which then keeps previewing on every space selected afterwards (and replaces the
+   *  user's own flow). Remember the live flow before the first panel use, and put it back when the tool is done. */
+  const toolPrevFlowRef = useRef<{ g: SerializedFlow | null } | null>(null);
+  const borrowFlowForTool = () => { if (!toolPrevFlowRef.current) toolPrevFlowRef.current = { g: liveFlowGraph }; };
+  const returnFlowAfterTool = () => {
+    const prev = toolPrevFlowRef.current;
+    toolPrevFlowRef.current = null;
+    setFlowOpen(false); setFlowToolRun(false);
+    if (!prev) return;
+    setLiveFlowGraph(prev.g); flowGraphRef.current = prev.g; lastFlowSigRef.current = "";
+  };
+  const clearWorkflowPreview = () => {
+    returnFlowAfterTool();
+    showToolPreview([]);
+  };
+
+  // Workflow tool ▸ "Draw": the panel hides while the user clicks the outline's corners, then comes back with
+  // the drawn outline (and the values / Live state it had) so it can be tuned before Run.
+  const [flowOutlinePts, setFlowOutlinePts] = useState<Point[]>([]);
+  const [flowOutlineHover, setFlowOutlineHover] = useState<Point | null>(null);
+  const [flowToolDrawn, setFlowToolDrawn] = useState<[number, number][] | null>(null);
+  const [flowToolRestore, setFlowToolRestore] = useState<{ values: Record<string, string | number | boolean>; live: boolean } | null>(null);
+  const flowOutlineRunRef = useRef<{ tool: ImportedFlowTool; values: Record<string, string | number | boolean>; live: boolean } | null>(null);
+  const cancelFlowOutline = () => {
+    const run = flowOutlineRunRef.current;
+    flowOutlineRunRef.current = null;
+    setFlowOutlinePts([]); setFlowOutlineHover(null);
+    setTool("select");
+    // Esc: back to the panel as it was, without a new outline.
+    if (run) { setFlowToolRestore({ values: run.values, live: run.live }); setRunningWorkflowTool(run.tool); }
+  };
+  const finishFlowOutline = () => {
+    const run = flowOutlineRunRef.current;
+    // A double-click lands its first click as a corner too — drop repeats closer than a few screen px.
+    const pts = flowOutlinePts.filter((p, i, a) => i === 0 || Math.hypot(p.x - a[i - 1].x, p.y - a[i - 1].y) * scale > 4);
+    if (!run) { cancelFlowOutline(); return; }
+    if (pts.length < 3) { toast.error("An outline needs at least 3 corners"); return; }
+    const ppm = pixelsPerMeter || 1;
+    setFlowToolDrawn(pts.map((p) => [Math.round(p.x / ppm * 1e4) / 1e4, Math.round(p.y / ppm * 1e4) / 1e4] as [number, number]));
+    cancelFlowOutline();
+  };
+  useEffect(() => {
+    if (tool !== "flow-outline") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") { e.preventDefault(); finishFlowOutline(); }
+      else if (e.key === "Escape") { e.preventDefault(); cancelFlowOutline(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const [placementReturn, setPlacementReturn] = useState<{ text: string; linked: string | null; design: string } | null>(null);
   const openDesignPlacement = async (inst: DesignInstance) => {
@@ -30338,6 +30749,10 @@ User request: ${aiPrompt.trim()}`;
                 onCreateGrid={() => setGridDialogOpen(true)}
                 onImportObjects={(files) => { void importObjectFolder(files); }}
                 onImportObjectsClick={() => setImportObjectsDialogOpen(true)}
+                onImportWorkflowsClick={() => setImportWorkflowsDialogOpen(true)}
+                workflowTools={history.state.flowTools ?? []}
+                onRunWorkflowTool={setRunningWorkflowTool}
+                onRemoveWorkflowTool={(t) => { const h = historyRef.current; const next = (h.state.flowTools ?? []).filter((x) => x.name !== t.name); h.set({ ...h.state, flowTools: next.length ? next : undefined }); }}
                 onSelectedGenElementChange={setSelectedGenElement}
                 shapesPopoverOpen={shapesPopoverOpen}
                 onShapesPopoverOpenChange={setShapesPopoverOpen}
@@ -31060,6 +31475,7 @@ User request: ${aiPrompt.trim()}`;
                     tool === "window" ||
                     tool === "space-rect" ||
                     tool === "space-circle" ||
+                    tool === "flow-outline" ||
                     tool === "single-segment"
                     ? "crosshair"
                     : "default",
@@ -37995,6 +38411,23 @@ User request: ${aiPrompt.trim()}`;
                       </>
                     );
                   })() : null}
+                  {/* Workflow tool outline being drawn: dashed polyline through the corners to the cursor. */}
+                  {tool === "flow-outline" && flowOutlinePts.length > 0 && (
+                    <>
+                      <Line
+                        points={[...flowOutlinePts, ...(flowOutlineHover ? [flowOutlineHover] : [])].flatMap((q) => [q.x, q.y])}
+                        closed={flowOutlinePts.length >= 2}
+                        stroke="#7c3aed"
+                        strokeWidth={2 / scale}
+                        dash={[6 / scale, 4 / scale]}
+                        fill="rgba(124,58,237,0.08)"
+                        listening={false}
+                      />
+                      {flowOutlinePts.map((q, i) => (
+                        <Circle key={i} x={q.x} y={q.y} radius={(i === 0 ? 5 : 3.5) / scale} fill={i === 0 ? "#7c3aed" : "#fff"} stroke="#7c3aed" strokeWidth={1.5 / scale} listening={false} />
+                      ))}
+                    </>
+                  )}
                   {/* Add-Space rectangle trace preview: dashed outline + per-edge L×B labels. */}
                   {tool === "space-rect" && spaceRectAnchor && spaceRectPreview ? (() => {
                     const x1 = Math.min(spaceRectAnchor.x, spaceRectPreview.x);
@@ -39191,12 +39624,12 @@ User request: ${aiPrompt.trim()}`;
           )}
         </div>
         </Panel>
-        {flowOpen && uiPrefs.showFlow && (
+        {flowOpen && (uiPrefs.showFlow || flowToolRun) && (
           <PanelResizeHandle className="group relative h-2 shrink-0 bg-slate-200 transition-colors hover:bg-sky-300">
             <div className="absolute left-1/2 top-1/2 h-1 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-400 group-hover:bg-sky-500" />
           </PanelResizeHandle>
         )}
-        {flowOpen && uiPrefs.showFlow && (
+        {flowOpen && (uiPrefs.showFlow || flowToolRun) && (
           <Panel
             id="flow-panel"
             order={2}
@@ -39254,123 +39687,7 @@ User request: ${aiPrompt.trim()}`;
               onImportPlan={(planJson) => { void importPlanText(planJson); }}
               onSetObjectParams={applyFlowObjectParams}
               onExportCanvasPreview={setFlowExportPreview}
-              onRunCommit={async (json, committedNodeIds) => {
-                await applyRecipeJson(json, "commit");
-                // Network rows with "Release on commit" → HAND THE SEGMENTS OVER. Live-materialised segments
-                // are `flowOwner`-tagged and are wiped the moment Live goes off or the flow re-runs, which is
-                // right while you tune parameters and wrong the moment you move a door by hand. Releasing
-                // writes the same segments — same thickness, `segmentType` and hosted object — as ORDINARY
-                // canvas data the flow no longer owns. Ids are deterministic, so committing twice updates in
-                // place instead of piling up duplicates.
-                const released: Wall[] = [];
-                for (const item of flowPreview) {
-                  const meta = item.segMeta;
-                  if (!meta?.release || !item.polygons.length) continue;
-                  const layerId = meta.layer ? `flow-live-${slugifyLayer(meta.layer)}` : `flow-live-${item.nodeId}`;
-                  item.polygons.forEach((pl, pi) => {
-                    for (let i = 0; i + 1 < pl.length; i++) {
-                      const a = pl[i], b = pl[i + 1];
-                      if (Math.hypot(b.x - a.x, b.y - a.y) < 1) continue;
-                      released.push(flowSegmentWall(`flowbake:${item.nodeId}:seg:${pi}:${i}`, a, b, meta, layerId, undefined, pi));
-                    }
-                  });
-                }
-                if (released.length) {
-                  const h = historyRef.current;
-                  const takenIds = new Set(released.map((w) => w.id));
-                  h.set({ ...h.state, walls: [...h.state.walls.filter((w) => !takenIds.has(w.id)), ...released] });
-                  toast.success(`Released ${released.length} segment${released.length === 1 ? "" : "s"} to the canvas`);
-                }
-                // Mitered Join → lay down real Path walls (segmentType "path") in the document for every
-                // input graph edge, using the node's Width as thickness and Joint type as the path join.
-                const newPathWalls: Wall[] = [];
-                for (const item of flowPreview) {
-                  const mp = item.miteredPath;
-                  if (!mp || mp.segments.length === 0) continue;
-                  const pathJoin: PathJoin = mp.join === "curved" ? "round" : "miter";
-                  mp.segments.forEach((pl, si) => {
-                    // Per-segment width when "Use same width for all" is OFF; else the uniform width.
-                    const thicknessPx = Math.max(0.02, mp.segWidthsM?.[si] ?? mp.widthM) * pixelsPerMeter;
-                    for (let i = 0; i + 1 < pl.length; i++) {
-                      const a = pl[i], b = pl[i + 1];
-                      if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue;
-                      newPathWalls.push({ id: newSegmentId(), start: a, end: b, thickness: thicknessPx, color: wallColor, mode: "mitered-union", method: "center", segmentType: "path", pathJoin });
-                    }
-                  });
-                }
-                if (newPathWalls.length) {
-                  const h = historyRef.current;
-                  h.set({ ...h.state, walls: splitWallsAtIntersections([...h.state.walls, ...newPathWalls]) });
-                  toast.success(`Created ${newPathWalls.length} path segment${newPathWalls.length === 1 ? "" : "s"}`);
-                }
-                // Graph to Path → commit each band as a real Corridor-region Space (the decoupled
-                // Make-path; mirrors the Skeleton make-path commit). The generic terminal block below
-                // skips these items (noCommitTools) so the band outline doesn't double-commit as walls.
-                const newPathRooms: Room[] = [];
-                for (const item of flowPreview) {
-                  if (item.tool !== "graph-to-path") continue;
-                  const loops = (item.polygons ?? []).filter((l) => l.length >= 3);
-                  loops.forEach((points, i) => {
-                    newPathRooms.push({
-                      id: newSpaceId(),
-                      points: points.map((p) => ({ ...p })),
-                      fill: "rgba(14, 165, 233, 0.35)",
-                      stroke: "#0369a1",
-                      roomType: "room",
-                      region: "Corridor",
-                      label: loops.length > 1 ? `Path ${i + 1}` : "Path",
-                      showLabel: true,
-                    });
-                  });
-                }
-                if (newPathRooms.length) {
-                  const h = historyRef.current;
-                  h.set({ ...h.state, rooms: [...h.state.rooms, ...newPathRooms] });
-                  toast.success(`Committed ${newPathRooms.length} path Space${newPathRooms.length === 1 ? "" : "s"}`);
-                }
-                // Commit terminal PREVIEW-ONLY geometry (Split Segment pieces, graph lines, buffer/bloom
-                // shapes, …) that the recipe engine doesn't handle, as real wall segments — so non-space
-                // flows (rooted at Segment / Graph / Node / Image / Canvas) produce canvas geometry on Run.
-                const committed = new Set(committedNodeIds);
-                // Overlay / value / already-handled tools whose preview polygons must NOT become walls.
-                // mitered-join is a pure VALUE node now (publishes val-polygons, draws/commits nothing) — it's
-                // excluded so its stroked ribbon never becomes walls on commit; wire val-polygons into a
-                // Polygon node when you want the walls drawn.
-                const noCommitTools = new Set([
-                  "place-object", "space-creator", "show-direction", "dimension", "area-dimension",
-                  "graph-to-path", "mitered-join",
-                  "graph-metrics", "conditional", "param-manip", "pipe-solver", "render", "analyse",
-                  "generate", "schema", "output-schema", "bua", "math", "random",
-                  "footing", "footing-to-plan", "footing-to-elevation", "footing-to-3d-mesh", "mesh-to-3d",
-                  "staircase", "staircase-to-plan", "staircase-to-left-elevation", "staircase-to-right-elevation",
-                  "staircase-to-front-elevation", "staircase-to-back-elevation", "staircase-to-3d-mesh",
-                  "schema-to-drawing",
-                  "floorplan-to-front-elevation", "floorplan-to-back-elevation",
-                  "floorplan-to-left-elevation", "floorplan-to-right-elevation", "views-layout",
-                ]);
-                const style = getCurrentWallStyle();
-                const newSegWalls: Wall[] = [];
-                for (const item of flowPreview) {
-                  if (!item.isFinal || committed.has(item.nodeId)) continue;
-                  if (item.miteredPath || item.dimLines || item.massing || item.pipeResults) continue;
-                  if (noCommitTools.has(item.tool)) continue;
-                  for (const poly of item.polygons ?? []) {
-                    if (poly.length < 2) continue;
-                    const closed = !item.openPath && poly.length >= 3;
-                    const segCount = closed ? poly.length : poly.length - 1;
-                    for (let i = 0; i < segCount; i++) {
-                      const a = poly[i], b = poly[(i + 1) % poly.length];
-                      if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue;
-                      newSegWalls.push({ id: newSegmentId(), start: { ...a }, end: { ...b }, thickness: style.thickness, color: wallColor, mode: style.mode, method: "center", segmentType: "wall" });
-                    }
-                  }
-                }
-                if (newSegWalls.length) {
-                  const h = historyRef.current;
-                  h.set({ ...h.state, walls: [...h.state.walls, ...newSegWalls] });
-                  toast.success(`Committed ${newSegWalls.length} segment${newSegWalls.length === 1 ? "" : "s"} from flow`);
-                }
-              }}
+              onRunCommit={(json, committedNodeIds) => commitFlowRun(json, committedNodeIds, flowPreview)}
               onPreview={(items) => { flowPreviewRef.current = items; setFlowPreview(items); }}
               sourcePolygon={selectedRoom?.points ?? []}
               pixelsPerMeter={pixelsPerMeter}
@@ -39530,6 +39847,38 @@ User request: ${aiPrompt.trim()}`;
               {propertiesPanelExpanded && (
               <ScrollArea className="props-scroll flex-1 min-h-0">
               <div className="space-y-4 p-3 pr-4 pb-6 pt-3">
+                {/* Active workflow tool — its controls live HERE, like an attached object's parameters: no
+                    floating window and no Flow panel (it evaluates and commits in the background). */}
+                <RunWorkflowToolDialog
+                  tool={runningWorkflowTool}
+                  onClose={() => { setRunningWorkflowTool(null); setFlowToolDrawn(null); setFlowToolRestore(null); returnFlowAfterTool(); showToolPreview([]); }}
+                  drawnOutline={flowToolDrawn}
+                  restore={flowToolRestore}
+                  onPreview={previewWorkflowTool}
+                  onClearPreview={clearWorkflowPreview}
+                  selectedOutline={(() => {
+                    const rooms = visibleRooms.filter((r) => selection.selectedIds.includes(r.id));
+                    if (rooms.length !== 1) return null;
+                    const ppm = pixelsPerMeter || 1;
+                    return rooms[0].points.map((pt) => [Math.round(pt.x / ppm * 1e4) / 1e4, Math.round(pt.y / ppm * 1e4) / 1e4] as [number, number]);
+                  })()}
+                  onRun={(flow, inputs) => {
+                    // Run on the selected space (not a drawn outline / the sample) → LINK the result to it, so
+                    // selecting the space later shows these controls and a change re-runs the tool.
+                    const host = !flowToolDrawn && selectedRoom ? selectedRoom.id : null;
+                    const uses = analyseFlowTool(flow);
+                    return runWorkflowTool(flow, inputs, host && runningWorkflowTool && (uses.polygons.length || uses.needs.includes("space"))
+                      ? { hostId: host, tool: runningWorkflowTool } : undefined);
+                  }}
+                  onDrawOutline={(values, live) => {
+                    if (!runningWorkflowTool) return;
+                    flowOutlineRunRef.current = { tool: runningWorkflowTool, values, live };
+                    setFlowOutlinePts([]); setFlowOutlineHover(null);
+                    setRunningWorkflowTool(null);
+                    setTool("flow-outline");
+                    toast.info("Click the outline's corners — double-click, Enter or click the first corner to finish; Esc cancels");
+                  }}
+                />
 
                 {/* ── Layout sheet title block — the sheet's editable fields. Shown in Layout view mode.
                       Preferred source: a canvas-attached `titleblock` parametric object (Import Objects →
@@ -40140,7 +40489,19 @@ User request: ${aiPrompt.trim()}`;
                     {/* Door hinge/swing removed — controlled via the Flow "Segment to Door" node. */}
                   </>
                 ) : selectedRoom ? (
+                  <>
                   <p className="text-xs text-slate-500">Selected: Space</p>
+                  {/* Workflow tools LINKED to this space — change a value and the tool re-runs, replacing its result. */}
+                  {(history.state.toolAttachments?.[selectedRoom.id] ?? []).map((att) => (
+                    <AttachedToolBlock
+                      key={att.id}
+                      att={att}
+                      onChange={(values) => rerunAttachedTool(selectedRoom.id, att, values)}
+                      onDetach={() => detachTool(selectedRoom.id, att, false)}
+                      onRemove={() => detachTool(selectedRoom.id, att, true)}
+                    />
+                  ))}
+                  </>
                 ) : selectedObject ? null : (
                   <>
                     <p className="text-xs text-slate-500">Selected: Canvas</p>
@@ -43373,6 +43734,15 @@ User request: ${aiPrompt.trim()}`;
         open={gridDialogOpen}
         onOpenChange={setGridDialogOpen}
         onConfirm={(draft) => { addGridFromDraft(draft); setGridDialogOpen(false); }}
+      />
+
+      {/* Workflows as tools — pick saved flows into the Drawing toolbar, then run one with its inputs. The run
+          goes through the same flow_apply + flow_commit path the AI bridge's run_flow_tool uses. */}
+      <ImportWorkflowsDialog
+        open={importWorkflowsDialogOpen}
+        onOpenChange={setImportWorkflowsDialogOpen}
+        imported={history.state.flowTools ?? []}
+        onImport={(next) => { const h = historyRef.current; h.set({ ...h.state, flowTools: next.length ? next : undefined }); }}
       />
 
       {/* Import Objects picker — tick objects and/or whole category folders from the library (live dev

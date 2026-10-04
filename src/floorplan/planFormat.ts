@@ -178,7 +178,7 @@ export function toStandardPlan(model: FloorPlanModel, frame: PlanFrame): Standar
 }
 
 /** Keys that describe the project rather than one floor — hoisted out of each level to the top. */
-const PROJECT_KEYS = ["schemaVersion", "settings", "layers", "moodboards", "customRoomTypes", "customSegmentTypes", "groups"] as const;
+const PROJECT_KEYS = ["schemaVersion", "settings", "layers", "moodboards", "flowTools", "customRoomTypes", "customSegmentTypes", "groups"] as const;
 
 function toMultiLevelPlan(packed: NonNullable<ReturnType<typeof unpackLevels>>, frame: PlanFrame): StandardPlan {
   const { active, activeId, meta, sheets } = packed;
