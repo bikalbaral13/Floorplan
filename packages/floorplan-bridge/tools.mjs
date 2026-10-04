@@ -1,3 +1,5 @@
+import { EXTRA_SCHEMAS } from "./toolGroups.mjs";
+
 // Shared by the local stdio bridge (floorplan-bridge.mjs) and the hosted relay (server/relayCore.mjs), so both
 // list the SAME tools with the SAME step-gate rules. Zero dependencies.
 
@@ -7,7 +9,7 @@
 export const DEFAULT_TIMEOUT_MS = 60000;
 export const CHECKPOINT_TIMEOUT_MS = Number((typeof process !== "undefined" && process.env?.FP_CHECKPOINT_TIMEOUT_MS) || 30 * 60 * 1000);
 export const LONG_TIMEOUT_MS = 5 * 60 * 1000;
-export const timeoutFor = (tool) => (tool === "checkpoint" ? CHECKPOINT_TIMEOUT_MS : tool === "apply_model" || tool === "import_objects" || tool === "import_plan" ? LONG_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
+export const timeoutFor = (tool) => (tool === "checkpoint" ? CHECKPOINT_TIMEOUT_MS : tool === "apply_model" || tool === "import_objects" || tool === "import_plan" || tool === "run_workflow" || tool === "run_flow_tool" ? LONG_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
 
 // ── Tool catalogue (schemas). Each tool name maps to a browser command handler (agentBridge.ts). ──
 export const TOOLS = [
@@ -55,6 +57,11 @@ export const TOOLS = [
   { name: "list_flow_tools", description: "List the saved flows that can be run as tools (Workflows/Tools/ in the library): name, title, description and INPUTS — each Input Properties field (number etc., with default/min/max) and each Polygon node (a [[x,y],…] outline in metres). Call before run_flow_tool.", inputSchema: { type: "object", properties: {} } },
   { name: "run_flow_tool", description: "Run one flow tool in the user's open editor tab: loads the flow into the Flow panel, sets `inputs` (keys = input names from list_flow_tools; unspecified inputs keep their defaults), evaluates it and returns per-node outputs (polygons in plan metres) plus any errors. commit:true also writes the result onto the canvas (the Flow panel's Run).", inputSchema: { type: "object", properties: { name: { type: "string", description: "tool name from list_flow_tools, e.g. inset" }, inputs: { type: "object", description: "input values keyed by input name" }, commit: { type: "boolean", description: "also commit the result to the canvas (default false)" } }, required: ["name"] } },
 
+  // ── Any saved flow under Workflows/, by path (the grouped `workflow` tool's list / describe / run). ──
+  { name: "list_workflows", description: "List every saved flow under Workflows/ by path (e.g. Operations/double_inset, Architectural/floorplan.v5); `featured` ones also have a wf_* tool. Then describe_workflow, then run_workflow.", inputSchema: EXTRA_SCHEMAS.list_workflows },
+  { name: "describe_workflow", description: "A saved flow's inputs (name, type, default, min/max), its Polygon inputs, and what it reads from the canvas (needs: space, segment …). Call before run_workflow.", inputSchema: EXTRA_SCHEMAS.describe_workflow },
+  { name: "run_workflow", description: "Run any saved flow in the open editor tab by its path under Workflows/. `inputs` keyed by name (unspecified keep defaults). space_id runs it on that space and LINKS the result to it (selecting the space shows the controls; a change re-runs). Commits unless preview:true. Returns added segment / space counts.", inputSchema: EXTRA_SCHEMAS.run_workflow },
+
   // ── Moodboard (Plan step 4): the agent opens the picker, the USER picks, the agent reads the stored picks. ──
   { name: "open_moodboard_picker", description: "Open the moodboard picker in the user's editor tab (Plan step 4). With `board` (a file under Moodboards/, e.g. \"ramanadhapuram-apartment-interior.json\") it opens straight into that board; without, it shows the board list. The USER chooses one option per room and clicks Save to plan — never pick for them. Then call get_moodboards.", inputSchema: { type: "object", properties: { board: { type: "string", description: "board file under Moodboards/ (optional)" } } } },
   { name: "get_moodboards", description: "Return the moodboard picks stored on the open design (its `moodboards` key): per board its id, title, source and picks (room, option, status, spaces). Empty until the user saves from the picker.", inputSchema: { type: "object", properties: {} } },
@@ -91,7 +98,7 @@ export const WRITE_TOOLS = new Set([
   "clear_canvas", "draw_wall", "apply_model", "draw_segment", "draw_freehand", "place_opening",
   "place_object", "merge_spaces", "create_layer", "move_to_layer", "attach_space_object",
   "set_image_underlay", "align_underlay", "fit_plan_to_rect", "flow_apply", "flow_commit",
-  "delete_entities", "style_segments", "attach_segment_object",
+  "delete_entities", "style_segments", "attach_segment_object", "run_workflow",
 ]);
 // `import_objects` is deliberately NOT gated: it loads the object library and every skill is told to call
 // it first, so gating it would refuse the one call that must precede a step rather than sit inside one.

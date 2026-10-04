@@ -21,6 +21,7 @@
 import crypto from "node:crypto";
 import { putObject, getObjectText, listObjects, deleteObject } from "../tools/r2.mjs";
 import { TOOLS, timeoutFor, newRunState, stepGate } from "../packages/floorplan-bridge/tools.mjs";
+import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
 import { RELAY_HEADLESS_TOOLS, HEADLESS_TOOL_NAMES, runHeadless, validDesignPath, saveDesignJson } from "./relayHeadless.mjs";
 
 const WAIT_MS = Number(process.env.RELAY_WAIT_MS || 50_000);      // one /mcp request waits this long, then tickets
@@ -38,6 +39,8 @@ const AWAIT_TOOL = {
   description: "Keep waiting for a call that returned { pending: true, ticket }. Relay-only: over the hosted link a call the editor has not answered within ~50 s (a checkpoint waiting on the user, a big apply_model) comes back as a ticket instead of blocking. Call this with that ticket, again and again, until it returns the real result.",
   inputSchema: { type: "object", properties: { ticket: { type: "string", description: "the ticket from a pending result" } }, required: ["ticket"] },
 };
+/** MCP_FLAT_TOOLS=1: list one tool per command (the pre-grouping surface) instead of the grouped tools. */
+const FLAT_TOOLS = /^(1|true|yes)$/i.test(String(process.env.MCP_FLAT_TOOLS ?? ""));
 const RELAY_TOOLS = [...TOOLS, AWAIT_TOOL, ...RELAY_HEADLESS_TOOLS];
 
 /* ── config ─────────────────────────────────────────────────────────────────────────────────────────── */
@@ -354,9 +357,12 @@ async function mcp(cfg, req, res) {
         instructions: "Drives the user's own tab of the BuilderPluss floor plan editor. If a tool returns { pending: true, ticket }, call await_result with that ticket until it finishes. With NO tab connected, canvas tools fall back to editing a Library design headlessly (the one the tab last had open, or the one set with use_design); snapshot_canvas then returns a server-rendered preview. Tools that need the live canvas or the user (checkpoint, flows, underlays, selection) still need the tab." });
     }
     if (method === "ping") return reply({});
-    if (method === "tools/list") return reply({ tools: [...RELAY_TOOLS, ...await workflowToolsFor(cfg, a.sid)] });
+    if (method === "tools/list") return reply({ tools: FLAT_TOOLS ? [...RELAY_TOOLS, ...await workflowToolsFor(cfg, a.sid)] : groupedTools(RELAY_TOOLS) });
     if (method === "tools/call") {
-      const name = params?.name, args = params?.arguments ?? {};
+      const g = resolveCall(params?.name, params?.arguments ?? {});
+      if (g.error) return reply(errText(g.error));
+      if (g.describe) return reply(text(describeOps(g.describe, RELAY_TOOLS)));
+      const name = g.name, args = g.args ?? {};
       if (!RELAY_TOOLS.some((t) => t.name === name) && !isWorkflowTool(name)) return fail(-32602, `unknown tool: ${name}`);
       try { return reply(await callTool(cfg, a.sid, name, args)); } catch (e) { return reply(errText(e?.message || "relay error")); }
     }

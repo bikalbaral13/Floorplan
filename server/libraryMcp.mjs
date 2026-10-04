@@ -20,8 +20,11 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
+import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
 import { relayConfig, CONNECTOR_RELAY_TOOLS, linkConnector, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
 
+/** MCP_FLAT_TOOLS=1 lists the old one-tool-per-command surface instead of the grouped one (rollback switch). */
+const FLAT = /^(1|true|yes)$/i.test(String(process.env.MCP_FLAT_TOOLS ?? ""));
 const PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
 const READ_LIMIT = 1_000_000;           // one read_file chunk
 const WRITE_LIMIT = 4_000_000;          // Vercel caps a request body at ~4.5 MB
@@ -159,6 +162,8 @@ function allTools() {
 }
 
 const INSTRUCTIONS = `BuilderPluss floor plan designer: the shared R2 library (Designs/, Objects/, Materials/, Moodboards/, Skills/, Images/, Workflows/) plus the full editor canvas toolset.
+
+TOOLS ARE GROUPED: session, step, library, skills, design, draw, layers, objects, workflow, underlay, moodboard (+ await_result). Each takes an \`op\` — e.g. skills { op: "list" }, objects { op: "place", object, x, y }, workflow { op: "run", path: "Operations/double_inset", inputs }. op: "describe_ops" gives a group's full arguments. Names below like list_skills / load_design are those ops (skills.list, design.load) — the old names still work too.
 
 HOW TO HANDLE A REQUEST
 1. Anything beyond a single small edit: call list_skills, pick the skill whose description fits the request, read_skill it, and follow it step by step. Read files it references with read_file. If no skill fits, work directly with the canvas tools.
@@ -382,12 +387,17 @@ export async function handleLibraryMcp(req, res, cfg = libraryMcpConfig()) {
     if (method === "ping") return reply({});
     if (method === "tools/list") {
       // Opted-in workflow tools of the editor tab this user is linked to (none when not linked / no tab).
+      // Grouped: ~12 tools; featured workflows are reached through workflow { op: "run" } and stay callable as wf_*.
+      if (!FLAT) return reply({ tools: groupedTools(allTools()) });
       const rcfg = relayConfig();
       const wf = rcfg ? await connectorWorkflowTools(rcfg, user).catch(() => []) : [];
       return reply({ tools: [...allTools(), ...wf] });
     }
     if (method === "tools/call") {
-      const name = params?.name, args = params?.arguments ?? {};
+      const r = resolveCall(params?.name, params?.arguments ?? {});
+      if (r.error) return reply(errText(r.error));
+      if (r.describe) return reply(text(describeOps(r.describe, allTools())));
+      const name = r.name, args = r.args ?? {};
       if (!allTools().some((t) => t.name === name) && !isWorkflowTool(name)) return fail(-32602, `unknown tool: ${name}`);
       try { return reply(await callTool(cfg, name, args, user)); } catch (e) { return reply(errText(e?.message || "library error")); }
     }

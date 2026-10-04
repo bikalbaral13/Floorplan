@@ -8737,6 +8737,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       let f;
       try { f = withFlowToolInputs(await loadFlowTool(name), inputs); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
       const applied = await agentApi().flowApply(JSON.stringify(f));
+      // The preview fills on the overlay's next evaluation, not inside flowApply — wait for it (≤ 3 s).
+      for (let t = 0; (applied as { ok?: boolean }).ok && t < 30 && !flowPreviewRef.current.some((it) => it.polygons.length); t++) await new Promise((r) => setTimeout(r, 100));
       const ppm = bridgePpmRef.current || 1;
       const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
       const outputs = flowPreviewRef.current.map((it) => ({
@@ -8758,10 +8760,38 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const entry = (await mcpFlowIndex(false)).find((t) => t.def.name === toolName) ?? (await mcpFlowIndex(true)).find((t) => t.def.name === toolName);
       if (!entry) return { error: `no opted-in workflow tool "${toolName}" — the flow needs "mcp": true` };
       const args = (a.args && typeof a.args === "object" ? a.args : {}) as Record<string, unknown>;
-      const flow = await loadFlowTool(entry.flow);
+      return runWorkflowAsTool(entry.flow, args, toolName);
+    });
+    // ── Any saved flow by its path under Workflows/ — the grouped `workflow` MCP tool's list / describe / run.
+    //    No "mcp": true needed: the flag only decides which flows ALSO get a wf_* tool of their own. ──
+    registerAgentCommand("list_workflows", async () => {
+      const names = await listAllFlowTools();
+      const featured = new Set((await mcpFlowIndex(false)).map((t) => t.flow));
+      return { folder: "Workflows", count: names.length, workflows: names.map((n) => ({ path: n, ...(featured.has(n) ? { featured: true } : {}) })),
+        note: "workflow { op: \"describe\", path } for a workflow's inputs, then op: \"run\"." };
+    });
+    registerAgentCommand("describe_workflow", async (a) => {
+      const path = String(a.path ?? "").replace(/^Workflows\//, "").replace(/\.json$/i, "");
+      const flow = await loadFlowTool(path);
+      const info = analyseFlowTool(flow);
+      return { path, title: flow.title, description: (flow.description ?? "").slice(0, 1200), inputs: info.fields, polygons: info.polygons, needs: info.needs,
+        note: info.needs.includes("space") ? "reads a space: pass space_id (list_spaces / get_selection)" : info.polygons.length ? "pass `outline` [[x,y],…] in metres, or space_id" : undefined };
+    });
+    registerAgentCommand("run_workflow", async (a) => {
+      const path = String(a.path ?? "").replace(/^Workflows\//, "").replace(/\.json$/i, "");
+      if (!path) return { error: "run_workflow needs `path`, e.g. \"Operations/double_inset\"" };
+      const args = { ...((a.inputs && typeof a.inputs === "object" ? a.inputs : {}) as Record<string, unknown>), space_id: a.space_id, outline: a.outline, preview: a.preview };
+      return runWorkflowAsTool(path, args, path);
+    });
+    async function runWorkflowAsTool(flowPath: string, args: Record<string, unknown>, toolName: string) {
+      const flow = await loadFlowTool(flowPath);
+      const entry = { flow: flowPath };
       const info = analyseFlowTool(flow);
       const inputs: Record<string, unknown> = {};
-      for (const i of info.fields) if (i.name in args) inputs[i.name] = args[i.name];
+      const known = new Set(info.fields.map((i) => i.name));
+      const unknown = Object.keys(args).filter((k) => !known.has(k) && !["space_id", "outline", "preview"].includes(k) && args[k] !== undefined);
+      if (unknown.length) return { error: `unknown input(s): ${unknown.join(", ")} — ${flowPath} takes ${[...known].join(", ") || "no inputs"}` };
+      for (const i of info.fields) if (i.name in args && args[i.name] !== undefined) inputs[i.name] = args[i.name];
       const spaceId = typeof args.space_id === "string" && args.space_id ? args.space_id : null;
       let outline: number[][] | null = null;
       if (spaceId) {
@@ -8792,7 +8822,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           ...(spaceId ? { linkedTo: spaceId } : {}),
         }),
       };
-    });
+    }
     registerAgentCommand("get_moodboards", () => {
       const mbs = historyRef.current.state.moodboards ?? [];
       return { count: mbs.length, moodboards: mbs };

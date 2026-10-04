@@ -12,6 +12,7 @@
 //       node mcp/floorplan-bridge.mjs             (this repo: registered via .mcp.json)
 
 import http from "node:http";
+import { groupedTools, resolveCall, describeOps } from "./toolGroups.mjs";
 import { TOOLS, DEFAULT_TIMEOUT_MS, CHECKPOINT_TIMEOUT_MS, newRunState, stepGate } from "./tools.mjs";
 
 const HTTP_PORT = Number(process.env.FP_BRIDGE_PORT || 41414);
@@ -116,7 +117,13 @@ http.createServer((req, res) => {
         res.end(JSON.stringify({ ok: false, error: "body is not valid JSON" }));
         return;
       }
-      const { tool, args } = payload;
+      const g = resolveCall(payload.tool, payload.args ?? {});
+      const tool = g.name, args = g.args;
+      if (g.error || g.describe) {
+        res.writeHead(200, { ...CORS, "Content-Type": "application/json" });
+        res.end(JSON.stringify(g.error ? { ok: false, error: g.error } : { ok: true, result: describeOps(g.describe, TOOLS) }));
+        return;
+      }
       if (!TOOLS.some((t) => t.name === tool) && !isWorkflowTool(tool)) {
         res.writeHead(400, { ...CORS, "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: `unknown tool: ${tool}` }));
@@ -175,6 +182,8 @@ async function refreshWorkflowTools() {
   return wfTools;
 }
 setInterval(() => { void refreshWorkflowTools(); }, 30000).unref();
+/** MCP_FLAT_TOOLS=1: list one tool per command (pre-grouping) instead of the grouped tools. */
+const FLAT_TOOLS = /^(1|true|yes)$/i.test(String(process.env.MCP_FLAT_TOOLS ?? ""));
 const isWorkflowTool = (name) => typeof name === "string" && name.startsWith("wf_");
 
 // ── Server → client requests (elicitation). Our own id space, prefixed so it can never collide with the
@@ -295,12 +304,16 @@ process.stdin.on("data", async (chunk) => {
       reply(id, {});
     } else if (method === "tools/list") {
       void (async () => {
+        if (!FLAT_TOOLS) { reply(id, { tools: groupedTools(TOOLS) }); return; }
         const wf = tabActive() ? await refreshWorkflowTools() : [];
         reply(id, { tools: [...TOOLS, ...wf] });
       })();
     } else if (method === "tools/call") {
-      const name = params?.name;
-      const args = params?.arguments ?? {};
+      const g = resolveCall(params?.name, params?.arguments ?? {});
+      if (g.error) { reply(id, { content: [{ type: "text", text: `Error: ${g.error}` }], isError: true }); continue; }
+      if (g.describe) { reply(id, { content: [{ type: "text", text: JSON.stringify(describeOps(g.describe, TOOLS)) }] }); continue; }
+      const name = g.name;
+      const args = g.args ?? {};
       if (!TOOLS.some((t) => t.name === name) && !isWorkflowTool(name)) { replyErr(id, -32602, `unknown tool: ${name}`); continue; }
       // Run DETACHED: awaiting here would stall the parse loop for the life of the call, and a checkpoint
       // lives for up to 30 min — the elicitation answer that ends it arrives on this very stream. JSON-RPC
