@@ -50,6 +50,14 @@ export const NavigatorBar = ({ overlay = false }: { overlay?: boolean }) => {
   };
 
   if (!open) {
+    // Phone: no rail eating the canvas — just a round chevron floating at the canvas's top-left corner,
+    // mirroring the Properties chevron at the top-right.
+    if (overlay) return (
+      <button type="button" onClick={toggle} title="Show the Library (R2) navigator" aria-label="Show navigator"
+        className="fixed left-4 top-[82px] z-40 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-md hover:bg-slate-50">
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    );
     return (
       <div className="flex w-8 shrink-0 flex-col items-center rounded-xl border border-slate-200 bg-white py-2 shadow-sm">
         <button type="button" onClick={toggle} title="Show the Library (R2) navigator" aria-label="Show navigator"

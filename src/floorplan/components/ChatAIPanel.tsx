@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, type ReactNode } from "react";
-import { Sparkles, ChevronDown, ChevronUp, Send, Loader2, Paperclip, X, FileText, SlidersHorizontal, RotateCcw, Copy, Wrench, Download, Boxes, Workflow, Files, GitBranch } from "lucide-react";
+import { Sparkles, ChevronDown, ChevronUp, Send, Loader2, Paperclip, X, FileText, SlidersHorizontal, RotateCcw, Copy, Wrench, Download, Boxes, Workflow, Files, GitBranch, Upload, Mic, MicOff } from "lucide-react";
+import { useDictation } from "./useDictation";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ToolInfo } from "../ai/toolCatalog";
 import { useLibraryBase } from "../useLibraryBase";
 import { LibrarySourceNote } from "./LibrarySourceNote";
@@ -80,6 +82,10 @@ export interface ChatAIPanelProps {
   onEngineChange?: (e: "claude" | "gemini") => void;
   /** Claude Code is blocked in chat.wait right now. */
   claudeListening?: boolean;
+  /** 📎 ▸ Import into canvas… — opens the editor's import picker (plan JSON, DXF, underlay, objects …). */
+  onImportCanvas?: () => void;
+  /** Export button right of Send — opens the editor's export picker. */
+  onExport?: () => void;
 }
 
 /** Foldable "Chat AI" bar pinned to the top of the canvas. Pick an agent (built-in Global Agent or one
@@ -91,8 +97,11 @@ export const ChatAIPanel = ({
   agents, selectedAgentId, onSelectAgent, onImportAgents,
   runner, systemPrompt, onSystemPromptChange, defaultSystemPrompt, promptReadOnly, skills, composedLength,
   tools, access, examples, engine = "gemini", onEngineChange, claudeListening = false,
+  onImportCanvas, onExport,
 }: ChatAIPanelProps) => {
   const [draft, setDraft] = useState("");
+  // 🎤 dictation: each finished phrase is appended to the draft (the user still reviews and presses Send).
+  const dictation = useDictation((t) => { if (t) setDraft((d) => (d.trim() ? `${d.trimEnd()} ${t}` : t)); });
   const selection = useLibrarySelection();
   const selGroups = KIND_ORDER.map((k) => ({ kind: k, list: selection.filter((i) => i.kind === k) })).filter((g) => g.list.length);
   const [file, setFile] = useState<File | null>(null);
@@ -150,8 +159,8 @@ export const ChatAIPanel = ({
   return (
     // Pinned to the BOTTOM of the canvas, clear of the Flow button and level tabs. The input is always shown;
     // the conversation above it folds. What the agent reads comes from the Library selection (navigator ticks).
-    <div className="pointer-events-none absolute inset-x-0 bottom-14 z-30 flex justify-center px-3 xl:bottom-3 xl:px-40">
-      <div className="pointer-events-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-0 md:bottom-14 md:px-3 xl:bottom-3 xl:px-40">
+      <div className="pointer-events-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-t-xl border border-b-0 md:rounded-xl md:border-b border-slate-200 bg-white/95 shadow-lg backdrop-blur">
         {!collapsed && (messages.length > 0 || busy || !configured) && (
           <>
             {/* Transcript. */}
@@ -255,6 +264,11 @@ export const ChatAIPanel = ({
                   </button>
                 </div>
               )}
+              {(dictation.listening || dictation.error) && (
+                <div className={`mb-1.5 truncate rounded-md px-2 py-1 text-[11px] ${dictation.error ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-500"}`}>
+                  {dictation.error ?? (dictation.interim ? `🎤 ${dictation.interim}` : "🎤 Listening… speak, then tap the mic to stop")}
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 {/* Attach an image / PDF floor plan. */}
                 <input
@@ -264,17 +278,29 @@ export const ChatAIPanel = ({
                   className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }}
                 />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  disabled={!configured || busy || runner === "flow"}
-                  onClick={() => fileRef.current?.click()}
-                  title={runner === "flow" ? "Attachments aren't used when building a flow" : "Attach an image or PDF floor plan to analyse"}
-                  aria-label="Attach a file"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
+                {/* 📎 menu: attach a file to the PROMPT (the AI reads it), or IMPORT a file into the canvas
+                    (the editor's import picker — replaces the old top-right Files ▸ Import…). */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Attach to the prompt, or import into the canvas" aria-label="Attach or import">
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" align="start" className="w-56">
+                    <DropdownMenuItem
+                      disabled={!configured || busy || runner === "flow"}
+                      onSelect={() => fileRef.current?.click()}
+                      title={runner === "flow" ? "Attachments aren't used when building a flow" : "Attach an image or PDF floor plan to analyse"}
+                    >
+                      <Paperclip className="mr-2 h-4 w-4" />Attach to prompt
+                    </DropdownMenuItem>
+                    {onImportCanvas && (
+                      <DropdownMenuItem onSelect={() => onImportCanvas()}>
+                        <Upload className="mr-2 h-4 w-4" />Import into canvas…
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <div className="relative flex-1">
                   {/* Example prompts, filtered by what has been typed. Anchored ABOVE the box so it
                       never covers the transcript's latest line. */}
@@ -326,9 +352,27 @@ export const ChatAIPanel = ({
                     }}
                   />
                 </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={`h-9 w-9 shrink-0 ${dictation.listening ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : ""}`}
+                  disabled={!dictation.supported || !configured || busy}
+                  onClick={() => { if (dictation.listening) inputRef.current?.focus(); dictation.toggle(); }}
+                  title={!dictation.supported ? "Voice input needs Chrome, Edge or Safari on a secure page (https or localhost)"
+                    : dictation.listening ? "Stop listening" : "Speak your prompt"}
+                  aria-label={dictation.listening ? "Stop voice input" : "Voice input"}
+                  aria-pressed={dictation.listening}
+                >
+                  {dictation.listening ? <MicOff className="h-4 w-4 animate-pulse" /> : <Mic className="h-4 w-4" />}
+                </Button>
                 <Button size="sm" className="h-9 gap-1.5 px-3 shrink-0" disabled={!configured || busy || (!draft.trim() && !file)} onClick={submit}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
+                {onExport && (
+                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={onExport} title="Export the plan…" aria-label="Export">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
       </div>

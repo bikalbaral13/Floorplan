@@ -16,10 +16,12 @@ export interface UiPrefs {
   showStatusBar: boolean;
   /** Who answers the Chat box: Claude Code (over Connect Claude / the local bridge) or Gemini. */
   chatEngine: "claude" | "gemini";
+  /** Marker: the one-time reset of showFlow to the new OFF default has run. */
+  flowOffDefault?: boolean;
 }
 
 const KEY = "bp.editor.uiPrefs";
-const DEFAULTS: UiPrefs = { showChat: true, showDrawingToolbar: false, showFlow: true, showProperties: true, showNavigator: true, showStatusBar: false, chatEngine: "claude" };
+const DEFAULTS: UiPrefs = { showChat: true, showDrawingToolbar: false, showFlow: false, showProperties: true, showNavigator: true, showStatusBar: false, chatEngine: "claude" };
 const listeners = new Set<() => void>();
 
 function read(): UiPrefs {
@@ -28,7 +30,10 @@ function read(): UiPrefs {
     // Prefs saved before the navigator existed carry the old Drawing-toolbar default (on). The navigator
     // takes that place now, so the toolbar starts OFF once; after that the saved choice is kept.
     if (!("showNavigator" in saved)) saved.showDrawingToolbar = false;
-    return { ...DEFAULTS, ...saved };
+    // Flow engine became off by default (every phase). Prefs saved before that carry it ON; reset it once,
+    // then the user's own choice is kept.
+    if (!(saved as { flowOffDefault?: boolean }).flowOffDefault) saved.showFlow = false;
+    return { ...DEFAULTS, ...saved, flowOffDefault: true } as UiPrefs;
   } catch {
     return DEFAULTS;
   }

@@ -196,3 +196,11 @@ All colors MUST be HSL.
   display: block !important;
   width: 100% !important;
 }
+
+/* Header ▸ Theme ▸ dark (components/ThemeToggle.tsx). One inversion of the whole page; photos, video and
+   the 3D view (react-three-fiber marks its canvas with data-engine) are inverted back to true colour. */
+html.bp-dark { background: #0b0d12; }
+html.bp-dark body { filter: invert(0.92) hue-rotate(180deg); }
+html.bp-dark img,
+html.bp-dark video,
+html.bp-dark canvas[data-engine] { filter: invert(1) hue-rotate(180deg); }

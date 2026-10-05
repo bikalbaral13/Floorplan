@@ -239,6 +239,7 @@ import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
 import { PhaseToggle, usePhase } from "./components/PhaseToggle";
 import { RenderModeToggle, useRenderMode } from "./components/RenderModeToggle";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { getUiPrefs, setUiPref, useUiPrefs } from "./uiPrefs";
 import { ElevationPanels } from "./components/ElevationPanels";
 import { AlignedElevations } from "./components/AlignedElevations";
@@ -24220,6 +24221,19 @@ User request: ${aiPrompt.trim()}`;
       toast.success("Floor plan saved to project.");
     }
   };
+  // Ctrl/⌘+S → Save to project (the button now sits inside Preferences, so it needs a shortcut).
+  const saveModelRef = useRef(saveModel);
+  saveModelRef.current = saveModel;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        void saveModelRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const loadModel = async () => {
     if (!projectId || !isProjectsApiConfigured()) {
@@ -28772,11 +28786,145 @@ User request: ${aiPrompt.trim()}`;
   const layersPopover = (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" title="Layer visibility" aria-label="Layer visibility">
+        <Button variant="outline" size="sm" title="View, levels and layers" aria-label="Layer visibility">
           <Layers className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 max-h-[70vh] overflow-y-auto" side="bottom" sideOffset={8}>
+        {/* View (2D / 3D / Both / Views / Layout), Phase and Render — moved here from the old View Mode button
+            and Preferences, so this one popover holds everything about what the canvas shows. */}
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">View</p>
+        <div className="mb-3 flex flex-row overflow-hidden rounded-md border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setViewMode("2d")}
+            className={`flex-1 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "2d"}
+            title="2D view"
+          >
+            2D
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("3d")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "3d"}
+            title="3D view"
+          >
+            3D
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("both")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "both" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "both"}
+            title="Split view — 2D left, 3D right"
+          >
+            Both
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("views")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "views" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "views"}
+            title="Orthographic views — plan centre, Back top / Front bottom / Left / Right"
+          >
+            Views
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("layout")}
+            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "layout" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            aria-pressed={viewMode === "layout"}
+            title="Layout sheet — plan as a viewport in a paper template (border, north arrow, title block)"
+          >
+            Layout
+          </button>
+        </div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phase</span>
+          <PhaseToggle />
+        </div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Render</span>
+          <RenderModeToggle />
+        </div>
+        {/* Levels (storeys) — moved here from the canvas bottom-right. One sheet per storey (see ./levels.ts);
+            2D edits the active sheet, 3D stacks them all. Hidden in Layout (paper-space) mode. */}
+        {viewMode !== "layout" && (<>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Levels</p>
+          <div className="mb-3 flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white p-1" role="tablist" aria-label="Levels">
+            {levelMeta.length === 0 ? (
+              <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white" role="tab" aria-selected="true">Single level</span>
+            ) : (<>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={show3dAllLevels}
+                title="3D: show every level stacked (2D keeps editing the selected level)"
+                onClick={() => setShow3dAllLevels(true)}
+                className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${show3dAllLevels ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+              >All</button>
+              {show3dAllLevels && (
+                <label className="flex shrink-0 cursor-pointer items-center gap-1 px-1 text-[11px] text-slate-600" title="Shell: exterior walls, doors, windows and slabs only — fast for a whole building. Off: every object on every level.">
+                  <input type="checkbox" checked={show3dShell} onChange={(e) => setShow3dShell(e.target.checked)} />
+                  Shell
+                </label>
+              )}
+              {sortLevels(levelMeta).map((l) => {
+                const on = l.id === activeLevelId && !show3dAllLevels;
+                return (
+                  <button
+                    key={l.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    title={`${l.name} — +${l.elevation.toFixed(2)} m, ${l.height.toFixed(2)} m high${on ? " (double-click to edit)" : ""}`}
+                    onClick={() => { setShow3dAllLevels(false); switchLevel(l.id); }}
+                    onDoubleClick={() => on && setLevelSettingsOpen(true)}
+                    className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${on ? "bg-slate-900 text-white" : l.id === activeLevelId ? "bg-slate-200 text-slate-800" : "text-slate-600 hover:bg-slate-100"}`}
+                  >
+                    {l.name}
+                    <span className={`ml-1 font-normal ${on ? "text-slate-300" : "text-slate-400"}`}>+{l.elevation.toFixed(1)}</span>
+                  </button>
+                );
+              })}
+            </>)}
+            {levelMeta.length > 0 && activeLevelId && (
+              <Popover open={levelSettingsOpen} onOpenChange={setLevelSettingsOpen}>
+                <PopoverTrigger asChild>
+                  <button type="button" className="shrink-0 rounded px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100" title="Level settings" aria-label="Level settings">⚙</button>
+                </PopoverTrigger>
+                <PopoverContent side="left" align="start" className="w-64 space-y-2 p-3 text-xs">
+                  {(() => {
+                    const l = levelMeta.find((x) => x.id === activeLevelId);
+                    if (!l) return null;
+                    return (
+                      <>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Level</p>
+                        <label className="block">Name
+                          <input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.name} onChange={(e) => updateLevel(l.id, { name: e.target.value })} />
+                        </label>
+                        <div className="flex gap-2">
+                          <label className="block flex-1">Elevation (m)
+                            <input type="number" step="0.05" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.elevation}
+                              onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) updateLevel(l.id, { elevation: v }); }} />
+                          </label>
+                          <label className="block flex-1">Height (m)
+                            <input type="number" step="0.05" min="0.5" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.height}
+                              onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) updateLevel(l.id, { height: v }); }} />
+                          </label>
+                        </div>
+                        <button type="button" className="w-full rounded border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50" onClick={() => deleteLevel(l.id)}>Delete this level</button>
+                      </>
+                    );
+                  })()}
+                </PopoverContent>
+              </Popover>
+            )}
+            <button type="button" onClick={() => addLevel()} className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50" title="Add a level on top" aria-label="Add level">+ Level</button>
+          </div>
+        </>)}
         {/* Drawing Layers — AutoCAD-style. Each row: visible, locked, color, name, active radio, delete.
             The Site-related layers (Buildable / Footprint / Basement / Inset Area) are pulled out
             into a foldable "Site" group so they don't dominate the list. */}
@@ -29202,67 +29350,6 @@ User request: ${aiPrompt.trim()}`;
     </Popover>
   );
 
-  const viewModePopover = (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" title="View Mode" aria-label="View Mode">
-          <Eye className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-56" side="bottom" sideOffset={8}>
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">2D / 3D</p>
-        <div className="mb-3 flex flex-row overflow-hidden rounded-md border border-slate-200">
-          <button
-            type="button"
-            onClick={() => setViewMode("2d")}
-            className={`flex-1 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "2d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "2d"}
-            title="2D view"
-          >
-            2D
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("3d")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "3d" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "3d"}
-            title="3D view"
-          >
-            3D
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("both")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "both" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "both"}
-            title="Split view — 2D left, 3D right"
-          >
-            Both
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("views")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "views" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "views"}
-            title="Orthographic views — plan centre, Back top / Front bottom / Left / Right"
-          >
-            Views
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("layout")}
-            className={`flex-1 border-l border-slate-200 px-2 py-1 text-[11px] font-semibold transition ${viewMode === "layout" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            aria-pressed={viewMode === "layout"}
-            title="Layout sheet — plan as a viewport in a paper template (border, north arrow, title block)"
-          >
-            Layout
-          </button>
-        </div>
-        {/* View Mode / Filling Mode / Placement Mode controls removed — wall rendering, fill and object
-            placement are now driven by the Flow engine. Only the 2D / 3D / Both toggle remains here. */}
-      </PopoverContent>
-    </Popover>
-  );
 
   // Snapping content moved into the Default Settings popover. The
   // top bar no longer shows a separate Snapping button.
@@ -29320,16 +29407,6 @@ User request: ${aiPrompt.trim()}`;
         </div>
         {/* Connect Claude + Push (dev server only) — moved here from the header and the screen corner. */}
         <div className="mb-3 flex flex-col gap-1.5 border-b border-slate-100 pb-3">
-          {/* Phase (Plan | Build | Present) and render mode (Geometry | Primitives | Detailed) — moved here
-              from the header / canvas corners. */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Phase</span>
-            <PhaseToggle />
-          </div>
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Render</span>
-            <RenderModeToggle />
-          </div>
           <ConnectClaudeButton variant="row" />
           {import.meta.env.DEV && <PushButton inline />}
         </div>
@@ -29362,6 +29439,17 @@ User request: ${aiPrompt.trim()}`;
               import, so the tags survive a hand-off. */}
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Project</p>
+            {/* Project actions — moved here from the old top-right Files menu. Import… / Export… live on the Chat
+                bar; they are repeated here only while the Chat is hidden, so they never disappear with it. */}
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]" title="Save to project (Ctrl+S)" onClick={() => void saveModel()}><Save className="h-3.5 w-3.5" />Save</Button>
+              <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]" title="Reload from project" onClick={() => void loadModel()}><FolderOpen className="h-3.5 w-3.5" />Reload</Button>
+              {!uiPrefs.showChat && (<>
+                <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]" title="Import a file into the canvas" onClick={() => setImportPickerOpen(true)}><Upload className="h-3.5 w-3.5" />Import…</Button>
+                <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]" title="Export the plan" onClick={() => setExportPickerOpen(true)}><Download className="h-3.5 w-3.5" />Export…</Button>
+              </>)}
+              <Button variant="outline" size="sm" className="ml-auto h-7 gap-1 border-red-200 px-2 text-[11px] text-red-600 hover:bg-red-50" title="New empty document (asks first)" onClick={() => handleNewDocument()}><FilePlus2 className="h-3.5 w-3.5" />New</Button>
+            </div>
             <label className="block">
               <span className="text-[11px] font-medium text-slate-700">Keywords</span>
               <input
@@ -30709,7 +30797,7 @@ User request: ${aiPrompt.trim()}`;
   );
 
   return (
-    <div className="h-screen w-full bg-slate-50 text-slate-900">
+    <div className={`${isMobile ? "h-[100dvh] overflow-hidden" : "h-screen"} w-full bg-slate-50 text-slate-900`}>
       <div className="flex min-h-16 items-center justify-between gap-2 overflow-x-auto border-b bg-white px-3 py-2 shadow-sm">
         <div className="flex shrink-0 items-center gap-2">
           <img src="/builderpluss-logo.svg" alt="BUILDERPLUSS" className="h-7 w-auto" />
@@ -30718,37 +30806,13 @@ User request: ${aiPrompt.trim()}`;
           </p>
 
         </div>
-        {/* Top-right toolbar: Files block + View block moved here from the left
-            sidebar. Files first (import/save/load/export), then a thin divider, then
-            View (2D/3D toggle, Snapping/Layers/View Mode/Default-Settings popovers). */}
+        {/* Top-right toolbar: Preferences, Layers (with Levels), View Mode. The old Files menu is gone:
+            Import… / Export… live on the Chat bar, New / Save / Reload in Preferences ▸ Project. */}
         <div className="flex shrink-0 items-center gap-1">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Files (import / save / export)" aria-label="Files">
-                <FolderOpen className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent side="bottom" align="end" className="w-auto p-2 shadow-xl" sideOffset={6}>
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Files</p>
-              {/* New — document-create action; first in the File menu, like every desktop app. Confirms before wiping. */}
-              <div className="mb-2 flex justify-center">
-                <ToolButton active={false} icon={<FilePlus2 className="h-4 w-4 text-emerald-600" />} label="New" onClick={handleNewDocument} />
-              </div>
-              <div className="grid grid-cols-2 place-items-center gap-2">
-                {/* One Import… and one Export…: each opens a picker of every kind (FilePickerDialog). The
-                    underlay's settings (opacity / scale / calibrate) stay on the left toolbar's plan import. */}
-                <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import…" onClick={() => setImportPickerOpen(true)} />
-                <ToolButton active={false} icon={<Download className="h-4 w-4" />} label="Export…" onClick={() => setExportPickerOpen(true)} />
-                <ToolButton active={false} icon={<Save className="h-4 w-4" />} label="Save to project" onClick={() => void saveModel()} />
-                <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Reload from project" onClick={() => void loadModel()} />
-              </div>
-            </PopoverContent>
-          </Popover>
-          <div className="mx-1 h-6 w-px bg-slate-200" />
-          {/* 2D/3D toggle moved into the View Mode popover. */}
+          {/* View / Phase / Render live in the Layers popover; Theme flips light / dark. */}
+          <ThemeToggle />
           {settingsPopover}
           {layersPopover}
-          {viewModePopover}
           {defaultSettingsPopover}
         </div>
         <input ref={jsonInputRef} type="file" accept=".json" onChange={importJsonFile} className="hidden" />
@@ -31156,7 +31220,6 @@ User request: ${aiPrompt.trim()}`;
                   <>
                     {settingsPopover}
                     {layersPopover}
-                    {viewModePopover}
                   </>
                 )}
                 defaultSettingsPopover={defaultSettingsPopover}
@@ -31203,7 +31266,8 @@ User request: ${aiPrompt.trim()}`;
         <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
         <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
         {/* Navigation tools float at the top centre of the canvas (Phase + render mode live in Preferences). */}
-        <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-md backdrop-blur">
+        {/* Phone: docked flush to the canvas top edge, between the two edge chevrons (navigator left, Properties right). */}
+        <div className={`absolute left-1/2 z-30 -translate-x-1/2 border border-slate-200 bg-white/95 p-1 shadow-md backdrop-blur ${isMobile ? "top-0 rounded-b-xl border-t-0" : "top-3 rounded-xl"}`}>
           {/* Top-center toolbar: Pan / Undo / Redo / Reset view / Zoom extents — navigation
               actions moved out of the Drawing left-sidebar group. */}
           <div className="flex shrink-0 items-center gap-1">
@@ -31244,6 +31308,8 @@ User request: ${aiPrompt.trim()}`;
             present (full tool-loop: canvas + Flow + parametric library); Import loads agent files from
             the Library's Agents/ folder, each with its own instructions, tool allow-list and resource grants. */}
         {uiPrefs.showChat && <ChatAIPanel
+          onImportCanvas={() => setImportPickerOpen(true)}
+          onExport={() => setExportPickerOpen(true)}
           messages={aiMessages}
           busy={aiSendBusy}
           collapsed={aiCollapsed}
@@ -31433,89 +31499,16 @@ User request: ${aiPrompt.trim()}`;
               Objects hidden at this zoom · zoom in to see them
             </div>
           )}
-          {/* LEVEL TABS — one sheet per storey (see ./levels.ts). 2D edits the active sheet; 3D stacks them all.
-              Bottom-right (bottom-left is taken by the Flow button); hidden in Layout (paper-space) mode. */}
+          {/* Live-sync pill for a linked Library design. The level tabs moved into the Layer visibility popover.
+              Bottom-right; hidden in Layout (paper-space) mode. */}
           {linkedDesign && viewMode !== "layout" && (
             <div
-              className="absolute bottom-12 right-2 z-30 flex items-center gap-1.5 rounded-md border border-emerald-200 bg-white/95 px-2 py-1 text-[11px] text-slate-600 shadow-sm"
+              className="absolute bottom-2 right-2 z-30 flex items-center gap-1.5 rounded-md border border-emerald-200 bg-white/95 px-2 py-1 text-[11px] text-slate-600 shadow-sm"
               title={`Live: edits saved to ${linkedDesign} in the Library (by the design MCP, another tab or a script) appear here automatically`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
               <span className="max-w-[16rem] truncate">Live · {linkedDesign.replace(/^Designs\//, "")}</span>
               <button type="button" className="ml-1 text-slate-400 hover:text-slate-700" aria-label="Stop live sync" title="Stop live sync" onClick={() => setLinkedDesign(null)}>×</button>
-            </div>
-          )}
-          {viewMode !== "layout" && (
-            <div className="absolute bottom-2 right-2 z-30 flex max-w-[70%] items-center gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm" role="tablist" aria-label="Levels">
-              {levelMeta.length === 0 ? (
-                <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white" role="tab" aria-selected="true">Single level</span>
-              ) : (<>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={show3dAllLevels}
-                  title="3D: show every level stacked (2D keeps editing the selected level)"
-                  onClick={() => setShow3dAllLevels(true)}
-                  className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${show3dAllLevels ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-                >All</button>
-                {show3dAllLevels && (
-                  <label className="flex shrink-0 cursor-pointer items-center gap-1 px-1 text-[11px] text-slate-600" title="Shell: exterior walls, doors, windows and slabs only — fast for a whole building. Off: every object on every level.">
-                    <input type="checkbox" checked={show3dShell} onChange={(e) => setShow3dShell(e.target.checked)} />
-                    Shell
-                  </label>
-                )}
-                {sortLevels(levelMeta).map((l) => {
-                  const on = l.id === activeLevelId && !show3dAllLevels;
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={on}
-                      title={`${l.name} — +${l.elevation.toFixed(2)} m, ${l.height.toFixed(2)} m high${on ? " (double-click to edit)" : ""}`}
-                      onClick={() => { setShow3dAllLevels(false); switchLevel(l.id); }}
-                      onDoubleClick={() => on && setLevelSettingsOpen(true)}
-                      className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold transition ${on ? "bg-slate-900 text-white" : l.id === activeLevelId ? "bg-slate-200 text-slate-800" : "text-slate-600 hover:bg-slate-100"}`}
-                    >
-                      {l.name}
-                      <span className={`ml-1 font-normal ${on ? "text-slate-300" : "text-slate-400"}`}>+{l.elevation.toFixed(1)}</span>
-                    </button>
-                  );
-                })}
-              </>)}
-              {levelMeta.length > 0 && activeLevelId && (
-                <Popover open={levelSettingsOpen} onOpenChange={setLevelSettingsOpen}>
-                  <PopoverTrigger asChild>
-                    <button type="button" className="shrink-0 rounded px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100" title="Level settings" aria-label="Level settings">⚙</button>
-                  </PopoverTrigger>
-                  <PopoverContent side="top" align="start" className="w-64 space-y-2 p-3 text-xs">
-                    {(() => {
-                      const l = levelMeta.find((x) => x.id === activeLevelId);
-                      if (!l) return null;
-                      return (
-                        <>
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Level</p>
-                          <label className="block">Name
-                            <input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.name} onChange={(e) => updateLevel(l.id, { name: e.target.value })} />
-                          </label>
-                          <div className="flex gap-2">
-                            <label className="block flex-1">Elevation (m)
-                              <input type="number" step="0.05" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.elevation}
-                                onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) updateLevel(l.id, { elevation: v }); }} />
-                            </label>
-                            <label className="block flex-1">Height (m)
-                              <input type="number" step="0.05" min="0.5" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" value={l.height}
-                                onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) updateLevel(l.id, { height: v }); }} />
-                            </label>
-                          </div>
-                          <button type="button" className="w-full rounded border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50" onClick={() => deleteLevel(l.id)}>Delete this level</button>
-                        </>
-                      );
-                    })()}
-                  </PopoverContent>
-                </Popover>
-              )}
-              <button type="button" onClick={addLevel} className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50" title="Add a level on top" aria-label="Add level">+ Level</button>
             </div>
           )}
           {/* Group bar (grouped documents): where you are in the group tree, and the selected group. */}
@@ -39729,7 +39722,7 @@ User request: ${aiPrompt.trim()}`;
           {!isRightPanelCollapsed && (
             <button
               type="button"
-              className="absolute right-2 top-1/2 z-10 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
+              className={`absolute right-2 z-10 inline-flex h-7 w-7 ${isMobile ? "top-2" : "top-1/2 -translate-y-1/2"} `+" items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"}
               onClick={toggleProperties}
               title={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
               aria-label={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
