@@ -7,8 +7,8 @@
  *
  *  WHOSE KEYS. The browser may send its own Cloudflare R2 keys (Preferences ▸ Cloudflare R2) as
  *  x-r2-endpoint / x-r2-access-key-id / x-r2-secret-access-key / x-r2-bucket headers, and then this signs
- *  with those. On Vercel that is the ONLY way in — the function has no keys of its own, so nobody without
- *  keys can touch the bucket. The dev server falls back to the R2_* keys in .env when none are sent. */
+ *  with those. Otherwise the server's own R2_* keys sign: on Vercel reads are open (the bucket is public
+ *  anyway) and writes need an x-library-token from MCP_TOKENS; the dev server needs nothing. */
 
 import path from "node:path";
 import crypto from "node:crypto";
@@ -150,6 +150,15 @@ const buildR2Tree = (objects, publicUrl) => {
 /** R2's S3 endpoint and nothing else — the function must not become a signed proxy to arbitrary hosts. */
 const R2_ENDPOINT_RE = /^https:\/\/[a-z0-9]+\.(?:[a-z]+\.)?r2\.cloudflarestorage\.com\/?$/i;
 
+/** True when the request's x-library-token matches one of `tokens` ([{ name, hash }] — sha256 hashes, as
+ *  libraryMcpConfig builds them from MCP_TOKENS). Constant-time compare. */
+const libraryTokenOk = (req, tokens) => {
+  const t = String(req.headers["x-library-token"] ?? "").trim();
+  if (!t || !tokens?.length) return false;
+  const h = crypto.createHash("sha256").update(t).digest();
+  return tokens.some((k) => crypto.timingSafeEqual(k.hash, h));
+};
+
 /** The bucket config carried by the request's x-r2-* headers, or null when they are absent / incomplete. */
 const configFromHeaders = (req, publicUrl, prefix) => {
   const h = (name) => String(req.headers[name] ?? "").trim();
@@ -170,20 +179,27 @@ const configFromHeaders = (req, publicUrl, prefix) => {
  *  (the dev server) — otherwise the request must bring its own keys. `uploadLimit` is in bytes. */
 export async function handleR2(req, res, envCfg, route, url, opts = {}) {
   try {
-    const cfg =
-      configFromHeaders(req, envCfg?.publicUrl ?? opts.publicUrl, envCfg?.prefix) ?? (opts.allowEnvConfig ? envCfg : null);
+    const headerCfg = configFromHeaders(req, envCfg?.publicUrl ?? opts.publicUrl, envCfg?.prefix);
+    // Deployed: the server's own keys (Vercel env) sign every READ; a WRITE (save / upload / delete) also
+    // needs a library token from MCP_TOKENS in the x-library-token header. Dev (allowEnvConfig): no gate.
+    const tokenOk = libraryTokenOk(req, opts.tokens);
+    const isWrite = req.method !== "GET";
+    const envAllowed = !!envCfg && (opts.allowEnvConfig || tokenOk || !isWrite);
+    const cfg = headerCfg ?? (envAllowed ? envCfg : null);
 
-    // GET /status → whether the bucket is usable with the keys at hand, and where reads point.
+    // GET /status → whether the bucket is writable with what this browser holds, and where reads point.
     if (req.method === "GET" && route === "/status") {
       return sendJson(res, 200, {
         ok: true,
-        configured: !!cfg,
+        configured: !!(headerCfg || (envCfg && (opts.allowEnvConfig || tokenOk))),
+        listable: !!cfg,
+        tokenRequired: !!envCfg && !opts.allowEnvConfig,
         bucket: cfg?.bucket ?? "",
         publicUrl: cfg?.publicUrl ?? "",
         prefix: cfg?.prefix ?? "",
       });
     }
-    if (!cfg) return sendJson(res, 401, { error: "no Cloudflare R2 keys — enter them in Preferences ▸ Cloudflare R2" });
+    if (!cfg) return sendJson(res, 401, { error: envCfg ? "writing needs a library token — enter it in Preferences ▸ Cloud Library" : "the server has no R2 keys (set R2_* in the Vercel env)" });
 
     // POST /save { path, content } → one object under the library prefix.
     if (req.method === "POST" && route === "/save") {

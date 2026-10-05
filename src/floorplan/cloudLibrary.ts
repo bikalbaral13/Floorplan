@@ -117,10 +117,33 @@ export function setR2Credentials(value: R2Credentials): void {
   statusPromise = null;
 }
 
-/** `fetch` for the `/__r2/*` bridge, carrying the stored keys as headers when all four are set. */
+/** Library token (one of the server's MCP_TOKENS) entered in Preferences ▸ Cloud Library. The deployed
+ *  bridge signs with the R2 keys in its own env; reads are open and writes need this token. Locally the dev
+ *  server needs nothing. Kept in THIS browser only. */
+const LIBRARY_TOKEN_KEY = "r2LibraryToken";
+
+export function libraryToken(): string {
+  try {
+    return localStorage.getItem(LIBRARY_TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setLibraryToken(value: string): void {
+  const t = value.trim();
+  try {
+    if (t) localStorage.setItem(LIBRARY_TOKEN_KEY, t);
+    else localStorage.removeItem(LIBRARY_TOKEN_KEY);
+    localStorage.removeItem(R2_CREDENTIALS_KEY); // the old four-key form is gone; drop what it left behind
+  } catch { /* storage blocked — the token just won't persist */ }
+  statusPromise = null;
+}
+
+/** `fetch` for the `/__r2/*` bridge: the library token when set, and any legacy R2 keys still stored. */
 function r2Fetch(url: string, init: RequestInit = {}): Promise<Response> {
   const c = r2Credentials();
-  const keys = c.endpoint && c.accessKeyId && c.secretAccessKey && c.bucket
+  const keys: Record<string, string> = c.endpoint && c.accessKeyId && c.secretAccessKey && c.bucket
     ? {
         "x-r2-endpoint": c.endpoint,
         "x-r2-access-key-id": c.accessKeyId,
@@ -128,6 +151,8 @@ function r2Fetch(url: string, init: RequestInit = {}): Promise<Response> {
         "x-r2-bucket": c.bucket,
       }
     : {};
+  const token = libraryToken();
+  if (token) keys["x-library-token"] = token;
   return fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...keys } });
 }
 
