@@ -1,0 +1,41 @@
+{
+ "code": "MT-22",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Lighting / textile",
+ "item": "Brass heated towel ladder",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 600,
+  "W": 44,
+  "H": 1200
+ },
+ "params": {
+  "type": "heated towel ladder",
+  "scatter_on": "host top"
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2378,
+   "y": 700,
+   "z": "host",
+   "rot": 90
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

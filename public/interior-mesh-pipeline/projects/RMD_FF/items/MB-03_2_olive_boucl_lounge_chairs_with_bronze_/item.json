@@ -1,0 +1,58 @@
+{
+ "code": "MB-03",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Furniture",
+ "item": "2 olive bouclé lounge chairs with bronze side table",
+ "family": "CHAIR_LOUNGE",
+ "host": "floor",
+ "qty": 3,
+ "size": {
+  "L": 760,
+  "W": 760,
+  "H": 800
+ },
+ "params": {
+  "seat_h": 400,
+  "back_h": 800,
+  "arm": "rounded",
+  "leg": "tapered bronze",
+  "leg_h": 150
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1100,
+   "y": 7650,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 2150,
+   "y": 7650,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 3,
+   "x": 1625,
+   "y": 7850,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "by the balcony glazing; access via the right-hand sliding panel",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

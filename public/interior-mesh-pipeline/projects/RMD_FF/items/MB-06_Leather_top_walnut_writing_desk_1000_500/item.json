@@ -1,0 +1,43 @@
+{
+ "code": "MB-06",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Furniture",
+ "item": "Leather-top walnut writing desk 1000×500 with bouclé chair",
+ "family": "DESK",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1000,
+  "W": 500,
+  "H": 750
+ },
+ "params": {
+  "top_t": 30,
+  "leather_inset": true,
+  "drawer_count": 1,
+  "leg": "panel + brass shoe"
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2800,
+   "y": 4045,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "chair clear of the bed and WIW door swing",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

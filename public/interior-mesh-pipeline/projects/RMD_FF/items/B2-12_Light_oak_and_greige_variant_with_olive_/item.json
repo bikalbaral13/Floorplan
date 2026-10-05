@@ -1,0 +1,40 @@
+{
+ "code": "B2-12",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Finish",
+ "item": "Light-oak and greige variant with olive accents",
+ "family": "FINISH_WALL",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 3886,
+  "W": 3733,
+  "H": 0
+ },
+ "params": {
+  "apply_to": "all walls"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9578,
+   "y": 10374,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

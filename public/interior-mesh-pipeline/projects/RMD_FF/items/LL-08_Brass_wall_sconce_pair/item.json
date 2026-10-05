@@ -1,0 +1,48 @@
+{
+ "code": "LL-08",
+ "project": "RMD_FF",
+ "space": "Lift lobby (in upper lounge)",
+ "space_code": "LL",
+ "category": "Lighting / textile",
+ "item": "Brass wall sconce pair",
+ "family": "LIGHT_SCONCE",
+ "host": "wall",
+ "qty": 2,
+ "size": {
+  "L": 180,
+  "W": 180,
+  "H": 200
+ },
+ "params": {
+  "style": "brass",
+  "centre_h": 1600
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5600,
+   "y": 8170,
+   "z": 1500,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 6440,
+   "y": 8170,
+   "z": 1500,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4300,
+  7000,
+  6600,
+  10052
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

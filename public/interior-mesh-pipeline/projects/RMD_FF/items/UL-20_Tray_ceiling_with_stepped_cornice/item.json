@@ -1,0 +1,44 @@
+{
+ "code": "UL-20",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Finish",
+ "item": "Tray ceiling with stepped cornice",
+ "family": "CEILING_TRAY",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 3200,
+  "W": 2350,
+  "H": 200
+ },
+ "params": {
+  "inset": 400,
+  "steps": 2,
+  "cove_led": true,
+  "ceiling_h": 2750,
+  "tray_h": 2950
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6700,
+   "y": 6325,
+   "z": 2950,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

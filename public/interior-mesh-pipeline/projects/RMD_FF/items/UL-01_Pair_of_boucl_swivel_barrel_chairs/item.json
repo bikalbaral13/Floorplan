@@ -1,0 +1,51 @@
+{
+ "code": "UL-01",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Furniture",
+ "item": "Pair of bouclé swivel barrel chairs",
+ "family": "CHAIR_BARREL_SWIVEL",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 820,
+  "W": 820,
+  "H": 760
+ },
+ "params": {
+  "seat_h": 420,
+  "back_h": 760,
+  "shell_t": 90,
+  "base": "swivel disc Ø450",
+  "channels": 0
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7550,
+   "y": 5750,
+   "z": 0,
+   "rot": 270
+  },
+  {
+   "inst": 2,
+   "x": 7550,
+   "y": 6850,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,41 @@
+{
+ "code": "LB-08",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Décor",
+ "item": "Arched wall niche with shelves",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1500,
+  "W": 40,
+  "H": 1800
+ },
+ "params": {
+  "depth": 100,
+  "type": "arched niche with shelves"
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3975,
+   "y": 10650,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

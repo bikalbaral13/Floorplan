@@ -1,0 +1,41 @@
+{
+ "code": "UL-11",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Décor",
+ "item": "Coffee-table books",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 150
+ },
+ "params": {
+  "type": "books",
+  "scatter_on": "host top"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6600,
+   "y": 6150,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

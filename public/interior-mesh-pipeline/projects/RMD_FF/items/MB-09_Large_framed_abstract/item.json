@@ -1,0 +1,43 @@
+{
+ "code": "MB-09",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Décor",
+ "item": "Large framed abstract",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 900,
+  "W": 40,
+  "H": 1200
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2800,
+   "y": 3815,
+   "z": 900,
+   "rot": 180
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

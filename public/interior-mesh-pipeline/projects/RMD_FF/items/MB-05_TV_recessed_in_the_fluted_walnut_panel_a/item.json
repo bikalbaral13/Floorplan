@@ -1,0 +1,43 @@
+{
+ "code": "MB-05",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Furniture",
+ "item": "TV recessed in the fluted walnut panel above a walnut console 1600×400",
+ "family": "MEDIA_CONSOLE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1600,
+  "W": 400,
+  "H": 500
+ },
+ "params": {
+  "type": "floating",
+  "fronts": "flush",
+  "tv_size_in": 75,
+  "tv_recess_depth": 60
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 430,
+   "y": 5783,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

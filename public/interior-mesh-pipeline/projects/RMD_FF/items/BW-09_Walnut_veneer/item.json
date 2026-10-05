@@ -1,0 +1,40 @@
+{
+ "code": "BW-09",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 walk-in wardrobe",
+ "space_code": "BW",
+ "category": "Finish",
+ "item": "Walnut veneer",
+ "family": "FINISH_WALL",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 2080,
+  "W": 1713,
+  "H": 0
+ },
+ "params": {
+  "apply_to": "all walls"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11965,
+   "y": 3488,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  10925,
+  2632,
+  13005,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

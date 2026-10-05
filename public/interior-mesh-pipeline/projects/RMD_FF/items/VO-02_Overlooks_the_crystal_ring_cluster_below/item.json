@@ -1,0 +1,41 @@
+{
+ "code": "VO-02",
+ "project": "RMD_FF",
+ "space": "Void over GF lounge",
+ "space_code": "VO",
+ "category": "Décor",
+ "item": "Overlooks the crystal ring cluster below",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 1200,
+  "W": 1200,
+  "H": 150
+ },
+ "params": {
+  "type": "sightline marker (no geometry)",
+  "scatter_on": "host top"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11350,
+   "y": 6400,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  9287,
+  4559,
+  13005,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "skipped"
+}

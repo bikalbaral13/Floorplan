@@ -1,0 +1,41 @@
+{
+ "code": "LB-10",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Décor",
+ "item": "Trailing plants",
+ "family": "PLANT_SMALL",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 200,
+  "W": 200,
+  "H": 600
+ },
+ "params": {
+  "pot_d": 300,
+  "species": "trailing"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3770,
+   "y": 11000,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

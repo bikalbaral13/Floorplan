@@ -1,0 +1,41 @@
+{
+ "code": "BT-05",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Furniture",
+ "item": "Towel shelf",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 380,
+  "W": 40,
+  "H": 300
+ },
+ "params": {
+  "depth": 100,
+  "type": "towel shelf"
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12940,
+   "y": 1990,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,41 @@
+{
+ "code": "MB-11",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Décor",
+ "item": "Orchid",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 150
+ },
+ "params": {
+  "type": "orchid",
+  "scatter_on": "host top"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3600,
+   "y": 7100,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

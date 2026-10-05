@@ -1,0 +1,40 @@
+{
+ "code": "BT-16",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Lighting / textile",
+ "item": "Egyptian-cotton towels",
+ "family": "SOFT_SET",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 150
+ },
+ "params": {
+  "items": "towels + towel"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11100,
+   "y": 1650,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

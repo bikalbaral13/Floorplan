@@ -1,0 +1,49 @@
+{
+ "code": "B1-02",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "Walnut side tables ×2 with marble tops",
+ "family": "SIDE_TABLE",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 450,
+  "W": 450,
+  "H": 550
+ },
+ "params": {
+  "top_t": 25,
+  "drawer_count": 1,
+  "leg": "none"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8158,
+   "y": 555,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 10537,
+   "y": 555,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

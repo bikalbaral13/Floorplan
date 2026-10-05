@@ -1,0 +1,38 @@
+{
+ "code": "MW-18",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Lighting / textile",
+ "item": "Shelf LEDs (auto-on with doors)",
+ "family": "LIGHT_LED_STRIP",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 3200,
+  "W": 40,
+  "H": 10
+ },
+ "params": {},
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 835,
+   "y": 2000,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

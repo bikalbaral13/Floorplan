@@ -1,0 +1,43 @@
+{
+ "code": "LL-01",
+ "project": "RMD_FF",
+ "space": "Lift lobby (in upper lounge)",
+ "space_code": "LL",
+ "category": "Furniture",
+ "item": "Slim walnut console 800×300 with brass legs beside the lift door",
+ "family": "CONSOLE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 800,
+  "W": 300,
+  "H": 800
+ },
+ "params": {
+  "top_t": 40,
+  "leg": "brass legs",
+  "inlay": "brass 6 mm",
+  "drawer_count": 0
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6020,
+   "y": 8127,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4300,
+  7000,
+  6600,
+  10052
+ ],
+ "note": "in the 930 mm of wall between the lift and the vestibule door",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,43 @@
+{
+ "code": "BW-08",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 walk-in wardrobe",
+ "space_code": "BW",
+ "category": "Décor",
+ "item": "Limited-edition print",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 400,
+  "W": 40,
+  "H": 500
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12150,
+   "y": 2652,
+   "z": 1250,
+   "rot": 180
+  }
+ ],
+ "room": [
+  10925,
+  2632,
+  13005,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,40 @@
+{
+ "code": "BW-10",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 walk-in wardrobe",
+ "space_code": "BW",
+ "category": "Finish",
+ "item": "Leather-wrapped handles",
+ "family": "JOINERY_INSERT",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 0
+ },
+ "params": {
+  "insert": "handles"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12360,
+   "y": 3350,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  10925,
+  2632,
+  13005,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

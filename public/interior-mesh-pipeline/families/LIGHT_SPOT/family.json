@@ -1,0 +1,49 @@
+{
+ "family": "LIGHT_SPOT",
+ "version": "0.1.1",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "ceiling",
+ "pivot": "top-centre at the mount point",
+ "recipe": "Recessed downlight / uplight / picture light: trim ring Ø90 + recessed can Ø75 × 80 (or a small arm + bar 450 for a picture light, or ground uplight Ø70 × 110).",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 80,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "beam_deg": {
+   "value": 40,
+   "min": 0,
+   "max": 400
+  },
+  "type": {
+   "value": "picture light",
+   "description": "added by project RMD_FF"
+  }
+ },
+ "test_values": {}
+}

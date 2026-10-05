@@ -1,0 +1,48 @@
+{
+ "code": "SB-01",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Furniture",
+ "item": "2 slim teak lounge chairs with Sunbrella cushions",
+ "family": "OUTDOOR_LOUNGE_CHAIR",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 700,
+  "W": 700,
+  "H": 750
+ },
+ "params": {
+  "frame": "teak",
+  "slats": true
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12200,
+   "y": 9600,
+   "z": 0,
+   "rot": 270
+  },
+  {
+   "inst": 2,
+   "x": 12200,
+   "y": 11050,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

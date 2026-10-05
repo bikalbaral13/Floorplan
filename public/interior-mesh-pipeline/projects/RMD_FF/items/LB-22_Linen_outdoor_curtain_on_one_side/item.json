@@ -1,0 +1,43 @@
+{
+ "code": "LB-22",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Lighting / textile",
+ "item": "Linen outdoor curtain on one side",
+ "family": "CURTAIN",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 3400,
+  "W": 40,
+  "H": 2700
+ },
+ "params": {
+  "fullness": 2.2,
+  "fold_pitch": 160,
+  "track": "motorised ceiling",
+  "layers": "linen outdoor"
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 250,
+   "y": 10400,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

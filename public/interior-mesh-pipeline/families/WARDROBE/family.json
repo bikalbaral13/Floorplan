@@ -1,0 +1,70 @@
+{
+ "family": "WARDROBE",
+ "version": "0.1.1",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Run of door modules (≈door_w) along the length, depth 600, height H; upper third doors as 6 mm glass panels in 20 mm frames, lower doors solid; vertical bar handles 300 long; interior (only if doors are modelled open): rails, drawer stack, shelves. L-shape = two runs meeting at the corner.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 2700,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "depth": {
+   "value": 600,
+   "min": 0,
+   "max": 6000
+  },
+  "door_w": {
+   "value": 450,
+   "min": 0,
+   "max": 4500
+  },
+  "upper_glass": {
+   "value": "bronze-tinted"
+  },
+  "handles": {
+   "value": "leather-wrapped"
+  },
+  "interior": {
+   "value": "hanging+drawers+shelves"
+  },
+  "led": {
+   "value": "auto-on"
+  },
+  "plan": {
+   "value": "L-shape",
+   "description": "added by project RMD_FF"
+  },
+  "note": {
+   "value": "+ tall shelf unit (2nd instance)",
+   "description": "added by project RMD_FF"
+  }
+ },
+ "test_values": {}
+}

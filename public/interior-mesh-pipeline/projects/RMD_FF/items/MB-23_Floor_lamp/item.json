@@ -1,0 +1,40 @@
+{
+ "code": "MB-23",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Lighting / textile",
+ "item": "Floor lamp",
+ "family": "LIGHT_FLOOR_LAMP",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 300,
+  "W": 300,
+  "H": 1500
+ },
+ "params": {
+  "style": "brass reading"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2650,
+   "y": 7750,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,41 @@
+{
+ "code": "VO-03",
+ "project": "RMD_FF",
+ "space": "Void over GF lounge",
+ "space_code": "VO",
+ "category": "Décor",
+ "item": "Trailing plants spilling over the trough",
+ "family": "PLANT_SMALL",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 300,
+  "W": 300,
+  "H": 600
+ },
+ "params": {
+  "pot_d": 300,
+  "species": "trailing"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9162,
+   "y": 7050,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  9287,
+  4559,
+  13005,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,38 @@
+{
+ "code": "MT-19",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Lighting / textile",
+ "item": "Mirror backlight",
+ "family": "LIGHT_LED_STRIP",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 1300,
+  "W": 40,
+  "H": 10
+ },
+ "params": {},
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3950,
+   "y": 1800,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

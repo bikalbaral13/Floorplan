@@ -1,0 +1,42 @@
+{
+ "code": "UL-02",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Furniture",
+ "item": "Round travertine coffee table Ø700",
+ "family": "TABLE_ROUND",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 700,
+  "W": 700,
+  "H": 400
+ },
+ "params": {
+  "top_t": 40,
+  "base": "travertine drum",
+  "edge": "eased 6"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6750,
+   "y": 6300,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

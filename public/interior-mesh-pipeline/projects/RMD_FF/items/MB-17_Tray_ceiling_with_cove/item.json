@@ -1,0 +1,44 @@
+{
+ "code": "MB-17",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Finish",
+ "item": "Tray ceiling with cove",
+ "family": "CEILING_TRAY",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 2600,
+  "W": 2550,
+  "H": 200
+ },
+ "params": {
+  "inset": 400,
+  "steps": 2,
+  "cove_led": true,
+  "ceiling_h": 2750,
+  "tray_h": 2950
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2575,
+   "y": 5800,
+   "z": 2950,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

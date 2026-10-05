@@ -1,0 +1,42 @@
+{
+ "code": "B1-14",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Finish",
+ "item": "Walnut slat headboard with bronze trims",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 2900,
+  "W": 100,
+  "H": 2700
+ },
+ "params": {
+  "type": "walnut slats + bronze trims",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9350,
+   "y": 280,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

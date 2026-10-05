@@ -1,0 +1,45 @@
+{
+ "code": "B1-01",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "King bed 1829×1981 with walnut-slat headboard and taupe fabric panels",
+ "family": "BED_PLATFORM",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1981,
+  "W": 1829,
+  "H": 450
+ },
+ "params": {
+  "mattress_h": 250,
+  "base_h": 200,
+  "base_inset": 60,
+  "leg": "recessed plinth 60",
+  "bevel": 15,
+  "duvet_drape": 120
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9348,
+   "y": 1320,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

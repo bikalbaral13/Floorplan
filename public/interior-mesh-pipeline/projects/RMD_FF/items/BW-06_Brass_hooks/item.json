@@ -1,0 +1,41 @@
+{
+ "code": "BW-06",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 walk-in wardrobe",
+ "space_code": "BW",
+ "category": "Décor",
+ "item": "Brass hooks",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 150
+ },
+ "params": {
+  "type": "hooks",
+  "scatter_on": "host top"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11100,
+   "y": 3600,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  10925,
+  2632,
+  13005,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,43 @@
+{
+ "code": "LL-02",
+ "project": "RMD_FF",
+ "space": "Lift lobby (in upper lounge)",
+ "space_code": "LL",
+ "category": "Décor",
+ "item": "Round brass mirror",
+ "family": "MIRROR",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 500,
+  "W": 37,
+  "H": 900
+ },
+ "params": {
+  "shape": "round Ø500",
+  "frame": "brass",
+  "backlight": false,
+  "centre_h": 1500
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6020,
+   "y": 8258,
+   "z": 1050,
+   "rot": 180
+  }
+ ],
+ "room": [
+  4300,
+  7000,
+  6600,
+  10052
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

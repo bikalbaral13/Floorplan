@@ -1,0 +1,40 @@
+{
+ "code": "LB-21",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Lighting / textile",
+ "item": "Outdoor throws",
+ "family": "SOFT_SET",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 150
+ },
+ "params": {
+  "items": "throw"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1300,
+   "y": 9900,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

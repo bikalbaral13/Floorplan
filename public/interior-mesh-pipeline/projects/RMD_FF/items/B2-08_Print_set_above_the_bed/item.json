@@ -1,0 +1,43 @@
+{
+ "code": "B2-08",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Décor",
+ "item": "Print set above the bed",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 3,
+ "size": {
+  "L": 1400,
+  "W": 40,
+  "H": 500
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9400,
+   "y": 8624,
+   "z": 1250,
+   "rot": 180
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

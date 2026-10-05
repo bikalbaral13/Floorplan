@@ -1,0 +1,43 @@
+{
+ "code": "MW-09",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Décor",
+ "item": "Bronze-framed full-length mirror",
+ "family": "MIRROR",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 600,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "shape": "full-length 600×2000",
+  "frame": "bronze",
+  "backlight": false,
+  "centre_h": 1500
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1250,
+   "y": 250,
+   "z": 1050,
+   "rot": 180
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

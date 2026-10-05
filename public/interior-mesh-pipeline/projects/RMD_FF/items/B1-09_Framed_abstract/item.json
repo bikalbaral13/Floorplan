@@ -1,0 +1,43 @@
+{
+ "code": "B1-09",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Décor",
+ "item": "Framed abstract",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1000,
+  "W": 40,
+  "H": 1200
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 10905,
+   "y": 1700,
+   "z": 900,
+   "rot": 270
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

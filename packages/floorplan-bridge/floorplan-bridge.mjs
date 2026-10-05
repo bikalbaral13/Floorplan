@@ -13,7 +13,7 @@
 
 import http from "node:http";
 import { groupedTools, resolveCall, describeOps } from "./toolGroups.mjs";
-import { TOOLS, DEFAULT_TIMEOUT_MS, CHECKPOINT_TIMEOUT_MS, newRunState, stepGate } from "./tools.mjs";
+import { TOOLS, DEFAULT_TIMEOUT_MS, CHECKPOINT_TIMEOUT_MS, newRunState, stepGate, timeoutFor } from "./tools.mjs";
 
 const HTTP_PORT = Number(process.env.FP_BRIDGE_PORT || 41414);
 
@@ -24,7 +24,7 @@ const waiters = [];        // pending long-poll responders waiting for a command
 const pending = new Map(); // command id → { resolve, reject, timer }
 
 
-function enqueueCommand(tool, args, timeoutMs = tool === "checkpoint" ? CHECKPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS) {
+function enqueueCommand(tool, args, timeoutMs = timeoutFor(tool)) {
   const id = `c${++seq}`;
   const cmd = { id, tool, args };
   return new Promise((resolve, reject) => {

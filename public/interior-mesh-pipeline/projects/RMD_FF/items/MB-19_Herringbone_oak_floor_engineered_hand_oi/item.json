@@ -1,0 +1,41 @@
+{
+ "code": "MB-19",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Finish",
+ "item": "Herringbone oak floor (engineered, hand-oiled)",
+ "family": "FINISH_FLOOR",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 4482,
+  "W": 3810,
+  "H": 15
+ },
+ "params": {
+  "pattern": "herringbone oak 600×90",
+  "grout": 2
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2135,
+   "y": 6036,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

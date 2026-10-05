@@ -1,0 +1,43 @@
+{
+ "code": "BT-03",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Furniture",
+ "item": "Shower 900×1000 with frameless glass",
+ "family": "SHOWER_ENCLOSURE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 955,
+  "W": 855,
+  "H": 2100
+ },
+ "params": {
+  "tray": "flush microcement",
+  "glass": "frameless low-iron 10 mm",
+  "drain": "linear brass",
+  "rain_head": "Ø300 brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11472,
+   "y": 752,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

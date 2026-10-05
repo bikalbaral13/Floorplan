@@ -1,0 +1,40 @@
+{
+ "code": "LL-04",
+ "project": "RMD_FF",
+ "space": "Lift lobby (in upper lounge)",
+ "space_code": "LL",
+ "category": "Décor",
+ "item": "Brass lift fascia and floor indicator",
+ "family": "LIFT_FINISH",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1010,
+  "W": 40,
+  "H": 2100
+ },
+ "params": {
+  "type": "brass fascia + indicator"
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5049,
+   "y": 8257,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  4300,
+  7000,
+  6600,
+  10052
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

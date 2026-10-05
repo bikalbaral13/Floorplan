@@ -1,0 +1,49 @@
+{
+ "code": "UL-06",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Furniture",
+ "item": "Walnut drum side tables ×2 Ø450 with marble tops",
+ "family": "TABLE_DRUM",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 450,
+  "W": 450,
+  "H": 500
+ },
+ "params": {
+  "top_t": 20,
+  "body": "walnut drum",
+  "top_inset": 0
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5575,
+   "y": 5230,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 5575,
+   "y": 7370,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

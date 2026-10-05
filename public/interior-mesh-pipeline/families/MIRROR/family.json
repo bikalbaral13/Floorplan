@@ -1,0 +1,54 @@
+{
+ "family": "MIRROR",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "wall",
+ "pivot": "back-bottom-centre on the wall plane (body toward -Y)",
+ "recipe": "Mirror plate (5 mm) with outline per shape: round/oval = ellipse, organic = closed spline with ±7% wobble, strip/full-length = rounded rectangle; frame = swept tube Ø8–20 or flat band along the outline; 10 mm backing; centre_h.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 900,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "shape": {
+   "value": "organic"
+  },
+  "frame": {
+   "value": "brass 8"
+  },
+  "backlight": {
+   "value": false
+  },
+  "centre_h": {
+   "value": 1500,
+   "min": 0,
+   "max": 15000
+  }
+ },
+ "test_values": {}
+}

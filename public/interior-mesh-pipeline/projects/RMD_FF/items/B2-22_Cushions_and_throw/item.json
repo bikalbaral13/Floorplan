@@ -1,0 +1,40 @@
+{
+ "code": "B2-22",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Lighting / textile",
+ "item": "Cushions and throw",
+ "family": "SOFT_SET",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 150
+ },
+ "params": {
+  "items": "cushion + throw"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9410,
+   "y": 8900,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

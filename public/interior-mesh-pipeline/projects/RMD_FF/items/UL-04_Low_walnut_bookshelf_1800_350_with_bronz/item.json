@@ -1,0 +1,43 @@
+{
+ "code": "UL-04",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Furniture",
+ "item": "Low walnut bookshelf 1800×350 with bronze-framed glass ends",
+ "family": "BOOKSHELF_LOW",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1400,
+  "W": 350,
+  "H": 900
+ },
+ "params": {
+  "shelves": 2,
+  "bay_w": 480,
+  "end_panels": "bronze-framed glass",
+  "plinth": 60
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8540,
+   "y": 4734,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "fitted at 1450 — full length of the solid wall",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,41 @@
+{
+ "code": "SB-03",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Furniture",
+ "item": "Narrow planter along the railing",
+ "family": "PLANTER_TROUGH",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 3350,
+  "W": 205,
+  "H": 400
+ },
+ "params": {
+  "wall_t": 30,
+  "plants": "trailing"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12858,
+   "y": 10375,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

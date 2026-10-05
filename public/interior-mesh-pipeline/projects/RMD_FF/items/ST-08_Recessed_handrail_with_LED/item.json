@@ -1,0 +1,40 @@
+{
+ "code": "ST-08",
+ "project": "RMD_FF",
+ "space": "Staircase",
+ "space_code": "ST",
+ "category": "Finish",
+ "item": "Recessed handrail with LED",
+ "family": "LIGHT_LED_STRIP",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 3100,
+  "W": 41,
+  "H": 10
+ },
+ "params": {
+  "type": "recessed handrail LED"
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6390,
+   "y": 2750,
+   "z": "host",
+   "rot": 270
+  }
+ ],
+ "room": [
+  4238,
+  230,
+  6411,
+  4559
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

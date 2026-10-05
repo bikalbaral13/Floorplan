@@ -1,0 +1,46 @@
+{
+ "family": "ACCESSORY",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "host",
+ "pivot": "bottom-centre (snapped onto its host)",
+ "recipe": "Small objects from primitives / revolves, dropped onto the host surface at the marked point: vase / bottle (revolved profile, hollow), bowl (shallow revolve), tray (lofted rounded rectangle with walls), books (stack of rounded boxes with cover/pages split), candles (cylinder + holder revolve), diffuser (bottle + 8 reed sticks Ø3), towel ladder (2 uprights Ø25 + bars Ø16), tub filler (floor column + spout), shower/tap set (swept spouts, cylinders). Keep each under ~5k tris.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 150,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "type": {
+   "value": "auto"
+  },
+  "scatter_on": {
+   "value": "host top"
+  }
+ },
+ "test_values": {}
+}

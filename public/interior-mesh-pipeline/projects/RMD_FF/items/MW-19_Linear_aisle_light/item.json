@@ -1,0 +1,40 @@
+{
+ "code": "MW-19",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Lighting / textile",
+ "item": "Linear aisle light",
+ "family": "LIGHT_LINEAR",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 2400,
+  "W": 40,
+  "H": 40
+ },
+ "params": {
+  "profile": "recessed 40"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1247,
+   "y": 2300,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

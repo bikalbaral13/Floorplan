@@ -1,0 +1,44 @@
+{
+ "code": "UL-16",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Finish",
+ "item": "White ogee panels",
+ "family": "WALL_PANEL_OGEE",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 5049,
+  "W": 3718,
+  "H": 2550
+ },
+ "params": {
+  "profile": "40×20 ogee",
+  "dado_h": 880,
+  "skirting_h": 120,
+  "cornice_h": 150,
+  "panel_w": "auto 600–900"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6762,
+   "y": 6418,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

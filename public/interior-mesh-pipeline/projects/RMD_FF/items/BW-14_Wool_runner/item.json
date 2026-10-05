@@ -1,0 +1,42 @@
+{
+ "code": "BW-14",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 walk-in wardrobe",
+ "space_code": "BW",
+ "category": "Lighting / textile",
+ "item": "Wool runner",
+ "family": "RUG",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1250,
+  "W": 700,
+  "H": 12
+ },
+ "params": {
+  "pile": "low",
+  "edge_bevel": 5,
+  "pattern": "tonal"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11675,
+   "y": 3150,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  10925,
+  2632,
+  13005,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

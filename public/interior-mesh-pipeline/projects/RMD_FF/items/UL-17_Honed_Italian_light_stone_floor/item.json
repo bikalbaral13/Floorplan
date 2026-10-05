@@ -1,0 +1,41 @@
+{
+ "code": "UL-17",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Finish",
+ "item": "Honed Italian light-stone floor",
+ "family": "FINISH_FLOOR",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 5049,
+  "W": 3718,
+  "H": 15
+ },
+ "params": {
+  "pattern": "honed stone 1200×600",
+  "grout": 2
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6762,
+   "y": 6418,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

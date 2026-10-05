@@ -1,0 +1,68 @@
+{
+ "family": "BED_PLATFORM",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Platform base: rounded box (L×W×base_h) with 15 mm edge radius, set back base_inset from a recessed plinth (60 mm high, inset 60). Mattress: rounded box W−80 × L−80 × mattress_h, 40 mm corner radius, on the base. Duvet: thin surface (20 mm) over the mattress top, draped 120 mm down the sides and foot with soft folds (low-frequency displacement 4–6 mm), turned down 350 mm at the head. Pillows: 2–4 pillow volumes (pillow_w 700 × 450 × 160, crowned) leaning 15° at the head. Head is at +Y, foot (front) at −Y. Headboard walls are separate items.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 450,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "mattress_h": {
+   "value": 250,
+   "min": 0,
+   "max": 2500
+  },
+  "base_h": {
+   "value": 200,
+   "min": 0,
+   "max": 2000
+  },
+  "base_inset": {
+   "value": 60,
+   "min": 0,
+   "max": 600
+  },
+  "leg": {
+   "value": "recessed plinth 60"
+  },
+  "bevel": {
+   "value": 15,
+   "min": 0,
+   "max": 150
+  },
+  "duvet_drape": {
+   "value": 120,
+   "min": 0,
+   "max": 1200
+  }
+ },
+ "test_values": {}
+}

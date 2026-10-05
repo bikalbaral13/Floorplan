@@ -1,0 +1,43 @@
+{
+ "code": "MB-08",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Décor",
+ "item": "Botanical art pair",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 2,
+ "size": {
+  "L": 850,
+  "W": 40,
+  "H": 600
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 825,
+   "y": 3815,
+   "z": 1200,
+   "rot": 180
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,41 @@
+{
+ "code": "LB-15",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Finish",
+ "item": "Timber slat soffit",
+ "family": "SOFFIT_SLAT",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 3500,
+  "W": 3400,
+  "H": 60
+ },
+ "params": {
+  "slat_w": 70,
+  "gap": 15
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2150,
+   "y": 10400,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

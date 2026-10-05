@@ -1,0 +1,40 @@
+{
+ "code": "SB-08",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Finish",
+ "item": "Textured plaster",
+ "family": "FINISH_WALL",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 3733,
+  "W": 1255,
+  "H": 0
+ },
+ "params": {
+  "apply_to": "all walls"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12378,
+   "y": 10374,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

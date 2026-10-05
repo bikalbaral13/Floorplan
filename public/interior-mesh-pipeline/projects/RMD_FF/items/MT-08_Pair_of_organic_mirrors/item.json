@@ -1,0 +1,43 @@
+{
+ "code": "MT-08",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Décor",
+ "item": "Pair of organic mirrors",
+ "family": "MIRROR",
+ "host": "wall",
+ "qty": 2,
+ "size": {
+  "L": 750,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "shape": "organic",
+  "frame": "brass 8",
+  "backlight": true,
+  "centre_h": 1500
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3975,
+   "y": 2075,
+   "z": 1050,
+   "rot": 270
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,41 @@
+{
+ "code": "B1-17",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Finish",
+ "item": "Herringbone oak floor (engineered, hand-oiled)",
+ "family": "FINISH_FLOOR",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 4315,
+  "W": 4115,
+  "H": 15
+ },
+ "params": {
+  "pattern": "herringbone oak",
+  "grout": 2
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8768,
+   "y": 2288,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

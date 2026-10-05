@@ -1,0 +1,43 @@
+{
+ "family": "JOINERY_INSERT",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "host",
+ "pivot": "bottom-centre (snapped onto its host)",
+ "recipe": "Parametric insert sized to its host joinery module: drawer with glass top + dividers, pull-out tie/belt rack (rail + pins), laundry hamper (open box on runners), display shelves (open boxes), handles (bar 300 long), glass upper doors (frame + pane). Build as separate parts parented to the host.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 100,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "insert": {
+   "value": "auto"
+  }
+ },
+ "test_values": {}
+}

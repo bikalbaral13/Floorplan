@@ -1,0 +1,40 @@
+{
+ "code": "MT-14",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Finish",
+ "item": "White fluted tile",
+ "family": "FINISH_WALL",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 3457,
+  "W": 1684,
+  "H": 0
+ },
+ "params": {
+  "apply_to": "all walls"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3198,
+   "y": 1958,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,42 @@
+{
+ "code": "MW-21",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Lighting / textile",
+ "item": "Wool runner 600×2400",
+ "family": "RUG",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 2400,
+  "W": 600,
+  "H": 12
+ },
+ "params": {
+  "pile": "low",
+  "edge_bevel": 5,
+  "pattern": "tonal"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1250,
+   "y": 2350,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

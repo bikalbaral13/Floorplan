@@ -1,0 +1,43 @@
+{
+ "code": "B2-20",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Lighting / textile",
+ "item": "Motorised drapes with sheers",
+ "family": "CURTAIN",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1668,
+  "W": 41,
+  "H": 2700
+ },
+ "params": {
+  "fullness": 2.2,
+  "fold_pitch": 160,
+  "track": "motorised ceiling",
+  "layers": "blackout+sheer"
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11500,
+   "y": 11009,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,53 @@
+{
+ "code": "B2-03",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Furniture",
+ "item": "Oak-veneer wardrobe with bronze handles (as drawn) and tall shelf unit",
+ "family": "WARDROBE",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 2800,
+  "W": 600,
+  "H": 2700
+ },
+ "params": {
+  "depth": 600,
+  "door_w": 450,
+  "upper_glass": "bronze-tinted",
+  "handles": "leather-wrapped",
+  "interior": "hanging+drawers+shelves",
+  "led": "auto-on",
+  "note": "+ tall shelf unit (2nd instance)"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9100,
+   "y": 11940,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 11321,
+   "y": 9300,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,48 @@
+{
+ "family": "LIGHT_SCONCE",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "wall",
+ "pivot": "back-bottom-centre on the wall plane (body toward -Y)",
+ "recipe": "Wall plate Ø100–120 × 10, short arm, diffuser: disc Ø200 (frosted lens + rim), globe Ø200, or cone (Ø45→60 × 220); centre_h; projection ≤ 100 mm below 2030.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 200,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "style": {
+   "value": "disc/globe/brass"
+  },
+  "centre_h": {
+   "value": 1600,
+   "min": 0,
+   "max": 16000
+  }
+ },
+ "test_values": {}
+}

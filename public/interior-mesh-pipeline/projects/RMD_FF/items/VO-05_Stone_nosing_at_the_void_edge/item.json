@@ -1,0 +1,40 @@
+{
+ "code": "VO-05",
+ "project": "RMD_FF",
+ "space": "Void over GF lounge",
+ "space_code": "VO",
+ "category": "Finish",
+ "item": "Stone nosing at the void edge",
+ "family": "INLAY_STRIP",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 400,
+  "W": 37,
+  "H": 5
+ },
+ "params": {
+  "width": 20
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9244,
+   "y": 5100,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  9287,
+  4559,
+  13005,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

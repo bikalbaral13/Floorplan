@@ -1,0 +1,43 @@
+{
+ "code": "ST-03",
+ "project": "RMD_FF",
+ "space": "Staircase",
+ "space_code": "ST",
+ "category": "Décor",
+ "item": "Landing artwork",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 600,
+  "W": 40,
+  "H": 800
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 4258,
+   "y": 700,
+   "z": 1100,
+   "rot": 90
+  }
+ ],
+ "room": [
+  4238,
+  230,
+  6411,
+  4559
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

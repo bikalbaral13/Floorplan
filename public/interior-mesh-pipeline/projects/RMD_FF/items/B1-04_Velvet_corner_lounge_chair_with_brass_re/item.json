@@ -1,0 +1,44 @@
+{
+ "code": "B1-04",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "Velvet corner lounge chair with brass reading lamp",
+ "family": "CHAIR_LOUNGE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 760,
+  "W": 760,
+  "H": 800
+ },
+ "params": {
+  "seat_h": 400,
+  "back_h": 800,
+  "arm": "rounded",
+  "leg": "tapered bronze",
+  "leg_h": 150
+ },
+ "face": "NE",
+ "rot_z": 135,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7100,
+   "y": 700,
+   "z": 0,
+   "rot": 135
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

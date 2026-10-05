@@ -1,7 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { PushButton } from "./components/PushButton";
 
 // NO PRE-SEEDED TOKEN. A JWT literal used to be written here on first load so PublicRoute would bounce
 // past /signin and the app would come up "logged in". It expired on 11 April, after which every platform
@@ -14,6 +13,5 @@ import { PushButton } from "./components/PushButton";
 createRoot(document.getElementById("root")!).render(
   <>
     <App />
-    {import.meta.env.DEV && <PushButton />}
   </>,
 );

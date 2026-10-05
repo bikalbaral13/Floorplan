@@ -15,6 +15,7 @@ import {
   FolderOpen,
   Loader2,
   RefreshCw,
+  Search,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -36,10 +37,14 @@ import {
   type CloudTree,
   type CloudTreeNode,
 } from "../../cloudLibrary";
+import { selectionState, toggleSelection, useLibrarySelection } from "../../librarySelection";
 
 export interface CloudInspectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** "dialog" (default) = the modal; "panel" = the same browser docked in the left navigation bar. A panel
+   *  is "open" while it is shown, so it still re-reads the bucket each time it is unfolded. */
+  variant?: "dialog" | "panel";
 }
 
 /** Read AND manage what is actually in the Cloudflare R2 bucket.
@@ -59,7 +64,7 @@ export interface CloudInspectDialogProps {
  *  clicked from. Both confirmations are INLINE rather than nested modals — a dialog stacked on a
  *  dialog fights Radix's focus trap, and naming the file where you clicked is clearer anyway.
  */
-export function CloudInspectDialog({ open, onOpenChange }: CloudInspectDialogProps) {
+export function CloudInspectDialog({ open, onOpenChange, variant = "dialog" }: CloudInspectDialogProps) {
   const [data, setData] = useState<CloudTree | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -274,18 +279,85 @@ export function CloudInspectDialog({ open, onOpenChange }: CloudInspectDialogPro
   /** Writes only work through the dev bridge; with no listing there is nothing to act on either. */
   const canWrite = !!data && !error;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-[820px]">
-        <DialogHeader>
-          <DialogTitle>Inspect Cloud storage</DialogTitle>
-          <DialogDescription>
-            {data
-              ? `Cloudflare R2 — ${data.bucket}: ${data.totals.files} file${data.totals.files === 1 ? "" : "s"} in ${data.totals.folders} folder${data.totals.folders === 1 ? "" : "s"}, ${formatBytes(data.totals.bytes)}`
-              : "Everything in the Cloudflare R2 bucket, as a folder hierarchy."}
-          </DialogDescription>
-        </DialogHeader>
+  const summary = data
+    ? `Cloudflare R2 — ${data.bucket}: ${data.totals.files} file${data.totals.files === 1 ? "" : "s"} in ${data.totals.folders} folder${data.totals.folders === 1 ? "" : "s"}, ${formatBytes(data.totals.bytes)}`
+    : "Everything in the Cloudflare R2 bucket, as a folder hierarchy.";
+  const panel = variant === "panel";
+  /** Top-level folders the navigator leaves out: app plumbing, not library content. */
+  const PANEL_HIDDEN = new Set(["relay", "uploads"]);
+  const rootChildren = (filtered?.children ?? []).filter((c) => !(panel && c.type === "folder" && PANEL_HIDDEN.has(c.name.toLowerCase())));
 
+  const treePane = (
+      <>
+        {/* `[&>…>div]:!block` overrides the `display: table` Radix puts on the viewport's inner
+            wrapper. That table sizes itself to its widest content, so one long line — a minified
+            JSON row, a deep folder path — stretched the listing past the viewport, which clips
+            without a horizontal scrollbar. As a block it takes the viewport's width instead: row
+            names truncate as intended, and a preview pane scrolls its own long lines rather than
+            pushing the tree sideways. */}
+        <ScrollArea className={`${panel ? "-mx-1 min-h-0" : "min-h-[280px] rounded-md border border-slate-200 bg-slate-50/60"} flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block`}>
+          {loading && !data ? (
+            <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Reading the bucket…
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center gap-2 p-8 text-center">
+              <CloudOff className="h-6 w-6 text-slate-400" />
+              <p className="text-sm font-medium text-slate-700">Could not read the bucket</p>
+              <p className="max-w-[420px] text-xs text-muted-foreground">{error}</p>
+              <p className="max-w-[420px] text-xs text-muted-foreground">
+                Listing, uploading and deleting all need the signing keys, which stay in the dev
+                server — so this works with <code className="rounded bg-slate-200 px-1">npm run dev</code> and
+                the R2 variables set in <code className="rounded bg-slate-200 px-1">.env</code>, not in a
+                static build.
+              </p>
+            </div>
+          ) : filtered && (filtered.children?.length ?? 0) === 0 ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">
+              {filter ? `Nothing matches “${filter}”.` : "The bucket is empty."}
+            </p>
+          ) : view === "json" ? (
+            <pre className="p-3 font-mono text-[11px] leading-relaxed text-slate-800">{json}</pre>
+          ) : (
+            <div className="p-2">
+              {rootChildren.map((child) => (
+                <TreeRow
+                  compact={panel}
+                  key={child.path}
+                  node={child}
+                  depth={0}
+                  expanded={expanded}
+                  // Filtering already narrowed the tree to matches; force those folders open so the
+                  // hits are visible instead of hidden behind a collapsed parent.
+                  forceOpen={!!filter.trim()}
+                  onToggle={(path) =>
+                    setExpanded((prev) => {
+                      const next = new Set(prev);
+                      if (!next.delete(path)) next.add(path);
+                      return next;
+                    })
+                  }
+                  onUpload={pickFilesFor}
+                  onDownload={downloadFile}
+                  saving={saving}
+                  uploading={uploading}
+                  confirmDelete={confirmDelete}
+                  onRequestDelete={setConfirmDelete}
+                  onConfirmDelete={(key) => void runDelete(key)}
+                  busyKey={busyKey}
+                  openPreview={openPreview}
+                  previews={previews}
+                  onTogglePreview={togglePreview}
+                />
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </>
+  );
+
+  const body = (
+      <>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-md border border-slate-200 p-0.5">
             {(["tree", "json"] as const).map((mode) => (
@@ -310,10 +382,10 @@ export function CloudInspectDialog({ open, onOpenChange }: CloudInspectDialogPro
             className="h-8 w-44 flex-1 text-xs"
             disabled={view === "json" || !data}
           />
-          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => void load(true)} disabled={loading}>
+          {!panel && <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => void load(true)} disabled={loading}>
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             <span className="text-xs">Refresh</span>
-          </Button>
+          </Button>}
           {/* Upload to the bucket ROOT. The tree renders root's children, not root itself, so without
               this the ~59 files that live at the top level would have no folder button to reach. */}
           <Button
@@ -363,69 +435,7 @@ export function CloudInspectDialog({ open, onOpenChange }: CloudInspectDialogPro
           </div>
         )}
 
-        {/* `[&>…>div]:!block` overrides the `display: table` Radix puts on the viewport's inner
-            wrapper. That table sizes itself to its widest content, so one long line — a minified
-            JSON row, a deep folder path — stretched the listing past the viewport, which clips
-            without a horizontal scrollbar. As a block it takes the viewport's width instead: row
-            names truncate as intended, and a preview pane scrolls its own long lines rather than
-            pushing the tree sideways. */}
-        <ScrollArea className="min-h-[280px] flex-1 rounded-md border border-slate-200 bg-slate-50/60 [&>[data-radix-scroll-area-viewport]>div]:!block">
-          {loading && !data ? (
-            <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Reading the bucket…
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center gap-2 p-8 text-center">
-              <CloudOff className="h-6 w-6 text-slate-400" />
-              <p className="text-sm font-medium text-slate-700">Could not read the bucket</p>
-              <p className="max-w-[420px] text-xs text-muted-foreground">{error}</p>
-              <p className="max-w-[420px] text-xs text-muted-foreground">
-                Listing, uploading and deleting all need the signing keys, which stay in the dev
-                server — so this works with <code className="rounded bg-slate-200 px-1">npm run dev</code> and
-                the R2 variables set in <code className="rounded bg-slate-200 px-1">.env</code>, not in a
-                static build.
-              </p>
-            </div>
-          ) : filtered && (filtered.children?.length ?? 0) === 0 ? (
-            <p className="p-8 text-center text-sm text-muted-foreground">
-              {filter ? `Nothing matches “${filter}”.` : "The bucket is empty."}
-            </p>
-          ) : view === "json" ? (
-            <pre className="p-3 font-mono text-[11px] leading-relaxed text-slate-800">{json}</pre>
-          ) : (
-            <div className="p-2">
-              {(filtered?.children ?? []).map((child) => (
-                <TreeRow
-                  key={child.path}
-                  node={child}
-                  depth={0}
-                  expanded={expanded}
-                  // Filtering already narrowed the tree to matches; force those folders open so the
-                  // hits are visible instead of hidden behind a collapsed parent.
-                  forceOpen={!!filter.trim()}
-                  onToggle={(path) =>
-                    setExpanded((prev) => {
-                      const next = new Set(prev);
-                      if (!next.delete(path)) next.add(path);
-                      return next;
-                    })
-                  }
-                  onUpload={pickFilesFor}
-                  onDownload={downloadFile}
-                  saving={saving}
-                  uploading={uploading}
-                  confirmDelete={confirmDelete}
-                  onRequestDelete={setConfirmDelete}
-                  onConfirmDelete={(key) => void runDelete(key)}
-                  busyKey={busyKey}
-                  openPreview={openPreview}
-                  previews={previews}
-                  onTogglePreview={togglePreview}
-                />
-              ))}
-            </div>
-          )}
-        </ScrollArea>
+        {treePane}
 
         {data?.publicUrl && (
           <p className="truncate text-[11px] text-muted-foreground">
@@ -434,6 +444,38 @@ export function CloudInspectDialog({ open, onOpenChange }: CloudInspectDialogPro
         )}
 
         <input ref={fileInputRef} type="file" multiple onChange={onFilesChosen} className="hidden" />
+      </>
+  );
+
+  if (panel) {
+    // The navigator: a search box over the tree. Browsing only — managing the bucket is the dialog's job.
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-2 text-sm">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Search the library…"
+            spellCheck={false}
+            autoComplete="off"
+            aria-label="Search the library"
+            className="h-8 pl-8 text-xs"
+            disabled={!data}
+          />
+        </div>
+        {treePane}
+      </div>
+    );
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-[820px]">
+        <DialogHeader>
+          <DialogTitle>Inspect Cloud storage</DialogTitle>
+          <DialogDescription>{summary}</DialogDescription>
+        </DialogHeader>
+        {body}
       </DialogContent>
     </Dialog>
   );
@@ -441,6 +483,8 @@ export function CloudInspectDialog({ open, onOpenChange }: CloudInspectDialogPro
 
 interface TreeRowProps {
   node: CloudTreeNode;
+  /** Navigator bar: browse only — name + size, no dates, no upload / download / delete. */
+  compact?: boolean;
   depth: number;
   expanded: Set<string>;
   forceOpen: boolean;
@@ -461,6 +505,24 @@ interface TreeRowProps {
 
 /** One folder or file line. Recursive, so the rendered depth follows the bucket rather than a
  *  fixed set of levels — the Library is three deep today and nothing here assumes that. */
+/** Navigator tick box: ticking IS the selection (librarySelection.ts). A folder shows "some" as indeterminate. */
+function SelectBox({ node }: { node: CloudTreeNode }) {
+  const items = useLibrarySelection();
+  const state = selectionState(node, new Set(items.map((i) => i.key)));
+  return (
+    <input
+      type="checkbox"
+      className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-sky-600"
+      checked={state === "all"}
+      ref={(el) => { if (el) el.indeterminate = state === "some"; }}
+      onChange={() => toggleSelection(node)}
+      onClick={(e) => e.stopPropagation()}
+      title={state === "all" ? `Remove ${node.name} from the selection` : `Select ${node.name}`}
+      aria-label={`Select ${node.name}`}
+    />
+  );
+}
+
 function TreeRow(p: TreeRowProps) {
   const { node, depth, expanded, forceOpen, onToggle } = p;
   const open = forceOpen || expanded.has(node.path);
@@ -477,6 +539,7 @@ function TreeRow(p: TreeRowProps) {
         style={indent}
         className={`group flex items-center gap-1.5 rounded py-[3px] pr-1.5 ${confirming ? "bg-rose-50" : showing ? "bg-white" : "hover:bg-white"}`}
       >
+        {p.compact && <SelectBox node={node} />}
         {/* The chevron sits where a file row previously held a blank spacer, so text files gain a
             fold without the column of names shifting. Binary keys keep the spacer: the pane renders
             characters, and a .glb through it is a screenful of mojibake. */}
@@ -534,7 +597,7 @@ function TreeRow(p: TreeRowProps) {
             <span className="ml-auto shrink-0 pl-3 font-mono text-[10px] text-slate-400">
               {formatBytes(node.size ?? 0)}
             </span>
-            {node.lastModified && (
+            {node.lastModified && !p.compact && (
               <span className="hidden shrink-0 pl-2 font-mono text-[10px] text-slate-400 sm:inline">
                 {node.lastModified.slice(0, 10)}
               </span>
@@ -550,7 +613,7 @@ function TreeRow(p: TreeRowProps) {
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
-            {node.url && (
+            {node.url && !p.compact && (
               <button
                 type="button"
                 onClick={() => void p.onDownload(node)}
@@ -564,7 +627,7 @@ function TreeRow(p: TreeRowProps) {
                   : <Download className="h-3 w-3" />}
               </button>
             )}
-            <button
+            {!p.compact && <button
               type="button"
               onClick={() => p.onRequestDelete(node.path)}
               title={`Delete ${node.path}`}
@@ -572,7 +635,7 @@ function TreeRow(p: TreeRowProps) {
               className="shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-600 group-hover:text-slate-400"
             >
               <Trash2 className="h-3 w-3" />
-            </button>
+            </button>}
           </>
         )}
       </div>
@@ -586,10 +649,11 @@ function TreeRow(p: TreeRowProps) {
     <div>
       {/* A row, not a button wrapping everything: the upload control is itself a button and cannot
           be nested inside one. The label half stays the toggle. */}
-      <div className="group flex items-center rounded pr-1.5 hover:bg-white">
+      <div className="group flex items-center rounded pr-1.5 hover:bg-white" style={p.compact ? indent : undefined}>
+        {p.compact && <span className="mr-1.5 flex"><SelectBox node={node} /></span>}
         <button
           type="button"
-          style={indent}
+          style={p.compact ? undefined : indent}
           onClick={() => onToggle(node.path)}
           className="flex min-w-0 flex-1 items-center gap-1.5 py-[3px] text-left"
         >
@@ -605,10 +669,10 @@ function TreeRow(p: TreeRowProps) {
           )}
           <span className="truncate text-[11px] font-semibold text-slate-700">{node.name}</span>
           <span className="ml-auto shrink-0 pl-3 font-mono text-[10px] text-slate-400">
-            {node.files ?? 0} · {formatBytes(node.bytes ?? 0)}
+            {p.compact ? node.files ?? 0 : `${node.files ?? 0} · ${formatBytes(node.bytes ?? 0)}`}
           </span>
         </button>
-        <button
+        {!p.compact && <button
           type="button"
           onClick={() => p.onUpload(node.path)}
           title={`Upload into ${node.path}`}
@@ -617,7 +681,7 @@ function TreeRow(p: TreeRowProps) {
           className="ml-1.5 shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-sky-100 hover:text-sky-600 group-hover:text-slate-400 disabled:opacity-40"
         >
           {busyHere ? <Loader2 className="h-3 w-3 animate-spin text-sky-600" /> : <Upload className="h-3 w-3" />}
-        </button>
+        </button>}
       </div>
       {open &&
         (node.children ?? []).map((child) => (

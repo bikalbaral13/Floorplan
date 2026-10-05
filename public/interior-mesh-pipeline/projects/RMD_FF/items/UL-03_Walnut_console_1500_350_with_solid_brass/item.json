@@ -1,0 +1,43 @@
+{
+ "code": "UL-03",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Furniture",
+ "item": "Walnut console 1500×350 with solid-brass inlay",
+ "family": "CONSOLE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1500,
+  "W": 350,
+  "H": 800
+ },
+ "params": {
+  "top_t": 40,
+  "leg": "panel",
+  "inlay": "solid brass",
+  "drawer_count": 0
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8470,
+   "y": 8102,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

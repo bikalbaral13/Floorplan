@@ -1,0 +1,56 @@
+{
+ "family": "MEDIA_CONSOLE",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Low cabinet L×W×H with flush door fronts (3 mm gaps); floating = 150 mm off the floor on a recessed back rail; TV = black slab 16:9 (tv_size_in diagonal) × 30 mm, recessed tv_recess_depth into the host panel (separate object 'tv').",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 450,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "type": {
+   "value": "floating"
+  },
+  "fronts": {
+   "value": "flush"
+  },
+  "tv_size_in": {
+   "value": 75,
+   "min": 0,
+   "max": 750
+  },
+  "tv_recess_depth": {
+   "value": 60,
+   "min": 0,
+   "max": 600
+  }
+ },
+ "test_values": {}
+}

@@ -1,0 +1,56 @@
+{
+ "family": "STAIR",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Dog-leg stair: two flights (riser riser_h, going 250, width ≈ 1000 each) and a half landing; 40 mm treads with stone nosing strips; balustrade of Ø12 rods @100 between a bottom stringer and a 50×10 top rail; recessed handrail channel in the wall.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 3348,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "treads": {
+   "value": "solid oak 40"
+  },
+  "riser_h": {
+   "value": 170,
+   "min": 0,
+   "max": 1700
+  },
+  "going": {
+   "value": 250,
+   "min": 0,
+   "max": 2500
+  },
+  "balustrade": {
+   "value": "black steel rods Ø12 @100"
+  }
+ },
+ "test_values": {}
+}

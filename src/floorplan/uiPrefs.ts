@@ -10,15 +10,25 @@ export interface UiPrefs {
   showFlow: boolean;
   /** The Properties | Metrics column. The canvas-edge chevron flips this same value. */
   showProperties: boolean;
+  /** The left navigation bar (the R2 Library tree). */
+  showNavigator: boolean;
+  /** The canvas status bar (zoom · mode · selection · Ortho). Off by default. */
+  showStatusBar: boolean;
+  /** Who answers the Chat box: Claude Code (over Connect Claude / the local bridge) or Gemini. */
+  chatEngine: "claude" | "gemini";
 }
 
 const KEY = "bp.editor.uiPrefs";
-const DEFAULTS: UiPrefs = { showChat: true, showDrawingToolbar: true, showFlow: true, showProperties: true };
+const DEFAULTS: UiPrefs = { showChat: true, showDrawingToolbar: false, showFlow: true, showProperties: true, showNavigator: true, showStatusBar: false, chatEngine: "claude" };
 const listeners = new Set<() => void>();
 
 function read(): UiPrefs {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<UiPrefs>;
+    // Prefs saved before the navigator existed carry the old Drawing-toolbar default (on). The navigator
+    // takes that place now, so the toolbar starts OFF once; after that the saved choice is kept.
+    if (!("showNavigator" in saved)) saved.showDrawingToolbar = false;
+    return { ...DEFAULTS, ...saved };
   } catch {
     return DEFAULTS;
   }
@@ -35,6 +45,9 @@ export function setUiPref<K extends keyof UiPrefs>(key: K, value: UiPrefs[K]) {
   }
   listeners.forEach((l) => l());
 }
+
+/** The current prefs, for callbacks that must not re-subscribe. */
+export const getUiPrefs = (): UiPrefs => current;
 
 export function useUiPrefs(): UiPrefs {
   return useSyncExternalStore(

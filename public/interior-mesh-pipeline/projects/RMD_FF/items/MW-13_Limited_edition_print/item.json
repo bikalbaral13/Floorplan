@@ -1,0 +1,43 @@
+{
+ "code": "MW-13",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Décor",
+ "item": "Limited-edition print",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 450,
+  "W": 40,
+  "H": 600
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1125,
+   "y": 3667,
+   "z": 1200,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

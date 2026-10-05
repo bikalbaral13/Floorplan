@@ -1,0 +1,42 @@
+{
+ "code": "MB-15",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Finish",
+ "item": "Green marble panels flanking a taupe fabric headboard, bronze trims",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 2750,
+  "W": 100,
+  "H": 2700
+ },
+ "params": {
+  "type": "upholstered taupe + green marble, bronze trims",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3990,
+   "y": 5775,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

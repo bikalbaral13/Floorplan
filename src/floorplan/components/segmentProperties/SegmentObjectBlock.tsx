@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { Upload, Trash2, Workflow } from "lucide-react";
+import { ChevronDown, ChevronRight, Upload, Trash2, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ParametricObjectFile, ParametricObjectParam, SegmentAttachment } from "../../types";
 import { evalParametricRefs, type RefInstance } from "../../flow/eval/parametricObject";
@@ -213,10 +213,10 @@ export const SegmentObjectBlock = (p: SegmentObjectBlockProps) => {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const libIds = Object.keys(p.library);
   return (
-    <div className="mt-2 rounded border border-slate-200 bg-white p-2 space-y-2">
-      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => p.setExpanded((v) => !v)}>
-        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{p.title ?? "Parametric Object"}</span>
-        <span className="text-[11px] text-slate-400">{p.expanded ? "▼" : "▶"}</span>
+    <div className="mt-2 space-y-2.5 rounded-lg border border-slate-200 bg-white p-3">
+      <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => p.setExpanded((v) => !v)} aria-expanded={p.expanded}>
+        {p.expanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+        <span className="text-xs font-semibold text-slate-700">{p.title ?? "Parametric Object"}</span>
       </button>
       {p.expanded && (
         <>

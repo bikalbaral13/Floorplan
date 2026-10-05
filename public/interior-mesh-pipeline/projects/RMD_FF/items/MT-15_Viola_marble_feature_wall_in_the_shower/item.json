@@ -1,0 +1,42 @@
+{
+ "code": "MT-15",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Finish",
+ "item": "Viola marble feature wall in the shower",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1595,
+  "W": 40,
+  "H": 2700
+ },
+ "params": {
+  "type": "Calacatta Viola slabs",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3198,
+   "y": 3620,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

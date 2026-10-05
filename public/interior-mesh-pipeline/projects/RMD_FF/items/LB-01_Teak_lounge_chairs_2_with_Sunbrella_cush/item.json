@@ -1,0 +1,48 @@
+{
+ "code": "LB-01",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Furniture",
+ "item": "Teak lounge chairs ×2 with Sunbrella cushions",
+ "family": "OUTDOOR_LOUNGE_CHAIR",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 800,
+  "W": 800,
+  "H": 750
+ },
+ "params": {
+  "frame": "teak",
+  "slats": true
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1300,
+   "y": 9900,
+   "z": 0,
+   "rot": 90
+  },
+  {
+   "inst": 2,
+   "x": 2900,
+   "y": 9900,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

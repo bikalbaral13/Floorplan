@@ -1,0 +1,43 @@
+{
+ "code": "MB-04",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Furniture",
+ "item": "Velvet bench at the bed foot",
+ "family": "BENCH_UPHOLSTERED",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1300,
+  "W": 450,
+  "H": 450
+ },
+ "params": {
+  "seat_t": 120,
+  "leg_h": 180,
+  "leg": "bronze sled",
+  "piping": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1685,
+   "y": 5783,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

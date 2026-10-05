@@ -1,0 +1,42 @@
+{
+ "code": "LB-03",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Furniture",
+ "item": "Teak oonjal (swing) on brass chains (optional)",
+ "family": "SWING_OONJAL",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 2000,
+  "W": 1200,
+  "H": 2400
+ },
+ "params": {
+  "seat": "1500×600 teak",
+  "frame": "A-frame 2000×1200",
+  "chains": "brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2000,
+   "y": 11500,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "A-frame footprint 2000×1200",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

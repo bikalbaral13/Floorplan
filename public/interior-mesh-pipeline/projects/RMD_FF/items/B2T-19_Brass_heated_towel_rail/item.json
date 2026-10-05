@@ -1,0 +1,41 @@
+{
+ "code": "B2T-19",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Lighting / textile",
+ "item": "Brass heated towel rail",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 600,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "type": "heated towel rail",
+  "scatter_on": "host top"
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6200,
+   "y": 10271,
+   "z": "host",
+   "rot": 180
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

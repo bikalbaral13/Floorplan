@@ -1,0 +1,40 @@
+{
+ "code": "B1-07",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "Bouclé ottoman",
+ "family": "POUF_ROUND",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 450,
+  "W": 450,
+  "H": 420
+ },
+ "params": {
+  "bevel": 60
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7400,
+   "y": 1350,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

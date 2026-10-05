@@ -1,0 +1,41 @@
+{
+ "code": "UL-22",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Lighting / textile",
+ "item": "Sculptural brass chandelier Ø900 with concealed LED cove (dimmable scenes)",
+ "family": "LIGHT_CHANDELIER",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 900,
+  "W": 900,
+  "H": 600
+ },
+ "params": {
+  "style": "sculptural brass Ø900",
+  "drop_to_bottom_mm": 2200
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6750,
+   "y": 6300,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

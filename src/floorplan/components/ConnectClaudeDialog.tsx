@@ -8,8 +8,20 @@ import { disconnectRelay, getRelaySession, pairRelay, type RelaySession, type Re
 /** Toolbar button + dialog for the hosted MCP relay: pair this tab, show the one command to paste into
  *  Claude Code, show whether the tab is receiving calls, and disconnect. No accounts: the pasted token is
  *  the only credential, and it expires with the session (12 h). */
-export function ConnectClaudeButton() {
+/** Asks the always-mounted dialog host to open — fired from the Preferences row, whose popover unmounts. */
+export const OPEN_CONNECT_EVENT = "bp-open-connect";
+
+/** "button" = the header button + its dialog (legacy) · "host" = the dialog only, opened by OPEN_CONNECT_EVENT,
+ *  kept mounted so the dialog outlives the popover that asked for it · "row" = a full-width menu row (status
+ *  light + label) that fires the event, with no dialog of its own. */
+export function ConnectClaudeButton({ variant = "button" }: { variant?: "button" | "host" | "row" } = {}) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (variant !== "host") return;
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_CONNECT_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_CONNECT_EVENT, onOpen);
+  }, [variant]);
   const [session, setSession] = useState<RelaySession | null>(() => getRelaySession());
   const [state, setState] = useState<RelayState>(() => (getRelaySession() ? "connecting" : "off"));
   const [busy, setBusy] = useState(false);
@@ -40,12 +52,27 @@ export function ConnectClaudeButton() {
   const label = !session ? "Not connected" : state === "connected" ? "Connected — this tab receives Claude's calls"
     : state === "idle" ? "Connected — another tab of yours is receiving the calls" : state === "offline" ? "Reconnecting…" : "Connecting…";
 
+  if (variant === "row") {
+    return (
+      <Button variant="outline" size="sm" title="Connect Claude Code to this tab" aria-label="Connect Claude"
+        onClick={() => window.dispatchEvent(new Event(OPEN_CONNECT_EVENT))} className="w-full justify-start gap-2">
+        <PlugZap className="h-4 w-4" />
+        <span className="text-xs">Connect Claude</span>
+        <span className="ml-auto flex items-center gap-1.5 text-[10px] text-slate-500">
+          <span className={`h-2 w-2 rounded-full ${light}`} aria-hidden />{!session ? "Off" : state === "connected" || state === "idle" ? "On" : "…"}
+        </span>
+      </Button>
+    );
+  }
+
   return (
     <>
-      <Button variant="outline" size="sm" title="Connect Claude Code to this tab" aria-label="Connect Claude" onClick={() => setOpen(true)} className="gap-1.5">
-        <span className={`h-2 w-2 rounded-full ${light}`} aria-hidden />
-        <PlugZap className="h-4 w-4" />
-      </Button>
+      {variant === "button" && (
+        <Button variant="outline" size="sm" title="Connect Claude Code to this tab" aria-label="Connect Claude" onClick={() => setOpen(true)} className="gap-1.5">
+          <span className={`h-2 w-2 rounded-full ${light}`} aria-hidden />
+          <PlugZap className="h-4 w-4" />
+        </Button>
+      )}
       {/* Non-modal: a checkpoint card can pop up while this is open, and it must stay clickable. */}
       <Dialog open={open} onOpenChange={setOpen} modal={false}>
         <DialogContent className="max-w-xl">

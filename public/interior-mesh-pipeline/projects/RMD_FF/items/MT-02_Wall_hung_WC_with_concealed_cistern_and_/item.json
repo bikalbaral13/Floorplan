@@ -1,0 +1,42 @@
+{
+ "code": "MT-02",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Furniture",
+ "item": "Wall-hung WC with concealed cistern and brass flush plate",
+ "family": "WC_WALLHUNG",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 495,
+  "W": 380,
+  "H": 400
+ },
+ "params": {
+  "pan": "540×370",
+  "cistern": "concealed",
+  "flush_plate": "brushed brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3200,
+   "y": 522,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

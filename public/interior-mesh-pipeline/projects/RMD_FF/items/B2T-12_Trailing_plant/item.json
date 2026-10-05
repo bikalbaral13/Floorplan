@@ -1,0 +1,41 @@
+{
+ "code": "B2T-12",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Décor",
+ "item": "Trailing plant",
+ "family": "PLANT_SMALL",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 600
+ },
+ "params": {
+  "pot_d": 300,
+  "species": "trailing"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6500,
+   "y": 10500,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

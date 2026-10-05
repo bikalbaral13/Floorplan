@@ -1,0 +1,45 @@
+{
+ "code": "B2-01",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Furniture",
+ "item": "Queen bed 1524×1981 with greige velvet upholstered headboard and bronze trim",
+ "family": "BED_PLATFORM",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1981,
+  "W": 1524,
+  "H": 450
+ },
+ "params": {
+  "mattress_h": 250,
+  "base_h": 200,
+  "base_inset": 60,
+  "leg": "recessed plinth 60",
+  "bevel": 15,
+  "duvet_drape": 120
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9410,
+   "y": 9598,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

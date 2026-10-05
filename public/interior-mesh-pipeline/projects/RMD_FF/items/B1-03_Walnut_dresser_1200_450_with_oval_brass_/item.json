@@ -1,0 +1,42 @@
+{
+ "code": "B1-03",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "Walnut dresser 1200×450 with oval brass mirror",
+ "family": "DRESSER",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1200,
+  "W": 450,
+  "H": 800
+ },
+ "params": {
+  "drawers": 6,
+  "mirror": "oval brass 600×900",
+  "handles": "bronze pulls"
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6835,
+   "y": 1900,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

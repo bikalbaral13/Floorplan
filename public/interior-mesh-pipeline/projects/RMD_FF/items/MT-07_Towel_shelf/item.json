@@ -1,0 +1,41 @@
+{
+ "code": "MT-07",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Furniture",
+ "item": "Towel shelf",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 380,
+  "W": 40,
+  "H": 300
+ },
+ "params": {
+  "depth": 100,
+  "type": "towel shelf"
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3200,
+   "y": 295,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

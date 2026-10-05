@@ -1,0 +1,53 @@
+{
+ "code": "BW-01",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 walk-in wardrobe",
+ "space_code": "BW",
+ "category": "Furniture",
+ "item": "L-shaped walnut wardrobe (600 deep) with hanging, drawers and shoe shelves",
+ "family": "WARDROBE",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 2035,
+  "W": 600,
+  "H": 2700
+ },
+ "params": {
+  "depth": 600,
+  "door_w": 450,
+  "upper_glass": "bronze-tinted",
+  "handles": "leather-wrapped",
+  "interior": "hanging+drawers+shelves",
+  "led": "auto-on",
+  "plan": "L-shape"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11942,
+   "y": 4000,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 12660,
+   "y": 3190,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  10925,
+  2632,
+  13005,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

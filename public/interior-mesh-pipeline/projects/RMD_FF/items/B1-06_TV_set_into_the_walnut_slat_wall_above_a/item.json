@@ -1,0 +1,43 @@
+{
+ "code": "B1-06",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "TV set into the walnut slat wall above a slim console",
+ "family": "MEDIA_CONSOLE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1500,
+  "W": 350,
+  "H": 450
+ },
+ "params": {
+  "type": "floating",
+  "fronts": "flush",
+  "tv_size_in": 65,
+  "tv_recess_depth": 60
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9350,
+   "y": 4170,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

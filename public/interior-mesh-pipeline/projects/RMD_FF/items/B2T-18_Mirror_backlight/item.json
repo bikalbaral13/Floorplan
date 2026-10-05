@@ -1,0 +1,38 @@
+{
+ "code": "B2T-18",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Lighting / textile",
+ "item": "Mirror backlight",
+ "family": "LIGHT_LED_STRIP",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 1000,
+  "W": 40,
+  "H": 10
+ },
+ "params": {},
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7470,
+   "y": 11640,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

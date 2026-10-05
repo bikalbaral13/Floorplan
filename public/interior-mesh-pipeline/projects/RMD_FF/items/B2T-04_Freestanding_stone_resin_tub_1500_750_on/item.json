@@ -1,0 +1,41 @@
+{
+ "code": "B2T-04",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Furniture",
+ "item": "Freestanding stone-resin tub 1500×750 on the short wall",
+ "family": "BATHTUB_FREESTANDING",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1500,
+  "W": 750,
+  "H": 560
+ },
+ "params": {
+  "shape": "oval",
+  "wall_t": 15
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 4675,
+   "y": 11270,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

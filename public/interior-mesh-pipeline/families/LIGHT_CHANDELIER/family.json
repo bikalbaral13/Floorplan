@@ -1,0 +1,48 @@
+{
+ "family": "LIGHT_CHANDELIER",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "ceiling",
+ "pivot": "top-centre at the mount point",
+ "recipe": "Ceiling canopy Ø120–300 + rods/cables to the fixture; body per style: stacked brass discs (shallow lathed dishes Ø900 / Ø600, 14 thick, 90 apart) or a cluster of 3 blown-glass globes (Ø350, hollow 3 mm) at staggered drops; bottom at drop_to_bottom_mm.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 600,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "style": {
+   "value": "sculptural brass"
+  },
+  "drop_to_bottom_mm": {
+   "value": 2200,
+   "min": 0,
+   "max": 22000
+  }
+ },
+ "test_values": {}
+}

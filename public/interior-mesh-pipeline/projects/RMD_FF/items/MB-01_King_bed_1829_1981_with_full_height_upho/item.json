@@ -1,0 +1,45 @@
+{
+ "code": "MB-01",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Furniture",
+ "item": "King bed 1829×1981 with full-height upholstered headboard wall",
+ "family": "BED_PLATFORM",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1980,
+  "W": 1829,
+  "H": 450
+ },
+ "params": {
+  "mattress_h": 250,
+  "base_h": 200,
+  "base_inset": 60,
+  "leg": "recessed plinth 60",
+  "bevel": 15,
+  "duvet_drape": 120
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2950,
+   "y": 5784,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

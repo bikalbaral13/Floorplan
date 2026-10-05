@@ -1,0 +1,41 @@
+{
+ "code": "B2T-15",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Finish",
+ "item": "Grey microcement floor",
+ "family": "FINISH_FLOOR",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 3320,
+  "W": 1989,
+  "H": 15
+ },
+ "params": {
+  "pattern": "microcement",
+  "grout": 2
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5898,
+   "y": 11246,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

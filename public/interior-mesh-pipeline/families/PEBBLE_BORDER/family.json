@@ -1,0 +1,45 @@
+{
+ "family": "PEBBLE_BORDER",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Ring band (inner Ø planter + 100, width 150) scattered with 120–200 pebbles (flattened low-poly spheres 30–60 mm), no interpenetration.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 40,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "width": {
+   "value": 150,
+   "min": 0,
+   "max": 1500
+  }
+ },
+ "test_values": {}
+}

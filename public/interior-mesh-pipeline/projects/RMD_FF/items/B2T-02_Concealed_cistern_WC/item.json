@@ -1,0 +1,42 @@
+{
+ "code": "B2T-02",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Furniture",
+ "item": "Concealed-cistern WC",
+ "family": "WC_WALLHUNG",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 540,
+  "W": 380,
+  "H": 400
+ },
+ "params": {
+  "pan": "540×370",
+  "cistern": "concealed",
+  "flush_plate": "brushed brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6540,
+   "y": 11925,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

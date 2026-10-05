@@ -1,0 +1,41 @@
+{
+ "code": "LB-19",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Lighting / textile",
+ "item": "Wall washers on the niche",
+ "family": "LIGHT_SPOT",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 200,
+  "W": 200,
+  "H": 80
+ },
+ "params": {
+  "beam_deg": 40,
+  "type": "wall washer"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3900,
+   "y": 10650,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

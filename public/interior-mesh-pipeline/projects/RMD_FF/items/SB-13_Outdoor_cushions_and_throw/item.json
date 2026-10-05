@@ -1,0 +1,40 @@
+{
+ "code": "SB-13",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Lighting / textile",
+ "item": "Outdoor cushions and throw",
+ "family": "SOFT_SET",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 150
+ },
+ "params": {
+  "items": "cushion + throw"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12200,
+   "y": 9600,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

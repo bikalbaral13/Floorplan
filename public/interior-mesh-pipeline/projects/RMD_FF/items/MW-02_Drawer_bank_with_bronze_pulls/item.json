@@ -1,0 +1,42 @@
+{
+ "code": "MW-02",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Furniture",
+ "item": "Drawer bank with bronze pulls",
+ "family": "DRAWER_BANK",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 600,
+  "W": 550,
+  "H": 900
+ },
+ "params": {
+  "drawers": 5,
+  "glass_top_jewellery": true,
+  "pulls": "bronze"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1964,
+   "y": 975,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,40 @@
+{
+ "code": "MW-08",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Furniture",
+ "item": "Bouclé pouf Ø400",
+ "family": "POUF_ROUND",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 400,
+  "W": 400,
+  "H": 420
+ },
+ "params": {
+  "bevel": 60
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1247,
+   "y": 950,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

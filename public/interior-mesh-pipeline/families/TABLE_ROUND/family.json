@@ -1,0 +1,57 @@
+{
+ "family": "TABLE_ROUND",
+ "version": "0.2.0",
+ "status": "implemented",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Round top Ø=L, top_t thick, 6 mm eased edge; base per 'base': drum = cylinder Ø0.9·L to the underside; pedestal = column Ø140 on a disc plinth Ø0.6·L × 20.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 420,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "top_t": {
+   "value": 40,
+   "min": 0,
+   "max": 400
+  },
+  "base": {
+   "value": "drum/pedestal"
+  },
+  "edge": {
+   "value": "eased 6"
+  }
+ },
+ "test_values": {
+  "L": 700,
+  "W": 700,
+  "H": 400,
+  "top_t": 40,
+  "base": "drum"
+ }
+}

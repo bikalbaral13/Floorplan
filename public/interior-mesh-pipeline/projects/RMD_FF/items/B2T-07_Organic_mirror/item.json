@@ -1,0 +1,43 @@
+{
+ "code": "B2T-07",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Décor",
+ "item": "Organic mirror",
+ "family": "MIRROR",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1000,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "shape": "organic",
+  "frame": "brass 8",
+  "backlight": true,
+  "centre_h": 1500
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7493,
+   "y": 11640,
+   "z": 1050,
+   "rot": 270
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

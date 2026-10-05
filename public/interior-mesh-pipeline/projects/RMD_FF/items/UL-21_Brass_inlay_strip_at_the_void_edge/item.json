@@ -1,0 +1,40 @@
+{
+ "code": "UL-21",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Finish",
+ "item": "Brass inlay strip at the void edge",
+ "family": "INLAY_STRIP",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 3718,
+  "W": 32,
+  "H": 5
+ },
+ "params": {
+  "width": 20
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9246,
+   "y": 6418,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

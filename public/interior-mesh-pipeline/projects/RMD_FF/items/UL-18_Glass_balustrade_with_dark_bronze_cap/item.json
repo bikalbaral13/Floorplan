@@ -1,0 +1,42 @@
+{
+ "code": "UL-18",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Finish",
+ "item": "Glass balustrade with dark-bronze cap",
+ "family": "BALUSTRADE_GLASS",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 3718,
+  "W": 35,
+  "H": 1100
+ },
+ "params": {
+  "glass": "low-iron 13.5 laminated",
+  "cap": "dark bronze",
+  "clamp": "bronze"
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9282,
+   "y": 6418,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

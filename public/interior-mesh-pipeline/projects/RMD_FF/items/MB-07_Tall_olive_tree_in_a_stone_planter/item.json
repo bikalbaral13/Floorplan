@@ -1,0 +1,43 @@
+{
+ "code": "MB-07",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Furniture",
+ "item": "Tall olive tree in a stone planter",
+ "family": "PLANTER_TREE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 500,
+  "W": 500,
+  "H": 1600
+ },
+ "params": {
+  "pot_h": 600,
+  "species": "olive",
+  "crown_density": "high",
+  "trim_to_room": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 480,
+   "y": 6950,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 120000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

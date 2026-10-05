@@ -1,0 +1,42 @@
+{
+ "code": "B2-14",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Finish",
+ "item": "Oak slat accent behind the desk",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1200,
+  "W": 40,
+  "H": 2700
+ },
+ "params": {
+  "type": "light-oak slats",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7655,
+   "y": 10850,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

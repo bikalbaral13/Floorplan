@@ -1,0 +1,42 @@
+{
+ "code": "MB-16",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Finish",
+ "item": "Fluted walnut TV panel",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 2000,
+  "W": 40,
+  "H": 2700
+ },
+ "params": {
+  "type": "fluted walnut",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 250,
+   "y": 5783,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

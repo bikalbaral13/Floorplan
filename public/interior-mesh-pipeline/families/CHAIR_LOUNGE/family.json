@@ -1,0 +1,61 @@
+{
+ "family": "CHAIR_LOUNGE",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Sculpted shell or box body with rounded arms (arm top 580–600), loose seat cushion at seat_h, back to back_h; 4 tapered legs Ø35→Ø20, leg_h, splayed 6°, fitted into a sub-frame plate that is embedded 4 mm into the body (no gaps); or a 60 mm plinth if leg='plinth'.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 800,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "seat_h": {
+   "value": 400,
+   "min": 0,
+   "max": 4000
+  },
+  "back_h": {
+   "value": 800,
+   "min": 0,
+   "max": 8000
+  },
+  "arm": {
+   "value": "rounded"
+  },
+  "leg": {
+   "value": "tapered bronze"
+  },
+  "leg_h": {
+   "value": 150,
+   "min": 0,
+   "max": 1500
+  }
+ },
+ "test_values": {}
+}

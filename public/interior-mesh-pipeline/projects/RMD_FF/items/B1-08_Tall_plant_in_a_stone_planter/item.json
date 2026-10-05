@@ -1,0 +1,43 @@
+{
+ "code": "B1-08",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "Tall plant in a stone planter",
+ "family": "PLANTER_TREE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 500,
+  "W": 500,
+  "H": 1500
+ },
+ "params": {
+  "pot_h": 600,
+  "species": "olive",
+  "crown_density": "high",
+  "trim_to_room": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6900,
+   "y": 2850,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 120000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

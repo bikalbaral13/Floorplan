@@ -1,0 +1,42 @@
+{
+ "code": "BT-02",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Furniture",
+ "item": "Concealed-cistern WC",
+ "family": "WC_WALLHUNG",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 495,
+  "W": 380,
+  "H": 400
+ },
+ "params": {
+  "pan": "540×370",
+  "cistern": "concealed",
+  "flush_plate": "brushed brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12712,
+   "y": 1990,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

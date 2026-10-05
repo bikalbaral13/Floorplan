@@ -1,0 +1,48 @@
+{
+ "code": "SB-07",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Décor",
+ "item": "Lantern pair",
+ "family": "LANTERN",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 160,
+  "W": 160,
+  "H": 450
+ },
+ "params": {
+  "body": "black steel + brass",
+  "glass": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11950,
+   "y": 11700,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 11950,
+   "y": 12000,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

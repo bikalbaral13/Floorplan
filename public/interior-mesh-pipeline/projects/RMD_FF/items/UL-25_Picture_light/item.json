@@ -1,0 +1,41 @@
+{
+ "code": "UL-25",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Lighting / textile",
+ "item": "Picture light",
+ "family": "LIGHT_SPOT",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 700,
+  "W": 40,
+  "H": 80
+ },
+ "params": {
+  "beam_deg": 40,
+  "type": "picture light"
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8550,
+   "y": 4620,
+   "z": 2750,
+   "rot": 180
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

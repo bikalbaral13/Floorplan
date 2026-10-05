@@ -1,0 +1,43 @@
+{
+ "code": "BT-06",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Décor",
+ "item": "Organic mirror",
+ "family": "MIRROR",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 800,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "shape": "organic",
+  "frame": "brass 8",
+  "backlight": true,
+  "centre_h": 1500
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12940,
+   "y": 850,
+   "z": 1050,
+   "rot": 270
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

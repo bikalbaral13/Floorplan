@@ -1,0 +1,41 @@
+{
+ "code": "B2T-05",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Furniture",
+ "item": "Linen tower cabinet 400",
+ "family": "TALL_CABINET",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 400,
+  "W": 400,
+  "H": 2100
+ },
+ "params": {
+  "depth": 400,
+  "doors": 1
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5500,
+   "y": 10496,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

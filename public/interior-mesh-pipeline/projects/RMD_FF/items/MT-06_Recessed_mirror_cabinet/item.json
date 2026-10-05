@@ -1,0 +1,41 @@
+{
+ "code": "MT-06",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Furniture",
+ "item": "Recessed mirror cabinet",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 550,
+  "W": 40,
+  "H": 700
+ },
+ "params": {
+  "depth": 100,
+  "type": "mirror cabinet"
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3975,
+   "y": 1375,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

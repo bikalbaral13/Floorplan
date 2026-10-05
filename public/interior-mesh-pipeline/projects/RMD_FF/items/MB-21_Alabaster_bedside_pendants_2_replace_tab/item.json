@@ -1,0 +1,48 @@
+{
+ "code": "MB-21",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Lighting / textile",
+ "item": "Alabaster bedside pendants ×2 (replace table lamps)",
+ "family": "LIGHT_PENDANT",
+ "host": "ceiling",
+ "qty": 2,
+ "size": {
+  "L": 260,
+  "W": 260,
+  "H": 350
+ },
+ "params": {
+  "shade": "alabaster",
+  "drop_to_bottom_mm": 1600
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3715,
+   "y": 4594,
+   "z": 2750,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 3715,
+   "y": 6973,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

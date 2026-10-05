@@ -1,0 +1,43 @@
+{
+ "code": "BT-01",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Furniture",
+ "item": "Walnut vanity 900 with Viola top",
+ "family": "VANITY",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 900,
+  "W": 505,
+  "H": 850
+ },
+ "params": {
+  "depth": 550,
+  "basins": 1,
+  "top": "Calacatta Viola 30",
+  "wall_hung": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12708,
+   "y": 850,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

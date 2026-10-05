@@ -1,0 +1,41 @@
+{
+ "code": "SB-04",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Furniture",
+ "item": "Preserved-moss wall panel in a bronze frame",
+ "family": "MOSS_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1050,
+  "W": 40,
+  "H": 1800
+ },
+ "params": {
+  "frame": "bronze 30",
+  "depth": 40
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12375,
+   "y": 12220,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

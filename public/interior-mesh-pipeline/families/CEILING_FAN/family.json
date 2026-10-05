@@ -1,0 +1,50 @@
+{
+ "family": "CEILING_FAN",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "ceiling",
+ "pivot": "top-centre at the mount point",
+ "recipe": "Canopy Ø150 + downrod Ø25 × 150 + motor housing Ø200 × 120 + 3 blades span/2 long, 140 wide, 8 thick, 12° pitch.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 400,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "blades": {
+   "value": 3,
+   "min": 0,
+   "max": 100
+  },
+  "span": {
+   "value": 1320,
+   "min": 0,
+   "max": 13200
+  }
+ },
+ "test_values": {}
+}

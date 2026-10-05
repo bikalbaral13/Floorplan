@@ -1,0 +1,43 @@
+{
+ "code": "B1-22",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Lighting / textile",
+ "item": "Motorised drapes with sheers",
+ "family": "CURTAIN",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 995,
+  "W": 40,
+  "H": 2700
+ },
+ "params": {
+  "fullness": 2.2,
+  "fold_pitch": 160,
+  "track": "motorised ceiling",
+  "layers": "blackout+sheer"
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7260,
+   "y": 250,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,41 @@
+{
+ "code": "BT-04",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Furniture",
+ "item": "Recessed niche",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 300,
+  "W": 40,
+  "H": 400
+ },
+ "params": {
+  "depth": 100,
+  "type": "shower niche"
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11065,
+   "y": 850,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

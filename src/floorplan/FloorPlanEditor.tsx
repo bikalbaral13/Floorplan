@@ -37,11 +37,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle as CircleIcon,
-  CloudCog,
   CloudDownload,
   Columns2,
   Compass,
   DoorOpen,
+  Download,
   DraftingCompass,
   Box,
   Eye,
@@ -200,7 +200,11 @@ import { SimulatedAnnealingDialog } from "./components/dialogs/SimulatedAnnealin
 import { Export3DDialog, DEFAULT_EXPORT_3D, type Export3DSettings } from "./components/dialogs/Export3DDialog";
 import { ExportJsonDialog } from "./components/dialogs/ExportJsonDialog";
 import { R2KeysSettings } from "./components/R2KeysSettings";
-import { CloudInspectDialog } from "./components/dialogs/CloudInspectDialog";
+import { FilePickerDialog, type FilePickerOption } from "./components/dialogs/FilePickerDialog";
+import { NavigatorBar } from "./components/NavigatorBar";
+import { buildSelectionContext, selectionForAgent, setSelectionByPaths, useLibrarySelection } from "./librarySelection";
+import { sendToInbox, useInboxStatus, waitForPrompt } from "./chatInbox";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ImportMoodboardDialog } from "./components/dialogs/ImportMoodboardDialog";
 import { DesignPlacementPanel } from "./components/DesignPlacementPanel";
 import { shellSheet } from "./shell3d";
@@ -226,6 +230,7 @@ import { AgentImportDialog } from "./components/dialogs/AgentImportDialog";
 import { toolCatalogForMode, describeTools } from "./ai/toolCatalog";
 import { registerAgentCommand, startAgentBridge, agentBridgeEnabled, getRelaySession, setBridgeLinkedDesign } from "./agentBridge";
 import { ConnectClaudeButton } from "./components/ConnectClaudeDialog";
+import { PushButton } from "@/components/PushButton";
 import { recordRevision, currentRev, getChangesSince, userEditsSince, asUserInteraction } from "./agentRevisions";
 import { showCheckpoint, resolveOpenCheckpoint, isCheckpointOpen } from "./checkpointHud";
 import { AddGridDialog, type GridDraft } from "./components/dialogs/AddGridDialog";
@@ -234,7 +239,7 @@ import { InfoPanel, type LoggedOp } from "./components/InfoPanel";
 import { LeftToolbar } from "./components/LeftToolbar";
 import { PhaseToggle, usePhase } from "./components/PhaseToggle";
 import { RenderModeToggle, useRenderMode } from "./components/RenderModeToggle";
-import { setUiPref, useUiPrefs } from "./uiPrefs";
+import { getUiPrefs, setUiPref, useUiPrefs } from "./uiPrefs";
 import { ElevationPanels } from "./components/ElevationPanels";
 import { AlignedElevations } from "./components/AlignedElevations";
 import { LayoutSheet, resolveLayoutSheetProps } from "./components/LayoutSheet";
@@ -3617,7 +3622,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // Export JSON → download / local Library / Cloud Library. Opened by the toolbar button.
   const [exportJsonOpen, setExportJsonOpen] = useState(false);
   // Files ▸ Inspect → read-only listing of the Cloudflare R2 bucket as a folder hierarchy.
-  const [cloudInspectOpen, setCloudInspectOpen] = useState(false);
+  /** Files ▸ Import… / Export… — the one button each opens a picker of what kind (FilePickerDialog). */
+  const [importPickerOpen, setImportPickerOpen] = useState(false);
+  const [exportPickerOpen, setExportPickerOpen] = useState(false);
+  const underlayInputRef = useRef<HTMLInputElement | null>(null);
   // Files ▸ Import Moodboard — pick from a moodboard/1 board; only the picks land on `model.moodboards`.
   const [moodboardOpen, setMoodboardOpen] = useState(false);
   /** Board the bridge's open_moodboard_picker asked for (file under Moodboards/); cleared on close. */
@@ -5849,7 +5857,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // Per-panel collapse state (Properties / Tools / Info). Header stays visible; body hides when off.
   // Properties opens expanded on load so the Properties / Metrics tab is visible by default.
   // Preferences ▸ Show on screen ▸ Properties panel; the canvas-edge chevron flips the same value.
-  const propertiesPanelExpanded = uiPrefs.showProperties;
+  /** Phone width (< 768 px): the side panels become slide-over drawers so the canvas keeps the screen. On a
+   *  phone the Properties drawer starts closed and its open state is NOT the saved desktop preference. */
+  const isMobile = useIsMobile();
+  const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
+  const propertiesPanelExpanded = isMobile ? mobilePropsOpen : uiPrefs.showProperties;
+  const toggleProperties = () => (isMobile ? setMobilePropsOpen((o) => !o) : setUiPref("showProperties", !uiPrefs.showProperties));
   const [toolsPanelExpanded, setToolsPanelExpanded] = useState<boolean>(true);
   const [infoPanelExpanded, setInfoPanelExpanded] = useState<boolean>(true);
   // Space Tools — hierarchical algorithm tree replacing the per-block render in the
@@ -6216,6 +6229,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // tool allow-list and resource grants (see ai/agentDefs.ts).
   const [aiAgents, setAiAgents] = useState<AgentDefinition[]>([]);
   const [aiSelectedAgentId, setAiSelectedAgentId] = useState<string>("orchestrator");
+  /** The navigator's ticked Library items, read fresh by the (memoised) send handler. */
+  const librarySelection = useLibrarySelection();
+  const librarySelectionRef = useRef(librarySelection);
+  /** Is Claude Code blocked in chat.wait right now (so a sent prompt is picked up at once)? */
+  const inboxStatus = useInboxStatus();
+  const claudeListeningRef = useRef(inboxStatus.listening);
+  claudeListeningRef.current = inboxStatus.listening;
+  librarySelectionRef.current = librarySelection;
   const [aiAgentImportOpen, setAiAgentImportOpen] = useState(false);
   // Live mirrors for the DELEGATION tools: agentApiRef's factory closes over these refs rather than the
   // state values, so a sub-agent launched mid-run always sees the current roster / key / model. The depth
@@ -6238,7 +6259,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     toast.success(`Imported ${defs.length} agent${defs.length === 1 ? "" : "s"}`);
   }, []);
   /** The selected agent definition — null means the built-in Global Agent. */
-  const aiSelectedAgent: AgentDefinition | null = aiSelectedAgentId === "orchestrator" ? null : (aiAgents.find((a) => a.id === aiSelectedAgentId) ?? null);
+  // Agents are retired from the chat: it always runs the built-in agent, and what it reads comes from the
+  // navigator's Library selection (librarySelection.ts). The Agents/ machinery stays only for the MCP side.
+  const aiSelectedAgent: AgentDefinition | null = null;
   // Keep the delegation mirrors current (plain assignment during render — these feed agentApiRef, which is
   // itself rebuilt every render, so an effect would land a render too late for a run started this pass).
   aiAgentsRef.current = aiAgents;
@@ -6277,6 +6300,17 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
    *  edits through the same programmatic pipeline the MCP bridge uses, streaming each tool call into the
    *  transcript. FLOW mode: tool-loop that builds the node-graph Flow (flowAgent.ts). */
   const handleAiSend = useCallback(async (prompt: string, file?: File) => {
+    // Claude Code engine: queue the prompt for chat.wait — Claude Code does the work on this live canvas.
+    if (getUiPrefs().chatEngine === "claude") {
+      setAiMessages((m) => [...m, { role: "user", text: file ? `${prompt}
+📎 ${file.name} (attachments are not passed to Claude Code yet)` : prompt }]);
+      setAiCollapsed(false);
+      sendToInbox({ prompt, selection: selectionForAgent(librarySelectionRef.current), attachment: file?.name, sentAt: Date.now() });
+      if (!claudeListeningRef.current) {
+        setAiMessages((m) => [...m, { role: "tool", text: "▸ Queued for Claude Code. Connect Claude (Preferences), then tell Claude Code: \"listen to the editor chat\" — it picks this up with chat.wait." }]);
+      }
+      return;
+    }
     if (!aiApiKey.trim() || !aiModel.trim()) {
       toast.error("Set the Gemini API key + model in Preferences first");
       setAiCollapsed(false);
@@ -6309,6 +6343,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           ? `▸ ${e.tool} ${JSON.stringify(e.input ?? {}).slice(0, 180)}`
           : `${e.ok ? "✓" : "✗"} ${e.tool} — ${e.summary.slice(0, 240)}`;
 
+      const selCtx = await buildSelectionContext(librarySelectionRef.current);
+      if (selCtx.inlined || selCtx.listed) setAiMessages((m) => [...m, { role: "tool", text: `▸ library selection — ${selCtx.inlined} file(s) read in, ${selCtx.listed} passed as links` }]);
       if (aiEffectiveRunner !== "flow") {
         // ── Canvas runner: tools over the live canvas + object library. The built-in Global Agent gets all
         //    tools; an imported canvas agent is scoped to its own accessibleTools + instructions. ──
@@ -6319,8 +6355,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           apiKey: aiApiKey, model: aiModel, prompt: effectivePrompt, pixelsPerMeter, api,
           toolset: "orchestrator",
           // Imported agent → its explicit tool allow-list + file instructions; built-in → all tools + the editable prompt.
-          toolNames: aiSelectedAgent?.accessibleTools,
-          systemPrompt: aiSelectedAgent ? aiSelectedAgent.instructions : aiAgentSystemPrompt,
+          toolNames: undefined,
+          // The ticked Library items: skills as instructions, small files as contents, the rest as links.
+          systemPrompt: aiAgentSystemPrompt + selCtx.text,
           file: filePart, detections,
           // Live param knowledge of every placeable object, appended to the system prompt.
           objectCatalog: buildDetailedObjectCatalog(historyRef.current.state.objectLibrary),
@@ -8736,9 +8773,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       const inputs = (a.inputs && typeof a.inputs === "object" ? a.inputs : {}) as Record<string, unknown>;
       let f;
       try { f = withFlowToolInputs(await loadFlowTool(name), inputs); } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+      const prevPreview = flowPreviewRef.current;
       const applied = await agentApi().flowApply(JSON.stringify(f));
-      // The preview fills on the overlay's next evaluation, not inside flowApply — wait for it (≤ 3 s).
-      for (let t = 0; (applied as { ok?: boolean }).ok && t < 30 && !flowPreviewRef.current.some((it) => it.polygons.length); t++) await new Promise((r) => setTimeout(r, 100));
+      // The preview fills on the overlay's next evaluation, not inside flowApply — and until then the ref still
+      // holds the PREVIOUS flow's preview. Wait (≤ 3 s) for a new one, then for it to carry geometry.
+      for (let t = 0; (applied as { ok?: boolean }).ok && t < 30 && (flowPreviewRef.current === prevPreview || !flowPreviewRef.current.some((it) => it.polygons.length)); t++) await new Promise((r) => setTimeout(r, 100));
+      if (flowPreviewRef.current === prevPreview) return { tool: name, inputs, ok: false, errors: ["the flow produced no new preview within 3 s — check the Flow panel"], outputs: [] };
       const ppm = bridgePpmRef.current || 1;
       const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
       const outputs = flowPreviewRef.current.map((it) => ({
@@ -8823,6 +8863,28 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         }),
       };
     }
+    // ── The Chat box as Claude Code's inbox, and the navigator's Library selection (chat.* / library.selection). ──
+    registerAgentCommand("chat_wait_prompt", async () => {
+      const p = await asUserInteraction(() => waitForPrompt());
+      setAiSendBusy(true);
+      setAiMessages((m) => [...m, { role: "tool", text: "▸ Claude Code picked up the prompt" }]);
+      return { ...p, note: "Follow any `skill` items; read files with library.read (paths are Library-relative). Work on the live canvas, post progress with chat.reply, finish with chat.reply { final: true }, then chat.wait again." };
+    });
+    registerAgentCommand("chat_reply", (a) => {
+      const text = String(a.text ?? "").trim();
+      const final = a.final === true;
+      if (text) { setAiMessages((m) => [...m, { role: final ? "ai" : "tool", text: final ? text : `▸ ${text}` }]); setAiCollapsed(false); }
+      if (final) setAiSendBusy(false);
+      return { posted: !!text, final };
+    });
+    registerAgentCommand("get_library_selection", () => ({ selection: selectionForAgent() }));
+    registerAgentCommand("set_library_selection", async (a) => ({
+      selection: await setSelectionByPaths(
+        Array.isArray(a.add) ? a.add.map(String) : [],
+        Array.isArray(a.remove) ? a.remove.map(String) : [],
+        a.clear === true,
+      ),
+    }));
     registerAgentCommand("get_moodboards", () => {
       const mbs = historyRef.current.state.moodboards ?? [];
       return { count: mbs.length, moodboards: mbs };
@@ -29256,6 +29318,21 @@ User request: ${aiPrompt.trim()}`;
           <h4 className="text-sm font-semibold text-slate-900">Preferences</h4>
           <p className="mt-0.5 text-xs text-slate-500">Snapping, global parameters, and wall-drawing defaults.</p>
         </div>
+        {/* Connect Claude + Push (dev server only) — moved here from the header and the screen corner. */}
+        <div className="mb-3 flex flex-col gap-1.5 border-b border-slate-100 pb-3">
+          {/* Phase (Plan | Build | Present) and render mode (Geometry | Primitives | Detailed) — moved here
+              from the header / canvas corners. */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Phase</span>
+            <PhaseToggle />
+          </div>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Render</span>
+            <RenderModeToggle />
+          </div>
+          <ConnectClaudeButton variant="row" />
+          {import.meta.env.DEV && <PushButton inline />}
+        </div>
 
         <div className="flex flex-col gap-3">
           {/* Show on screen — per-browser toggles for the big UI pieces (uiPrefs.ts). */}
@@ -29266,6 +29343,8 @@ User request: ${aiPrompt.trim()}`;
               ["showDrawingToolbar", "Drawing toolbar"],
               ["showFlow", "Flow engine"],
               ["showProperties", "Properties panel"],
+              ["showNavigator", "Navigator (R2 Library)"],
+              ["showStatusBar", "Status bar"],
             ] as const).map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 py-0.5 text-[11px] font-medium text-slate-700">
                 <input
@@ -30469,6 +30548,24 @@ User request: ${aiPrompt.trim()}`;
     toast.success("New drawing");
   };
 
+  // Files ▸ Import… / Export… — every import and export the Files menu used to show as its own button.
+  const importOptions: FilePickerOption[] = [
+    { id: "device", icon: <Upload className="h-4 w-4" />, label: "Plan from device", hint: "A plan .json from this computer", onSelect: () => jsonInputRef.current?.click() },
+    { id: "library", icon: <CloudDownload className="h-4 w-4 text-sky-600" />, label: "Plan from Library", hint: "A design saved in the Library (Designs/)", onSelect: () => setImportDesignOpen(true) },
+    { id: "vestal", icon: <FolderOpen className="h-4 w-4" />, label: "Vestal JSON", hint: "A Vestal export .json", onSelect: () => vestalJsonInputRef.current?.click() },
+    { id: "image", icon: <Image className="h-4 w-4" />, label: "Image / PDF underlay", hint: "A .png, .jpg or .pdf to trace over", onSelect: () => underlayInputRef.current?.click() },
+    { id: "image-lib", icon: <CloudDownload className="h-4 w-4 text-sky-600" />, label: "Image from Library", hint: "An underlay from the Library's Images", onSelect: () => setImportImageOpen(true) },
+    { id: "map", icon: <MapPin className="h-4 w-4 text-sky-600" />, label: "Map", hint: "A .geojson site or map file", onSelect: () => geojsonInputRef.current?.click() },
+    { id: "moodboard", icon: <Palette className="h-4 w-4 text-amber-600" />, label: "Moodboard", hint: "Picks from a Library moodboard", onSelect: () => setMoodboardOpen(true) },
+  ];
+  const exportOptions: FilePickerOption[] = [
+    { id: "json", icon: <FileJson className="h-4 w-4" />, label: "JSON", hint: "The plan as .json (re-importable)", onSelect: exportJsonFile },
+    { id: "png", icon: <Image className="h-4 w-4" />, label: "PNG", hint: "A picture of the 2D canvas", onSelect: exportPng },
+    { id: "svg", icon: <FileImage className="h-4 w-4" />, label: "SVG", hint: "The 2D plan as vector graphics", onSelect: exportSvgFile },
+    { id: "dxf", icon: <DraftingCompass className="h-4 w-4" />, label: "DXF", hint: "For AutoCAD and other CAD apps", onSelect: exportDxfFile },
+    { id: "3d", icon: <Box className="h-4 w-4 text-violet-600" />, label: "3D", hint: "The 3D model (.glb and more)", onSelect: () => setExport3dOpen(true) },
+  ];
+
   // "Import Image" — the image-underlay popover (upload + opacity / scale / lock / calibrate). Lives in the
   // top-right Files dropdown; opens to the left so it clears the dropdown.
   const imageUnderlayPopover = (
@@ -30613,56 +30710,18 @@ User request: ${aiPrompt.trim()}`;
 
   return (
     <div className="h-screen w-full bg-slate-50 text-slate-900">
-      <div className="flex min-h-16 items-center justify-between gap-2 border-b bg-white px-3 py-2 shadow-sm">
+      <div className="flex min-h-16 items-center justify-between gap-2 overflow-x-auto border-b bg-white px-3 py-2 shadow-sm">
         <div className="flex shrink-0 items-center gap-2">
           <img src="/builderpluss-logo.svg" alt="BUILDERPLUSS" className="h-7 w-auto" />
-          <p className="text-sm font-semibold tracking-wide text-slate-700">
+          <p className="hidden text-sm font-semibold tracking-wide text-slate-700 md:block">
             BUILDER<span className="font-extrabold text-slate-900">PLUSS</span>
           </p>
-          <div className="mx-1 h-6 w-px bg-slate-200" />
-          <PhaseToggle />
-        </div>
-        {/* Top-center toolbar: Pan / Undo / Redo / Reset view / Zoom extents — navigation
-            actions moved out of the Drawing left-sidebar group. */}
-        <div className="flex shrink-0 items-center gap-1">
-          <ToolButton
-            active={tool === "pan"}
-            icon={<Hand className="h-4 w-4" />}
-            label="Pan"
-            onClick={() => {
-              setTool("pan");
-              setAddDoorMode(false);
-              setAddWindowMode(false);
-              setAddEdgeMode(null);
-              setAddEdgeFirstRoom(null);
-              setAddRoomMode(false);
-              setAddFurnitureMode(false);
-            }}
-          />
-          <ToolButton active={false} icon={<Undo2 className="h-4 w-4" />} label="Undo" onClick={history.undo} disabled={!history.canUndo} />
-          <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} />
-          <ToolButton
-            active={false}
-            icon={<ZoomIn className="h-4 w-4" />}
-            label="Reset view"
-            onClick={() => {
-              setScale(1);
-              setPosition({ x: 0, y: 0 });
-            }}
-          />
-          <ToolButton
-            active={false}
-            icon={<Maximize className="h-4 w-4" />}
-            label="Zoom extents"
-            onClick={zoomExtents}
-          />
+
         </div>
         {/* Top-right toolbar: Files block + View block moved here from the left
             sidebar. Files first (import/save/load/export), then a thin divider, then
             View (2D/3D toggle, Snapping/Layers/View Mode/Default-Settings popovers). */}
         <div className="flex shrink-0 items-center gap-1">
-          <RenderModeToggle />
-          <div className="mx-1 h-6 w-px bg-slate-200" />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" title="Files (import / save / export)" aria-label="Files">
@@ -30676,26 +30735,12 @@ User request: ${aiPrompt.trim()}`;
                 <ToolButton active={false} icon={<FilePlus2 className="h-4 w-4 text-emerald-600" />} label="New" onClick={handleNewDocument} />
               </div>
               <div className="grid grid-cols-2 place-items-center gap-2">
-                {/* Import has two sources and they are two buttons, not one button with a submenu:
-                    both are one click, and which one you want is known before you press anything. */}
-                <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import from device" onClick={() => jsonInputRef.current?.click()} />
-                <ToolButton active={false} icon={<CloudDownload className="h-4 w-4 text-sky-600" />} label="Import from Library" onClick={() => setImportDesignOpen(true)} />
-                <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Vestal JSON" onClick={() => vestalJsonInputRef.current?.click()} />
-                {/* Import Image (image underlay) + Import Map (GeoJSON) — moved here from the Drawing toolbar. */}
-                {imageUnderlayPopover}
-                <ToolButton active={false} icon={<MapPin className="h-4 w-4 text-sky-600" />} label="Import Map" onClick={() => geojsonInputRef.current?.click()} />
-                <ToolButton active={false} icon={<Palette className="h-4 w-4 text-amber-600" />} label="Import Moodboard" onClick={() => setMoodboardOpen(true)} />
+                {/* One Import… and one Export…: each opens a picker of every kind (FilePickerDialog). The
+                    underlay's settings (opacity / scale / calibrate) stay on the left toolbar's plan import. */}
+                <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import…" onClick={() => setImportPickerOpen(true)} />
+                <ToolButton active={false} icon={<Download className="h-4 w-4" />} label="Export…" onClick={() => setExportPickerOpen(true)} />
                 <ToolButton active={false} icon={<Save className="h-4 w-4" />} label="Save to project" onClick={() => void saveModel()} />
                 <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Reload from project" onClick={() => void loadModel()} />
-                <ToolButton active={false} icon={<FileJson className="h-4 w-4" />} label="Export JSON" onClick={exportJsonFile} />
-                <ToolButton active={false} icon={<Image className="h-4 w-4" />} label="Export PNG" onClick={exportPng} />
-                <ToolButton active={false} icon={<FileImage className="h-4 w-4" />} label="Export SVG" onClick={exportSvgFile} />
-                <ToolButton active={false} icon={<DraftingCompass className="h-4 w-4" />} label="Export to DXF" onClick={exportDxfFile} />
-                <ToolButton active={false} icon={<Box className="h-4 w-4 text-violet-600" />} label="Export 3D" onClick={() => setExport3dOpen(true)} />
-                {/* Inspect — read the Cloudflare R2 bucket and show what is actually in it. Nothing
-                    else surfaces the bucket as a whole, so a file another app wrote (or a save under
-                    the wrong key) is otherwise only visible from the Cloudflare dashboard. */}
-                <ToolButton active={false} icon={<CloudCog className="h-4 w-4 text-sky-600" />} label="Inspect Cloud storage" onClick={() => setCloudInspectOpen(true)} />
               </div>
             </PopoverContent>
           </Popover>
@@ -30704,7 +30749,6 @@ User request: ${aiPrompt.trim()}`;
           {settingsPopover}
           {layersPopover}
           {viewModePopover}
-          <ConnectClaudeButton />
           {defaultSettingsPopover}
         </div>
         <input ref={jsonInputRef} type="file" accept=".json" onChange={importJsonFile} className="hidden" />
@@ -30718,10 +30762,13 @@ User request: ${aiPrompt.trim()}`;
           </button>
         )}
         <input ref={geojsonInputRef} type="file" accept=".geojson,.json" onChange={importGeojsonFile} className="hidden" />
+        <input ref={underlayInputRef} type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => { onUnderlayUpload(e); e.target.value = ""; }} className="hidden" />
         <input ref={vestalJsonInputRef} type="file" accept=".json" onChange={importVestalJson} className="hidden" />
       </div>
 
-      <div className="flex h-[calc(100%-64px)] gap-2 p-2">
+      <div className="relative flex h-[calc(100%-64px)] gap-2 p-2">
+        {/* Left navigation bar — the R2 Library as a foldable, resizable tree (replaces Files ▸ Inspect). */}
+        {uiPrefs.showNavigator && <NavigatorBar overlay={isMobile} />}
         {/* Floating, draggable Drawing toolbar (SketchUp-style). Fixed-positioned over the canvas; drag
             it anywhere by the top grip handle. Hidden from Preferences ▸ Show on screen. */}
         <div
@@ -31110,21 +31157,15 @@ User request: ${aiPrompt.trim()}`;
                     {settingsPopover}
                     {layersPopover}
                     {viewModePopover}
-                    <ConnectClaudeButton />
                   </>
                 )}
                 defaultSettingsPopover={defaultSettingsPopover}
                 filesSlot={(
                   <>
-                    <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import from device" onClick={() => jsonInputRef.current?.click()} />
-                    <ToolButton active={false} icon={<CloudDownload className="h-4 w-4 text-sky-600" />} label="Import from Library" onClick={() => setImportDesignOpen(true)} />
-                    <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Vestal JSON" onClick={() => vestalJsonInputRef.current?.click()} />
+                    <ToolButton active={false} icon={<Upload className="h-4 w-4" />} label="Import…" onClick={() => setImportPickerOpen(true)} />
+                    <ToolButton active={false} icon={<Download className="h-4 w-4" />} label="Export…" onClick={() => setExportPickerOpen(true)} />
                     <ToolButton active={false} icon={<Save className="h-4 w-4" />} label="Save to project" onClick={() => void saveModel()} />
                     <ToolButton active={false} icon={<FolderOpen className="h-4 w-4" />} label="Reload from project" onClick={() => void loadModel()} />
-                    <ToolButton active={false} icon={<FileJson className="h-4 w-4" />} label="Export JSON" onClick={exportJsonFile} />
-                    <ToolButton active={false} icon={<Image className="h-4 w-4" />} label="Export PNG" onClick={exportPng} />
-                    <ToolButton active={false} icon={<FileImage className="h-4 w-4" />} label="Export SVG" onClick={exportSvgFile} />
-                    <ToolButton active={false} icon={<DraftingCompass className="h-4 w-4" />} label="Export to DXF" onClick={exportDxfFile} />
                   </>
                 )}
                 topToolSlots={null}
@@ -31161,6 +31202,44 @@ User request: ${aiPrompt.trim()}`;
 
         <PanelGroup direction="vertical" className="flex min-h-0 flex-1">
         <Panel id="canvas-panel" order={1} minSize={20} className="relative min-h-0">
+        {/* Navigation tools float at the top centre of the canvas (Phase + render mode live in Preferences). */}
+        <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-md backdrop-blur">
+          {/* Top-center toolbar: Pan / Undo / Redo / Reset view / Zoom extents — navigation
+              actions moved out of the Drawing left-sidebar group. */}
+          <div className="flex shrink-0 items-center gap-1">
+            <ToolButton
+              active={tool === "pan"}
+              icon={<Hand className="h-4 w-4" />}
+              label="Pan"
+              onClick={() => {
+                setTool("pan");
+                setAddDoorMode(false);
+                setAddWindowMode(false);
+                setAddEdgeMode(null);
+                setAddEdgeFirstRoom(null);
+                setAddRoomMode(false);
+                setAddFurnitureMode(false);
+              }}
+            />
+            <ToolButton active={false} icon={<Undo2 className="h-4 w-4" />} label="Undo" onClick={history.undo} disabled={!history.canUndo} />
+            <ToolButton active={false} icon={<Redo2 className="h-4 w-4" />} label="Redo" onClick={history.redo} disabled={!history.canRedo} />
+            <ToolButton
+              active={false}
+              icon={<ZoomIn className="h-4 w-4" />}
+              label="Reset view"
+              onClick={() => {
+                setScale(1);
+                setPosition({ x: 0, y: 0 });
+              }}
+            />
+            <ToolButton
+              active={false}
+              icon={<Maximize className="h-4 w-4" />}
+              label="Zoom extents"
+              onClick={zoomExtents}
+            />
+          </div>
+        </div>
         {/* Chat AI — foldable bar pinned to the top of the canvas. The built-in Global Agent is always
             present (full tool-loop: canvas + Flow + parametric library); Import loads agent files from
             the Library's Agents/ folder, each with its own instructions, tool allow-list and resource grants. */}
@@ -31170,7 +31249,11 @@ User request: ${aiPrompt.trim()}`;
           collapsed={aiCollapsed}
           onToggleCollapsed={() => setAiCollapsed((c) => !c)}
           onSend={handleAiSend}
-          configured={!!aiApiKey.trim() && !!aiModel.trim()}
+          // Claude Code needs no key here — it runs on the user's machine and answers through chat.wait / reply.
+          configured={uiPrefs.chatEngine === "claude" || (!!aiApiKey.trim() && !!aiModel.trim())}
+          engine={uiPrefs.chatEngine}
+          onEngineChange={(e) => setUiPref("chatEngine", e)}
+          claudeListening={inboxStatus.listening}
           agents={[
             { id: "orchestrator", label: "⚡ Global Agent", title: "Global Agent — one self-contained agent with the full toolbox: canvas design, the Flow engine, saved workflows + designs, and the parametric object library. It delegates to nothing." },
             ...aiAgents.map((a): ChatAgentTab => ({ id: a.id, label: a.label ?? a.name, title: a.description ?? a.name })),
@@ -39624,8 +39707,10 @@ User request: ${aiPrompt.trim()}`;
             else if (moveDistanceInput !== "") { typedKind = "Offset"; typedLabel = withUnit(moveDistanceInput); }
             else if (copyDistanceInput !== "") { typedKind = "Copy gap"; typedLabel = withUnit(copyDistanceInput); }
             const dot = <span className="text-slate-300">·</span>;
+            // Preferences ▸ Show on screen ▸ Status bar (off by default).
+            if (!uiPrefs.showStatusBar) return null;
             return (
-              <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 px-4 py-1.5 text-xs text-slate-600 shadow-md backdrop-blur">
+              <div className="pointer-events-none absolute left-1/2 top-[4.25rem] z-10 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 overflow-hidden whitespace-nowrap rounded-full border border-slate-200/80 bg-white/95 px-4 py-1.5 text-xs text-slate-600 shadow-md backdrop-blur">
                 <span className="font-medium text-slate-800">{(scale * 100).toFixed(0)}%</span>
                 {dot}
                 <span className="font-medium text-slate-700">{modeLabel}</span>
@@ -39645,7 +39730,7 @@ User request: ${aiPrompt.trim()}`;
             <button
               type="button"
               className="absolute right-2 top-1/2 z-10 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[12px] font-semibold text-slate-700 shadow-md hover:bg-slate-50"
-              onClick={() => setUiPref("showProperties", !propertiesPanelExpanded)}
+              onClick={toggleProperties}
               title={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
               aria-label={propertiesPanelExpanded ? "Hide Properties / Metrics" : "Show Properties / Metrics"}
             >
@@ -39863,12 +39948,22 @@ User request: ${aiPrompt.trim()}`;
         <div
           className={
             !isRightPanelCollapsed && propertiesPanelExpanded
-              ? `${propsSplitView ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
+              ? isMobile
+                ? "absolute bottom-2 right-2 top-2 z-40 min-h-0 w-[min(22rem,calc(100vw-1rem))] rounded-xl border bg-white shadow-xl"
+                : `${propsSplitView ? "w-[34rem]" : "w-72"} ${sidePanelClass}`
               : "w-0 min-w-0 shrink-0 overflow-hidden border-0 bg-transparent p-0 shadow-none"
           }
         >
           {!isRightPanelCollapsed && propertiesPanelExpanded ? (
             <div className="flex h-full min-h-0 flex-col">
+              {/* Phone drawer: it covers the canvas-edge chevron, so it carries its own close. */}
+              {isMobile && (
+                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Properties</span>
+                  <button type="button" onClick={toggleProperties} aria-label="Close Properties" title="Close"
+                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800">✕</button>
+                </div>
+              )}
               {/* `[&>div>div]` is Radix's viewport child, which it styles `display:table; min-width:100%`.
                   A table inside a scroll container has unlimited inline space, so it grows to MAX-CONTENT:
                   one long parameter label (a 16-param object like the BOQ generator has several) widens the
@@ -39876,7 +39971,7 @@ User request: ${aiPrompt.trim()}`;
                   at the column and lets the labels wrap instead. */}
               {propertiesPanelExpanded && (
               <ScrollArea className="props-scroll flex-1 min-h-0">
-              <div className="space-y-4 p-3 pr-4 pb-6 pt-3">
+              <div className="relative space-y-4 p-4 pb-6">
                 {/* Active workflow tool — its controls live HERE, like an attached object's parameters: no
                     floating window and no Flow panel (it evaluates and commits in the background). */}
                 <RunWorkflowToolDialog
@@ -39948,16 +40043,16 @@ User request: ${aiPrompt.trim()}`;
                     chain below. */}
                 {(selectedNodeKey || selectedGraph || selectedWall || selectedRoom || (imageSelected && history.state.imageUnderlay)
                   || (!selectedObject && !selectedGenElement && !imageSelected)) && (
-                  <div className="flex justify-end">
+                  <div className="absolute right-3 top-3 z-10">
                     <button
                       type="button"
                       onClick={() => setPropsSplitView((v) => !v)}
                       title={propsSplitView ? "Switch to tabbed Properties / Metrics" : "Show Properties & Metrics side by side"}
                       aria-pressed={propsSplitView}
-                      className={`flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-semibold transition ${propsSplitView ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                      aria-label={propsSplitView ? "Tabbed view" : "Split view"}
+                      className={`flex h-7 w-7 items-center justify-center rounded-md border transition ${propsSplitView ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}
                     >
                       <Columns2 className="h-3.5 w-3.5" />
-                      {propsSplitView ? "Split view" : "Tabs"}
                     </button>
                   </div>
                 )}
@@ -39965,15 +40060,15 @@ User request: ${aiPrompt.trim()}`;
                 {/* ── Context header ── */}
                 {imageSelected && selectedImage ? (
                   <>
-                    <p className="text-xs text-slate-500">
-                      Selected: Image{selectedImage.id ? <span className="ml-1 font-mono text-slate-400">{selectedImage.id}</span> : null}
+                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Image{selectedImage.id ? <span className="ml-1 font-mono text-slate-400">{selectedImage.id}</span> : null}
                     </p>
 
                     {!propsSplitView && (
-                    <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                    <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
                       <button
                         type="button"
-                        className={`flex-1 px-2.5 py-1.5 text-center transition ${imagePropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${imagePropsTab === "properties" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setImagePropsTab("properties")}
                         aria-pressed={imagePropsTab === "properties"}
                       >
@@ -39981,7 +40076,7 @@ User request: ${aiPrompt.trim()}`;
                       </button>
                       <button
                         type="button"
-                        className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${imagePropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${imagePropsTab === "metrics" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setImagePropsTab("metrics")}
                         aria-pressed={imagePropsTab === "metrics"}
                       >
@@ -40202,22 +40297,22 @@ User request: ${aiPrompt.trim()}`;
                     </div>
                   </>
                 ) : selectedGenElement?.type === "seed" && generatedLayout ? (
-                  <p className="text-xs text-slate-500">Selected: Room</p>
+                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Room</p>
                 ) : selectedGenElement?.type === "connection" && generatedLayout ? (
-                  <p className="text-xs text-slate-500">Selected: Connection</p>
+                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Connection</p>
                 ) : selectedGenElement?.type === "repulsion" && generatedLayout ? (
-                  <p className="text-xs text-slate-500">Selected: Repulsion</p>
+                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Repulsion</p>
                 ) : selectedNodeKey ? (
-                  <p className="text-xs text-slate-500">Selected: Point</p>
+                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Point</p>
                 ) : selectedGraph ? (
                   <>
-                    <p className="text-xs text-slate-500">Selected: Graph</p>
+                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Graph</p>
 
                     {!propsSplitView && (
-                    <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                    <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
                       <button
                         type="button"
-                        className={`flex-1 px-2.5 py-1.5 text-center transition ${graphPropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${graphPropsTab === "properties" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setGraphPropsTab("properties")}
                         aria-pressed={graphPropsTab === "properties"}
                       >
@@ -40225,7 +40320,7 @@ User request: ${aiPrompt.trim()}`;
                       </button>
                       <button
                         type="button"
-                        className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${graphPropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${graphPropsTab === "metrics" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setGraphPropsTab("metrics")}
                         aria-pressed={graphPropsTab === "metrics"}
                       >
@@ -40284,13 +40379,13 @@ User request: ${aiPrompt.trim()}`;
                   </>
                 ) : selectedWall ? (
                   <>
-                    <p className="text-xs text-slate-500">Selected: Segment{selectedWall.label ? ` — ${selectedWall.label}` : ""}</p>
+                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Segment{selectedWall.label ? ` — ${selectedWall.label}` : ""}</p>
 
                     {!propsSplitView && (
-                    <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                    <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
                       <button
                         type="button"
-                        className={`flex-1 px-2.5 py-1.5 text-center transition ${wallPropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${wallPropsTab === "properties" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setWallPropsTab("properties")}
                         aria-pressed={wallPropsTab === "properties"}
                       >
@@ -40298,7 +40393,7 @@ User request: ${aiPrompt.trim()}`;
                       </button>
                       <button
                         type="button"
-                        className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${wallPropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${wallPropsTab === "metrics" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setWallPropsTab("metrics")}
                         aria-pressed={wallPropsTab === "metrics"}
                       >
@@ -40520,7 +40615,7 @@ User request: ${aiPrompt.trim()}`;
                   </>
                 ) : selectedRoom ? (
                   <>
-                  <p className="text-xs text-slate-500">Selected: Space</p>
+                  <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Space</p>
                   {/* Workflow tools LINKED to this space — change a value and the tool re-runs, replacing its result. */}
                   {(history.state.toolAttachments?.[selectedRoom.id] ?? []).map((att) => (
                     <AttachedToolBlock
@@ -40534,7 +40629,7 @@ User request: ${aiPrompt.trim()}`;
                   </>
                 ) : selectedObject ? null : (
                   <>
-                    <p className="text-xs text-slate-500">Selected: Canvas</p>
+                    <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Canvas</p>
 
                     {/* The drawing as a whole, in the same Properties | Metrics pair every selected scope
                         uses. Nothing is selected, so the subject is the CANVAS: Properties are the objects
@@ -40543,10 +40638,10 @@ User request: ${aiPrompt.trim()}`;
                         the canvas is always a valid subject even on an empty plan, and each block renders
                         null on its own when it has nothing to show. */}
                     {!propsSplitView && (
-                      <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                      <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
                         <button
                           type="button"
-                          className={`flex-1 px-2.5 py-1.5 text-center transition ${canvasPropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                          className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${canvasPropsTab === "properties" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                           onClick={() => setCanvasPropsTab("properties")}
                           aria-pressed={canvasPropsTab === "properties"}
                         >
@@ -40554,7 +40649,7 @@ User request: ${aiPrompt.trim()}`;
                         </button>
                         <button
                           type="button"
-                          className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${canvasPropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                          className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${canvasPropsTab === "metrics" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                           onClick={() => setCanvasPropsTab("metrics")}
                           aria-pressed={canvasPropsTab === "metrics"}
                         >
@@ -40566,8 +40661,14 @@ User request: ${aiPrompt.trim()}`;
                     <div className={propsSplitView ? "grid grid-cols-2 gap-3 items-start" : "contents"}>
                       {(propsSplitView || canvasPropsTab === "properties") && (
                         <div className="space-y-1.5">
-                          <p className="text-xs text-slate-500">Tool: {tool}</p>
-                          <p className="text-xs text-slate-500">Zoom: {(scale * 100).toFixed(0)}%</p>
+                          <div className="grid grid-cols-2 gap-2 pt-1.5">
+                            {([["Tool", tool], ["Zoom", `${(scale * 100).toFixed(0)}%`]] as const).map(([k, v]) => (
+                              <div key={k} className="rounded-lg border border-slate-200 px-2.5 py-1.5">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{k}</p>
+                                <p className="truncate text-xs font-semibold capitalize text-slate-800">{v}</p>
+                              </div>
+                            ))}
+                          </div>
 
                           {/* Parametric Object — the CANVAS as host. Nothing is selected, so the subject is
                               the drawing itself: import a `hostKind: "canvas"` object (Title Block, BOQ
@@ -40643,7 +40744,7 @@ User request: ${aiPrompt.trim()}`;
 
                     {/* Outliner — shown when nothing is selected. Hierarchical browser of model elements.
                         Outside the tabs deliberately: it is navigation, not a property or a measurement. */}
-                    <div className="mt-3 space-y-1.5">
+                    <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
                       {([
                         { key: "nodes" as const, label: "Nodes", count: wallNodes.length },
                         { key: "edges" as const, label: "Edges", count: history.state.walls.length },
@@ -40651,16 +40752,16 @@ User request: ${aiPrompt.trim()}`;
                       ]).map((group) => {
                         const open = outlinerOpenGroup === group.key;
                         return (
-                          <div key={group.key} className="rounded border border-slate-200 bg-white">
+                          <div key={group.key}>
                             <button
                               type="button"
-                              className="flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-slate-50"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
                               onClick={() => setOutlinerOpenGroup(open ? null : group.key)}
+                              aria-expanded={open}
                             >
-                              <span className="text-xs font-semibold text-slate-700">
-                                {group.label} <span className="ml-1 text-[10px] font-normal text-slate-400">({group.count})</span>
-                              </span>
-                              <span className="text-[11px] text-slate-400">{open ? "▼" : "▶"}</span>
+                              {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+                              <span className="flex-1 text-xs font-semibold text-slate-700">{group.label}</span>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">{group.count}</span>
                             </button>
                             {open && (
                               <div className="max-h-56 overflow-y-auto border-t border-slate-100 px-1 py-1">
@@ -41093,14 +41194,14 @@ User request: ${aiPrompt.trim()}`;
                   );
                   return (
                     <>
-                      <p className="text-xs text-slate-500">Selected: Dimension</p>
+                      <p className="flex items-baseline gap-1.5 pr-10 text-sm font-semibold text-slate-900"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Selected</span>Dimension</p>
 
                       {/* Properties | Metrics tab strip (matches the Segment panel). */}
                       {!propsSplitView && (
-                        <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                        <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
                           <button
                             type="button"
-                            className={`flex-1 px-2.5 py-1.5 text-center transition ${wallPropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                            className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${wallPropsTab === "properties" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                             onClick={() => setWallPropsTab("properties")}
                             aria-pressed={wallPropsTab === "properties"}
                           >
@@ -41108,7 +41209,7 @@ User request: ${aiPrompt.trim()}`;
                           </button>
                           <button
                             type="button"
-                            className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${wallPropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                            className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${wallPropsTab === "metrics" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                             onClick={() => setWallPropsTab("metrics")}
                             aria-pressed={wallPropsTab === "metrics"}
                           >
@@ -41205,10 +41306,10 @@ User request: ${aiPrompt.trim()}`;
                   <div className="mt-4 rounded border bg-green-50 p-2 text-xs space-y-2">
                     {/* Properties | Metrics tab strip — Properties = INPUTS, Metrics = OUTPUTS. */}
                     {!propsSplitView && (
-                    <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                    <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
                       <button
                         type="button"
-                        className={`flex-1 px-2.5 py-1.5 text-center transition ${roomPropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${roomPropsTab === "properties" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setRoomPropsTab("properties")}
                         aria-pressed={roomPropsTab === "properties"}
                       >
@@ -41216,7 +41317,7 @@ User request: ${aiPrompt.trim()}`;
                       </button>
                       <button
                         type="button"
-                        className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${roomPropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                        className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${roomPropsTab === "metrics" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                         onClick={() => setRoomPropsTab("metrics")}
                         aria-pressed={roomPropsTab === "metrics"}
                       >
@@ -42736,10 +42837,10 @@ User request: ${aiPrompt.trim()}`;
 
                       {/* Properties | Metrics tab strip — Properties = INPUTS, Metrics = OUTPUTS. */}
                       {!propsSplitView && (
-                      <div className="flex items-stretch overflow-hidden rounded border border-slate-200 bg-white text-[11px] font-semibold">
+                      <div className="flex items-stretch gap-0.5 rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold">
                         <button
                           type="button"
-                          className={`flex-1 px-2.5 py-1.5 text-center transition ${nodePropsTab === "properties" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                          className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${nodePropsTab === "properties" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                           onClick={() => setNodePropsTab("properties")}
                           aria-pressed={nodePropsTab === "properties"}
                         >
@@ -42747,7 +42848,7 @@ User request: ${aiPrompt.trim()}`;
                         </button>
                         <button
                           type="button"
-                          className={`flex-1 border-l border-slate-200 px-2.5 py-1.5 text-center transition ${nodePropsTab === "metrics" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                          className={`flex-1 rounded-md px-2.5 py-1.5 text-center transition ${nodePropsTab === "metrics" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                           onClick={() => setNodePropsTab("metrics")}
                           aria-pressed={nodePropsTab === "metrics"}
                         >
@@ -43942,7 +44043,10 @@ User request: ${aiPrompt.trim()}`;
       {/* Inspect — Files ▸ Inspect Cloud storage. Read-only listing of the R2 bucket, fetched through
           the dev-server bridge because enumerating an S3 keyspace needs a signature the browser
           must never hold. */}
-      <CloudInspectDialog open={cloudInspectOpen} onOpenChange={setCloudInspectOpen} />
+      {/* Connect Claude's dialog lives here, always mounted; Preferences ▸ Connect Claude opens it. */}
+      <ConnectClaudeButton variant="host" />
+      <FilePickerDialog open={importPickerOpen} onOpenChange={setImportPickerOpen} title="Import" description="What do you want to bring in?" options={importOptions} />
+      <FilePickerDialog open={exportPickerOpen} onOpenChange={setExportPickerOpen} title="Export" description="Save the plan as…" options={exportOptions} />
       <ImportMoodboardDialog
         open={moodboardOpen}
         onOpenChange={(o) => { setMoodboardOpen(o); if (!o) setMoodboardInitial(undefined); }}

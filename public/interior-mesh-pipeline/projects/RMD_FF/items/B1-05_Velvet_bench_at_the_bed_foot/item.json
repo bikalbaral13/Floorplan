@@ -1,0 +1,43 @@
+{
+ "code": "B1-05",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Furniture",
+ "item": "Velvet bench at the bed foot",
+ "family": "BENCH_UPHOLSTERED",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1300,
+  "W": 450,
+  "H": 450
+ },
+ "params": {
+  "seat_t": 120,
+  "leg_h": 180,
+  "leg": "bronze sled",
+  "piping": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9348,
+   "y": 2586,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

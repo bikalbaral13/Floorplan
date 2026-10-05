@@ -1,0 +1,44 @@
+{
+ "code": "B2-05",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Furniture",
+ "item": "Olive bouclé lounge chair by the balcony door",
+ "family": "CHAIR_LOUNGE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 750,
+  "W": 750,
+  "H": 800
+ },
+ "params": {
+  "seat_h": 400,
+  "back_h": 800,
+  "arm": "rounded",
+  "leg": "tapered bronze",
+  "leg_h": 150
+ },
+ "face": "W",
+ "rot_z": 270,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11050,
+   "y": 10475,
+   "z": 0,
+   "rot": 270
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

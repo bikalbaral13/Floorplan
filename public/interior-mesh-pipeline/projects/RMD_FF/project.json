@@ -1,0 +1,12 @@
+{
+ "code": "RMD_FF",
+ "title": "Ramanathapuram residence \u2014 first floor",
+ "ffl_mm": 3348,
+ "units": "mm",
+ "front": "-Y",
+ "collection_root": "FF_Meshes",
+ "collection_prefix": "FF_",
+ "base_blend": "RMD_GF_UE_Final_Baked.blend (ground floor shell + roof slab; FF walls not modelled yet)",
+ "notes": "FFL +3348 = top of the 300 mm GF roof slab; plan grid identical to the ground floor",
+ "name_prefix": "SM_FF_"
+}

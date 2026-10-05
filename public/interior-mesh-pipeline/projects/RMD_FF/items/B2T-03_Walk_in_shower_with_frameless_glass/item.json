@@ -1,0 +1,43 @@
+{
+ "code": "B2T-03",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Furniture",
+ "item": "Walk-in shower with frameless glass",
+ "family": "SHOWER_ENCLOSURE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1000,
+  "W": 955,
+  "H": 2100
+ },
+ "params": {
+  "tray": "flush microcement",
+  "glass": "frameless low-iron 10 mm",
+  "drain": "linear brass",
+  "rain_head": "Ø300 brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5750,
+   "y": 11718,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,38 @@
+{
+ "code": "BT-14",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Lighting / textile",
+ "item": "Mirror backlight",
+ "family": "LIGHT_LED_STRIP",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 800,
+  "W": 40,
+  "H": 10
+ },
+ "params": {},
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12915,
+   "y": 850,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

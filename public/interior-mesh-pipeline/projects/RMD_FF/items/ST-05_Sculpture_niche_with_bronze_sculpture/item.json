@@ -1,0 +1,41 @@
+{
+ "code": "ST-05",
+ "project": "RMD_FF",
+ "space": "Staircase",
+ "space_code": "ST",
+ "category": "Décor",
+ "item": "Sculpture niche with bronze sculpture",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 700,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "depth": 100,
+  "type": "sculpture niche + bronze sculpture"
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5350,
+   "y": 250,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  4238,
+  230,
+  6411,
+  4559
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

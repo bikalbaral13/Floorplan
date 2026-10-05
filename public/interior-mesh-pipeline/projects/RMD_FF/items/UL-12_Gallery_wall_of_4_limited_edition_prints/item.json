@@ -1,0 +1,43 @@
+{
+ "code": "UL-12",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Décor",
+ "item": "Gallery wall of 4 limited-edition prints in walnut frames",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 4,
+ "size": {
+  "L": 1280,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8540,
+   "y": 4580,
+   "z": 1050,
+   "rot": 180
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

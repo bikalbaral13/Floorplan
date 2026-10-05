@@ -1,0 +1,41 @@
+{
+ "code": "LB-14",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Finish",
+ "item": "Teak / ipe hardwood deck (replaces WPC)",
+ "family": "FINISH_FLOOR",
+ "host": "room",
+ "qty": 1,
+ "size": {
+  "L": 3810,
+  "W": 3733,
+  "H": 15
+ },
+ "params": {
+  "pattern": "teak / ipe deck 140×20",
+  "grout": 2
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2135,
+   "y": 10374,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

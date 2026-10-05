@@ -1,0 +1,41 @@
+{
+ "code": "B2-07",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Furniture",
+ "item": "Floating shelf",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 800,
+  "W": 40,
+  "H": 40
+ },
+ "params": {
+  "depth": 100,
+  "type": "floating shelf (surface-mounted)"
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 7695,
+   "y": 10900,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,43 @@
+{
+ "code": "B1-10",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Décor",
+ "item": "Art pair above the dresser",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 2,
+ "size": {
+  "L": 500,
+  "W": 40,
+  "H": 700
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 6630,
+   "y": 1900,
+   "z": 1150,
+   "rot": 90
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

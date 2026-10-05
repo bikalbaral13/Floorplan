@@ -1,0 +1,41 @@
+{
+ "code": "MT-21",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Lighting / textile",
+ "item": "Shower downlight",
+ "family": "LIGHT_SPOT",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 200,
+  "W": 200,
+  "H": 80
+ },
+ "params": {
+  "beam_deg": 40,
+  "type": "shower downlight"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3200,
+   "y": 3150,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

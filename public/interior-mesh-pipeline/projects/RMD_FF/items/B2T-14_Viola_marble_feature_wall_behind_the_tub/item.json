@@ -1,0 +1,42 @@
+{
+ "code": "B2T-14",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Finish",
+ "item": "Viola marble feature wall behind the tub",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 1740,
+  "W": 40,
+  "H": 2700
+ },
+ "params": {
+  "type": "Calacatta Viola slabs",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 4270,
+   "y": 11270,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

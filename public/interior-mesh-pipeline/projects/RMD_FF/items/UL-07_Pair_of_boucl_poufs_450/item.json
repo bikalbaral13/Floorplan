@@ -1,0 +1,47 @@
+{
+ "code": "UL-07",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Furniture",
+ "item": "Pair of bouclé poufs Ø450",
+ "family": "POUF_ROUND",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 450,
+  "W": 450,
+  "H": 420
+ },
+ "params": {
+  "bevel": 60
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8150,
+   "y": 7680,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 8790,
+   "y": 7680,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "tucked at the console",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

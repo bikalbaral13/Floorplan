@@ -1,0 +1,42 @@
+{
+ "code": "SB-02",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Furniture",
+ "item": "Side table Ø400 with stone top",
+ "family": "TABLE_ROUND",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 400,
+  "W": 400,
+  "H": 450
+ },
+ "params": {
+  "top_t": 40,
+  "base": "teak + stone top",
+  "edge": "eased 6"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12200,
+   "y": 10320,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

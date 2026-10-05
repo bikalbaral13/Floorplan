@@ -1,0 +1,41 @@
+{
+ "code": "B2T-06",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Furniture",
+ "item": "Recessed niche",
+ "family": "RECESSED",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 400,
+  "W": 40,
+  "H": 400
+ },
+ "params": {
+  "depth": 100,
+  "type": "shower niche"
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5500,
+   "y": 12175,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

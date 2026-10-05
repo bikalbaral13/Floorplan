@@ -1,0 +1,48 @@
+{
+ "code": "UL-05",
+ "project": "RMD_FF",
+ "space": "Upper lounge",
+ "space_code": "UL",
+ "category": "Furniture",
+ "item": "Cream velvet loveseat 1600×850",
+ "family": "SOFA_LOVESEAT",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1600,
+  "W": 850,
+  "H": 780
+ },
+ "params": {
+  "seat_h": 440,
+  "seat_cushions": 2,
+  "back_cushions": 2,
+  "arm_w": 180,
+  "plinth_inset": 60,
+  "piping": true,
+  "crown": 22,
+  "back_tilt_deg": 12,
+  "gap": 4
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5575,
+   "y": 6300,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  4238,
+  4559,
+  9287,
+  8277
+ ],
+ "note": "faces the void (keeps the vestibule door clear)",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

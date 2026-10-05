@@ -24,7 +24,10 @@ export const GROUPS = {
   },
   library: {
     summary: "The shared R2 library (Designs/, Objects/, Materials/, Moodboards/, Skills/, Images/, Workflows/).",
-    ops: { list: "list_library", search: "search_library", read: "read_file", write: "write_file" },
+    ops: {
+      list: "list_library", search: "search_library", read: "read_file", write: "write_file",
+      selection: "get_library_selection", select: "set_library_selection",
+    },
   },
   skills: {
     summary: "Playbooks for multi-step jobs. Call op:list FIRST for anything beyond a single edit, then op:read the one that fits.",
@@ -66,6 +69,10 @@ export const GROUPS = {
   underlay: {
     summary: "Reference image under the plan: place, align, vectorise.",
     ops: { set: "set_image_underlay", align: "align_underlay", analyze: "analyze_underlay" },
+  },
+  chat: {
+    summary: "The editor's Chat box, driven by YOU instead of Gemini: op:wait blocks until the user sends a prompt (it carries their ticked Library selection), op:reply posts progress and the answer back into the chat. Loop: wait → work on the live canvas → reply { final: true } → wait.",
+    ops: { wait: "chat_wait_prompt", reply: "chat_reply" },
   },
   moodboard: {
     summary: "Moodboard picks (Plan step 4): open the picker for the USER, then read what they saved.",

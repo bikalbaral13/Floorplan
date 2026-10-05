@@ -1,0 +1,48 @@
+{
+ "code": "LB-17",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Lighting / textile",
+ "item": "Wall globe lights",
+ "family": "LIGHT_SCONCE",
+ "host": "wall",
+ "qty": 2,
+ "size": {
+  "L": 220,
+  "W": 220,
+  "H": 200
+ },
+ "params": {
+  "style": "outdoor globe",
+  "centre_h": 1600
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1600,
+   "y": 12200,
+   "z": 1500,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 3000,
+   "y": 12200,
+   "z": 1500,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,2 @@
+- 2026-10-04 v0.1.0 — created as spec (first-principles recipe)
+- 2026-10-04 v0.2.0 — reference implementation (geometry only); test_values added

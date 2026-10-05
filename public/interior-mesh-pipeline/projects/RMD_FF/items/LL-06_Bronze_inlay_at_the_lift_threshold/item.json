@@ -1,0 +1,40 @@
+{
+ "code": "LL-06",
+ "project": "RMD_FF",
+ "space": "Lift lobby (in upper lounge)",
+ "space_code": "LL",
+ "category": "Finish",
+ "item": "Bronze inlay at the lift threshold",
+ "family": "INLAY_STRIP",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1010,
+  "W": 50,
+  "H": 5
+ },
+ "params": {
+  "width": 20
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5049,
+   "y": 8205,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  4300,
+  7000,
+  6600,
+  10052
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

@@ -1,0 +1,49 @@
+{
+ "family": "BALUSTRADE_GLASS",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Glass panels 13.5 thick × 1100 high along the edge line, 1000 wide each with 5 mm joints, base channel 60×120, top cap rail 40×20 and handrail Ø42 on brackets.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 1100,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "glass": {
+   "value": "low-iron 13.5 laminated"
+  },
+  "cap": {
+   "value": "dark bronze"
+  },
+  "clamp": {
+   "value": "bronze"
+  }
+ },
+ "test_values": {}
+}

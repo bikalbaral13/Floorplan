@@ -1,0 +1,41 @@
+{
+ "code": "VO-01",
+ "project": "RMD_FF",
+ "space": "Void over GF lounge",
+ "space_code": "VO",
+ "category": "Furniture",
+ "item": "Low honed-stone planter trough 1500×250 at the balustrade corner",
+ "family": "PLANTER_TROUGH",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1500,
+  "W": 250,
+  "H": 400
+ },
+ "params": {
+  "wall_t": 30,
+  "plants": "trailing"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9162,
+   "y": 7050,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  9287,
+  4559,
+  13005,
+  8277
+ ],
+ "note": "on the lounge side of the balustrade (the void has no floor)",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

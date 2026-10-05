@@ -1,0 +1,43 @@
+{
+ "code": "MT-03",
+ "project": "RMD_FF",
+ "space": "Master toilet",
+ "space_code": "MT",
+ "category": "Furniture",
+ "item": "Walk-in shower 1650×1000 with frameless low-iron glass",
+ "family": "SHOWER_ENCLOSURE",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1595,
+  "W": 953,
+  "H": 2100
+ },
+ "params": {
+  "tray": "flush microcement",
+  "glass": "frameless low-iron 10 mm",
+  "drain": "linear brass",
+  "rain_head": "Ø300 brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 3198,
+   "y": 3164,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  2356,
+  230,
+  4040,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

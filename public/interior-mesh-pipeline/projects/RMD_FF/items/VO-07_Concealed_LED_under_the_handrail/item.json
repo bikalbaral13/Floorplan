@@ -1,0 +1,38 @@
+{
+ "code": "VO-07",
+ "project": "RMD_FF",
+ "space": "Void over GF lounge",
+ "space_code": "VO",
+ "category": "Lighting / textile",
+ "item": "Concealed LED under the handrail",
+ "family": "LIGHT_LED_STRIP",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 3640,
+  "W": 40,
+  "H": 10
+ },
+ "params": {},
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9290,
+   "y": 6420,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  9287,
+  4559,
+  13005,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,49 @@
+{
+ "family": "SWING_OONJAL",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Swing seat 1500×600×40 slatted with back rail; 4 chains (torus link chains, link 30 mm) from seat corners up to an A-frame 2000×1200 × 2400 high (two A legs + top beam) or to 2 ceiling hooks.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 2400,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "seat": {
+   "value": "1500×600 teak"
+  },
+  "frame": {
+   "value": "A-frame 2000×1200"
+  },
+  "chains": {
+   "value": "brass"
+  }
+ },
+ "test_values": {}
+}

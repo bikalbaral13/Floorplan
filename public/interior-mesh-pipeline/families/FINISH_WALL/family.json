@@ -1,0 +1,53 @@
+{
+ "family": "FINISH_WALL",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "room",
+ "pivot": "plan coordinates (built in place)",
+ "recipe": "Thin skin (5 mm) on every wall face of the room rectangle up to 2750 (or full height), openings left open; one object per room.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 100,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "apply_to": {
+   "value": "all walls"
+  },
+  "room": {
+   "value": [
+    0,
+    0,
+    3000,
+    3000
+   ],
+   "unit": "mm",
+   "description": "room rectangle [x0, y0, x1, y1] in plan coordinates"
+  }
+ },
+ "test_values": {}
+}

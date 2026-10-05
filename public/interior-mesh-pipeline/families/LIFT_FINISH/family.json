@@ -1,0 +1,44 @@
+{
+ "family": "LIFT_FINISH",
+ "version": "0.1.1",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "wall",
+ "pivot": "back-bottom-centre on the wall plane (body toward -Y)",
+ "recipe": "Fascia / surround = thin rectangular frame pieces (100 wide, 30 proud) around the lift opening; indicator = 180×60×10 plate above the door.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 2100,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "type": {
+   "value": "brass fascia + indicator",
+   "description": "added by project RMD_FF"
+  }
+ },
+ "test_values": {}
+}

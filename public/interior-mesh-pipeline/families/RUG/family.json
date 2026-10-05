@@ -1,0 +1,55 @@
+{
+ "family": "RUG",
+ "version": "0.2.0",
+ "status": "implemented",
+ "units": "mm",
+ "front": "-Y",
+ "host": "floor",
+ "pivot": "bottom-centre",
+ "recipe": "Rug slab L×W×pile with 5 mm bevelled edge; shag variant = displaced grid (12 mm noise); bath mat with a waffle grid relief (28 mm cells, 4 mm deep).",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 12,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "pile": {
+   "value": "low"
+  },
+  "edge_bevel": {
+   "value": 5,
+   "min": 0,
+   "max": 100
+  },
+  "pattern": {
+   "value": "tonal"
+  }
+ },
+ "test_values": {
+  "L": 2400,
+  "W": 1700,
+  "H": 12
+ }
+}

@@ -1,0 +1,47 @@
+{
+ "code": "LL-05",
+ "project": "RMD_FF",
+ "space": "Lift lobby (in upper lounge)",
+ "space_code": "LL",
+ "category": "Finish",
+ "item": "Travertine surround (matches ground floor)",
+ "family": "LIFT_FINISH",
+ "host": "wall",
+ "qty": 2,
+ "size": {
+  "L": 100,
+  "W": 40,
+  "H": 2100
+ },
+ "params": {
+  "type": "travertine surround"
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 4494,
+   "y": 8257,
+   "z": 0,
+   "rot": 180
+  },
+  {
+   "inst": 2,
+   "x": 5604,
+   "y": 8257,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  4300,
+  7000,
+  6600,
+  10052
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

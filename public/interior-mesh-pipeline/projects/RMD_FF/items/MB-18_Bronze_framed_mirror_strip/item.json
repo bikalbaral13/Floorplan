@@ -1,0 +1,43 @@
+{
+ "code": "MB-18",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Finish",
+ "item": "Bronze-framed mirror strip",
+ "family": "MIRROR",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 900,
+  "W": 30,
+  "H": 900
+ },
+ "params": {
+  "shape": "strip",
+  "frame": "bronze",
+  "backlight": false,
+  "centre_h": 1500
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 245,
+   "y": 7750,
+   "z": 1050,
+   "rot": 90
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

@@ -1,0 +1,44 @@
+{
+ "code": "B1-16",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Finish",
+ "item": "Cove ceiling",
+ "family": "CEILING_TRAY",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 3000,
+  "W": 2700,
+  "H": 200
+ },
+ "params": {
+  "inset": 400,
+  "steps": 2,
+  "cove_led": true,
+  "ceiling_h": 2750,
+  "tray_h": 2950
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9350,
+   "y": 2300,
+   "z": 2950,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

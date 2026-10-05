@@ -1,0 +1,45 @@
+{
+ "code": "LB-05",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Furniture",
+ "item": "Teak side stools ×2",
+ "family": "STOOL",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 380,
+  "W": 380,
+  "H": 450
+ },
+ "params": {},
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 650,
+   "y": 9900,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 3400,
+   "y": 9350,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

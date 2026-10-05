@@ -1,0 +1,40 @@
+{
+ "code": "ST-07",
+ "project": "RMD_FF",
+ "space": "Staircase",
+ "space_code": "ST",
+ "category": "Finish",
+ "item": "Stone nosing on the treads",
+ "family": "INLAY_STRIP",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 250,
+  "W": 250,
+  "H": 5
+ },
+ "params": {
+  "width": 20
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 4800,
+   "y": 2500,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  230,
+  6411,
+  4559
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

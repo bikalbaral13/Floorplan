@@ -1,0 +1,480 @@
+{
+ "ACCESSORY": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "host",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "ART_FRAME": {
+  "version": "0.2.0",
+  "status": "implemented",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "BALUSTRADE_GLASS": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "BATHTUB_FREESTANDING": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "BED_PLATFORM": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "BENCH_UPHOLSTERED": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "BOOKSHELF_LOW": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "CEILING_FAN": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "ceiling",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "CEILING_TRAY": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "ceiling",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "CHAIR_BARREL_SWIVEL": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "CHAIR_DESK": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": []
+ },
+ "CHAIR_LOUNGE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "CONSOLE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "CURTAIN": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "DESK": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "DRAWER_BANK": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "DRESSER": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "FINISH_FLOOR": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "room",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "FINISH_WALL": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "room",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "INLAY_STRIP": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "JOINERY_INSERT": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "host",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LANTERN": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIFT_FINISH": {
+  "version": "0.1.1",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIGHT_CHANDELIER": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "ceiling",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIGHT_FLOOR_LAMP": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIGHT_LED_STRIP": {
+  "version": "0.1.1",
+  "status": "spec",
+  "host": "host",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIGHT_LINEAR": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "ceiling",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIGHT_PENDANT": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "ceiling",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIGHT_SCONCE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "LIGHT_SPOT": {
+  "version": "0.1.1",
+  "status": "spec",
+  "host": "ceiling",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "MEDIA_CONSOLE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "MIRROR": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "MOSS_PANEL": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "OUTDOOR_CABINET": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "OUTDOOR_LOUNGE_CHAIR": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "PEBBLE_BORDER": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "PLANTER_TREE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "PLANTER_TROUGH": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "PLANT_SMALL": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "POUF_ROUND": {
+  "version": "0.2.0",
+  "status": "implemented",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "RECESSED": {
+  "version": "0.1.1",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "RUG": {
+  "version": "0.2.0",
+  "status": "implemented",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SHOE_TOWER": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SHOWER_BENCH": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SHOWER_ENCLOSURE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SIDE_TABLE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SOFA_LOVESEAT": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SOFFIT_SLAT": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "ceiling",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SOFT_SET": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "host",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "STAIR": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "STOOL": {
+  "version": "0.2.0",
+  "status": "implemented",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "SWING_OONJAL": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "TABLE_DRUM": {
+  "version": "0.2.0",
+  "status": "implemented",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "TABLE_ROUND": {
+  "version": "0.2.0",
+  "status": "implemented",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "TALL_CABINET": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "VANITY": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "WALL_FEATURE_PANEL": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "WALL_PANEL_OGEE": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "WARDROBE": {
+  "version": "0.1.1",
+  "status": "spec",
+  "host": "floor",
+  "projects": [
+   "RMD_FF"
+  ]
+ },
+ "WC_WALLHUNG": {
+  "version": "0.1.0",
+  "status": "spec",
+  "host": "wall",
+  "projects": [
+   "RMD_FF"
+  ]
+ }
+}

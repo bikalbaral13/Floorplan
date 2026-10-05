@@ -1,0 +1,42 @@
+{
+ "code": "B1-23",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Lighting / textile",
+ "item": "Hand-knotted rug 2400×3000",
+ "family": "RUG",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 3000,
+  "W": 2400,
+  "H": 12
+ },
+ "params": {
+  "pile": "low",
+  "edge_bevel": 5,
+  "pattern": "tonal"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9348,
+   "y": 2400,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

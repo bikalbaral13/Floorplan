@@ -1,0 +1,47 @@
+{
+ "code": "MB-20",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Lighting / textile",
+ "item": "Linear lights ×2",
+ "family": "LIGHT_LINEAR",
+ "host": "ceiling",
+ "qty": 2,
+ "size": {
+  "L": 1900,
+  "W": 40,
+  "H": 40
+ },
+ "params": {
+  "profile": "recessed 40"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2950,
+   "y": 4750,
+   "z": 2750,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 2950,
+   "y": 6820,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

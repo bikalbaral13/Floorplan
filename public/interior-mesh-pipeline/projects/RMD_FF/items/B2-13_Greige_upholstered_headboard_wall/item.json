@@ -1,0 +1,42 @@
+{
+ "code": "B2-13",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Finish",
+ "item": "Greige upholstered headboard wall",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 2600,
+  "W": 100,
+  "H": 2700
+ },
+ "params": {
+  "type": "greige velvet upholstered + bronze trim",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9400,
+   "y": 8557,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

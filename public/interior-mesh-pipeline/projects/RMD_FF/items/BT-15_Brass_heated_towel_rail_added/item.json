@@ -1,0 +1,41 @@
+{
+ "code": "BT-15",
+ "project": "RMD_FF",
+ "space": "Bedroom-1 toilet",
+ "space_code": "BT",
+ "category": "Lighting / textile",
+ "item": "Brass heated towel rail (added)",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 500,
+  "W": 40,
+  "H": 900
+ },
+ "params": {
+  "type": "heated towel rail",
+  "scatter_on": "host top"
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 11020,
+   "y": 1650,
+   "z": "host",
+   "rot": 90
+  }
+ ],
+ "room": [
+  11000,
+  230,
+  13005,
+  2632
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

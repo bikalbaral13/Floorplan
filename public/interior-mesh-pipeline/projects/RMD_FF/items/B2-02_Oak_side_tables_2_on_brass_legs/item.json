@@ -1,0 +1,49 @@
+{
+ "code": "B2-02",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Furniture",
+ "item": "Oak side tables ×2 on brass legs",
+ "family": "SIDE_TABLE",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 450,
+  "W": 450,
+  "H": 550
+ },
+ "params": {
+  "top_t": 25,
+  "drawer_count": 1,
+  "leg": "brass"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8373,
+   "y": 8832,
+   "z": 0,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 10447,
+   "y": 8832,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

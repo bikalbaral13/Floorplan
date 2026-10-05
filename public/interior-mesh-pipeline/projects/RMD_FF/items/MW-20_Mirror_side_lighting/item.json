@@ -1,0 +1,41 @@
+{
+ "code": "MW-20",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Lighting / textile",
+ "item": "Mirror-side lighting",
+ "family": "LIGHT_SPOT",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 160,
+  "W": 160,
+  "H": 80
+ },
+ "params": {
+  "beam_deg": 40,
+  "type": "mirror light"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1250,
+   "y": 340,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

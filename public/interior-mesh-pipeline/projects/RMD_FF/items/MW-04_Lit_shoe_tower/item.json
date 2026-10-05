@@ -1,0 +1,41 @@
+{
+ "code": "MW-04",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Furniture",
+ "item": "Lit shoe tower",
+ "family": "SHOE_TOWER",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 600,
+  "W": 470,
+  "H": 2100
+ },
+ "params": {
+  "shelves": 9,
+  "shelf_led": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1964,
+   "y": 465,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

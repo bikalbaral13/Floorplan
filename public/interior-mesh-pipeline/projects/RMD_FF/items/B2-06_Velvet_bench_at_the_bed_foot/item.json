@@ -1,0 +1,43 @@
+{
+ "code": "B2-06",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 (+ vestibule)",
+ "space_code": "B2",
+ "category": "Furniture",
+ "item": "Velvet bench at the bed foot",
+ "family": "BENCH_UPHOLSTERED",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 1200,
+  "W": 400,
+  "H": 450
+ },
+ "params": {
+  "seat_t": 120,
+  "leg_h": 180,
+  "leg": "bronze sled",
+  "piping": true
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9410,
+   "y": 10838,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  7635,
+  8507,
+  11521,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

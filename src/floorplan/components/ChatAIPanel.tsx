@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { ToolInfo } from "../ai/toolCatalog";
 import { useLibraryBase } from "../useLibraryBase";
 import { LibrarySourceNote } from "./LibrarySourceNote";
+import { KIND_LABEL, KIND_ORDER, useLibrarySelection } from "../librarySelection";
 
 export interface ChatMessage {
   /** "tool" = one agent tool call / result line (rendered as a compact mono log row). */
@@ -74,6 +75,11 @@ export interface ChatAIPanelProps {
   access: AgentAccessView;
   /** Starter example prompts for the selected agent (shown in the empty transcript). */
   examples?: string[];
+  /** Who answers: Claude Code (through the MCP chat.wait / chat.reply inbox) or Gemini in the browser. */
+  engine?: "claude" | "gemini";
+  onEngineChange?: (e: "claude" | "gemini") => void;
+  /** Claude Code is blocked in chat.wait right now. */
+  claudeListening?: boolean;
 }
 
 /** Foldable "Chat AI" bar pinned to the top of the canvas. Pick an agent (built-in Global Agent or one
@@ -84,9 +90,11 @@ export const ChatAIPanel = ({
   messages, busy, collapsed, onToggleCollapsed, onSend, configured,
   agents, selectedAgentId, onSelectAgent, onImportAgents,
   runner, systemPrompt, onSystemPromptChange, defaultSystemPrompt, promptReadOnly, skills, composedLength,
-  tools, access, examples,
+  tools, access, examples, engine = "gemini", onEngineChange, claudeListening = false,
 }: ChatAIPanelProps) => {
   const [draft, setDraft] = useState("");
+  const selection = useLibrarySelection();
+  const selGroups = KIND_ORDER.map((k) => ({ kind: k, list: selection.filter((i) => i.kind === k) })).filter((g) => g.list.length);
   const [file, setFile] = useState<File | null>(null);
   const [showSystem, setShowSystem] = useState(false);
   const [showTools, setShowTools] = useState(false);
@@ -140,162 +148,14 @@ export const ChatAIPanel = ({
   };
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-2 z-30 flex justify-center px-3">
-      <div className="pointer-events-auto w-full max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur">
-        {/* Header — fold toggle. */}
-        <button
-          type="button"
-          className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
-          onClick={onToggleCollapsed}
-          aria-expanded={!collapsed}
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <Sparkles className="h-4 w-4 text-violet-600" />
-            Chat AI
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
-          </span>
-          {collapsed ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronUp className="h-4 w-4 text-slate-400" />}
-        </button>
-
-        {!collapsed && (
-          <div className="border-t border-slate-100">
-            {/* Agent selector + import + inspection (system prompt / tools / access). */}
-            <div className="border-b border-slate-100 px-3 py-2">
-              <div className="mb-1.5 flex items-center gap-1">
-                <div className="flex flex-1 items-center gap-1 overflow-x-auto rounded-md bg-slate-100 p-0.5 text-[10px] font-medium">
-                  {agents.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      className={
-                        "whitespace-nowrap rounded px-2 py-1 transition-colors " +
-                        (selectedAgentId === a.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700")
-                      }
-                      onClick={() => onSelectAgent(a.id)}
-                      title={a.title}
-                    >
-                      {a.label}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={onImportAgents}
-                  className="flex shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                  title="Import agents from Library/Agents"
-                >
-                  <Download className="h-3 w-3" />
-                  Import
-                </button>
-              </div>
-
-              {/* System prompt — editable for the built-in, read-only (from file) for imported agents. */}
-              <button
-                type="button"
-                onClick={() => setShowSystem((v) => !v)}
-                className="flex w-full items-center gap-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-700"
-                aria-expanded={showSystem}
-              >
-                <SlidersHorizontal className="h-3 w-3 shrink-0" />
-                {promptReadOnly ? "Instructions" : "System prompt"}
-                {isCustomPrompt && <span className="rounded bg-violet-100 px-1 text-[9px] font-semibold text-violet-700">edited</span>}
-                {promptReadOnly && <span className="rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-500">from file</span>}
-                {showSystem ? <ChevronUp className="ml-auto h-3 w-3" /> : <ChevronDown className="ml-auto h-3 w-3" />}
-              </button>
-              {showSystem && (
-                <div className="mt-1.5 space-y-1">
-                  <textarea
-                    className="h-40 w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 font-mono text-[10px] leading-snug outline-none focus:border-violet-400 read-only:bg-slate-50 read-only:text-slate-500"
-                    value={systemPrompt}
-                    onChange={(e) => onSystemPromptChange(e.target.value)}
-                    readOnly={promptReadOnly}
-                    spellCheck={false}
-                    placeholder="System prompt sent to the model on every send…"
-                  />
-                  <div className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-700"
-                        onClick={async () => { try { await navigator.clipboard.writeText(systemPrompt); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* clipboard unavailable */ } }}
-                      >
-                        <Copy className="h-3 w-3" /> {copied ? "Copied" : "Copy"}
-                      </button>
-                      {!promptReadOnly && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-700 disabled:opacity-40"
-                          disabled={!isCustomPrompt}
-                          onClick={() => onSystemPromptChange(defaultSystemPrompt)}
-                        >
-                          <RotateCcw className="h-3 w-3" /> Reset to default
-                        </button>
-                      )}
-                    </div>
-                    {/* The box shows the agent FILE's own instructions. Skills are composed on at load,
-                        so name them here rather than silently padding the text the user is reading. */}
-                    <span className="text-slate-400">
-                      {systemPrompt.length} chars
-                      {skills && skills.length > 0 && (
-                        <span title={`Composed onto the live prompt: ${skills.join(", ")}`}>
-                          {" "}+ {skills.length} skill{skills.length === 1 ? "" : "s"}
-                          {composedLength ? ` (${composedLength} live)` : ""}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Available tools — read-only reference of what the selected agent can do. */}
-              <button
-                type="button"
-                onClick={() => setShowTools((v) => !v)}
-                className="mt-1.5 flex w-full items-center gap-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-700"
-                aria-expanded={showTools}
-              >
-                <Wrench className="h-3 w-3 shrink-0" />
-                Available tools
-                <span className="rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-500">{tools.length}</span>
-                {showTools ? <ChevronUp className="ml-auto h-3 w-3" /> : <ChevronDown className="ml-auto h-3 w-3" />}
-              </button>
-              {showTools && (
-                <div className="mt-1.5 max-h-56 space-y-1.5 overflow-y-auto rounded-md border border-slate-200 bg-slate-50/60 px-2 py-1.5">
-                  {tools.map((t, i) => {
-                    const newGroup = i === 0 || t.group !== tools[i - 1].group;
-                    return (
-                      <div key={t.name}>
-                        {newGroup && (
-                          <div className={(i === 0 ? "" : "mt-2 ") + "mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400"}>
-                            {t.group}
-                          </div>
-                        )}
-                        <div className="flex gap-1.5">
-                          <code className="shrink-0 font-mono text-[10px] font-medium text-violet-700">{t.name}</code>
-                          <span className="text-[10px] leading-snug text-slate-500">{t.desc}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Access. A DELEGATING agent (one holding the `delegate` tool) routes work instead of doing
-                  it: the only grant that means anything to it is WHICH AGENTS it may call — objects,
-                  flows and designs are the grants of the specialists it delegates to, so showing them
-                  here would only suggest an access it never exercises. */}
-              {delegating ? (
-                <AccessSection icon={<GitBranch className="h-3 w-3 shrink-0" />} title="Agents" grant={access.agents} open={showAgents} onToggle={() => setShowAgents((v) => !v)} folder="Agents" />
-              ) : (
-                <>
-                  <AccessSection icon={<Boxes className="h-3 w-3 shrink-0" />} title="Parametric objects" grant={access.objects} open={showObjects} onToggle={() => setShowObjects((v) => !v)} folder="Objects" />
-                  <AccessSection icon={<Workflow className="h-3 w-3 shrink-0" />} title="Flows" grant={access.flows} open={showFlows} onToggle={() => setShowFlows((v) => !v)} folder="Workflows" />
-                  <AccessSection icon={<Files className="h-3 w-3 shrink-0" />} title="Designs" grant={access.designs} open={showDesigns} onToggle={() => setShowDesigns((v) => !v)} folder="Designs" />
-                </>
-              )}
-            </div>
+    // Pinned to the BOTTOM of the canvas, clear of the Flow button and level tabs. The input is always shown;
+    // the conversation above it folds. What the agent reads comes from the Library selection (navigator ticks).
+    <div className="pointer-events-none absolute inset-x-0 bottom-14 z-30 flex justify-center px-3 xl:bottom-3 xl:px-40">
+      <div className="pointer-events-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur">
+        {!collapsed && (messages.length > 0 || busy || !configured) && (
+          <>
             {/* Transcript. */}
-            <div ref={scrollRef} className="max-h-60 space-y-2 overflow-y-auto px-3 py-2.5">
+            <div ref={scrollRef} className="max-h-60 space-y-2 overflow-y-auto border-b border-slate-100 px-3 py-2.5">
               {!configured && (
                 <p className="rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
                   Set your Gemini API key + model in <span className="font-medium">Preferences</span> (top-right ⚙) to use Chat AI.
@@ -350,8 +210,41 @@ export const ChatAIPanel = ({
               )}
             </div>
 
+          </>
+        )}
+        {/* What the agent will read — the navigator's ticked Library items — and the conversation fold. */}
+        <div className="flex items-center gap-1.5 px-2 pt-2">
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {selection.length === 0 ? (
+              <span className="truncate text-[10px] text-slate-400">No Library items selected — tick them in the navigator</span>
+            ) : selGroups.map((g) => (
+              <span key={g.kind} className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700" title={g.list.map((i) => i.key).join(", ")}>
+                {KIND_LABEL[g.kind]} · {g.list.length}
+              </span>
+            ))}
+          </div>
+          {onEngineChange && (
+            <div className="flex shrink-0 items-center rounded-md bg-slate-100 p-0.5 text-[10px] font-semibold" role="group" aria-label="Chat engine">
+              {(["claude", "gemini"] as const).map((e) => (
+                <button key={e} type="button" onClick={() => onEngineChange(e)} aria-pressed={engine === e}
+                  title={e === "claude" ? (claudeListening ? "Claude Code is listening" : "Claude Code — not listening yet (Connect Claude, then ask it to listen to the editor chat)") : "Gemini (API key in Preferences)"}
+                  className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${engine === e ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+                  {e === "claude" && <span className={`h-1.5 w-1.5 rounded-full ${claudeListening ? "bg-emerald-500" : "bg-slate-300"}`} aria-hidden />}
+                  {e === "claude" ? "Claude Code" : "Gemini"}
+                </button>
+              ))}
+            </div>
+          )}
+          {messages.length > 0 && (
+            <button type="button" onClick={onToggleCollapsed} className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              title={collapsed ? "Show the conversation" : "Hide the conversation"} aria-label={collapsed ? "Show the conversation" : "Hide the conversation"} aria-expanded={!collapsed}>
+              {collapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
             {/* Input. */}
-            <div className="border-t border-slate-100 p-2">
+            <div className="p-2">
               {/* Attached image/PDF chip — the AI reads it to reproduce the floor plan. */}
               {file && (
                 <div className="mb-1.5 flex items-center gap-1.5 rounded-md bg-violet-50 px-2 py-1 text-[11px] text-violet-700">
@@ -413,6 +306,7 @@ export const ChatAIPanel = ({
                     rows={1}
                     placeholder={!configured ? "Set the Gemini key in Preferences first"
                       : runner === "flow" ? "Describe the flow to build… (Enter to send)"
+                      : engine === "claude" ? "Ask Claude Code… it uses the ticked Library items (Enter to send)"
                       : "Generate or edit the plan… (attach an image/PDF, Enter to send)"}
                     value={draft}
                     disabled={!configured || busy}
@@ -437,8 +331,6 @@ export const ChatAIPanel = ({
                 </Button>
               </div>
             </div>
-          </div>
-        )}
       </div>
     </div>
   );

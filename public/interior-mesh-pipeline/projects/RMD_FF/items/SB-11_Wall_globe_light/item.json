@@ -1,0 +1,41 @@
+{
+ "code": "SB-11",
+ "project": "RMD_FF",
+ "space": "Small balcony",
+ "space_code": "SB",
+ "category": "Lighting / textile",
+ "item": "Wall globe light",
+ "family": "LIGHT_SCONCE",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 200,
+  "W": 200,
+  "H": 200
+ },
+ "params": {
+  "style": "outdoor globe",
+  "centre_h": 1600
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 12400,
+   "y": 12150,
+   "z": 1500,
+   "rot": 0
+  }
+ ],
+ "room": [
+  11750,
+  8507,
+  13005,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

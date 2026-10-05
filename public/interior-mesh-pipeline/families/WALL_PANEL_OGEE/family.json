@@ -1,0 +1,61 @@
+{
+ "family": "WALL_PANEL_OGEE",
+ "version": "0.1.0",
+ "status": "spec",
+ "units": "mm",
+ "front": "-Y",
+ "host": "wall",
+ "pivot": "back-bottom-centre on the wall plane (body toward -Y)",
+ "recipe": "Per wall face: skirting 120, dado 880, cornice 150 as swept profiles; picture-frame mouldings (40×20 ogee profile swept round rectangles) in panels 600–900 wide between dado and cornice and below the dado.",
+ "parameters": {
+  "L": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "length / width along X (Ø for round items)"
+  },
+  "W": {
+   "value": 500,
+   "min": 1,
+   "max": 30000,
+   "unit": "mm",
+   "description": "depth along Y"
+  },
+  "H": {
+   "value": 2550,
+   "min": 0,
+   "max": 30000,
+   "unit": "mm",
+   "description": "height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 99999,
+   "description": "random seed (deterministic output)"
+  },
+  "profile": {
+   "value": "40×20 ogee"
+  },
+  "dado_h": {
+   "value": 880,
+   "min": 0,
+   "max": 8800
+  },
+  "skirting_h": {
+   "value": 120,
+   "min": 0,
+   "max": 1200
+  },
+  "cornice_h": {
+   "value": 150,
+   "min": 0,
+   "max": 1500
+  },
+  "panel_w": {
+   "value": "auto 600–900"
+  }
+ },
+ "test_values": {}
+}

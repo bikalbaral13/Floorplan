@@ -1,0 +1,48 @@
+{
+ "code": "LB-18",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Lighting / textile",
+ "item": "Planter uplights",
+ "family": "LIGHT_SPOT",
+ "host": "ceiling",
+ "qty": 2,
+ "size": {
+  "L": 150,
+  "W": 150,
+  "H": 80
+ },
+ "params": {
+  "beam_deg": 40,
+  "type": "planter uplight"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 550,
+   "y": 11850,
+   "z": 2750,
+   "rot": 0
+  },
+  {
+   "inst": 2,
+   "x": 3700,
+   "y": 11850,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

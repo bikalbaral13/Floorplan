@@ -1,0 +1,52 @@
+{
+ "code": "MW-01",
+ "project": "RMD_FF",
+ "space": "Master walk-in wardrobe",
+ "space_code": "MW",
+ "category": "Furniture",
+ "item": "Walnut wardrobes on both long walls with bronze-tinted glass upper doors, 830 mm aisle",
+ "family": "WARDROBE",
+ "host": "floor",
+ "qty": 2,
+ "size": {
+  "L": 3387,
+  "W": 600,
+  "H": 2700
+ },
+ "params": {
+  "depth": 600,
+  "door_w": 450,
+  "upper_glass": "bronze-tinted",
+  "handles": "leather-wrapped",
+  "interior": "hanging+drawers+shelves",
+  "led": "auto-on"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 530,
+   "y": 1994,
+   "z": 0,
+   "rot": 90
+  },
+  {
+   "inst": 2,
+   "x": 1964,
+   "y": 2774,
+   "z": 0,
+   "rot": 90
+  }
+ ],
+ "room": [
+  230,
+  230,
+  2264,
+  3687
+ ],
+ "note": "right wall limited by the toilet opening and the door swing",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

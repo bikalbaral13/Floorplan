@@ -1,0 +1,41 @@
+{
+ "code": "B1-21",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Lighting / textile",
+ "item": "Designer ceiling fan",
+ "family": "CEILING_FAN",
+ "host": "ceiling",
+ "qty": 1,
+ "size": {
+  "L": 1200,
+  "W": 1200,
+  "H": 400
+ },
+ "params": {
+  "blades": 3,
+  "span": 1320
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 9348,
+   "y": 2900,
+   "z": 2750,
+   "rot": 0
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

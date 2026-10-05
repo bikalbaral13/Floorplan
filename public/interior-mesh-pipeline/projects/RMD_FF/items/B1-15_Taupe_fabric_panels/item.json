@@ -1,0 +1,49 @@
+{
+ "code": "B1-15",
+ "project": "RMD_FF",
+ "space": "Bedroom-1",
+ "space_code": "B1",
+ "category": "Finish",
+ "item": "Taupe fabric panels",
+ "family": "WALL_FEATURE_PANEL",
+ "host": "wall",
+ "qty": 2,
+ "size": {
+  "L": 480,
+  "W": 40,
+  "H": 2700
+ },
+ "params": {
+  "type": "taupe upholstered",
+  "module": 60,
+  "depth": 40
+ },
+ "face": "N",
+ "rot_z": 180,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 8140,
+   "y": 350,
+   "z": 0,
+   "rot": 180
+  },
+  {
+   "inst": 2,
+   "x": 10560,
+   "y": 350,
+   "z": 0,
+   "rot": 180
+  }
+ ],
+ "room": [
+  6610,
+  230,
+  10925,
+  4345
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

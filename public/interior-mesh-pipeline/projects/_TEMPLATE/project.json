@@ -1,0 +1,12 @@
+{
+ "code": "<PROJECT_CODE>",
+ "title": "<Project title>",
+ "ffl_mm": 0,
+ "units": "mm",
+ "front": "-Y",
+ "collection_root": "<PROJECT_CODE>_Meshes",
+ "collection_prefix": "<PROJECT_CODE>_",
+ "base_blend": "",
+ "notes": "ffl_mm = height of this floor's finished floor level above the model origin",
+ "name_prefix": "SM_<PROJECT_CODE>_"
+}

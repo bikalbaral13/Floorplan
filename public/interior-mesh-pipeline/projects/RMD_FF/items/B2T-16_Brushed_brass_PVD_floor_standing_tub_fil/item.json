@@ -1,0 +1,41 @@
+{
+ "code": "B2T-16",
+ "project": "RMD_FF",
+ "space": "Bedroom-2 toilet",
+ "space_code": "B2T",
+ "category": "Finish",
+ "item": "Brushed-brass PVD floor-standing tub filler and fittings",
+ "family": "ACCESSORY",
+ "host": "host",
+ "qty": 1,
+ "size": {
+  "L": 120,
+  "W": 120,
+  "H": 1000
+ },
+ "params": {
+  "type": "floor-standing brass tub filler",
+  "scatter_on": "host top"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 5180,
+   "y": 11270,
+   "z": "host",
+   "rot": 0
+  }
+ ],
+ "room": [
+  4238,
+  10251,
+  7558,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

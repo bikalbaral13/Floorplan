@@ -1,0 +1,42 @@
+{
+ "code": "LB-02",
+ "project": "RMD_FF",
+ "space": "Large balcony",
+ "space_code": "LB",
+ "category": "Furniture",
+ "item": "Round stone table",
+ "family": "TABLE_ROUND",
+ "host": "floor",
+ "qty": 1,
+ "size": {
+  "L": 650,
+  "W": 650,
+  "H": 450
+ },
+ "params": {
+  "top_t": 40,
+  "base": "stone pedestal",
+  "edge": "eased 6"
+ },
+ "face": "—",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 2100,
+   "y": 9900,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  8507,
+  4040,
+  12240
+ ],
+ "note": "",
+ "tri_budget": 60000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}

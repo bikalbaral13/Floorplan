@@ -11,7 +11,8 @@ async function post<T>(url: string, body: unknown = {}): Promise<T> {
   return out as T;
 }
 
-export function PushButton() {
+/** `inline` = a full-width row for the Preferences popover; otherwise the old floating button. */
+export function PushButton({ inline = false }: { inline?: boolean } = {}) {
   const [pushing, setPushing] = useState(false);
 
   const push = async () => {
@@ -36,6 +37,20 @@ export function PushButton() {
       setPushing(false);
     }
   };
+
+  if (inline) {
+    return (
+      <button
+        type="button"
+        onClick={push}
+        disabled={pushing}
+        title="Commit all changes and push to GitHub (dev server only)"
+        className="flex w-full items-center gap-2 rounded-md border border-[#1f6feb] bg-[#1f6feb] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1a5fd0] disabled:cursor-wait disabled:opacity-70"
+      >
+        ⬆ {pushing ? "Pushing…" : "Push to GitHub"}
+      </button>
+    );
+  }
 
   return (
     <button

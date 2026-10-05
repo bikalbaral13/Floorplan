@@ -1,0 +1,43 @@
+{
+ "code": "MB-25",
+ "project": "RMD_FF",
+ "space": "Master bedroom",
+ "space_code": "MB",
+ "category": "Lighting / textile",
+ "item": "Motorised silk-blend blackout drapes with ivory sheers",
+ "family": "CURTAIN",
+ "host": "wall",
+ "qty": 1,
+ "size": {
+  "L": 2840,
+  "W": 47,
+  "H": 2700
+ },
+ "params": {
+  "fullness": 2.2,
+  "fold_pitch": 160,
+  "track": "motorised ceiling",
+  "layers": "blackout+sheer"
+ },
+ "face": "S",
+ "rot_z": 0,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 1680,
+   "y": 8254,
+   "z": 0,
+   "rot": 0
+  }
+ ],
+ "room": [
+  230,
+  3795,
+  4040,
+  8277
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": true,
+ "status": "todo"
+}

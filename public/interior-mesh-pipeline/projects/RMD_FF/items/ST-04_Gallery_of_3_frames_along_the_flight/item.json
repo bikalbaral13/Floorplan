@@ -1,0 +1,43 @@
+{
+ "code": "ST-04",
+ "project": "RMD_FF",
+ "space": "Staircase",
+ "space_code": "ST",
+ "category": "Décor",
+ "item": "Gallery of 3 frames along the flight",
+ "family": "ART_FRAME",
+ "host": "wall",
+ "qty": 3,
+ "size": {
+  "L": 500,
+  "W": 40,
+  "H": 650
+ },
+ "params": {
+  "frame_w": 30,
+  "frame_d": 40,
+  "canvas_inset": 5,
+  "centre_h": 1500
+ },
+ "face": "E",
+ "rot_z": 90,
+ "placements": [
+  {
+   "inst": 1,
+   "x": 4258,
+   "y": 2750,
+   "z": 1175,
+   "rot": 90
+  }
+ ],
+ "room": [
+  4238,
+  230,
+  6411,
+  4559
+ ],
+ "note": "",
+ "tri_budget": 15000,
+ "open_mesh_ok": false,
+ "status": "todo"
+}
