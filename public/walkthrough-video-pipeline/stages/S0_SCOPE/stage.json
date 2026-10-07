@@ -1,0 +1,21 @@
+{
+ "id": "S0_SCOPE",
+ "version": "0.1.0",
+ "title": "Scope the walkthrough (the user answers)",
+ "kind": "script",
+ "gate": false,
+ "summary": "Writes scope.json from scope.questions.json defaults as a DRAFT; the user answers it: which .blend, script and camera-path files, exterior / interior coverage, preview quality, AI provider / model / resolution / seed, style notes, budget. Done only when answered_by='user' and the approval carries their words.",
+ "inputs": [
+  "stages/S0_SCOPE/scope.questions.json",
+  "scope.json (user-answered)"
+ ],
+ "outputs": [
+  "scope.json"
+ ],
+ "checks": [
+  "answered_by == user",
+  "required answers present and valid",
+  "blend / script / path files exist",
+  "blend is not inside public/"
+ ]
+}

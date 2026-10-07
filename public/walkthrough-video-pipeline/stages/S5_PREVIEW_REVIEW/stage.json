@@ -1,0 +1,17 @@
+{
+ "id": "S5_PREVIEW_REVIEW",
+ "version": "0.1.0",
+ "title": "The user approves the preview",
+ "kind": "script",
+ "gate": true,
+ "summary": "Show the user the preview video and keyframes. They approve the framing and timing, or say what to change (then rerun S2/S3/S4).",
+ "inputs": [
+  "preview.json"
+ ],
+ "outputs": [
+  "preview.json (approved)"
+ ],
+ "checks": [
+  "the user's words"
+ ]
+}

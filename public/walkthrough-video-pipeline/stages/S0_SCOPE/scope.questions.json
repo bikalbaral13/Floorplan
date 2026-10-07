@@ -1,0 +1,22 @@
+{
+ "id": "walkthrough-scope/1",
+ "questions": [
+  { "id": "blend_path", "q": "Which .blend is the walkthrough made from? (absolute path; it stays where it is and is never overwritten)", "required": true, "default": "" },
+  { "id": "script_file", "q": "Voiceover / video script (PDF, DOCX, TXT) — absolute path, or empty", "required": false, "default": "" },
+  { "id": "path_file", "q": "Camera path / shot list drawing (PDF or image) — absolute path, or empty", "required": false, "default": "" },
+  { "id": "coverage", "q": "What does the model cover — and what should the film show?", "options": ["exterior", "interior", "both"], "required": true, "default": "exterior" },
+  { "id": "target_seconds", "q": "Target film length in seconds (the shot list may be shorter if the model cannot show every scene)", "required": true, "default": 60 },
+  { "id": "materials", "q": "Keep the .blend's materials, or recolour flat massing materials from the standards palette?", "options": ["keep", "palette"], "required": true, "default": "keep" },
+  { "id": "preview_preset", "q": "Blender preview quality", "options": ["draft", "low", "medium", "final"], "required": true, "default": "low" },
+  { "id": "ai_provider", "q": "AI video provider", "options": ["krea", "none"], "required": true, "default": "krea" },
+  { "id": "ai_mode", "q": "How S8 submits: through the Krea MCP connector (agent), or the REST API with $KREA_API_KEY", "options": ["connector", "api"], "required": true, "default": "connector" },
+  { "id": "ai_model", "q": "AI video model (must be on the user's plan)", "required": true, "default": "bytedance/seedance-2" },
+  { "id": "ai_resolution", "q": "AI output resolution", "options": ["480p", "720p", "1080p"], "required": true, "default": "720p" },
+  { "id": "aspect_ratio", "q": "Aspect ratio", "options": ["16:9", "9:16", "1:1", "4:3", "21:9"], "required": true, "default": "16:9" },
+  { "id": "seed", "q": "Fixed seed shared by every clip (any integer)", "required": true, "default": 20261007 },
+  { "id": "style_notes", "q": "Look and place: location, architecture style, materials, time of day, mood (goes into every prompt)", "required": false, "default": "" },
+  { "id": "budget_units", "q": "Credit budget for generation (empty = ask at S7)", "required": false, "default": null },
+  { "id": "audio_file", "q": "Voiceover / music to lay under the final video — absolute path, or empty", "required": false, "default": "" },
+  { "id": "blender_exe", "q": "blender.exe path (empty = auto-detect)", "required": false, "default": "" }
+ ]
+}

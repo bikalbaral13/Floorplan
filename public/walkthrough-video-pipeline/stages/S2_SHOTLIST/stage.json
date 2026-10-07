@@ -1,0 +1,27 @@
+{
+ "id": "S2_SHOTLIST",
+ "version": "0.1.0",
+ "title": "Author the shot list (agent)",
+ "kind": "agent",
+ "gate": false,
+ "summary": "The agent turns the script + camera-path drawing into shots.json (walkthrough-shots/1) in model coordinates, using intake.json and the top-down plan. Shots the model cannot show (e.g. interiors in an exterior-only file) are dropped and listed in PROJECT.md.",
+ "inputs": [
+  "scope.json",
+  "intake.json",
+  "work/intake/topdown.png",
+  "<script_file>",
+  "<path_file>"
+ ],
+ "outputs": [
+  "shots.json"
+ ],
+ "checks": [
+  "schema",
+  "back-to-back timing",
+  "camera path / orbit valid",
+  "targets exist",
+  "lens and light valid",
+  "cameras inside the site (warn)",
+  "script cue + src on every shot (warn)"
+ ]
+}

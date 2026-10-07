@@ -1,0 +1,68 @@
+{
+ "out_blend": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\KINGSWOOD_EXT_walkthrough.blend",
+ "shots": [
+  {
+   "id": "S1",
+   "camera": "CAM_S1_ArrivalAerial",
+   "frames": [
+    1,
+    240
+   ]
+  },
+  {
+   "id": "S2",
+   "camera": "CAM_S2_DropOff",
+   "frames": [
+    241,
+    384
+   ]
+  },
+  {
+   "id": "S3",
+   "camera": "CAM_S3_SpineWalk",
+   "frames": [
+    385,
+    576
+   ]
+  },
+  {
+   "id": "S4",
+   "camera": "CAM_S4_VillaStreet",
+   "frames": [
+    577,
+    816
+   ]
+  },
+  {
+   "id": "S5",
+   "camera": "CAM_S5_VillaOrbit",
+   "frames": [
+    817,
+    1056
+   ]
+  },
+  {
+   "id": "S6",
+   "camera": "CAM_S6_SouthRowAerial",
+   "frames": [
+    1057,
+    1248
+   ]
+  },
+  {
+   "id": "S7",
+   "camera": "CAM_S7_NightRise",
+   "frames": [
+    1249,
+    1536
+   ]
+  }
+ ],
+ "lamps": 39,
+ "props": [
+  "CAR"
+ ],
+ "frame_end": 1536,
+ "glow_materials": 3,
+ "ok": true
+}

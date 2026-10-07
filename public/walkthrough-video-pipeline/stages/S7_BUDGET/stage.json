@@ -1,0 +1,20 @@
+{
+ "id": "S7_BUDGET",
+ "version": "0.1.0",
+ "title": "The user approves the generation spend",
+ "kind": "script",
+ "gate": true,
+ "summary": "Summarises what S8 will submit (clips, seconds, model, resolution, provider concurrency) against scope.budget_units. Generation spends the user's credits, so it never starts without their words.",
+ "inputs": [
+  "prompts.json",
+  "preview.json",
+  "scope.json"
+ ],
+ "outputs": [
+  "budget.json"
+ ],
+ "checks": [
+  "reference clips large enough",
+  "the user's words"
+ ]
+}

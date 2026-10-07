@@ -1,0 +1,18 @@
+{
+ "kit": "pipeline_kit",
+ "version": "0.2.0",
+ "source": "app repo packages/pipeline-kit",
+ "files": {
+  "VERSION": "1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9",
+  "__init__.py": "bead5e84e136ff31f77438a16b4e67c34c3bffa931b53f21ac28c1e83fde8b0b",
+  "findings.py": "5491a16f7c518d3aa4afd787e9ae79b6bda819b54f1605a94ec175a8cd335ffb",
+  "paths.py": "073990ac77b0d8e5a610967bf89da92d55a8a4b9b08afb1cd9ca600a48fcc9f2",
+  "r2.py": "5f557875d707488efb65579306ab000e60b0e175df7159ef9ac217b90b9d4d65",
+  "report.py": "4f0592ea8186186d9d7e1b3d99991a682ab7549ae17d3487ac60436087e47c6a",
+  "runner.py": "a0b57c7a7122734abb476a336d77e908b5c8398a5a29d7593d149fc7d1e5562c",
+  "stage.py": "1ea7e38a8fd97ef6859c618e1a3192e38f82b377dcd38ad00fd2e71fd08549b8",
+  "sync.py": "8cbb80eee874019f0e986acd46084da1f15e95a3054d1988980c306111fda911",
+  "tasks.py": "0f79f6615870ac6202a1a3e813e89de4bc0612e6f21e247af7465ecc9de468cd"
+ },
+ "rule": "never edit \u2014 change the master, run its tests, re-vendor"
+}

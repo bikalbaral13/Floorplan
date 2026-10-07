@@ -1,0 +1,21 @@
+{
+ "id": "S8_GENERATE",
+ "version": "0.1.0",
+ "title": "Generate the AI clips",
+ "kind": "script",
+ "gate": false,
+ "summary": "One clip per shot, sequentially (provider concurrency 1). connector mode: writes generate/requests.json; the agent submits each through the Krea MCP connector and records job ids / result URLs in jobs.json; rerun downloads finished clips. api mode: upload → submit → poll → download with $KREA_API_KEY. Resumable: finished clips are never regenerated; out-of-credit (402) or busy (429) blocks with the shot to resume from.",
+ "inputs": [
+  "prompts.json",
+  "preview.json",
+  "jobs.json"
+ ],
+ "outputs": [
+  "jobs.json",
+  "work/output/ai/<ID>.mp4"
+ ],
+ "checks": [
+  "every shot has a downloaded clip",
+  "no failed jobs"
+ ]
+}

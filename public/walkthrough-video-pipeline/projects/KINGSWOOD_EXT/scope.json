@@ -1,0 +1,22 @@
+{
+ "questionnaire": "walkthrough-scope/1",
+ "answered_by": "fixture",
+ "answered_at": "2026-10-07",
+ "blend_path": "C:\\Users\\bikal\\Downloads\\RMD_EXT.blend",
+ "script_file": "D:\\BUILDER_PLUSS\\Walkthrough Video Script.pdf",
+ "path_file": "C:\\Users\\bikal\\Downloads\\Kingswood_Walkthrough_Path.pdf",
+ "coverage": "exterior",
+ "target_seconds": 64,
+ "materials": "palette",
+ "preview_preset": "low",
+ "ai_provider": "krea",
+ "ai_mode": "connector",
+ "ai_model": "bytedance/seedance-2",
+ "ai_resolution": "720p",
+ "aspect_ratio": "16:9",
+ "seed": 20261007,
+ "style_notes": "Luxury gated villa community, Tamil Nadu; cream sandstone, coconut and neem trees, golden-hour dusk",
+ "budget_units": null,
+ "audio_file": "",
+ "blender_exe": ""
+}

@@ -1,0 +1,20 @@
+{
+ "schema": "walkthrough-inventory/1",
+ "note": "trimmed RMD_EXT.blend inventory (bbox + objects the fixture refers to)",
+ "bbox": [
+  [
+   -108.47,
+   -100.76,
+   -6.0
+  ],
+  [
+   128.2,
+   79.91,
+   23.05
+  ]
+ ],
+ "objects": [
+  "LIGHT_001",
+  "BLD_P01_villa_1"
+ ]
+}

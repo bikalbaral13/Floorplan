@@ -1,0 +1,17 @@
+{
+ "id": "S10_REVIEW",
+ "version": "0.1.0",
+ "title": "The user approves the final video",
+ "kind": "script",
+ "gate": true,
+ "summary": "The user watches the final video and approves; the hand-off is recorded and outputs may be published to Projects/{CODE}/walkthrough/.",
+ "inputs": [
+  "final.json"
+ ],
+ "outputs": [
+  "handoff.json"
+ ],
+ "checks": [
+  "the user's words"
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "preset": "low",
+ "res": [
+  960,
+  540
+ ],
+ "fps": 12,
+ "engine": "WORKBENCH",
+ "shots": [
+  {
+   "id": "S1",
+   "clip": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\shots\\S1.mp4",
+   "render_s": 36.5,
+   "first": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S1_first.png",
+   "last": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S1_last.png"
+  },
+  {
+   "id": "S2",
+   "clip": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\shots\\S2.mp4",
+   "render_s": 9.7,
+   "first": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S2_first.png",
+   "last": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S2_last.png"
+  },
+  {
+   "id": "S3",
+   "clip": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\shots\\S3.mp4",
+   "render_s": 22.0,
+   "first": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S3_first.png",
+   "last": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S3_last.png"
+  },
+  {
+   "id": "S4",
+   "clip": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\shots\\S4.mp4",
+   "render_s": 44.7,
+   "first": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S4_first.png",
+   "last": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S4_last.png"
+  },
+  {
+   "id": "S5",
+   "clip": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\shots\\S5.mp4",
+   "render_s": 33.1,
+   "first": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S5_first.png",
+   "last": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S5_last.png"
+  },
+  {
+   "id": "S6",
+   "clip": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\shots\\S6.mp4",
+   "render_s": 25.3,
+   "first": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S6_first.png",
+   "last": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S6_last.png"
+  },
+  {
+   "id": "S7",
+   "clip": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\shots\\S7.mp4",
+   "render_s": 42.5,
+   "first": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S7_first.png",
+   "last": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\preview\\keyframes\\S7_last.png"
+  }
+ ],
+ "preview": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\KINGSWOOD_EXT_preview.mp4",
+ "seconds": 64.0,
+ "approved": "FIXTURE preview ok 2026-10-07"
+}

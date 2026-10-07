@@ -46,7 +46,7 @@ export const PHASES: PhaseDef[] = [
     id: "present",
     label: "Present",
     title: "Present: images, videos, walkthroughs, Unreal / Blender / SketchUp exports",
-    pipelines: ["Floorplan Renderer", "Interior Mesh Pipeline", "Exterior Mesh Pipeline"],
+    pipelines: ["Floorplan Renderer", "Interior Mesh Pipeline", "Exterior Mesh Pipeline", "Walkthrough Video generation Pipeline"],
   },
 ];
 

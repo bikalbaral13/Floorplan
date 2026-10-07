@@ -1,0 +1,13 @@
+- 2026-10-07T15:34:23 S0_SCOPE blocked: Draft scope.json written from the defaults. Ask the user every question, record THEIR answers, set answered_by='user' and answered_at, then rerun with --approved "<their words, date>".
+- 2026-10-07T15:34:24 S0_SCOPE done: scope: exterior · 64 s · preview low · krea/bytedance/seedance-2 720p seed 20261007 [0 fail, 0 warn]
+- 2026-10-07T15:34:24 [decision] scope answered by the user: FIXTURE regression run 2026-10-07
+- 2026-10-07T15:34:41 S1_INTAKE done: 1756 objects, site 142 x 181 m, 60 lamp-like; plan ..\..\..\..\pipeline-work\walkthrough\KINGSWOOD_EXT\intake\topdown.png
+- 2026-10-07T15:34:50 S2_SHOTLIST done: 7 shots, 64 s [0 fail, 0 warn]
+- 2026-10-07T15:34:56 S3_BUILD done: 7 cameras, 39 lamps, props ['CAR'], frames 1–1536 → ..\..\..\..\pipeline-work\walkthrough\KINGSWOOD_EXT\output\KINGSWOOD_EXT_walkthrough.blend
+- 2026-10-07T15:39:39 S4_PREVIEW done: 7 clips at 960x540 12 fps (214 s render) → ..\..\..\..\pipeline-work\walkthrough\KINGSWOOD_EXT\output\KINGSWOOD_EXT_preview.mp4
+- 2026-10-07T15:40:02 S5_PREVIEW_REVIEW done: preview approved (..\..\..\..\pipeline-work\walkthrough\KINGSWOOD_EXT\output\KINGSWOOD_EXT_preview.mp4)
+- 2026-10-07T15:40:02 [decision] preview approved by the user: FIXTURE preview ok 2026-10-07
+- 2026-10-07T15:40:02 S6_PROMPTS done: 7 prompts, model bytedance/seedance-2, seed 20261007
+- 2026-10-07T15:40:02 S7_BUDGET done: 7 clips, 64 s of bytedance/seedance-2 at 720p (one at a time)
+- 2026-10-07T15:40:02 [decision] generation spend approved by the user: FIXTURE spend ok 2026-10-07
+- 2026-10-07T15:40:04 S8_GENERATE blocked: 3/7 clips downloaded; next S4. Submit each entry of generate.requests.json through the Krea connector ONE AT A TIME (upload the reference clip, then generate_video), record ref_url / job_id / result_url in jobs.json, then rerun to download.

@@ -1,0 +1,55 @@
+{
+ "schema": "walkthrough-standards/1",
+ "note": "House conventions used when scope.json is silent. Project-independent: no site, client or style is assumed here. src: convention (house default) or observed (measured on a real run).",
+ "blender": { "exe": "", "timeout_s": 3600 },
+ "fps": 24,
+ "render_presets": {
+  "draft":  { "engine": "WORKBENCH", "res": [480, 270],  "fps": 12, "aa": "OFF", "note": "fastest look-only check; below the AI reference-video minimum" },
+  "low":    { "engine": "WORKBENCH", "res": [960, 540],  "fps": 12, "aa": "OFF", "note": "default preview; >= 409,600 px so it is accepted as an AI reference video (src: observed)" },
+  "medium": { "engine": "WORKBENCH", "res": [1280, 720], "fps": 24, "aa": "8" },
+  "final":  { "engine": "CYCLES", "res": [1920, 1080], "fps": 24, "samples": 64, "note": "needs a GPU (CPU ~1 min/frame, src: observed)" }
+ },
+ "ai_models": {
+  "bytedance/seedance-2":   { "min_s": 4, "max_s": 15, "min_ref_pixels": 409600, "concurrency": 1, "resolutions": ["480p", "720p", "1080p"], "seed": true, "src": "observed; confirm with the provider schema before S7" },
+  "bytedance/seedance-2-5": { "min_s": 4, "max_s": 30, "min_ref_pixels": 409600, "concurrency": 1, "resolutions": ["480p", "720p", "1080p"], "seed": true, "note": "needs a higher Krea plan (src: observed)" }
+ },
+ "style": {
+  "prefix": "Professional architectural visualization film, ultra-realistic, shot on a cinema camera with a prime lens, perfectly stabilized. Follow the reference video's camera path, framing and building layout exactly:",
+  "suffix": "Crisp architectural lines, true verticals, high dynamic range, premium real estate commercial color grade, calm luxurious pacing. No people, no text, no logos.",
+  "src": "convention — project-specific place, materials and mood go in each shot body or scope.style_notes"
+ },
+ "lighting": {
+  "dusk":  { "sun_elevation_deg": 14, "sun_heading_deg": 250, "sun_energy": 3.5, "sun_color": [1.0, 0.85, 0.7],  "world_strength": 0.35, "moon_energy": 0,    "lamps_w": 600,  "windows_glow": 0 },
+  "day":   { "sun_elevation_deg": 45, "sun_heading_deg": 200, "sun_energy": 4.0, "sun_color": [1.0, 0.97, 0.92], "world_strength": 1.0,  "moon_energy": 0,    "lamps_w": 0,    "windows_glow": 0 },
+  "night": { "sun_elevation_deg": 14, "sun_heading_deg": 250, "sun_energy": 0.0, "sun_color": [1.0, 0.85, 0.7],  "world_strength": 0.15, "moon_energy": 0.35, "lamps_w": 1500, "windows_glow": 4 }
+ },
+ "workbench_world": { "dusk": [0.55, 0.68, 0.85], "day": [0.6, 0.75, 0.95], "night": [0.02, 0.03, 0.07] },
+ "palette": {
+  "note": "Used only when scope.materials == 'palette' (massing models with flat materials). Matched case-insensitively against the material name: the first keyword contained in the name wins. [r, g, b, roughness].",
+  "default": [0.6, 0.58, 0.55, 0.8],
+  "rules": [
+   ["glass", [0.05, 0.08, 0.1, 0.05]], ["asphalt", [0.05, 0.05, 0.055, 0.8]], ["road", [0.06, 0.06, 0.065, 0.8]],
+   ["lawn", [0.12, 0.25, 0.06, 0.9]], ["grass", [0.12, 0.25, 0.06, 0.9]], ["foliage", [0.07, 0.2, 0.05, 0.8]], ["lea", [0.07, 0.2, 0.05, 0.8]],
+   ["trunk", [0.15, 0.1, 0.06, 0.9]], ["branch", [0.15, 0.1, 0.06, 0.9]], ["stem", [0.15, 0.1, 0.06, 0.9]], ["water", [0.05, 0.15, 0.2, 0.05]],
+   ["ground", [0.22, 0.2, 0.15, 1.0]], ["earth", [0.3, 0.24, 0.16, 1.0]], ["soil", [0.3, 0.24, 0.16, 1.0]],
+   ["winframe", [0.15, 0.12, 0.1, 0.4]], ["frame", [0.2, 0.13, 0.07, 0.5]], ["door", [0.3, 0.18, 0.09, 0.5]],
+   ["rail", [0.1, 0.1, 0.1, 0.3]], ["bar", [0.1, 0.1, 0.1, 0.4]], ["pole", [0.1, 0.1, 0.1, 0.4]], ["metal", [0.5, 0.5, 0.52, 0.3]],
+   ["lantern", [1.0, 0.85, 0.6, 0.3]], ["lens", [1.0, 0.85, 0.6, 0.3]], ["lamp", [1.0, 0.85, 0.6, 0.3]],
+   ["roof", [0.4, 0.37, 0.33, 0.8]], ["paver", [0.5, 0.45, 0.38, 0.8]], ["kerb", [0.6, 0.6, 0.58, 0.8]], ["curb", [0.6, 0.6, 0.58, 0.8]],
+   ["concrete", [0.5, 0.5, 0.48, 0.8]], ["marking", [0.9, 0.9, 0.85, 0.6]], ["plinth", [0.45, 0.4, 0.35, 0.8]],
+   ["coping", [0.85, 0.82, 0.75, 0.5]], ["cap", [0.88, 0.84, 0.76, 0.5]], ["parapet", [0.8, 0.75, 0.66, 0.7]], ["chajja", [0.82, 0.78, 0.7, 0.6]],
+   ["pillar", [0.82, 0.76, 0.66, 0.6]], ["pier", [0.82, 0.76, 0.66, 0.6]], ["column", [0.82, 0.76, 0.66, 0.6]], ["wall", [0.78, 0.72, 0.62, 0.7]]
+  ]
+ },
+ "emissive_keywords": ["lantern", "lens", "lamp"],
+ "glass_keywords": ["glass", "glazing"],
+ "lamp_defaults": { "object_pattern": "light|lamp", "height_m": 5.5, "note": "street-lamp point lights are added at objects whose name matches object_pattern (regex, case-insensitive) unless scope.lamps says otherwise" },
+ "krea": {
+  "mode_default": "connector",
+  "api_base": "https://api.krea.ai", "generate_path": "/generate/{endpoint}", "job_path": "/jobs/{job_id}", "upload_path": "/assets/upload-url",
+  "key_env": "KREA_API_KEY",
+  "verified": false,
+  "note": "api-mode paths are NOT yet verified against Krea's REST docs; connector mode (the Krea MCP connector) is the tested path. Verify, then set verified: true."
+ },
+ "checks": { "min_shot_s": 3, "cam_min_height_m": 1.0, "site_margin_m": 150, "min_lens_mm": 10, "max_lens_mm": 200 }
+}

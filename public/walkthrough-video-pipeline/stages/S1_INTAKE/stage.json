@@ -1,0 +1,22 @@
+{
+ "id": "S1_INTAKE",
+ "version": "0.1.0",
+ "title": "Inventory the .blend",
+ "kind": "blender",
+ "gate": false,
+ "summary": "Opens the source .blend headless (never saves it): bounding box, object / collection / material lists, lamp-like and interior-hint objects, and a top-down Workbench plan with its pixel → world mapping, so the shot list can be written in model coordinates.",
+ "inputs": [
+  "scope.json",
+  "<blend_path>"
+ ],
+ "outputs": [
+  "intake.json",
+  "work/intake/inventory.json",
+  "work/intake/topdown.png"
+ ],
+ "checks": [
+  "blend opens and renders",
+  "coverage vs interior hints (warn)",
+  "metric units, scale 1 (warn)"
+ ]
+}

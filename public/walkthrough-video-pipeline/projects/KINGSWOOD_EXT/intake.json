@@ -1,0 +1,111 @@
+{
+ "bbox": [
+  [
+   -14.16,
+   -100.76,
+   -6.0
+  ],
+  [
+   128.2,
+   79.91,
+   23.2
+  ]
+ ],
+ "counts": {
+  "CAMERA": 1,
+  "EMPTY": 878,
+  "MESH": 877
+ },
+ "cameras": [
+  "PREVIEW_CAM",
+  "_TOPDOWN"
+ ],
+ "units": "METRIC",
+ "scale_length": 1.0,
+ "collections": [
+  {
+   "name": "Scene Collection",
+   "excluded": false,
+   "objects": 1
+  },
+  {
+   "name": "EXT",
+   "excluded": false,
+   "objects": 0
+  },
+  {
+   "name": "EXT_roads",
+   "excluded": false,
+   "objects": 99
+  },
+  {
+   "name": "EXT_plots",
+   "excluded": false,
+   "objects": 95
+  },
+  {
+   "name": "EXT_gates",
+   "excluded": false,
+   "objects": 141
+  },
+  {
+   "name": "EXT_walls",
+   "excluded": false,
+   "objects": 404
+  },
+  {
+   "name": "EXT_open",
+   "excluded": false,
+   "objects": 6
+  },
+  {
+   "name": "EXT_buildings_unique",
+   "excluded": false,
+   "objects": 15
+  },
+  {
+   "name": "EXT_terrain",
+   "excluded": false,
+   "objects": 3
+  },
+  {
+   "name": "EXT_inst_buildings",
+   "excluded": false,
+   "objects": 19
+  },
+  {
+   "name": "EXT_inst_trees",
+   "excluded": false,
+   "objects": 32
+  },
+  {
+   "name": "EXT_inst_shrubs",
+   "excluded": false,
+   "objects": 591
+  },
+  {
+   "name": "EXT_inst_lights",
+   "excluded": false,
+   "objects": 39
+  },
+  {
+   "name": "EXT_basement",
+   "excluded": false,
+   "objects": 27
+  }
+ ],
+ "lamp_like": 60,
+ "interior_hints": [],
+ "materials": 59,
+ "topdown": {
+  "png": "D:\\MAIN\\monica_recent\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\intake\\topdown.png",
+  "px": 1400,
+  "center": [
+   57.02100133895874,
+   -10.423500061035156
+  ],
+  "m_per_px": 0.13550625228881835,
+  "to_world": "x = cx + (px_x - px/2) * m_per_px ; y = cy - (px_y - px/2) * m_per_px"
+ },
+ "inventory": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\intake\\inventory.json"
+}

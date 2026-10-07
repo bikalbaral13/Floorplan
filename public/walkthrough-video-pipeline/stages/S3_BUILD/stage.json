@@ -1,0 +1,22 @@
+{
+ "id": "S3_BUILD",
+ "version": "0.1.0",
+ "title": "Build the walkthrough .blend",
+ "kind": "blender",
+ "gate": false,
+ "summary": "shots.json → <CODE>_walkthrough.blend: a camera + look-at target per shot bound to timeline markers, sun / moon / sky keyed per shot light, street-lamp point lights, glowing windows at night, moving prop stand-ins, optional flat-material palette. The source .blend is never overwritten.",
+ "inputs": [
+  "scope.json",
+  "shots.json",
+  "standards"
+ ],
+ "outputs": [
+  "work/output/<CODE>_walkthrough.blend",
+  "build.json"
+ ],
+ "checks": [
+  "build script succeeds",
+  "one camera per shot",
+  "frame range = total duration"
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "id": "S6_PROMPTS",
+ "version": "0.1.0",
+ "title": "Author the AI prompts (agent)",
+ "kind": "agent",
+ "gate": false,
+ "summary": "The agent writes prompts.json (walkthrough-prompts/1): one shared style prefix / suffix, one fixed seed, and a body per shot describing camera move, architecture, materials and light from the script. Full prompts are written to prompts.preview.md for the user.",
+ "inputs": [
+  "shots.json",
+  "scope.json",
+  "standards style",
+  "<script_file>"
+ ],
+ "outputs": [
+  "prompts.json",
+  "prompts.preview.md"
+ ],
+ "checks": [
+  "model known",
+  "resolution allowed",
+  "fixed integer seed",
+  "shared style",
+  "every shot has a body",
+  "durations whole seconds within model limits"
+ ]
+}

@@ -1,0 +1,20 @@
+{
+ "id": "S9_ASSEMBLE",
+ "version": "0.1.0",
+ "title": "Assemble the final video",
+ "kind": "blender",
+ "gate": false,
+ "summary": "Joins the AI clips in shot order (optionally under scope.audio_file) into <CODE>_final.mp4 with Blender's sequencer.",
+ "inputs": [
+  "jobs.json",
+  "work/output/ai/*.mp4"
+ ],
+ "outputs": [
+  "work/output/<CODE>_final.mp4",
+  "final.json"
+ ],
+ "checks": [
+  "every shot present",
+  "duration within 10 % of the shot list"
+ ]
+}

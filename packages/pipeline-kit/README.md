@@ -13,6 +13,7 @@ Using it in a pipeline: put `_vendor` on `sys.path`, build a `paths.Layout(root)
 | Pipeline | Kit | Since |
 |---|---|---|
 | floorplan-tracer-pipeline | 0.2.0 (paths, tasks, findings, report, stage, runner, r2, sync) | 2026-10-06; sync 2026-10-07 |
+| walkthrough-video-pipeline | 0.2.0 (paths, tasks, findings, report, stage, runner, sync); Blender stages via core/blender.py | 2026-10-07 |
 | exterior-mesh-pipeline | — (next: paths / tasks / report / findings; its Blender task types later) | |
 | interior-mesh-pipeline | — | |
 | program_pipeline | — | |

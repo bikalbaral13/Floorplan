@@ -1,0 +1,24 @@
+{
+ "S1": {
+  "job_id": "c0ff75c3-a9f2-48d7-af25-7e8b6be3da9a",
+  "result_url": "https://app-uploads.krea.ai/public/c6a50c16-7c96-4a13-baaf-1d27992aef85-video.mp4",
+  "file": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\ai\\S1.mp4",
+  "status": "completed"
+ },
+ "S2": {
+  "job_id": "1b150544-1df4-4a28-86b8-f02418d7ac0f",
+  "result_url": "https://app-uploads.krea.ai/public/2025738e-3fe1-4e15-a5ce-21409283fafb-video.mp4",
+  "file": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\ai\\S2.mp4",
+  "status": "completed"
+ },
+ "S3": {
+  "job_id": "e0bf16a9-e876-4062-b209-c91b2702de3c",
+  "result_url": "https://app-uploads.krea.ai/public/daeba44d-d10f-4263-b7f4-ccfd30d09f0d-video.mp4",
+  "file": "..\\..\\..\\..\\pipeline-work\\walkthrough\\KINGSWOOD_EXT\\output\\ai\\S3.mp4",
+  "status": "completed"
+ },
+ "S4": {},
+ "S5": {},
+ "S6": {},
+ "S7": {}
+}

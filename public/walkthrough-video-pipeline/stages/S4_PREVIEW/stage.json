@@ -1,0 +1,23 @@
+{
+ "id": "S4_PREVIEW",
+ "version": "0.1.0",
+ "title": "Render the preview",
+ "kind": "blender",
+ "gate": false,
+ "summary": "Renders every shot with the scope's preview preset (default 'low': Workbench 960x540 @ 12 fps) as its own clip with first / last keyframes, then joins them into <CODE>_preview.mp4. These clips are the AI reference videos.",
+ "inputs": [
+  "build.json",
+  "shots.json",
+  "standards"
+ ],
+ "outputs": [
+  "work/output/preview/shots/<ID>.mp4",
+  "work/output/preview/keyframes/*",
+  "work/output/<CODE>_preview.mp4",
+  "preview.json"
+ ],
+ "checks": [
+  "every shot rendered",
+  "clip size >= the AI model's minimum reference pixels"
+ ]
+}

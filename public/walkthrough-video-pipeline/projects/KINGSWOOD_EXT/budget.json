@@ -1,0 +1,13 @@
+{
+ "provider": "krea",
+ "mode": "connector",
+ "model": "bytedance/seedance-2",
+ "resolution": "720p",
+ "seed": 20261007,
+ "clips": 7,
+ "seconds": 64,
+ "concurrency": 1,
+ "budget_units": null,
+ "note": "credit cost per second varies by model, resolution and reference length — check the provider balance first; S8 stops cleanly when credits run out and resumes from that shot",
+ "approved": "FIXTURE spend ok 2026-10-07"
+}

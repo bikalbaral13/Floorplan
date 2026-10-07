@@ -1,0 +1,298 @@
+{
+ "schema": "walkthrough-shots/1",
+ "fps": 24,
+ "coverage": "exterior",
+ "note": "Kingswood, Ramanathapuram — exterior-only cut of the 17-shot path (interiors not in RMD_EXT.blend). Regression fixture from the 2026-10-07 run.",
+ "shots": [
+  {
+   "id": "S1",
+   "name": "ArrivalAerial",
+   "start": 0,
+   "duration": 10,
+   "lens": 28,
+   "light": "dusk",
+   "camera": {
+    "type": "path",
+    "keys": [
+     [
+      63,
+      115,
+      60
+     ],
+     [
+      63,
+      52,
+      8
+     ]
+    ]
+   },
+   "target": {
+    "keys": [
+     [
+      63,
+      10,
+      0
+     ],
+     [
+      63,
+      15,
+      3
+     ]
+    ]
+   },
+   "script_cue": "Some addresses announce themselves...",
+   "path_ref": "Sheet 1 S1",
+   "src": "derived"
+  },
+  {
+   "id": "S2",
+   "name": "DropOff",
+   "start": 10,
+   "duration": 6,
+   "lens": 24,
+   "light": "dusk",
+   "camera": {
+    "type": "path",
+    "keys": [
+     [
+      52,
+      32,
+      1.5
+     ],
+     [
+      55,
+      22,
+      1.5
+     ]
+    ]
+   },
+   "target": {
+    "object": "CAR"
+   },
+   "script_cue": "(arrival, no line)",
+   "path_ref": "Sheet 1 S2",
+   "src": "derived"
+  },
+  {
+   "id": "S3",
+   "name": "SpineWalk",
+   "start": 16,
+   "duration": 8,
+   "lens": 24,
+   "light": "dusk",
+   "camera": {
+    "type": "path",
+    "keys": [
+     [
+      59.5,
+      20,
+      1.6
+     ],
+     [
+      59.5,
+      -6,
+      1.6
+     ]
+    ]
+   },
+   "target": {
+    "keys": [
+     [
+      60,
+      -60,
+      2
+     ],
+     [
+      60,
+      -70,
+      2
+     ]
+    ]
+   },
+   "script_cue": "Arched stone facades rise in quiet symmetry...",
+   "path_ref": "Sheet 1 S3",
+   "src": "derived"
+  },
+  {
+   "id": "S4",
+   "name": "VillaStreet",
+   "start": 24,
+   "duration": 10,
+   "lens": 28,
+   "light": "dusk",
+   "camera": {
+    "type": "path",
+    "keys": [
+     [
+      50,
+      14,
+      3
+     ],
+     [
+      24,
+      14,
+      3
+     ]
+    ]
+   },
+   "target": {
+    "keys": [
+     [
+      34,
+      -10,
+      4
+     ],
+     [
+      10,
+      -10,
+      4
+     ]
+    ]
+   },
+   "script_cue": "Step inside, and the craft speaks for itself. (exterior substitute)",
+   "path_ref": "Sheet 1 S4",
+   "src": "derived"
+  },
+  {
+   "id": "S5",
+   "name": "VillaOrbit",
+   "start": 34,
+   "duration": 10,
+   "lens": 30,
+   "light": "dusk",
+   "camera": {
+    "type": "orbit",
+    "center": [
+     9,
+     -7
+    ],
+    "radius": 26,
+    "start_deg": 200,
+    "sweep_deg": 96,
+    "z": [
+     12,
+     7.2
+    ]
+   },
+   "target": {
+    "keys": [
+     [
+      9,
+      -7,
+      3
+     ]
+    ]
+   },
+   "script_cue": "...not just to be seen, but to be felt. (exterior substitute)",
+   "path_ref": "Villa 1 plot",
+   "src": "derived"
+  },
+  {
+   "id": "S6",
+   "name": "SouthRowAerial",
+   "start": 44,
+   "duration": 8,
+   "lens": 24,
+   "light": "dusk",
+   "camera": {
+    "type": "path",
+    "keys": [
+     [
+      18,
+      -44,
+      22
+     ],
+     [
+      62,
+      -44,
+      22
+     ]
+    ]
+   },
+   "target": {
+    "keys": [
+     [
+      30,
+      -76,
+      0
+     ],
+     [
+      75,
+      -76,
+      0
+     ]
+    ]
+   },
+   "script_cue": "Beyond your door, a clubhouse... (exterior substitute)",
+   "path_ref": "Sheet 1 S13-S16 area",
+   "src": "derived"
+  },
+  {
+   "id": "S7",
+   "name": "NightRise",
+   "start": 52,
+   "duration": 12,
+   "lens": 28,
+   "light": "night",
+   "camera": {
+    "type": "path",
+    "keys": [
+     [
+      64,
+      -50,
+      10
+     ],
+     [
+      64,
+      15,
+      80
+     ]
+    ]
+   },
+   "target": {
+    "keys": [
+     [
+      64,
+      -72,
+      0
+     ],
+     [
+      64,
+      -40,
+      0
+     ]
+    ]
+   },
+   "script_cue": "Kingswood, Ramanathapuram... Made to last.",
+   "path_ref": "Sheet 1 S17",
+   "src": "derived"
+  }
+ ],
+ "props": [
+  {
+   "id": "CAR",
+   "type": "car",
+   "keys": [
+    [
+     0,
+     63,
+     75
+    ],
+    [
+     10,
+     63,
+     48
+    ],
+    [
+     16,
+     63.5,
+     24
+    ]
+   ]
+  }
+ ],
+ "lamps": {
+  "object_pattern": "^LIGHT_\\d+$",
+  "height_m": 5.5
+ }
+}
