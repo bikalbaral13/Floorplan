@@ -21,7 +21,7 @@ import path from "node:path";
 import { putObject, getObjectText, listObjectsDetailed } from "../tools/r2.mjs";
 import { DESIGN_TOOLS, callDesignTool } from "./designMcp.mjs";
 import { groupedTools, resolveCall, describeOps } from "../packages/floorplan-bridge/toolGroups.mjs";
-import { relayConfig, CONNECTOR_RELAY_TOOLS, linkConnector, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
+import { relayConfig, CONNECTOR_RELAY_TOOLS, linkConnector, openEditor, connectorStatus, callConnectorTool, connectorWorkflowTools, isWorkflowTool } from "./relayCore.mjs";
 
 /** MCP_FLAT_TOOLS=1 lists the old one-tool-per-command surface instead of the grouped one (rollback switch). */
 const FLAT = /^(1|true|yes)$/i.test(String(process.env.MCP_FLAT_TOOLS ?? ""));
@@ -146,6 +146,11 @@ const CONNECTOR_TOOLS = [
     inputSchema: { type: "object", properties: { code: { type: "string", description: "the code the editor's Connect Claude dialog shows, e.g. K7PX2M" } }, required: ["code"] },
   },
   {
+    name: "open_editor",
+    description: "Start a LIVE editor session without the user clicking anything: returns a one-time link (valid 10 min) that opens the floorplan editor already connected to this connector. Give the user the link — or open it beside the chat if you can open a browser — then call editor_status until tabConnected is true. Prefer this over connect_editor.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
     name: "editor_status",
     description: "Is a live editor tab linked and connected, which Library design headless edits go to, and the step-gate state. Call before a multi-step job to know whether the user is watching live.",
     inputSchema: { type: "object", properties: {} },
@@ -167,7 +172,7 @@ TOOLS ARE GROUPED: session, step, library, skills, design, draw, layers, objects
 
 HOW TO HANDLE A REQUEST
 1. Anything beyond a single small edit: call list_skills, pick the skill whose description fits the request, read_skill it, and follow it step by step. Read files it references with read_file. If no skill fits, work directly with the canvas tools.
-2. Call editor_status. If no editor is linked, ask the user once whether they want to watch live: they open https://floorplan-indol.vercel.app/floorplan-editor, click Connect Claude, and tell you the code — then call connect_editor. If they don't, work headless: use_design picks (or creates) Designs/<name>.json and the canvas tools edit that file.
+2. Call editor_status. If no editor tab is connected, ask the user once whether they want to watch live. If yes, call open_editor and give them the link it returns (or open it beside the chat if you can open a browser) — the tab connects itself, no code; then call editor_status until tabConnected is true. (Fallback: they click Connect Claude in the editor and tell you the code for connect_editor.) If they don't, work headless: use_design picks (or creates) Designs/<name>.json and the canvas tools edit that file.
 3. Draw JSON-FIRST — it is many times faster than drawing piece by piece. To lay down or replace a whole plan, build the complete plan JSON (the standard format: read an existing one with read_file for the shape) and call load_design ONCE: it saves to Designs/ and loads into the linked tab in one step, like the editor's Import JSON. To change an existing design, batch every change of a step into ONE edit_design call (up to 500 ops; a linked tab showing that design picks it up live). Use the single canvas tools (draw_segment / place_opening / place_object / attach_* / flow_*; METRES) only for a few small touch-ups. Check your work with snapshot_canvas.
 4. Multi-step skills: begin_step → work → checkpoint for each step; the user answers in the editor. If a call returns { pending: true, ticket }, call await_result with the ticket until it finishes.
 5. Steps a skill runs on the user's own PC (Blender renders, Python/DXF, .skp export) cannot run here: finish everything else, save the design, and tell the user the exact local command to run.
@@ -354,6 +359,7 @@ async function callTool(cfg, name, args, user) {
   const rcfg = relayConfig();
   if (!rcfg) throw new Error("the live editor relay is not configured on this server (RELAY_R2_* keys)");
   if (name === "connect_editor") return text(await linkConnector(rcfg, user, args.code));
+  if (name === "open_editor") return text(await openEditor(rcfg, user));
   if (name === "editor_status") return text(await connectorStatus(rcfg, user));
   return callConnectorTool(rcfg, user, name, args);
 }

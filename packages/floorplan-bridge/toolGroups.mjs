@@ -16,7 +16,7 @@
 export const GROUPS = {
   session: {
     summary: "The live editor link and what is on the canvas right now.",
-    ops: { connect: "connect_editor", status: "editor_status", state: "get_state", selection: "get_selection", snapshot: "snapshot_canvas" },
+    ops: { open: "open_editor", connect: "connect_editor", status: "editor_status", state: "get_state", selection: "get_selection", snapshot: "snapshot_canvas" },
   },
   step: {
     summary: "Stepwise runs: open a step, then hand it to the user with a checkpoint (blocks until they answer).",

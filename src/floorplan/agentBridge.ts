@@ -56,6 +56,28 @@ export async function pairRelay(): Promise<RelaySession> {
   setRelaySession(s);
   return s;
 }
+/** open_editor links: `/floorplan-editor#pair=<one-time token>` connects this tab without the dialog. The
+ *  token lives in the fragment (never sent to a server) and is removed from the address bar BEFORE the
+ *  claim, so a reload, a bookmark or a copied URL cannot reuse it. Runs once per page load (StrictMode
+ *  mounts effects twice). Resolves to the session, or null when there was no link; throws when the link is
+ *  dead (expired, or already used). */
+let claimOnce: Promise<RelaySession | null> | null = null;
+export function claimRelayFromUrl(): Promise<RelaySession | null> {
+  if (claimOnce) return claimOnce;
+  const m = /(?:^#|&)pair=([A-Za-z0-9_-]{20,64})(?:&|$)/.exec(window.location.hash);
+  if (!m) return (claimOnce = Promise.resolve(null));
+  const rest = window.location.hash.replace(/(^#|&)pair=[^&]*/, "$1").replace(/^#&/, "#").replace(/^#$/, "");
+  window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search + rest);
+  return (claimOnce = (async () => {
+    const res = await fetch("/__relay/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: m[1] }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) throw new Error(j.error || `could not connect (${res.status})`);
+    const s: RelaySession = { sessionId: j.sessionId, tabToken: j.tabToken, agentToken: j.agentToken, command: j.command, mcpUrl: j.mcpUrl, linkCode: j.linkCode, expiresAt: j.expiresAt };
+    setRelaySession(s);
+    return s;
+  })());
+}
+
 /** End the session: the relay deletes everything it held for it. */
 export async function disconnectRelay(): Promise<void> {
   const s = getRelaySession();

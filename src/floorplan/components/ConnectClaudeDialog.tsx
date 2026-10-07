@@ -3,7 +3,7 @@ import { Check, Copy, Loader2, PlugZap, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { disconnectRelay, getRelaySession, pairRelay, type RelaySession, type RelayState } from "../agentBridge";
+import { claimRelayFromUrl, disconnectRelay, getRelaySession, pairRelay, type RelaySession, type RelayState } from "../agentBridge";
 
 /** Toolbar button + dialog for the hosted MCP relay: pair this tab, show the one command to paste into
  *  Claude Code, show whether the tab is receiving calls, and disconnect. No accounts: the pasted token is
@@ -34,6 +34,13 @@ export function ConnectClaudeButton({ variant = "button" }: { variant?: "button"
     window.addEventListener("bp-relay-state", onState);
     return () => { window.removeEventListener("bp-relay-change", onChange); window.removeEventListener("bp-relay-state", onState); };
   }, []);
+  // An open_editor link (#pair=…) connects this tab on load — the host is always mounted, so it runs once here.
+  useEffect(() => {
+    if (variant !== "host") return;
+    claimRelayFromUrl()
+      .then((s) => { if (s) { setSession(s); setState("connecting"); toast.success("Connected to Claude — this tab shows its work live."); } })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Could not connect to Claude"));
+  }, [variant]);
   useEffect(() => { if (state === "expired") toast.info("Claude connection expired — click Connect Claude to start a new one."); }, [state]);
 
   const connect = async () => {

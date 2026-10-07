@@ -111,24 +111,60 @@ async function sessionFor(cfg, req, kind) {
 const pairsByIp = new Map(); // best-effort per-instance limit: 30 pairings / hour / IP
 const LINK_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // no 0/O/1/I: the code is read aloud and retyped
 async function pair(cfg, req, res, url) {
-  const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "?").split(",")[0].trim();
-  const now = Date.now(), hist = (pairsByIp.get(ip) || []).filter((t) => now - t < 3_600_000);
-  if (hist.length >= 30) return send(res, 429, { ok: false, error: "too many connections from this address — try again within the hour" });
-  pairsByIp.set(ip, [...hist, now]);
+  if (rateLimited(req)) return send(res, 429, { ok: false, error: "too many connections from this address — try again within the hour" });
+  const now = Date.now();
   const sid = `s${now.toString(36)}${crypto.randomBytes(6).toString("hex")}`;   // letters and digits only: `_` separates the token parts
   const agentToken = `fpa_${sid}_${rand(24)}`, tabToken = `fpt_${sid}_${rand(24)}`;
-  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
-  const proto = String(req.headers["x-forwarded-proto"] || (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) ? "http" : "https")).split(",")[0];
-  const origin = req.headers.origin || `${proto}://${host}`;
   await putJson(cfg, `${P(sid)}/session.json`, { createdAt: now, expiresAt: now + SESSION_TTL_MS, agentHash: sha(agentToken), tabHash: sha(tabToken), latch: null, run: newRunState() });
   // A short code the library connector (/api/mcp) trades for this session with connect_editor, so a
   // claude.ai connector — which can carry no Authorization header — can drive this tab too.
   const linkCode = Array.from(crypto.randomBytes(6), (b) => LINK_ALPHABET[b % LINK_ALPHABET.length]).join("");
   await putJson(cfg, `relay/links/${linkCode}.json`, { sid, expiresAt: now + SESSION_TTL_MS });
-  const mcpUrl = `${origin.replace(/\/+$/, "")}/mcp`;
-  send(res, 200, { ok: true, sessionId: sid, tabToken, agentToken, mcpUrl, linkCode, expiresAt: now + SESSION_TTL_MS,
-    command: `claude mcp add --transport http floorplan ${mcpUrl} --header "Authorization: Bearer ${agentToken}"` });
+  send(res, 200, pairReply(sid, tabToken, agentToken, requestOrigin(req), linkCode, now + SESSION_TTL_MS));
   void url;
+}
+
+function requestOrigin(req) {
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+  const proto = String(req.headers["x-forwarded-proto"] || (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) ? "http" : "https")).split(",")[0];
+  return req.headers.origin || `${proto}://${host}`;
+}
+function pairReply(sid, tabToken, agentToken, origin, linkCode, expiresAt) {
+  const mcpUrl = `${origin.replace(/\/+$/, "")}/mcp`;
+  return { ok: true, sessionId: sid, tabToken, agentToken, mcpUrl, linkCode, expiresAt,
+    command: `claude mcp add --transport http floorplan ${mcpUrl} --header "Authorization: Bearer ${agentToken}"` };
+}
+const rateLimited = (req) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "?").split(",")[0].trim();
+  const now = Date.now(), hist = (pairsByIp.get(ip) || []).filter((t) => now - t < 3_600_000);
+  if (hist.length >= 30) return true;
+  pairsByIp.set(ip, [...hist, now]); return false;
+};
+
+/* ── open_editor: the connector starts the pairing ───────────────────────────────────────────────────────
+ * The reverse of Connect Claude. The connector creates the session ALREADY linked to its user and returns a
+ * link carrying a one-time claim token in the URL FRAGMENT (#pair=…, never sent to a server, so it stays out
+ * of access logs). The tab that opens it POSTs the token to /__relay/claim and gets its tokens — minted
+ * there, so no secret is ever stored. The claim is single-use and lives 10 minutes. */
+const CLAIM_TTL_MS = 10 * 60 * 1000;
+const claimKey = (token) => `relay/claims/${sha(`claim:${token}`)}.json`;
+const EDITOR_ORIGIN = unquote(process.env.EDITOR_ORIGIN || "").replace(/\/+$/, "") || ALLOWED_ORIGINS[0];
+
+async function claim(cfg, req, res) {
+  if (rateLimited(req)) return send(res, 429, { ok: false, error: "too many connections from this address — try again within the hour" });
+  let body; try { body = JSON.parse(await readBody(req) || "{}"); } catch { return send(res, 400, { ok: false, error: "bad claim body" }); }
+  const token = String(body?.token ?? "");
+  const gone = { ok: false, error: "this editor link has expired or was already used — ask Claude to open the editor again, or click Connect Claude" };
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return send(res, 410, gone);
+  const c = await getJson(cfg, claimKey(token));
+  await deleteObject(cfg, claimKey(token)).catch(() => {});                 // single use, whatever happens next
+  if (!c || Date.now() > c.expiresAt) return send(res, 410, gone);
+  const s = await getJson(cfg, `${P(c.sid)}/session.json`);
+  if (!live(s) || s.tabHash) return send(res, 410, gone);                    // already claimed (a racing second open)
+  const agentToken = `fpa_${c.sid}_${rand(24)}`, tabToken = `fpt_${c.sid}_${rand(24)}`;
+  s.agentHash = sha(agentToken); s.tabHash = sha(tabToken); s.claimedAt = Date.now();
+  await putJson(cfg, `${P(c.sid)}/session.json`, s);
+  send(res, 200, { ...pairReply(c.sid, tabToken, agentToken, requestOrigin(req), c.linkCode, s.expiresAt), design: s.design ?? null });
 }
 
 /* ── the tab side ───────────────────────────────────────────────────────────────────────────────────── */
@@ -411,12 +447,31 @@ export async function linkConnector(cfg, user, code) {
   return { ok: true, linked: true, tabConnected: tabUpFor(s), design: s.design ?? null, expiresAt: s.expiresAt };
 }
 
+/** open_editor: a new session linked to this connector user, and the link that connects a tab to it. */
+export async function openEditor(cfg, user) {
+  const now = Date.now();
+  const sid = `s${now.toString(36)}${crypto.randomBytes(6).toString("hex")}`;
+  const prev = await getJson(cfg, userKey(user));
+  const old = prev?.sid ? await getJson(cfg, `${P(prev.sid)}/session.json`) : null;
+  const design = live(old) ? old.design ?? null : null;                     // keep working on the design picked before
+  const linkCode = Array.from(crypto.randomBytes(6), (b) => LINK_ALPHABET[b % LINK_ALPHABET.length]).join("");
+  await putJson(cfg, `${P(sid)}/session.json`, { createdAt: now, expiresAt: now + SESSION_TTL_MS, agentHash: "", tabHash: "", latch: null,
+    run: newRunState(), opened: true, ...(design ? { design, designSetBy: "agent" } : {}) });
+  await putJson(cfg, `relay/links/${linkCode}.json`, { sid, expiresAt: now + SESSION_TTL_MS });
+  const token = rand(24);
+  await putJson(cfg, claimKey(token), { sid, linkCode, expiresAt: now + CLAIM_TTL_MS });
+  await putJson(cfg, userKey(user), { sid, linked: true, at: now });
+  return { ok: true, url: `${EDITOR_ORIGIN}/floorplan-editor#pair=${token}`, linked: true, tabConnected: false, design,
+    expiresAt: now + CLAIM_TTL_MS,
+    note: "Give the user this link (or open it beside the chat if you can open a browser). The tab connects itself when it loads — no code to read. The link works ONCE within 10 minutes; call editor_status until tabConnected is true before drawing live." };
+}
+
 export async function connectorStatus(cfg, user) {
   const link = await getJson(cfg, userKey(user));
   const s = link?.sid ? await getJson(cfg, `${P(link.sid)}/session.json`) : null;
   const linked = !!link?.linked && live(s);
   return { linked, tabConnected: linked && tabUpFor(s), design: live(s) ? s.design ?? null : null, stepState: live(s) ? stepGate(s.run ?? newRunState()).stepState() : null,
-    mode: linked && tabUpFor(s) ? "LIVE — canvas tools drive the open editor tab" : "HEADLESS — canvas tools edit the use_design file in the Library; call connect_editor with the code the editor shows to go live" };
+    mode: linked && tabUpFor(s) ? "LIVE — canvas tools drive the open editor tab" : "HEADLESS — canvas tools edit the use_design file in the Library; call open_editor (or connect_editor with the code the editor shows) to go live" };
 }
 
 /** The workflow tools of the tab a connector user is linked to ([] when not linked / no tab). */
@@ -432,7 +487,7 @@ export async function callConnectorTool(cfg, user, name, args) {
 }
 
 /* ── router ─────────────────────────────────────────────────────────────────────────────────────────── */
-/** @param route "/mcp" or "/pair" | "/next" | "/result" | "/blob" | "/session" | "/status" */
+/** @param route "/mcp" or "/pair" | "/claim" | "/next" | "/result" | "/blob" | "/session" | "/status" */
 export async function handleRelay(req, res, route, url, cfg = relayConfig()) {
   const origin = req.headers.origin;
   const cors = origin && originAllowed(origin)
@@ -446,6 +501,7 @@ export async function handleRelay(req, res, route, url, cfg = relayConfig()) {
     // Tab routes: only the editor's own origins (a request with no Origin is a script, which still needs the tab token).
     if (origin && !originAllowed(origin)) return send(res, 403, { ok: false, error: `origin ${origin} is not allowed` });
     if (route === "/pair" && req.method === "POST") return await pair(cfg, req, res, url);
+    if (route === "/claim" && req.method === "POST") return await claim(cfg, req, res);
     if (route === "/next" && req.method === "GET") return await next(cfg, req, res, url);
     if (route === "/result" && req.method === "POST") return await result(cfg, req, res);
     if (route === "/blob" && req.method === "POST") return await blob(cfg, req, res);
