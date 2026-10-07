@@ -1,27 +1,27 @@
 /**
- * Plan / Build / Present toggle in the editor header.
+ * Program / Plan / Design / Build / Present toggle in the editor header.
  *
- * Step 1 of the phases work: the toggle only records the chosen phase (per browser, in localStorage).
- * Nothing reads it yet. Later steps subscribe with `usePhase()` to show/hide toolbars and rank skills,
- * so the logic stays here and out of FloorPlanEditor.
+ * Records the chosen phase per browser (localStorage) and publishes it through `usePhase()`; LeftToolbar
+ * switches its phase workflow buttons on it. The phase list and each pipeline's home phase live in
+ * ../phases.ts so other parts of the app can share them.
  */
 import { useSyncExternalStore } from "react";
+import { PHASES, isPhase, type Phase } from "../phases";
 
-export type Phase = "plan" | "build" | "present";
+export type { Phase };
 
-const PHASES: { id: Phase; label: string; title: string }[] = [
-  { id: "plan", label: "Plan", title: "Plan: import or trace the floor plan, set scale and levels, pick the moodboard" },
-  { id: "build", label: "Build", title: "Build: improve the plan with objects, materials, lighting and instancing" },
-  { id: "present", label: "Present", title: "Present: images, videos and walkthroughs" },
-];
-
-const KEY = "bp.editor.phase";
+const KEY = "bp.editor.phase.v2";
+/** Before Program / Design existed, "build" meant improving the plan with objects — today's Design. */
+const LEGACY_KEY = "bp.editor.phase";
 const listeners = new Set<() => void>();
 
 function read(): Phase {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === "plan" || v === "build" || v === "present") return v;
+    if (isPhase(v)) return v;
+    const old = localStorage.getItem(LEGACY_KEY);
+    if (old === "build") return "design";
+    if (isPhase(old)) return old;
   } catch {
     /* storage blocked: fall back to the default */
   }
@@ -62,7 +62,8 @@ export function PhaseToggle() {
           onClick={() => setPhase(p.id)}
           className={`${i ? "border-l border-slate-200 " : ""}px-2.5 py-1 text-[11px] font-semibold transition ${phase === p.id ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
           aria-pressed={phase === p.id}
-          title={p.title}
+          title={`${p.title}
+Pipelines: ${p.pipelines.join(", ")}`}
         >
           {p.label}
         </button>

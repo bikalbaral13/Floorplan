@@ -1,0 +1,37 @@
+{
+ "code": "PLOT-05",
+ "family": "GROUND_PATCH",
+ "group": "plots",
+ "params": {
+  "surface": "lawn",
+  "top_z": 0.15,
+  "edge": "brick"
+ },
+ "geometry": {
+  "polygons": [
+   [
+    [
+     [
+      0.0,
+      -15.4951
+     ],
+     [
+      0.0,
+      -44.8232
+     ],
+     [
+      18.2832,
+      -44.8232
+     ],
+     [
+      18.2832,
+      -15.4951
+     ]
+    ],
+    []
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

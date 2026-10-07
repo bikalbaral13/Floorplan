@@ -1,0 +1,37 @@
+{
+ "code": "DRIVE-P07",
+ "family": "GROUND_PATCH",
+ "group": "plots",
+ "params": {
+  "surface": "pavers",
+  "top_z": 0.16,
+  "edge": "none"
+ },
+ "geometry": {
+  "polygons": [
+   [
+    [
+     [
+      43.8598,
+      -27.6525
+     ],
+     [
+      47.4598,
+      -27.6525
+     ],
+     [
+      47.4598,
+      -28.6525
+     ],
+     [
+      43.8598,
+      -28.6525
+     ]
+    ],
+    []
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

@@ -1,0 +1,35 @@
+{
+ "code": "BLD-villa-3-LOD1",
+ "family": "BUILDING",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.1",
+ "assumed": [
+  "base_z"
+ ],
+ "tris": 348,
+ "objects": 7,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "7 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 30000,
+ "output": "PROTOTYPES › BLD_villa_3_LOD1 › SM_BLD_villa_3_LOD1",
+ "at": "2026-10-06T12:49:10",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:48",
+   "status": "ok_with_flags",
+   "tris": 350,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:49:10",
+   "status": "ok",
+   "tris": 348,
+   "family_version": "0.1.1"
+  }
+ ]
+}

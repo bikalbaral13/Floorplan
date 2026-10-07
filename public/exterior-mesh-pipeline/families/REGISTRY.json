@@ -1,0 +1,80 @@
+{
+ "BUILDING": {
+  "version": "0.1.1",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 864
+ },
+ "TERRAIN": {
+  "version": "0.2.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 4188
+ },
+ "ROAD": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 56
+ },
+ "KERB": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 384
+ },
+ "GROUND_PATCH": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 128
+ },
+ "COMPOUND_WALL": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 2418
+ },
+ "GATE_SLIDING": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 1376
+ },
+ "GATE_SWING": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 948
+ },
+ "TREE": {
+  "version": "0.1.1",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 6228
+ },
+ "SHRUB": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 384
+ },
+ "STREET_LIGHT": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 440
+ },
+ "BASEMENT": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 220
+ },
+ "RAMP": {
+  "version": "0.1.0",
+  "status": "tested",
+  "projects": [],
+  "verified_tris": 2228
+ }
+}

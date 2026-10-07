@@ -1,0 +1,19 @@
+{
+ "family": "GATE_SWING",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "site",
+ "pivot": "world origin",
+ "description": "Plot gate: pillars with caps and a closed double swing gate (arched top rail, bars, sheet panel, hinges, latch, drop bolt).",
+ "parameters": {
+  "width": {"value": 3.6, "min": 1.0, "max": 6, "unit": "m", "label": "Clear opening"},
+  "height": {"value": 1.5, "min": 0.9, "max": 3, "unit": "m", "label": "Leaf height at the hinge side"},
+  "pillar": {"value": 0.45, "min": 0.23, "max": 0.9, "unit": "m", "label": "Pillar size"},
+  "base_z": {"value": 0.15, "min": -5, "max": 5, "unit": "m", "label": "Ground level at the gate"}
+ },
+ "geometry": "{center:[x,y], heading:deg (direction of the plot front line)}",
+ "recipe": "Pillars at ±(w/2 + pillar/2); two leaves w/2 - 20 mm; arched top rail swept; bars follow the arch.",
+ "tri_budget": 30000,
+ "test_values": {},
+ "test_geometry": {"center": [0, 0], "heading": 0}
+}

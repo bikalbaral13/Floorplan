@@ -1,0 +1,35 @@
+{
+ "code": "BLD-apartment-LOD1",
+ "family": "BUILDING",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.1",
+ "assumed": [
+  "base_z"
+ ],
+ "tris": 15928,
+ "objects": 7,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "7 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 30000,
+ "output": "PROTOTYPES › BLD_apartment_LOD1 › SM_BLD_apartment_LOD1",
+ "at": "2026-10-06T12:49:37",
+ "history": [
+  {
+   "at": "2026-10-06T12:47:05",
+   "status": "ok_with_flags",
+   "tris": 16234,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:49:37",
+   "status": "ok",
+   "tris": 15928,
+   "family_version": "0.1.1"
+  }
+ ]
+}

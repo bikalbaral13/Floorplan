@@ -1,0 +1,68 @@
+{
+ "design": "villa-1",
+ "units": "m",
+ "origin": "design (0,0)",
+ "bbox": [
+  -12.961,
+  -12.218,
+  3.172,
+  0.166
+ ],
+ "levels": [
+  {
+   "id": "L0",
+   "name": "Ground floor",
+   "elevation": 0,
+   "height": 3.2
+  },
+  {
+   "id": "L1",
+   "name": "First floor",
+   "elevation": 3.2,
+   "height": 3.2
+  },
+  {
+   "id": "L2",
+   "name": "Terrace (half storey)",
+   "elevation": 6.4,
+   "height": 2.8
+  }
+ ],
+ "footprint": [
+  [
+   [
+    -13.081,
+    -12.338
+   ],
+   [
+    -13.081,
+    0.12
+   ],
+   [
+    -0.12,
+    0.12
+   ],
+   [
+    -0.12,
+    0.286
+   ],
+   [
+    3.292,
+    0.286
+   ],
+   [
+    3.292,
+    -8.395
+   ],
+   [
+    2.244,
+    -8.395
+   ],
+   [
+    2.244,
+    -12.338
+   ]
+  ]
+ ],
+ "footprintAreaM2": 200.41
+}

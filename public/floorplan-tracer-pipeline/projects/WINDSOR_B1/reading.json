@@ -1,0 +1,235 @@
+{
+ "branch": "drawing",
+ "sheets": [
+  {
+   "page": "P01",
+   "level": "L0",
+   "origin_px": [
+    750,
+    543
+   ],
+   "walls": "work/measure/P01.walls.json",
+   "style": "brochure (brown fill gray≈78 between black edges → --dark 105)"
+  }
+ ],
+ "calibration": {
+  "pairs": [
+   [
+    "BEDROOM-2 w",
+    222.5,
+    "11'0\""
+   ],
+   [
+    "BEDROOM-2 h",
+    202.3,
+    "10'0\""
+   ],
+   [
+    "TOILET-2 w",
+    161.8,
+    "8'0\""
+   ],
+   [
+    "TOILET-2 h",
+    101.1,
+    "5'0\""
+   ],
+   [
+    "LIVING / DINING w",
+    414.7,
+    "20'6\""
+   ],
+   [
+    "LIVING / DINING h",
+    222.5,
+    "11'0\""
+   ],
+   [
+    "BALCONY w",
+    80.9,
+    "4'0\""
+   ],
+   [
+    "BALCONY h",
+    187.1,
+    "9'3\""
+   ],
+   [
+    "BEDROOM-1 w",
+    212.4,
+    "10'6\""
+   ],
+   [
+    "BEDROOM-1 h",
+    262.9,
+    "13'0\""
+   ],
+   [
+    "TOILET-1 w",
+    101.1,
+    "5'0\""
+   ],
+   [
+    "TOILET-1 h",
+    171.9,
+    "8'6\""
+   ],
+   [
+    "KITCHEN w",
+    161.8,
+    "8'0\""
+   ],
+   [
+    "KITCHEN h",
+    171.9,
+    "8'9\""
+   ],
+   [
+    "UTILITY w",
+    116.3,
+    "5'9\""
+   ],
+   [
+    "UTILITY h",
+    80.9,
+    "4'0\""
+   ]
+  ],
+  "user_px_per_m": null,
+  "_note": "clear spans measured inner face to inner face on the 2026-09-14 trace (Windsor_park_B1.json) — this project is a regression of that trace"
+ },
+ "printed": [
+  [
+   "TOILET-2",
+   "8'0\" x 5'0\""
+  ],
+  [
+   "BEDROOM-2",
+   "11'0\" x 10'0\""
+  ],
+  [
+   "BALCONY",
+   "4'0\" x 9'3\""
+  ],
+  [
+   "LIVING / DINING",
+   "20'6\" x 11'0\""
+  ],
+  [
+   "TOILET-1",
+   "5'0\" x 8'6\""
+  ],
+  [
+   "KITCHEN",
+   "8'0\" x 8'9\""
+  ],
+  [
+   "BEDROOM-1",
+   "10'6\" x 13'0\""
+  ],
+  [
+   "UTILITY",
+   "5'9\" x 4'0\""
+  ]
+ ],
+ "symbols": [
+  {
+   "kind": "armchair",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "bed",
+   "count": 2,
+   "level": "L0"
+  },
+  {
+   "kind": "cabinet",
+   "count": 2,
+   "level": "L0"
+  },
+  {
+   "kind": "chair",
+   "count": 4,
+   "level": "L0"
+  },
+  {
+   "kind": "dressing-table",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "kitchen-sink",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "nightstand",
+   "count": 3,
+   "level": "L0"
+  },
+  {
+   "kind": "refrigerator",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "shoe-rack",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "sofa",
+   "count": 2,
+   "level": "L0"
+  },
+  {
+   "kind": "stool",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "stove",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "table",
+   "count": 2,
+   "level": "L0"
+  },
+  {
+   "kind": "toilet",
+   "count": 2,
+   "level": "L0"
+  },
+  {
+   "kind": "tv-unit",
+   "count": 1,
+   "level": "L0"
+  },
+  {
+   "kind": "wardrobe",
+   "count": 2,
+   "level": "L0"
+  },
+  {
+   "kind": "washbasin",
+   "count": 3,
+   "level": "L0"
+  },
+  {
+   "kind": "washing-machine",
+   "count": 1,
+   "level": "L0"
+  }
+ ],
+ "notes": [
+  "9 dark column blocks on the wall lines (gray≈41) are columns, not thicker walls",
+  "both toilets print 8'x5' / 5'x8'6\" — known not to fit the drawn faces at any scale (2026-09-14 report)"
+ ],
+ "assumptions": [
+  "no printed size for the niche, duct and service shafts — measured lines kept",
+  "toilet ventilator sills by convention where not readable"
+ ]
+}

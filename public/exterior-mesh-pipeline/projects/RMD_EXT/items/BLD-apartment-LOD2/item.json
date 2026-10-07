@@ -1,0 +1,1 @@
+{"code":"BLD-apartment-LOD2","family":"BUILDING","group":"prototypes","params":{"lod":2},"geometry":{"$ref":"geometry/apartment.json"},"proto":"BLD_apartment_LOD2","status":"todo"}

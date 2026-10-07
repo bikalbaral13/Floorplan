@@ -1,7 +1,7 @@
 /**
- * Screen-wide Render mode toggle (header, left of the Files button): Geometry | Primitives | Detailed.
+ * Screen-wide Render mode toggle (header, left of the Files button): Graph | Primitives | Detailed.
  *
- *   Geometry   — nodes, segments and spaces only; no parametric object is evaluated or drawn.
+ *   Graph      — nodes, segments and spaces only; no parametric object is evaluated or drawn.
  *   Primitives — each attached object as its bounding outline in 2D and bounding cuboid in 3D.
  *   Detailed   — every object fully evaluated in 2D and 3D.
  *
@@ -14,7 +14,7 @@ import { useSyncExternalStore } from "react";
 export type UiRenderMode = "geometry" | "primitives" | "detailed";
 
 const MODES: { id: UiRenderMode; label: string; title: string }[] = [
-  { id: "geometry", label: "Geometry", title: "Geometry only: nodes, segments and spaces; no object is rendered (still listed in Properties)" },
+  { id: "geometry", label: "Graph", title: "Graph only: nodes, segments and spaces; no object is rendered (still listed in Properties)" },
   { id: "primitives", label: "Primitives", title: "Primitives: each object as its bounding outline in 2D and bounding cuboid in 3D" },
   { id: "detailed", label: "Detailed", title: "Detailed: every object fully evaluated in 2D and 3D (slow on big plans)" },
 ];

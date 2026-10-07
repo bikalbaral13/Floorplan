@@ -1,0 +1,35 @@
+{
+ "code": "PWALL-F18",
+ "family": "COMPOUND_WALL",
+ "group": "walls",
+ "params": {
+  "height": 0.9,
+  "thickness": 0.15,
+  "pier_spacing": 3.0,
+  "pier": 0.3,
+  "railing_h": 0.6,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "line": [
+   [
+    36.577,
+    -56.5974
+   ],
+   [
+    54.8602,
+    -56.5974
+   ],
+   [
+    54.8602,
+    -45.3916
+   ],
+   [
+    47.6605,
+    -45.3916
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

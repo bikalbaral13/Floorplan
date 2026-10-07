@@ -1,0 +1,22 @@
+{
+ "id": "S2_READ",
+ "version": "0.1.0",
+ "title": "Read the source (agent)",
+ "kind": "agent",
+ "gate": false,
+ "summary": "DRAWING: measure wall bands (tools/wallbands.py), read openings / symbols at zoom (tools/grid_crops.py), transcribe printed sizes, pair them with measured clear spans → reading.json; the stage fits the scale. SKETCH: separate GIVEN / DRAWN / INFERRED, block diagram, ambiguous cell resolved WITH the user → reading.json (sketch readings are confirmed by the user's approval).",
+ "inputs": [
+  "work/pages/*",
+  "scope.json"
+ ],
+ "outputs": [
+  "reading.json",
+  "work/calib.json"
+ ],
+ "checks": [
+  "reading.json valid for the branch",
+  "drawing: scale from user or ≥ 3 printed pairs, residuals within limits",
+  "sketch: user confirmed the reading (approval)",
+  "symbols listed (objects are mandatory)"
+ ]
+}

@@ -1,0 +1,133 @@
+{
+ "_about": "Conventions the tracer applies when the source is silent. Every value used from here is tagged src=convention in plan.json and listed in the report. A project picks a set in project.json → standards.",
+ "conventions": {
+  "wall_out": "9in",
+  "wall_in": "4in",
+  "column": "12in",
+  "floor_to_floor_m": 3.0,
+  "wall_height_m": 2.7,
+  "door_head_m": 2.1,
+  "window_sill_m": 0.9,
+  "toilet_window_sill_m": 1.5,
+  "double_leaf_min_m": 1.2,
+  "riser_target_m": 0.17,
+  "tread_m": 0.25,
+  "door_leaf_m": 0.9,
+  "set_out_round": "1in"
+ },
+ "checks": {
+  "printed_exact_ft": 0.02,
+  "printed_area_warn_pct": 2.0,
+  "printed_area_fail_pct": 8.0,
+  "calibration_warn_ft": 0.25,
+  "calibration_fail_ft": 0.6,
+  "sliver_m2": 0.6,
+  "door_jamb_min_m": 0.03,
+  "door_jamb_max_m": 0.6,
+  "stair_fill_min": 0.85,
+  "fixture_overlap_m2": 0.02,
+  "may_overlap": [
+   [
+    "cabinet",
+    "stove"
+   ],
+   [
+    "cabinet",
+    "kitchen-sink"
+   ],
+   [
+    "cabinet",
+    "washbasin"
+   ],
+   [
+    "dressing-table",
+    "stool"
+   ],
+   [
+    "table",
+    "chair"
+   ],
+   [
+    "desk",
+    "chair"
+   ],
+   [
+    "bed",
+    "nightstand"
+   ],
+   [
+    "cabinet",
+    "refrigerator"
+   ]
+  ]
+ },
+ "hierarchy": {
+  "enabled_for": [
+   "sketch"
+  ],
+  "big": [
+   "HALL",
+   "LIVING",
+   "KITCHEN"
+  ],
+  "small": [
+   "BEDROOM",
+   "BED ROOM"
+  ]
+ },
+ "symbol_legend": {
+  "_source": "Floorplan Tracer skill — Indian developer brochure plans",
+  "striped rectangle on a wall": "wardrobe",
+  "rectangle with a V on a wall": "tv-unit",
+  "narrow rectangle with one diagonal": "dressing-table mirror (+ table, stool)",
+  "box with a dashed X": "duct / service shaft (a SPACE, not furniture)",
+  "circle beside a bed": "nightstand",
+  "oval in a white counter": "washbasin",
+  "four small circles in a counter": "stove (hob)",
+  "hatched square in a counter": "kitchen-sink",
+  "square with a smaller square inside (utility)": "washing-machine",
+  "quarter arc + leaf line": "hinged door (hinge = arc centre, swing = arc side)",
+  "two parallel thin lines in a wide gap, no arc": "sliding door (glazed)",
+  "thin double / triple line in an exterior wall": "window",
+  "small squares at junctions (sketch)": "columns — count the grid lines, not the squares",
+  "box with an arrow through it (sketch)": "stair, arrow = up"
+ },
+ "fixture_backs": {
+  "_about": "canvas-library rotation tables — backs MEASURED from baked footprints at rotation 0 (Floorplan Improver bake table). Only measured kinds belong here; others export with their raw rotation.",
+  "BACK": {
+   "bed": "-x",
+   "toilet": "-x",
+   "chair": "-x",
+   "washbasin": "-y",
+   "armchair": "-y",
+   "wardrobe": "+y",
+   "tv-unit": "+y",
+   "nightstand": "+y",
+   "sofa": "+y",
+   "cabinet": "+y",
+   "kitchen-sink": "+y",
+   "stove": "+y",
+   "refrigerator": "+y"
+  },
+  "TURN": {
+   "-x": {
+    "W": 0,
+    "N": 90,
+    "E": 180,
+    "S": 270
+   },
+   "-y": {
+    "N": 0,
+    "E": 90,
+    "S": 180,
+    "W": 270
+   },
+   "+y": {
+    "S": 0,
+    "W": 90,
+    "N": 180,
+    "E": 270
+   }
+  }
+ }
+}

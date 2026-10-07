@@ -1,0 +1,35 @@
+{
+ "code": "PWALL-F31",
+ "family": "COMPOUND_WALL",
+ "group": "walls",
+ "params": {
+  "height": 0.9,
+  "thickness": 0.15,
+  "pier_spacing": 3.0,
+  "pier": 0.3,
+  "railing_h": 0.6,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "line": [
+   [
+    81.9058,
+    -31.6658
+   ],
+   [
+    74.8591,
+    -31.6658
+   ],
+   [
+    74.8591,
+    -44.8232
+   ],
+   [
+    93.1422,
+    -44.8232
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

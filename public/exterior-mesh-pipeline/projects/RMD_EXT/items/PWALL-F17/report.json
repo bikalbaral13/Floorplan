@@ -1,0 +1,39 @@
+{
+ "code": "PWALL-F17",
+ "family": "COMPOUND_WALL",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 1114,
+ "objects": 6,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "6 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 120000,
+ "output": "EXT › EXT_walls › SM_PWALL_F17",
+ "at": "2026-10-06T13:12:36",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:03",
+   "status": "ok",
+   "tris": 1114,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:54:37",
+   "status": "ok",
+   "tris": 1114,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:12:36",
+   "status": "ok",
+   "tris": 1114,
+   "family_version": "0.1.0"
+  }
+ ]
+}

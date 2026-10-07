@@ -1,0 +1,27 @@
+{
+ "code": "PWALL-D10",
+ "family": "COMPOUND_WALL",
+ "group": "walls",
+ "params": {
+  "height": 1.5,
+  "thickness": 0.15,
+  "pier_spacing": 3.0,
+  "pier": 0.3,
+  "railing_h": 0.0,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "line": [
+   [
+    36.577,
+    -15.4951
+   ],
+   [
+    54.4102,
+    -15.4951
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

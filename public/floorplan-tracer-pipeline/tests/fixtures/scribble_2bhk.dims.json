@@ -1,0 +1,16 @@
+{
+ "_about": "The constants module: every coordinate in layout.json derives from these chains (S3 closes them).",
+ "x": {"outer": "36'", "wall_out": "9in", "lines": ["A", "B", "C", "D"], "bays": [{"value": "10'"}, {"value": null, "px": 236}, {"value": null, "px": 262}], "round": "3in"},
+ "y": {"outer": "25'", "wall_out": "9in", "lines": ["Y1", "Y2", "Y3"], "bays": [{"value": "13'3\""}, {"value": "11'"}]},
+ "extra": {
+  "x": {
+   "P1": "B+0.0508+3.0988+0.0508",
+   "P2": "D-0.1143-2.7432-0.0508",
+   "P3": "P2-0.0508-1.524-0.0508"
+  },
+  "y": {
+   "T1": "Y1+0.1143+2.286+0.0508"
+  }
+ },
+ "_notes": {"P1": "bedroom 1 east partition: B + half 4\" + 10'-2\" clear + half 4\"", "P2": "bedroom 2 west partition: D − half 9\" − 9'-0\" clear − half 4\"", "P3": "toilet west partition: 5'-0\" clear", "T1": "toilet north partition: 7'-6\" clear from the south wall's face"}
+}

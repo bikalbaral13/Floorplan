@@ -1,0 +1,20 @@
+{
+ "id": "S4_LAYOUT",
+ "version": "0.1.0",
+ "title": "Author the layout (agent)",
+ "kind": "agent",
+ "gate": false,
+ "summary": "Write layout.json (tracer-layout/1): wall lines with typed runs (pre-cut doors / windows / vacant openings / gates), spaces on centrelines with printed sizes, columns, stairs, fixtures by back side, not_placed. Built on the grid / calibrated frame — never hand-typed derived coordinates.",
+ "inputs": [
+  "reading.json",
+  "work/dims.resolved.json"
+ ],
+ "outputs": [
+  "layout.json"
+ ],
+ "checks": [
+  "layout parses and builds",
+  "no unknown run kinds",
+  "grid references resolve"
+ ]
+}

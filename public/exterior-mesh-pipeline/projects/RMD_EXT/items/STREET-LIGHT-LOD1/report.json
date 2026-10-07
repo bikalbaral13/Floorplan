@@ -1,0 +1,27 @@
+{
+ "code": "STREET-LIGHT-LOD1",
+ "family": "STREET_LIGHT",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 136,
+ "objects": 6,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "6 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 600,
+ "output": "PROTOTYPES › STREET_LIGHT_LOD1 › SM_STREET_LIGHT_LOD1",
+ "at": "2026-10-06T12:47:22",
+ "history": [
+  {
+   "at": "2026-10-06T12:47:22",
+   "status": "ok",
+   "tris": 136,
+   "family_version": "0.1.0"
+  }
+ ]
+}

@@ -1,0 +1,37 @@
+{
+ "code": "DRIVE-P17",
+ "family": "GROUND_PATCH",
+ "group": "plots",
+ "params": {
+  "surface": "pavers",
+  "top_z": 0.16,
+  "edge": "none"
+ },
+ "geometry": {
+  "polygons": [
+   [
+    [
+     [
+      85.7155,
+      -46.624
+     ],
+     [
+      82.1155,
+      -46.624
+     ],
+     [
+      82.1155,
+      -45.3916
+     ],
+     [
+      85.7155,
+      -45.3916
+     ]
+    ],
+    []
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

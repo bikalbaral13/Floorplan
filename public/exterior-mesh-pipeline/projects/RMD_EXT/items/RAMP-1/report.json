@@ -1,0 +1,27 @@
+{
+ "code": "RAMP-1",
+ "family": "RAMP",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 2228,
+ "objects": 6,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "6 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 20000,
+ "output": "EXT › EXT_basement › SM_RAMP_1",
+ "at": "2026-10-06T13:11:17",
+ "history": [
+  {
+   "at": "2026-10-06T13:11:17",
+   "status": "ok",
+   "tris": 2228,
+   "family_version": "0.1.0"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "code": "ASHOKA-LOD1",
+ "family": "TREE",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.1",
+ "assumed": [],
+ "tris": 116,
+ "objects": 2,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "2 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 3000,
+ "output": "PROTOTYPES › ASHOKA_LOD1 › SM_ASHOKA_LOD1",
+ "at": "2026-10-06T12:49:55",
+ "history": [
+  {
+   "at": "2026-10-06T12:47:18",
+   "status": "ok",
+   "tris": 116,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:49:55",
+   "status": "ok",
+   "tris": 116,
+   "family_version": "0.1.1"
+  }
+ ]
+}

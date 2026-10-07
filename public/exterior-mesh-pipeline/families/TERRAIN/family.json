@@ -1,0 +1,67 @@
+{
+ "family": "TERRAIN",
+ "version": "0.2.0",
+ "status": "implemented",
+ "host": "site (world coordinates)",
+ "pivot": "world origin",
+ "description": "Flat site ground with Perlin roughness and closed earth dumps in the free margin.",
+ "parameters": {
+  "base_z": {
+   "value": -0.06,
+   "min": -2,
+   "max": 2,
+   "unit": "m",
+   "label": "Mean ground level (keep below road 0.00)"
+  },
+  "roughness": {
+   "value": 0.025,
+   "min": 0,
+   "max": 0.3,
+   "unit": "m",
+   "label": "Roughness amplitude"
+  },
+  "cell": {
+   "value": 1.0,
+   "min": 0.25,
+   "max": 5,
+   "unit": "m",
+   "label": "Grid cell"
+  },
+  "seed": {
+   "value": 7,
+   "min": 0,
+   "max": 100000,
+   "label": "Noise seed"
+  }
+ },
+ "geometry": "{bounds:[x0,y0,x1,y1], dumps:[[cx,cy,radius,height,seed],...], holes:[[outer,[holes]]] (optional: no ground cells inside)}",
+ "recipe": "Open grid surface (UV1 planar), dumps as closed bell-profile radial meshes with wobble and lumps, base 120 mm below ground.",
+ "tri_budget": 400000,
+ "test_values": {
+  "cell": 0.5
+ },
+ "test_geometry": {
+  "bounds": [
+   0,
+   0,
+   24,
+   16
+  ],
+  "dumps": [
+   [
+    6,
+    8,
+    2.6,
+    0.9,
+    11
+   ],
+   [
+    16,
+    6,
+    3.4,
+    1.2,
+    42
+   ]
+  ]
+ }
+}

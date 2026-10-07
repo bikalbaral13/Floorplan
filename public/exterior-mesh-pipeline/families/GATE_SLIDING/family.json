@@ -1,0 +1,18 @@
+{
+ "family": "GATE_SLIDING",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "site",
+ "pivot": "world origin",
+ "description": "Main estate sliding gate with pillars, caps, lanterns, track and wheels.",
+ "parameters": {
+  "width": {"value": 9.0, "min": 2, "max": 15, "unit": "m", "label": "Clear opening (from geometry; informative)"},
+  "height": {"value": 2.1, "min": 1, "max": 4, "unit": "m", "label": "Leaf height"},
+  "pillar": {"value": 0.6, "min": 0.3, "max": 1.2, "unit": "m", "label": "Pillar size"}
+ },
+ "geometry": "{a:[x,y], b:[x,y]} the clear opening",
+ "recipe": "Pillars outside a and b; single leaf a→b closed; bars @120 with spear finials; track runs one leaf beyond a (parked side).",
+ "tri_budget": 40000,
+ "test_values": {"width": 6.0},
+ "test_geometry": {"a": [0, 0], "b": [6, 0]}
+}

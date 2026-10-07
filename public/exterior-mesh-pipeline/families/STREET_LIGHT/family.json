@@ -1,0 +1,18 @@
+{
+ "family": "STREET_LIGHT",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "prototype",
+ "pivot": "pole base on the ground; arm along local +X",
+ "description": "Street light: pedestal, base plate + bolts, octagonal tapered pole, swan-neck arm, finned LED housing, lens.",
+ "parameters": {
+  "lod": {"value": 2, "options": [1, 2], "label": "2 = detailed, 1 = light"},
+  "height": {"value": 7.0, "min": 3, "max": 14, "unit": "m", "label": "Pole height"},
+  "arm": {"value": 1.2, "min": 0.3, "max": 3, "unit": "m", "label": "Arm reach"}
+ },
+ "geometry": "none",
+ "recipe": "See build.py docstring.",
+ "tri_budget": {"1": 600, "2": 4000},
+ "test_values": {},
+ "test_geometry": null
+}

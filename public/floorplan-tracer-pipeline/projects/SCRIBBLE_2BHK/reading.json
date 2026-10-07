@@ -1,0 +1,21 @@
+{
+ "branch": "sketch",
+ "given": ["36ft outer, east-west", "25ft outer, north-south", "10ft c-c, west bay", "9 inch outer wall", "4 inch inner wall", "rooms: STAIR, VERANDAH, HALL, KITCHEN, BEDROOM 1, BEDROOM 2, TOILET"],
+ "drawn": ["column squares on 4 x 3 grid lines (3 x 2 bays, 12 columns)", "stair box in the north-west cell", "door arcs: verandah→hall, hall→bedroom 1, hall→bedroom 2, hall→toilet"],
+ "inferred": ["east bays 12'-0\" and 13'-3\" fitted to the 25'-3\" remainder from sketch proportions (236 : 262 px)", "bands split 13'-3\" (south) / 11'-0\" (north) so the hall band is the deeper one — hierarchy rule", "bedrooms set by clear width 10'-2\" (bed 1) and 9'-0\" (bed 2), partitions off the column lines", "toilet 5'-0\" x 7'-6\" carved from the hall's south-east (outer) corner — wet room on an outside wall", "windows on every outer wall of habitable rooms; toilet ventilator sill 1.5 m (convention)", "door leaves 0.9 m (toilet 0.75 m), floor-to-floor 3.0 m, wall height 2.7 m (conventions)", "stair: dog-leg, 18 risers split 9 + 9, flights 1.25 m, landing 0.85 m, toe at the verandah through a channel gate on the first (west) flight"],
+ "rooms": [
+  {"name": "STAIR", "cell": "A-B / Y2-Y3", "adjacent": ["VERANDAH (gate)", "BEDROOM 1"]},
+  {"name": "BEDROOM 1", "cell": "B-P1 / Y2-Y3", "adjacent": ["HALL"]},
+  {"name": "KITCHEN", "cell": "P1-D / Y2-Y3", "adjacent": ["HALL (open)"]},
+  {"name": "VERANDAH", "cell": "A-B / Y1-Y2", "adjacent": ["outside (open front)", "HALL", "STAIR"]},
+  {"name": "HALL", "cell": "B-P2 / Y1-Y2 minus the toilet", "adjacent": ["VERANDAH", "BEDROOM 1", "KITCHEN", "BEDROOM 2", "TOILET"]},
+  {"name": "TOILET", "cell": "P3-P2 / Y1-T1", "adjacent": ["HALL"]},
+  {"name": "BEDROOM 2", "cell": "P2-D / Y1-Y2", "adjacent": ["HALL"]}
+ ],
+ "block_diagram": "      A      B           P1               D\nY3    +------+-----------+----------------+\n      | STAIR| BEDROOM 1 |    KITCHEN     |   11'-0\" band\nY2    +-gate-+--door-----+-open----+------+\n      | VER- |   HALL    | TOILET  | BED 2|   13'-3\" band\n      | ANDAH|           |(corner) |      |\nY1    +-open-+-----------+---------+------+\n        10'      12'          13'-3\"   (c-c, 35'-3\")",
+ "ambiguous": [{"where": "C-D / Y1-Y2 (south-east cell)", "options": ["bedroom 2 + toilet stacked in the cell (bedroom 2 ≈ 82 sq ft)", "toilet carved from the hall's outer corner (bedroom 2 ≈ 115 sq ft, hall ≈ 154)"], "chosen_by_user": "FIXTURE — the skill's documented resolution: toilet in the hall corner"}],
+ "symbols": [],
+ "questions_asked": ["Is the room arrangement right?", "Are the fitted east bays 12'-0\" / 13'-3\" acceptable?", "Where does the toilet go — stacked with bedroom 2 or in the hall corner?"],
+ "answers": "FIXTURE — taken from the skill's worked example",
+ "assumptions": ["the sketch photo is not available — sketch_facts.md quotes the skill's example"]
+}

@@ -1,0 +1,8 @@
+{
+ "code": "WINDSOR_B1",
+ "title": "Windsor Park unit B1 2BHK \u00e2\u20ac\u201d drawing-branch regression (re-run of the 2026-09-14 trace)",
+ "standards": "DEFAULT",
+ "work_dir": "../../../../pipeline-work/tracer/WINDSOR_B1",
+ "underlay_src": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Windsor_park.jpeg",
+ "fixture": true
+}

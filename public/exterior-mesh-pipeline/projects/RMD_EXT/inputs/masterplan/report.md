@@ -1,0 +1,23 @@
+# Ramanadhapuram master plan: build report
+
+- plot  1: villa-1   at (14.475, 13.735) m; setbacks W/N/E/S 1.51 / 1.52 / 0.64 / 1.59 m; fit 19/19 cols, rms 0.033 m
+- plot  2: villa-1   at (32.76, 13.735) m; setbacks W/N/E/S 1.52 / 1.52 / 0.65 / 1.59 m; fit 19/19 cols, rms 0.034 m
+- plot  3: villa-1   at (51.047, 13.735) m; setbacks W/N/E/S 1.51 / 1.52 / 0.64 / 1.59 m; fit 19/19 cols, rms 0.032 m
+- plot  4: villa-1   at (101.742, 13.735) m; setbacks W/N/E/S 1.52 / 1.52 / 4.02 / 1.59 m; fit 19/19 cols, rms 0.032 m
+- plot  5: villament at (16.091, 43.149) m; setbacks W/N/E/S 2.65 / 1.68 / 2.19 / 1.67 m; fit 40/47 cols, rms 0.04 m
+- plot  6: villa-2   at (34.888, 27.018) m; setbacks W/N/E/S 1.66 / 1.69 / 1.69 / 0.24 m; fit 20/20 cols, rms 0.026 m
+- plot  7: villa-2   at (53.174, 27.018) m; setbacks W/N/E/S 1.65 / 1.69 / 1.69 / 0.24 m; fit 20/20 cols, rms 0.025 m
+- plot  8: villa-2   at (91.46, 27.018) m; setbacks W/N/E/S 1.65 / 1.69 / 1.68 / 0.24 m; fit 20/20 cols, rms 0.026 m
+- plot  9: villa-3   at (107.31, 27.024) m; setbacks W/N/E/S 1.64 / 1.63 / 4.05 / 1.63 m; fit 17/17 cols, rms 0.017 m
+- plot 10: villa-4   at (34.892, 43.173) m; setbacks W/N/E/S 1.65 / 0.26 / 1.68 / 1.65 m; fit 21/21 cols, rms 0.021 m
+- plot 11: villa-4   at (53.178, 43.173) m; setbacks W/N/E/S 1.64 / 0.26 / 1.68 / 1.65 m; fit 21/21 cols, rms 0.02 m
+- plot 12: villa-4   at (91.464, 43.173) m; setbacks W/N/E/S 1.65 / 0.26 / 1.68 / 1.65 m; fit 21/21 cols, rms 0.021 m
+- plot 13: villa-4   at (109.75, 43.173) m; setbacks W/N/E/S 1.65 / 0.26 / 3.4 / 1.65 m; fit 21/21 cols, rms 0.02 m
+- plot 14: villa-5   at (16.616, 54.992) m; setbacks W/N/E/S 1.64 / 1.05 / 1.67 / 0.24 m; fit 17/22 cols, rms 0.017 m
+- plot 15: villa-5   at (34.902, 54.992) m; setbacks W/N/E/S 1.64 / 1.05 / 1.67 / 0.24 m; fit 17/22 cols, rms 0.017 m
+- plot 16: villa-5   at (53.189, 54.992) m; setbacks W/N/E/S 1.64 / 1.05 / 1.67 / 0.24 m; fit 17/22 cols, rms 0.017 m
+- plot 17: villa-5   at (91.474, 54.992) m; setbacks W/N/E/S 1.64 / 1.05 / 1.67 / 0.24 m; fit 17/22 cols, rms 0.017 m
+- plot 18: villa-5   at (109.76, 54.992) m; setbacks W/N/E/S 1.64 / 1.05 / 3.6 / 0.24 m; fit 17/22 cols, rms 0.017 m
+- plot 19: apartment at (110.752, 61.125) m; setbacks W/N/E/S 2.69 / 3 / 2.78 / -0.72 m
+- Ramanadhapuram_MasterPlan_preview.json: 7.0 MB, levels B2(86s) B1(119s) G(2320s) L+3.2(2255s) L+6.4(1307s) L+9.6(1074s) L+12.8(933s) L+16.0(909s) L+19.2(93s), attachments 13249, duplicate ids 0
+- Ramanadhapuram_MasterPlan_flat.json: 30.9 MB, levels B2(86s) B1(119s) G(6576s) L+3.2(6082s) L+6.4(3350s) L+9.6(2921s) L+12.8(2543s) L+16.0(2513s) L+19.2(115s), attachments 41958, duplicate ids 0

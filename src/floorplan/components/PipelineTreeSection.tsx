@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen, Layers } from "lucide-react";
+import { phaseOf } from "../phases";
 
-/** One entry of public/interior-mesh-pipeline/manifest.json (tools/gen-pipeline-manifest.mjs). */
+/** One entry of public/<pipeline>/manifest.json (tools/gen-pipeline-manifest.mjs). */
 interface PNode {
   name: string;
   path: string;
@@ -11,13 +12,14 @@ interface PNode {
   children?: PNode[];
 }
 
-const BASE = "/interior-mesh-pipeline";
 const fmt = (b = 0) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-/** Navigator section: the Interior Mesh Pipeline folder shipped with the app — VIEW ONLY. Folders fold;
- *  a file opens in a new tab. Folded by default; the open state is remembered per browser. */
-export const PipelineTreeSection = () => {
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem("bp.editor.pipelineOpen") === "1"; } catch { return false; } });
+/** Navigator section: a pipeline folder shipped with the app (public/<base>) — VIEW ONLY. Folders fold;
+ *  a file opens in a new tab. Folded by default; the open state is remembered per browser and section. */
+export const PipelineTreeSection = ({ base = "/interior-mesh-pipeline", title = "Interior Mesh Pipeline", storageKey = "bp.editor.pipelineOpen" }:
+  { base?: string; title?: string; storageKey?: string }) => {
+  const BASE = base;
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(storageKey) === "1"; } catch { return false; } });
   const [root, setRoot] = useState<{ files: number; children: PNode[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -33,7 +35,7 @@ export const PipelineTreeSection = () => {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [open, root]);
 
-  const toggleOpen = () => setOpen((o) => { try { localStorage.setItem("bp.editor.pipelineOpen", o ? "0" : "1"); } catch { /* ignore */ } return !o; });
+  const toggleOpen = () => setOpen((o) => { try { localStorage.setItem(storageKey, o ? "0" : "1"); } catch { /* ignore */ } return !o; });
   const toggle = (p: string) => setExpanded((prev) => { const n = new Set(prev); if (!n.delete(p)) n.add(p); return n; });
 
   const Row = ({ node, depth }: { node: PNode; depth: number }) => {
@@ -92,7 +94,8 @@ export const PipelineTreeSection = () => {
         className="flex items-center gap-1.5 rounded px-1 pb-1.5 text-left hover:text-slate-800">
         {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
         <Layers className="h-3.5 w-3.5 text-violet-600" />
-        <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Interior Mesh Pipeline</span>
+        <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</span>
+        {phaseOf(title) && <span title={`Home phase: ${phaseOf(title)!.label}`} className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">{phaseOf(title)!.label}</span>}
         {root && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-slate-500">{root.files}</span>}
       </button>
       {open && (

@@ -1,0 +1,19 @@
+{
+ "id": "tracer-scope",
+ "version": "0.1.0",
+ "intro": "Answer before any pixel is measured. Your answers decide the branch, the steps and the outputs. The agent may PROPOSE answers; only you set answered_by = \"user\".",
+ "questions": [
+  {"id": "source_kind", "required": true, "ask": "What are we tracing?", "options": ["drawing", "sketch"], "default": "drawing",
+   "help": "drawing = a measured plan (JPEG / PNG / PDF render) — traced pixel for pixel. sketch = a photo of a hand scribble — derived from its dimension chain, not traced."},
+  {"id": "sources", "required": true, "ask": "Which files (in inputs/)?", "default": []},
+  {"id": "levels", "required": true, "ask": "One level, or several sheets that stack?", "options": ["single", "multi"], "default": "single"},
+  {"id": "scale_owner", "required": true, "ask": "Who sets the scale?", "options": ["user", "agent"], "default": "user",
+   "help": "user: you give px/m (or a measured span) — the agent only cross-checks it against printed sizes in ONE line. agent: least-squares from every printed room size."},
+  {"id": "user_px_per_m", "required": false, "ask": "If you set the scale: pixels per metre on the source image", "default": null},
+  {"id": "objects", "required": true, "ask": "Place the symbols drawn on the sheet (fixtures, furniture)?", "options": ["all", "fixed only", "none"], "default": "all",
+   "help": "all = every drawn symbol is placed or listed as not placed (objects are mandatory). Furnishing EMPTY rooms is Design-phase work, not tracing."},
+  {"id": "hierarchy", "required": false, "ask": "Sketch: enforce hall and kitchen larger than every bedroom?", "options": [true, false], "default": true},
+  {"id": "emit", "required": true, "ask": "Outputs", "options": ["canvas", "svg", "overlay", "plan_trace"], "default": ["canvas", "svg", "overlay", "plan_trace"]},
+  {"id": "print_units", "required": false, "ask": "Units printed on the sheet", "options": ["ft-in", "m"], "default": "ft-in"}
+ ]
+}

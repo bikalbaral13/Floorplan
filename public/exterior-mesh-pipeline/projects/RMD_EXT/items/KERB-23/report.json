@@ -1,0 +1,39 @@
+{
+ "code": "KERB-23",
+ "family": "KERB",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 590,
+ "objects": 2,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "2 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 60000,
+ "output": "EXT › EXT_roads › SM_KERB_23",
+ "at": "2026-10-06T13:13:46",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:33",
+   "status": "ok",
+   "tris": 540,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:55:43",
+   "status": "ok",
+   "tris": 540,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:13:46",
+   "status": "ok",
+   "tris": 590,
+   "family_version": "0.1.0"
+  }
+ ]
+}

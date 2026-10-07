@@ -1,0 +1,31 @@
+{
+ "schema": "pipeline/1",
+ "id": "interior-mesh",
+ "title": "Interior Mesh Pipeline",
+ "version": "0.1.0",
+ "phase": "present",
+ "entry": {
+  "agents": "AGENTS.md",
+  "run": "Blender: tools.run_task.run_next('{CODE}')",
+  "new_project": "python tools/new_project.py {CODE} \"<title>\"",
+  "selftest": "python tools/selftest.py"
+ },
+ "inputs": [
+  { "id": "workbook", "from": "project:workbook/*.xlsx", "required": true, "note": "sheets Items, Placements, Families, Rooms" },
+  { "id": "base_blend", "from": "project:inputs/*.blend", "required": true, "note": "never overwritten" }
+ ],
+ "library_pins": [
+  { "path": "library/Schemas/" },
+  { "path": "library/Families/", "local_copy": "families/" },
+  { "path": "library/Materials/" }
+ ],
+ "outputs": {
+  "keep": [
+   { "id": "blend", "local": "project:output/blend/*.blend", "to": "Projects/{CODE}/interior/", "binary": true },
+   { "id": "fbx", "local": "project:output/fbx/*.fbx", "to": "Projects/{CODE}/interior/fbx/", "binary": true },
+   { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/runs/interior-mesh/" }
+  ],
+  "temp": ["**/*.blend1"]
+ },
+ "promotes": ["library/Families/"]
+}

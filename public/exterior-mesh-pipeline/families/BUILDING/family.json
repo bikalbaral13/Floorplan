@@ -1,0 +1,294 @@
+{
+ "family": "BUILDING",
+ "version": "0.1.1",
+ "status": "implemented",
+ "host": "prototype (design local frame) or site (unique buildings)",
+ "pivot": "design (0, 0) on the plinth bottom +0.10 (plinth bottom at -0.10, finished floor at plinth_h)",
+ "description": "Exterior envelope of one design: walls split around openings, windows, doors, slabs, roofs, parapets, railings, sunshades, sills, steps.",
+ "parameters": {
+  "lod": {
+   "value": 2,
+   "options": [
+    1,
+    2
+   ],
+   "label": "2 = detailed (Unreal LOD0), 1 = massing (Unreal LOD1)"
+  },
+  "base_z": {
+   "value": 0.0,
+   "min": -5,
+   "max": 50,
+   "unit": "m",
+   "label": "World Z of the pivot (unique buildings only; prototypes are placed by instances)"
+  }
+ },
+ "geometry": "adapters.canvas_masterplan.extract_building / cabin_building: {levels:[{name,e,h,walls:[{a,b,t,h,out,ea,eb,open:[{kind,c,w,sill,head,panes,leaves,steps}]}],floor,roof,roof_screed,mass,parapets:[{line,h,kind}]}],plinth,plinth_band,plinth_h}",
+ "recipe": "Plinth to plinth_h with a 30 mm proud stone band. Walls: obox pieces between openings, below sills and above heads (true reveals); low walls get a coping. Window: 60x70 frame set back 50 mm, mullions per pane, transom when taller than 1.7 m, 8 mm glass, precast sill (weathered, drip groove), RCC chajja 450 mm. Door: 100x75 frame, 40 mm leaves with raised panels, rose + lever, chajja, steps off the plinth. Slabs 150 mm with 50 mm band; roof screed 50 mm inset 250 mm; parapets 115 / 150 mm with weathered copings; balconies 600 mm upstand + steel railing.",
+ "tri_budget": {
+  "1": 30000,
+  "2": 900000
+ },
+ "test_values": {
+  "lod": 2
+ },
+ "test_geometry": {
+  "plinth_h": 0.45,
+  "plinth": [
+   [
+    [
+     [
+      -0.2,
+      -0.2
+     ],
+     [
+      8.2,
+      -0.2
+     ],
+     [
+      8.2,
+      6.2
+     ],
+     [
+      -0.2,
+      6.2
+     ]
+    ],
+    []
+   ]
+  ],
+  "plinth_band": [
+   [
+    [
+     [
+      -0.23,
+      -0.23
+     ],
+     [
+      8.23,
+      -0.23
+     ],
+     [
+      8.23,
+      6.23
+     ],
+     [
+      -0.23,
+      6.23
+     ]
+    ],
+    []
+   ]
+  ],
+  "levels": [
+   {
+    "name": "Ground floor",
+    "e": 0,
+    "h": 3.2,
+    "floor": [],
+    "mass": [
+     [
+      [
+       [
+        -0.115,
+        -0.115
+       ],
+       [
+        8.115,
+        -0.115
+       ],
+       [
+        8.115,
+        6.115
+       ],
+       [
+        -0.115,
+        6.115
+       ]
+      ],
+      []
+     ]
+    ],
+    "roof": [
+     [
+      [
+       [
+        -0.165,
+        -0.165
+       ],
+       [
+        8.165,
+        -0.165
+       ],
+       [
+        8.165,
+        6.165
+       ],
+       [
+        -0.165,
+        6.165
+       ]
+      ],
+      []
+     ]
+    ],
+    "roof_screed": [
+     [
+      [
+       [
+        0.135,
+        0.135
+       ],
+       [
+        7.865,
+        0.135
+       ],
+       [
+        7.865,
+        5.865
+       ],
+       [
+        0.135,
+        5.865
+       ]
+      ],
+      []
+     ]
+    ],
+    "parapets": [
+     {
+      "line": [
+       [
+        -0.115,
+        -0.115
+       ],
+       [
+        8.115,
+        -0.115
+       ],
+       [
+        8.115,
+        6.115
+       ],
+       [
+        -0.115,
+        6.115
+       ],
+       [
+        -0.115,
+        -0.115
+       ]
+      ],
+      "h": 0.9,
+      "kind": "roof"
+     }
+    ],
+    "walls": [
+     {
+      "a": [
+       0,
+       0
+      ],
+      "b": [
+       8,
+       0
+      ],
+      "t": 0.23,
+      "h": 3.2,
+      "out": -1,
+      "ea": 0.115,
+      "eb": -0.115,
+      "open": [
+       {
+        "kind": "door",
+        "c": 2.0,
+        "w": 1.2,
+        "sill": 0,
+        "head": 2.1,
+        "panes": 1,
+        "leaves": "Double",
+        "steps": true
+       },
+       {
+        "kind": "window",
+        "c": 5.5,
+        "w": 1.8,
+        "sill": 0.9,
+        "head": 2.1,
+        "panes": 3,
+        "leaves": "Single"
+       }
+      ]
+     },
+     {
+      "a": [
+       8,
+       0
+      ],
+      "b": [
+       8,
+       6
+      ],
+      "t": 0.23,
+      "h": 3.2,
+      "out": -1,
+      "ea": 0.115,
+      "eb": -0.115,
+      "open": [
+       {
+        "kind": "window",
+        "c": 3.0,
+        "w": 1.2,
+        "sill": 0.6,
+        "head": 2.4,
+        "panes": 2,
+        "leaves": "Single"
+       }
+      ]
+     },
+     {
+      "a": [
+       8,
+       6
+      ],
+      "b": [
+       0,
+       6
+      ],
+      "t": 0.23,
+      "h": 3.2,
+      "out": -1,
+      "ea": 0.115,
+      "eb": -0.115,
+      "open": [
+       {
+        "kind": "opening",
+        "c": 4.0,
+        "w": 1.5,
+        "sill": 0,
+        "head": 2.1,
+        "panes": 1,
+        "leaves": "Single"
+       }
+      ]
+     },
+     {
+      "a": [
+       0,
+       6
+      ],
+      "b": [
+       0,
+       0
+      ],
+      "t": 0.23,
+      "h": 3.2,
+      "out": -1,
+      "ea": 0.115,
+      "eb": -0.115,
+      "open": []
+     }
+    ]
+   }
+  ]
+ }
+}

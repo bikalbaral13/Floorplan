@@ -1,0 +1,33 @@
+{
+ "code": "COCONUT-LOD2",
+ "family": "TREE",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.1",
+ "assumed": [],
+ "tris": 2756,
+ "objects": 4,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "4 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 40000,
+ "output": "PROTOTYPES › COCONUT_LOD2 › SM_COCONUT_LOD2",
+ "at": "2026-10-06T12:49:52",
+ "history": [
+  {
+   "at": "2026-10-06T12:47:16",
+   "status": "ok_with_flags",
+   "tris": 2756,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:49:52",
+   "status": "ok",
+   "tris": 2756,
+   "family_version": "0.1.1"
+  }
+ ]
+}

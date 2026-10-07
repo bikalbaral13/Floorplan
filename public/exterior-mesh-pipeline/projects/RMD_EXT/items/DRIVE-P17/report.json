@@ -1,0 +1,39 @@
+{
+ "code": "DRIVE-P17",
+ "family": "GROUND_PATCH",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 12,
+ "objects": 1,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "1 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 80000,
+ "output": "EXT › EXT_plots › SM_DRIVE_P17",
+ "at": "2026-10-06T13:12:09",
+ "history": [
+  {
+   "at": "2026-10-06T12:45:55",
+   "status": "ok",
+   "tris": 12,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:54:12",
+   "status": "ok",
+   "tris": 12,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:12:09",
+   "status": "ok",
+   "tris": 12,
+   "family_version": "0.1.0"
+  }
+ ]
+}

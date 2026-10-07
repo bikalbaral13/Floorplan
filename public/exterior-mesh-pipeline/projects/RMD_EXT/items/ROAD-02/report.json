@@ -1,0 +1,39 @@
+{
+ "code": "ROAD-02",
+ "family": "ROAD",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 48,
+ "objects": 2,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "2 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 60000,
+ "output": "EXT › EXT_roads › SM_ROAD_02",
+ "at": "2026-10-06T13:11:23",
+ "history": [
+  {
+   "at": "2026-10-06T12:45:49",
+   "status": "ok",
+   "tris": 24,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:53:34",
+   "status": "ok",
+   "tris": 48,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:11:23",
+   "status": "ok",
+   "tris": 48,
+   "family_version": "0.1.0"
+  }
+ ]
+}

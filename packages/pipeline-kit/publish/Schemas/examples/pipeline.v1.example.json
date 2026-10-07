@@ -1,0 +1,102 @@
+{
+ "schema": "pipeline/1",
+ "id": "floorplan-tracer",
+ "title": "Floorplan Tracer Pipeline",
+ "version": "0.1.0",
+ "phase": "plan",
+ "entry": {
+  "agents": "AGENTS.md",
+  "run": "python tools/run_task.py {CODE}",
+  "new_project": "python tools/new_project.py {CODE} --title \"...\"",
+  "selftest": "python tools/selftest.py"
+ },
+ "kit": "0.1.0",
+ "inputs": [
+  {
+   "id": "source",
+   "from": "project:inputs/*",
+   "required": true,
+   "note": "drawing image / PDF, or a hand-sketch photo; or project.json underlay_src (R2 library/Images)"
+  }
+ ],
+ "library_pins": [
+  {
+   "path": "library/Standards/DEFAULT.json",
+   "local_copy": "standards/DEFAULT.json"
+  },
+  {
+   "path": "library/Schemas/"
+  },
+  {
+   "path": "library/Pipelines/_kit/",
+   "version": "0.1.0",
+   "local_copy": "_vendor/pipeline_kit"
+  }
+ ],
+ "outputs": {
+  "keep": [
+   {
+    "id": "plan",
+    "local": "project:plan.json",
+    "to": "Projects/{CODE}/plan/plan.json",
+    "schema": "tracer-plan.v1",
+    "after": "S8_REVIEW"
+   },
+   {
+    "id": "layout",
+    "local": "project:layout.json",
+    "to": "Projects/{CODE}/plan/layout.json",
+    "schema": "tracer-layout.v1",
+    "after": "S8_REVIEW"
+   },
+   {
+    "id": "canvas",
+    "local": "out/{CODE}.canvas.json",
+    "to": "Projects/{CODE}/plan/{CODE}.canvas.json",
+    "schema": "canvas.v1",
+    "after": "S8_REVIEW"
+   },
+   {
+    "id": "plan_trace",
+    "local": "out/plan_trace.json",
+    "to": "Projects/{CODE}/plan/plan_trace.json",
+    "schema": "plan_trace-tracer.v0",
+    "after": "S8_REVIEW"
+   },
+   {
+    "id": "svg",
+    "local": "out/*.svg",
+    "to": "Projects/{CODE}/plan/",
+    "after": "S8_REVIEW"
+   },
+   {
+    "id": "overlay",
+    "local": "out/*_overlay.png",
+    "to": "Projects/{CODE}/plan/",
+    "after": "S8_REVIEW",
+    "binary": true
+   },
+   {
+    "id": "handoff",
+    "local": "project:handoff.json",
+    "to": "Projects/{CODE}/plan/handoff.json",
+    "after": "S8_REVIEW"
+   },
+   {
+    "id": "report",
+    "local": "project:REPORT.md",
+    "to": "Projects/{CODE}/runs/floorplan-tracer/"
+   }
+  ],
+  "temp": [
+   "pages/**",
+   "measure/**",
+   "calib.json",
+   "dims.resolved.json",
+   "manifest.json",
+   "contact.png",
+   "qc.*",
+   "out/report.md"
+  ]
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "code": "KERB-12",
+ "family": "KERB",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 640,
+ "objects": 2,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "2 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 60000,
+ "output": "EXT › EXT_roads › SM_KERB_12",
+ "at": "2026-10-06T13:13:38",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:29",
+   "status": "ok",
+   "tris": 640,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:55:36",
+   "status": "ok",
+   "tris": 640,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:13:38",
+   "status": "ok",
+   "tris": 640,
+   "family_version": "0.1.0"
+  }
+ ]
+}

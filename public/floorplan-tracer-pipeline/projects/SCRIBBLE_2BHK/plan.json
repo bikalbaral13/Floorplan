@@ -1,0 +1,1375 @@
+{
+ "schema": "tracer-plan/1",
+ "units": "m",
+ "source": {
+  "kind": "sketch",
+  "files": [
+   "sketch_facts.md"
+  ],
+  "tracer_version": "0.1.0",
+  "standards": "DEFAULT",
+  "project": "SCRIBBLE_2BHK"
+ },
+ "scale": null,
+ "levels": [
+  {
+   "id": "L0",
+   "name": "Ground floor",
+   "elevation": 0.0,
+   "height": 3.0,
+   "walls": [
+    {
+     "id": "L0-w1",
+     "a": [
+      0.0,
+      0.0
+     ],
+     "b": [
+      0.3,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w3",
+     "a": [
+      2.748,
+      0.0
+     ],
+     "b": [
+      3.048,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w4",
+     "a": [
+      3.048,
+      0.0
+     ],
+     "b": [
+      4.048,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w6",
+     "a": [
+      5.548,
+      0.0
+     ],
+     "b": [
+      6.2103,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w7",
+     "a": [
+      6.2103,
+      0.0
+     ],
+     "b": [
+      6.6603,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w9",
+     "a": [
+      7.2603,
+      0.0
+     ],
+     "b": [
+      7.8359,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w10",
+     "a": [
+      7.8359,
+      0.0
+     ],
+     "b": [
+      8.4359,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w12",
+     "a": [
+      9.9359,
+      0.0
+     ],
+     "b": [
+      10.7442,
+      0.0
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w13",
+     "a": [
+      6.2103,
+      2.4511
+     ],
+     "b": [
+      7.8359,
+      2.4511
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "Toilet north partition",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w14",
+     "a": [
+      0.0,
+      4.0386
+     ],
+     "b": [
+      0.24,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w16",
+     "a": [
+      1.55,
+      4.0386
+     ],
+     "b": [
+      3.048,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w17",
+     "a": [
+      3.048,
+      4.0386
+     ],
+     "b": [
+      3.198,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w19",
+     "a": [
+      4.098,
+      4.0386
+     ],
+     "b": [
+      6.2484,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w20",
+     "a": [
+      6.2484,
+      4.0386
+     ],
+     "b": [
+      6.5484,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w22",
+     "a": [
+      7.4484,
+      4.0386
+     ],
+     "b": [
+      7.8359,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w23",
+     "a": [
+      7.8359,
+      4.0386
+     ],
+     "b": [
+      10.7442,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w24",
+     "a": [
+      0.0,
+      7.3914
+     ],
+     "b": [
+      0.9,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w26",
+     "a": [
+      2.1,
+      7.3914
+     ],
+     "b": [
+      3.048,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w27",
+     "a": [
+      3.048,
+      7.3914
+     ],
+     "b": [
+      3.848,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w29",
+     "a": [
+      5.348,
+      7.3914
+     ],
+     "b": [
+      6.2484,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w30",
+     "a": [
+      6.2484,
+      7.3914
+     ],
+     "b": [
+      7.4484,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w32",
+     "a": [
+      8.9484,
+      7.3914
+     ],
+     "b": [
+      10.7442,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w33",
+     "a": [
+      0.0,
+      0.0
+     ],
+     "b": [
+      0.0,
+      4.0386
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w34",
+     "a": [
+      0.0,
+      4.0386
+     ],
+     "b": [
+      0.0,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w35",
+     "a": [
+      3.048,
+      0.0
+     ],
+     "b": [
+      3.048,
+      2.9886
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w37",
+     "a": [
+      3.048,
+      3.8886
+     ],
+     "b": [
+      3.048,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w38",
+     "a": [
+      3.048,
+      4.0386
+     ],
+     "b": [
+      3.048,
+      7.3914
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w39",
+     "a": [
+      6.2484,
+      4.0386
+     ],
+     "b": [
+      6.2484,
+      7.3914
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w40",
+     "a": [
+      6.2103,
+      0.0
+     ],
+     "b": [
+      6.2103,
+      1.5511
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w42",
+     "a": [
+      6.2103,
+      2.3011
+     ],
+     "b": [
+      6.2103,
+      2.4511
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w43",
+     "a": [
+      7.8359,
+      0.0
+     ],
+     "b": [
+      7.8359,
+      2.4511
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w44",
+     "a": [
+      7.8359,
+      2.4511
+     ],
+     "b": [
+      7.8359,
+      2.9886
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w46",
+     "a": [
+      7.8359,
+      3.8886
+     ],
+     "b": [
+      7.8359,
+      4.0386
+     ],
+     "t": 0.1016,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w47",
+     "a": [
+      10.7442,
+      0.0
+     ],
+     "b": [
+      10.7442,
+      1.2
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w49",
+     "a": [
+      10.7442,
+      2.7
+     ],
+     "b": [
+      10.7442,
+      4.0386
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w50",
+     "a": [
+      10.7442,
+      4.0386
+     ],
+     "b": [
+      10.7442,
+      4.9914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    },
+    {
+     "id": "L0-w52",
+     "a": [
+      10.7442,
+      6.1914
+     ],
+     "b": [
+      10.7442,
+      7.3914
+     ],
+     "t": 0.2286,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "sketch"
+    }
+   ],
+   "openings": [
+    {
+     "id": "L0-o2",
+     "a": [
+      0.3,
+      0.0
+     ],
+     "b": [
+      2.748,
+      0.0
+     ],
+     "t": 0.2286,
+     "kind": "opening",
+     "width": 2.448,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Verandah open front",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o5",
+     "a": [
+      4.048,
+      0.0
+     ],
+     "b": [
+      5.548,
+      0.0
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 1.5,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 3,
+     "label": "Hall window",
+     "src": "sketch",
+     "sill_src": "convention"
+    },
+    {
+     "id": "L0-o8",
+     "a": [
+      6.6603,
+      0.0
+     ],
+     "b": [
+      7.2603,
+      0.0
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 0.6,
+     "sill": 1.5,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Toilet ventilator",
+     "src": "sketch",
+     "sill_src": "convention"
+    },
+    {
+     "id": "L0-o11",
+     "a": [
+      8.4359,
+      0.0
+     ],
+     "b": [
+      9.9359,
+      0.0
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 1.5,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Bedroom 2 window",
+     "src": "sketch",
+     "sill_src": "convention"
+    },
+    {
+     "id": "L0-o15",
+     "a": [
+      0.24,
+      4.0386
+     ],
+     "b": [
+      1.55,
+      4.0386
+     ],
+     "t": 0.1016,
+     "kind": "gate",
+     "width": 1.31,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Stair gate (first flight)",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o18",
+     "a": [
+      3.198,
+      4.0386
+     ],
+     "b": [
+      4.098,
+      4.0386
+     ],
+     "t": 0.1016,
+     "kind": "door",
+     "width": 0.9,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "a",
+     "swing": "L",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Bedroom 1 door",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o21",
+     "a": [
+      6.5484,
+      4.0386
+     ],
+     "b": [
+      7.4484,
+      4.0386
+     ],
+     "t": 0.1016,
+     "kind": "opening",
+     "width": 0.9,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Kitchen opening",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o25",
+     "a": [
+      0.9,
+      7.3914
+     ],
+     "b": [
+      2.1,
+      7.3914
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 1.2,
+     "sill": 1.2,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Stair window",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o28",
+     "a": [
+      3.848,
+      7.3914
+     ],
+     "b": [
+      5.348,
+      7.3914
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 1.5,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Bedroom 1 window",
+     "src": "sketch",
+     "sill_src": "convention"
+    },
+    {
+     "id": "L0-o31",
+     "a": [
+      7.4484,
+      7.3914
+     ],
+     "b": [
+      8.9484,
+      7.3914
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 1.5,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Kitchen window",
+     "src": "sketch",
+     "sill_src": "convention"
+    },
+    {
+     "id": "L0-o36",
+     "a": [
+      3.048,
+      2.9886
+     ],
+     "b": [
+      3.048,
+      3.8886
+     ],
+     "t": 0.1016,
+     "kind": "door",
+     "width": 0.9,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "b",
+     "swing": "R",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Main door (verandah → hall)",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o41",
+     "a": [
+      6.2103,
+      1.5511
+     ],
+     "b": [
+      6.2103,
+      2.3011
+     ],
+     "t": 0.1016,
+     "kind": "door",
+     "width": 0.75,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "b",
+     "swing": "R",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Toilet door",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o45",
+     "a": [
+      7.8359,
+      2.9886
+     ],
+     "b": [
+      7.8359,
+      3.8886
+     ],
+     "t": 0.1016,
+     "kind": "door",
+     "width": 0.9,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "b",
+     "swing": "R",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Bedroom 2 door",
+     "src": "sketch",
+     "sill_src": "sketch"
+    },
+    {
+     "id": "L0-o48",
+     "a": [
+      10.7442,
+      1.2
+     ],
+     "b": [
+      10.7442,
+      2.7
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 1.5,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Bedroom 2 east window",
+     "src": "sketch",
+     "sill_src": "convention"
+    },
+    {
+     "id": "L0-o51",
+     "a": [
+      10.7442,
+      4.9914
+     ],
+     "b": [
+      10.7442,
+      6.1914
+     ],
+     "t": 0.2286,
+     "kind": "window",
+     "width": 1.2,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Kitchen east window",
+     "src": "sketch",
+     "sill_src": "convention"
+    }
+   ],
+   "spaces": [
+    {
+     "id": "L0-sp53",
+     "name": "STAIR",
+     "type": "area",
+     "ring": [
+      [
+       0.0,
+       4.0386
+      ],
+      [
+       3.048,
+       4.0386
+      ],
+      [
+       3.048,
+       7.3914
+      ],
+      [
+       0.0,
+       7.3914
+      ]
+     ],
+     "area": 10.2193,
+     "net_area": 9.1898,
+     "clear": [
+      2.8829,
+      3.1877
+     ],
+     "printed": null,
+     "src": "sketch"
+    },
+    {
+     "id": "L0-sp54",
+     "name": "BEDROOM 1",
+     "type": "room",
+     "ring": [
+      [
+       3.048,
+       4.0386
+      ],
+      [
+       6.2484,
+       4.0386
+      ],
+      [
+       6.2484,
+       7.3914
+      ],
+      [
+       3.048,
+       7.3914
+      ]
+     ],
+     "area": 10.7303,
+     "net_area": 9.878,
+     "clear": [
+      3.0988,
+      3.1877
+     ],
+     "printed": null,
+     "src": "sketch"
+    },
+    {
+     "id": "L0-sp55",
+     "name": "KITCHEN",
+     "type": "room",
+     "ring": [
+      [
+       6.2484,
+       4.0386
+      ],
+      [
+       10.7442,
+       4.0386
+      ],
+      [
+       10.7442,
+       7.3914
+      ],
+      [
+       6.2484,
+       7.3914
+      ]
+     ],
+     "area": 15.0735,
+     "net_area": 13.805,
+     "clear": [
+      4.3307,
+      3.1877
+     ],
+     "printed": null,
+     "src": "sketch"
+    },
+    {
+     "id": "L0-sp56",
+     "name": "VERANDAH",
+     "type": "balcony",
+     "ring": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       3.048,
+       0.0
+      ],
+      [
+       3.048,
+       4.0386
+      ],
+      [
+       0.0,
+       4.0386
+      ]
+     ],
+     "area": 12.3097,
+     "net_area": 11.1669,
+     "clear": [
+      2.8829,
+      3.8735
+     ],
+     "printed": null,
+     "src": "sketch"
+    },
+    {
+     "id": "L0-sp57",
+     "name": "HALL",
+     "type": "room",
+     "ring": [
+      [
+       3.048,
+       0.0
+      ],
+      [
+       6.2103,
+       0.0
+      ],
+      [
+       6.2103,
+       2.4511
+      ],
+      [
+       7.8359,
+       2.4511
+      ],
+      [
+       7.8359,
+       4.0386
+      ],
+      [
+       3.048,
+       4.0386
+      ]
+     ],
+     "area": 15.3519,
+     "net_area": 14.2737,
+     "clear": null,
+     "printed": null,
+     "src": "sketch"
+    },
+    {
+     "id": "L0-sp58",
+     "name": "TOILET",
+     "type": "toilet",
+     "ring": [
+      [
+       6.2103,
+       0.0
+      ],
+      [
+       7.8359,
+       0.0
+      ],
+      [
+       7.8359,
+       2.4511
+      ],
+      [
+       6.2103,
+       2.4511
+      ]
+     ],
+     "area": 3.9845,
+     "net_area": 3.4839,
+     "clear": [
+      1.524,
+      2.286
+     ],
+     "printed": null,
+     "src": "sketch"
+    },
+    {
+     "id": "L0-sp59",
+     "name": "BEDROOM 2",
+     "type": "room",
+     "ring": [
+      [
+       7.8359,
+       0.0
+      ],
+      [
+       10.7442,
+       0.0
+      ],
+      [
+       10.7442,
+       4.0386
+      ],
+      [
+       7.8359,
+       4.0386
+      ]
+     ],
+     "area": 11.7455,
+     "net_area": 10.6258,
+     "clear": [
+      2.7432,
+      3.8735
+     ],
+     "printed": null,
+     "src": "sketch"
+    }
+   ],
+   "columns": [
+    {
+     "id": "L0-c60",
+     "c": [
+      0.0,
+      0.0
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c61",
+     "c": [
+      3.048,
+      0.0
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c62",
+     "c": [
+      6.7056,
+      0.0
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c63",
+     "c": [
+      10.7442,
+      0.0
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c64",
+     "c": [
+      0.0,
+      4.0386
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c65",
+     "c": [
+      3.048,
+      4.0386
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c66",
+     "c": [
+      6.7056,
+      4.0386
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c67",
+     "c": [
+      10.7442,
+      4.0386
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c68",
+     "c": [
+      0.0,
+      7.3914
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c69",
+     "c": [
+      3.048,
+      7.3914
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c70",
+     "c": [
+      6.7056,
+      7.3914
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c71",
+     "c": [
+      10.7442,
+      7.3914
+     ],
+     "size": [
+      0.3048,
+      0.3048
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "L0-st72",
+     "bay": [
+      0.1143,
+      4.0894,
+      2.9972,
+      7.2771
+     ],
+     "footprint": [
+      0.2457,
+      4.0894,
+      2.8658,
+      7.1894
+     ],
+     "risers": 18,
+     "riser": 0.1667,
+     "tread": 0.25,
+     "flight_w": 1.25,
+     "mid": 0.12,
+     "landing": 0.85,
+     "config": "dogleg",
+     "toe": "S",
+     "first_flight": "W",
+     "src": "derived"
+    }
+   ],
+   "fixtures": [],
+   "not_placed": [],
+   "nodes": 46
+  }
+ ]
+}

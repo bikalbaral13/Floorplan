@@ -1,0 +1,10 @@
+task_id,stage,title,depends_on,status,approved,started,finished,output,notes
+S0_SCOPE,S0_SCOPE,Scope the trace (the user answers),,done,FIXTURE — sketch-branch regression by the agent,2026-10-06T14:48:24,2026-10-06T14:48:24,scope.json,"scope: sketch · single · scale by agent · objects all · emit ['canvas', 'svg', 'plan_trace']"
+S1_INTAKE,S1_INTAKE,Intake: pages and document kind,S0_SCOPE,done,FIXTURE — manifest checked by the agent,2026-10-06T14:48:25,2026-10-06T14:48:25,..\..\..\..\pipeline-work\tracer\SCRIBBLE_2BHK\manifest.json,"manifest confirmed: 1 page(s), document kind sketch"
+S2_READ,S2_READ,Read the source (agent),S1_INTAKE,done,FIXTURE — reading = the skill's documented resolution,2026-10-06T14:49:09,2026-10-06T14:49:09,reading.json,reading ok (sketch)
+S3_DIMENSIONS,S3_DIMENSIONS,Close the dimensions,S2_READ,done,,2026-10-06T14:49:09,2026-10-06T14:49:09,..\..\..\..\pipeline-work\tracer\SCRIBBLE_2BHK\dims.resolved.json,"grid: 7 x-lines, 4 y-lines"
+S4_LAYOUT,S4_LAYOUT,Author the layout (agent),S3_DIMENSIONS,done,,2026-10-06T16:16:07,2026-10-06T16:16:07,layout.json,"Ground floor: 37 walls, 15 openings, 7 spaces, 0 fixtures"
+S5_BUILD,S5_BUILD,Build the plan model,S4_LAYOUT,done,,2026-10-06T16:16:08,2026-10-06T16:16:08,plan.json,"plan.json: 1 level(s), 37 wall pieces, 7 spaces"
+S6_VERIFY,S6_VERIFY,Verify,S5_BUILD,done,,2026-10-06T16:16:08,2026-10-06T16:16:09,..\..\..\..\pipeline-work\tracer\SCRIBBLE_2BHK\qc.md,"QC: 0 fail, 0 warn"
+S7_EXPORT,S7_EXPORT,Export,S6_VERIFY,done,,2026-10-06T16:16:09,2026-10-06T16:16:09,..\..\..\..\pipeline-work\tracer\SCRIBBLE_2BHK\out\SCRIBBLE_2BHK.canvas.json;..\..\..\..\pipeline-work\tracer\SCRIBBLE_2BHK\out\SCRIBBLE_2BHK_L0.svg;..\..\..\..\pipeline-work\tracer\SCRIBBLE_2BHK\out\plan_trace.json;..\..\..\..\pipeline-work\tracer\SCRIBBLE_2BHK\out\report.md,4 files
+S8_REVIEW,S8_REVIEW,Review and hand off (the user approves),S7_EXPORT,todo,,,,,

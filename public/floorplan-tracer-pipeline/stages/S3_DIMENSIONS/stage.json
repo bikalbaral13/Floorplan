@@ -1,0 +1,20 @@
+{
+ "id": "S3_DIMENSIONS",
+ "version": "0.1.0",
+ "title": "Close the dimensions",
+ "kind": "script",
+ "gate": false,
+ "summary": "SKETCH: dims.json chains (outer → c-c, known bays, fitted bays rounded to the set-out step, residual in the largest) → grid. DRAWING: optional centreline solve from printed clear spans off 2–3 anchors. Writes work/dims.resolved.json; layout.grid is taken from it.",
+ "inputs": [
+  "dims.json (sketch, optional for drawings)",
+  "work/calib.json"
+ ],
+ "outputs": [
+  "work/dims.resolved.json"
+ ],
+ "checks": [
+  "every chain closes exactly",
+  "fitted bays reported",
+  "line moves reported (drawing)"
+ ]
+}

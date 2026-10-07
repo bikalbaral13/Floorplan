@@ -1,0 +1,27 @@
+{
+ "code": "SHRUB-LOD1",
+ "family": "SHRUB",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 40,
+ "objects": 1,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "1 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 400,
+ "output": "PROTOTYPES › SHRUB_LOD1 › SM_SHRUB_LOD1",
+ "at": "2026-10-06T12:47:19",
+ "history": [
+  {
+   "at": "2026-10-06T12:47:19",
+   "status": "ok",
+   "tris": 40,
+   "family_version": "0.1.0"
+  }
+ ]
+}

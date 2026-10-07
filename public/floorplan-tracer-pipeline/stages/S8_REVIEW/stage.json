@@ -1,0 +1,17 @@
+{
+ "id": "S8_REVIEW",
+ "version": "0.1.0",
+ "title": "Review and hand off (the user approves)",
+ "kind": "script",
+ "gate": true,
+ "summary": "The user looks at the drawing / overlay / report and approves; records the hand-off.",
+ "inputs": [
+  "work/out/*"
+ ],
+ "outputs": [
+  "handoff.json"
+ ],
+ "checks": [
+  "approval text present"
+ ]
+}

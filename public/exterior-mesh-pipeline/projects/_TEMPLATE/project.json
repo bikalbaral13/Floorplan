@@ -1,0 +1,64 @@
+{
+ "code": "<CODE>",
+ "title": "<TITLE>",
+ "name_prefix": "SM_",
+ "collection_root": "EXT",
+ "library_url": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library",
+ "source": {
+  "masterplan": "inputs/masterplan/master_plan.json",
+  "site": "inputs/masterplan/<site design>.json",
+  "envelopes": "inputs/masterplan/envelopes"
+ },
+ "site": {
+  "seed": 7,
+  "plinth_h": 0.45,
+  "ground": {
+   "terrain": -0.06,
+   "road": 0.0,
+   "kerb": 0.15,
+   "plot": 0.15,
+   "paving": 0.16,
+   "yard": 0.12
+  },
+  "roughness": 0.025,
+  "terrain_cell": 1.0,
+  "terrain_margin": 14.0,
+  "dumps": 9,
+  "plot_gate_w": 3.6,
+  "tree_species": [
+   "NEEM",
+   "COCONUT",
+   "ASHOKA"
+  ],
+  "tree_spacing": 9.0,
+  "tree_offset": 1.8,
+  "light_spacing": 22.0,
+  "osr_spacing": 6.5,
+  "plants": {
+   "NEEM": {
+    "height": 8.5,
+    "seed": 11
+   },
+   "COCONUT": {
+    "height": 9.0,
+    "seed": 23
+   },
+   "ASHOKA": {
+    "height": 7.0,
+    "seed": 5
+   },
+   "SHRUB": {
+    "height": 0.8,
+    "seed": 3
+   },
+   "STREET_LIGHT": {
+    "height": 7.0,
+    "arm": 1.2
+   }
+  }
+ },
+ "export": {
+  "unreal_scale": 100,
+  "fbx_dir": "output/fbx"
+ }
+}

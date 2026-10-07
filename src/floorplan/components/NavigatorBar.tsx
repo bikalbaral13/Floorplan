@@ -89,8 +89,10 @@ export const NavigatorBar = ({ overlay = false }: { overlay?: boolean }) => {
         <div className="flex min-h-0 flex-1 flex-col">
           <CloudInspectDialog variant="panel" open onOpenChange={() => {}} />
         </div>
-        {/* Read-only: the Interior Mesh Pipeline folder shipped with the app (public/interior-mesh-pipeline). */}
+        {/* Read-only: the pipeline folders shipped with the app (public/interior-mesh-pipeline, public/floorplan-tracer-pipeline, public/exterior-mesh-pipeline). */}
         <PipelineTreeSection />
+        <PipelineTreeSection base="/floorplan-tracer-pipeline" title="Floorplan Tracer Pipeline" storageKey="bp.editor.tracerPipelineOpen" />
+        <PipelineTreeSection base="/exterior-mesh-pipeline" title="Exterior Mesh Pipeline" storageKey="bp.editor.extPipelineOpen" />
         <LibrarySelectionBox />
       </div>
       {/* Resize grip — the whole right edge (desktop only; the phone drawer has a fixed width). */}

@@ -1,0 +1,22 @@
+{
+ "id": "S1_INTAKE",
+ "version": "0.1.0",
+ "title": "Intake: pages and document kind",
+ "kind": "script",
+ "gate": false,
+ "summary": "Copies images / renders PDF pages (tools/pdf_intake.py) into work/pages, classifies each page (plan / site / sketch), writes work/manifest.json and a contact sheet; the user confirms the manifest.",
+ "inputs": [
+  "scope.json",
+  "inputs/*"
+ ],
+ "outputs": [
+  "work/manifest.json",
+  "work/pages/*",
+  "work/contact.png"
+ ],
+ "checks": [
+  "every source file found",
+  "manifest confirmed by the user"
+ ],
+ "confirm": "the stage itself refuses to finish without --approved \"<the user's words>\""
+}

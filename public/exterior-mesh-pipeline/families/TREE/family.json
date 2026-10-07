@@ -1,0 +1,50 @@
+{
+ "family": "TREE",
+ "version": "0.1.1",
+ "status": "implemented",
+ "host": "prototype (origin, trunk base at z = 0, sinks 100 mm)",
+ "pivot": "trunk base",
+ "description": "Instanced tree prototypes: NEEM (round), COCONUT (palm), ASHOKA (columnar), LOD2 detailed / LOD1 light.",
+ "parameters": {
+  "species": {
+   "value": "NEEM",
+   "options": [
+    "NEEM",
+    "COCONUT",
+    "ASHOKA"
+   ],
+   "label": "Species"
+  },
+  "lod": {
+   "value": 2,
+   "options": [
+    1,
+    2
+   ],
+   "label": "2 = detailed (Unreal LOD0), 1 = light (Unreal LOD1)"
+  },
+  "height": {
+   "value": 8.5,
+   "min": 2,
+   "max": 20,
+   "unit": "m",
+   "label": "Overall height"
+  },
+  "seed": {
+   "value": 1,
+   "min": 0,
+   "max": 100000,
+   "label": "Shape seed"
+  }
+ },
+ "geometry": "none",
+ "recipe": "See build.py docstring. Instance variation (rotation, ±15% scale) comes from the placement, not the prototype.",
+ "tri_budget": {
+  "1": 3000,
+  "2": 40000
+ },
+ "test_values": {
+  "species": "NEEM"
+ },
+ "test_geometry": null
+}

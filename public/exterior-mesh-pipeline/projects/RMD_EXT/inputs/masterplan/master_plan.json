@@ -1,0 +1,328 @@
+{
+ "schemaVersion": "masterplan/1",
+ "name": "Ramanadhapuram",
+ "units": "m",
+ "pixelsPerMeter": 100,
+ "site": "Designs/Ramanadhapuram_Site.json",
+ "placements": "on the site's level-G PLOT spaces, field `designInstance` (design, path, rotation, mirror, position = site metres of the design's (0,0), levelMap)",
+ "designs": {
+  "villa-1": {
+   "path": "Designs/Ramanadhapuram_Villa1_improved.json",
+   "sha256": "c4cc7e1ff4e35fc94d9f7afd04b1d0e3a6785fbb9e702c77ed526beab68981a2",
+   "bytes": 812255,
+   "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-1.json",
+   "levels": [
+    "Ground floor",
+    "First floor",
+    "Terrace (half storey)"
+   ],
+   "instances": [
+    1,
+    2,
+    3,
+    4
+   ]
+  },
+  "villa-2": {
+   "path": "Designs/Ramanadhapuram_Villa2_improved.json",
+   "sha256": "3c63d9c16d1ebb4b4f8ccddbb88823336eafda946fb76c974d5e9c56e7c3d3d2",
+   "bytes": 561445,
+   "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-2.json",
+   "levels": [
+    "Ground floor",
+    "First floor",
+    "Terrace (half storey)"
+   ],
+   "instances": [
+    6,
+    7,
+    8
+   ]
+  },
+  "villa-3": {
+   "path": "Designs/Ramanadhapuram_Villa3_improved.json",
+   "sha256": "95e80ea87550d58692b28025e54668c581462b503e0cec2fc610e3348b6c3d08",
+   "bytes": 470241,
+   "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-3.json",
+   "levels": [
+    "Ground floor",
+    "First floor",
+    "Terrace (half storey)"
+   ],
+   "instances": [
+    9
+   ]
+  },
+  "villa-4": {
+   "path": "Designs/Ramanadhapuram_Villa4_improved.json",
+   "sha256": "58f33683cf52d45f39c4f82607a61844191e310c82fc65ca1d167af818249957",
+   "bytes": 584783,
+   "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-4.json",
+   "levels": [
+    "Ground floor",
+    "First floor",
+    "Terrace (half storey)"
+   ],
+   "instances": [
+    10,
+    11,
+    12,
+    13
+   ]
+  },
+  "villa-5": {
+   "path": "Designs/Ramanadhapuram_Villa5_improved.json",
+   "sha256": "857f9d3858a70206124f7bfc7702ac405c366bfded9be05f5d06ab36250a838c",
+   "bytes": 516983,
+   "envelope": "Master Plans/Ramanadhapuram/envelopes/villa-5.json",
+   "levels": [
+    "Ground floor",
+    "First floor",
+    "Terrace (half storey)"
+   ],
+   "instances": [
+    14,
+    15,
+    16,
+    17,
+    18
+   ]
+  },
+  "villament": {
+   "path": "Designs/Ramanadhapuram_Villament_improved.json",
+   "sha256": "09ba25248b4c546421c7d905da2f1577673c1ae6abc35bdf2820f2beac90be3b",
+   "bytes": 2081676,
+   "envelope": "Master Plans/Ramanadhapuram/envelopes/villament.json",
+   "levels": [
+    "Ground floor",
+    "First floor",
+    "Second floor",
+    "Third floor",
+    "Terrace (half storey)"
+   ],
+   "instances": [
+    5
+   ]
+  },
+  "apartment": {
+   "path": "Designs/Ramanadhapuram_Apartment_improved.json",
+   "sha256": "44b6cf969dfbe3e6bb4f928a0e7124d9177d476ff4a0af3ff8aca14e59a84f72",
+   "bytes": 18540144,
+   "envelope": "Master Plans/Ramanadhapuram/envelopes/apartment.json",
+   "levels": [
+    "Ground floor",
+    "First floor",
+    "Second floor",
+    "Third floor",
+    "Fourth floor",
+    "Fifth floor",
+    "Terrace (half storey)"
+   ],
+   "instances": [
+    19
+   ]
+  }
+ },
+ "summary": [
+  {
+   "plot": 1,
+   "design": "villa-1",
+   "position": [
+    14.475,
+    13.735
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 2,
+   "design": "villa-1",
+   "position": [
+    32.76,
+    13.735
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 3,
+   "design": "villa-1",
+   "position": [
+    51.047,
+    13.735
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 4,
+   "design": "villa-1",
+   "position": [
+    101.742,
+    13.735
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 5,
+   "design": "villament",
+   "position": [
+    16.091,
+    43.149
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 6,
+   "design": "villa-2",
+   "position": [
+    34.888,
+    27.018
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 7,
+   "design": "villa-2",
+   "position": [
+    53.174,
+    27.018
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 8,
+   "design": "villa-2",
+   "position": [
+    91.46,
+    27.018
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 9,
+   "design": "villa-3",
+   "position": [
+    107.31,
+    27.024
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 10,
+   "design": "villa-4",
+   "position": [
+    34.892,
+    43.173
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 11,
+   "design": "villa-4",
+   "position": [
+    53.178,
+    43.173
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 12,
+   "design": "villa-4",
+   "position": [
+    91.464,
+    43.173
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 13,
+   "design": "villa-4",
+   "position": [
+    109.75,
+    43.173
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 14,
+   "design": "villa-5",
+   "position": [
+    16.616,
+    54.992
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 15,
+   "design": "villa-5",
+   "position": [
+    34.902,
+    54.992
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 16,
+   "design": "villa-5",
+   "position": [
+    53.189,
+    54.992
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 17,
+   "design": "villa-5",
+   "position": [
+    91.474,
+    54.992
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 18,
+   "design": "villa-5",
+   "position": [
+    109.76,
+    54.992
+   ],
+   "rotation": 0,
+   "mirror": false
+  },
+  {
+   "plot": 19,
+   "design": "apartment",
+   "position": [
+    110.752,
+    61.125
+   ],
+   "rotation": 0,
+   "mirror": false
+  }
+ ],
+ "source": {
+  "pdf": "RAMANADHAPURAM_FLOOR PLANS_22.09.2026.pdf",
+  "mapping": "p.4 ground-floor site plan, red column vectors",
+  "builtAt": "2026-09-30T10:39:30.828Z"
+ },
+ "views": {
+  "site": "Master Plans/Ramanadhapuram/Ramanadhapuram_MasterPlan_site.json (open this in the editor: site + building footprints)",
+  "preview": "Master Plans/Ramanadhapuram/Ramanadhapuram_MasterPlan_preview.json (all walls/openings/rooms, 7 MB; too heavy for the editor, for tools)",
+  "flat": "Master Plans/Ramanadhapuram/Ramanadhapuram_MasterPlan_flat.json (fully expanded, 31 MB; for Blender/DXF/BOQ, do not edit)"
+ }
+}

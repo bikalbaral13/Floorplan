@@ -1,0 +1,37 @@
+{
+ "code": "YARD-01",
+ "family": "GROUND_PATCH",
+ "group": "open",
+ "params": {
+  "surface": "concrete",
+  "top_z": 0.12,
+  "edge": "kerb"
+ },
+ "geometry": {
+  "polygons": [
+   [
+    [
+     [
+      87.2659,
+      0.0
+     ],
+     [
+      87.2659,
+      -15.4951
+     ],
+     [
+      74.8591,
+      -15.4951
+     ],
+     [
+      74.8591,
+      0.0
+     ]
+    ],
+    []
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

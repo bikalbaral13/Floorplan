@@ -1,0 +1,39 @@
+{
+ "code": "OSR-01",
+ "family": "GROUND_PATCH",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 220,
+ "objects": 2,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "2 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 80000,
+ "output": "EXT › EXT_open › SM_OSR_01",
+ "at": "2026-10-06T13:13:53",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:36",
+   "status": "ok",
+   "tris": 220,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:55:49",
+   "status": "ok",
+   "tris": 220,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:13:53",
+   "status": "ok",
+   "tris": 220,
+   "family_version": "0.1.0"
+  }
+ ]
+}

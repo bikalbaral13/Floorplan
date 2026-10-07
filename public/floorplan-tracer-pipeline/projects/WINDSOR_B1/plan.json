@@ -1,0 +1,2371 @@
+{
+ "schema": "tracer-plan/1",
+ "units": "m",
+ "source": {
+  "kind": "drawing",
+  "files": [
+   "Windsor_park.jpeg"
+  ],
+  "tracer_version": "0.1.0",
+  "standards": "DEFAULT",
+  "project": "WINDSOR_B1"
+ },
+ "scale": {
+  "px_per_m": 66.36,
+  "method": "least-squares",
+  "calibrated_px_per_m": 66.2652,
+  "max_residual_ft": 0.239,
+  "n_pairs": 16
+ },
+ "levels": [
+  {
+   "id": "L0",
+   "name": "Ground floor",
+   "elevation": 0.0,
+   "height": 3.0,
+   "walls": [
+    {
+     "id": "L0-w1",
+     "a": [
+      -2.2129,
+      5.9188
+     ],
+     "b": [
+      1.351,
+      5.9188
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w2",
+     "a": [
+      -5.1462,
+      4.4022
+     ],
+     "b": [
+      -2.5044,
+      4.4022
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w3",
+     "a": [
+      -2.5044,
+      4.4022
+     ],
+     "b": [
+      -2.2129,
+      4.4022
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w4",
+     "a": [
+      -6.5689,
+      3.1193
+     ],
+     "b": [
+      -5.1462,
+      3.1193
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w5",
+     "a": [
+      -5.1462,
+      2.6673
+     ],
+     "b": [
+      -3.3153,
+      2.6673
+     ],
+     "t": 0.1658,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w7",
+     "a": [
+      -2.6823,
+      2.6673
+     ],
+     "b": [
+      -2.5044,
+      2.6673
+     ],
+     "t": 0.1658,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w8",
+     "a": [
+      -2.5044,
+      2.6673
+     ],
+     "b": [
+      -2.2129,
+      2.6673
+     ],
+     "t": 0.1658,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w9",
+     "a": [
+      -2.2129,
+      2.6673
+     ],
+     "b": [
+      -2.0946,
+      2.6673
+     ],
+     "t": 0.1658,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w11",
+     "a": [
+      -1.2658,
+      2.6673
+     ],
+     "b": [
+      1.351,
+      2.6673
+     ],
+     "t": 0.1658,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w12",
+     "a": [
+      -6.5689,
+      2.1263
+     ],
+     "b": [
+      -5.1462,
+      2.1263
+     ],
+     "t": 0.1507,
+     "h": 0.6,
+     "kind": "kerb",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w13",
+     "a": [
+      -7.3668,
+      -0.8965
+     ],
+     "b": [
+      -6.5689,
+      -0.8965
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w14",
+     "a": [
+      -6.5689,
+      -0.8965
+     ],
+     "b": [
+      -5.1462,
+      -0.8965
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w15",
+     "a": [
+      -5.1462,
+      -0.8965
+     ],
+     "b": [
+      -4.8825,
+      -0.8965
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w17",
+     "a": [
+      -4.0687,
+      -0.8965
+     ],
+     "b": [
+      -3.9479,
+      -0.8965
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w18",
+     "a": [
+      -3.9479,
+      -0.8965
+     ],
+     "b": [
+      -2.2129,
+      -0.8965
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w19",
+     "a": [
+      -2.2129,
+      -0.8965
+     ],
+     "b": [
+      -1.5295,
+      -0.8965
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w21",
+     "a": [
+      -0.7685,
+      -0.8965
+     ],
+     "b": [
+      0.4667,
+      -0.8965
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w22",
+     "a": [
+      0.4667,
+      -0.8965
+     ],
+     "b": [
+      1.351,
+      -0.8965
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w23",
+     "a": [
+      1.351,
+      -0.8965
+     ],
+     "b": [
+      1.4564,
+      -0.8965
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w24",
+     "a": [
+      -3.9479,
+      -3.6908
+     ],
+     "b": [
+      -3.4057,
+      -3.6908
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w26",
+     "a": [
+      -2.8632,
+      -3.6908
+     ],
+     "b": [
+      -2.2129,
+      -3.6908
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w27",
+     "a": [
+      -2.2129,
+      -3.6908
+     ],
+     "b": [
+      -1.5271,
+      -3.6908
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w28",
+     "a": [
+      -1.5271,
+      -3.6908
+     ],
+     "b": [
+      -1.4066,
+      -3.6908
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w30",
+     "a": [
+      0.3461,
+      -3.6908
+     ],
+     "b": [
+      0.4667,
+      -3.6908
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w31",
+     "a": [
+      0.4667,
+      -3.6908
+     ],
+     "b": [
+      1.4564,
+      -3.6908
+     ],
+     "t": 0.3466,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w32",
+     "a": [
+      -7.3668,
+      -5.1151
+     ],
+     "b": [
+      -3.9479,
+      -5.1151
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w33",
+     "a": [
+      -1.5271,
+      -5.2114
+     ],
+     "b": [
+      0.4667,
+      -5.2114
+     ],
+     "t": 0.3466,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w34",
+     "a": [
+      0.4667,
+      -5.2114
+     ],
+     "b": [
+      1.4564,
+      -5.2114
+     ],
+     "t": 0.3466,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w35",
+     "a": [
+      -7.3668,
+      -0.8965
+     ],
+     "b": [
+      -7.3668,
+      -1.7179
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w37",
+     "a": [
+      -7.3668,
+      -2.8632
+     ],
+     "b": [
+      -7.3668,
+      -5.1151
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w38",
+     "a": [
+      -6.5689,
+      3.1193
+     ],
+     "b": [
+      -6.5689,
+      2.1263
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w39",
+     "a": [
+      -6.5689,
+      2.1263
+     ],
+     "b": [
+      -6.5689,
+      2.0042
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w41",
+     "a": [
+      -6.5689,
+      -0.7384
+     ],
+     "b": [
+      -6.5689,
+      -0.8965
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w42",
+     "a": [
+      -5.1462,
+      4.4022
+     ],
+     "b": [
+      -5.1462,
+      3.7975
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w44",
+     "a": [
+      -5.1462,
+      3.2399
+     ],
+     "b": [
+      -5.1462,
+      3.1193
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w45",
+     "a": [
+      -5.1462,
+      3.1193
+     ],
+     "b": [
+      -5.1462,
+      2.6673
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w46",
+     "a": [
+      -5.1462,
+      2.6673
+     ],
+     "b": [
+      -5.1462,
+      2.1263
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w47",
+     "a": [
+      -5.1462,
+      2.1263
+     ],
+     "b": [
+      -5.1462,
+      1.522
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w49",
+     "a": [
+      -5.1462,
+      -0.5425
+     ],
+     "b": [
+      -5.1462,
+      -0.8965
+     ],
+     "t": 0.2562,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w50",
+     "a": [
+      -4.129,
+      4.2194
+     ],
+     "b": [
+      -4.129,
+      2.7426
+     ],
+     "t": 0.0226,
+     "h": 0.0,
+     "kind": "line",
+     "layer": "ledge",
+     "label": "Shower screen",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w51",
+     "a": [
+      -3.9479,
+      -0.8965
+     ],
+     "b": [
+      -3.9479,
+      -1.8686
+     ],
+     "t": 0.1808,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w53",
+     "a": [
+      -3.9479,
+      -2.5015
+     ],
+     "b": [
+      -3.9479,
+      -3.6908
+     ],
+     "t": 0.1808,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w54",
+     "a": [
+      -3.9479,
+      -3.6908
+     ],
+     "b": [
+      -3.9479,
+      -5.1151
+     ],
+     "t": 0.1808,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w55",
+     "a": [
+      -2.5044,
+      4.4022
+     ],
+     "b": [
+      -2.5044,
+      3.255
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w56",
+     "a": [
+      -2.5044,
+      3.255
+     ],
+     "b": [
+      -2.5044,
+      2.6673
+     ],
+     "t": 0.1507,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w57",
+     "a": [
+      -2.2129,
+      5.9188
+     ],
+     "b": [
+      -2.2129,
+      5.7715
+     ],
+     "t": 0.1808,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w59",
+     "a": [
+      -2.2129,
+      4.4756
+     ],
+     "b": [
+      -2.2129,
+      4.4022
+     ],
+     "t": 0.1808,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w60",
+     "a": [
+      -2.2129,
+      -0.8965
+     ],
+     "b": [
+      -2.2129,
+      -3.6908
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w61",
+     "a": [
+      -1.5271,
+      -3.6908
+     ],
+     "b": [
+      -1.5271,
+      -3.7975
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w63",
+     "a": [
+      -1.5271,
+      -4.9427
+     ],
+     "b": [
+      -1.5271,
+      -5.2114
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w64",
+     "a": [
+      -1.5271,
+      -5.2114
+     ],
+     "b": [
+      -1.5271,
+      -5.5756
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w65",
+     "a": [
+      0.4667,
+      -0.8965
+     ],
+     "b": [
+      0.4667,
+      -3.6908
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w66",
+     "a": [
+      0.4667,
+      -3.6908
+     ],
+     "b": [
+      0.4667,
+      -5.2114
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w67",
+     "a": [
+      1.351,
+      5.9188
+     ],
+     "b": [
+      1.351,
+      2.6673
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w68",
+     "a": [
+      1.351,
+      2.6673
+     ],
+     "b": [
+      1.351,
+      0.2411
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w70",
+     "a": [
+      1.351,
+      -0.7384
+     ],
+     "b": [
+      1.351,
+      -0.8965
+     ],
+     "t": 0.2411,
+     "h": 2.7,
+     "kind": "wall",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w71",
+     "a": [
+      1.4564,
+      -0.8965
+     ],
+     "b": [
+      1.4564,
+      -3.6908
+     ],
+     "t": 0.0301,
+     "h": 1.0,
+     "kind": "parapet",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-w72",
+     "a": [
+      1.4564,
+      -3.6908
+     ],
+     "b": [
+      1.4564,
+      -5.2114
+     ],
+     "t": 0.0301,
+     "h": 1.0,
+     "kind": "parapet",
+     "label": "",
+     "src": "measured"
+    }
+   ],
+   "openings": [
+    {
+     "id": "L0-o6",
+     "a": [
+      -3.3153,
+      2.6673
+     ],
+     "b": [
+      -2.6823,
+      2.6673
+     ],
+     "t": 0.1658,
+     "kind": "door",
+     "width": 0.633,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "b",
+     "swing": "L",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Toilet-2 door",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o10",
+     "a": [
+      -2.0946,
+      2.6673
+     ],
+     "b": [
+      -1.2658,
+      2.6673
+     ],
+     "t": 0.1658,
+     "kind": "door",
+     "width": 0.8288,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "a",
+     "swing": "L",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Bedroom-2 door",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o16",
+     "a": [
+      -4.8825,
+      -0.8965
+     ],
+     "b": [
+      -4.0687,
+      -0.8965
+     ],
+     "t": 0.2562,
+     "kind": "door",
+     "width": 0.8138,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "b",
+     "swing": "R",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Bedroom-1 door",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o20",
+     "a": [
+      -1.5295,
+      -0.8965
+     ],
+     "b": [
+      -0.7685,
+      -0.8965
+     ],
+     "t": 0.1507,
+     "kind": "opening",
+     "width": 0.761,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Kitchen opening",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o25",
+     "a": [
+      -3.4057,
+      -3.6908
+     ],
+     "b": [
+      -2.8632,
+      -3.6908
+     ],
+     "t": 0.2562,
+     "kind": "window",
+     "width": 0.5425,
+     "sill": 1.8,
+     "head": 2.3,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Toilet-1 ventilator",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o29",
+     "a": [
+      -1.4066,
+      -3.6908
+     ],
+     "b": [
+      0.3461,
+      -3.6908
+     ],
+     "t": 0.2562,
+     "kind": "opening",
+     "width": 1.7527,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Kitchen-utility opening",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o36",
+     "a": [
+      -7.3668,
+      -1.7179
+     ],
+     "b": [
+      -7.3668,
+      -2.8632
+     ],
+     "t": 0.2562,
+     "kind": "window",
+     "width": 1.1453,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 3,
+     "label": "Bedroom-1 window",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o40",
+     "a": [
+      -6.5689,
+      2.0042
+     ],
+     "b": [
+      -6.5689,
+      -0.7384
+     ],
+     "t": 0.1507,
+     "kind": "opening",
+     "width": 2.7426,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Balcony open side",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o43",
+     "a": [
+      -5.1462,
+      3.7975
+     ],
+     "b": [
+      -5.1462,
+      3.2399
+     ],
+     "t": 0.2562,
+     "kind": "window",
+     "width": 0.5576,
+     "sill": 1.5,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 1,
+     "label": "Toilet-2 window",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o48",
+     "a": [
+      -5.1462,
+      1.522
+     ],
+     "b": [
+      -5.1462,
+      -0.5425
+     ],
+     "t": 0.2562,
+     "kind": "sliding",
+     "width": 2.0645,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Balcony sliding door",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o52",
+     "a": [
+      -3.9479,
+      -1.8686
+     ],
+     "b": [
+      -3.9479,
+      -2.5015
+     ],
+     "t": 0.1808,
+     "kind": "door",
+     "width": 0.6329,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "b",
+     "swing": "L",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Toilet-1 door",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o58",
+     "a": [
+      -2.2129,
+      5.7715
+     ],
+     "b": [
+      -2.2129,
+      4.4756
+     ],
+     "t": 0.1808,
+     "kind": "window",
+     "width": 1.2959,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 3,
+     "label": "Bedroom-2 window",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o62",
+     "a": [
+      -1.5271,
+      -3.7975
+     ],
+     "b": [
+      -1.5271,
+      -4.9427
+     ],
+     "t": 0.2411,
+     "kind": "window",
+     "width": 1.1452,
+     "sill": 0.9,
+     "head": 2.1,
+     "hinge": null,
+     "swing": null,
+     "leaves": 1,
+     "panes": 2,
+     "label": "Utility window",
+     "src": "measured",
+     "sill_src": "measured"
+    },
+    {
+     "id": "L0-o69",
+     "a": [
+      1.351,
+      0.2411
+     ],
+     "b": [
+      1.351,
+      -0.7384
+     ],
+     "t": 0.2411,
+     "kind": "door",
+     "width": 0.9795,
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "b",
+     "swing": "R",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Main door",
+     "src": "measured",
+     "sill_src": "measured"
+    }
+   ],
+   "spaces": [
+    {
+     "id": "L0-sp73",
+     "name": "BEDROOM-2",
+     "type": "room",
+     "ring": [
+      [
+       -2.2129,
+       5.9188
+      ],
+      [
+       1.351,
+       5.9188
+      ],
+      [
+       1.351,
+       2.6673
+      ],
+      [
+       -2.2129,
+       2.6673
+      ]
+     ],
+     "area": 11.588,
+     "net_area": 10.3693,
+     "clear": [
+      3.3529,
+      3.048
+     ],
+     "printed": [
+      3.3528,
+      3.048
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp74",
+     "name": "TOILET-2",
+     "type": "toilet",
+     "ring": [
+      [
+       -5.1462,
+       4.4022
+      ],
+      [
+       -2.5044,
+       4.4022
+      ],
+      [
+       -2.5044,
+       2.6673
+      ],
+      [
+       -5.1462,
+       2.6673
+      ]
+     ],
+     "area": 4.5833,
+     "net_area": 3.6826,
+     "clear": [
+      2.4384,
+      1.5239
+     ],
+     "printed": [
+      2.4384,
+      1.524
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp75",
+     "name": "NICHE",
+     "type": "area",
+     "ring": [
+      [
+       -2.5044,
+       4.4022
+      ],
+      [
+       -2.2129,
+       4.4022
+      ],
+      [
+       -2.2129,
+       3.255
+      ],
+      [
+       -2.5044,
+       3.255
+      ]
+     ],
+     "area": 0.3344,
+     "net_area": 0.2203,
+     "clear": [
+      0.2162,
+      1.0191
+     ],
+     "printed": null,
+     "src": "measured",
+     "edges_without_band": [
+      [
+       [
+        -2.2129,
+        3.255
+       ],
+       [
+        -2.2129,
+        4.4022
+       ]
+      ],
+      [
+       [
+        -2.5044,
+        3.255
+       ],
+       [
+        -2.2129,
+        3.255
+       ]
+      ]
+     ]
+    },
+    {
+     "id": "L0-sp76",
+     "name": "LIVING / DINING",
+     "type": "room",
+     "ring": [
+      [
+       -5.1462,
+       2.6673
+      ],
+      [
+       1.351,
+       2.6673
+      ],
+      [
+       1.351,
+       -0.8965
+      ],
+      [
+       -5.1462,
+       -0.8965
+      ]
+     ],
+     "area": 23.1547,
+     "net_area": 21.1894,
+     "clear": [
+      6.2486,
+      3.3528
+     ],
+     "printed": [
+      6.2484,
+      3.3528
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp77",
+     "name": "DUCT",
+     "type": "area",
+     "ring": [
+      [
+       -6.5689,
+       3.1193
+      ],
+      [
+       -5.1462,
+       3.1193
+      ],
+      [
+       -5.1462,
+       2.1263
+      ],
+      [
+       -6.5689,
+       2.1263
+      ]
+     ],
+     "area": 1.4127,
+     "net_area": 0.9627,
+     "clear": [
+      1.2192,
+      0.7895
+     ],
+     "printed": null,
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp78",
+     "name": "BALCONY",
+     "type": "balcony",
+     "ring": [
+      [
+       -6.5689,
+       2.1263
+      ],
+      [
+       -5.1462,
+       2.1263
+      ],
+      [
+       -5.1462,
+       -0.8965
+      ],
+      [
+       -6.5689,
+       -0.8965
+      ]
+     ],
+     "area": 4.3005,
+     "net_area": 3.4375,
+     "clear": [
+      1.2192,
+      2.8194
+     ],
+     "printed": [
+      1.2192,
+      2.8194
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp79",
+     "name": "BEDROOM-1",
+     "type": "room",
+     "ring": [
+      [
+       -7.3668,
+       -0.8965
+      ],
+      [
+       -3.9479,
+       -0.8965
+      ],
+      [
+       -3.9479,
+       -5.1151
+      ],
+      [
+       -7.3668,
+       -5.1151
+      ]
+     ],
+     "area": 14.423,
+     "net_area": 12.6829,
+     "clear": [
+      3.2004,
+      3.9624
+     ],
+     "printed": [
+      3.2004,
+      3.9624
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp80",
+     "name": "TOILET-1",
+     "type": "toilet",
+     "ring": [
+      [
+       -3.9479,
+       -0.8965
+      ],
+      [
+       -2.2129,
+       -0.8965
+      ],
+      [
+       -2.2129,
+       -3.6908
+      ],
+      [
+       -3.9479,
+       -3.6908
+      ]
+     ],
+     "area": 4.8481,
+     "net_area": 3.9486,
+     "clear": [
+      1.5241,
+      2.5909
+     ],
+     "printed": [
+      1.524,
+      2.5908
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp81",
+     "name": "KITCHEN",
+     "type": "room",
+     "ring": [
+      [
+       -2.2129,
+       -0.8965
+      ],
+      [
+       0.4667,
+       -0.8965
+      ],
+      [
+       0.4667,
+       -3.6908
+      ],
+      [
+       -2.2129,
+       -3.6908
+      ]
+     ],
+     "area": 7.4876,
+     "net_area": 6.3178,
+     "clear": [
+      2.4385,
+      2.5909
+     ],
+     "printed": [
+      2.4384,
+      2.667
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp82",
+     "name": "UTILITY",
+     "type": "room",
+     "ring": [
+      [
+       -1.5271,
+       -3.6908
+      ],
+      [
+       0.4667,
+       -3.6908
+      ],
+      [
+       0.4667,
+       -5.2114
+      ],
+      [
+       -1.5271,
+       -5.2114
+      ]
+     ],
+     "area": 3.0318,
+     "net_area": 2.1369,
+     "clear": [
+      1.7527,
+      1.2192
+     ],
+     "printed": [
+      1.7526,
+      1.2192
+     ],
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp83",
+     "name": "SERVICE SHAFT",
+     "type": "area",
+     "ring": [
+      [
+       0.4667,
+       -0.8965
+      ],
+      [
+       1.4564,
+       -0.8965
+      ],
+      [
+       1.4564,
+       -3.6908
+      ],
+      [
+       0.4667,
+       -3.6908
+      ]
+     ],
+     "area": 2.7655,
+     "net_area": 2.1292,
+     "clear": [
+      0.8541,
+      2.4929
+     ],
+     "printed": null,
+     "src": "measured"
+    },
+    {
+     "id": "L0-sp84",
+     "name": "SERVICE SHAFT",
+     "type": "area",
+     "ring": [
+      [
+       0.4667,
+       -3.6908
+      ],
+      [
+       1.4564,
+       -3.6908
+      ],
+      [
+       1.4564,
+       -5.2114
+      ],
+      [
+       0.4667,
+       -5.2114
+      ]
+     ],
+     "area": 1.5049,
+     "net_area": 1.0027,
+     "clear": [
+      0.8541,
+      1.174
+     ],
+     "printed": null,
+     "src": "measured"
+    }
+   ],
+   "columns": [
+    {
+     "id": "L0-c85",
+     "c": [
+      -1.8535,
+      5.9373
+     ],
+     "size": [
+      1.025,
+      0.332
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c86",
+     "c": [
+      0.9494,
+      5.9373
+     ],
+     "size": [
+      1.055,
+      0.332
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c87",
+     "c": [
+      -2.3885,
+      2.9234
+     ],
+     "size": [
+      0.467,
+      0.6631
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c88",
+     "c": [
+      1.0549,
+      2.818
+     ],
+     "size": [
+      0.844,
+      0.4519
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c89",
+     "c": [
+      -6.4195,
+      2.72
+     ],
+     "size": [
+      0.332,
+      1.0399
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c90",
+     "c": [
+      -6.9545,
+      -0.8288
+     ],
+     "size": [
+      0.98,
+      0.332
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c91",
+     "c": [
+      -1.959,
+      -0.9343
+     ],
+     "size": [
+      0.844,
+      0.332
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c92",
+     "c": [
+      -7.3915,
+      -4.2194
+     ],
+     "size": [
+      0.316,
+      1.055
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    },
+    {
+     "id": "L0-c93",
+     "c": [
+      -3.8577,
+      -4.2119
+     ],
+     "size": [
+      0.332,
+      1.0701
+     ],
+     "rot": 0.0,
+     "src": "measured"
+    }
+   ],
+   "stairs": [],
+   "fixtures": [
+    {
+     "id": "L0-f94",
+     "kind": "bed",
+     "c": [
+      -0.8288,
+      4.8523
+     ],
+     "size": [
+      1.3559,
+      1.763
+     ],
+     "back": "N",
+     "rot": 180,
+     "room": "BEDROOM-2",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f95",
+     "kind": "nightstand",
+     "c": [
+      -1.7706,
+      5.5078
+     ],
+     "size": [
+      0.377,
+      0.377
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "BEDROOM-2",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f96",
+     "kind": "nightstand",
+     "c": [
+      0.1055,
+      5.5078
+     ],
+     "size": [
+      0.377,
+      0.377
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "BEDROOM-2",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f97",
+     "kind": "wardrobe",
+     "c": [
+      0.9644,
+      4.4153
+     ],
+     "size": [
+      2.712,
+      0.6331
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "BEDROOM-2",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f98",
+     "kind": "tv-unit",
+     "c": [
+      -0.5425,
+      2.8556
+     ],
+     "size": [
+      0.904,
+      0.226
+     ],
+     "back": "S",
+     "rot": 0,
+     "room": "BEDROOM-2",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f99",
+     "kind": "bed",
+     "c": [
+      -4.9578,
+      -3.6317
+     ],
+     "size": [
+      1.703,
+      1.748
+     ],
+     "back": "E",
+     "rot": 90,
+     "room": "BEDROOM-1",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f100",
+     "kind": "nightstand",
+     "c": [
+      -4.2571,
+      -4.6941
+     ],
+     "size": [
+      0.347,
+      0.316
+     ],
+     "back": "S",
+     "rot": 0,
+     "room": "BEDROOM-1",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f101",
+     "kind": "wardrobe",
+     "c": [
+      -6.1634,
+      -1.296
+     ],
+     "size": [
+      2.064,
+      0.6031
+     ],
+     "back": "S",
+     "rot": 0,
+     "room": "BEDROOM-1",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f102",
+     "kind": "dressing-table",
+     "c": [
+      -7.0223,
+      -3.9557
+     ],
+     "size": [
+      1.7929,
+      0.354
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "BEDROOM-1",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f103",
+     "kind": "stool",
+     "c": [
+      -6.7963,
+      -4.4605
+     ],
+     "size": [
+      0.392,
+      0.407
+     ],
+     "back": null,
+     "rot": 0.0,
+     "room": "BEDROOM-1",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f104",
+     "kind": "table",
+     "c": [
+      -3.5413,
+      0.9117
+     ],
+     "size": [
+      1.055,
+      0.98
+     ],
+     "back": null,
+     "rot": 0.0,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f105",
+     "kind": "chair",
+     "c": [
+      -3.5262,
+      1.5597
+     ],
+     "size": [
+      0.4219,
+      0.437
+     ],
+     "back": "N",
+     "rot": 180,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f106",
+     "kind": "chair",
+     "c": [
+      -3.5262,
+      0.2637
+     ],
+     "size": [
+      0.4219,
+      0.437
+     ],
+     "back": "S",
+     "rot": 0,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f107",
+     "kind": "chair",
+     "c": [
+      -4.2646,
+      0.9192
+     ],
+     "size": [
+      0.4219,
+      0.437
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f108",
+     "kind": "chair",
+     "c": [
+      -2.8707,
+      0.9192
+     ],
+     "size": [
+      0.4219,
+      0.437
+     ],
+     "back": "E",
+     "rot": 90,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f109",
+     "kind": "sofa",
+     "c": [
+      0.0,
+      2.2152
+     ],
+     "size": [
+      1.266,
+      0.5729
+     ],
+     "back": "N",
+     "rot": 180,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f110",
+     "kind": "armchair",
+     "c": [
+      0.8891,
+      2.2378
+     ],
+     "size": [
+      0.5,
+      0.527
+     ],
+     "back": "S",
+     "rot": 0,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f111",
+     "kind": "sofa",
+     "c": [
+      -0.9494,
+      1.198
+     ],
+     "size": [
+      1.401,
+      0.6031
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f112",
+     "kind": "table",
+     "c": [
+      -0.0377,
+      1.1679
+     ],
+     "size": [
+      0.618,
+      0.618
+     ],
+     "back": null,
+     "rot": 0.0,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f113",
+     "kind": "shoe-rack",
+     "c": [
+      1.1302,
+      1.0322
+     ],
+     "size": [
+      0.9189,
+      0.3009
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "LIVING / DINING",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f114",
+     "kind": "toilet",
+     "c": [
+      -3.7221,
+      3.8954
+     ],
+     "size": [
+      0.467,
+      0.7379
+     ],
+     "back": "N",
+     "rot": 180,
+     "room": "TOILET-2",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f115",
+     "kind": "washbasin",
+     "c": [
+      -2.9687,
+      4.0009
+     ],
+     "size": [
+      0.542,
+      0.527
+     ],
+     "back": "N",
+     "rot": 180,
+     "room": "TOILET-2",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f116",
+     "kind": "toilet",
+     "c": [
+      -3.4057,
+      -3.1495
+     ],
+     "size": [
+      0.4519,
+      0.6631
+     ],
+     "back": "S",
+     "rot": 0,
+     "room": "TOILET-1",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f117",
+     "kind": "washbasin",
+     "c": [
+      -2.6221,
+      -2.1549
+     ],
+     "size": [
+      0.648,
+      0.4519
+     ],
+     "back": "E",
+     "rot": 90,
+     "room": "TOILET-1",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f118",
+     "kind": "cabinet",
+     "c": [
+      -1.8309,
+      -2.2905
+     ],
+     "size": [
+      2.321,
+      0.618
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "KITCHEN",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f119",
+     "kind": "stove",
+     "c": [
+      -1.8686,
+      -2.7351
+     ],
+     "size": [
+      0.769,
+      0.4821
+     ],
+     "back": "W",
+     "rot": 270,
+     "room": "KITCHEN",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f120",
+     "kind": "refrigerator",
+     "c": [
+      0.0151,
+      -1.3487
+     ],
+     "size": [
+      0.648,
+      0.558
+     ],
+     "back": "E",
+     "rot": 90,
+     "room": "KITCHEN",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f121",
+     "kind": "cabinet",
+     "c": [
+      -0.0075,
+      -2.6974
+     ],
+     "size": [
+      1.869,
+      0.618
+     ],
+     "back": "E",
+     "rot": 90,
+     "room": "KITCHEN",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f122",
+     "kind": "kitchen-sink",
+     "c": [
+      0.0,
+      -2.9234
+     ],
+     "size": [
+      1.055,
+      0.527
+     ],
+     "back": "E",
+     "rot": 90,
+     "room": "KITCHEN",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f123",
+     "kind": "washing-machine",
+     "c": [
+      0.0151,
+      -4.4605
+     ],
+     "size": [
+      0.558,
+      0.558
+     ],
+     "back": "E",
+     "rot": 90,
+     "room": "UTILITY",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f124",
+     "kind": "washbasin",
+     "c": [
+      -5.7866,
+      1.9741
+     ],
+     "size": [
+      0.4821,
+      0.467
+     ],
+     "back": "N",
+     "rot": 180,
+     "room": "BALCONY",
+     "label": "",
+     "src": "measured"
+    },
+    {
+     "id": "L0-f125",
+     "kind": "north-arrow",
+     "c": [
+      5.5003,
+      -4.7016
+     ],
+     "size": [
+      0.6001,
+      0.6001
+     ],
+     "back": null,
+     "rot": 0.0,
+     "room": null,
+     "label": "",
+     "src": "measured"
+    }
+   ],
+   "not_placed": [],
+   "nodes": 64
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+{
+ "code": "BSMT-B2",
+ "family": "BASEMENT",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 3904,
+ "objects": 5,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "5 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 120000,
+ "output": "EXT › EXT_basement › SM_BSMT_B2",
+ "at": "2026-10-06T13:11:21",
+ "history": [
+  {
+   "at": "2026-10-06T13:11:21",
+   "status": "ok",
+   "tris": 3904,
+   "family_version": "0.1.0"
+  }
+ ]
+}

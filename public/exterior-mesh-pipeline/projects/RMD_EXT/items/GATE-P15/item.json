@@ -1,0 +1,20 @@
+{
+ "code": "GATE-P15",
+ "family": "GATE_SWING",
+ "group": "gates",
+ "params": {
+  "width": 3.6,
+  "height": 1.5,
+  "pillar": 0.45,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "center": [
+   27.3435,
+   -56.5974
+  ],
+  "heading": 0.0
+ },
+ "proto": null,
+ "status": "ok"
+}

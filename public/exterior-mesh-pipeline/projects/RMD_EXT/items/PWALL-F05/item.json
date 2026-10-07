@@ -1,0 +1,35 @@
+{
+ "code": "PWALL-F05",
+ "family": "COMPOUND_WALL",
+ "group": "walls",
+ "params": {
+  "height": 0.9,
+  "thickness": 0.15,
+  "pier_spacing": 3.0,
+  "pier": 0.3,
+  "railing_h": 0.6,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "line": [
+   [
+    53.9065,
+    -58.0986
+   ],
+   [
+    0.193,
+    -58.0986
+   ],
+   [
+    0.193,
+    -85.9158
+   ],
+   [
+    0.593,
+    -85.9158
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

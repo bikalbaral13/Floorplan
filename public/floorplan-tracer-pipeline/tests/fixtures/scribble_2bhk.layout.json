@@ -1,0 +1,46 @@
+{
+ "schema": "tracer-layout/1",
+ "frame": {"type": "metric"},
+ "src": "sketch",
+ "snap": 0.05,
+ "levels": [{
+  "id": "L0", "name": "Ground floor", "elevation": 0, "height": 3.0, "wall_h": 2.7,
+  "lines": [
+   ["H", "Y1", 0.2286, [["w", "A", "A+0.30"], ["o", "A+0.30", "B-0.30", {"label": "Verandah open front"}], ["w", "B-0.30", "B"],
+                         ["w", "B", "B+1.0"], ["win", "B+1.0", "B+2.5", {"label": "Hall window", "panes": 3}], ["w", "B+2.5", "P3"],
+                         ["w", "P3", "P3+0.45"], ["win", "P3+0.45", "P3+1.05", {"label": "Toilet ventilator", "panes": 1}], ["w", "P3+1.05", "P2"],
+                         ["w", "P2", "P2+0.6"], ["win", "P2+0.6", "P2+2.1", {"label": "Bedroom 2 window", "panes": 2}], ["w", "P2+2.1", "D"]]],
+   ["H", "T1", 0.1016, [["w", "P3", "P2", {"label": "Toilet north partition"}]]],
+   ["H", "Y2", 0.1016, [["w", "A", "A+0.24"], ["gate", "A+0.24", "A+1.55", {"label": "Stair gate (first flight)"}], ["w", "A+1.55", "B"],
+                         ["w", "B", "B+0.15"], ["d", "B+0.15", "B+1.05", {"label": "Bedroom 1 door", "hinge": "s", "swing": "+"}], ["w", "B+1.05", "P1"],
+                         ["w", "P1", "P1+0.30"], ["o", "P1+0.30", "P1+1.20", {"label": "Kitchen opening"}], ["w", "P1+1.20", "D"]]],
+   ["H", "Y3", 0.2286, [["w", "A", "A+0.9"], ["win", "A+0.9", "A+2.1", {"label": "Stair window", "sill": 1.2}], ["w", "A+2.1", "B"],
+                         ["w", "B", "B+0.8"], ["win", "B+0.8", "B+2.3", {"label": "Bedroom 1 window"}], ["w", "B+2.3", "P1"],
+                         ["w", "P1", "P1+1.2"], ["win", "P1+1.2", "P1+2.7", {"label": "Kitchen window"}], ["w", "P1+2.7", "D"]]],
+   ["V", "A", 0.2286, [["w", "Y1", "Y3"]]],
+   ["V", "B", 0.1016, [["w", "Y1", "Y2-1.05"], ["d", "Y2-1.05", "Y2-0.15", {"label": "Main door (verandah → hall)", "hinge": "e", "swing": "+"}], ["w", "Y2-0.15", "Y2"],
+                        ["w", "Y2", "Y3"]]],
+   ["V", "P1", 0.1016, [["w", "Y2", "Y3"]]],
+   ["V", "P3", 0.1016, [["w", "Y1", "T1-0.90"], ["d", "T1-0.90", "T1-0.15", {"label": "Toilet door", "hinge": "e", "swing": "+"}], ["w", "T1-0.15", "T1"]]],
+   ["V", "P2", 0.1016, [["w", "Y1", "T1"], ["w", "T1", "Y2-1.05"], ["d", "Y2-1.05", "Y2-0.15", {"label": "Bedroom 2 door", "hinge": "e", "swing": "+"}], ["w", "Y2-0.15", "Y2"]]],
+   ["V", "D", 0.2286, [["w", "Y1", "Y1+1.2"], ["win", "Y1+1.2", "Y1+2.7", {"label": "Bedroom 2 east window"}], ["w", "Y1+2.7", "Y3-2.4"],
+                        ["win", "Y3-2.4", "Y3-1.2", {"label": "Kitchen east window"}], ["w", "Y3-1.2", "Y3"]]]
+  ],
+  "spaces": [
+   ["STAIR", ["A", "Y2", "B", "Y3"], {"type": "area"}],
+   ["BEDROOM 1", ["B", "Y2", "P1", "Y3"]],
+   ["KITCHEN", ["P1", "Y2", "D", "Y3"]],
+   ["VERANDAH", ["A", "Y1", "B", "Y2"], {"type": "balcony"}],
+   ["HALL", [["B", "Y1"], ["P3", "Y1"], ["P3", "T1"], ["P2", "T1"], ["P2", "Y2"], ["B", "Y2"]]],
+   ["TOILET", ["P3", "Y1", "P2", "T1"], {"type": "toilet"}],
+   ["BEDROOM 2", ["P2", "Y1", "D", "Y2"]]
+  ],
+  "columns": [["A", "Y1", 0.3048, 0.3048], ["B", "Y1", 0.3048, 0.3048], ["C", "Y1", 0.3048, 0.3048], ["D", "Y1", 0.3048, 0.3048],
+              ["A", "Y2", 0.3048, 0.3048], ["B", "Y2", 0.3048, 0.3048], ["C", "Y2", 0.3048, 0.3048], ["D", "Y2", 0.3048, 0.3048],
+              ["A", "Y3", 0.3048, 0.3048], ["B", "Y3", 0.3048, 0.3048], ["C", "Y3", 0.3048, 0.3048], ["D", "Y3", 0.3048, 0.3048]],
+  "stairs": [{"bay": ["A+0.1143", "Y2+0.0508", "B-0.0508", "Y3-0.1143"], "risers": 18, "tread": 0.25, "flight_w": 1.25, "mid": 0.12, "landing": 0.85,
+              "config": "dogleg", "toe": "S", "first_flight": "W", "src": "derived"}],
+  "fixtures": [],
+  "not_placed": []
+ }]
+}

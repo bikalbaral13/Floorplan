@@ -1,0 +1,18 @@
+{
+ "family": "SHRUB",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "prototype",
+ "pivot": "ground centre",
+ "description": "Instanced shrub / hedge plant prototype.",
+ "parameters": {
+  "lod": {"value": 2, "options": [1, 2], "label": "2 = detailed, 1 = light"},
+  "height": {"value": 0.8, "min": 0.3, "max": 2.5, "unit": "m", "label": "Height"},
+  "seed": {"value": 3, "min": 0, "max": 100000, "label": "Shape seed"}
+ },
+ "geometry": "none",
+ "recipe": "Clumps of subdivided icospheres with radial jitter; stems as thin tubes.",
+ "tri_budget": {"1": 400, "2": 3000},
+ "test_values": {},
+ "test_geometry": null
+}

@@ -1,0 +1,27 @@
+{
+ "code": "PWALL-D06",
+ "family": "COMPOUND_WALL",
+ "group": "walls",
+ "params": {
+  "height": 1.5,
+  "thickness": 0.15,
+  "pier_spacing": 3.0,
+  "pier": 0.3,
+  "railing_h": 0.0,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "line": [
+   [
+    18.2832,
+    -15.4951
+   ],
+   [
+    18.2832,
+    -0.45
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

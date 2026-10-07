@@ -1,0 +1,1 @@
+{"code":"BLD-villament-LOD2","family":"BUILDING","group":"prototypes","params":{"lod":2},"geometry":{"$ref":"geometry/villament.json"},"proto":"BLD_villament_LOD2","status":"todo"}

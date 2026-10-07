@@ -1,0 +1,17 @@
+{
+ "family": "KERB",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "site",
+ "pivot": "world origin",
+ "description": "Precast kerb units (1.0 m, 6 mm joints, chamfered arris) with a concrete gutter along a road edge.",
+ "parameters": {
+  "top_z": {"value": 0.15, "min": -5, "max": 5, "unit": "m", "label": "Kerb top"},
+  "road_z": {"value": 0.0, "min": -5, "max": 5, "unit": "m", "label": "Road level"}
+ },
+ "geometry": "{line:[[x,y],...]} oriented with the road on its LEFT",
+ "recipe": "Split the line into 1.0 m units minus 6 mm joints; sweep the kerb profile per unit; one gutter sweep along the whole line.",
+ "tri_budget": 60000,
+ "test_values": {},
+ "test_geometry": {"line": [[0, 0], [12, 0], [16, 2], [18, 6]]}
+}

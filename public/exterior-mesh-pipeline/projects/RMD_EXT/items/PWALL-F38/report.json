@@ -1,0 +1,39 @@
+{
+ "code": "PWALL-F38",
+ "family": "COMPOUND_WALL",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 970,
+ "objects": 6,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "6 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 120000,
+ "output": "EXT › EXT_walls › SM_PWALL_F38",
+ "at": "2026-10-06T13:13:03",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:14",
+   "status": "ok",
+   "tris": 970,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:55:01",
+   "status": "ok",
+   "tris": 970,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:13:03",
+   "status": "ok",
+   "tris": 970,
+   "family_version": "0.1.0"
+  }
+ ]
+}

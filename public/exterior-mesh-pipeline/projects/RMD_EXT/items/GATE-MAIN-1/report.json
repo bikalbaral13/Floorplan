@@ -1,0 +1,39 @@
+{
+ "code": "GATE-MAIN-1",
+ "family": "GATE_SLIDING",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 1844,
+ "objects": 7,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "7 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 40000,
+ "output": "EXT › EXT_gates › SM_GATE_MAIN_1",
+ "at": "2026-10-06T13:13:28",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:25",
+   "status": "ok",
+   "tris": 1844,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:55:26",
+   "status": "ok",
+   "tris": 1844,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:13:28",
+   "status": "ok",
+   "tris": 1844,
+   "family_version": "0.1.0"
+  }
+ ]
+}

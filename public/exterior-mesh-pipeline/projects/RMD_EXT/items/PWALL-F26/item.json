@@ -1,0 +1,31 @@
+{
+ "code": "PWALL-F26",
+ "family": "COMPOUND_WALL",
+ "group": "walls",
+ "params": {
+  "height": 0.9,
+  "thickness": 0.15,
+  "pier_spacing": 3.0,
+  "pier": 0.3,
+  "railing_h": 0.6,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "line": [
+   [
+    47.6898,
+    -28.6525
+   ],
+   [
+    54.8602,
+    -28.6525
+   ],
+   [
+    54.8602,
+    -15.4951
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

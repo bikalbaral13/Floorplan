@@ -1,0 +1,22 @@
+- 2026-10-06T14:44:31 S0_SCOPE blocked: Draft scope.json written from the defaults. Show the questions to the user, record THEIR answers, set answered_by='user' and answered_at, then rerun with their words.
+- 2026-10-06T14:44:45 S0_SCOPE done: scope: drawing · single · scale by agent · objects all · emit ['canvas', 'svg', 'overlay', 'plan_trace'] [0 fail, 0 warn]
+- 2026-10-06T14:44:45 [decision] scope answered by the user: FIXTURE — regression run by the agent (2026-10-06)
+- 2026-10-06T14:44:46 S1_INTAKE blocked: 1 page(s) → manifest (single). Show work/contact.png and the manifest to the user; rerun with their confirmation.
+- 2026-10-06T14:44:46 S1_INTAKE done: manifest confirmed: 1 page(s), document kind single
+- 2026-10-06T14:44:46 [decision] manifest confirmed: FIXTURE — manifest checked by the agent
+- 2026-10-06T14:45:07 S2_READ done: reading ok (drawing) [0 fail, 0 warn]
+- 2026-10-06T14:45:07 S3_DIMENSIONS done: no dims.json — the layout uses measured centrelines
+- 2026-10-06T14:45:23 S4_LAYOUT done: Ground floor: 58 walls, 14 openings, 12 spaces, 32 fixtures
+- 2026-10-06T14:45:24 S5_BUILD done: plan.json: 1 level(s), 58 wall pieces, 12 spaces
+- 2026-10-06T14:45:25 S6_VERIFY done: QC: 0 fail, 4 warn [0 fail, 4 warn]
+- 2026-10-06T14:45:40 S7_EXPORT done: 5 files [0 fail, 0 warn]
+- 2026-10-06T14:46:56 S4_LAYOUT done: Ground floor: 58 walls, 14 openings, 12 spaces, 32 fixtures
+- 2026-10-06T14:46:57 S5_BUILD done: plan.json: 1 level(s), 58 wall pieces, 12 spaces
+- 2026-10-06T14:46:58 S6_VERIFY done: QC: 0 fail, 4 warn [0 fail, 4 warn]
+- 2026-10-06T14:46:59 S7_EXPORT done: 5 files [0 fail, 0 warn]
+- 2026-10-06T16:16:03 S4_LAYOUT done: Ground floor: 58 walls, 14 openings, 12 spaces, 32 fixtures
+- 2026-10-06T16:16:04 S5_BUILD done: plan.json: 1 level(s), 58 wall pieces, 12 spaces
+- 2026-10-06T16:16:05 S6_VERIFY done: QC: 0 fail, 4 warn [0 fail, 4 warn]
+- 2026-10-06T16:16:06 S7_EXPORT done: 5 files [0 fail, 0 warn]
+- 2026-10-07T11:02:01 S8_REVIEW done: approved and handed off
+- 2026-10-07T11:02:01 [decision] trace approved by the user: FIXTURE — kit 0.2.0 publish test by the agent (2026-10-07)

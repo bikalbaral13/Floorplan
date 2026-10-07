@@ -1,0 +1,39 @@
+{
+ "code": "RAMP-2",
+ "family": "RAMP",
+ "group": "basement",
+ "params": {
+  "z_top": -2.85,
+  "z_bottom": -5.7,
+  "guard_h": 1.05
+ },
+ "geometry": {
+  "top": [
+   [
+    60.1229,
+    -45.6777
+   ],
+   [
+    69.5841,
+    -45.6777
+   ]
+  ],
+  "bottom": [
+   [
+    60.1229,
+    -69.795
+   ],
+   [
+    69.5841,
+    -69.795
+   ]
+  ],
+  "label": "RAMP",
+  "levels": [
+   1,
+   2
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

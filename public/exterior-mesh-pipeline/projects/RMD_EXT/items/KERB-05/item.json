@@ -1,0 +1,23 @@
+{
+ "code": "KERB-05",
+ "family": "KERB",
+ "group": "roads",
+ "params": {
+  "top_z": 0.15,
+  "road_z": 0.0
+ },
+ "geometry": {
+  "line": [
+   [
+    58.0365,
+    -58.0986
+   ],
+   [
+    100.7345,
+    -58.0986
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

@@ -1,0 +1,21 @@
+{
+ "family": "COMPOUND_WALL",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "site",
+ "pivot": "world origin",
+ "description": "Site boundary wall / plot front wall (with railing) / plot divider wall along a polyline.",
+ "parameters": {
+  "height": {"value": 2.1, "min": 0.3, "max": 4, "unit": "m", "label": "Wall height to coping top"},
+  "thickness": {"value": 0.23, "min": 0.1, "max": 0.5, "unit": "m", "label": "Wall thickness"},
+  "pier_spacing": {"value": 3.0, "min": 1.5, "max": 6, "unit": "m", "label": "Pier spacing"},
+  "pier": {"value": 0.4, "min": 0.2, "max": 0.8, "unit": "m", "label": "Pier size"},
+  "railing_h": {"value": 0.0, "min": 0, "max": 1.5, "unit": "m", "label": "MS railing above the coping (0 = none)"},
+  "base_z": {"value": 0.0, "min": -5, "max": 5, "unit": "m", "label": "Ground level at the wall"}
+ },
+ "geometry": "{line:[[x,y],...]} (closed when first == last)",
+ "recipe": "Footing, body, weathered coping sweeps; piers at corners + spacing with cap block, chamfered course and pyramid; railing bays between consecutive piers on one segment.",
+ "tri_budget": 120000,
+ "test_values": {"height": 0.9, "thickness": 0.15, "pier": 0.3, "railing_h": 0.6},
+ "test_geometry": {"line": [[0, 0], [9, 0], [9, 6]]}
+}

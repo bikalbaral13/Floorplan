@@ -1,0 +1,39 @@
+{
+ "code": "TERRAIN",
+ "family": "TERRAIN",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.2.0",
+ "assumed": [],
+ "tris": 39368,
+ "objects": 2,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "2 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 400000,
+ "output": "EXT › EXT_terrain › SM_TERRAIN",
+ "at": "2026-10-06T13:13:58",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:40",
+   "status": "ok",
+   "tris": 56788,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:55:53",
+   "status": "ok",
+   "tris": 56788,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:13:58",
+   "status": "ok",
+   "tris": 39368,
+   "family_version": "0.2.0"
+  }
+ ]
+}

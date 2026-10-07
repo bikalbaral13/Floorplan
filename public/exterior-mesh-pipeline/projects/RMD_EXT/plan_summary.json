@@ -1,0 +1,57 @@
+{
+ "basement_items": 4,
+ "roads": 2,
+ "plots": 19,
+ "yards": 1,
+ "osr": 1,
+ "cabins": 1,
+ "boundary_segments": 54,
+ "main_gates": 1,
+ "kerb_lines": 31,
+ "plot_gates": 19,
+ "dumps": 9,
+ "inst_buildings": 19,
+ "inst_trees": 32,
+ "inst_shrubs": 591,
+ "inst_lights": 39,
+ "designs": {
+  "villa-1": {
+   "levels": 3,
+   "ext_walls": 102,
+   "openings": 27
+  },
+  "villa-2": {
+   "levels": 3,
+   "ext_walls": 90,
+   "openings": 26
+  },
+  "villa-3": {
+   "levels": 3,
+   "ext_walls": 75,
+   "openings": 18
+  },
+  "villa-4": {
+   "levels": 3,
+   "ext_walls": 116,
+   "openings": 38
+  },
+  "villa-5": {
+   "levels": 3,
+   "ext_walls": 95,
+   "openings": 29
+  },
+  "villament": {
+   "levels": 5,
+   "ext_walls": 351,
+   "openings": 95
+  },
+  "apartment": {
+   "levels": 7,
+   "ext_walls": 2477,
+   "openings": 956
+  }
+ },
+ "items": 160,
+ "prototypes": 24,
+ "tasks": 205
+}

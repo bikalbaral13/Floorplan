@@ -1,0 +1,22 @@
+{
+ "approved": "FIXTURE — kit 0.2.0 publish test by the agent (2026-10-07)",
+ "tracer_version": "0.1.0",
+ "plan": "plan.json",
+ "outputs": [
+  "WINDSOR_B1.canvas.json",
+  "WINDSOR_B1_L0.svg",
+  "WINDSOR_B1_L0_overlay.png",
+  "plan_trace.json",
+  "report.md"
+ ],
+ "next": {
+  "design": "plan_trace.json / canvas JSON → Design phase (Floorplan Improver)",
+  "program": "plan_trace.json"
+ },
+ "levels": [
+  {
+   "id": "L0",
+   "spaces": 12
+  }
+ ]
+}

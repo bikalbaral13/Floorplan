@@ -1,0 +1,22 @@
+{
+ "code": "GATE-MAIN-1",
+ "family": "GATE_SLIDING",
+ "group": "gates",
+ "params": {
+  "width": 9.12,
+  "height": 2.1,
+  "pillar": 0.6
+ },
+ "geometry": {
+  "a": [
+   69.4867,
+   30.9688
+  ],
+  "b": [
+   60.3719,
+   30.6471
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

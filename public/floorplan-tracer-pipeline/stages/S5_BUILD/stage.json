@@ -1,0 +1,19 @@
+{
+ "id": "S5_BUILD",
+ "version": "0.1.0",
+ "title": "Build the plan model",
+ "kind": "script",
+ "gate": false,
+ "summary": "layout.json → plan.json (tracer-plan/1): snapped junctions, wall splits at T-nodes and ring corners, openings, spaces with clear sizes and net areas, elements, provenance.",
+ "inputs": [
+  "layout.json",
+  "work/calib.json",
+  "standards"
+ ],
+ "outputs": [
+  "plan.json"
+ ],
+ "checks": [
+  "build findings (junction inside an opening, invalid rings)"
+ ]
+}

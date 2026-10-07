@@ -1,0 +1,39 @@
+{
+ "code": "PWALL-F28",
+ "family": "COMPOUND_WALL",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.0",
+ "assumed": [],
+ "tris": 8466,
+ "objects": 6,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "6 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 120000,
+ "output": "EXT › EXT_walls › SM_PWALL_F28",
+ "at": "2026-10-06T13:12:51",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:08",
+   "status": "ok",
+   "tris": 8466,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:54:49",
+   "status": "ok",
+   "tris": 8466,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T13:12:51",
+   "status": "ok",
+   "tris": 8466,
+   "family_version": "0.1.0"
+  }
+ ]
+}

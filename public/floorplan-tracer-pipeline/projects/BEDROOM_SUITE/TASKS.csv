@@ -1,0 +1,10 @@
+task_id,stage,title,depends_on,status,approved,started,finished,output,notes
+S0_SCOPE,S0_SCOPE,Scope the trace (the user answers),,todo,,,,,
+S1_INTAKE,S1_INTAKE,Intake: pages and document kind,S0_SCOPE,todo,,,,,
+S2_READ,S2_READ,Read the source (agent),S1_INTAKE,todo,,,,,
+S3_DIMENSIONS,S3_DIMENSIONS,Close the dimensions,S2_READ,todo,,,,,
+S4_LAYOUT,S4_LAYOUT,Author the layout (agent),S3_DIMENSIONS,todo,,,,,
+S5_BUILD,S5_BUILD,Build the plan model,S4_LAYOUT,todo,,,,,
+S6_VERIFY,S6_VERIFY,Verify,S5_BUILD,todo,,,,,
+S7_EXPORT,S7_EXPORT,Export,S6_VERIFY,todo,,,,,
+S8_REVIEW,S8_REVIEW,Review and hand off (the user approves),S7_EXPORT,todo,,,,,

@@ -1,0 +1,18 @@
+{
+ "family": "RAMP",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "site (world coordinates)",
+ "pivot": "world origin",
+ "description": "Two-lane vehicle ramp between levels: inclined slab, anti-skid ribs, side curbs + median, side retaining / guard walls with coping, end guard over the exit.",
+ "parameters": {
+  "z_top": {"value": 0.0, "min": -30, "max": 10, "unit": "m", "label": "Surface level at the top edge"},
+  "z_bottom": {"value": -2.85, "min": -30, "max": 10, "unit": "m", "label": "Surface level at the bottom edge"},
+  "guard_h": {"value": 1.05, "min": 0, "max": 2, "unit": "m", "label": "Guard height above the upper level"}
+ },
+ "geometry": "{top:[t0,t1], bottom:[b0,b1] (t0–b0, t1–b1 long sides), label, levels:[top_index, bottom_index]}",
+ "recipe": "Everything inside the footprint: 200 mm side walls, 300 mm curbs, median, ribs @300 per lane; walls from 250 mm under the slab to z_top + guard_h; end guard keeps 2.2 m headroom at the exit.",
+ "tri_budget": 20000,
+ "test_values": {},
+ "test_geometry": {"top": [[0, 0], [9.5, 0]], "bottom": [[0, -26.7], [9.5, -26.7]], "label": "RAMP", "levels": [0, 1]}
+}

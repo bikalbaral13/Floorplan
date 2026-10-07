@@ -1,0 +1,18 @@
+{
+ "family": "GROUND_PATCH",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "site",
+ "pivot": "world origin",
+ "description": "Plot lawn, open-space lawn, service-yard concrete or driveway pavers with brick / kerb edging.",
+ "parameters": {
+  "surface": {"value": "lawn", "options": ["lawn", "pavers", "concrete"], "label": "Surface (part name; material later)"},
+  "top_z": {"value": 0.15, "min": -5, "max": 5, "unit": "m", "label": "Finished surface level"},
+  "edge": {"value": "brick", "options": ["brick", "kerb", "none"], "label": "Edging swept inside the boundary"}
+ },
+ "geometry": "{polygons:[[outer,[holes]],...]}",
+ "recipe": "prism_holes body 250 mm deep; edging profile swept on every ring with the patch on its left (outer CCW, holes CW).",
+ "tri_budget": 80000,
+ "test_values": {"surface": "lawn", "edge": "brick"},
+ "test_geometry": {"polygons": [[[[0, 0], [15, 0], [15, 18], [0, 18]], [[[5, 6], [10, 6], [10, 12], [5, 12]]]]]}
+}

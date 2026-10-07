@@ -1,0 +1,45 @@
+{
+ "code": "CABIN-01",
+ "family": "BUILDING",
+ "status": "ok",
+ "errors": [],
+ "flags": [],
+ "instances": 0,
+ "family_version": "0.1.1",
+ "assumed": [],
+ "tris": 900,
+ "objects": 14,
+ "non_manifold_edges": 0,
+ "uv0": "real-world (1 u = 1 m)",
+ "uv1": "14 meshes, 0 bad",
+ "uv1_bad": [],
+ "tri_budget": 900000,
+ "output": "EXT › EXT_buildings_unique › SM_CABIN_01",
+ "at": "2026-10-06T13:13:55",
+ "history": [
+  {
+   "at": "2026-10-06T12:46:37",
+   "status": "ok",
+   "tris": 900,
+   "family_version": "0.1.0"
+  },
+  {
+   "at": "2026-10-06T12:48:54",
+   "status": "ok",
+   "tris": 900,
+   "family_version": "0.1.1"
+  },
+  {
+   "at": "2026-10-06T12:55:51",
+   "status": "ok",
+   "tris": 900,
+   "family_version": "0.1.1"
+  },
+  {
+   "at": "2026-10-06T13:13:55",
+   "status": "ok",
+   "tris": 900,
+   "family_version": "0.1.1"
+  }
+ ]
+}

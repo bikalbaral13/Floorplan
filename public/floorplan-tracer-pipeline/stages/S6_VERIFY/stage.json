@@ -1,0 +1,20 @@
+{
+ "id": "S6_VERIFY",
+ "version": "0.1.0",
+ "title": "Verify",
+ "kind": "script",
+ "gate": false,
+ "summary": "All checks on plan.json (graph, spaces / printed sizes, scale, hierarchy, wet rooms, circulation, door side, stair fill, fixtures, objects accounted). Failures block unless the user accepted them in accepted.json with a reason.",
+ "inputs": [
+  "plan.json",
+  "reading.json",
+  "accepted.json"
+ ],
+ "outputs": [
+  "work/qc.md",
+  "work/qc.json"
+ ],
+ "checks": [
+  "no unaccepted fail"
+ ]
+}

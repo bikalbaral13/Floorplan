@@ -1,0 +1,18 @@
+{
+ "id": "S7_EXPORT",
+ "version": "0.1.0",
+ "title": "Export",
+ "kind": "script",
+ "gate": false,
+ "summary": "plan.json → canvas JSON (editor), SVG per level, overlay PNG on the source image (drawings), plan_trace.json (design / program pipelines), report.md.",
+ "inputs": [
+  "plan.json",
+  "scope.json → emit"
+ ],
+ "outputs": [
+  "work/out/*"
+ ],
+ "checks": [
+  "canvas round trip: re-import gives the same counts and areas"
+ ]
+}

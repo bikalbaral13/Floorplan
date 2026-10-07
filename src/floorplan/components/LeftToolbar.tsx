@@ -8,7 +8,7 @@ import { ViewToolbar } from "./toolbars/ViewToolbar";
 import { AddSemanticsToolbar } from "./toolbars/AddSemanticsToolbar";
 import { TestToolbar } from "./toolbars/TestToolbar";
 import { PlanPhaseToolbar } from "./toolbars/PlanPhaseToolbar";
-import { BuildPhaseToolbar } from "./toolbars/BuildPhaseToolbar";
+import { DesignPhaseToolbar } from "./toolbars/DesignPhaseToolbar";
 import { PresentPhaseToolbar } from "./toolbars/PresentPhaseToolbar";
 import type { Phase } from "./PhaseToggle";
 
@@ -249,7 +249,7 @@ export const LeftToolbar = ({
         hasMoodboard={!!hasMoodboard}
       />
     )}
-    {phase === "build" && <BuildPhaseToolbar hasPlan={!!hasPlan} hasMoodboard={!!hasMoodboard} />}
+    {phase === "design" && <DesignPhaseToolbar hasPlan={!!hasPlan} hasMoodboard={!!hasMoodboard} />}
     {phase === "present" && (
       <PresentPhaseToolbar walkthroughPath={walkthroughPath} onWalkthroughUploaded={(p) => onWalkthroughUploaded?.(p)} />
     )}
@@ -315,7 +315,7 @@ export const LeftToolbar = ({
       onOpenAddNodeDialog={onOpenAddNodeDialog}
       onImportGeojson={onImportGeojson}
       planMode={phase === "plan"}
-      buildMode={phase === "build"}
+      designMode={phase === "design"}
     />}
 
     {/* Files toolbar moved to the top-right bar. */}

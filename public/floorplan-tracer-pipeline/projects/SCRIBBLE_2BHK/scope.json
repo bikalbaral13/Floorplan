@@ -1,0 +1,20 @@
+{
+ "questionnaire": "tracer-scope",
+ "answered_by": "fixture",
+ "answered_at": "2026-10-06",
+ "source_kind": "sketch",
+ "sources": [
+  "sketch_facts.md"
+ ],
+ "levels": "single",
+ "scale_owner": "agent",
+ "user_px_per_m": null,
+ "objects": "all",
+ "hierarchy": true,
+ "emit": [
+  "canvas",
+  "svg",
+  "plan_trace"
+ ],
+ "print_units": "ft-in"
+}

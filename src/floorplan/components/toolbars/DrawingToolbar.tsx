@@ -43,8 +43,8 @@ type EdgeMode = "connection" | null;
 export interface DrawingToolbarProps {
   /** Plan phase: keep only the correction tools (Add Node / Segment / Space, Select, Delete). */
   planMode?: boolean;
-  /** Build phase: like Plan, but Import Objects stays (furnishing needs the object library). */
-  buildMode?: boolean;
+  /** Design phase: like Plan, but Import Objects stays (furnishing needs the object library). */
+  designMode?: boolean;
   tool: Tool;
   onToolChange: (tool: Tool) => void;
   /** Active scope filter while Select tool is in use. */
@@ -540,7 +540,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             </PopoverContent>
             </Popover>
             {/* Dimension — click two points to drop a standalone Dimension annotation (own button below Add Space). */}
-            {!p.planMode && !p.buildMode && <ToolButton
+            {!p.planMode && !p.designMode && <ToolButton
               active={!!p.drawingDimension}
               icon={<Ruler className="h-6 w-6 text-amber-600" />}
               label="Dimension"
@@ -635,7 +635,7 @@ export const DrawingToolbar = (p: DrawingToolbarProps) => {
             {/* Pan moved to the top-center toolbar. */}
             {/* Miscellaneous — a dropdown grouping Text / Measure. The corner chevron matches
                 the Select-scope split button. Active while any of its tools is current. */}
-            {!p.planMode && !p.buildMode && <>
+            {!p.planMode && !p.designMode && <>
             <Popover open={miscOpen} onOpenChange={setMiscOpen}>
               <PopoverTrigger asChild>
                 <Button

@@ -1,0 +1,31 @@
+{
+ "code": "PWALL-F19",
+ "family": "COMPOUND_WALL",
+ "group": "walls",
+ "params": {
+  "height": 0.9,
+  "thickness": 0.15,
+  "pier_spacing": 3.0,
+  "pier": 0.3,
+  "railing_h": 0.6,
+  "base_z": 0.15
+ },
+ "geometry": {
+  "line": [
+   [
+    43.6005,
+    -45.3916
+   ],
+   [
+    36.577,
+    -45.3916
+   ],
+   [
+    36.577,
+    -45.7916
+   ]
+  ]
+ },
+ "proto": null,
+ "status": "ok"
+}

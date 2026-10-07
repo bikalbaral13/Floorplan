@@ -1,0 +1,22 @@
+{
+ "id": "S0_SCOPE",
+ "version": "0.1.0",
+ "title": "Scope the trace (the user answers)",
+ "kind": "script",
+ "gate": false,
+ "summary": "Writes scope.json from scope.questions.json defaults as a DRAFT; the user answers it (source kind, files, levels, who sets the scale, what to place, outputs). Done only when scope.json carries answered_by='user' and the approval names their words.",
+ "inputs": [
+  "scope.questions.json",
+  "scope.json (user-answered)"
+ ],
+ "outputs": [
+  "scope.json"
+ ],
+ "checks": [
+  "answered_by == user",
+  "answered_at set",
+  "every required question answered",
+  "source files exist"
+ ],
+ "confirm": "the stage itself refuses to finish without --approved \"<the user's words>\""
+}

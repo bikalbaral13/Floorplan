@@ -1,0 +1,26 @@
+{
+ "family": "BASEMENT",
+ "version": "0.1.0",
+ "status": "implemented",
+ "host": "site (world coordinates)",
+ "pivot": "world origin",
+ "description": "One basement level: floor slab with ramp openings, ground deck (top basement), retaining + core walls, parking stall markings and wheel stops.",
+ "parameters": {
+  "floor_z": {"value": -2.85, "min": -30, "max": 0, "unit": "m", "label": "Finished basement floor"},
+  "slab": {"value": 0.3, "min": 0.15, "max": 1.0, "unit": "m", "label": "Floor slab thickness"},
+  "wall_top": {"value": -0.45, "min": -30, "max": 0, "unit": "m", "label": "Top of walls (underside of the slab above)"},
+  "deck_top": {"value": -0.2, "min": -2, "max": 0, "unit": "m", "label": "Top of the ground deck (under road / lawn build-up)"},
+  "deck": {"value": 0.25, "min": 0.15, "max": 1.0, "unit": "m", "label": "Deck thickness"}
+ },
+ "geometry": "{floor:[[outer,[holes]]], deck:[[outer,[holes]]] (top basement only), walls:[{a,b,t}], bays:[{ring:[4 pts], open:edge index (aisle), head:edge index}], name}",
+ "recipe": "prism_holes slabs; obox walls running t/2 past both ends; stall lines 100 mm inside the stall on 3 edges; chamfered wheel stop 750 mm off the head end.",
+ "tri_budget": 120000,
+ "test_values": {"floor_z": -2.85, "wall_top": -0.45},
+ "test_geometry": {
+  "floor": [[[[0, 0], [20, 0], [20, -12], [0, -12]], [[[14, -2], [18, -2], [18, -10], [14, -10]]]]],
+  "deck": [[[[0, 0], [20, 0], [20, -12], [0, -12]], [[[14, -2], [18, -2], [18, -10], [14, -10]]]]],
+  "walls": [{"a": [0, 0], "b": [20, 0], "t": 0.3}, {"a": [20, 0], "b": [20, -12], "t": 0.3}, {"a": [20, -12], "b": [0, -12], "t": 0.3}, {"a": [0, -12], "b": [0, 0], "t": 0.3}, {"a": [6, -5], "b": [9, -5], "t": 0.23}],
+  "bays": [{"ring": [[1, -0.3], [1, -5.3], [3.5, -5.3], [3.5, -0.3]], "open": 1, "head": 3}, {"ring": [[3.6, -0.3], [3.6, -5.3], [6.1, -5.3], [6.1, -0.3]], "open": 1, "head": 3}],
+  "name": "test"
+ }
+}

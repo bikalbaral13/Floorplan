@@ -1,0 +1,37 @@
+{
+ "schema": "pipeline/1",
+ "id": "exterior-mesh",
+ "title": "Exterior Mesh Pipeline",
+ "version": "0.2.0",
+ "phase": "present",
+ "entry": {
+  "agents": "AGENTS.md",
+  "run": "blender -b --python tools/run_task.py -- {CODE} --all",
+  "new_project": "python tools/plan_to_project.py {CODE}",
+  "selftest": "python tools/selftest.py"
+ },
+ "inputs": [
+  { "id": "masterplan", "from": "project:inputs/masterplan/master_plan.json", "schema": "masterplan.v1", "required": true },
+  { "id": "site", "from": "project:inputs/masterplan/*_site.json", "schema": "canvas.v1", "required": true },
+  { "id": "envelopes", "from": "project:inputs/masterplan/envelopes/*.json", "required": true },
+  { "id": "designs", "from": "library/Designs/*.json", "schema": "canvas.v1", "required": false, "note": "fetched into work_dir/cache by the adapter" }
+ ],
+ "library_pins": [
+  { "path": "library/Standards/DEFAULT.json" },
+  { "path": "library/Schemas/" },
+  { "path": "library/Families/", "local_copy": "families/" },
+  { "path": "library/Materials/" }
+ ],
+ "outputs": {
+  "keep": [
+   { "id": "geometry", "local": "project:geometry/*.json", "to": "Projects/{CODE}/exterior/geometry/", "schema": "building.v1" },
+   { "id": "instances", "local": "project:instances.json", "to": "Projects/{CODE}/exterior/instances.json", "schema": "instances.v1" },
+   { "id": "blend", "local": "output/blend/{CODE}.blend", "to": "Projects/{CODE}/exterior/{CODE}.blend", "binary": true },
+   { "id": "unreal", "local": "output/unreal/**", "to": "Projects/{CODE}/exterior/unreal/", "binary": true },
+   { "id": "previews", "local": "output/previews/*.png", "to": "Projects/{CODE}/exterior/previews/", "binary": true },
+   { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/runs/exterior-mesh/" }
+  ],
+  "temp": ["cache/**", "output/blend/*.blend1", "output/qc.json"]
+ },
+ "promotes": ["library/Families/"]
+}
