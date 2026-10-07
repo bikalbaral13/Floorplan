@@ -31,5 +31,16 @@
    { "id": "report", "local": "project:REPORT.md", "to": "Projects/{CODE}/runs/floorplan-tracer/" }
   ],
   "temp": ["pages/**", "measure/**", "calib.json", "dims.resolved.json", "manifest.json", "contact.png", "qc.*", "out/report.md"]
+ },
+ "deliver": {
+  "mode": "local-first",
+  "after": "S7_EXPORT",
+  "rule": "all stages run locally; R2 read/written directly (tools/r2.mjs); the live editor is used once, last, to show the result — never draw on it while tracing, never pass plan JSON or images through connector tool args",
+  "steps": [
+   { "put": "project:inputs/{source}", "to": "Images/{CODE}.{ext}", "binary": true },
+   { "set": "out/{CODE}.canvas.json imageUnderlay.src", "value": "{library_path}/Images/{CODE}.{ext}" },
+   { "put": "out/{CODE}.canvas.json", "to": "Designs/{CODE}.json" },
+   { "open": "editor", "design": "Designs/{CODE}.json" }
+  ]
  }
 }
