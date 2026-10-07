@@ -311,7 +311,7 @@ async function callTool(cfg, sid, name, args) {
     let saved;
     try { saved = await saveDesignJson(s, args); } catch (e) { return errText(e.message); }
     await putJson(cfg, `${P(sid)}/session.json`, s);
-    const info = { saved: saved.path, replaced: saved.replaced, ...saved.counts };
+    const info = { [saved.byPath ? "loaded" : "saved"]: saved.path, replaced: saved.replaced, ...saved.counts };
     if (!tabUp) return text({ ...info, live: false, note: "no editor tab connected — saved to the Library only; it opens from Library ▸ Designs, and connect_editor makes later loads show live" });
     return enqueue(cfg, sid, s, "import_plan", { json: saved.text, path: saved.path }, info);
   }

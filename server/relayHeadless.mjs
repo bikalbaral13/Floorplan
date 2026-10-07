@@ -29,12 +29,12 @@ export const USE_DESIGN_TOOL = {
 
 export const LOAD_DESIGN_TOOL = {
   name: "load_design",
-  description: "FASTEST way to draw: hand over a COMPLETE plan JSON (the standard format the editor's Import JSON / Export JSON use — nodes, segments, spaces, layers, settings; older walls/rooms exports work too). It is saved to `path` in the Library and, when an editor tab is connected, loaded into that tab in ONE step exactly as Import JSON would (objects resolved, scale restored) — and the tab then stays linked to the file, so later edit_design batches on it appear there live. With no tab connected it is only saved. Prefer this (or edit_design batches) over many draw_segment / place_object calls: build the whole plan as JSON, load it once, then check with snapshot_canvas.",
+  description: "FASTEST way to draw: show a whole plan in the linked editor tab in ONE step, exactly as Import JSON would (objects resolved, scale restored); the tab then stays linked to the file, so later edit_design batches on it appear there live. BY PATH (preferred): omit `design` and the Library file at `path` (already uploaded, e.g. straight to R2 by a local pipeline) is loaded — no plan bytes pass through this call. WITH `design`: the complete plan JSON (standard Import/Export format — nodes, segments, spaces, layers, settings; older walls/rooms exports work too) is saved to `path` first. With no tab connected it is only saved. Build the whole plan as a file, load it once, then check with snapshot_canvas — never draw it piece by piece.",
   inputSchema: { type: "object", properties: {
     path: { type: "string", description: "Designs/<name>.json" },
-    design: { description: "the plan: a JSON object, or its text" },
-    overwrite: { type: "boolean", description: "replace an existing file (default false) — read it first if it may hold work you want to keep" },
-  }, required: ["path", "design"] },
+    design: { description: "optional — the plan as a JSON object or its text; omit to load the existing file at `path`" },
+    overwrite: { type: "boolean", description: "with `design`: replace an existing file (default false) — read it first if it may hold work you want to keep" },
+  }, required: ["path"] },
 };
 
 /** Validate and save a whole plan JSON for load_design. Returns { path, text, replaced } or throws. */
@@ -43,6 +43,16 @@ export async function saveDesignJson(session, args, user = "relay") {
   if (!cfg) throw new Error("library storage is not configured on this server");
   const path = String(args.path ?? "").trim().replace(/^library\//i, "");
   if (!validDesignPath(path)) throw new Error("path must look like Designs/<name>.json");
+  if (args.design === undefined || args.design === null || args.design === "") {
+    // Load BY PATH: the file is already in the Library — read it here so its bytes never cross the MCP call.
+    const store = libraryStore(cfg);
+    if (!(await store.exists(path))) throw new Error(`${path} does not exist — upload it first, or pass \`design\``);
+    const text = await store.get(path);
+    let plan;
+    try { plan = JSON.parse(text); } catch (e) { throw new Error(`${path} is not valid JSON: ${e.message}`); }
+    session.design = path; session.designSetBy = "agent";
+    return { path, text, replaced: false, byPath: true, counts: { nodes: plan.nodes?.length ?? 0, segments: plan.segments?.length ?? 0, spaces: plan.spaces?.length ?? 0, levels: plan.levels?.length ?? 0 } };
+  }
   let plan = args.design;
   if (typeof plan === "string") { try { plan = JSON.parse(plan); } catch (e) { throw new Error(`design is not valid JSON: ${e.message}`); } }
   if (!plan || typeof plan !== "object" || Array.isArray(plan)) throw new Error("design must be a JSON object");
