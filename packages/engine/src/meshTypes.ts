@@ -35,6 +35,10 @@ export interface FlowMeshPrism {
    *  as a shape-with-holes instead of fan-triangulating, so concave / holed outlines come out right.
    *  Used by the wall-band carve (column footprints subtracted from wall prisms). */
   holes?: Point[][];
+  /** The 3D render ROW this solid came from (e.g. "Flutes", "Backer") — what a `finishes` entry names. */
+  name?: string;
+  /** A Library material path wired to that row by the object itself (a Material node), when it has one. */
+  material?: string;
 }
 
 export interface FlowMesh {

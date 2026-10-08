@@ -578,7 +578,7 @@ export const spineSolids = (meshes: SpineMesh[], anchor: Point, ppm: number): { 
         const aligned = rev.every((p, j) => samePlan(p, hi.ring[j])) ? rev
           : lo.ring.every((p, j) => samePlan(p, hi.ring[j])) ? lo.ring : null;
         if (!aligned) continue; // twisted or tapered — not a straight prism
-        found.push({ bottom: aligned.map(px), top: hi.ring.map(px), yBottom: lo.z, yTop: hi.z, color: m.color });
+        found.push({ bottom: aligned.map(px), top: hi.ring.map(px), yBottom: lo.z, yTop: hi.z, color: m.color, name: m.name, ...(m.material ? { material: m.material } : {}) });
         accounted += 2 + aligned.length; // two caps + one side per edge
       }
     }

@@ -1,0 +1,409 @@
+{
+ "source": "D:/kaski_district_rate_2081_82.json",
+ "district": "Kaski",
+ "fiscalYear": "2081/82",
+ "currency": "NPR",
+ "approved": "2081/03/25",
+ "items": {
+  "cement": {
+   "label": "Cement PPC 50 kg",
+   "unit": "bag",
+   "rate": 574,
+   "bookUnit": "bag",
+   "description": "Cement (50 kg) PPC",
+   "sn": "1",
+   "section": "4 Imported Construction Materials",
+   "sub": "Cement"
+  },
+  "sand": {
+   "label": "Sand",
+   "unit": "m3",
+   "rate": 2329,
+   "bookUnit": "cu.m",
+   "description": "Sand",
+   "sn": "1",
+   "section": "3 Local Materials",
+   "sub": "Sand (including transport, within Pokhara market area)"
+  },
+  "agg20": {
+   "label": "Aggregate 4.75–25 mm (crusher)",
+   "unit": "m3",
+   "rate": 2088,
+   "bookUnit": "cu.m",
+   "description": "Crusher machine aggregate small (4.75 to 25 mm)",
+   "sn": "4",
+   "section": "3 Local Materials",
+   "sub": "Aggregate (including transport, within Pokhara valley)"
+  },
+  "agg40": {
+   "label": "Aggregate 4.75–40 mm (crusher)",
+   "unit": "m3",
+   "rate": 1990,
+   "bookUnit": "cu.m",
+   "description": "Crusher machine aggregate small (4.75 to 40 mm)",
+   "sn": "3",
+   "section": "3 Local Materials",
+   "sub": "Aggregate (including transport, within Pokhara valley)"
+  },
+  "boulder": {
+   "label": "River boulder / stone",
+   "unit": "m3",
+   "rate": 2298,
+   "bookUnit": "cu.m",
+   "description": "River boulder/stone",
+   "sn": "1",
+   "section": "3 Local Materials",
+   "sub": "Stone (including transport, within Pokhara valley)"
+  },
+  "chips": {
+   "label": "Stone chips (crushed)",
+   "unit": "m3",
+   "rate": 1884.41,
+   "bookUnit": "cu.m",
+   "description": "Stone chips (crushed)",
+   "sn": "k",
+   "section": "4 Imported Construction Materials",
+   "sub": "Tile, marble and flooring related"
+  },
+  "brick": {
+   "label": "Chimney kiln brick (local)",
+   "unit": "1000 nos",
+   "rate": 15050,
+   "bookUnit": "thousand",
+   "description": "Chimney kiln brick (local)",
+   "sn": "2",
+   "section": "4 Imported Construction Materials",
+   "sub": "Bricks"
+  },
+  "brickbat": {
+   "label": "Brick bats",
+   "unit": "m3",
+   "rate": 3100,
+   "bookUnit": "cu.m",
+   "description": "Brick bats (broken bricks)",
+   "sn": "1",
+   "section": "4 Imported Construction Materials",
+   "sub": "Bricks"
+  },
+  "rebar": {
+   "label": "TMT Fe500 10–20 mm",
+   "unit": "kg",
+   "rate": 95.6,
+   "bookUnit": "kg",
+   "description": "TMT/Torsteel (10-20) mm",
+   "sn": "5",
+   "section": "4 Imported Construction Materials",
+   "sub": "Steel rebar Fe 500"
+  },
+  "rebar8": {
+   "label": "TMT Fe500 8 mm",
+   "unit": "kg",
+   "rate": 95.6,
+   "bookUnit": "kg",
+   "description": "TMT/Torsteel 8 mm",
+   "sn": "4",
+   "section": "4 Imported Construction Materials",
+   "sub": "Steel rebar Fe 500"
+  },
+  "wire": {
+   "label": "Binding wire",
+   "unit": "kg",
+   "rate": 116.34,
+   "bookUnit": "kg",
+   "description": "Binding wire",
+   "sn": "1",
+   "section": "4 Imported Construction Materials",
+   "sub": "Steel rebar Fe 500"
+  },
+  "skilled": {
+   "label": "Skilled labour (mason/carpenter/painter/electrician)",
+   "unit": "day",
+   "rate": 1218,
+   "bookUnit": "per day",
+   "description": "Mason / carpenter / sculptor / woodcarver / painter / electrician / mechanic",
+   "sn": "2",
+   "section": "labour Labour Wage Rates of Kaski District for FY 2081/82",
+   "sub": "Skilled Labour"
+  },
+  "unskilled": {
+   "label": "Unskilled labour (labourer/porter)",
+   "unit": "day",
+   "rate": 842,
+   "bookUnit": "per day",
+   "description": "Labourer / porter",
+   "sn": "1",
+   "section": "labour Labour Wage Rates of Kaski District for FY 2081/82",
+   "sub": "Unskilled Labour"
+  },
+  "plywood": {
+   "label": "Ordinary plywood 6 mm (formwork facing)",
+   "unit": "sq.ft",
+   "rate": 32.09,
+   "bookUnit": "sq.ft",
+   "description": "Ordinary plywood 6 mm",
+   "sn": "xiii",
+   "section": "4 Imported Construction Materials",
+   "sub": "Glass, net and plywood related"
+  },
+  "salwood": {
+   "label": "Sal wood sawn",
+   "unit": "cu.ft",
+   "rate": 6063.75,
+   "bookUnit": "cu.ft",
+   "description": "Sal wood (sawn), including sawing and transport",
+   "sn": "1",
+   "section": "2 Timber",
+   "sub": ""
+  },
+  "flushdoor": {
+   "label": "32 mm waterproof plywood door shutter",
+   "unit": "sq.ft",
+   "rate": 329.93,
+   "bookUnit": "sq.ft",
+   "description": "32 mm waterproof plywood door",
+   "sn": "vii",
+   "section": "4 Imported Construction Materials",
+   "sub": "Glass, net and plywood related"
+  },
+  "window": {
+   "label": "Aluminium sliding window, 5 mm glass with net",
+   "unit": "sq.ft",
+   "rate": 693,
+   "bookUnit": "sq.ft",
+   "description": "Aluminium Sliding window fitted with 5mm clear glass with net section (88x38x1.1)",
+   "sn": "2",
+   "section": "4 Imported Construction Materials",
+   "sub": "Aluminium related"
+  },
+  "grill": {
+   "label": "Powder-coated MS window grill",
+   "unit": "kg",
+   "rate": 210,
+   "bookUnit": "kg",
+   "description": "Powder-coated MS grill for window",
+   "sn": null,
+   "section": "4 Imported Construction Materials",
+   "sub": "Powder-coated windows and doors"
+  },
+  "tile": {
+   "label": "Flooring tile 16\"×16\"",
+   "unit": "piece",
+   "rate": 145.66,
+   "bookUnit": "piece",
+   "description": "Flooring tile 16\"x16\"",
+   "sn": "e",
+   "section": "4 Imported Construction Materials",
+   "sub": "Tile, marble and flooring related"
+  },
+  "emulsion": {
+   "label": "Plastic emulsion paint",
+   "unit": "litre",
+   "rate": 434.77,
+   "bookUnit": "litre",
+   "description": "Plastic emulsion",
+   "sn": "k",
+   "section": "4 Imported Construction Materials",
+   "sub": "Paint related"
+  },
+  "primer": {
+   "label": "Exterior primer",
+   "unit": "litre",
+   "rate": 336.94,
+   "bookUnit": "litre",
+   "description": "Exterior primer paint",
+   "sn": "b",
+   "section": "4 Imported Construction Materials",
+   "sub": "Paint related"
+  },
+  "putty": {
+   "label": "Wall putty",
+   "unit": "kg",
+   "rate": 42.78,
+   "bookUnit": "kg",
+   "description": "Wall putty",
+   "sn": "i",
+   "section": "4 Imported Construction Materials",
+   "sub": "Paint related"
+  },
+  "enamel": {
+   "label": "Enamel paint",
+   "unit": "litre",
+   "rate": 478.74,
+   "bookUnit": "litre",
+   "description": "Enamel paint",
+   "sn": "c",
+   "section": "4 Imported Construction Materials",
+   "sub": "Paint related"
+  },
+  "wpc": {
+   "label": "Water-proofing compound powder",
+   "unit": "kg",
+   "rate": 74,
+   "bookUnit": "kg",
+   "description": "Water proofing compound powder",
+   "sn": "5",
+   "section": "4 Imported Construction Materials",
+   "sub": "Cement Admixture"
+  },
+  "point": {
+   "label": "Point wiring (Cu wire, concealed PVC conduit, box)",
+   "unit": "point",
+   "rate": 949.3,
+   "bookUnit": "point",
+   "description": "2x3/20, 3/22 copper wire, PVC conduit concealed, switch box etc. point wiring",
+   "sn": null,
+   "section": "9 Electrical and solar related materials",
+   "sub": "Electrical materials"
+  },
+  "switch": {
+   "label": "One-way 5 A switch",
+   "unit": "piece",
+   "rate": 89.84,
+   "bookUnit": "piece",
+   "description": "One way 5 amp switch",
+   "sn": null,
+   "section": "9 Electrical and solar related materials",
+   "sub": "Electrical materials"
+  },
+  "mcbSP": {
+   "label": "SP MCB 6/16/32 A",
+   "unit": "piece",
+   "rate": 286.69,
+   "bookUnit": "piece",
+   "description": "6Amp/16amp/32Amp single pole mcb (SP)",
+   "sn": null,
+   "section": "9 Electrical and solar related materials",
+   "sub": "Electrical materials"
+  },
+  "mcbDP": {
+   "label": "DP MCB 16/32 A",
+   "unit": "piece",
+   "rate": 874.98,
+   "bookUnit": "piece",
+   "description": "16Amp/32Amp Double pole mcb (DP)",
+   "sn": null,
+   "section": "9 Electrical and solar related materials",
+   "sub": "Electrical materials"
+  },
+  "db": {
+   "label": "MCB distribution board 8-way",
+   "unit": "piece",
+   "rate": 1288.43,
+   "bookUnit": "piece",
+   "description": "MCB distribution board 8 way",
+   "sn": null,
+   "section": "9 Electrical and solar related materials",
+   "sub": "Electrical materials"
+  },
+  "commode": {
+   "label": "Ceramic commode P-trap with flush set",
+   "unit": "piece",
+   "rate": 11230.07,
+   "bookUnit": "piece",
+   "description": "Ceramic commode \"P\" Trap white with flush bracket set",
+   "sn": null,
+   "section": "11 Sanitary Materials",
+   "sub": ""
+  },
+  "basin": {
+   "label": "Wash basin 22\"×16\"",
+   "unit": "set",
+   "rate": 2110.54,
+   "bookUnit": "set",
+   "description": "Wash basin 22\"x16\"",
+   "sn": null,
+   "section": "11 Sanitary Materials",
+   "sub": ""
+  },
+  "sink": {
+   "label": "Kitchen sink 24\"×18\"×8\"",
+   "unit": "piece",
+   "rate": 2849.89,
+   "bookUnit": "piece",
+   "description": "Kitchen sink 24\"x18\"x8\"",
+   "sn": null,
+   "section": "11 Sanitary Materials",
+   "sub": ""
+  },
+  "cpvc15": {
+   "label": "CPVC pipe 15 mm",
+   "unit": "m",
+   "rate": 203.4,
+   "bookUnit": "m",
+   "description": "CPVC Pipe SDR-11 - 1/2\" (15 mm)",
+   "sn": "1",
+   "section": "cpvc Rate of CPVC Pipes and Fittings, FY 2081/082 (Excluding VAT)",
+   "sub": "Pipes and fittings by size"
+  },
+  "cpvc20": {
+   "label": "CPVC pipe 20 mm",
+   "unit": "m",
+   "rate": 317.7,
+   "bookUnit": "m",
+   "description": "CPVC Pipe SDR-11 - 3/4\" (20 mm)",
+   "sn": "1",
+   "section": "cpvc Rate of CPVC Pipes and Fittings, FY 2081/082 (Excluding VAT)",
+   "sub": "Pipes and fittings by size"
+  },
+  "cpvc25": {
+   "label": "CPVC pipe 25 mm",
+   "unit": "m",
+   "rate": 465.3,
+   "bookUnit": "m",
+   "description": "CPVC Pipe SDR-11 - 1\" (25 mm)",
+   "sn": "1",
+   "section": "cpvc Rate of CPVC Pipes and Fittings, FY 2081/082 (Excluding VAT)",
+   "sub": "Pipes and fittings by size"
+  },
+  "hdpe20": {
+   "label": "HDPE pipe 20 mm 10 kg/cm²",
+   "unit": "m",
+   "rate": 40.2,
+   "bookUnit": "running m",
+   "description": "HDPE pipe 20 mm, 10 kg/cm2, weight 0.134 kg/m",
+   "sn": "2",
+   "section": "hdpe_pipes Rate of HDPE Pipes (FY 2081/82, per metre excluding VAT)",
+   "sub": ""
+  },
+  "upvc110": {
+   "label": "uPVC soil pipe 110 mm",
+   "unit": "m",
+   "rate": 473.1,
+   "bookUnit": "m",
+   "description": "UPVC pipe OD 110mm (4\"), pressure 4 Kgf/cm2",
+   "sn": "9",
+   "section": "upvc-pipes UPVC Pipes",
+   "sub": "UPVC Pipes Manufactured as per NS 206/046"
+  },
+  "upvc75": {
+   "label": "uPVC pipe 75 mm",
+   "unit": "m",
+   "rate": 242.39,
+   "bookUnit": "m",
+   "description": "UPVC pipe OD 75mm (2-1/2\"), pressure 4 Kgf/cm2",
+   "sn": "7",
+   "section": "upvc-pipes UPVC Pipes",
+   "sub": "UPVC Pipes Manufactured as per NS 206/046"
+  },
+  "tank": {
+   "label": "PE overhead water tank",
+   "unit": "litre",
+   "rate": 12.7,
+   "bookUnit": "per litre",
+   "description": "Overhead water tank (N/S Poli Tank)",
+   "sn": null,
+   "section": "11 Sanitary Materials",
+   "sub": ""
+  },
+  "hinge": {
+   "label": "4\" hinge",
+   "unit": "piece",
+   "rate": 28.83,
+   "bookUnit": "piece",
+   "description": "4\" hinge",
+   "sn": null,
+   "section": "4 Imported Construction Materials",
+   "sub": ""
+  }
+ }
+}

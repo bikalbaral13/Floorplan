@@ -2,7 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { flushSync } from "react-dom";
 
 const FloorPlan3DCanvas = lazy(() => import("./three/FloorPlan3DCanvas"));
-import type { SnapshotApi } from "./three/FloorPlan3DCanvas";
+import type { SnapshotApi, MeshHost } from "./three/FloorPlan3DCanvas";
+import { rowMaterialPath, type MaterialBinding } from "./three/materials3d";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { designStamp, designVersion, fetchDesignText, watchDesign, type DesignWatch } from "./designLiveSync";
@@ -50,6 +51,7 @@ import {
   Unlock,
   FileImage,
   FileJson,
+  FileText,
   FilePlus2,
   Folder,
   FolderOpen,
@@ -119,8 +121,9 @@ import { defaultLayerTable, withLayerDefaults, NODE_OBJECT_KINDS, objectKindDefa
 import { compileFlow } from "./flow/compileFlow";
 import { FLOW_TOOLS_DIR, analyseFlowTool, flowToolInputs, listFlowToolNames, loadFlowTool, withFlowToolInputs, loadFlowTool as loadWorkflowTool, listAllFlowTools, isMcpFlow, mcpToolFor, flowToolGlyph, type McpToolDef, type FlowFile as FlowToolFile, type ImportedFlowTool, type ToolAttachment } from "./flowTools";
 import { AttachedToolBlock, ImportWorkflowsDialog, RunWorkflowToolDialog } from "./components/dialogs/FlowToolDialogs";
-import { cloudLibraryBaseUrl, libraryPath, setLibraryPath, DEFAULT_LIBRARY_PATH, fetchFromCloudLibrary } from "./cloudLibrary";
+import { cloudLibraryBaseUrl, libraryPath, setLibraryPath, DEFAULT_LIBRARY_PATH, fetchFromCloudLibrary, uploadToBucket } from "./cloudLibrary";
 import { toStandardPlan, fromStandardPlan, isStandardPlan, type StandardPlan } from "./planFormat";
+import { buildWalkthrough, type WalkPlanIn } from "./walkthrough";
 import { rasterizePdfFirstPage } from "./pdfRaster";
 import { saveLibraryFile, listParametricObjectFiles, deleteLibraryObjectFiles, pobjFolderFor, fetchLibraryJson, LIB_OBJECTS } from "./libraryFiles";
 import { vectorizeImage, type VectorizeColorMode } from "@builderpluss/engine";
@@ -665,6 +668,75 @@ const applyAlpha = (color: string, alpha: number): string => {
  *  (the Line's `fillPatternRotation` orients it); "dots" → a coarse tile of seed-jittered dots so the
  *  repeat reads as scattered rather than a rigid grid. Keyed so identical params share one canvas. */
 const _hatchCache = new Map<string, HTMLCanvasElement>();
+/** Presentation-plan palette: solid charcoal wall poché (as in real-estate plans — a wall is a mass, not a
+ *  hatch), and quiet linework for fixtures. */
+const POCHE = "#2f3236";
+const PRES_LINE = "#4b5563";
+/** A furniture fill for the presentation plan: the object's own colour washed almost to white (so a bed still
+ *  reads warmer than a basin), opaque so the floor finish does not show through it. */
+const presTint = (hex: string): string => {
+  const m = /^#?([0-9a-f]{6})/i.exec(hex ?? "");
+  if (!m) return "#f8f8f6";
+  const n = parseInt(m[1], 16);
+  const mix = (c: number) => Math.round(255 - (255 - c) * 0.16);
+  return `rgb(${mix((n >> 16) & 255)},${mix((n >> 8) & 255)},${mix(n & 255)})`;
+};
+/** Soft contact shadow for furniture on a presentation plan (Konva shadow props). */
+const PRES_SHADOW = { shadowColor: "#000000", shadowOpacity: 0.16, shadowBlur: 6, shadowOffsetX: 1.5, shadowOffsetY: 2 } as const;
+const PRES_FONT = "'Montserrat', 'Inter', 'Helvetica Neue', Arial, sans-serif";
+
+/** Presentation floor finish as a repeating tile, drawn at TRUE SIZE in world px (pixelsPerMeter): oak boards
+ *  of 180 mm with staggered joints, porcelain tile at its stated size, marble slabs, else a soft neutral. Keyed by
+ *  material path + scale and cached, so a plan of 40 rooms builds a handful of canvases. */
+const floorPatternCache = new Map<string, HTMLCanvasElement | null>();
+const floorPatternImage = (materialPath: string, ppm: number): HTMLCanvasElement | null => {
+  if (typeof document === "undefined" || !materialPath) return null;
+  const key = `${materialPath}@${ppm.toFixed(2)}`;
+  if (floorPatternCache.has(key)) return floorPatternCache.get(key)!;
+  const m = materialPath.toLowerCase();
+  const px = (metres: number) => Math.max(2, metres * ppm);
+  const cv = document.createElement("canvas");
+  const ctx = cv.getContext("2d");
+  if (!ctx) return null;
+  if (/oak|wood|plank|walnut|timber|parquet|herringbone/.test(m)) {
+    const bw = px(0.18), bl = px(1.2), rows = 4;
+    cv.width = Math.ceil(bl); cv.height = Math.ceil(bw * rows);
+    const tones = /walnut/.test(m) ? ["#a07a57", "#946f4d", "#a8835f", "#8f6a49"] : ["#e7d4b5", "#dfcaa8", "#e9d8bb", "#dcc5a1"];
+    for (let j = 0; j < rows; j++) {
+      ctx.fillStyle = tones[j % tones.length];
+      ctx.fillRect(0, j * bw, cv.width, bw);
+      ctx.strokeStyle = "rgba(120,90,55,0.10)";
+      ctx.lineWidth = Math.max(0.5, bw * 0.03);
+      for (let g = 1; g < 3; g++) { ctx.beginPath(); ctx.moveTo(0, j * bw + (g * bw) / 3); ctx.lineTo(cv.width, j * bw + (g * bw) / 3 + bw * 0.1); ctx.stroke(); }
+      ctx.strokeStyle = "rgba(110,80,45,0.35)";
+      ctx.lineWidth = Math.max(0.6, bw * 0.04);
+      ctx.beginPath(); ctx.moveTo(0, j * bw); ctx.lineTo(cv.width, j * bw); ctx.stroke();
+      const x = ((j * 0.37) % 1) * cv.width;
+      ctx.beginPath(); ctx.moveTo(x, j * bw); ctx.lineTo(x, (j + 1) * bw); ctx.stroke();
+    }
+  } else if (/tile|porcelain|ceramic|terrazzo/.test(m)) {
+    const t = px(/300|tile\.json$/.test(m) ? 0.3 : 0.6);
+    cv.width = cv.height = Math.ceil(t);
+    ctx.fillStyle = /grey/.test(m) ? "#e3e3e0" : "#ecebe6";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = /grey/.test(m) ? "#c6c6c2" : "#d3d1ca";
+    ctx.lineWidth = Math.max(0.6, t * 0.02);
+    ctx.strokeRect(0, 0, cv.width, cv.height);
+  } else if (/marble|stone|quartz/.test(m)) {
+    const t = px(0.8);
+    cv.width = cv.height = Math.ceil(t);
+    ctx.fillStyle = "#f2efe9"; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = "rgba(150,140,128,0.25)"; ctx.lineWidth = Math.max(0.5, t * 0.004);
+    ctx.beginPath(); ctx.moveTo(0, t * 0.2); ctx.bezierCurveTo(t * 0.3, t * 0.5, t * 0.6, t * 0.1, t, t * 0.7); ctx.stroke();
+    ctx.strokeStyle = "#dcd7cf"; ctx.lineWidth = Math.max(0.6, t * 0.01); ctx.strokeRect(0, 0, cv.width, cv.height);
+  } else {
+    cv.width = cv.height = 4;
+    ctx.fillStyle = "#f3f1ec"; ctx.fillRect(0, 0, 4, 4);
+  }
+  floorPatternCache.set(key, cv);
+  return cv;
+};
+
 const getHatchPattern = (style: "diagonal" | "dots", spacing: number, color: string, weight: number): HTMLCanvasElement | undefined => {
   if (typeof document === "undefined") return undefined;
   const sp = Math.max(3, Math.round(spacing));
@@ -1188,6 +1260,10 @@ interface LayerVisibility {
    *  Sharp wall rendering. When on, `viewSharp` is also true (so all sharp rendering applies); the
    *  Sharp button is considered active only when this is off. */
   viewArchitectural: boolean;
+  /** 2D PRESENTATION style (the client-brochure plan): solid wall poché, floors filled by their material, room
+   *  name + dimensions only, no construction dimension chains or node dots. Off = the drafting view. Treated as ON
+   *  when absent (`!== false`), so saved settings from before it existed open in the presentation style. */
+  presentation?: boolean;
   /** Filling mode: exactly one of fill/outline/union must be true */
   fillingFill: boolean;
   fillingOutline: boolean;
@@ -1977,7 +2053,44 @@ export type Display3DStyle = { color: string; opacity: number; wireframe: boolea
 /** A resolved 3D primitive for the 3D canvas: shape + (scale-baked) dimensions + a baked affine transform
  *  (translate metres, rotate radians, mirror ±1 per axis). Produced from the Flow 3D-primitive nodes.
  *  `display` is set when a Display 3D node is wired downstream (colour now lives there, not on the primitive). */
+/** A 3D mesh that knows which canvas host (and attachment) it was built from — what a 3D click selects. */
+export type HostedFlowMesh = FlowMesh & { host?: MeshHost; bind?: MaterialBinding };
+/** An attachment's material binding (what `rowMaterialPath` reads) — the same params the Blender renderer reads. */
+const defaultBindingCache = new WeakMap<object, MaterialBinding>();
+/** The binding an object DEFINITION declares (its input-props `materialPath` / `finishes` defaults). An attachment
+ *  that never overrode them still wears these — a traced plan's 55 walls carry no material param of their own. */
+const defaultBinding = (obj: object | undefined): MaterialBinding => {
+  if (!obj) return {};
+  let b = defaultBindingCache.get(obj);
+  if (!b) {
+    const o = obj as { nodes?: { data?: { tool?: string; params?: { props?: { id: string; value: unknown }[] } } }[]; spine?: { nodes?: unknown[] } };
+    const nodes = (o.nodes ?? o.spine?.nodes ?? []) as { data?: { tool?: string; params?: { props?: { id: string; value: unknown }[] } } }[];
+    const props = nodes.find((n) => n.data?.tool === "input-props")?.data?.params?.props ?? [];
+    const val = (id: string) => String(props.find((p) => p.id === id)?.value ?? "");
+    b = { materialPath: val("materialPath"), finishes: val("finishes") };
+    defaultBindingCache.set(obj, b);
+  }
+  return b;
+};
+/** Wet and service rooms get a porcelain tile floor by default; every other room keeps the Room object's
+ *  default (pale oak planks). Only when the attachment states no floor material of its own — an explicit
+ *  `materialPath` / `finishes` (a moodboard pick, a deck brief) always wins. Matched on the room's label / type. */
+const WET_ROOM = /\b(toilet|wc|bath|bathroom|washroom|shower|powder|kitchen|kitchenette|pantry|utility|laundry|wash|balcony|terrace|deck|store|storage|garage)\b/i;
+const roomFloorBind = (att: { params?: Record<string, unknown> }, obj: object | undefined, room: { label?: string; name?: string; roomType?: string }): MaterialBinding => {
+  if (att.params?.materialPath || att.params?.finishes) return bindOf(att, obj);
+  const label = `${room.label ?? ""} ${room.name ?? ""} ${room.roomType ?? ""}`;
+  return WET_ROOM.test(label) ? { materialPath: "Finishes/tile-grey-600.json", finishes: "" } : bindOf(att, obj);
+};
+/** An attachment's material binding (what `rowMaterialPath` reads): its own params, else the definition's defaults. */
+const bindOf = (att: { params?: Record<string, unknown> }, obj?: object): MaterialBinding => {
+  const d = defaultBinding(obj);
+  return { materialPath: String(att.params?.materialPath || d.materialPath || ""), finishes: String(att.params?.finishes || d.finishes || "") };
+};
 export type PrimMass3D = {
+  /** The canvas host this solid belongs to (node / segment / space + attachment), so a 3D click can select it. */
+  host?: MeshHost;
+  /** Library material (relative to Materials/) this solid wears in the live 3D view; "" = its own colour. */
+  materialPath?: string;
   id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string;
   /** The Render row's layer name, carried through as the mesh's label (3D has no canvas layer toggles yet —
    *  it names the mesh in the scene and travels with the export). */
@@ -3456,6 +3569,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     viewSharp: false,
     viewGraph: true,
     viewArchitectural: false,
+    presentation: true,
     fillingFill: false,
     fillingOutline: true,
     fillingUnion: false,
@@ -3463,6 +3577,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     placement2dSymbol: false,
     placementRenderedSymbol: false,
   });
+  /** 2D presentation style (see LayerVisibility.presentation): on unless explicitly switched off. */
+  const presentation = layerVisibility.presentation !== false;
   /** GENERAL wall-carve footprints (world px): every placed object that declares `cutsWall` subtracts its
    *  plan footprint from the wall band — parametric node attachments (e.g. column.v1: the carve shape is the
    *  object's own evaluated 2D fill, so rectangular / circular / rotated all work) PLUS the legacy
@@ -4279,18 +4395,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   // Parametric objects attached to NODES that carry their own geometry → 3D meshes (footprints extruded by
   // height), shown in the 3D view via the same Mesh-to-3D path as the Flow editor. Anchored at each node,
   // with the instance's edited params overriding the file defaults.
-  const parametricObjectMeshes = useMemo<FlowMesh[]>(() => {
+  const parametricObjectMeshes = useMemo<HostedFlowMesh[]>(() => {
     if (!is3dOpen) return [];
     const lib = history.state.objectLibrary ?? {};
     const meta = history.state.nodeMeta ?? {};
-    const out: FlowMesh[] = [];
+    const out: HostedFlowMesh[] = [];
     for (const node of wallNodes) {
       for (const att of meta[node.stableKey]?.attachments ?? []) {
         const obj = lib[att.objectId];
         if (!objHasGeometry(obj)) continue;
         // A spine places itself from the host points, so a NODE host is the anchor itself: (0,0) local.
         const prisms = evalParametricPrisms(objText(obj), { x: node.x, y: node.y }, pixelsPerMeter, vp(att.params), objIsSpine(obj) ? [{ x: 0, y: 0 }] : undefined, resolveObjectDef, att.childParams);
-        if (prisms.length) out.push({ id: `pobj-${node.stableKey}-${att.id}`, prisms });
+        if (prisms.length) out.push({ id: `pobj-${node.stableKey}-${att.id}`, prisms, host: { kind: "node", id: node.stableKey, attId: att.id }, bind: bindOf(att, lib[att.objectId]) });
       }
     }
     return out;
@@ -4337,9 +4453,16 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     miteredPolygons: Map<string, Point[]>,
     roomInscribedRects: Map<string, { cx: number; cy: number; angleRad: number; wPx: number; hPx: number }>,
     wallCarveFootprints: Point[][],
-  ): FlowMesh[] => {
+  ): HostedFlowMesh[] => {
     const lib = sheet.objectLibrary ?? {};
-    const out: FlowMesh[] = [];
+    const out: HostedFlowMesh[] = [];
+    // Traced plans often have OVERLAPPING rooms (a hall lapping a toilet, two bedrooms sharing a band). Their floor
+    // plates sit in one plane and, wearing different finishes, flicker. The smaller room's finish reads on top (a
+    // bathroom tile laps the hall boards): lift each plate by a sub-millimetre step ranked by area, smallest highest.
+    const roomArea = (pts: Point[]) => Math.abs(pts.reduce((a, p, i) => { const q = pts[(i + 1) % pts.length]; return a + p.x * q.y - q.x * p.y; }, 0)) / 2;
+    const floorLift = new Map(
+      [...sheet.rooms].sort((a, b) => roomArea(b.points) - roomArea(a.points) || a.id.localeCompare(b.id)).map((r, i) => [r.id, (i + 1) * 0.0015]),
+    );
     const pnum = (att: SegmentAttachment, k: string, d: number): number => { const v = att.params[k]; const x = typeof v === "number" ? v : Number(v); return isFinite(x) ? x : d; };
     const pcol = (att: SegmentAttachment, d: string): string => (typeof att.params.color === "string" && att.params.color ? att.params.color : d);
     for (const room of sheet.rooms) {
@@ -4375,7 +4498,9 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             }
           }
         }
-        if (prisms.length) out.push({ id: `pobj-space-${room.id}-${att.id}`, prisms });
+        const lift = floorLift.get(room.id) ?? 0;
+        if (lift) prisms = prisms.map((p) => ({ ...p, yBottom: p.yBottom + lift, yTop: p.yTop + lift }));
+        if (prisms.length) out.push({ id: `pobj-space-${room.id}-${att.id}`, prisms, host: { kind: "space", id: room.id, attId: att.id }, bind: roomFloorBind(att, lib[att.objectId], room) });
       }
     }
     for (const w of sheet.walls) {
@@ -4442,10 +4567,10 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           // door would carve its spandrel at the 2.1 m fallback instead of at its own head.
           const lintel = wbase + (isWin ? pnum(openAtt, "lintelHeight", 2.1) : pnum(openAtt, "lintelHeight", pnum(openAtt, "height", 2.1)));
           const sillTop = wbase + (isWin ? pnum(openAtt, "sillHeight", 0.9) : 0);
-          if (sillTop > wbase + 0.01) out.push({ id: `wall-${w.id}-sill`, prisms: bandPrisms(wbase, Math.min(sillTop, wtop)) });
-          if (lintel < wtop - 0.01) out.push({ id: `wall-${w.id}-head`, prisms: bandPrisms(Math.max(lintel, wbase), wtop) });
+          if (sillTop > wbase + 0.01) out.push({ id: `wall-${w.id}-sill`, prisms: bandPrisms(wbase, Math.min(sillTop, wtop)), host: { kind: "segment", id: w.id, attId: wallAtt.id }, bind: bindOf(wallAtt, lib[wallAtt.objectId]) });
+          if (lintel < wtop - 0.01) out.push({ id: `wall-${w.id}-head`, prisms: bandPrisms(Math.max(lintel, wbase), wtop), host: { kind: "segment", id: w.id, attId: wallAtt.id }, bind: bindOf(wallAtt, lib[wallAtt.objectId]) });
         } else {
-          out.push({ id: `wall-${w.id}-${wallAtt.id}`, prisms: bandPrisms(wbase, wtop) });
+          out.push({ id: `wall-${w.id}-${wallAtt.id}`, prisms: bandPrisms(wbase, wtop), host: { kind: "segment", id: w.id, attId: wallAtt.id }, bind: bindOf(wallAtt, lib[wallAtt.objectId]) });
         }
       }
       // Door / Window → its OWN parametric 3D geometry (the .pobj.json geometry block), oriented along the
@@ -4459,7 +4584,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
           const prisms = evalParametricPrisms(objText(oObj), { x: cx, y: cy }, pixelsPerMeter, vp({ ...openAtt.params, rotation: angle }), undefined, resolveObjectDef, openAtt.childParams);
           const lifted = wbase ? prisms.map((p) => ({ ...p, yBottom: p.yBottom + wbase, yTop: p.yTop + wbase })) : prisms;
-          if (lifted.length) out.push({ id: `opening-${w.id}-${openAtt.id}`, prisms: lifted });
+          if (lifted.length) out.push({ id: `opening-${w.id}-${openAtt.id}`, prisms: lifted, host: { kind: "segment", id: w.id, attId: openAtt.id }, bind: bindOf(openAtt, lib[openAtt.objectId]) });
         }
       }
       // Generic objects → evaluate un-rotated at the segment midpoint, then HOST-ALIGN in plan (mirrors
@@ -4473,7 +4598,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         if (objIsSpine(gObj)) {
           const hostPts = [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / pixelsPerMeter, y: (p.y - mid.y) / pixelsPerMeter }));
           const sp = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, vp(att.params), hostPts, resolveObjectDef, att.childParams);
-          if (sp.length) out.push({ id: `pobj-seg-${w.id}-${att.id}`, prisms: sp });
+          if (sp.length) out.push({ id: `pobj-seg-${w.id}-${att.id}`, prisms: sp, host: { kind: "segment", id: w.id, attId: att.id }, bind: bindOf(att, lib[att.objectId]) });
           continue;
         }
         const prisms = evalParametricPrisms(objText(gObj), mid, pixelsPerMeter, vp({ ...att.params, rotation: 0 }), undefined, resolveObjectDef, att.childParams);
@@ -4487,12 +4612,12 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
           const lx = (p.x - gcx) * sxF, ly = p.y - gcy;
           return { x: mid.x + ux * lx + nx * ly, y: mid.y + uy * lx + ny * ly };
         };
-        out.push({ id: `pobj-seg-${w.id}-${att.id}`, prisms: prisms.map((p) => ({ ...p, bottom: p.bottom.map(tp), top: p.top.map(tp) })) });
+        out.push({ id: `pobj-seg-${w.id}-${att.id}`, prisms: prisms.map((p) => ({ ...p, bottom: p.bottom.map(tp), top: p.top.map(tp) })), host: { kind: "segment", id: w.id, attId: att.id }, bind: bindOf(att, lib[att.objectId]) });
       }
     }
     return out;
   };
-  const floorWallMeshes = useMemo<FlowMesh[]>(
+  const floorWallMeshes = useMemo<HostedFlowMesh[]>(
     () => (is3dOpen ? buildFloorWallMeshes(history.state, miteredPolygons, roomInscribedRects, wallCarveFootprints) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- buildFloorWallMeshes reads pixelsPerMeter / isLayerVisible, listed
     [history.state.rooms, history.state.walls, history.state.objectLibrary, miteredPolygons, pixelsPerMeter, roomInscribedRects, wallCarveFootprints, isLayerVisible, is3dOpen, uiRenderMode]);
@@ -4514,7 +4639,8 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     const lib = history.state.objectLibrary ?? {};
     const ppm = pixelsPerMeter || 1;
     const out: PrimMass3D[] = [];
-    const push = (idBase: string, anchorPx: Point, hostPts: Point[] | undefined, att: { objectId: string; params: Record<string, number | string | boolean>; id: string }) => {
+    const push = (idBase: string, anchorPx: Point, hostPts: Point[] | undefined, att: { objectId: string; params: Record<string, number | string | boolean>; id: string }, hostRef: Omit<MeshHost, "attId">) => {
+      const host: MeshHost = { ...hostRef, attId: att.id };
       const obj = lib[att.objectId];
       if (objIsPython(obj)) {
         // Object-local metres (+x across, +y back→front, +z up) → scene metres (x, y up, z = plan Y), turned by
@@ -4532,7 +4658,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
             pos[k + 2] = az + lx * sn + ly * c;
           }
           out.push({
-            id: `py-${idBase}-${att.id}-${i}`, shape: "mesh", layer: m.name,
+            id: `py-${idBase}-${att.id}-${i}`, host, materialPath: rowMaterialPath(bindOf(att, lib[att.objectId]), m.name), shape: "mesh", layer: m.name,
             length: 0, breadth: 0, height: 0, radius: 0, radiusTop: 0, topLength: 0, topBreadth: 0, tubeRadius: 0, arcDeg: 360,
             mesh: { positions: pos, indices: m.indices },
             color: m.color ?? "#cbd5e1",
@@ -4549,7 +4675,7 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
         const faces = m.faces.map((ring) => ring.map((q) => [q[0], q[2], q[1]]));
         if (!faces.length) return;
         out.push({
-          id: `spine-${idBase}-${att.id}-${m.id || i}`,
+          id: `spine-${idBase}-${att.id}-${m.id || i}`, host, materialPath: rowMaterialPath(bindOf(att, lib[att.objectId]), m.name, m.material), layer: m.name,
           shape: "polyhedron",
           length: 0, breadth: 0, height: 0, radius: 0,
           radiusTop: 0, topLength: 0, topBreadth: 0, tubeRadius: 0, arcDeg: 360,
@@ -4562,14 +4688,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
     // NODE-hosted: the node IS the anchor, so the host is the local origin.
     for (const node of wallNodes) {
       for (const att of (history.state.nodeMeta ?? {})[node.stableKey]?.attachments ?? []) {
-        push(`node-${node.stableKey}`, { x: node.x, y: node.y }, [{ x: 0, y: 0 }], att);
+        push(`node-${node.stableKey}`, { x: node.x, y: node.y }, [{ x: 0, y: 0 }], att, { kind: "node", id: node.stableKey });
       }
     }
     // SEGMENT-hosted: anchored at the midpoint, the two endpoints handed over as the host.
     for (const w of history.state.walls) {
       for (const att of w.attachments ?? []) {
         const mid = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
-        push(`seg-${w.id}`, mid, [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / ppm, y: (p.y - mid.y) / ppm })), att);
+        push(`seg-${w.id}`, mid, [w.start, w.end].map((p) => ({ x: (p.x - mid.x) / ppm, y: (p.y - mid.y) / ppm })), att, { kind: "segment", id: w.id });
       }
     }
     // SPACE-hosted: anchored at the centroid, the outline handed over.
@@ -4577,14 +4703,14 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
       if (!room.attachments?.length || room.points.length < 3) continue;
       const c = polygonCentroid(room.points);
       const hostLocal = room.points.map((p) => ({ x: (p.x - c.x) / ppm, y: (p.y - c.y) / ppm }));
-      for (const att of room.attachments) push(`room-${room.id}`, c, hostLocal, att);
+      for (const att of room.attachments) push(`room-${room.id}`, c, hostLocal, att, { kind: "space", id: room.id });
     }
     return out;
   }, [history.state.objectLibrary, history.state.nodeMeta, history.state.walls, history.state.rooms, wallNodes, pixelsPerMeter, is3dOpen, pyTick, uiRenderMode]);
 
   // Everything the 3D view shows on the generic mesh channel: Flow "Mesh to 3D" output + node-attached
   // parametric-object meshes + Space-floor / Segment-wall meshes.
-  const meshPreviewAll = useMemo<FlowMesh[] | undefined>(() => {
+  const meshPreviewAll = useMemo<HostedFlowMesh[] | undefined>(() => {
     const all = [...(flowMeshPreview ?? []), ...parametricObjectMeshes, ...floorWallMeshes];
     return all.length ? all : undefined;
   }, [flowMeshPreview, parametricObjectMeshes, floorWallMeshes]);
@@ -6700,6 +6826,18 @@ export const FloorPlanEditor = ({ projectId }: FloorPlanEditorProps) => {
   };
 
   const selectedSingleId = selection.selectedIds.length === 1 ? selection.selectedIds[0] : null;
+  // 3D object picking: the host a 3D click selected (with the exact attachment), and the host the 3D view
+  // highlights — the picked attachment while it is still the selection, else every object on the selected host.
+  const [picked3d, setPicked3d] = useState<MeshHost | null>(null);
+  const selectedHost3d = useMemo<MeshHost | null>(() => {
+    const h: MeshHost | null = selectedNodeKey
+      ? { kind: "node", id: selectedNodeKey }
+      : selectedSingleId
+        ? { kind: history.state.rooms.some((r) => r.id === selectedSingleId) ? "space" : "segment", id: selectedSingleId }
+        : null;
+    if (!h) return null;
+    return picked3d && picked3d.kind === h.kind && picked3d.id === h.id ? picked3d : h;
+  }, [selectedNodeKey, selectedSingleId, history.state.rooms, picked3d]);
   useEffect(() => {
     if (tool !== "wall" || wallDrawType !== "spline") {
       setCurrentWallSplinePoints([]);
@@ -28017,6 +28155,109 @@ User request: ${aiPrompt.trim()}`;
     }
   }, [export3d, setViewMode]);
 
+  /**
+   * Export ▸ HTML report — the complete project report (../houseDesign/htmlReport): architecture, structure
+   * with member forces, geotechnics, BOQ & rates, programme and the drawing set from the house engine, plus
+   * what only the live 3D view can give — a top view and a perspective of every room, and the walkthrough.
+   *
+   * Open 3D → shoot each room (focus on its box, plan cut 1.4 m above its floor) → record the walkthrough in
+   * real time → upload the .webm to R2 library/Video/ and embed its URL → build the report from the exported
+   * plan JSON → download one .html with the images inlined.
+   */
+  const [exportHtmlBusy, setExportHtmlBusy] = useState(false);
+  const runExportHtml = useCallback(async () => {
+    if (exportHtmlBusy) return;
+    setExportHtmlBusy(true);
+    const tid = toast.loading("Export HTML: preparing…");
+    const step = (m: string) => toast.loading(`Export HTML: ${m}`, { id: tid });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const plan = JSON.parse(exportJsonRef.current()) as Record<string, any>;
+      const ppm = Number(plan.settings?.pixelsPerMeter) || pixelsPerMeter || 100;
+      if (!snapshotApiRef.current) {
+        setViewMode((m) => (m === "3d" || m === "both" ? m : "3d"));
+        const deadline = Date.now() + 6000;
+        while (!snapshotApiRef.current && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
+      }
+      const api = snapshotApiRef.current;
+      // let the scene (every level, every object) finish building before the first frame is taken
+      await new Promise((r) => setTimeout(r, 1500));
+      // ── room views ──
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      type Lv = { id: string; name?: string; elevation?: number; nodes: any[]; spaces: any[] };
+      const levels: Lv[] = Array.isArray(plan.levels) && plan.levels.length
+        ? plan.levels
+        : [{ id: "L0", name: "Plan", elevation: 0, nodes: plan.nodes ?? [], spaces: plan.spaces ?? [] }];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isRoom = (sp: any) => sp.layer === "space" || (!/^(site|struct|mep|svc|plumb|elec)/i.test(sp.layer ?? "") && sp.roomType !== "plot-boundary" && String(sp.label ?? "").trim() !== "");
+      const shots: import("../houseDesign/htmlReport").RoomShot[] = [];
+      if (api) {
+        const todo = levels.flatMap((lv) => (lv.spaces ?? []).filter(isRoom).map((sp) => ({ lv, sp })));
+        let k = 0;
+        for (const { lv, sp } of todo) {
+          k++;
+          const at = new Map((lv.nodes ?? []).map((n) => [n.id, n]));
+          const pts = ((sp.nodeIds ?? []) as string[]).map((id) => at.get(id)).filter(Boolean) as { x: number; y: number }[];
+          if (pts.length < 3) continue;
+          const areaM2 = Math.abs(pts.reduce((a, p, i) => { const q = pts[(i + 1) % pts.length]; return a + p.x * q.y - q.x * p.y; }, 0)) / 2 / (ppm * ppm);
+          if (areaM2 < 1) continue;
+          const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+          const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+          const room = String(sp.label ?? sp.roomType ?? sp.id).split("\n")[0].trim();
+          step(`room views ${k}/${todo.length} — ${room}`);
+          const baseZ = Number(lv.elevation) || 0;
+          const focus = { centerX: (x0 + x1) / 2 / ppm, centerY: -(y0 + y1) / 2 / ppm, widthM: (x1 - x0) / ppm, depthM: (y1 - y0) / ppm, baseZ, clipAboveZ: baseZ + 1.4 };
+          const top = await api.captureOne("top", focus);
+          const persp = await api.captureOne("isometric", { ...focus, widthM: focus.widthM * 1.15, depthM: focus.depthM * 1.15 });
+          if (top || persp) shots.push({ levelId: lv.id, levelName: lv.name ?? lv.id, room, areaM2, top, persp });
+        }
+      }
+      // ── walkthrough film ──
+      let video: { url: string; seconds?: number } | null = null;
+      let videoNote = "";
+      if (!api?.recordWalkthrough) videoNote = "The 3D view could not be opened, so no walkthrough was recorded.";
+      else {
+        if (!historyRef.current.state.walkthrough) {
+          const h = historyRef.current;
+          const wt = buildWalkthrough(toStandardPlan(h.state, { pixelsPerMeter }) as unknown as WalkPlanIn);
+          if (wt.route.length) { h.set({ ...h.state, walkthrough: wt }); plan.walkthrough = wt; await new Promise((r) => setTimeout(r, 800)); }
+        }
+        if (!historyRef.current.state.walkthrough) videoNote = "The plan has no walkthrough (no connected rooms on the active level).";
+        else {
+          step("recording the walkthrough (real time)…");
+          const t0 = performance.now();
+          const blob = await api.recordWalkthrough();
+          const seconds = (performance.now() - t0) / 1000;
+          step("uploading the video to R2 library/Video…");
+          const slug = String(plan.project?.name ?? plan.settings?.keywords ?? "plan").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || "plan";
+          const up = await uploadToBucket(`library/Video/${slug}_walkthrough_${new Date().toISOString().replace(/[:.]/g, "-")}.webm`, blob);
+          if (up.ok && up.url) video = { url: up.url, seconds };
+          else {
+            // no R2 write access here — keep the film by inlining it, so the report still plays it
+            const dataUrl = await new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(blob); });
+            video = { url: dataUrl, seconds };
+            toast.warning(`Video upload failed (${up.error ?? "no URL"}) — embedded in the HTML instead.`);
+          }
+        }
+      }
+      step("computing the design report…");
+      await new Promise((r) => setTimeout(r, 30));
+      const { buildProjectHtml } = await import("../houseDesign/htmlReport");
+      const { html, complete } = buildProjectHtml(plan, { shots, video, videoNote });
+      const name = `${String(plan.project?.name ?? plan.settings?.keywords ?? "plan").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || "plan"}_report.html`;
+      const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.success(`Exported ${name} — ${shots.length} room views${video ? " + walkthrough" : ""}${complete ? " + full design report" : ""}`, { id: tid });
+    } catch (e) {
+      console.error("HTML export failed", e);
+      toast.error(`HTML export failed: ${(e as Error)?.message ?? "unknown error"}`, { id: tid });
+    } finally {
+      setExportHtmlBusy(false);
+    }
+  }, [exportHtmlBusy, pixelsPerMeter, setViewMode]);
+
   /** Read a plan DOCUMENT from text and load it. Lifted out of the file picker so ONE path serves both a
    *  file the user chose and a plan a flow computed — the Canvas Encoder's Import button hands its JSON
    *  straight here. Everything the file route did happens once, in one place, rather than in two that
@@ -28848,6 +29089,22 @@ User request: ${aiPrompt.trim()}`;
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Render</span>
           <RenderModeToggle />
+        </div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">2D Style</span>
+          <div className="inline-flex overflow-hidden rounded-full border border-slate-200 text-xs">
+            {([["Drafting", false], ["Presentation", true]] as const).map(([label, on]) => (
+              <button
+                key={label}
+                type="button"
+                title={on ? "Client plan: solid walls, material floors, room name + size, no dimension chains" : "Drafting: hatched walls, dimension chains, nodes, metrics"}
+                onClick={() => setLayerVisibility((prev) => ({ ...prev, presentation: on }))}
+                className={`px-3 py-1 ${(layerVisibility.presentation !== false) === on ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         {/* Levels (storeys) — moved here from the canvas bottom-right. One sheet per storey (see ./levels.ts);
             2D edits the active sheet, 3D stacks them all. Hidden in Layout (paper-space) mode. */}
@@ -30652,6 +30909,7 @@ User request: ${aiPrompt.trim()}`;
     { id: "svg", icon: <FileImage className="h-4 w-4" />, label: "SVG", hint: "The 2D plan as vector graphics", onSelect: exportSvgFile },
     { id: "dxf", icon: <DraftingCompass className="h-4 w-4" />, label: "DXF", hint: "For AutoCAD and other CAD apps", onSelect: exportDxfFile },
     { id: "3d", icon: <Box className="h-4 w-4 text-violet-600" />, label: "3D", hint: "The 3D model (.glb and more)", onSelect: () => setExport3dOpen(true) },
+    { id: "html", icon: <FileText className="h-4 w-4 text-emerald-600" />, label: "HTML report", hint: "Design report: drawings, structure, geotech, cost, room views, walkthrough", onSelect: () => { setExportPickerOpen(false); void runExportHtml(); } },
   ];
 
   // "Import Image" — the image-underlay popover (upload + opacity / scale / lock / calibrate). Lives in the
@@ -31483,9 +31741,36 @@ User request: ${aiPrompt.trim()}`;
                   })()}
                   snapshotApiRef={snapshotApiRef}
                   onSelectWall={(id, additive) => {
+                    setPicked3d(null);
+                    setSelectedNodeKey(null);
                     if (!id) { selection.clearSelection(); return; }
                     if (additive) selection.toggleSelected(id);
                     else selection.selectOne(id);
+                  }}
+                  // A parametric object picked in 3D selects its HOST the way a 2D click does, so the same
+                  // Properties panel opens: node → selectedNodeKey; segment / space → the shared id selection.
+                  onSelectHost={(host, additive) => {
+                    setPicked3d(host);
+                    setSelectedGenElement(null);
+                    if (host.kind === "node") {
+                      selection.clearSelection();
+                      setSelectedNodeKey(host.id);
+                      return;
+                    }
+                    setSelectedNodeKey(null);
+                    if (additive) selection.toggleSelected(host.id);
+                    else selection.selectOne(host.id);
+                  }}
+                  selectedHost={selectedHost3d}
+                  walkthrough={history.state.walkthrough}
+                  onGenerateWalkthrough={() => {
+                    // The walkthrough is built on the plan FILE shape (nodes / segments / spaces in plan px) — the
+                    // same builder the CLI runs — from the ACTIVE level, and stored on the model so it saves.
+                    const h = historyRef.current;
+                    const plan = toStandardPlan(h.state, { pixelsPerMeter });
+                    const wt = buildWalkthrough(plan as unknown as WalkPlanIn);
+                    if (!wt.route.length) { alert("No spaces to walk through on this level."); return; }
+                    h.set({ ...h.state, walkthrough: wt });
                   }}
                 />
               </Suspense>
@@ -32117,6 +32402,16 @@ User request: ${aiPrompt.trim()}`;
                       return objHasGeometry(o) && (o.meta.symbol === "floor" || o.meta.symbol === "massing");
                     });
                     const floorFill = floorAtt && typeof floorAtt.params.color === "string" ? floorAtt.params.color : null;
+                    // Presentation: the floor reads as its FINISH (the Room object material, else the wet-room rule).
+                    const presFloor = (() => {
+                      if (!presentation || room.roomType === "floorplate-boundary") return null;
+                      const lib = history.state.objectLibrary ?? {};
+                      const roomAtt = room.attachments?.find((a) => String(a.objectId).startsWith("room"));
+                      const path = roomAtt
+                        ? roomFloorBind(roomAtt, lib[roomAtt.objectId], room).materialPath
+                        : WET_ROOM.test(`${room.label ?? ""} ${room.roomType ?? ""}`) ? "Finishes/tile-grey-600.json" : "Finishes/oak-plank-light.json";
+                      return floorPatternImage(path ?? "", pixelsPerMeter);
+                    })();
                     return (
                       <Group key={roomReactKey}>
                         {isRoomSelected && layerVisibility.seeds && (
@@ -32165,7 +32460,11 @@ User request: ${aiPrompt.trim()}`;
                               const raw = (ctx as unknown as { _context: CanvasRenderingContext2D })._context;
                               // Selection keeps the room's own fill — only the boundary is highlighted.
                               const fill = floorFill ?? (room.fillOpacity != null ? applyAlpha(room.fill, room.fillOpacity) : room.fill);
-                              if (fill) {
+                              const pat = presFloor ? raw.createPattern(presFloor, "repeat") : null;
+                              if (pat) {
+                                raw.fillStyle = pat;
+                                raw.fill(path, "evenodd");
+                              } else if (fill) {
                                 raw.fillStyle = fill;
                                 raw.fill(path, "evenodd");
                               }
@@ -32203,8 +32502,10 @@ User request: ${aiPrompt.trim()}`;
                             listening={!(addDoorMode || addWindowMode || furnitureNodeMode || tool === "point")}
                             points={renderOuter.flatMap((point) => [point.x, point.y])}
                             closed
-                            fill={floorFill ?? (room.fillOpacity != null ? applyAlpha(room.fill, room.fillOpacity) : room.fill)}
-                            stroke={isRoomSelected ? "#f59e0b" : room.stroke}
+                            {...(presFloor
+                              ? { fillPatternImage: presFloor as unknown as HTMLImageElement, fillPatternRepeat: "repeat", fillPriority: "pattern" }
+                              : { fill: floorFill ?? (room.fillOpacity != null ? applyAlpha(room.fill, room.fillOpacity) : room.fill) })}
+                            stroke={isRoomSelected ? "#f59e0b" : presFloor ? "rgba(0,0,0,0)" : room.stroke}
                             strokeWidth={isRoomSelected ? 3.5 / scale : 1}
                             onClick={(event) => {
                               onObjectSelect(event.target.id(), event.evt.shiftKey);
@@ -32516,7 +32817,39 @@ User request: ${aiPrompt.trim()}`;
                             </Group>
                           );
                         })()}
-                        {room.showLabel !== false ? (
+                        {room.showLabel !== false && presentation ? (
+                          <Group x={center.x} y={center.y} listening={false}>
+                            {/* Presentation label: the room NAME and its size, nothing else - as on a client plan. */}
+                            <Text
+                              offsetX={70}
+                              offsetY={14}
+                              width={140}
+                              align="center"
+                              fontSize={13}
+                              fontFamily={PRES_FONT}
+                              fontStyle="600"
+                              letterSpacing={0.3}
+                              fill="#1f2937"
+                              shadowColor="#ffffff"
+                              shadowBlur={4}
+                              shadowOpacity={0.9}
+                              text={spaceLabel}
+                            />
+                            <Text
+                              offsetX={70}
+                              offsetY={-1}
+                              width={140}
+                              align="center"
+                              fontSize={10.5}
+                              fontFamily={PRES_FONT}
+                              fill="#4b5563"
+                              shadowColor="#ffffff"
+                              shadowBlur={4}
+                              shadowOpacity={0.9}
+                              text={spaceLBLabel}
+                            />
+                          </Group>
+                        ) : room.showLabel !== false ? (
                           <Group x={center.x} y={center.y}>
                             {/* Label (or display id), L × B and area — shown unless this Space's "Show Label" is off (on by default). */}
                             <Text
@@ -32832,8 +33165,8 @@ User request: ${aiPrompt.trim()}`;
                       key={`bufu-${i}`}
                       points={poly.flatMap((p) => [p.x, p.y])}
                       closed
-                      fill={bufferedUnion.fillUnion ? bufferedUnion.color : "rgba(0,0,0,0)"}
-                      {...(bufferedUnion.hatch
+                      fill={presentation ? POCHE : bufferedUnion.fillUnion ? bufferedUnion.color : "rgba(0,0,0,0)"}
+                      {...(bufferedUnion.hatch && !presentation
                         ? {
                             fillPriority: "pattern",
                             fillPatternImage: getHatchPattern(bufferedUnion.hatch.style, bufferedUnion.hatch.spacing, bufferedUnion.color, bufferedUnion.hatch.weight),
@@ -32841,8 +33174,8 @@ User request: ${aiPrompt.trim()}`;
                             fillPatternRotation: bufferedUnion.hatch.style === "diagonal" ? bufferedUnion.hatch.angle : 0,
                           }
                         : {})}
-                      stroke={bufferedUnion.fillUnion && !bufferedUnion.hatch ? bufferedUnion.color : undefined}
-                      strokeWidth={bufferedUnion.fillUnion && !bufferedUnion.hatch ? 0.5 : undefined}
+                      stroke={presentation ? POCHE : bufferedUnion.fillUnion && !bufferedUnion.hatch ? bufferedUnion.color : undefined}
+                      strokeWidth={presentation ? 0.5 : bufferedUnion.fillUnion && !bufferedUnion.hatch ? 0.5 : undefined}
                       listening={false}
                     />
                   ))}
@@ -32850,7 +33183,7 @@ User request: ${aiPrompt.trim()}`;
                     <Line
                       key={`bufu-edge-${i}`}
                       points={[edge.a.x, edge.a.y, edge.b.x, edge.b.y]}
-                      stroke={bufferedUnion.color}
+                      stroke={presentation ? POCHE : bufferedUnion.color}
                       strokeWidth={Math.max(0.75, 1 / scale)}
                       listening={false}
                     />
@@ -32898,9 +33231,14 @@ User request: ${aiPrompt.trim()}`;
                         const g = evalParametricGeometry(objText(obj), mid, pixelsPerMeter, vp(att.params), hostPts, resolveObjectDef, att.childParams);
                         if (!g.fill.length && !g.lines.length) return null;
                         const pts = (poly: Point[]) => poly.flatMap((p) => [p.x, p.y]);
+                        const isWallObj = symbol === "wall" || String(att.objectId).startsWith("wall");
                         return (
                           <Group key={att.id} listening={false}>
-                            {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} points={pts(poly)} closed stroke={col} strokeWidth={sw} fill={`${col}22`} lineJoin="round" />; })}
+                            {g.fill.map((poly, i) => {
+                              const col = g.fillColor?.[i] ?? g.color;
+                              if (presentation && isWallObj) return <Line key={`f${i}`} points={pts(poly)} closed stroke={POCHE} strokeWidth={0.5} fill={POCHE} lineJoin="round" />;
+                              return <Line key={`f${i}`} points={pts(poly)} closed stroke={presentation ? PRES_LINE : col} strokeWidth={presentation ? Math.max(0.6, 0.9 / scale) : sw} fill={presentation ? "#ffffffcc" : `${col}22`} lineJoin="round" />;
+                            })}
                             {g.lines.map((ln, i) => <Line key={`l${i}`} points={pts(ln)} stroke={g.lineColor?.[i] ?? g.color} strokeWidth={sw} lineJoin="round" />)}
                           </Group>
                         );
@@ -32924,7 +33262,7 @@ User request: ${aiPrompt.trim()}`;
                         });
                         return (
                           <Group key={att.id} listening={false}>
-                            {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} points={mapPoly(poly)} closed stroke={col} strokeWidth={sw} fill={`${col}22`} lineJoin="round" />; })}
+                            {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} points={mapPoly(poly)} closed stroke={presentation ? PRES_LINE : col} strokeWidth={presentation ? Math.max(0.5, 0.8 / scale) : sw} fill={presentation ? presTint(col) : `${col}22`} lineJoin="round" />; })}
                             {g.lines.map((ln, i) => <Line key={`l${i}`} points={mapPoly(ln)} stroke={g.lineColor?.[i] ?? g.color} strokeWidth={sw} lineJoin="round" />)}
                             {g.refLines.map((ln, i) => <Line key={`r${i}`} points={mapPoly(ln)} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" />)}
                           </Group>
@@ -33053,9 +33391,14 @@ User request: ${aiPrompt.trim()}`;
                         const hitW = Math.max(6 / scale, sw * 4);
                         return (
                           <Group key={att.id} listening={canDrill} onClick={pick} onTap={pick}>
-                            {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} name={g.fillSrc?.[i] ?? ""} points={poly.flatMap((p) => [p.x, p.y])} closed stroke={col} strokeWidth={sw} fill={`${col}22`} lineJoin="round" hitStrokeWidth={hitW} />; })}
-                            {g.lines.map((ln, i) => <Line key={`l${i}`} name={g.lineSrc?.[i] ?? ""} points={ln.flatMap((p) => [p.x, p.y])} stroke={g.lineColor?.[i] ?? g.color} strokeWidth={sw} lineJoin="round" hitStrokeWidth={hitW} />)}
-                            {g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
+                            {g.fill.map((poly, i) => {
+                              const col = g.fillColor?.[i] ?? g.color;
+                              // Presentation: opaque near-white furniture, fine charcoal line, soft shadow on the outline piece.
+                              if (presentation) return <Line key={`f${i}`} name={g.fillSrc?.[i] ?? ""} points={poly.flatMap((p) => [p.x, p.y])} closed stroke={PRES_LINE} strokeWidth={Math.max(0.5, 0.8 / scale)} fill={presTint(col)} lineJoin="round" hitStrokeWidth={hitW} {...(i === 0 ? PRES_SHADOW : {})} />;
+                              return <Line key={`f${i}`} name={g.fillSrc?.[i] ?? ""} points={poly.flatMap((p) => [p.x, p.y])} closed stroke={col} strokeWidth={sw} fill={`${col}22`} lineJoin="round" hitStrokeWidth={hitW} />;
+                            })}
+                            {g.lines.map((ln, i) => <Line key={`l${i}`} name={g.lineSrc?.[i] ?? ""} points={ln.flatMap((p) => [p.x, p.y])} stroke={presentation ? PRES_LINE : (g.lineColor?.[i] ?? g.color)} strokeWidth={presentation ? Math.max(0.5, 0.8 / scale) : sw} lineJoin="round" hitStrokeWidth={hitW} />)}
+                            {!presentation && g.refLines.map((ln, i) => <Line key={`r${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
                             {selPath && g.lines.map((ln, i) => (isSel(g.lineSrc?.[i]) ? <Line key={`hl${i}`} points={ln.flatMap((p) => [p.x, p.y])} stroke="#3b82f6" strokeWidth={sw * 2} lineJoin="round" listening={false} /> : null))}
                           </Group>
                         );
@@ -33101,6 +33444,9 @@ User request: ${aiPrompt.trim()}`;
                       // (see the live-materialise effect) — suppress the display-only overlay so it isn't
                       // double-drawn on top of the committed Spaces.
                       if (liveFlow && liveOwnedAttIdsRef.current.has(att.id)) return null;
+                      // Presentation: the Room object's floor plate is shown AS the floor finish (pattern above) —
+                      // its tinted plate on top would only grey the boards out.
+                      if (presentation && String(att.objectId).startsWith("room")) return null;
                       const obj = (history.state.objectLibrary ?? {})[att.objectId];
                       if (!objHasGeometry(obj)) return null;
                       const defText = objText(obj);
@@ -33135,10 +33481,10 @@ User request: ${aiPrompt.trim()}`;
                         <Group key={`pobj-space-2d-${room.id}-${att.id}`} listening={false}>
                           {/* Solid plan result(s) — e.g. Site's final buildable footprint + any split open-space
                               pieces (`fill` op / split remainder). Semi-transparent so overlaps stay legible. */}
-                          {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} points={mapPoly(poly)} closed fill={`${col}40`} stroke={col} strokeWidth={sw} lineJoin="round" />; })}
-                          {g.lines.map((ln, i) => <Line key={`l${i}`} points={mapPoly(ln)} stroke={g.lineColor?.[i] ?? g.color} strokeWidth={sw} lineJoin="round" />)}
+                          {g.fill.map((poly, i) => { const col = g.fillColor?.[i] ?? g.color; return <Line key={`f${i}`} points={mapPoly(poly)} closed fill={presentation ? presTint(col) : `${col}40`} stroke={presentation ? PRES_LINE : col} strokeWidth={presentation ? Math.max(0.5, 0.8 / scale) : sw} lineJoin="round" />; })}
+                          {g.lines.map((ln, i) => <Line key={`l${i}`} points={mapPoly(ln)} stroke={presentation ? PRES_LINE : (g.lineColor?.[i] ?? g.color)} strokeWidth={presentation ? Math.max(0.5, 0.8 / scale) : sw} lineJoin="round" />)}
                           {/* Dashed construction/reference outlines (inset polygon · split line · optimise rect). */}
-                          {g.refLines.map((ln, i) => <Line key={`r${i}`} points={mapPoly(ln)} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
+                          {!presentation && g.refLines.map((ln, i) => <Line key={`r${i}`} points={mapPoly(ln)} stroke="#2563eb" strokeWidth={Math.max(0.6, 1 / scale)} dash={[6 / scale, 4 / scale]} lineJoin="round" listening={false} />)}
                           {selPath && g.lines.map((ln, i) => (isSel(g.lineSrc?.[i]) ? <Line key={`hl${i}`} points={mapPoly(ln)} stroke="#3b82f6" strokeWidth={sw * 2} lineJoin="round" /> : null))}
                         </Group>
                       );
@@ -33180,6 +33526,9 @@ User request: ${aiPrompt.trim()}`;
                     // Properties panel, so the plan label and the panel agree.
                     const linesFor = (objectId: string, params: Record<string, unknown>, host: Point[]) => {
                       const obj = lib[objectId];
+                      // Presentation plan: objects carry no metric / parameter captions ("Area (m2): 16") — the room
+                      // label states the room, the drawing states the object.
+                      if (presentation) return [];
                       return [...canvasLabelLines(obj, params), ...canvasMetricLines(obj, params, host, resolveObjectDef)];
                     };
                     const local = (pts: Point[], at: Point) => pts.map((p) => ({ x: (p.x - at.x) / pixelsPerMeter, y: (p.y - at.y) / pixelsPerMeter }));
@@ -33217,7 +33566,7 @@ User request: ${aiPrompt.trim()}`;
 
                   {/* Path corridor INNER / OUTER face dimensions — both offset edges measured and labelled.
                       Gated on the Dimension layer so they can be toggled with the other dimensions. */}
-                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && pathEdgeDimensions.map((d, i) => {
+                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && !presentation && pathEdgeDimensions.map((d, i) => {
                     const col = d.role === "outer" ? "#b45309" : "#0891b2";
                     const sw = Math.max(0.6, 1 / scale);
                     const arr = 11 / Math.max(1, scale);
@@ -33237,7 +33586,7 @@ User request: ${aiPrompt.trim()}`;
 
                   {/* Buffered display segments — their committed ACTUAL mitered Outer / Inner dimensions,
                       gated on the Dimension layer like other dimensions. */}
-                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && !hideObjectsForZoom && history.state.walls
+                  {isLayerVisible(DEFAULT_DIMENSION_LAYER_ID) && !presentation && !hideObjectsForZoom && history.state.walls
                     .filter((w) => w.bufferStyle && w.segmentType !== "path" && isEntityVisible(w)
                       && inCull(Math.min(w.start.x, w.end.x), Math.min(w.start.y, w.end.y), Math.max(w.start.x, w.end.x), Math.max(w.start.y, w.end.y)))
                     .map((w) => renderBufferedCommitDims(w))}
@@ -33323,7 +33672,7 @@ User request: ${aiPrompt.trim()}`;
                   }
 
                   {/* Mitered wall architectural dimension lines — inner & outer edges */}
-                  {layerVisibility.measure && (layerVisibility.viewSharp || layerVisibility.viewCurved) && !hideObjectsForZoom &&
+                  {layerVisibility.measure && !presentation && (layerVisibility.viewSharp || layerVisibility.viewCurved) && !hideObjectsForZoom &&
                     miteredDimensions.map((dim) => {
                       const wall = wallByIdMap.get(dim.wallId);
                       if (!wall) return null;
@@ -33480,7 +33829,7 @@ User request: ${aiPrompt.trim()}`;
                   })}
 
                   {/* Graph mode — architectural dimension lines for each wall edge */}
-                  {layerVisibility.viewGraph && layerVisibility.measure && !hideObjectsForZoom && wallsInPaintOrder.map((wall) => {
+                  {layerVisibility.viewGraph && layerVisibility.measure && !presentation && !hideObjectsForZoom && wallsInPaintOrder.map((wall) => {
                     const ppm = pixelsPerMeter;
                     const dx = wall.end.x - wall.start.x;
                     const dy = wall.end.y - wall.start.y;
@@ -34811,7 +35160,7 @@ User request: ${aiPrompt.trim()}`;
                       />
                     );
                   })}
-                  {layerVisibility.nodes && (tool === "select" || tool === "single-segment" || tool === "point") && wallNodesInView.map((node) => {
+                  {layerVisibility.nodes && (presentation ? (tool === "single-segment" || tool === "point") : (tool === "select" || tool === "single-segment" || tool === "point")) && wallNodesInView.map((node) => {
                     const isSelected = selectedNodeKey === node.key || selectedNodeKey === node.stableKey;
                     // In "Node" select scope, node-picking is the primary action — give each node a much
                     // bigger, forgiving hit target (and hover feedback) so the user doesn't have to aim
@@ -35282,7 +35631,7 @@ User request: ${aiPrompt.trim()}`;
                     // repeating hatch pattern (diagonal lines or scattered dots) in the wall colour instead
                     // of a solid fill. Spread onto the fill Line(s) below. fillPriority="pattern" overrides
                     // the solid `fill` prop, leaving the gaps transparent (the classic hatched look).
-                    const hatchProps: Record<string, unknown> = wall.hatch
+                    const hatchProps: Record<string, unknown> = wall.hatch && !presentation
                       ? {
                           fillPriority: "pattern",
                           fillPatternImage: getHatchPattern(
@@ -35635,9 +35984,9 @@ User request: ${aiPrompt.trim()}`;
                                 return wallPolygonPoints({ ...wall, start: liveStart, end: liveEnd });
                               })()}
                               closed
-                              fill={suppressForArch ? "rgba(0,0,0,0)" : (layerVisibility.fillingFill ? wall.color : "rgba(0,0,0,0)")}
+                              fill={suppressForArch ? "rgba(0,0,0,0)" : presentation ? POCHE : (layerVisibility.fillingFill ? wall.color : "rgba(0,0,0,0)")}
                               {...hatchProps}
-                              stroke={suppressForArch ? "transparent" : wall.color}
+                              stroke={suppressForArch ? "transparent" : presentation ? POCHE : wall.color}
                               strokeWidth={layerVisibility.fillingFill ? 1 : 0.5}
                               dash={segmentDash(wall)}
                               onClick={(event) => {
@@ -35667,7 +36016,7 @@ User request: ${aiPrompt.trim()}`;
                               return wallPolygonPoints({ ...wall, start: liveStart, end: liveEnd });
                             })()}
                             closed
-                            fill={suppressForArch ? "rgba(0,0,0,0)" : (layerVisibility.fillingFill ? wall.color : "rgba(0,0,0,0)")}
+                            fill={suppressForArch ? "rgba(0,0,0,0)" : presentation ? POCHE : (layerVisibility.fillingFill ? wall.color : "rgba(0,0,0,0)")}
                             {...hatchProps}
                             stroke="transparent"
                             strokeWidth={0}
@@ -35695,9 +36044,9 @@ User request: ${aiPrompt.trim()}`;
                             id={wall.id}
                             points={wallPolygonPoints({ ...wall, start: liveStart, end: liveEnd })}
                             closed
-                            fill={suppressForArch ? "rgba(0,0,0,0)" : ((wStyle.mode === "fill" || layerVisibility.fillingFill) ? wall.color : "rgba(0,0,0,0)")}
+                            fill={suppressForArch ? "rgba(0,0,0,0)" : presentation ? POCHE : ((wStyle.mode === "fill" || layerVisibility.fillingFill) ? wall.color : "rgba(0,0,0,0)")}
                             {...hatchProps}
-                            stroke={suppressForArch ? "transparent" : wall.color}
+                            stroke={suppressForArch ? "transparent" : presentation ? POCHE : wall.color}
                             strokeWidth={(wStyle.mode === "fill" || layerVisibility.fillingFill) ? 1 : 2}
                             dash={segmentDash(wall)}
                             onClick={(event) => {
@@ -37077,7 +37426,7 @@ User request: ${aiPrompt.trim()}`;
                             lineJoin="round"
                             onClick={(event) => onObjectSelect(objectItem.id, event.evt.shiftKey)}
                           />
-                          {layerVisibility.measure
+                          {layerVisibility.measure && !presentation
                             ? (() => {
                               // Recompute per-segment lengths in the CURRENT unit so that
                               // changing the unit in Default Settings is reflected on the
@@ -37098,7 +37447,7 @@ User request: ${aiPrompt.trim()}`;
                               return out;
                             })()
                             : null}
-                          {layerVisibility.measure ? (
+                          {layerVisibility.measure && !presentation ? (
                             <Text
                               x={objectItem.points[objectItem.points.length - 2] + 10}
                               y={objectItem.points[objectItem.points.length - 1] + 10}
@@ -38687,7 +39036,7 @@ User request: ${aiPrompt.trim()}`;
               </Layer>
             ) : null}
 
-            {layerVisibility.measure ? (
+            {layerVisibility.measure && !presentation ? (
               <Layer listening={false}>
                 <WorldViewport x={position.x} y={position.y} scale={scale}>
                   {layerVisibility.drawing && !layerVisibility.viewGraph
@@ -38819,6 +39168,8 @@ User request: ${aiPrompt.trim()}`;
                     if (item.dimLines && item.tool === "wall-builder" && tool === "single-segment" && !!singleSegStart && singleSegType === "wall") return [];
                     // Dimension node: witness lines + dimension line + ticks (open polylines) and the
                     // positioned value labels. Geometry-less (polygons is empty) — drawn from dimLines.
+                    // Presentation plan: no construction dimension chains (a client plan states room sizes in the labels).
+                    if (item.dimLines && presentation) return [];
                     if (item.dimLines) {
                       const sw = Math.max(0.5, 1 / scale);
                       return [

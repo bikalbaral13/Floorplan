@@ -1,6 +1,13 @@
-﻿import { forwardRef, Suspense, useEffect, useImperativeHandle, useMemo, type ComponentProps, type CSSProperties, type ReactNode, type MutableRefObject } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
-import { Edges, Html, OrbitControls, useTexture } from "@react-three/drei";
+﻿import { forwardRef, Suspense, useEffect, useImperativeHandle, useMemo, useRef, type ComponentProps, type CSSProperties, type ReactNode, type MutableRefObject } from "react";
+import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { Edges, Environment, Html, OrbitControls, useTexture } from "@react-three/drei";
+import { addBoxUV, libraryMaterial, rowMaterialPath, useMaterialDefs, type MaterialBinding } from "./materials3d";
+import { EffectComposer, N8AO, SMAA } from "@react-three/postprocessing";
+import { Component as ReactComponent } from "react";
+import { DEFAULT_LIBRARY_PATH } from "../cloudLibrary";
+import { WalkCamera, WalkthroughBar, newWalkState, recordWalk, type WalkState } from "./WalkthroughPlayer";
+import type { Walkthrough } from "../walkthrough";
 import * as THREE from "three";
 import { CSG } from "three-csg-ts";
 import type { FloorPlanModel, FurnitureItem, Room, Wall } from "../types";
@@ -9,6 +16,14 @@ import { subtractPolygon } from "@builderpluss/engine";
 import type { Point } from "../types";
 import type { FlowMesh, FlowMeshPrism } from "@builderpluss/engine";
 import { wrapForExport, exportGroupToBlob, type Mesh3DFormat, type Mesh3DOptions } from "../export/flowMesh3d";
+
+/** Which canvas element a 3D mesh was built from: the HOST (node stableKey / segment id / space id) and the
+ *  attachment on it. A 3D click hands this back to the editor, which selects the host exactly as a 2D click
+ *  would — so the same Properties panel (params, deck spec, provenance) shows for an object picked in 3D. */
+export type MeshHost = { kind: "node" | "segment" | "space"; id: string; attId?: string };
+const sameHost = (a?: MeshHost | null, b?: MeshHost | null) => !!a && !!b && a.kind === b.kind && a.id === b.id && (!a.attId || !b.attId || a.attId === b.attId);
+/** Emissive tint for the selected object's meshes (the walls use their own selected colour). */
+const SELECT_EMISSIVE = "#2563eb";
 
 /** A `<mesh>` that automatically adds dark edge lines to any geometry it contains.
  *  Drop-in replacement for `<mesh>`. Improves visual separation between adjacent meshes. */
@@ -103,7 +118,7 @@ function polyhedronGeometry(faces: number[][][]): THREE.BufferGeometry {
   const geom = new THREE.BufferGeometry();
   geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(tris), 3));
   geom.computeVertexNormals();
-  return geom;
+  return addBoxUV(geom);
 }
 
 /** An indexed triangle mesh (a Python object's output): shared vertices, so computeVertexNormals SMOOTHS — cloth
@@ -113,7 +128,7 @@ function indexedMeshGeometry(mesh: { positions: Float32Array; indices: Uint32Arr
   geom.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
   geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
   geom.computeVertexNormals();
-  return geom;
+  return addBoxUV(geom);
 }
 function IndexedMeshGeom({ mesh }: { mesh: { positions: Float32Array; indices: Uint32Array } }) {
   const geom = useMemo(() => indexedMeshGeometry(mesh), [mesh]);
@@ -221,7 +236,7 @@ function buildPrismGeometry(pr: FlowMeshPrism, toScene: (x: number, y: number) =
     const geom = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, steps: 1 });
     geom.rotateX(-Math.PI / 2);
     geom.translate(0, pr.yBottom, 0);
-    return geom;
+    return addBoxUV(geom.index ? geom.toNonIndexed() : geom);
   }
   const b = pr.bottom.slice(0, N).map((p) => toScene(p.x, p.y));
   const t = pr.top.slice(0, N).map((p) => toScene(p.x, p.y));
@@ -239,7 +254,7 @@ function buildPrismGeometry(pr: FlowMeshPrism, toScene: (x: number, y: number) =
   const geom = new THREE.BufferGeometry();
   geom.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geom.computeVertexNormals();
-  return geom;
+  return addBoxUV(geom);
 }
 
 /** Flow "Mesh to 3D" output — render each incoming mesh's lofted prisms (e.g. a column footing, and every
@@ -247,23 +262,64 @@ function buildPrismGeometry(pr: FlowMeshPrism, toScene: (x: number, y: number) =
  *  main scene (see the `toScene` note below near the Z-up group): origin-aligned, NOT recentred — the world
  *  origin coincides with the 2D origin, and the enclosing +90° X rotation group applies the Y→−Y flip. A
  *  recentred mapping here would shift every mesh-channel object by (cx, cy) off the native slabs/walls. */
-function FlowMeshes({ meshes, ppm }: { meshes: FlowMesh[]; ppm: number }) {
+function FlowMeshes({ meshes, ppm, onSelectHost, selectedHost }: { meshes: HostedMesh[]; ppm: number; onSelectHost?: (h: MeshHost, additive: boolean) => void; selectedHost?: MeshHost | null }) {
+  // ONE mesh per (flow mesh, colour), not one per prism. A wave-baffle field is thousands of prisms; drawn one
+  // mesh each (plus an Edges line set each) a single room cost ~3,500 draw calls. Merging keeps the host on the
+  // merged mesh, so picking and highlighting are unchanged.
   const built = useMemo(() => {
     const toScene = (x: number, y: number): [number, number] => [x / ppm, y / ppm];
-    return meshes
-      .flatMap((m) => m.prisms.map((pr, pi) => ({ key: `${m.id}-${pi}`, geom: buildPrismGeometry(pr, toScene), color: pr.color })))
-      .filter((x): x is { key: string; geom: THREE.BufferGeometry; color: string } => !!x.geom);
+    const out: { key: string; geom: THREE.BufferGeometry; color: string; path: string; host: MeshHost | undefined }[] = [];
+    for (const m of meshes) {
+      // grouped by (colour, library material): one draw per surface the object is made of
+      const byLook = new Map<string, { color: string; path: string; geoms: THREE.BufferGeometry[] }>();
+      for (const pr of m.prisms) {
+        const g = buildPrismGeometry(pr, toScene);
+        if (!g) continue;
+        // Every prism now carries position + normal + metre UVs (addBoxUV); merge needs that one schema.
+        g.clearGroups();
+        const path = rowMaterialPath(m.bind, pr.name, pr.material);
+        const k = `${pr.color}|${path}`;
+        const e = byLook.get(k) ?? { color: pr.color, path, geoms: [] };
+        e.geoms.push(g.index ? g.toNonIndexed() : g);
+        byLook.set(k, e);
+      }
+      for (const [k, { color, path, geoms }] of byLook) {
+        const merged = geoms.length === 1 ? geoms[0] : mergeGeometries(geoms, false);
+        if (merged) {
+          if (geoms.length > 1) geoms.forEach((g) => g.dispose());
+          out.push({ key: `${m.id}|${k}`, geom: merged, color, path, host: m.host });
+        } else {
+          geoms.forEach((g, i) => out.push({ key: `${m.id}|${k}|${i}`, geom: g, color, path, host: m.host }));
+        }
+      }
+    }
+    return out;
   }, [meshes, ppm]);
+  const matDefs = useMaterialDefs(built.map((x) => x.path));
+  useEffect(() => () => built.forEach((x) => x.geom.dispose()), [built]);
   return (
     <group>
-      {built.map((x) => (
-        <EdgedMesh key={x.key} geometry={x.geom}>
-          <meshStandardMaterial color={x.color} side={THREE.DoubleSide} />
-        </EdgedMesh>
-      ))}
+      {built.map((x) => {
+        const sel = sameHost(x.host, selectedHost);
+        return (
+          // A surface wearing a real material is drawn WITHOUT outline edges: plastered walls and tiled floors
+          // read as continuous surfaces, not as a diagram of their pieces. Flat-colour objects keep their edges.
+          <mesh
+            key={x.key}
+            geometry={x.geom}
+            userData={x.host ? { host: x.host } : undefined}
+            onClick={x.host && onSelectHost ? (ev: ThreeEvent<MouseEvent>) => { ev.stopPropagation(); onSelectHost(x.host!, !!ev.nativeEvent?.shiftKey); } : undefined}
+            material={libraryMaterial(x.path, x.color, x.path ? matDefs.get(x.path) : null, sel ? { emissive: SELECT_EMISSIVE, emissiveIntensity: 0.45 } : undefined)}
+          >
+            {!x.path && <Edges color="#0f172a" threshold={15} lineWidth={1} />}
+          </mesh>
+        );
+      })}
     </group>
   );
 }
+/** A Flow mesh that may know its canvas host (parametric-object meshes do; plain Flow output does not). */
+type HostedMesh = FlowMesh & { host?: MeshHost; bind?: MaterialBinding };
 
 /** View axes for the multi-view snapshot grid exposed by the imperative ref.
  *  - 6 canonical orthographic-ish views (front/back/left/right/top/isometric)
@@ -286,6 +342,8 @@ export interface SnapshotApi {
    *  camera can frame one room rather than the whole building. Omit `focus` for the building box.
    *  Returns "" if the read-back fails (tainted canvas). */
   captureOne: (view: SnapshotView, focus?: CaptureFocus) => Promise<string>;
+  /** Play the plan's walkthrough once (forward) and record the 3D canvas while it plays → .webm. Real time. */
+  recordWalkthrough?: () => Promise<Blob>;
   /** Serialise everything currently drawn — walls, slabs, objects, flow meshes — to a mesh file.
    *  Exports the LIVE scene rather than re-deriving geometry, so what you get is what you see. */
   exportScene: (format: Mesh3DFormat, opts: Mesh3DOptions) => Promise<{ blob: Blob; meshes: number; triangles: number }>;
@@ -295,7 +353,7 @@ export interface SnapshotApi {
 type Display3DStyle = { color: string; opacity: number; wireframe: boolean; showEdges: boolean };
 /** A resolved 3D primitive: shape + (scale-baked) dimensions + baked transform (translate m, rotate rad,
  *  mirror ±1 per axis) + optional Display 3D style. Mirrors FloorPlanEditor's PrimMass3D. */
-type PrimMass3D = { id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string; layer?: string; faces?: number[][][]; mesh?: { positions: Float32Array; indices: Uint32Array }; transform?: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number }; display?: Display3DStyle };
+type PrimMass3D = { host?: MeshHost; materialPath?: string; id: string; shape: string; length: number; breadth: number; height: number; radius: number; color: string; layer?: string; faces?: number[][][]; mesh?: { positions: Float32Array; indices: Uint32Array }; transform?: { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number; mx: number; my: number; mz: number }; display?: Display3DStyle };
 /** One operand of a Boolean op: a primitive, or a nested Boolean subtree (so Booleans chain). */
 type BoolOperand3D = { prim: PrimMass3D } | { bool: BoolNode3D };
 /** A Boolean (CSG) node: operation + two operands (each a primitive or another Boolean). */
@@ -311,7 +369,7 @@ export interface Level3D {
   rooms?: Room[];
   floorHeightM?: number;
   /** This level's editor-built object meshes (hosted Wall bands, doors, windows, floors). */
-  meshPreview?: FlowMesh[];
+  meshPreview?: HostedMesh[];
 }
 
 interface Props {
@@ -339,6 +397,16 @@ interface Props {
   selectedWallIds?: string[];
   /** Click handler â€” id may be a wall id or a room id. additive=true on shift-click for multi-select. */
   onSelectWall?: (id: string | null, additive: boolean) => void;
+  /** Click on a parametric-object mesh — selects its HOST (node / segment / space) like a 2D click. */
+  onSelectHost?: (host: MeshHost, additive: boolean) => void;
+  /** The host whose object meshes are drawn highlighted (the editor's current object selection). */
+  selectedHost?: MeshHost | null;
+  /** Image-based light: "indoor" (default), "outdoor", or a Library path / URL to an .hdr (see HDRI_PRESETS). */
+  hdri?: string;
+  /** The plan's walkthrough entity (route + camera path) — enables the Walkthrough bar. */
+  walkthrough?: Walkthrough;
+  /** Build a walkthrough from this plan (shown on the bar when the plan has none). */
+  onGenerateWalkthrough?: () => void;
   /** Low-poly schematic mode (driven by 2D Graph view). Walls / openings / floors render as single
    *  planes instead of extruded volumes â€” massive triangle-count reduction at the cost of visual
    *  thickness. Doors and windows are flat wood-coloured planes; floors are flat polygons (no slab). */
@@ -376,7 +444,7 @@ interface Props {
   booleanMasses?: BoolMass3D[];
   /** Flow "Mesh to 3D" output — generic 3D meshes (e.g. column footings) to render. Each is a set of
    *  lofted prisms in plan-px world coords + metre heights (see {@link FlowMesh}). */
-  meshPreview?: FlowMesh[];
+  meshPreview?: HostedMesh[];
 }
 
 /** Ground plane textured with the map underlay. Loads the texture (suspends) and draws the pre-built
@@ -427,7 +495,8 @@ const DEFAULT_WALL_THICKNESS_M = 0.15;
 const DEFAULT_DOOR_LINTEL_M = 2.1;
 const DEFAULT_WINDOW_LINTEL_M = 2.1;
 const DEFAULT_WINDOW_SILL_M = 0.9;
-const GREY = "#d6dae0";
+/** Native wall / plate colour when no material is bound: the bright, slightly warm white of a painted wall. */
+const GREY = "#f1f0ec";
 const FLOOR_GREY = "#b8bec6";
 
 const FURNITURE_DIMS: Record<FurnitureItem["type"], { w: number; d: number; h: number }> = {
@@ -469,7 +538,14 @@ const wallBands = (w: Wall, fullH: number): Array<{ yMin: number; yMax: number }
 /** The box a capture is framed on, in WORLD METRES. Defaults to the whole building; the Flow Render
  *  node passes the bounding box of the Space wired into it so one room fills the frame instead of
  *  sitting as a speck in the middle of the plan. */
-export interface CaptureFocus { centerX: number; centerY: number; widthM: number; depthM: number }
+export interface CaptureFocus {
+  centerX: number; centerY: number; widthM: number; depthM: number;
+  /** Floor of the storey being framed, world metres (default 0) — the camera aims at this storey, not the ground. */
+  baseZ?: number;
+  /** Plan cut: everything above this world height is clipped away (renderer clipping plane), so a room on
+   *  any storey is seen from above with the slab and the floors over it removed. */
+  clipAboveZ?: number;
+}
 
 /** The six canonical camera placements for a focus box, plus the point they all look at.
  *
@@ -498,8 +574,9 @@ const viewCameras = (
 ) => {
   const { centerX, centerY, widthM, depthM } = focus;
   const eyeZ = floorHeightM * 0.6;
+  const baseZ = focus.baseZ ?? 0;
   // Framed on the focus centre (world metres) — the model does not sit at the origin (see toScene).
-  const center = new THREE.Vector3(centerX, centerY, eyeZ);
+  const center = new THREE.Vector3(centerX, centerY, baseZ + eyeZ);
   // Half-extents ABOUT `center`. The scene spans z ∈ [0, topZ] while the eye sits at 0.6 of one storey,
   // so the vertical half-extent is whichever side of the look-at point reaches further.
   const topZ = Math.max(opts?.topZ ?? floorHeightM, floorHeightM);
@@ -619,13 +696,86 @@ const buildComposite = async (get: (v: SnapshotView) => string | undefined): Pro
   return null;
 };
 
+/** Image-based lighting from the Library's HDRI folder (R2 `library/HDRI/`, CC0 from Poly Haven — see its
+ *  index.json). "indoor" (default) is a neutral soft studio — whites stay white, the architectural-model look;
+ *  "interior" a warmer sunlit room; "outdoor" a soft sky for exterior views; any other
+ *  value is a Library-relative path ("HDRI/x.hdr") or a full URL. */
+export const HDRI_PRESETS: Record<string, string> = {
+  indoor: "HDRI/studio_small_09_2k.hdr",
+  interior: "HDRI/lebombo_2k.hdr",
+  outdoor: "HDRI/kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+};
+const hdriUrl = (hdri: string) => {
+  const rel = HDRI_PRESETS[hdri] ?? hdri;
+  return /^https?:/i.test(rel) ? rel : `${DEFAULT_LIBRARY_PATH.replace(/\/+$/, "")}/${rel.replace(/^\/+/, "")}`;
+};
+/** If the HDRI cannot load (offline, a bad path) the view must still light: fall back to drei's built-in preset
+ *  instead of letting the Suspense error take the whole canvas down. */
+class EnvFallback extends ReactComponent<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? this.props.fallback : this.props.children; }
+}
+
+/** Key light with soft shadows, aimed at the building centre, its shadow frustum sized to the building —
+ *  a default 5 m frustum clips the shadows of anything larger, and a huge one blurs every shadow. */
+function SunLight({ cx, cy, span }: { cx: number; cy: number; span: number }) {
+  const { scene } = useThree();
+  const light = useMemo(() => new THREE.DirectionalLight("#ffffff", 1.35), []);
+  useEffect(() => {
+    const half = Math.max(8, span * 0.75);
+    light.position.set(cx + span * 0.6, cy - span * 0.45, Math.max(14, span * 0.9));
+    light.target.position.set(cx, cy, 0);
+    light.castShadow = true;
+    light.shadow.mapSize.set(2048, 2048);
+    Object.assign(light.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 0.5, far: span * 4 + 40 });
+    light.shadow.camera.updateProjectionMatrix();
+    // Bias sized to the shadow texel (frustum / map size ≈ 1–2 cm here): too small and every lit face shadows
+    // itself in fine diagonal stripes ("acne") — what showed on wall tops and floors.
+    light.shadow.bias = -0.0015;
+    light.shadow.normalBias = Math.max(0.05, (half * 2) / 2048 * 2.5);
+    scene.add(light, light.target);
+    return () => { scene.remove(light, light.target); };
+  }, [scene, light, cx, cy, span]);
+  return null;
+}
+
+/** Every solid casts and receives shadows; glazing (transmissive) receives but does not cast — a window that
+ *  casts a hard shadow reads as a wall (same rule as the Blender scene). Runs after each commit so meshes that
+ *  arrive later (objects evaluate asynchronously) are covered; a traversal of a few hundred meshes is cheap. */
+function ShadowFlags() {
+  const { scene, invalidate } = useThree();
+  useEffect(() => {
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = m.material as THREE.MeshPhysicalMaterial | undefined;
+      const glass = !!mat && "transmission" in mat && (mat.transmission ?? 0) > 0;
+      m.castShadow = !glass && !(mat && mat.transparent);
+      m.receiveShadow = true;
+    });
+    invalidate();
+  });
+  return null;
+}
+
 /** Bridge component mounted inside <Canvas/> so it has access to gl/scene/camera
  *  via useThree. Exposes a captureAll() that renders the scene from six canonical
  *  viewpoints to the offscreen-capable WebGL buffer (preserveDrawingBuffer on),
  *  then restores the original camera. */
-const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number; floorHeightM: number; centerX: number; centerY: number }>(
-  ({ widthM, depthM, floorHeightM, centerX, centerY }, ref) => {
+const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number; floorHeightM: number; centerX: number; centerY: number; walkRef?: React.MutableRefObject<WalkState> }>(
+  ({ widthM, depthM, floorHeightM, centerX, centerY, walkRef }, ref) => {
     const { gl, scene, camera, size } = useThree();
+    const controls = useThree((st) => st.controls);
+    const invalidate = useThree((st) => st.invalidate);
+    const advance = useThree((st) => st.advance);
+    // DEV only: expose the live renderer / scene / camera / controls for profiling (renderer.info draw calls)
+    // and for scripted picking and camera tests. Never in a production build.
+    useEffect(() => {
+      if (!import.meta.env.DEV) return;
+      (window as unknown as { __fp3d?: unknown }).__fp3d = { gl, scene, camera, controls, invalidate, advance };
+      return () => { delete (window as unknown as { __fp3d?: unknown }).__fp3d; };
+    }, [gl, scene, camera, controls, invalidate, advance]);
     /** How high the drawn model actually reaches, in world metres — what a TOP view has to clear and what
      *  an elevation has to contain. MEASURED, because `floorHeightM` is one storey: a massing tower framed
      *  by that alone would put the top camera inside the building. Measured over the model content group
@@ -694,20 +844,27 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
         const group = wrapForExport(inner, opts, "z-up");
         return { blob: await exportGroupToBlob(group, format), meshes: inner.children.length, triangles };
       },
+      recordWalkthrough: walkRef ? () => { walkRef.current.dir = 1; return recordWalk(walkRef); } : undefined,
       captureOne: async (view: SnapshotView, focus?: CaptureFocus) => {
         const aspect = Math.max(1e-6, size.width / size.height);
         // Fall back to the building box, which is what captureAll always uses — so an unfocused
         // captureOne("isometric") is pixel-identical to the frame captureAll would have produced.
         const box = focus ?? { centerX, centerY, widthM, depthM };
-        const { center, views } = viewCameras(box, floorHeightM, { aspect, topZ: sceneTopZ() });
+        const clip = box.clipAboveZ;
+        const topZ = clip != null ? Math.max(clip - (box.baseZ ?? 0), 0.5) : sceneTopZ();
+        const { center, views } = viewCameras(box, floorHeightM, { aspect, topZ });
         const shoot = (v: typeof views[number]): string => {
           const cam = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
           cam.up.set(v.up[0], v.up[1], v.up[2]);
           cam.position.set(v.pos[0], v.pos[1], v.pos[2]);
           cam.lookAt(center);
           cam.updateMatrixWorld();
-          gl.render(scene, cam);
-          try { return gl.domElement.toDataURL("image/png"); } catch { return ""; }
+          const prevPlanes = gl.clippingPlanes;
+          if (clip != null) gl.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 0, -1), clip)];
+          try {
+            gl.render(scene, cam);
+            return gl.domElement.toDataURL("image/jpeg", 0.88);
+          } catch { return ""; } finally { gl.clippingPlanes = prevPlanes; }
         };
         // The composite is the one view that is not a camera: it needs the five orthographic frames
         // first, so render those (still framed on `box`) and hand them to the shared builder.
@@ -888,13 +1045,23 @@ const SnapshotBridge = forwardRef<SnapshotApi, { widthM: number; depthM: number;
 );
 SnapshotBridge.displayName = "SnapshotBridge";
 
-export default function FloorPlan3DCanvas({ model, levels, activeElevationM, contentOnly = false, pixelsPerMeter, placementMode = "polygon", rooms, objectsOnly = false, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef }: Props) {
+export default function FloorPlan3DCanvas({ model, levels, activeElevationM, contentOnly = false, pixelsPerMeter, placementMode = "polygon", rooms, objectsOnly = false, selectedWallIds, onSelectWall, lowPoly = false, architectural = false, floorHeightM, wallCarvePolys, massingShowBlocks = false, massingExtrudeUpwards = true, massingPreview, mapUnderlay, spaceMasses, primitiveMasses, booleanMasses, meshPreview, snapshotApiRef, onSelectHost, selectedHost, hdri = "indoor", walkthrough, onGenerateWalkthrough }: Props) {
   const ppm = Math.max(1e-6, pixelsPerMeter);
   // Effective per-floor height. Falls back to the legacy 2.7 m constant when no prop is passed
   // (preserves existing behaviour for callers that don't yet thread the Massing block's value).
   const FLOOR_H = floorHeightM && floorHeightM > 0 ? floorHeightM : WALL_HEIGHT_M;
   const useSymbol = placementMode === "2dSymbol";
   const selectedSet = useMemo(() => new Set(selectedWallIds ?? []), [selectedWallIds]);
+  const primMatDefs = useMaterialDefs((primitiveMasses ?? []).map((p) => p.materialPath ?? ""));
+  // Walkthrough playback state, shared by the in-canvas camera driver and the HTML bar (mutated per frame).
+  const walkRef = useRef<WalkState>(newWalkState());
+  // DEV: scripted playback / export for tests (`window.__fpWalk`).
+  useEffect(() => {
+    if (!import.meta.env.DEV || contentOnly) return;
+    const w = window as unknown as { __fpWalk?: unknown };
+    w.__fpWalk = { state: walkRef.current, record: () => recordWalk(walkRef) };
+    return () => { delete w.__fpWalk; };
+  }, [contentOnly]);
   const slabRooms = rooms ?? model.rooms ?? [];
   const ROOM_SLAB_THICKNESS_M = 0.2;
   /** Click handler for a wall mesh. Stops propagation so OrbitControls doesn't claim the gesture
@@ -1281,18 +1448,23 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
           <mesh
             key={`prim-mass-${pm.id}`}
             name={pm.layer ?? pm.id}
+            userData={pm.host ? { host: pm.host } : undefined}
+            onClick={pm.host && onSelectHost ? (ev: ThreeEvent<MouseEvent>) => { ev.stopPropagation(); onSelectHost(pm.host!, !!ev.nativeEvent?.shiftKey); } : undefined}
             position={[tf?.tx ?? 0, y + (tf?.ty ?? 0), tf?.tz ?? 0]}
             rotation={[tf?.rx ?? 0, tf?.ry ?? 0, tf?.rz ?? 0]}
             scale={[tf?.mx ?? 1, tf?.my ?? 1, tf?.mz ?? 1]}
+            {...(pm.materialPath && !ds ? { material: libraryMaterial(pm.materialPath, pm.color, primMatDefs.get(pm.materialPath), sameHost(pm.host, selectedHost) ? { emissive: SELECT_EMISSIVE, emissiveIntensity: 0.45 } : undefined) } : {})}
           >
             {geom}
-            <meshStandardMaterial
+            {!(pm.materialPath && !ds) && <meshStandardMaterial
               color={ds?.color ?? pm.color ?? "#94a3b8"}
               wireframe={ds?.wireframe ?? false}
               transparent={(ds?.opacity ?? 1) < 1}
               opacity={ds?.opacity ?? 1}
               side={mirrored || (ds?.opacity ?? 1) < 1 ? THREE.DoubleSide : THREE.FrontSide}
-            />
+              emissive={sameHost(pm.host, selectedHost) ? SELECT_EMISSIVE : "#000000"}
+              emissiveIntensity={sameHost(pm.host, selectedHost) ? 0.45 : 0}
+            />}
             {ds?.showEdges && <Edges color="#0f172a" threshold={15} lineWidth={1} />}
           </mesh>
         );
@@ -1306,7 +1478,7 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
 
       {/* Flow "Mesh to 3D" — generic meshes (column footings, …) built from lofted prisms. */}
       {meshPreview && meshPreview.length > 0 && (
-        <FlowMeshes meshes={meshPreview} ppm={ppm} />
+        <FlowMeshes meshes={meshPreview} ppm={ppm} onSelectHost={onSelectHost} selectedHost={selectedHost} />
       )}
 
       {/* Room slabs â€” extrude each room polygon as a thin floor plate at y=0. Click-selectable; the
@@ -1471,6 +1643,9 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
           // Architectural view: drop the topmost slab (the roof/ceiling cap) so the room interior is
           // visible from above. Floor base (i=0) and inter-floor seams (1..floors-1) are kept.
           if (architectural && i === floors) return null;
+          // A room carrying a Room object draws its own floor plate (with its floor material); a native slab in
+          // the same plane z-fights with it — the floor "flicker". The object's plate wins; skip the base slab.
+          if (i === 0 && (r.attachments ?? []).some((a) => String(a.objectId ?? "").startsWith("room"))) return null;
           const y = i === 0
             ? slabBumpY
             : i === floors
@@ -3149,6 +3324,7 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
   if (contentOnly) return modelContent;
 
   return (
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
     <Canvas
       // Z-UP scene (see the rotation group below): 3/4 view from the +X / −Y side, above. `up:[0,0,1]` is set
       // in the CAMERA PROP (applied at camera creation, BEFORE OrbitControls initialises — onCreated alone
@@ -3156,13 +3332,23 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
       // plane reads as the floor and height rises vertically. Framed on the building centre (bcX, bcY).
       camera={{ position: [bcX + camDist, bcY - camDist, camDist * 0.8], up: [0, 0, 1], fov: 45, near: 0.1, far: 1000 }}
       style={{ width: "100%", height: "100%", background: "#eef2f7" }}
+      shadows="soft"
       gl={{ preserveDrawingBuffer: true }}
-      onCreated={({ camera }) => camera.up.set(0, 0, 1)}
+      onCreated={({ camera, gl }) => {
+        camera.up.set(0, 0, 1);
+        // AgX (Blender's default view transform since 4.0): physical materials + an HDRI need a filmic
+        // curve, or whites clip and the library colours wash out. Same look as the Blender renders.
+        // Khronos PBR Neutral: keeps a white wall WHITE and colours true — AgX's filmic shoulder greys bright
+        // emulsion and wants a higher exposure. This is the clean "architectural visualisation" look.
+        gl.toneMapping = THREE.NeutralToneMapping;
+        gl.toneMappingExposure = 1.05;
+      }}
       onPointerMissed={() => onSelectWall?.(null, false)}
     >
       {snapshotApiRef && (
         <SnapshotBridge
           ref={snapshotApiRef}
+          walkRef={walkRef}
           widthM={widthM}
           depthM={depthM}
           floorHeightM={FLOOR_H}
@@ -3170,9 +3356,26 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
           centerY={bcY}
         />
       )}
-      <ambientLight intensity={1.1} />
-      <directionalLight position={[20, 30, 15]} intensity={0.5} />
-      <directionalLight position={[-15, 20, -10]} intensity={0.35} />
+      {/* Image-based light: an HDRI gives physical materials something to reflect (glass, brass, lacquer)
+          and soft, directional fill. The two key lights stay for shape; the ambient drops, the HDRI fills. */}
+      <EnvFallback key={hdri} fallback={<Suspense fallback={null}><Environment preset="apartment" environmentIntensity={1.0} /></Suspense>}>
+        <Suspense fallback={null}>
+          <Environment files={hdriUrl(hdri)} environmentIntensity={hdri === "outdoor" ? 0.9 : 1.1} />
+        </Suspense>
+      </EnvFallback>
+      {/* The post-processing composer draws onto the clear colour, not the CSS background — without an explicit
+          scene background every open sky reads black. */}
+      <color attach="background" args={["#e8e9eb"]} />
+      <hemisphereLight args={["#ffffff", "#d9d7d2", 0.45]} />
+      <SunLight cx={bcX} cy={bcY} span={Math.max(widthM, depthM)} />
+      <directionalLight position={[-15, 20, -10]} intensity={0.3} />
+      <ShadowFlags />
+      {/* Contact darkening where surfaces meet (corners, under furniture, between baffles) + clean edges.
+          N8AO is screen-space and depth-aware, so it costs about the same on a 10 m room or a whole floor. */}
+      <EffectComposer multisampling={0} enableNormalPass={false}>
+        <N8AO aoRadius={0.6} distanceFalloff={0.4} intensity={2.2} quality="medium" halfRes />
+        <SMAA />
+      </EffectComposer>
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} target={[bcX, bcY, 1]} />
       <ZUpController />
 
@@ -3213,7 +3416,12 @@ export default function FloorPlan3DCanvas({ model, levels, activeElevationM, con
           </group>
         ))}
       </group>
+      <WalkCamera walk={walkthrough} ppm={ppm} state={walkRef} />
     </Canvas>
+    {(walkthrough || onGenerateWalkthrough) && (
+      <WalkthroughBar walk={walkthrough} state={walkRef} onGenerate={onGenerateWalkthrough} />
+    )}
+    </div>
   );
 }
 

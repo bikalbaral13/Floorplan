@@ -1210,6 +1210,10 @@ export interface FloorPlanModel {
   /** Moodboard decisions — only what was picked, per board. A fixed top-level key of the plan file
    *  beside nodes / segments / spaces. See {@link MoodboardSelection}. */
   moodboards?: MoodboardSelection[];
+  /** Walkthrough — a plan-level entity beside nodes / segments / spaces: the space traversal graph (stops,
+   *  door / opening / open links), the forward route and the camera path the 3D view plays. See ./walkthrough.ts.
+   *  (Not `settings.walkthrough`, which is the library path of an uploaded walkthrough brief PDF.) */
+  walkthrough?: import("./walkthrough").Walkthrough;
   /** Workflows imported as Drawing-toolbar tools (Import Workflows) — saved with the plan. */
   flowTools?: import("./flowTools").ImportedFlowTool[];
   /** Workflow-tool runs linked to the space they ran on, by space id — see ToolAttachment. */
