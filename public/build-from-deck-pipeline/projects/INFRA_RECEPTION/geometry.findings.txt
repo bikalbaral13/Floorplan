@@ -1,0 +1,14 @@
+scale 53.80 mm/px (reception desk long side = 3300 mm (dims slide 16))
+ok   W-N on zone outline (max 1.6 px)
+ok   W-W on zone outline (max 2.5 px)
+ok   W-D on zone outline (max 2.5 px)
+ok   W-S on zone outline (max 1.6 px)
+ok   W-E on zone outline (max 1.6 px)
+zone Z-RECEPTION: 46.4 m2
+zone Z-LOBBY: 34.2 m2
+opening D-V1: 1009 mm
+opening D-V2: 1009 mm
+opening D-W: 1560 mm
+opening D-E: 1560 mm
+spec params attached: ['FL-01', 'FL-02', 'FN-04', 'LT-03', 'WL-01', 'WL-02', 'WL-03', 'WL-04', 'WL-05']
+canvas: 17 nodes, 14 segments, 2 spaces -> INFRA_RECEPTION.canvas.json

@@ -1,0 +1,149 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "roombrief/1",
+ "type": "object",
+ "required": [
+  "schema",
+  "project",
+  "room",
+  "zones",
+  "items"
+ ],
+ "properties": {
+  "schema": {
+   "const": "roombrief/1"
+  },
+  "project": {
+   "type": "string"
+  },
+  "room": {
+   "type": "string"
+  },
+  "heights_mm": {
+   "type": "object"
+  },
+  "zones": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "points_px"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "label": {
+      "type": "string"
+     },
+     "from_slide": {
+      "type": "integer"
+     },
+     "points_px": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "minItems": 3
+     }
+    }
+   }
+  },
+  "items": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "category",
+     "object",
+     "params",
+     "slides"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "category": {
+      "enum": [
+       "flooring",
+       "ceiling",
+       "wall",
+       "lighting",
+       "furniture"
+      ]
+     },
+     "zone": {
+      "type": "string"
+     },
+     "object": {
+      "type": "object",
+      "required": [
+       "kind"
+      ],
+      "properties": {
+       "kind": {
+        "type": "string"
+       },
+       "hint": {
+        "type": "string"
+       },
+       "new": {
+        "type": "boolean"
+       }
+      }
+     },
+     "params": {
+      "type": "object",
+      "additionalProperties": {
+       "type": [
+        "number",
+        "string",
+        "boolean"
+       ]
+      }
+     },
+     "slides": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "refImages": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "productUrls": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "note": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "cameras": {
+   "type": "array"
+  },
+  "checks": {
+   "type": "array"
+  },
+  "openQuestions": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ }
+}

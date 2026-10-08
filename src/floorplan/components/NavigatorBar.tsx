@@ -94,6 +94,7 @@ export const NavigatorBar = ({ overlay = false }: { overlay?: boolean }) => {
         <PipelineTreeSection base="/floorplan-tracer-pipeline" title="Floorplan Tracer Pipeline" storageKey="bp.editor.tracerPipelineOpen" />
         <PipelineTreeSection base="/exterior-mesh-pipeline" title="Exterior Mesh Pipeline" storageKey="bp.editor.extPipelineOpen" />
         <PipelineTreeSection base="/walkthrough-video-pipeline" title="Walkthrough Video generation Pipeline" storageKey="bp.editor.walkthroughPipelineOpen" />
+        <PipelineTreeSection base="/build-from-deck-pipeline" title="Build from Plan Deck" storageKey="bp.editor.deckPipelineOpen" />
         <LibrarySelectionBox />
       </div>
       {/* Resize grip — the whole right edge (desktop only; the phone drawer has a fixed width). */}

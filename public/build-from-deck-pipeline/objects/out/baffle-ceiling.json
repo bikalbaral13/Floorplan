@@ -1,0 +1,844 @@
+{
+ "version": 1,
+ "id": "baffle-ceiling-with-math",
+ "title": "Baffle Ceiling — straight or wave acoustic blades over a space, with an end-profile frame",
+ "category": "Architectural",
+ "object": {
+  "hostKind": "space",
+  "name": "Baffle Ceiling",
+  "units": "m",
+  "icon": {
+   "paths": [
+    "M3 5h18",
+    "M5 5v6",
+    "M9 5v8",
+    "M13 5v6",
+    "M17 5v8",
+    "M21 5v6"
+   ]
+  }
+ },
+ "description": "A parametric BAFFLE CEILING on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SPACE. The blades run along the space's longest edge (Rotation turns them) and fill its bounding box less the inset. Use a rectangular ceiling-zone space for an angled room: the field is the host's box, not its outline.\n\nWAVE = THE BOTTOM EDGE, NOT THE BLADE. Each blade is cut into segments of Wave segment length; a segment's bottom sits at bottomLevel + A·(½ + ½·sin(2πu/λ + i·φ)), so the lowest edge is exactly bottomLevel and the wave travels across the field by φ per blade. The tops stay level at bottomLevel + A + height — a hung baffle has a straight top.\n\nCOLOUR is by row: Alternate puts odd blades on the Baffles B row, so two felt colours need no second object. END PROFILE caps the blade ends with a straight band (the deck's review: white, rectangular, need not follow the wave — slides 23, 27); Full frame also runs it down the long sides, which hides the wave from the side.\n\nDEFAULTS are the INFRA Reception spec: 25 mm blades, 150 mm deep, 50 mm clear, lowest edge 2700 FFL.",
+ "nodes": [
+  {
+   "id": "geo",
+   "position": {
+    "x": -960,
+    "y": 60
+   },
+   "data": {
+    "tool": "source",
+    "params": {
+     "grabFromSelection": true,
+     "id": "",
+     "nodeLabel": "Geometry"
+    }
+   }
+  },
+  {
+   "id": "props",
+   "position": {
+    "x": -640,
+    "y": 60
+   },
+   "data": {
+    "tool": "input-props",
+    "params": {
+     "props": [
+      {
+       "id": "P",
+       "name": "Host — node / segment / space [[x, y], …]",
+       "type": "text",
+       "value": "[[0, 0]]",
+       "options": []
+      },
+      {
+       "id": "profile",
+       "name": "Profile",
+       "type": "select",
+       "value": "Wave",
+       "options": [
+        "Straight",
+        "Wave"
+       ]
+      },
+      {
+       "id": "baffleThk",
+       "name": "Baffle thickness",
+       "type": "range",
+       "value": 0.025,
+       "min": 0.01,
+       "max": 0.1,
+       "step": 0.001,
+       "options": []
+      },
+      {
+       "id": "baffleHeight",
+       "name": "Baffle height",
+       "type": "range",
+       "value": 0.15,
+       "min": 0.05,
+       "max": 0.6,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "clearSpacing",
+       "name": "Clear spacing between baffles",
+       "type": "range",
+       "value": 0.05,
+       "min": 0.01,
+       "max": 0.5,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "bottomLevel",
+       "name": "Lowest bottom edge (FFL)",
+       "type": "range",
+       "value": 2.7,
+       "min": 2,
+       "max": 5,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "waveAmplitude",
+       "name": "Wave amplitude",
+       "type": "range",
+       "value": 0.12,
+       "min": 0,
+       "max": 0.5,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "waveLength",
+       "name": "Wave length",
+       "type": "range",
+       "value": 3,
+       "min": 0.5,
+       "max": 10,
+       "step": 0.05,
+       "options": []
+      },
+      {
+       "id": "wavePhaseStep",
+       "name": "Phase shift per baffle (rad)",
+       "type": "range",
+       "value": 0.25,
+       "min": 0,
+       "max": 3.2,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "segLength",
+       "name": "Wave segment length",
+       "type": "range",
+       "value": 0.25,
+       "min": 0.05,
+       "max": 1,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "inset",
+       "name": "Inset from space edge",
+       "type": "range",
+       "value": 0.1,
+       "min": 0,
+       "max": 2,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "colourMode",
+       "name": "Colour mode",
+       "type": "select",
+       "value": "Alternate",
+       "options": [
+        "Alternate",
+        "Single"
+       ]
+      },
+      {
+       "id": "endProfile",
+       "name": "End profile",
+       "type": "select",
+       "value": "Ends",
+       "options": [
+        "None",
+        "Ends",
+        "Full frame"
+       ]
+      },
+      {
+       "id": "profileHeight",
+       "name": "End profile height",
+       "type": "range",
+       "value": 0.3,
+       "min": 0.02,
+       "max": 0.8,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "profileThk",
+       "name": "End profile thickness",
+       "type": "range",
+       "value": 0.02,
+       "min": 0.005,
+       "max": 0.1,
+       "step": 0.001,
+       "options": []
+      },
+      {
+       "id": "rotation",
+       "name": "Rotation (deg)",
+       "type": "range",
+       "value": 0,
+       "min": 0,
+       "max": 360,
+       "step": 1,
+       "options": []
+      },
+      {
+       "id": "anchorDir",
+       "name": "Anchor Direction",
+       "type": "select",
+       "value": "Center",
+       "options": [
+        "Top-Left",
+        "Top-Center",
+        "Top-Right",
+        "Left-Center",
+        "Center",
+        "Right-Center",
+        "Bottom-Left",
+        "Bottom-Center",
+        "Bottom-Right"
+       ]
+      },
+      {
+       "id": "fitMode",
+       "name": "Fit to host",
+       "type": "select",
+       "value": "Off",
+       "options": [
+        "Off",
+        "Max",
+        "Exact"
+       ]
+      },
+      {
+       "id": "margin",
+       "name": "Margin from host",
+       "type": "range",
+       "value": 0,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "flipSide",
+       "name": "Flip side",
+       "type": "checkbox",
+       "value": false,
+       "options": []
+      },
+      {
+       "id": "material",
+       "name": "Material",
+       "type": "text",
+       "value": "acoustic felt baffles, painted aluminium end profile",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "semantics",
+       "name": "Semantics",
+       "type": "text",
+       "value": "suspended acoustic baffle ceiling",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "materialPath",
+       "name": "Material path",
+       "type": "text",
+       "value": "Fabric/felt.json",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "finishes",
+       "name": "Finishes",
+       "type": "text",
+       "value": "Baffles B=Fabric/felt.json; End profile=Metal/powder-coat.json; *=Fabric/felt.json",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specId",
+       "name": "Spec id",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specCategory",
+       "name": "Spec category",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specNote",
+       "name": "Spec note",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "deckSlides",
+       "name": "Deck slides",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "refImages",
+       "name": "Reference images",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "productUrl",
+       "name": "Product link",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "math",
+   "position": {
+    "x": -180,
+    "y": 40
+   },
+   "data": {
+    "tool": "expr",
+    "params": {
+     "name": "Baffle Ceiling maths",
+     "expr": "_natL = 0\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_bodyL = _hostL\n_bodyW = _hostW\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\nbfIn = inset + margin\nbfL = max(0.1, _hostL - 2 * bfIn)\nbfW = max(0.1, _hostW - 2 * bfIn)\nbfPitch = baffleThk + clearSpacing\nbfN = max(1, floor((bfW - baffleThk) / bfPitch) + 1)\nbfWave = profile == 'Wave'\nbfNs = bfWave ? max(1, round(bfL / segLength)) : 1\nbfBi = kron(arange(bfN), ones(bfNs, 1))\nbfSi = kron(ones(bfN, 1), arange(bfNs))\nbfDu = bfL / bfNs\nbfUa = 0 - bfL / 2 + bfSi * bfDu\nbfUb = bfUa + bfDu\nbfVc = (bfBi - (bfN - 1) / 2) * bfPitch\nbfVa = bfVc - baffleThk / 2\nbfVb = bfVc + baffleThk / 2\nbfPh = 2 * PI * (bfUa + bfDu / 2) / waveLength + bfBi * wavePhaseStep\nbfAmp = bfWave ? waveAmplitude : 0\nbfZ0 = bottomLevel + bfAmp * (0.5 + 0.5 * sin(bfPh))\nbfZTop = bottomLevel + bfAmp + baffleHeight\nbfG = colourMode == 'Alternate' ? 1 + (bfBi % 2) : fill(rows(bfBi), 1, 1)\nbfNq = rows(bfUa)\nbfQ = hcat(bfUa, bfVa, bfUb, bfVa, bfUb, bfVb, bfUa, bfVb, bfZ0, fill(bfNq, 1, bfZTop), bfG)\n# End profile — a straight (rectangular, not wave-following) cap across the blade ends; Full frame adds the long sides\nbfFg = endProfile != 'None' ? 3 : 0\nbfSg = endProfile == 'Full frame' ? 3 : 0\nbfFz0 = bottomLevel\nbfFz1 = bottomLevel + profileHeight\nbfX = bfL / 2\nbfY = bfW / 2\nbfT = profileThk\nbfFQ = vcat(hcat(0 - bfX - bfT, 0 - bfY - bfT, 0 - bfX, 0 - bfY - bfT, 0 - bfX, bfY + bfT, 0 - bfX - bfT, bfY + bfT, bfFz0, bfFz1, bfFg), hcat(bfX, 0 - bfY - bfT, bfX + bfT, 0 - bfY - bfT, bfX + bfT, bfY + bfT, bfX, bfY + bfT, bfFz0, bfFz1, bfFg), hcat(0 - bfX, 0 - bfY - bfT, bfX, 0 - bfY - bfT, bfX, 0 - bfY, 0 - bfX, 0 - bfY, bfFz0, bfFz1, bfSg), hcat(0 - bfX, bfY, bfX, bfY, bfX, bfY + bfT, 0 - bfX, bfY + bfT, bfFz0, bfFz1, bfSg))\nQ = vcat(bfQ, bfFQ)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nBafflesA3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nBafflesB3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nFrame3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nBafflesAPlan = sub(compress(_WP, eq(col(_WP,3), 1)), 0, 0, _nwp, 3)\nBafflesBPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nFramePlan = sub(compress(_WP, eq(col(_WP,3), 3)), 0, 0, _nwp, 3)\n# Metrics\nbaffleCount = bfN\nbaffleLength = bfL\nbaffleCentres = bfPitch\nbaffleLinearMetres = bfN * bfL\nfieldArea = bfL * bfW\nlowestEdge = bottomLevel\ntopOfBaffles = bfZTop"
+    }
+   }
+  },
+  {
+   "id": "out",
+   "position": {
+    "x": 240,
+    "y": 60
+   },
+   "data": {
+    "tool": "output",
+    "params": {
+     "slots": [
+      {
+       "id": "s1",
+       "label": "Baffles A — solid"
+      },
+      {
+       "id": "s2",
+       "label": "Baffles B — solid"
+      },
+      {
+       "id": "s3",
+       "label": "End profile — solid"
+      },
+      {
+       "id": "s4",
+       "label": "Baffles A — plan"
+      },
+      {
+       "id": "s5",
+       "label": "Baffles B — plan"
+      },
+      {
+       "id": "s6",
+       "label": "End profile — plan"
+      },
+      {
+       "id": "s7",
+       "label": "Baffles"
+      },
+      {
+       "id": "s8",
+       "label": "Baffle length (m)"
+      },
+      {
+       "id": "s9",
+       "label": "Baffle centres (m)"
+      },
+      {
+       "id": "s10",
+       "label": "Baffle run (m)"
+      },
+      {
+       "id": "s11",
+       "label": "Field area (m²)"
+      },
+      {
+       "id": "s12",
+       "label": "Lowest edge (m)"
+      },
+      {
+       "id": "s13",
+       "label": "Top of baffles (m)"
+      },
+      {
+       "id": "s14",
+       "label": "Fit scale"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r2d",
+   "position": {
+    "x": 620,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-2d",
+    "params": {
+     "prims": [
+      {
+       "id": "p2_a",
+       "kind": "polygon",
+       "name": "Baffles A",
+       "color": "#2479AE",
+       "layer": "Ceiling",
+       "show": true
+      },
+      {
+       "id": "p2_b",
+       "kind": "polygon",
+       "name": "Baffles B",
+       "color": "#0B5394",
+       "layer": "Ceiling",
+       "show": true
+      },
+      {
+       "id": "p2_f",
+       "kind": "polygon",
+       "name": "End profile",
+       "color": "#e5e7eb",
+       "layer": "Ceiling",
+       "show": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r3d",
+   "position": {
+    "x": 900,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-3d",
+    "params": {
+     "prims": [
+      {
+       "id": "p3_a",
+       "kind": "polyhedron",
+       "name": "Baffles A",
+       "color": "#2479AE",
+       "layer": "Ceiling",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_b",
+       "kind": "polyhedron",
+       "name": "Baffles B",
+       "color": "#0B5394",
+       "layer": "Ceiling",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_f",
+       "kind": "polyhedron",
+       "name": "End profile",
+       "color": "#FFFFFF",
+       "layer": "Ceiling",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e_geo_props",
+   "source": "geo",
+   "target": "props",
+   "sourceHandle": "val-points",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e_props_math_P",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-P",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e_props_math_profile",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-profile",
+   "targetHandle": "valin-profile"
+  },
+  {
+   "id": "e_props_math_baffleThk",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-baffleThk",
+   "targetHandle": "valin-baffleThk"
+  },
+  {
+   "id": "e_props_math_baffleHeight",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-baffleHeight",
+   "targetHandle": "valin-baffleHeight"
+  },
+  {
+   "id": "e_props_math_clearSpacing",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-clearSpacing",
+   "targetHandle": "valin-clearSpacing"
+  },
+  {
+   "id": "e_props_math_bottomLevel",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-bottomLevel",
+   "targetHandle": "valin-bottomLevel"
+  },
+  {
+   "id": "e_props_math_waveAmplitude",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-waveAmplitude",
+   "targetHandle": "valin-waveAmplitude"
+  },
+  {
+   "id": "e_props_math_waveLength",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-waveLength",
+   "targetHandle": "valin-waveLength"
+  },
+  {
+   "id": "e_props_math_wavePhaseStep",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-wavePhaseStep",
+   "targetHandle": "valin-wavePhaseStep"
+  },
+  {
+   "id": "e_props_math_segLength",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-segLength",
+   "targetHandle": "valin-segLength"
+  },
+  {
+   "id": "e_props_math_inset",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-inset",
+   "targetHandle": "valin-inset"
+  },
+  {
+   "id": "e_props_math_colourMode",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-colourMode",
+   "targetHandle": "valin-colourMode"
+  },
+  {
+   "id": "e_props_math_endProfile",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-endProfile",
+   "targetHandle": "valin-endProfile"
+  },
+  {
+   "id": "e_props_math_profileHeight",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-profileHeight",
+   "targetHandle": "valin-profileHeight"
+  },
+  {
+   "id": "e_props_math_profileThk",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-profileThk",
+   "targetHandle": "valin-profileThk"
+  },
+  {
+   "id": "e_props_math_rotation",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-rotation",
+   "targetHandle": "valin-rotation"
+  },
+  {
+   "id": "e_props_math_anchorDir",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-anchorDir",
+   "targetHandle": "valin-anchorDir"
+  },
+  {
+   "id": "e_props_math_fitMode",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-fitMode",
+   "targetHandle": "valin-fitMode"
+  },
+  {
+   "id": "e_props_math_margin",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-margin",
+   "targetHandle": "valin-margin"
+  },
+  {
+   "id": "e_props_math_flipSide",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-flipSide",
+   "targetHandle": "valin-flipSide"
+  },
+  {
+   "id": "e_math_out_s1",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-BafflesA3D",
+   "targetHandle": "valin-s1"
+  },
+  {
+   "id": "e_math_out_s2",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-BafflesB3D",
+   "targetHandle": "valin-s2"
+  },
+  {
+   "id": "e_math_out_s3",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Frame3D",
+   "targetHandle": "valin-s3"
+  },
+  {
+   "id": "e_math_out_s4",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-BafflesAPlan",
+   "targetHandle": "valin-s4"
+  },
+  {
+   "id": "e_math_out_s5",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-BafflesBPlan",
+   "targetHandle": "valin-s5"
+  },
+  {
+   "id": "e_math_out_s6",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-FramePlan",
+   "targetHandle": "valin-s6"
+  },
+  {
+   "id": "e_math_out_s7",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-baffleCount",
+   "targetHandle": "valin-s7"
+  },
+  {
+   "id": "e_math_out_s8",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-baffleLength",
+   "targetHandle": "valin-s8"
+  },
+  {
+   "id": "e_math_out_s9",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-baffleCentres",
+   "targetHandle": "valin-s9"
+  },
+  {
+   "id": "e_math_out_s10",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-baffleLinearMetres",
+   "targetHandle": "valin-s10"
+  },
+  {
+   "id": "e_math_out_s11",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-fieldArea",
+   "targetHandle": "valin-s11"
+  },
+  {
+   "id": "e_math_out_s12",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-lowestEdge",
+   "targetHandle": "valin-s12"
+  },
+  {
+   "id": "e_math_out_s13",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-topOfBaffles",
+   "targetHandle": "valin-s13"
+  },
+  {
+   "id": "e_math_out_s14",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-scale",
+   "targetHandle": "valin-s14"
+  },
+  {
+   "id": "e_out_r2d_p2_a",
+   "source": "out",
+   "target": "r2d",
+   "sourceHandle": "val-s4",
+   "targetHandle": "valin-p2_a"
+  },
+  {
+   "id": "e_out_r2d_p2_b",
+   "source": "out",
+   "target": "r2d",
+   "sourceHandle": "val-s5",
+   "targetHandle": "valin-p2_b"
+  },
+  {
+   "id": "e_out_r2d_p2_f",
+   "source": "out",
+   "target": "r2d",
+   "sourceHandle": "val-s6",
+   "targetHandle": "valin-p2_f"
+  },
+  {
+   "id": "e_out_r3d_p3_a",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s1",
+   "targetHandle": "valin-p3_a"
+  },
+  {
+   "id": "e_out_r3d_p3_b",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s2",
+   "targetHandle": "valin-p3_b"
+  },
+  {
+   "id": "e_out_r3d_p3_f",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s3",
+   "targetHandle": "valin-p3_f"
+  }
+ ]
+}

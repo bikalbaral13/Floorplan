@@ -1,0 +1,34 @@
+[
+ {
+  "key": "baffleCeiling",
+  "file": "baffle-ceiling.json",
+  "hostKind": "space",
+  "category": "Architectural",
+  "kb": 23.3,
+  "cases": 5
+ },
+ {
+  "key": "logoSignage",
+  "file": "logo-signage.json",
+  "hostKind": "segment",
+  "category": "Architectural",
+  "kb": 20.2,
+  "cases": 3
+ },
+ {
+  "key": "receptionDesk",
+  "file": "reception-desk.json",
+  "hostKind": "node",
+  "category": "Architectural",
+  "kb": 22.6,
+  "cases": 3
+ },
+ {
+  "key": "servicesCeiling",
+  "file": "services-ceiling.json",
+  "hostKind": "space",
+  "category": "MEP",
+  "kb": 26.5,
+  "cases": 4
+ }
+]

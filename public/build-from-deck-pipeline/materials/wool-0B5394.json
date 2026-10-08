@@ -1,0 +1,59 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.wool.0b5394",
+  "title": "Fabric \u2014 wool, navy",
+  "description": "INFRA Reception lounge chair fabric (deck slide 12, one colour per chair). Recoloured from fabric.wool to the deck swatch #0B5394; texture recipe and surface block unchanged.",
+  "procedural": {
+    "type": "voronoi",
+    "blenderNode": "ShaderNodeTexVoronoi",
+    "params": {
+      "scale": 120,
+      "detail": 1,
+      "roughness": 0.5,
+      "randomness": 1,
+      "feature": "F1",
+      "distance": "EUCLIDEAN",
+      "colorA": "#1660a6",
+      "colorB": "#004682"
+    }
+  },
+  "pbr": {
+    "baseColor": "#0B5394",
+    "roughness": 0.98,
+    "metallic": 0,
+    "sheen": 0.3
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.55,
+      "roughness": 0.35,
+      "tint": "#e8e4dc"
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.6,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.1,
+      "scale": 18
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#0B5394"
+  },
+  "dxf": {
+    "pattern": "NET3",
+    "scale": 0.08,
+    "angle": 0
+  },
+  "variantOf": {
+    "id": "fabric.wool",
+    "swatch": "#0B5394"
+  }
+}

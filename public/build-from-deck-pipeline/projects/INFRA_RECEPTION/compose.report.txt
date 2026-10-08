@@ -1,0 +1,35 @@
+FL-01: Z-LOBBY room <- {'materialPath': 'Finishes/oak-herringbone.json'}
+FL-02: Z-RECEPTION room <- {'materialPath': 'Finishes/marble.json'}
+FL-03: 1 x rug
+CL-01: baffle-ceiling on 4.95 x 5.06 m zone
+CL-02: services-ceiling on 11.57 x 2.58 m zone
+LT-01: 6 x pendant
+LT-02: 1 x pendant
+LT-03: cove-light 5.80 m on W-D face
+WL-01: upholstered-panel 5.80 m on W-D face
+WL-02: logo-signage 5.80 m on W-D face
+WL-03: fluted-panel 5.80 m on W-D face
+WL-03: fluted-panel 2.34 m on W-D face
+WL-03: fluted-panel 5.30 m on W-S face
+WL-04: glass partition 4.99 m, 8 panes
+WL-04: glass partition 2.49 m, 4 panes
+WL-04: glass partition 2.47 m, 4 panes
+WL-04: door Visitor room 1 - stile glass door (WL-04) -> glass leaf, black frame
+WL-04: door Visitor room 2 - stile glass door (WL-04) -> glass leaf, black frame
+WL-05: W-E wall material Masonry/concrete.json
+WL-06: tv 1.10 m on W-D face
+WL-06: tv 1.10 m on W-D face
+FN-01: 1 x reception-desk
+FN-02: 2 x chair
+FN-03: sofa in 2 pieces
+FN-04: planter 4.46 x 0.51 m at 215.25,-55.5
+FN-05: render-only (people and monitors are scene dressing for S7 (Blender), not canvas objects)
+CAM-A: camera rot 151.95 - Deck view A - desk, logo, moss (slide 31)
+CAM-B: camera rot 30.15 - Deck view B - lobby, sofa, desk (slide 32)
+CAM-C: camera rot 207.7 - Deck view C - along the diagonal wall (slides 21, 22, 29)
+CAM-1: camera rot 32.89 - Corner NW
+CAM-2: camera rot 147.31 - Corner NE
+CAM-3: camera rot 219.24 - Corner SE (over sofa)
+CAM-4: camera rot 352.15 - Diagonal wall, mid
+material defaults copied onto attachments: 32 params
+canvas: 62 nodes, 43 segments, 4 spaces, 54 attachments (40 carry deck spec params) -> INFRA_RECEPTION.room.canvas.json

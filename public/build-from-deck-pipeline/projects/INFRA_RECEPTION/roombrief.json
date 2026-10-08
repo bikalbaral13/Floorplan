@@ -1,0 +1,709 @@
+{
+ "schema": "roombrief/1",
+ "project": "INFRA (Competition) - 2024",
+ "room": "RECEPTION",
+ "room_id": "reception",
+ "precedence": "final renders (slides 31, 32) > latest review comment > spec slide",
+ "heights_mm": {
+  "false_ceiling": 2700,
+  "partition": 2600,
+  "slab_soffit": null
+ },
+ "zones": [
+  {
+   "id": "Z-RECEPTION",
+   "label": "Reception (marble)",
+   "from_slide": 4,
+   "points_px": [
+    [
+     620.9,
+     499.2
+    ],
+    [
+     620.9,
+     446.4
+    ],
+    [
+     400.6,
+     446.4
+    ],
+    [
+     400.6,
+     489.1
+    ],
+    [
+     473.7,
+     562.1
+    ],
+    [
+     539.2,
+     496.7
+    ]
+   ]
+  },
+  {
+   "id": "Z-LOBBY",
+   "label": "Waiting lobby (herringbone)",
+   "from_slide": 3,
+   "points_px": [
+    [
+     476.7,
+     564.2
+    ],
+    [
+     540.7,
+     499.2
+    ],
+    [
+     619.9,
+     499.2
+    ],
+    [
+     619.9,
+     596.7
+    ],
+    [
+     506.2,
+     596.7
+    ]
+   ]
+  }
+ ],
+ "items": [
+  {
+   "id": "FL-01",
+   "category": "flooring",
+   "zone": "Z-LOBBY",
+   "slides": [
+    3
+   ],
+   "object": {
+    "kind": "floor-finish",
+    "hint": "space finish / tile pattern"
+   },
+   "params": {
+    "material": "light oak",
+    "pattern": "herringbone",
+    "colour": "#D9C3A0"
+   },
+   "note": "Wooden flooring herringbone pattern",
+   "refImages": [
+    "images/f8a43804d759.png"
+   ],
+   "productUrls": [
+    "https://in.pinterest.com/pin/429671620713582808/"
+   ]
+  },
+  {
+   "id": "FL-02",
+   "category": "flooring",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    4
+   ],
+   "object": {
+    "kind": "floor-finish",
+    "hint": "space finish"
+   },
+   "params": {
+    "material": "white statuario marble",
+    "pattern": "large slab",
+    "colour": "#F2F2F0"
+   },
+   "note": "Marble flooring",
+   "refImages": [
+    "images/2c1f495ebc46.png"
+   ],
+   "productUrls": [
+    "https://in.pinterest.com/pin/48906345947313517/"
+   ]
+  },
+  {
+   "id": "FL-03",
+   "category": "flooring",
+   "zone": "Z-LOBBY",
+   "slides": [
+    20
+   ],
+   "object": {
+    "kind": "rug",
+    "hint": "round rug under lounge chairs"
+   },
+   "params": {
+    "diameter_mm": 2400,
+    "product": "The Weaver RM564"
+   },
+   "note": "Review s20: change the rug -> theweaver rm564 240 cm dia",
+   "refImages": [
+    "images/0af303922100.jpg",
+    "images/9c20e04a523d.png"
+   ],
+   "productUrls": [
+    "https://www.theweaver.co.in/product/rm564-cstht240cm-diaw/"
+   ]
+  },
+  {
+   "id": "CL-01",
+   "category": "ceiling",
+   "zone": "Z-LOBBY",
+   "slides": [
+    5,
+    17,
+    23,
+    27
+   ],
+   "object": {
+    "kind": "baffle-ceiling",
+    "hint": "NEW: wave baffle ceiling",
+    "new": true
+   },
+   "params": {
+    "profile": "wave",
+    "baffleThk_mm": 25,
+    "baffleHeight_mm": 150,
+    "clearSpacing_mm": 50,
+    "bottomLevel_mm": 2700,
+    "colours": "#2479AE,#0B5394",
+    "endProfile": "rectangular",
+    "endProfileColour": "#FFFFFF"
+   },
+   "note": "Wave baffle 25 thk x 150 h @ 50 spacing, FC bottom 2700; end profile: black (s17) superseded by white rectangular (s23, s27)",
+   "refImages": [
+    "images/43a899c45d3f.png",
+    "images/9fd6c57dad45.png",
+    "images/1d65103576bc.png",
+    "images/100dac59eda1.jpg",
+    "images/bb720e523e5e.png",
+    "images/0af303922100.jpg",
+    "images/4e844f25ba9f.jpg"
+   ],
+   "productUrls": [
+    "https://arktura.com/resources/tools/"
+   ]
+  },
+  {
+   "id": "CL-02",
+   "category": "ceiling",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    6,
+    18,
+    28,
+    29
+   ],
+   "object": {
+    "kind": "exposed-ceiling",
+    "hint": "NEW: open ceiling + services",
+    "new": true
+   },
+   "params": {
+    "finish": "white paint",
+    "servicesColour": "#FFFFFF",
+    "ductShape": "oval",
+    "servicesComplete": true
+   },
+   "note": "Open ceiling, white; all ducts oval (s28); services white & complete (s18, s29)",
+   "refImages": [
+    "images/193328c7e986.png",
+    "images/75b7c944da6c.png",
+    "images/0af303922100.jpg",
+    "images/2104866e104c.png",
+    "images/e43927b00dd0.png",
+    "images/4e844f25ba9f.jpg",
+    "images/6c721c53610b.png"
+   ],
+   "productUrls": [
+    "https://in.pinterest.com/pin/566820303115807854/",
+    "https://lunalightstudios.com/products/hammered-lotus-leaf-metal-pendant-lamp-minimal-1-light-brass-hanging-ceiling-light-for-dining-room?variant=45873746936091"
+   ]
+  },
+  {
+   "id": "LT-01",
+   "category": "lighting",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    6
+   ],
+   "object": {
+    "kind": "pendant",
+    "hint": "white cylinder pendant (lamp/1)"
+   },
+   "params": {
+    "colour": "#FFFFFF",
+    "arrangement": "random",
+    "count": 6
+   },
+   "note": "White pendant lights placed randomly throughout the reception",
+   "refImages": [
+    "images/193328c7e986.png",
+    "images/75b7c944da6c.png"
+   ],
+   "productUrls": []
+  },
+  {
+   "id": "LT-02",
+   "category": "lighting",
+   "zone": "Z-LOBBY",
+   "slides": [
+    18,
+    25,
+    27
+   ],
+   "object": {
+    "kind": "pendant",
+    "hint": "hammered lotus-leaf brass pendant"
+   },
+   "params": {
+    "finish": "brass",
+    "diameterScale": "smaller than first render",
+    "hangLevel_mm": 2400,
+    "avoidDucts": true
+   },
+   "productUrl": "https://lunalightstudios.com/products/hammered-lotus-leaf-metal-pendant-lamp-minimal-1-light-brass-hanging-ceiling-light-for-dining-room?variant=45873746936091",
+   "note": "Suspended designer light; smaller dia (s25), higher (s27), must not clash with duct (s25)",
+   "refImages": [
+    "images/0af303922100.jpg",
+    "images/2104866e104c.png",
+    "images/e43927b00dd0.png",
+    "images/50d075c4a5b3.jpg",
+    "images/f09a255941b8.png",
+    "images/4e844f25ba9f.jpg"
+   ],
+   "productUrls": [
+    "https://lunalightstudios.com/products/hammered-lotus-leaf-metal-pendant-lamp-minimal-1-light-brass-hanging-ceiling-light-for-dining-room?variant=45873746936091",
+    "https://in.pinterest.com/pin/566820303115807854/",
+    "https://www.texturecan.com/details/182/"
+   ]
+  },
+  {
+   "id": "LT-03",
+   "category": "lighting",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    9
+   ],
+   "object": {
+    "kind": "cove-light",
+    "hint": "linear LED in fluted-panel cove"
+   },
+   "params": {
+    "level_mm": 2700
+   },
+   "note": "Cove light at top of fluted panel",
+   "refImages": [
+    "images/6b22d4381ea6.png"
+   ],
+   "productUrls": [
+    "https://in.pinterest.com/pin/279223245639487769/"
+   ]
+  },
+  {
+   "id": "WL-01",
+   "category": "wall",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    8,
+    25
+   ],
+   "object": {
+    "kind": "moss-wall",
+    "hint": "NEW: preserved moss wall panel",
+    "new": true
+   },
+   "params": {
+    "colour": "#4E6B1E",
+    "topLevel_mm": 2600
+   },
+   "productUrl": "https://www.texturecan.com/details/182/",
+   "note": "Moss wall behind the desk; darker than first render (s25); top level = glass top (s21)",
+   "refImages": [
+    "images/224dd8d0b01f.png",
+    "images/50d075c4a5b3.jpg",
+    "images/f09a255941b8.png"
+   ],
+   "productUrls": [
+    "https://www.texturecan.com/details/182/"
+   ]
+  },
+  {
+   "id": "WL-02",
+   "category": "wall",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    7,
+    9,
+    17,
+    26
+   ],
+   "object": {
+    "kind": "logo-signage",
+    "hint": "3D letters on moss wall"
+   },
+   "params": {
+    "text": "MARIAN",
+    "colour": "#0B2D6B",
+    "backlit": true,
+    "panelColour": "#D0B38E"
+   },
+   "note": "Add Marian logo (s17); dark blue not black, add backlight (s26)",
+   "refImages": [
+    "images/6b22d4381ea6.png",
+    "images/100dac59eda1.jpg",
+    "images/bb720e523e5e.png",
+    "images/50d075c4a5b3.jpg"
+   ],
+   "productUrls": [
+    "https://in.pinterest.com/pin/279223245639487769/"
+   ]
+  },
+  {
+   "id": "WL-03",
+   "category": "wall",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    9,
+    10
+   ],
+   "object": {
+    "kind": "fluted-panel",
+    "hint": "NEW: vertical fluted wall cladding",
+    "new": true
+   },
+   "params": {
+    "colour": "#FFFFFF",
+    "fromLevel_mm": 1500,
+    "toLevel_mm": 2700,
+    "behindSofaToLevel_mm": 2700
+   },
+   "note": "White fluted panel 1500-2700 lvl with cove light; continued behind sofa up to false ceiling",
+   "refImages": [
+    "images/6b22d4381ea6.png"
+   ],
+   "productUrls": [
+    "https://in.pinterest.com/pin/279223245639487769/"
+   ]
+  },
+  {
+   "id": "WL-04",
+   "category": "wall",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    11,
+    21
+   ],
+   "object": {
+    "kind": "glass-partition",
+    "hint": "NEW: black-frame Brooklyn glass partition + stile door",
+    "new": true
+   },
+   "params": {
+    "height_mm": 2600,
+    "frameSpacing_mm": 600,
+    "frameColour": "#111111",
+    "door": "stile glass, black frame"
+   },
+   "note": "Brooklyn glass partition to 2600 lvl, frames @600; door stile glass black frame (s21)",
+   "refImages": [
+    "images/c67f6b1eed34.png",
+    "images/0af303922100.jpg",
+    "images/e47b80f137a4.png"
+   ],
+   "productUrls": []
+  },
+  {
+   "id": "WL-05",
+   "category": "wall",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    15,
+    18
+   ],
+   "object": {
+    "kind": "wall-finish",
+    "hint": "textured paint"
+   },
+   "params": {
+    "finish": "concrete texture paint",
+    "colour": "#BDBDBD",
+    "toLevel": "false ceiling"
+   },
+   "note": "Concrete texture paint up to FC level (s15); s18 'change to texture wall' -> reference pin 566820303115807854",
+   "refImages": [
+    "images/b6435bae5d8d.png",
+    "images/0af303922100.jpg",
+    "images/2104866e104c.png",
+    "images/e43927b00dd0.png"
+   ],
+   "productUrls": [
+    "https://in.pinterest.com/pin/424464333629509079/",
+    "https://in.pinterest.com/pin/566820303115807854/",
+    "https://lunalightstudios.com/products/hammered-lotus-leaf-metal-pendant-lamp-minimal-1-light-brass-hanging-ceiling-light-for-dining-room?variant=45873746936091"
+   ]
+  },
+  {
+   "id": "WL-06",
+   "category": "wall",
+   "zone": "Z-LOBBY",
+   "slides": [
+    24
+   ],
+   "object": {
+    "kind": "tv-display",
+    "hint": "wall TV with image"
+   },
+   "params": {
+    "screenImage": true
+   },
+   "note": "Add some image to the TV display",
+   "refImages": [
+    "images/0af303922100.jpg"
+   ],
+   "productUrls": []
+  },
+  {
+   "id": "FN-01",
+   "category": "furniture",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    16,
+    17
+   ],
+   "object": {
+    "kind": "reception-desk",
+    "hint": "NEW: sculpted white desk with timber cubby base",
+    "new": true
+   },
+   "params": {
+    "length_mm": 3300,
+    "depth_mm": 800,
+    "height_mm": 750,
+    "plinth_mm": 300,
+    "topColour": "#FFFFFF",
+    "baseMaterial": "timber cubbies",
+    "baseColour": "#926343"
+   },
+   "note": "Desk 3300 x 800 x 750, 300 (dims sheet s16); add humans & desktop (s17)",
+   "refImages": [
+    "images/47d0cc8110f9.png",
+    "images/100dac59eda1.jpg",
+    "images/bb720e523e5e.png"
+   ],
+   "productUrls": []
+  },
+  {
+   "id": "FN-02",
+   "category": "furniture",
+   "zone": "Z-LOBBY",
+   "slides": [
+    12,
+    19,
+    20
+   ],
+   "object": {
+    "kind": "lounge-chair",
+    "hint": "Naughtone Always lounge"
+   },
+   "params": {
+    "count": 2,
+    "fabricColours": "#B7B7B7,#0B5394",
+    "legMaterial": "wood"
+   },
+   "productUrl": "https://www.naughtone.com/products/always-lounge/",
+   "note": "One fabric colour per chair; legs wooden (s20, metal->wood)",
+   "refImages": [
+    "images/7df641cacc03.png",
+    "images/2a56e4e2e0c1.png",
+    "images/0af303922100.jpg",
+    "images/9c20e04a523d.png"
+   ],
+   "productUrls": [
+    "https://www.naughtone.com/products/always-lounge/",
+    "https://www.theweaver.co.in/product/rm564-cstht240cm-diaw/"
+   ]
+  },
+  {
+   "id": "FN-03",
+   "category": "furniture",
+   "zone": "Z-LOBBY",
+   "slides": [
+    13,
+    19
+   ],
+   "object": {
+    "kind": "sofa-l",
+    "hint": "modular L-type sofa"
+   },
+   "params": {
+    "colour": "#BD6734",
+    "secondaryColour": "#93A084",
+    "centreTable": false
+   },
+   "note": "L type sofa, no centre table; colour changed (s19 swatch #93A084)",
+   "refImages": [
+    "images/f4d26da6faa8.png",
+    "images/0af303922100.jpg"
+   ],
+   "productUrls": []
+  },
+  {
+   "id": "FN-04",
+   "category": "furniture",
+   "zone": "Z-LOBBY",
+   "slides": [
+    14,
+    26
+   ],
+   "object": {
+    "kind": "planter",
+    "hint": "planter box behind sofa"
+   },
+   "params": {
+    "plants": "similar, green",
+    "position": "rear of sofa"
+   },
+   "note": "Planter box with similar plants at rear of sofa; plants green not white (s26)",
+   "refImages": [
+    "images/059f7a8bf6f1.png",
+    "images/50d075c4a5b3.jpg",
+    "images/bb720e523e5e.png"
+   ],
+   "productUrls": []
+  },
+  {
+   "id": "FN-05",
+   "category": "furniture",
+   "zone": "Z-RECEPTION",
+   "slides": [
+    17
+   ],
+   "object": {
+    "kind": "entourage",
+    "hint": "people + desktop monitors at desk"
+   },
+   "params": {
+    "people": 3,
+    "desktops": 2
+   },
+   "note": "Add humans & desktop in the reception table",
+   "refImages": [
+    "images/100dac59eda1.jpg",
+    "images/bb720e523e5e.png"
+   ],
+   "productUrls": []
+  }
+ ],
+ "cameras": [
+  {
+   "id": "CAM-A",
+   "match_slide": 31,
+   "eyeHeight_mm": 1600,
+   "note": "final render: desk + logo + moss wall"
+  },
+  {
+   "id": "CAM-B",
+   "match_slide": 32,
+   "eyeHeight_mm": 1600,
+   "note": "final render: lobby sofa + desk from opposite side"
+  },
+  {
+   "id": "CAM-C",
+   "match_slide": 22,
+   "eyeHeight_mm": 1600,
+   "note": "another view on a different angle (s22); human-eye height (s29)"
+  }
+ ],
+ "checks": [
+  {
+   "slide": 26,
+   "text": "Workstation placed in wrong direction — check against layout"
+  },
+  {
+   "slide": 25,
+   "text": "Suspended light must not overlap the duct"
+  },
+  {
+   "slide": 28,
+   "text": "All ducts oval in every view"
+  },
+  {
+   "slide": 21,
+   "text": "Glass top and moss wall top on the same level"
+  }
+ ],
+ "openQuestions": [
+  "Slab soffit height for the exposed ceiling (default 3600 mm)",
+  "Plan scale: derive from desk length 3300 mm on plan (stage 2)"
+ ],
+ "source": {
+  "deck": "PROJECT - View Inputs - Part 1.pptx",
+  "divider_slide": 2,
+  "slides": [
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30,
+   31,
+   32
+  ]
+ },
+ "plan": {
+  "file": "images/259b38aa056f.png",
+  "px": [
+   804,
+   994
+  ],
+  "room_view_px": [
+   393.0,
+   357.1,
+   643.8,
+   607.8
+  ]
+ },
+ "views": [
+  {
+   "slide": 30,
+   "kind": "view",
+   "images": [
+    "images/36b08a08d240.png"
+   ]
+  },
+  {
+   "slide": 31,
+   "kind": "final_render",
+   "images": [
+    "images/d3e18f458bea.jpg"
+   ]
+  },
+  {
+   "slide": 32,
+   "kind": "final_render",
+   "images": [
+    "images/2390203cff7f.jpg"
+   ]
+  }
+ ]
+}

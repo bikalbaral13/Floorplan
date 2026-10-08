@@ -1,0 +1,58 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.chenille.grey.b7b7b7",
+  "title": "Fabric \u2014 chenille, light grey",
+  "description": "INFRA Reception lounge chair fabric (deck slide 12, one colour per chair). Recoloured from fabric.chenille.grey to the deck swatch #B7B7B7; texture recipe and surface block unchanged.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 90,
+      "detail": 6,
+      "roughness": 0.62,
+      "distortion": 0.8,
+      "colorA": "#a4a4a5",
+      "colorB": "#cacac9"
+    }
+  },
+  "pbr": {
+    "baseColor": "#B7B7B7",
+    "roughness": 0.9,
+    "metallic": 0,
+    "sheen": 0.6,
+    "sheenTint": "#e6e4e0"
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.8,
+      "roughness": 0.3,
+      "tint": "#e8e8e8"
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.6,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.08,
+      "scale": 30
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#B7B7B7"
+  },
+  "dxf": {
+    "pattern": "HOUND",
+    "scale": 0.05,
+    "angle": 0
+  },
+  "variantOf": {
+    "id": "fabric.chenille.grey",
+    "swatch": "#B7B7B7"
+  }
+}

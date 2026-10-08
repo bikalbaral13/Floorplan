@@ -40,7 +40,7 @@ export const PHASES: PhaseDef[] = [
     id: "build",
     label: "Build",
     title: "Build: structure, services, quantities, cost, schedule and construction drawings",
-    pipelines: ["Complete House Design", "Plane Frame Analysis", "EPANET Pipe Networks", "DXF Plan Drawings"],
+    pipelines: ["Build from Plan Deck", "Complete House Design", "Plane Frame Analysis", "EPANET Pipe Networks", "DXF Plan Drawings"],
   },
   {
     id: "present",

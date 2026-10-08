@@ -1,0 +1,37 @@
+{
+ "schema": "deck-trace/1",
+ "note": "Read from the deck's plan image (804x994 px) by pixel profiles; wall a/b are centreline points in plan px. Walls are whole; openings cut them.",
+ "scale": {
+  "method": "reception desk long side = 3300 mm (dims slide 16)",
+  "ref_px": [[461.25, 490.75], [505.0, 533.75]], "ref_mm": 3300,
+  "checks": [
+   { "what": "desk depth across 45° = 14.5 px", "expect_mm": 800 },
+   { "what": "visitor-room door leaf 17.5 px", "expect_mm": 900 }
+  ]
+ },
+ "origin_px": [399, 597],
+ "level": { "id": "L0", "name": "Reception", "height_m": 3.6, "height_src": "assumed slab soffit (openQuestion)" },
+ "walls": [
+  { "id": "W-N", "a": [399, 446], "b": [621.5, 446], "t_mm": 100, "h_mm": 2600, "label": "Glass partition (WL-04)" },
+  { "id": "W-W", "a": [399, 446], "b": [399, 491], "t_mm": 150, "label": "West wall" },
+  { "id": "W-D", "a": [399, 491], "b": [507, 597], "t_mm": 150, "label": "Diagonal wall behind desk - fluted panel (WL-03) + moss wall (WL-01) + logo (WL-02) + cove (LT-03)" },
+  { "id": "W-S", "a": [507, 597], "b": [621.5, 597], "t_mm": 150, "label": "South wall" },
+  { "id": "W-E", "a": [621.5, 597], "b": [621.5, 446], "t_mm": 230, "label": "East wall - concrete texture paint (WL-05) + planter (FN-04)" }
+ ],
+ "openings": [
+  { "id": "D-V1", "wall": "W-N", "from_px": [491.75, 446], "to_px": [510.5, 446], "kind": "door", "leaves": 1, "hinge": "a", "swing": "L", "head_mm": 2100, "label": "Visitor room 1 - stile glass door (WL-04)", "spec": "WL-04" },
+  { "id": "D-V2", "wall": "W-N", "from_px": [556.75, 446], "to_px": [575.5, 446], "kind": "door", "leaves": 1, "hinge": "a", "swing": "L", "head_mm": 2100, "label": "Visitor room 2 - stile glass door (WL-04)", "spec": "WL-04" },
+  { "id": "D-W", "wall": "W-W", "from_px": [399, 455], "to_px": [399, 484], "kind": "door", "leaves": 2, "hinge": "a", "swing": "R", "head_mm": 2100, "label": "Entry from office (double), opens into reception" },
+  { "id": "D-E", "wall": "W-E", "from_px": [621.5, 487], "to_px": [621.5, 458], "kind": "door", "leaves": 2, "hinge": "a", "swing": "R", "head_mm": 2100, "label": "To lift lobby (double)" }
+ ],
+ "columns": [
+  { "id": "C-SE", "c_px": [615.5, 590.5], "size_mm": [850, 800], "label": "SE column" }
+ ],
+ "furniture_hints": [
+  { "item": "FN-01", "kind": "reception-desk", "corners_px": [[451.25, 500], [461.25, 490.75], [505, 533.75], [494.5, 543.75]], "note": "desk at 45°, staff side to the north-east" },
+  { "item": "FN-03", "kind": "sofa-l", "bbox_px": [554, 578, 610, 595], "note": "sofa along south wall" },
+  { "item": "FN-04", "kind": "planter", "bbox_px": [595, 500, 609, 583], "note": "planter/shelf along east wall behind sofa" },
+  { "item": "FN-02", "kind": "lounge-chair", "points_px": [[556, 508], [541, 536]], "note": "two lounge chairs" },
+  { "item": "FN-03", "kind": "coffee-table-symbol", "bbox_px": [568, 531, 587, 562], "note": "table in plan; deck says no centre table -> not placed" }
+ ]
+}

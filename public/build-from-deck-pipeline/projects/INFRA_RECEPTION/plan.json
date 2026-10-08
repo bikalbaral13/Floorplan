@@ -1,0 +1,342 @@
+{
+ "schema": "tracer-plan/1",
+ "units": "m",
+ "source": {
+  "kind": "drawing",
+  "files": [
+   "PROJECT - View Inputs - Part 1.pptx"
+  ],
+  "tracer_version": "build-from-deck/S3",
+  "standards": null
+ },
+ "scale": {
+  "px_per_m": 18.589,
+  "method": "reception desk long side = 3300 mm (dims slide 16)"
+ },
+ "levels": [
+  {
+   "id": "L0",
+   "name": "Reception",
+   "elevation": 0.0,
+   "height": 3.6,
+   "walls": [
+    {
+     "id": "W-N.1",
+     "a": [
+      0.0,
+      8.1231
+     ],
+     "b": [
+      4.9895,
+      8.1231
+     ],
+     "t": 0.1,
+     "h": 2.6,
+     "kind": "wall",
+     "label": "Glass partition (WL-04)",
+     "src": "measured"
+    },
+    {
+     "id": "W-N.2",
+     "a": [
+      5.9982,
+      8.1231
+     ],
+     "b": [
+      8.4862,
+      8.1231
+     ],
+     "t": 0.1,
+     "h": 2.6,
+     "kind": "wall",
+     "label": "Glass partition (WL-04)",
+     "src": "measured"
+    },
+    {
+     "id": "W-N.3",
+     "a": [
+      9.4948,
+      8.1231
+     ],
+     "b": [
+      11.9694,
+      8.1231
+     ],
+     "t": 0.1,
+     "h": 2.6,
+     "kind": "wall",
+     "label": "Glass partition (WL-04)",
+     "src": "measured"
+    },
+    {
+     "id": "W-W.1",
+     "a": [
+      0.0,
+      8.1231
+     ],
+     "b": [
+      0.0,
+      7.6389
+     ],
+     "t": 0.15,
+     "h": 3.6,
+     "kind": "wall",
+     "label": "West wall",
+     "src": "measured"
+    },
+    {
+     "id": "W-W.2",
+     "a": [
+      0.0,
+      6.0789
+     ],
+     "b": [
+      0.0,
+      5.7023
+     ],
+     "t": 0.15,
+     "h": 3.6,
+     "kind": "wall",
+     "label": "West wall",
+     "src": "measured"
+    },
+    {
+     "id": "W-D.1",
+     "a": [
+      0.0,
+      5.7023
+     ],
+     "b": [
+      5.8099,
+      0.0
+     ],
+     "t": 0.15,
+     "h": 3.6,
+     "kind": "wall",
+     "label": "Diagonal wall behind desk - fluted panel (WL-03) + moss wall (WL-01) + logo (WL-02) + cove (LT-03)",
+     "src": "measured"
+    },
+    {
+     "id": "W-S.1",
+     "a": [
+      5.8099,
+      0.0
+     ],
+     "b": [
+      11.9694,
+      0.0
+     ],
+     "t": 0.15,
+     "h": 3.6,
+     "kind": "wall",
+     "label": "South wall",
+     "src": "measured"
+    },
+    {
+     "id": "W-E.1",
+     "a": [
+      11.9694,
+      0.0
+     ],
+     "b": [
+      11.9694,
+      5.9175
+     ],
+     "t": 0.23,
+     "h": 3.6,
+     "kind": "wall",
+     "label": "East wall - concrete texture paint (WL-05) + planter (FN-04)",
+     "src": "measured"
+    },
+    {
+     "id": "W-E.2",
+     "a": [
+      11.9694,
+      7.4775
+     ],
+     "b": [
+      11.9694,
+      8.1231
+     ],
+     "t": 0.23,
+     "h": 3.6,
+     "kind": "wall",
+     "label": "East wall - concrete texture paint (WL-05) + planter (FN-04)",
+     "src": "measured"
+    }
+   ],
+   "openings": [
+    {
+     "id": "D-V1",
+     "a": [
+      4.9895,
+      8.1231
+     ],
+     "b": [
+      5.9982,
+      8.1231
+     ],
+     "t": 0.1,
+     "kind": "door",
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "a",
+     "swing": "L",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Visitor room 1 - stile glass door (WL-04)",
+     "src": "measured",
+     "width": 1.009
+    },
+    {
+     "id": "D-V2",
+     "a": [
+      8.4862,
+      8.1231
+     ],
+     "b": [
+      9.4948,
+      8.1231
+     ],
+     "t": 0.1,
+     "kind": "door",
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "a",
+     "swing": "L",
+     "leaves": 1,
+     "panes": 1,
+     "label": "Visitor room 2 - stile glass door (WL-04)",
+     "src": "measured",
+     "width": 1.009
+    },
+    {
+     "id": "D-W",
+     "a": [
+      0.0,
+      7.6389
+     ],
+     "b": [
+      0.0,
+      6.0789
+     ],
+     "t": 0.15,
+     "kind": "door",
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "a",
+     "swing": "R",
+     "leaves": 2,
+     "panes": 1,
+     "label": "Entry from office (double), opens into reception",
+     "src": "measured",
+     "width": 1.56
+    },
+    {
+     "id": "D-E",
+     "a": [
+      11.9694,
+      5.9175
+     ],
+     "b": [
+      11.9694,
+      7.4775
+     ],
+     "t": 0.23,
+     "kind": "door",
+     "sill": 0.0,
+     "head": 2.1,
+     "hinge": "a",
+     "swing": "R",
+     "leaves": 2,
+     "panes": 1,
+     "label": "To lift lobby (double)",
+     "src": "measured",
+     "width": 1.56
+    }
+   ],
+   "spaces": [
+    {
+     "id": "Z-RECEPTION",
+     "name": "Reception (marble)",
+     "type": "room",
+     "ring": [
+      [
+       11.9694,
+       5.2612
+      ],
+      [
+       11.9694,
+       8.1231
+      ],
+      [
+       0.0,
+       8.1231
+      ],
+      [
+       0.0,
+       5.7023
+      ],
+      [
+       4.0282,
+       1.7487
+      ],
+      [
+       7.5824,
+       5.3285
+      ]
+     ],
+     "area": 46.42,
+     "src": "deck-outline"
+    },
+    {
+     "id": "Z-LOBBY",
+     "name": "Waiting lobby (herringbone)",
+     "type": "area",
+     "ring": [
+      [
+       4.0282,
+       1.7487
+      ],
+      [
+       7.5824,
+       5.3285
+      ],
+      [
+       11.9694,
+       5.2612
+      ],
+      [
+       11.9694,
+       0.0
+      ],
+      [
+       5.8099,
+       0.0
+      ]
+     ],
+     "area": 34.25,
+     "src": "deck-outline"
+    }
+   ],
+   "columns": [
+    {
+     "id": "C-SE",
+     "c": [
+      11.6467,
+      0.3497
+     ],
+     "size": [
+      0.85,
+      0.8
+     ],
+     "rot": 0,
+     "src": "measured"
+    }
+   ],
+   "stairs": [],
+   "fixtures": [],
+   "not_placed": []
+  }
+ ]
+}

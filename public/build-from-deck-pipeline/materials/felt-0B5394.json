@@ -1,0 +1,57 @@
+{
+  "schema": "material/1",
+  "category": "Fabric",
+  "id": "fabric.acoustic-felt.0b5394",
+  "title": "Fabric \u2014 acoustic felt, navy",
+  "description": "INFRA Reception wave baffles, colour B (deck slide 5). Recoloured from fabric.acoustic-felt to the deck swatch #0B5394; texture recipe and surface block unchanged.",
+  "procedural": {
+    "type": "noise",
+    "blenderNode": "ShaderNodeTexNoise",
+    "params": {
+      "scale": 180,
+      "detail": 5,
+      "roughness": 0.6,
+      "distortion": 0.8,
+      "colorA": "#1860a0",
+      "colorB": "#004688"
+    }
+  },
+  "pbr": {
+    "baseColor": "#0B5394",
+    "roughness": 0.99,
+    "metallic": 0,
+    "sheen": 0.2
+  },
+  "surface": {
+    "sheen": {
+      "weight": 0.25,
+      "roughness": 0.5,
+      "tint": "#aab2b8"
+    },
+    "normal": {
+      "source": "procedural",
+      "strength": 0.7,
+      "scale": 1
+    },
+    "roughnessVariation": {
+      "amount": 0.05,
+      "scale": 26
+    }
+  },
+  "plan2d": {
+    "hatch": "dots",
+    "spacing": 5,
+    "angle": 0,
+    "weight": 1,
+    "color": "#0B5394"
+  },
+  "dxf": {
+    "pattern": "AR-SAND",
+    "scale": 0.4,
+    "angle": 0
+  },
+  "variantOf": {
+    "id": "fabric.acoustic-felt",
+    "swatch": "#0B5394"
+  }
+}

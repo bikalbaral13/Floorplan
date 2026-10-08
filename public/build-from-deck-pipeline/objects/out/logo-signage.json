@@ -1,0 +1,752 @@
+{
+ "version": 1,
+ "id": "logo-signage-with-math",
+ "title": "Logo Signage — raised letters on an optional panel, with a backlit halo",
+ "category": "Architectural",
+ "object": {
+  "hostKind": "segment",
+  "name": "Logo Signage",
+  "units": "m",
+  "icon": {
+   "paths": [
+    "M4 7h16v10H4z",
+    "M7 10v4",
+    "M10 10l2 4 2-4",
+    "M17 10v4"
+   ]
+  }
+ },
+ "description": "A parametric LOGO SIGNAGE on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A WALL SEGMENT. Position slides it along the wall, Centre height sets it in elevation, Flip side picks the face. The letters are BLOCKS sized by count, height and aspect — the canvas cannot set type. The `text` param carries the real wording; the Blender stage replaces the blocks with extruded text of the same height, depth and colour.\n\nDEFAULTS are the INFRA Reception review: MARIAN, dark blue not black, backlit (slide 26).",
+ "nodes": [
+  {
+   "id": "geo",
+   "position": {
+    "x": -960,
+    "y": 60
+   },
+   "data": {
+    "tool": "source",
+    "params": {
+     "grabFromSelection": true,
+     "id": "",
+     "nodeLabel": "Geometry"
+    }
+   }
+  },
+  {
+   "id": "props",
+   "position": {
+    "x": -640,
+    "y": 60
+   },
+   "data": {
+    "tool": "input-props",
+    "params": {
+     "props": [
+      {
+       "id": "P",
+       "name": "Host — node / segment / space [[x, y], …]",
+       "type": "text",
+       "value": "[[0, 0]]",
+       "options": []
+      },
+      {
+       "id": "position",
+       "name": "Position along wall (0–1)",
+       "type": "range",
+       "value": 0.5,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "centreHeight",
+       "name": "Centre height",
+       "type": "range",
+       "value": 1.9,
+       "min": 0.5,
+       "max": 4,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "wallHalfThk",
+       "name": "Wall face offset from centreline",
+       "type": "range",
+       "value": 0.075,
+       "min": 0,
+       "max": 0.3,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "panelOn",
+       "name": "Backing panel",
+       "type": "checkbox",
+       "value": false,
+       "options": []
+      },
+      {
+       "id": "panelWidth",
+       "name": "Panel width",
+       "type": "range",
+       "value": 2.4,
+       "min": 0.3,
+       "max": 8,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "panelHeight",
+       "name": "Panel height",
+       "type": "range",
+       "value": 0.7,
+       "min": 0.1,
+       "max": 3,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "panelThk",
+       "name": "Panel thickness",
+       "type": "range",
+       "value": 0.03,
+       "min": 0.005,
+       "max": 0.1,
+       "step": 0.001,
+       "options": []
+      },
+      {
+       "id": "letterCount",
+       "name": "Letters",
+       "type": "range",
+       "value": 6,
+       "min": 1,
+       "max": 20,
+       "step": 1,
+       "options": []
+      },
+      {
+       "id": "letterHeight",
+       "name": "Letter height",
+       "type": "range",
+       "value": 0.35,
+       "min": 0.05,
+       "max": 1.5,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "letterAspect",
+       "name": "Letter width / height",
+       "type": "range",
+       "value": 0.7,
+       "min": 0.2,
+       "max": 1.5,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "letterGap",
+       "name": "Letter gap",
+       "type": "range",
+       "value": 0.06,
+       "min": 0,
+       "max": 0.5,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "letterDepth",
+       "name": "Letter depth",
+       "type": "range",
+       "value": 0.04,
+       "min": 0.005,
+       "max": 0.2,
+       "step": 0.001,
+       "options": []
+      },
+      {
+       "id": "standoff",
+       "name": "Standoff from face",
+       "type": "range",
+       "value": 0.025,
+       "min": 0,
+       "max": 0.1,
+       "step": 0.001,
+       "options": []
+      },
+      {
+       "id": "backlit",
+       "name": "Backlit halo",
+       "type": "checkbox",
+       "value": true,
+       "options": []
+      },
+      {
+       "id": "rotation",
+       "name": "Rotation (deg)",
+       "type": "range",
+       "value": 0,
+       "min": 0,
+       "max": 360,
+       "step": 1,
+       "options": []
+      },
+      {
+       "id": "anchorDir",
+       "name": "Anchor Direction",
+       "type": "select",
+       "value": "Center",
+       "options": [
+        "Top-Left",
+        "Top-Center",
+        "Top-Right",
+        "Left-Center",
+        "Center",
+        "Right-Center",
+        "Bottom-Left",
+        "Bottom-Center",
+        "Bottom-Right"
+       ]
+      },
+      {
+       "id": "fitMode",
+       "name": "Fit to host",
+       "type": "select",
+       "value": "Off",
+       "options": [
+        "Off",
+        "Max",
+        "Exact"
+       ]
+      },
+      {
+       "id": "margin",
+       "name": "Margin from host",
+       "type": "range",
+       "value": 0,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "flipSide",
+       "name": "Flip side",
+       "type": "checkbox",
+       "value": false,
+       "options": []
+      },
+      {
+       "id": "material",
+       "name": "Material",
+       "type": "text",
+       "value": "dark blue acrylic letters, backlit",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "semantics",
+       "name": "Semantics",
+       "type": "text",
+       "value": "backlit 3D logo",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "materialPath",
+       "name": "Material path",
+       "type": "text",
+       "value": "Finishes/lacquer.json",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "finishes",
+       "name": "Finishes",
+       "type": "text",
+       "value": "Halo=Emissive/led-warm.json; Panel=Finishes/oak-veneer.json; *=Finishes/lacquer.json",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "text",
+       "name": "Text (Blender sets real type)",
+       "type": "text",
+       "value": "MARIAN",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specId",
+       "name": "Spec id",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specCategory",
+       "name": "Spec category",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specNote",
+       "name": "Spec note",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "deckSlides",
+       "name": "Deck slides",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "refImages",
+       "name": "Reference images",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "productUrl",
+       "name": "Product link",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "math",
+   "position": {
+    "x": -180,
+    "y": 40
+   },
+   "data": {
+    "tool": "expr",
+    "params": {
+     "name": "Logo Signage maths",
+     "expr": "_natL = 0\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\nlgW = letterCount * letterHeight * letterAspect + (letterCount - 1) * letterGap\n_bodyL = lgW\n_bodyW = 0.1\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\nlgU = _hu0 + position * _hostL - _cu\nlgV0 = wallHalfThk\nlgPg = panelOn ? 1 : 0\nlgPanel = hcat(lgU - panelWidth / 2, lgV0, lgU + panelWidth / 2, lgV0, lgU + panelWidth / 2, lgV0 + panelThk, lgU - panelWidth / 2, lgV0 + panelThk, centreHeight - panelHeight / 2, centreHeight + panelHeight / 2, lgPg)\nlgFace = lgV0 + (panelOn ? panelThk : 0)\nlgN = max(1, round(letterCount))\nlgI = arange(lgN)\nlgLw = letterHeight * letterAspect\nlgUa = lgU - lgW / 2 + lgI * (lgLw + letterGap)\nlgZ0 = centreHeight - letterHeight / 2\nlgZ1 = centreHeight + letterHeight / 2\nlgVa = lgFace + standoff\nlgVb = lgVa + letterDepth\nlgLet = hcat(lgUa, fill(lgN, 1, lgVa), lgUa + lgLw, fill(lgN, 1, lgVa), lgUa + lgLw, fill(lgN, 1, lgVb), lgUa, fill(lgN, 1, lgVb), fill(lgN, 1, lgZ0), fill(lgN, 1, lgZ1), fill(lgN, 1, 2))\nlgHg = backlit ? 3 : 0\nlgHalo = hcat(lgU - lgW / 2 - 0.04, lgFace + 0.001, lgU + lgW / 2 + 0.04, lgFace + 0.001, lgU + lgW / 2 + 0.04, lgFace + 0.004, lgU - lgW / 2 - 0.04, lgFace + 0.004, lgZ0 - 0.04, lgZ1 + 0.04, lgHg)\nQ = vcat(lgPanel, lgLet, lgHalo)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nPanel3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nLetters3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nHalo3D = sub(compress(_W, eq(col(_W,4), 3)), 0, 0, _nw, 4)\nSignPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\n# Metrics\nsignWidth = lgW\nsignCentreHeight = centreHeight\nletterHeightOut = letterHeight"
+    }
+   }
+  },
+  {
+   "id": "out",
+   "position": {
+    "x": 240,
+    "y": 60
+   },
+   "data": {
+    "tool": "output",
+    "params": {
+     "slots": [
+      {
+       "id": "s1",
+       "label": "Panel — solid"
+      },
+      {
+       "id": "s2",
+       "label": "Letters — solid"
+      },
+      {
+       "id": "s3",
+       "label": "Halo — solid"
+      },
+      {
+       "id": "s4",
+       "label": "Letters — plan"
+      },
+      {
+       "id": "s5",
+       "label": "Sign width (m)"
+      },
+      {
+       "id": "s6",
+       "label": "Centre height (m)"
+      },
+      {
+       "id": "s7",
+       "label": "Letter height (m)"
+      },
+      {
+       "id": "s8",
+       "label": "Fit scale"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r2d",
+   "position": {
+    "x": 620,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-2d",
+    "params": {
+     "prims": [
+      {
+       "id": "p2_sign",
+       "kind": "polygon",
+       "name": "Letters",
+       "color": "#0B2D6B",
+       "layer": "Signage",
+       "show": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r3d",
+   "position": {
+    "x": 900,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-3d",
+    "params": {
+     "prims": [
+      {
+       "id": "p3_panel",
+       "kind": "polyhedron",
+       "name": "Panel",
+       "color": "#D0B38E",
+       "layer": "Signage",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_let",
+       "kind": "polyhedron",
+       "name": "Letters",
+       "color": "#0B2D6B",
+       "layer": "Signage",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_halo",
+       "kind": "polyhedron",
+       "name": "Halo",
+       "color": "#FFF4E0",
+       "layer": "Signage",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e_geo_props",
+   "source": "geo",
+   "target": "props",
+   "sourceHandle": "val-points",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e_props_math_P",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-P",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e_props_math_position",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-position",
+   "targetHandle": "valin-position"
+  },
+  {
+   "id": "e_props_math_centreHeight",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-centreHeight",
+   "targetHandle": "valin-centreHeight"
+  },
+  {
+   "id": "e_props_math_wallHalfThk",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-wallHalfThk",
+   "targetHandle": "valin-wallHalfThk"
+  },
+  {
+   "id": "e_props_math_panelOn",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-panelOn",
+   "targetHandle": "valin-panelOn"
+  },
+  {
+   "id": "e_props_math_panelWidth",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-panelWidth",
+   "targetHandle": "valin-panelWidth"
+  },
+  {
+   "id": "e_props_math_panelHeight",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-panelHeight",
+   "targetHandle": "valin-panelHeight"
+  },
+  {
+   "id": "e_props_math_panelThk",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-panelThk",
+   "targetHandle": "valin-panelThk"
+  },
+  {
+   "id": "e_props_math_letterCount",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-letterCount",
+   "targetHandle": "valin-letterCount"
+  },
+  {
+   "id": "e_props_math_letterHeight",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-letterHeight",
+   "targetHandle": "valin-letterHeight"
+  },
+  {
+   "id": "e_props_math_letterAspect",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-letterAspect",
+   "targetHandle": "valin-letterAspect"
+  },
+  {
+   "id": "e_props_math_letterGap",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-letterGap",
+   "targetHandle": "valin-letterGap"
+  },
+  {
+   "id": "e_props_math_letterDepth",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-letterDepth",
+   "targetHandle": "valin-letterDepth"
+  },
+  {
+   "id": "e_props_math_standoff",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-standoff",
+   "targetHandle": "valin-standoff"
+  },
+  {
+   "id": "e_props_math_backlit",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-backlit",
+   "targetHandle": "valin-backlit"
+  },
+  {
+   "id": "e_props_math_rotation",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-rotation",
+   "targetHandle": "valin-rotation"
+  },
+  {
+   "id": "e_props_math_anchorDir",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-anchorDir",
+   "targetHandle": "valin-anchorDir"
+  },
+  {
+   "id": "e_props_math_fitMode",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-fitMode",
+   "targetHandle": "valin-fitMode"
+  },
+  {
+   "id": "e_props_math_margin",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-margin",
+   "targetHandle": "valin-margin"
+  },
+  {
+   "id": "e_props_math_flipSide",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-flipSide",
+   "targetHandle": "valin-flipSide"
+  },
+  {
+   "id": "e_math_out_s1",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Panel3D",
+   "targetHandle": "valin-s1"
+  },
+  {
+   "id": "e_math_out_s2",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Letters3D",
+   "targetHandle": "valin-s2"
+  },
+  {
+   "id": "e_math_out_s3",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Halo3D",
+   "targetHandle": "valin-s3"
+  },
+  {
+   "id": "e_math_out_s4",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-SignPlan",
+   "targetHandle": "valin-s4"
+  },
+  {
+   "id": "e_math_out_s5",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-signWidth",
+   "targetHandle": "valin-s5"
+  },
+  {
+   "id": "e_math_out_s6",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-signCentreHeight",
+   "targetHandle": "valin-s6"
+  },
+  {
+   "id": "e_math_out_s7",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-letterHeightOut",
+   "targetHandle": "valin-s7"
+  },
+  {
+   "id": "e_math_out_s8",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-scale",
+   "targetHandle": "valin-s8"
+  },
+  {
+   "id": "e_out_r2d_p2_sign",
+   "source": "out",
+   "target": "r2d",
+   "sourceHandle": "val-s4",
+   "targetHandle": "valin-p2_sign"
+  },
+  {
+   "id": "e_out_r3d_p3_panel",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s1",
+   "targetHandle": "valin-p3_panel"
+  },
+  {
+   "id": "e_out_r3d_p3_let",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s2",
+   "targetHandle": "valin-p3_let"
+  },
+  {
+   "id": "e_out_r3d_p3_halo",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s3",
+   "targetHandle": "valin-p3_halo"
+  }
+ ]
+}

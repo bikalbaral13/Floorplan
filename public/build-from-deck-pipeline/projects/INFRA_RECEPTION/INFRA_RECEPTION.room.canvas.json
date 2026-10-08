@@ -1,0 +1,2710 @@
+{
+ "schemaVersion": 1,
+ "settings": {
+  "library_path": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library",
+  "units": "m",
+  "northbearing": 0,
+  "pixelsPerMeter": 18.589,
+  "keywords": "INFRA (Competition) - 2024 - RECEPTION (build-from-deck S5 composed room)",
+  "source": {
+   "kind": "drawing",
+   "files": [
+    "PROJECT - View Inputs - Part 1.pptx"
+   ],
+   "tracer_version": "build-from-deck/S3",
+   "standards": null
+  },
+  "deckBrief": "Projects/INFRA_RECEPTION/roombrief.json"
+ },
+ "layers": [
+  {
+   "id": "0",
+   "name": "0",
+   "color": "#000000",
+   "visible": true,
+   "locked": false,
+   "order": 0
+  },
+  {
+   "id": "image",
+   "name": "Image",
+   "color": "#a855f7",
+   "visible": true,
+   "locked": false,
+   "order": 1
+  },
+  {
+   "id": "map",
+   "name": "Map",
+   "color": "#0284c7",
+   "visible": false,
+   "locked": false,
+   "order": 2
+  },
+  {
+   "id": "dimension",
+   "name": "Dimension",
+   "color": "#b45309",
+   "visible": true,
+   "locked": false,
+   "order": 3
+  },
+  {
+   "id": "wall",
+   "name": "Wall",
+   "color": "#1e293b",
+   "visible": true,
+   "locked": false,
+   "order": 4
+  },
+  {
+   "id": "door",
+   "name": "Door",
+   "color": "#b91c1c",
+   "visible": true,
+   "locked": false,
+   "order": 5
+  },
+  {
+   "id": "window",
+   "name": "Window",
+   "color": "#0e7490",
+   "visible": true,
+   "locked": false,
+   "order": 6
+  },
+  {
+   "id": "opening",
+   "name": "Opening",
+   "color": "#64748b",
+   "visible": true,
+   "locked": false,
+   "order": 7
+  },
+  {
+   "id": "space",
+   "name": "Space",
+   "color": "#16a34a",
+   "visible": true,
+   "locked": false,
+   "order": 8
+  },
+  {
+   "id": "column",
+   "name": "Column",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 9
+  },
+  {
+   "id": "staircase",
+   "name": "Staircase",
+   "color": "#7c2d12",
+   "visible": true,
+   "locked": false,
+   "order": 10
+  },
+  {
+   "id": "finish",
+   "name": "Finish",
+   "color": "#a16207",
+   "visible": true,
+   "locked": false,
+   "order": 11
+  },
+  {
+   "id": "ceiling",
+   "name": "Ceiling",
+   "color": "#0369a1",
+   "visible": true,
+   "locked": false,
+   "order": 12
+  },
+  {
+   "id": "lighting",
+   "name": "Lighting",
+   "color": "#ca8a04",
+   "visible": true,
+   "locked": false,
+   "order": 13
+  },
+  {
+   "id": "furniture",
+   "name": "Furniture",
+   "color": "#7c3aed",
+   "visible": true,
+   "locked": false,
+   "order": 14
+  },
+  {
+   "id": "signage",
+   "name": "Signage",
+   "color": "#0B2D6B",
+   "visible": true,
+   "locked": false,
+   "order": 15
+  },
+  {
+   "id": "camera",
+   "name": "Camera",
+   "color": "#0f766e",
+   "visible": true,
+   "locked": false,
+   "order": 16
+  }
+ ],
+ "imageUnderlay": {
+  "id": "img-INFRA_RECEPTION",
+  "src": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/259b38aa056f.png",
+  "x": -399,
+  "y": -597,
+  "width": 804,
+  "height": 994,
+  "opacity": 0.55,
+  "scale": 1,
+  "locked": true,
+  "layerId": "image"
+ },
+ "nodes": [
+  {
+   "id": "L0-n0",
+   "x": 0.0,
+   "y": -151.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n1",
+   "x": 92.75,
+   "y": -151.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n2",
+   "x": 111.501,
+   "y": -151.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n3",
+   "x": 157.75,
+   "y": -151.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n4",
+   "x": 176.499,
+   "y": -151.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n5",
+   "x": 222.499,
+   "y": -151.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n6",
+   "x": 0.0,
+   "y": -142.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n7",
+   "x": 0.0,
+   "y": -113.001,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n8",
+   "x": 0.0,
+   "y": -106.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n9",
+   "x": 108.0,
+   "y": -0.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n10",
+   "x": 222.499,
+   "y": -0.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n11",
+   "x": 222.499,
+   "y": -110.0,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n12",
+   "x": 222.499,
+   "y": -138.999,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n13",
+   "x": 222.499,
+   "y": -97.8,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n14",
+   "x": 74.88,
+   "y": -32.507,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n15",
+   "x": 140.949,
+   "y": -99.051,
+   "layer": "wall"
+  },
+  {
+   "id": "L0-n16",
+   "x": 216.501,
+   "y": -6.501,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-att024",
+     "objectId": "column-with-math",
+     "objectPath": "Objects/Structural/column.json",
+     "params": {
+      "rotation": 0,
+      "anchorDir": "Center",
+      "fitMode": "Off",
+      "shape": "Rectangular",
+      "length": 0.85,
+      "breadth": 0.8,
+      "height": 3.6
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn001",
+   "x": 154,
+   "y": -72,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt002",
+     "objectId": "rug-with-math",
+     "objectPath": "Objects/Architectural/rug.json",
+     "params": {
+      "specId": "FL-03",
+      "specCategory": "flooring",
+      "specNote": "Review s20: change the rug -> theweaver rm564 240 cm dia",
+      "deckSlides": "20",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/9c20e04a523d.png",
+      "productUrl": "https://www.theweaver.co.in/product/rm564-cstht240cm-diaw/",
+      "spec_diameter_mm": 2400,
+      "spec_product": "The Weaver RM564",
+      "shape": "Round",
+      "length": 2.4,
+      "width": 2.4,
+      "fitMode": "Off",
+      "materialPath": "Fabric/rug-pile-cream.json",
+      "finishes": "*=Fabric/rug-pile-cream.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn005",
+   "x": 126,
+   "y": -97,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn006",
+   "x": 218,
+   "y": -97,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn007",
+   "x": 218,
+   "y": -3,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn008",
+   "x": 126,
+   "y": -3,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn00b",
+   "x": 4,
+   "y": -148,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn00c",
+   "x": 219,
+   "y": -148,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn00d",
+   "x": 219,
+   "y": -100,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn00e",
+   "x": 4,
+   "y": -100,
+   "layer": "ceiling"
+  },
+  {
+   "id": "L0-dn010",
+   "x": 26,
+   "y": -120,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt011",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "specId": "LT-01",
+      "specCategory": "lighting",
+      "specNote": "White pendant lights placed randomly throughout the reception",
+      "deckSlides": "6",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/193328c7e986.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/75b7c944da6c.png",
+      "productUrl": "",
+      "spec_colour": "#FFFFFF",
+      "spec_arrangement": "random",
+      "spec_count": 6,
+      "shade": "Cylinder",
+      "diameter": 0.12,
+      "bodyLength": 0.3,
+      "mountHeight": 3.6,
+      "bottomHeight": 2.6,
+      "materialPath": "Metal/powder-coat.json",
+      "lumens": 1200,
+      "kelvin": 4000,
+      "emitsLight": true,
+      "finishes": "*=Metal/powder-coat.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn013",
+   "x": 59,
+   "y": -117,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt014",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "specId": "LT-01",
+      "specCategory": "lighting",
+      "specNote": "White pendant lights placed randomly throughout the reception",
+      "deckSlides": "6",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/193328c7e986.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/75b7c944da6c.png",
+      "productUrl": "",
+      "spec_colour": "#FFFFFF",
+      "spec_arrangement": "random",
+      "spec_count": 6,
+      "shade": "Cylinder",
+      "diameter": 0.12,
+      "bodyLength": 0.3,
+      "mountHeight": 3.6,
+      "bottomHeight": 2.6,
+      "materialPath": "Metal/powder-coat.json",
+      "lumens": 1200,
+      "kelvin": 4000,
+      "emitsLight": true,
+      "finishes": "*=Metal/powder-coat.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn016",
+   "x": 113,
+   "y": -139,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt017",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "specId": "LT-01",
+      "specCategory": "lighting",
+      "specNote": "White pendant lights placed randomly throughout the reception",
+      "deckSlides": "6",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/193328c7e986.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/75b7c944da6c.png",
+      "productUrl": "",
+      "spec_colour": "#FFFFFF",
+      "spec_arrangement": "random",
+      "spec_count": 6,
+      "shade": "Cylinder",
+      "diameter": 0.12,
+      "bodyLength": 0.3,
+      "mountHeight": 3.6,
+      "bottomHeight": 2.6,
+      "materialPath": "Metal/powder-coat.json",
+      "lumens": 1200,
+      "kelvin": 4000,
+      "emitsLight": true,
+      "finishes": "*=Metal/powder-coat.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn019",
+   "x": 161,
+   "y": -120,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt01a",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "specId": "LT-01",
+      "specCategory": "lighting",
+      "specNote": "White pendant lights placed randomly throughout the reception",
+      "deckSlides": "6",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/193328c7e986.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/75b7c944da6c.png",
+      "productUrl": "",
+      "spec_colour": "#FFFFFF",
+      "spec_arrangement": "random",
+      "spec_count": 6,
+      "shade": "Cylinder",
+      "diameter": 0.12,
+      "bodyLength": 0.3,
+      "mountHeight": 3.6,
+      "bottomHeight": 2.6,
+      "materialPath": "Metal/powder-coat.json",
+      "lumens": 1200,
+      "kelvin": 4000,
+      "emitsLight": true,
+      "finishes": "*=Metal/powder-coat.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn01c",
+   "x": 193,
+   "y": -120,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt01d",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "specId": "LT-01",
+      "specCategory": "lighting",
+      "specNote": "White pendant lights placed randomly throughout the reception",
+      "deckSlides": "6",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/193328c7e986.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/75b7c944da6c.png",
+      "productUrl": "",
+      "spec_colour": "#FFFFFF",
+      "spec_arrangement": "random",
+      "spec_count": 6,
+      "shade": "Cylinder",
+      "diameter": 0.12,
+      "bodyLength": 0.3,
+      "mountHeight": 3.6,
+      "bottomHeight": 2.6,
+      "materialPath": "Metal/powder-coat.json",
+      "lumens": 1200,
+      "kelvin": 4000,
+      "emitsLight": true,
+      "finishes": "*=Metal/powder-coat.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn01f",
+   "x": 47,
+   "y": -92,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt020",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "specId": "LT-01",
+      "specCategory": "lighting",
+      "specNote": "White pendant lights placed randomly throughout the reception",
+      "deckSlides": "6",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/193328c7e986.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/75b7c944da6c.png",
+      "productUrl": "",
+      "spec_colour": "#FFFFFF",
+      "spec_arrangement": "random",
+      "spec_count": 6,
+      "shade": "Cylinder",
+      "diameter": 0.12,
+      "bodyLength": 0.3,
+      "mountHeight": 3.6,
+      "bottomHeight": 2.6,
+      "materialPath": "Metal/powder-coat.json",
+      "lumens": 1200,
+      "kelvin": 4000,
+      "emitsLight": true,
+      "finishes": "*=Metal/powder-coat.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn022",
+   "x": 153,
+   "y": -75,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt023",
+     "objectId": "pendant-with-math",
+     "objectPath": "Objects/Architectural/pendant.json",
+     "params": {
+      "specId": "LT-02",
+      "specCategory": "lighting",
+      "specNote": "Suspended designer light; smaller dia (s25), higher (s27), must not clash with duct (s25)",
+      "deckSlides": "18,25,27",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/2104866e104c.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e43927b00dd0.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/50d075c4a5b3.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/f09a255941b8.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/4e844f25ba9f.jpg",
+      "productUrl": "https://lunalightstudios.com/products/hammered-lotus-leaf-metal-pendant-lamp-minimal-1-light-brass-hanging-ceiling-light-for-dining-room?variant=45873746936091",
+      "spec_finish": "brass",
+      "spec_diameterScale": "smaller than first render",
+      "spec_hangLevel_mm": 2400,
+      "spec_avoidDucts": true,
+      "shade": "Dome",
+      "diameter": 0.35,
+      "bodyLength": 0.18,
+      "mountHeight": 2.97,
+      "bottomHeight": 2.35,
+      "materialPath": "Metal/brass.json",
+      "lumens": 800,
+      "kelvin": 2700,
+      "emitsLight": true,
+      "finishes": "*=Metal/brass.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn026",
+   "x": 2.148,
+   "y": -108.189,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn027",
+   "x": 79.095,
+   "y": -32.667,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn02a",
+   "x": 0.977,
+   "y": -106.995,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn02b",
+   "x": 77.923,
+   "y": -31.473,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn02e",
+   "x": 0.977,
+   "y": -106.995,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn02f",
+   "x": 77.923,
+   "y": -31.473,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn032",
+   "x": 0.977,
+   "y": -106.995,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn033",
+   "x": 77.923,
+   "y": -31.473,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn036",
+   "x": 77.923,
+   "y": -31.473,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn037",
+   "x": 108.967,
+   "y": -1.004,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn03a",
+   "x": 108.0,
+   "y": -1.394,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn03b",
+   "x": 206.522,
+   "y": -1.394,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn041",
+   "x": 78.587,
+   "y": -30.822,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn042",
+   "x": 93.18,
+   "y": -16.499,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn045",
+   "x": 93.843,
+   "y": -15.848,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn046",
+   "x": 108.437,
+   "y": -1.525,
+   "layer": "finish"
+  },
+  {
+   "id": "L0-dn048",
+   "x": 79,
+   "y": -79.94,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt049",
+     "objectId": "reception-desk-with-math",
+     "objectPath": "Objects/Architectural/reception-desk.json",
+     "params": {
+      "specId": "FN-01",
+      "specCategory": "furniture",
+      "specNote": "Desk 3300 x 800 x 750, 300 (dims sheet s16); add humans & desktop (s17)",
+      "deckSlides": "16,17",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/47d0cc8110f9.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/100dac59eda1.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/bb720e523e5e.png",
+      "productUrl": "",
+      "spec_length_mm": 3300,
+      "spec_depth_mm": 800,
+      "spec_height_mm": 750,
+      "spec_plinth_mm": 300,
+      "spec_topColour": "#FFFFFF",
+      "spec_baseMaterial": "timber cubbies",
+      "spec_baseColour": "#926343",
+      "length": 3.3,
+      "depth": 0.8,
+      "height": 0.75,
+      "ledgeRise": 0.3,
+      "sweep": "Left high",
+      "rotation": 44.5,
+      "flipSide": false,
+      "materialPath": "Finishes/quartz.json",
+      "finishes": "Cubbies=Finishes/oak-veneer.json; *=Finishes/quartz.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn04b",
+   "x": 157,
+   "y": -89,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt04c",
+     "objectId": "chair-with-math",
+     "objectPath": "Objects/Architectural/chair.json",
+     "params": {
+      "specId": "FN-02",
+      "specCategory": "furniture",
+      "specNote": "One fabric colour per chair; legs wooden (s20, metal->wood)",
+      "deckSlides": "12,19,20",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/7df641cacc03.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/2a56e4e2e0c1.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/9c20e04a523d.png",
+      "productUrl": "https://www.naughtone.com/products/always-lounge/",
+      "spec_count": 2,
+      "spec_fabricColours": "#B7B7B7,#0B5394",
+      "spec_legMaterial": "wood",
+      "armStyle": "Tub arms",
+      "quilting": "Plain",
+      "piping": false,
+      "finishes": "Legs=Finishes/oak-veneer.json; *=Fabric/chenille-B7B7B7.json",
+      "materialPath": "Fabric/chenille-B7B7B7.json",
+      "rotation": 155.22
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn04e",
+   "x": 142,
+   "y": -61,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt04f",
+     "objectId": "chair-with-math",
+     "objectPath": "Objects/Architectural/chair.json",
+     "params": {
+      "specId": "FN-02",
+      "specCategory": "furniture",
+      "specNote": "One fabric colour per chair; legs wooden (s20, metal->wood)",
+      "deckSlides": "12,19,20",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/7df641cacc03.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/2a56e4e2e0c1.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/9c20e04a523d.png",
+      "productUrl": "https://www.naughtone.com/products/always-lounge/",
+      "spec_count": 2,
+      "spec_fabricColours": "#B7B7B7,#0B5394",
+      "spec_legMaterial": "wood",
+      "armStyle": "Tub arms",
+      "quilting": "Plain",
+      "piping": false,
+      "finishes": "Legs=Finishes/oak-veneer.json; *=Fabric/wool-0B5394.json",
+      "materialPath": "Fabric/wool-0B5394.json",
+      "rotation": 121.61
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn051",
+   "x": 183,
+   "y": -10.5,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt052",
+     "objectId": "sofa-with-math",
+     "objectPath": "Objects/Architectural/sofa.json",
+     "params": {
+      "specId": "FN-03",
+      "specCategory": "furniture",
+      "specNote": "L type sofa, no centre table; colour changed (s19 swatch #93A084)",
+      "deckSlides": "13,19",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/f4d26da6faa8.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg",
+      "productUrl": "",
+      "spec_colour": "#BD6734",
+      "spec_secondaryColour": "#93A084",
+      "spec_centreTable": false,
+      "depth": 0.9,
+      "legHeight": 0.08,
+      "materialPath": "Fabric/chenille-BD6734.json",
+      "finishes": "*=Fabric/chenille-BD6734.json",
+      "length": 2.9,
+      "seats": 3,
+      "rotation": 0.0
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn054",
+   "x": 203,
+   "y": -58,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt055",
+     "objectId": "sofa-with-math",
+     "objectPath": "Objects/Architectural/sofa.json",
+     "params": {
+      "specId": "FN-03",
+      "specCategory": "furniture",
+      "specNote": "L type sofa, no centre table; colour changed (s19 swatch #93A084)",
+      "deckSlides": "13,19",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/f4d26da6faa8.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg",
+      "productUrl": "",
+      "spec_colour": "#BD6734",
+      "spec_secondaryColour": "#93A084",
+      "spec_centreTable": false,
+      "depth": 0.9,
+      "legHeight": 0.08,
+      "materialPath": "Fabric/chenille-BD6734.json",
+      "finishes": "*=Fabric/chenille-BD6734.json",
+      "length": 4.2,
+      "seats": 4,
+      "rotation": 270.0
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn057",
+   "x": 215.25,
+   "y": -55.5,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt058",
+     "objectId": "planter-box-with-math",
+     "objectPath": "Objects/Architectural/planter-box.json",
+     "params": {
+      "specId": "FN-04",
+      "specCategory": "furniture",
+      "specNote": "Planter box with similar plants at rear of sofa; plants green not white (s26)",
+      "deckSlides": "14,26",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/059f7a8bf6f1.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/50d075c4a5b3.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/bb720e523e5e.png",
+      "productUrl": "",
+      "spec_plants": "similar, green",
+      "spec_position": "rear of sofa",
+      "shape": "Trough",
+      "height": 0.9,
+      "plants": 8,
+      "showPlants": true,
+      "materialPath": "Finishes/planter-stone.json",
+      "finishes": "Foliage=Organic/foliage.json; *=Finishes/planter-stone.json",
+      "length": 4.465,
+      "width": 0.511,
+      "rotation": 90,
+      "fitMode": "Off"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn05a",
+   "x": 193,
+   "y": -135,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt05b",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "view": "Perspective",
+      "focalLength": 20,
+      "eyeHeight": 1.6,
+      "tilt": 0,
+      "shiftY": 0.06,
+      "resolutionX": 960,
+      "resolutionY": 540,
+      "aspect": "16:9",
+      "rotation": 151.95,
+      "shotName": "Deck view A - desk, logo, moss (slide 31)",
+      "shotOrder": 1,
+      "shotActive": true,
+      "specId": "CAM-A",
+      "deckSlides": "31",
+      "specNote": "Deck view A - desk, logo, moss (slide 31)",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn05d",
+   "x": 19,
+   "y": -129,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt05e",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "view": "Perspective",
+      "focalLength": 20,
+      "eyeHeight": 1.6,
+      "tilt": 0,
+      "shiftY": 0.06,
+      "resolutionX": 960,
+      "resolutionY": 540,
+      "aspect": "16:9",
+      "rotation": 30.15,
+      "shotName": "Deck view B - lobby, sofa, desk (slide 32)",
+      "shotOrder": 2,
+      "shotActive": true,
+      "specId": "CAM-B",
+      "deckSlides": "32",
+      "specNote": "Deck view B - lobby, sofa, desk (slide 32)",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn060",
+   "x": 201,
+   "y": -25,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt061",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "view": "Perspective",
+      "focalLength": 20,
+      "eyeHeight": 1.6,
+      "tilt": 0,
+      "shiftY": 0.06,
+      "resolutionX": 960,
+      "resolutionY": 540,
+      "aspect": "16:9",
+      "rotation": 207.7,
+      "shotName": "Deck view C - along the diagonal wall (slides 21, 22, 29)",
+      "shotOrder": 3,
+      "shotActive": true,
+      "specId": "CAM-C",
+      "deckSlides": "21,22,29",
+      "specNote": "Deck view C - along the diagonal wall (slides 21, 22, 29)",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn063",
+   "x": 8,
+   "y": -143,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt064",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "view": "Perspective",
+      "focalLength": 20,
+      "eyeHeight": 1.6,
+      "tilt": 0,
+      "shiftY": 0.06,
+      "resolutionX": 960,
+      "resolutionY": 540,
+      "aspect": "16:9",
+      "rotation": 32.89,
+      "shotName": "Corner NW",
+      "shotOrder": 4,
+      "shotActive": true,
+      "specId": "CAM-1",
+      "deckSlides": "",
+      "specNote": "Corner NW",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn066",
+   "x": 215,
+   "y": -143,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt067",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "view": "Perspective",
+      "focalLength": 20,
+      "eyeHeight": 1.6,
+      "tilt": 0,
+      "shiftY": 0.06,
+      "resolutionX": 960,
+      "resolutionY": 540,
+      "aspect": "16:9",
+      "rotation": 147.31,
+      "shotName": "Corner NE",
+      "shotOrder": 5,
+      "shotActive": true,
+      "specId": "CAM-2",
+      "deckSlides": "",
+      "specNote": "Corner NE",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn069",
+   "x": 191,
+   "y": -19,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt06a",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "view": "Perspective",
+      "focalLength": 20,
+      "eyeHeight": 1.6,
+      "tilt": 0,
+      "shiftY": 0.06,
+      "resolutionX": 960,
+      "resolutionY": 540,
+      "aspect": "16:9",
+      "rotation": 219.24,
+      "shotName": "Corner SE (over sofa)",
+      "shotOrder": 6,
+      "shotActive": true,
+      "specId": "CAM-3",
+      "deckSlides": "",
+      "specNote": "Corner SE (over sofa)",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dn06c",
+   "x": 56,
+   "y": -77,
+   "layer": "0",
+   "attachments": [
+    {
+     "id": "L0-datt06d",
+     "objectId": "camera-with-math",
+     "objectPath": "Objects/Architectural/camera.json",
+     "params": {
+      "view": "Perspective",
+      "focalLength": 20,
+      "eyeHeight": 1.6,
+      "tilt": 0,
+      "shiftY": 0.06,
+      "resolutionX": 960,
+      "resolutionY": 540,
+      "aspect": "16:9",
+      "rotation": 352.15,
+      "shotName": "Diagonal wall, mid",
+      "shotOrder": 7,
+      "shotActive": true,
+      "specId": "CAM-4",
+      "deckSlides": "",
+      "specNote": "Diagonal wall, mid",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  }
+ ],
+ "segments": [
+  {
+   "id": "L0-s001",
+   "fromNodeId": "L0-n0",
+   "toNodeId": "L0-n1",
+   "thickness": 1.86,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "window",
+   "label": "Glass partition (WL-04)",
+   "attachments": [
+    {
+     "id": "L0-att002",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "WL-04",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "L0-datt03d",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "specId": "WL-04",
+      "specCategory": "wall",
+      "specNote": "Brooklyn glass partition to 2600 lvl, frames @600; door stile glass black frame (s21)",
+      "deckSlides": "11,21",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/c67f6b1eed34.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e47b80f137a4.png",
+      "productUrl": "",
+      "spec_height_mm": 2600,
+      "spec_frameSpacing_mm": 600,
+      "spec_frameColour": "#111111",
+      "spec_door": "stile glass, black frame",
+      "operation": "Fixed",
+      "fitMode": "Fill wall",
+      "sillHeight": 0,
+      "lintelHeight": 2.6,
+      "frameWidth": 0.04,
+      "materialPath": "Metal/matte-black.json",
+      "finishes": "Glazing=Glazing/glass.json; *=Metal/matte-black.json",
+      "width": 4.9895,
+      "panes": 8,
+      "wallDepth": 0.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true
+  },
+  {
+   "id": "L0-s003",
+   "fromNodeId": "L0-n2",
+   "toNodeId": "L0-n3",
+   "thickness": 1.86,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "window",
+   "label": "Glass partition (WL-04)",
+   "attachments": [
+    {
+     "id": "L0-att004",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "WL-04",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "L0-datt03e",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "specId": "WL-04",
+      "specCategory": "wall",
+      "specNote": "Brooklyn glass partition to 2600 lvl, frames @600; door stile glass black frame (s21)",
+      "deckSlides": "11,21",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/c67f6b1eed34.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e47b80f137a4.png",
+      "productUrl": "",
+      "spec_height_mm": 2600,
+      "spec_frameSpacing_mm": 600,
+      "spec_frameColour": "#111111",
+      "spec_door": "stile glass, black frame",
+      "operation": "Fixed",
+      "fitMode": "Fill wall",
+      "sillHeight": 0,
+      "lintelHeight": 2.6,
+      "frameWidth": 0.04,
+      "materialPath": "Metal/matte-black.json",
+      "finishes": "Glazing=Glazing/glass.json; *=Metal/matte-black.json",
+      "width": 2.488,
+      "panes": 4,
+      "wallDepth": 0.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true
+  },
+  {
+   "id": "L0-s005",
+   "fromNodeId": "L0-n4",
+   "toNodeId": "L0-n5",
+   "thickness": 1.86,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "window",
+   "label": "Glass partition (WL-04)",
+   "attachments": [
+    {
+     "id": "L0-att006",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "WL-04",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "L0-datt03f",
+     "objectId": "window-with-math",
+     "objectPath": "Objects/Architectural/window.json",
+     "params": {
+      "specId": "WL-04",
+      "specCategory": "wall",
+      "specNote": "Brooklyn glass partition to 2600 lvl, frames @600; door stile glass black frame (s21)",
+      "deckSlides": "11,21",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/c67f6b1eed34.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e47b80f137a4.png",
+      "productUrl": "",
+      "spec_height_mm": 2600,
+      "spec_frameSpacing_mm": 600,
+      "spec_frameColour": "#111111",
+      "spec_door": "stile glass, black frame",
+      "operation": "Fixed",
+      "fitMode": "Fill wall",
+      "sillHeight": 0,
+      "lintelHeight": 2.6,
+      "frameWidth": 0.04,
+      "materialPath": "Metal/matte-black.json",
+      "finishes": "Glazing=Glazing/glass.json; *=Metal/matte-black.json",
+      "width": 2.4746,
+      "panes": 4,
+      "wallDepth": 0.1
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "isObjectOpening": true
+  },
+  {
+   "id": "L0-s007",
+   "fromNodeId": "L0-n0",
+   "toNodeId": "L0-n6",
+   "thickness": 2.79,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "wall",
+   "label": "West wall",
+   "attachments": [
+    {
+     "id": "L0-att008",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-s009",
+   "fromNodeId": "L0-n7",
+   "toNodeId": "L0-n8",
+   "thickness": 2.79,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "wall",
+   "label": "West wall",
+   "attachments": [
+    {
+     "id": "L0-att00a",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-s00b",
+   "fromNodeId": "L0-n8",
+   "toNodeId": "L0-n9",
+   "thickness": 2.79,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "wall",
+   "label": "Diagonal wall behind desk - fluted panel (WL-03) + moss wall (WL-01) + logo (WL-02) + cove (LT-03)",
+   "attachments": [
+    {
+     "id": "L0-att00c",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "LT-03,WL-01,WL-02,WL-03",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-s00d",
+   "fromNodeId": "L0-n9",
+   "toNodeId": "L0-n10",
+   "thickness": 2.79,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "wall",
+   "label": "South wall",
+   "attachments": [
+    {
+     "id": "L0-att00e",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-s00f",
+   "fromNodeId": "L0-n10",
+   "toNodeId": "L0-n11",
+   "thickness": 4.28,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "wall",
+   "label": "East wall - concrete texture paint (WL-05) + planter (FN-04)",
+   "attachments": [
+    {
+     "id": "L0-att010",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.23,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "WL-05,FN-04",
+      "specId": "WL-05",
+      "specCategory": "wall",
+      "specNote": "Concrete texture paint up to FC level (s15); s18 'change to texture wall' -> reference pin 566820303115807854",
+      "deckSlides": "15,18",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/b6435bae5d8d.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/2104866e104c.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e43927b00dd0.png",
+      "productUrl": "https://in.pinterest.com/pin/424464333629509079/",
+      "spec_finish": "concrete texture paint",
+      "spec_colour": "#BDBDBD",
+      "spec_toLevel": "false ceiling",
+      "materialPath": "Masonry/concrete.json",
+      "baseColor": "#BDBDBD",
+      "finishes": "*=Masonry/concrete.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-s011",
+   "fromNodeId": "L0-n12",
+   "toNodeId": "L0-n5",
+   "thickness": 4.28,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "wall",
+   "label": "East wall - concrete texture paint (WL-05) + planter (FN-04)",
+   "attachments": [
+    {
+     "id": "L0-att012",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.23,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "WL-05,FN-04",
+      "specId": "WL-05",
+      "specCategory": "wall",
+      "specNote": "Concrete texture paint up to FC level (s15); s18 'change to texture wall' -> reference pin 566820303115807854",
+      "deckSlides": "15,18",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/b6435bae5d8d.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/2104866e104c.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e43927b00dd0.png",
+      "productUrl": "https://in.pinterest.com/pin/424464333629509079/",
+      "spec_finish": "concrete texture paint",
+      "spec_colour": "#BDBDBD",
+      "spec_toLevel": "false ceiling",
+      "materialPath": "Masonry/concrete.json",
+      "baseColor": "#BDBDBD",
+      "finishes": "*=Masonry/concrete.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-s015",
+   "fromNodeId": "L0-n1",
+   "toNodeId": "L0-n2",
+   "thickness": 1.86,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "door",
+   "isObjectOpening": true,
+   "attachments": [
+    {
+     "id": "L0-att013",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "WL-04",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "L0-att014",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 1.009,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "right",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.1,
+      "lintelHeight": 2.1,
+      "specId": "WL-04",
+      "specCategory": "wall",
+      "specNote": "Brooklyn glass partition to 2600 lvl, frames @600; door stile glass black frame (s21)",
+      "deckSlides": "11,21",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/c67f6b1eed34.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e47b80f137a4.png",
+      "productUrl": "",
+      "spec_height_mm": 2600,
+      "spec_frameSpacing_mm": 600,
+      "spec_frameColour": "#111111",
+      "spec_door": "stile glass, black frame",
+      "panelStyle": "Flush",
+      "materialPath": "Glazing/glass.json",
+      "finishes": "Leaf=Glazing/glass.json; *=Metal/matte-black.json",
+      "ironmongeryColor": "#111111"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "label": "Visitor room 1 - stile glass door (WL-04)"
+  },
+  {
+   "id": "L0-s018",
+   "fromNodeId": "L0-n3",
+   "toNodeId": "L0-n4",
+   "thickness": 1.86,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "door",
+   "isObjectOpening": true,
+   "attachments": [
+    {
+     "id": "L0-att016",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.1,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "specIds": "WL-04",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "L0-att017",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 1.009,
+      "leaves": "Single",
+      "hinge": "left",
+      "swing": "right",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.1,
+      "lintelHeight": 2.1,
+      "specId": "WL-04",
+      "specCategory": "wall",
+      "specNote": "Brooklyn glass partition to 2600 lvl, frames @600; door stile glass black frame (s21)",
+      "deckSlides": "11,21",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/c67f6b1eed34.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e47b80f137a4.png",
+      "productUrl": "",
+      "spec_height_mm": 2600,
+      "spec_frameSpacing_mm": 600,
+      "spec_frameColour": "#111111",
+      "spec_door": "stile glass, black frame",
+      "panelStyle": "Flush",
+      "materialPath": "Glazing/glass.json",
+      "finishes": "Leaf=Glazing/glass.json; *=Metal/matte-black.json",
+      "ironmongeryColor": "#111111"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "label": "Visitor room 2 - stile glass door (WL-04)"
+  },
+  {
+   "id": "L0-s01b",
+   "fromNodeId": "L0-n6",
+   "toNodeId": "L0-n7",
+   "thickness": 2.79,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "door",
+   "isObjectOpening": true,
+   "attachments": [
+    {
+     "id": "L0-att019",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.15,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "L0-att01a",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 1.56,
+      "leaves": "Double",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.15,
+      "lintelHeight": 2.1,
+      "materialPath": "Finishes/light-oak.json",
+      "finishes": "Leaf=Finishes/light-oak.json; Lining=Finishes/paint-eggshell.json; Ironmongery=Metal/powder-coat.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "label": "Entry from office (double), opens into reception"
+  },
+  {
+   "id": "L0-s01e",
+   "fromNodeId": "L0-n11",
+   "toNodeId": "L0-n12",
+   "thickness": 4.28,
+   "color": "#1e293b",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "fill",
+   "method": "center",
+   "segmentType": "line",
+   "bufferStyle": "flat",
+   "hatch": true,
+   "hatchStyle": "diagonal",
+   "hatchSpacing": 6,
+   "showLabel": false,
+   "layer": "door",
+   "isObjectOpening": true,
+   "attachments": [
+    {
+     "id": "L0-att01c",
+     "objectId": "wall-with-math",
+     "objectPath": "Objects/Architectural/wall.json",
+     "params": {
+      "thickness": 0.23,
+      "height": 3.6,
+      "mode": "Buffered",
+      "hatch": true,
+      "fitMode": "Fill segment",
+      "materialPath": "Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    },
+    {
+     "id": "L0-att01d",
+     "objectId": "door-with-math",
+     "objectPath": "Objects/Architectural/door.json",
+     "params": {
+      "width": 1.56,
+      "leaves": "Double",
+      "hinge": "left",
+      "swing": "left",
+      "openAngle": 90,
+      "fitMode": "Fill segment",
+      "frameDepth": 0.23,
+      "lintelHeight": 2.1,
+      "materialPath": "Finishes/light-oak.json",
+      "finishes": "Leaf=Finishes/light-oak.json; Lining=Finishes/paint-eggshell.json; Ironmongery=Metal/powder-coat.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ],
+   "label": "To lift lobby (double)"
+  },
+  {
+   "id": "L0-obj023",
+   "fromNodeId": "L0-n16",
+   "toNodeId": "L0-n16",
+   "layer": "column",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj003",
+   "fromNodeId": "L0-dn001",
+   "toNodeId": "L0-dn001",
+   "layer": "furniture",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj012",
+   "fromNodeId": "L0-dn010",
+   "toNodeId": "L0-dn010",
+   "layer": "lighting",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj015",
+   "fromNodeId": "L0-dn013",
+   "toNodeId": "L0-dn013",
+   "layer": "lighting",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj018",
+   "fromNodeId": "L0-dn016",
+   "toNodeId": "L0-dn016",
+   "layer": "lighting",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj01b",
+   "fromNodeId": "L0-dn019",
+   "toNodeId": "L0-dn019",
+   "layer": "lighting",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj01e",
+   "fromNodeId": "L0-dn01c",
+   "toNodeId": "L0-dn01c",
+   "layer": "lighting",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj021",
+   "fromNodeId": "L0-dn01f",
+   "toNodeId": "L0-dn01f",
+   "layer": "lighting",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj024",
+   "fromNodeId": "L0-dn022",
+   "toNodeId": "L0-dn022",
+   "layer": "lighting",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-ds028",
+   "fromNodeId": "L0-dn026",
+   "toNodeId": "L0-dn027",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "LT-03 on W-D 0.0-5.8 m",
+   "attachments": [
+    {
+     "id": "L0-datt025",
+     "objectId": "cove-light-with-math",
+     "objectPath": "Objects/Architectural/cove-light.json",
+     "params": {
+      "specId": "LT-03",
+      "specCategory": "lighting",
+      "specNote": "Cove light at top of fluted panel",
+      "deckSlides": "9",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/6b22d4381ea6.png",
+      "productUrl": "https://in.pinterest.com/pin/279223245639487769/",
+      "spec_level_mm": 2700,
+      "slabHeight": 1.77,
+      "coveDrop": 0.25,
+      "kelvin": 4000,
+      "fitMode": "Off",
+      "lumensPerMetre": 900,
+      "emitsLight": true,
+      "length": 5.8,
+      "materialPath": "Finishes/paint-eggshell.json",
+      "finishes": "Tape=Emissive/led-warm.json; Lip=Finishes/plaster.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-ds02c",
+   "fromNodeId": "L0-dn02a",
+   "toNodeId": "L0-dn02b",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "WL-01 on W-D 0.0-5.8 m",
+   "attachments": [
+    {
+     "id": "L0-datt029",
+     "objectId": "upholstered-panel-with-math",
+     "objectPath": "Objects/Architectural/upholstered-panel.json",
+     "params": {
+      "specId": "WL-01",
+      "specCategory": "wall",
+      "specNote": "Moss wall behind the desk; darker than first render (s25); top level = glass top (s21)",
+      "deckSlides": "8,25",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/224dd8d0b01f.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/50d075c4a5b3.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/f09a255941b8.png",
+      "productUrl": "https://www.texturecan.com/details/182/",
+      "spec_colour": "#4E6B1E",
+      "spec_topLevel_mm": 2600,
+      "pattern": "Plain",
+      "height": 1.1,
+      "baseOffset": 1.5,
+      "haloLed": false,
+      "floatGap": 0.01,
+      "paddingDepth": 0.04,
+      "trimLip": false,
+      "fitMode": "Off",
+      "materialPath": "Organic/moss-preserved.json",
+      "finishes": "*=Organic/moss-preserved.json",
+      "length": 5.8
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-ds030",
+   "fromNodeId": "L0-dn02e",
+   "toNodeId": "L0-dn02f",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "WL-02 on W-D 0.0-5.8 m",
+   "attachments": [
+    {
+     "id": "L0-datt02d",
+     "objectId": "logo-signage-with-math",
+     "objectPath": "Objects/Architectural/logo-signage.json",
+     "params": {
+      "specId": "WL-02",
+      "specCategory": "wall",
+      "specNote": "Add Marian logo (s17); dark blue not black, add backlight (s26)",
+      "deckSlides": "7,9,17,26",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/6b22d4381ea6.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/100dac59eda1.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/bb720e523e5e.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/50d075c4a5b3.jpg",
+      "productUrl": "https://in.pinterest.com/pin/279223245639487769/",
+      "spec_text": "MARIAN",
+      "spec_colour": "#0B2D6B",
+      "spec_backlit": true,
+      "spec_panelColour": "#D0B38E",
+      "text": "MARIAN",
+      "letterCount": 6,
+      "centreHeight": 2.05,
+      "letterHeight": 0.3,
+      "backlit": true,
+      "panelOn": false,
+      "position": 0.69,
+      "wallHalfThk": 0.06,
+      "flipSide": true,
+      "materialPath": "Finishes/lacquer.json",
+      "finishes": "Halo=Emissive/led-warm.json; Panel=Finishes/oak-veneer.json; *=Finishes/lacquer.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-ds034",
+   "fromNodeId": "L0-dn032",
+   "toNodeId": "L0-dn033",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "WL-03 on W-D 0.0-5.8 m",
+   "attachments": [
+    {
+     "id": "L0-datt031",
+     "objectId": "fluted-panel-with-math",
+     "objectPath": "Objects/Architectural/fluted-panel.json",
+     "params": {
+      "specId": "WL-03",
+      "specCategory": "wall",
+      "specNote": "White fluted panel 1500-2700 lvl with cove light; continued behind sofa up to false ceiling",
+      "deckSlides": "9,10",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/6b22d4381ea6.png",
+      "productUrl": "https://in.pinterest.com/pin/279223245639487769/",
+      "spec_colour": "#FFFFFF",
+      "spec_fromLevel_mm": 1500,
+      "spec_toLevel_mm": 2700,
+      "spec_behindSofaToLevel_mm": 2700,
+      "profile": "Half-round",
+      "fitMode": "Off",
+      "materialPath": "Finishes/paint-eggshell.json",
+      "baseOffset": 0,
+      "height": 1.5,
+      "length": 5.8,
+      "finishes": "*=Finishes/paint-eggshell.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-ds038",
+   "fromNodeId": "L0-dn036",
+   "toNodeId": "L0-dn037",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "WL-03 on W-D 5.8-8.14 m",
+   "attachments": [
+    {
+     "id": "L0-datt035",
+     "objectId": "fluted-panel-with-math",
+     "objectPath": "Objects/Architectural/fluted-panel.json",
+     "params": {
+      "specId": "WL-03",
+      "specCategory": "wall",
+      "specNote": "White fluted panel 1500-2700 lvl with cove light; continued behind sofa up to false ceiling",
+      "deckSlides": "9,10",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/6b22d4381ea6.png",
+      "productUrl": "https://in.pinterest.com/pin/279223245639487769/",
+      "spec_colour": "#FFFFFF",
+      "spec_fromLevel_mm": 1500,
+      "spec_toLevel_mm": 2700,
+      "spec_behindSofaToLevel_mm": 2700,
+      "profile": "Half-round",
+      "fitMode": "Off",
+      "materialPath": "Finishes/paint-eggshell.json",
+      "baseOffset": 0,
+      "height": 2.7,
+      "length": 2.34,
+      "finishes": "*=Finishes/paint-eggshell.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-ds03c",
+   "fromNodeId": "L0-dn03a",
+   "toNodeId": "L0-dn03b",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "WL-03 on W-S 0.0-5.3 m",
+   "attachments": [
+    {
+     "id": "L0-datt039",
+     "objectId": "fluted-panel-with-math",
+     "objectPath": "Objects/Architectural/fluted-panel.json",
+     "params": {
+      "specId": "WL-03",
+      "specCategory": "wall",
+      "specNote": "White fluted panel 1500-2700 lvl with cove light; continued behind sofa up to false ceiling",
+      "deckSlides": "9,10",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/6b22d4381ea6.png",
+      "productUrl": "https://in.pinterest.com/pin/279223245639487769/",
+      "spec_colour": "#FFFFFF",
+      "spec_fromLevel_mm": 1500,
+      "spec_toLevel_mm": 2700,
+      "spec_behindSofaToLevel_mm": 2700,
+      "profile": "Half-round",
+      "fitMode": "Off",
+      "materialPath": "Finishes/paint-eggshell.json",
+      "baseOffset": 0,
+      "height": 2.7,
+      "length": 5.3,
+      "finishes": "*=Finishes/paint-eggshell.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-ds043",
+   "fromNodeId": "L0-dn041",
+   "toNodeId": "L0-dn042",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "WL-06 on W-D 5.85-6.95 m",
+   "attachments": [
+    {
+     "id": "L0-datt040",
+     "objectId": "tv-with-math",
+     "objectPath": "Objects/Architectural/tv.json",
+     "params": {
+      "specId": "WL-06",
+      "specCategory": "wall",
+      "specNote": "Add some image to the TV display",
+      "deckSlides": "24",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg",
+      "productUrl": "",
+      "spec_screenImage": true,
+      "diagonal": 1.2,
+      "centreHeight": 1.55,
+      "mount": "Wall",
+      "materialPath": "Glazing/screen.json",
+      "finishes": "Bias light=Emissive/diffuser.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-ds047",
+   "fromNodeId": "L0-dn045",
+   "toNodeId": "L0-dn046",
+   "layer": "finish",
+   "thickness": 1,
+   "color": "#a16207",
+   "dashed": false,
+   "lineStyle": "solid",
+   "mode": "line",
+   "method": "center",
+   "segmentType": "line",
+   "hatch": false,
+   "showLabel": false,
+   "label": "WL-06 on W-D 7.0-8.1 m",
+   "attachments": [
+    {
+     "id": "L0-datt044",
+     "objectId": "tv-with-math",
+     "objectPath": "Objects/Architectural/tv.json",
+     "params": {
+      "specId": "WL-06",
+      "specCategory": "wall",
+      "specNote": "Add some image to the TV display",
+      "deckSlides": "24",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg",
+      "productUrl": "",
+      "spec_screenImage": true,
+      "diagonal": 1.2,
+      "centreHeight": 1.55,
+      "mount": "Wall",
+      "materialPath": "Glazing/screen.json",
+      "finishes": "Bias light=Emissive/diffuser.json"
+     },
+     "t": 0.5,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dobj04a",
+   "fromNodeId": "L0-dn048",
+   "toNodeId": "L0-dn048",
+   "layer": "furniture",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj04d",
+   "fromNodeId": "L0-dn04b",
+   "toNodeId": "L0-dn04b",
+   "layer": "furniture",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj050",
+   "fromNodeId": "L0-dn04e",
+   "toNodeId": "L0-dn04e",
+   "layer": "furniture",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj053",
+   "fromNodeId": "L0-dn051",
+   "toNodeId": "L0-dn051",
+   "layer": "furniture",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj056",
+   "fromNodeId": "L0-dn054",
+   "toNodeId": "L0-dn054",
+   "layer": "furniture",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj059",
+   "fromNodeId": "L0-dn057",
+   "toNodeId": "L0-dn057",
+   "layer": "furniture",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj05c",
+   "fromNodeId": "L0-dn05a",
+   "toNodeId": "L0-dn05a",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj05f",
+   "fromNodeId": "L0-dn05d",
+   "toNodeId": "L0-dn05d",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj062",
+   "fromNodeId": "L0-dn060",
+   "toNodeId": "L0-dn060",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj065",
+   "fromNodeId": "L0-dn063",
+   "toNodeId": "L0-dn063",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj068",
+   "fromNodeId": "L0-dn066",
+   "toNodeId": "L0-dn066",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj06b",
+   "fromNodeId": "L0-dn069",
+   "toNodeId": "L0-dn069",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  },
+  {
+   "id": "L0-dobj06e",
+   "fromNodeId": "L0-dn06c",
+   "toNodeId": "L0-dn06c",
+   "layer": "camera",
+   "thickness": 0.5,
+   "color": "#334155",
+   "dashed": false,
+   "mode": "line",
+   "method": "center",
+   "segmentType": "wall"
+  }
+ ],
+ "spaces": [
+  {
+   "id": "L0-sp01f",
+   "nodeIds": [
+    "L0-n13",
+    "L0-n5",
+    "L0-n0",
+    "L0-n8",
+    "L0-n14",
+    "L0-n15"
+   ],
+   "layer": "space",
+   "label": "Reception (marble)",
+   "showLabel": true,
+   "roomType": "room",
+   "fill": "rgba(148,163,184,0.25)",
+   "stroke": "#475569",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "L0-att020",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Grey",
+      "specId": "FL-02",
+      "specCategory": "flooring",
+      "specNote": "Marble flooring",
+      "deckSlides": "4",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/2c1f495ebc46.png",
+      "productUrl": "https://in.pinterest.com/pin/48906345947313517/",
+      "spec_material": "white statuario marble",
+      "spec_pattern": "large slab",
+      "spec_colour": "#F2F2F0",
+      "materialPath": "Finishes/marble.json",
+      "finishes": "*=Finishes/marble.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-sp021",
+   "nodeIds": [
+    "L0-n14",
+    "L0-n15",
+    "L0-n13",
+    "L0-n10",
+    "L0-n9"
+   ],
+   "layer": "space",
+   "label": "Waiting lobby (herringbone)",
+   "showLabel": true,
+   "roomType": "area",
+   "fill": "rgba(203,213,225,0.35)",
+   "stroke": "#475569",
+   "fillOpacity": 0.18,
+   "attachments": [
+    {
+     "id": "L0-att022",
+     "objectId": "room-with-math",
+     "objectPath": "Objects/Architectural/room.json",
+     "params": {
+      "color": "Grey",
+      "specId": "FL-01",
+      "specCategory": "flooring",
+      "specNote": "Wooden flooring herringbone pattern",
+      "deckSlides": "3",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/f8a43804d759.png",
+      "productUrl": "https://in.pinterest.com/pin/429671620713582808/",
+      "spec_material": "light oak",
+      "spec_pattern": "herringbone",
+      "spec_colour": "#D9C3A0",
+      "materialPath": "Finishes/oak-herringbone.json",
+      "finishes": "*=Finishes/oak-herringbone.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dsp009",
+   "nodeIds": [
+    "L0-dn005",
+    "L0-dn006",
+    "L0-dn007",
+    "L0-dn008"
+   ],
+   "layer": "ceiling",
+   "label": "Baffle ceiling zone (lobby)",
+   "showLabel": false,
+   "roomType": "area",
+   "fill": "rgba(0,0,0,0)",
+   "stroke": "#0369a1",
+   "fillOpacity": 0,
+   "attachments": [
+    {
+     "id": "L0-datt004",
+     "objectId": "baffle-ceiling-with-math",
+     "objectPath": "Objects/Architectural/baffle-ceiling.json",
+     "params": {
+      "specId": "CL-01",
+      "specCategory": "ceiling",
+      "specNote": "Wave baffle 25 thk x 150 h @ 50 spacing, FC bottom 2700; end profile: black (s17) superseded by white rectangular (s23, s27)",
+      "deckSlides": "5,17,23,27",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/43a899c45d3f.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/9fd6c57dad45.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/1d65103576bc.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/100dac59eda1.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/bb720e523e5e.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/4e844f25ba9f.jpg",
+      "productUrl": "https://arktura.com/resources/tools/",
+      "spec_profile": "wave",
+      "spec_baffleThk_mm": 25,
+      "spec_baffleHeight_mm": 150,
+      "spec_clearSpacing_mm": 50,
+      "spec_bottomLevel_mm": 2700,
+      "spec_colours": "#2479AE,#0B5394",
+      "spec_endProfile": "rectangular",
+      "spec_endProfileColour": "#FFFFFF",
+      "profile": "Wave",
+      "baffleThk": 0.025,
+      "baffleHeight": 0.15,
+      "clearSpacing": 0.05,
+      "bottomLevel": 2.7,
+      "endProfile": "Ends",
+      "colourMode": "Alternate",
+      "materialPath": "Fabric/felt-2479AE.json",
+      "finishes": "Baffles B=Fabric/felt-0B5394.json; End profile=Metal/powder-coat.json; *=Fabric/felt-2479AE.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  },
+  {
+   "id": "L0-dsp00f",
+   "nodeIds": [
+    "L0-dn00b",
+    "L0-dn00c",
+    "L0-dn00d",
+    "L0-dn00e"
+   ],
+   "layer": "ceiling",
+   "label": "Services zone (reception)",
+   "showLabel": false,
+   "roomType": "area",
+   "fill": "rgba(0,0,0,0)",
+   "stroke": "#0369a1",
+   "fillOpacity": 0,
+   "attachments": [
+    {
+     "id": "L0-datt00a",
+     "objectId": "services-ceiling-with-math",
+     "objectPath": "Objects/MEP/services-ceiling.json",
+     "params": {
+      "specId": "CL-02",
+      "specCategory": "ceiling",
+      "specNote": "Open ceiling, white; all ducts oval (s28); services white & complete (s18, s29)",
+      "deckSlides": "6,18,28,29",
+      "refImages": "https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/193328c7e986.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/75b7c944da6c.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/0af303922100.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/2104866e104c.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/e43927b00dd0.png,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/4e844f25ba9f.jpg,https://pub-156fd74325894cccb9467e68a6e5cc82.r2.dev/library/Images/Decks/INFRA_RECEPTION/6c721c53610b.png",
+      "productUrl": "https://in.pinterest.com/pin/566820303115807854/",
+      "spec_finish": "white paint",
+      "spec_servicesColour": "#FFFFFF",
+      "spec_ductShape": "oval",
+      "spec_servicesComplete": true,
+      "slabHeight": 3.6,
+      "ductShape": "Oval",
+      "ductCount": 2,
+      "ductSpacing": 1.2,
+      "ductOffset": 0.2,
+      "trayOffset": -0.9,
+      "pipeOffset": 0.9,
+      "soffitOn": true,
+      "materialPath": "Finishes/paint-eggshell.json",
+      "finishes": "*=Finishes/paint-eggshell.json"
+     },
+     "t": 0,
+     "flip": false
+    }
+   ]
+  }
+ ],
+ "graphAttrs": {
+  "nodes": {
+   "L0-obj023:end|L0-obj023:start": {
+    "node-type": "object"
+   },
+   "L0-dobj003:end|L0-dobj003:start": {
+    "node-type": "object"
+   },
+   "L0-dobj012:end|L0-dobj012:start": {
+    "node-type": "object"
+   },
+   "L0-dobj015:end|L0-dobj015:start": {
+    "node-type": "object"
+   },
+   "L0-dobj018:end|L0-dobj018:start": {
+    "node-type": "object"
+   },
+   "L0-dobj01b:end|L0-dobj01b:start": {
+    "node-type": "object"
+   },
+   "L0-dobj01e:end|L0-dobj01e:start": {
+    "node-type": "object"
+   },
+   "L0-dobj021:end|L0-dobj021:start": {
+    "node-type": "object"
+   },
+   "L0-dobj024:end|L0-dobj024:start": {
+    "node-type": "object"
+   },
+   "L0-dobj04a:end|L0-dobj04a:start": {
+    "node-type": "object"
+   },
+   "L0-dobj04d:end|L0-dobj04d:start": {
+    "node-type": "object"
+   },
+   "L0-dobj050:end|L0-dobj050:start": {
+    "node-type": "object"
+   },
+   "L0-dobj053:end|L0-dobj053:start": {
+    "node-type": "object"
+   },
+   "L0-dobj056:end|L0-dobj056:start": {
+    "node-type": "object"
+   },
+   "L0-dobj059:end|L0-dobj059:start": {
+    "node-type": "object"
+   },
+   "L0-dobj05c:end|L0-dobj05c:start": {
+    "node-type": "object"
+   },
+   "L0-dobj05f:end|L0-dobj05f:start": {
+    "node-type": "object"
+   },
+   "L0-dobj062:end|L0-dobj062:start": {
+    "node-type": "object"
+   },
+   "L0-dobj065:end|L0-dobj065:start": {
+    "node-type": "object"
+   },
+   "L0-dobj068:end|L0-dobj068:start": {
+    "node-type": "object"
+   },
+   "L0-dobj06b:end|L0-dobj06b:start": {
+    "node-type": "object"
+   },
+   "L0-dobj06e:end|L0-dobj06e:start": {
+    "node-type": "object"
+   }
+  },
+  "segments": {}
+ }
+}

@@ -1,0 +1,947 @@
+{
+ "version": 1,
+ "id": "services-ceiling-with-math",
+ "title": "Services Ceiling — exposed soffit with oval ducts, cable tray and pipes",
+ "category": "MEP",
+ "object": {
+  "hostKind": "space",
+  "name": "Services Ceiling",
+  "units": "m",
+  "icon": {
+   "paths": [
+    "M3 4h18",
+    "M4 8h16a2 2 0 010 4H4a2 2 0 010-4z",
+    "M3 16h18",
+    "M6 19h12"
+   ]
+  }
+ },
+ "description": "A parametric SERVICES CEILING on the six-node spine — Geometry → Input Properties → Math Engine → Output Metrics → 2D Render + 3D Render.\n\nDROP IT ON A SPACE. Everything runs along the space's longest edge (Rotation turns the runs) across its bounding box less the inset: a painted soffit plate, oval ducts, a cable tray and pipes, all at stated gaps below the soffit.\n\nTHE OVAL IS BUILT FACE BY FACE, not from boxes. A quad prism only extrudes vertically, and a duct runs horizontally, so each duct is ductFacets side faces whose corners sit on the ellipse (w/2·cos a, h/2·sin a) in the (v, z) plane, plus two end caps — every facet of every duct in ONE table indexed by floor(i/N). Rectangular is the same table at four facets turned 45° and scaled by √2.\n\nDEFAULTS are the INFRA Reception review: all ducts oval (s28), services white and complete (s18, s29), soffit at an assumed 3.6 m.",
+ "nodes": [
+  {
+   "id": "geo",
+   "position": {
+    "x": -960,
+    "y": 60
+   },
+   "data": {
+    "tool": "source",
+    "params": {
+     "grabFromSelection": true,
+     "id": "",
+     "nodeLabel": "Geometry"
+    }
+   }
+  },
+  {
+   "id": "props",
+   "position": {
+    "x": -640,
+    "y": 60
+   },
+   "data": {
+    "tool": "input-props",
+    "params": {
+     "props": [
+      {
+       "id": "P",
+       "name": "Host — node / segment / space [[x, y], …]",
+       "type": "text",
+       "value": "[[0, 0]]",
+       "options": []
+      },
+      {
+       "id": "slabHeight",
+       "name": "Slab soffit (FFL)",
+       "type": "range",
+       "value": 3.6,
+       "min": 2.4,
+       "max": 8,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "soffitOn",
+       "name": "Painted soffit plate",
+       "type": "checkbox",
+       "value": true,
+       "options": []
+      },
+      {
+       "id": "soffitThk",
+       "name": "Soffit plate thickness",
+       "type": "range",
+       "value": 0.05,
+       "min": 0.01,
+       "max": 0.3,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "ductShape",
+       "name": "Duct shape",
+       "type": "select",
+       "value": "Oval",
+       "options": [
+        "Oval",
+        "Rectangular"
+       ]
+      },
+      {
+       "id": "ductCount",
+       "name": "Ducts",
+       "type": "range",
+       "value": 2,
+       "min": 0,
+       "max": 6,
+       "step": 1,
+       "options": []
+      },
+      {
+       "id": "ductWidth",
+       "name": "Duct width",
+       "type": "range",
+       "value": 0.6,
+       "min": 0.1,
+       "max": 2,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "ductHeight",
+       "name": "Duct height",
+       "type": "range",
+       "value": 0.3,
+       "min": 0.1,
+       "max": 1,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "ductDrop",
+       "name": "Gap soffit to duct top",
+       "type": "range",
+       "value": 0.15,
+       "min": 0,
+       "max": 1.5,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "ductSpacing",
+       "name": "Duct centres",
+       "type": "range",
+       "value": 2.4,
+       "min": 0.3,
+       "max": 8,
+       "step": 0.05,
+       "options": []
+      },
+      {
+       "id": "ductOffset",
+       "name": "Duct field offset",
+       "type": "range",
+       "value": 0,
+       "min": -5,
+       "max": 5,
+       "step": 0.05,
+       "options": []
+      },
+      {
+       "id": "ductFacets",
+       "name": "Oval facets",
+       "type": "range",
+       "value": 16,
+       "min": 8,
+       "max": 48,
+       "step": 1,
+       "options": []
+      },
+      {
+       "id": "trayOn",
+       "name": "Cable tray",
+       "type": "checkbox",
+       "value": true,
+       "options": []
+      },
+      {
+       "id": "trayWidth",
+       "name": "Tray width",
+       "type": "range",
+       "value": 0.3,
+       "min": 0.1,
+       "max": 0.9,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "trayDepth",
+       "name": "Tray depth",
+       "type": "range",
+       "value": 0.08,
+       "min": 0.03,
+       "max": 0.2,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "trayDrop",
+       "name": "Gap soffit to tray",
+       "type": "range",
+       "value": 0.12,
+       "min": 0,
+       "max": 1.5,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "trayOffset",
+       "name": "Tray offset",
+       "type": "range",
+       "value": -1.5,
+       "min": -6,
+       "max": 6,
+       "step": 0.05,
+       "options": []
+      },
+      {
+       "id": "pipeCount",
+       "name": "Pipes",
+       "type": "range",
+       "value": 2,
+       "min": 0,
+       "max": 6,
+       "step": 1,
+       "options": []
+      },
+      {
+       "id": "pipeDia",
+       "name": "Pipe diameter",
+       "type": "range",
+       "value": 0.05,
+       "min": 0.015,
+       "max": 0.3,
+       "step": 0.005,
+       "options": []
+      },
+      {
+       "id": "pipeDrop",
+       "name": "Gap soffit to pipe centre",
+       "type": "range",
+       "value": 0.35,
+       "min": 0.02,
+       "max": 1.5,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "pipeOffset",
+       "name": "Pipe field offset",
+       "type": "range",
+       "value": 1.2,
+       "min": -6,
+       "max": 6,
+       "step": 0.05,
+       "options": []
+      },
+      {
+       "id": "inset",
+       "name": "Inset from space edge",
+       "type": "range",
+       "value": 0.1,
+       "min": 0,
+       "max": 2,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "rotation",
+       "name": "Rotation (deg)",
+       "type": "range",
+       "value": 0,
+       "min": 0,
+       "max": 360,
+       "step": 1,
+       "options": []
+      },
+      {
+       "id": "anchorDir",
+       "name": "Anchor Direction",
+       "type": "select",
+       "value": "Center",
+       "options": [
+        "Top-Left",
+        "Top-Center",
+        "Top-Right",
+        "Left-Center",
+        "Center",
+        "Right-Center",
+        "Bottom-Left",
+        "Bottom-Center",
+        "Bottom-Right"
+       ]
+      },
+      {
+       "id": "fitMode",
+       "name": "Fit to host",
+       "type": "select",
+       "value": "Off",
+       "options": [
+        "Off",
+        "Max",
+        "Exact"
+       ]
+      },
+      {
+       "id": "margin",
+       "name": "Margin from host",
+       "type": "range",
+       "value": 0,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "options": []
+      },
+      {
+       "id": "flipSide",
+       "name": "Flip side",
+       "type": "checkbox",
+       "value": false,
+       "options": []
+      },
+      {
+       "id": "material",
+       "name": "Material",
+       "type": "text",
+       "value": "painted white galvanised ducts and tray, painted soffit",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "semantics",
+       "name": "Semantics",
+       "type": "text",
+       "value": "exposed services open ceiling",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "materialPath",
+       "name": "Material path",
+       "type": "text",
+       "value": "Finishes/paint-eggshell.json",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "finishes",
+       "name": "Finishes",
+       "type": "text",
+       "value": "*=Finishes/paint-eggshell.json",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specId",
+       "name": "Spec id",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specCategory",
+       "name": "Spec category",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "specNote",
+       "name": "Spec note",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "deckSlides",
+       "name": "Deck slides",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "refImages",
+       "name": "Reference images",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      },
+      {
+       "id": "productUrl",
+       "name": "Product link",
+       "type": "text",
+       "value": "",
+       "min": 0,
+       "max": 10,
+       "step": 1,
+       "options": [],
+       "editable": true,
+       "showInCanvas": false,
+       "necessary": false
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "math",
+   "position": {
+    "x": -180,
+    "y": 40
+   },
+   "data": {
+    "tool": "expr",
+    "params": {
+     "name": "Services Ceiling maths",
+     "expr": "_natL = 0\n# Host frame — node, segment or space\n_e1 = hcat(1, 0)\n_np = rows(P)\n_isSeg = _np == 2\n_isSpace = _np > 2\n_edges = _isSpace ? (shift(P, -1) - P) : _e1\n_edgeLen = len(_edges)\n_longest = max(_edgeLen)\n_spaceDir = _isSpace ? row(compress(_edges, eq(_edgeLen, _longest)), 0) : _e1\n_segDir = _isSeg ? (row(P, 1) - row(P, 0)) : _e1\n_dir = _isSpace ? _spaceDir : (_isSeg ? _segDir : _e1)\n_dirLen = len(_dir)\n_axisB = _dirLen > 0 ? normalize(_dir) : _e1\n_rot = rotation * PI / 180\n_crot = cos(_rot)\n_srot = sin(_rot)\n_bx = sub(_axisB, 0, 0, 1, 1)\n_by = sub(_axisB, 0, 1, 1, 1)\n_axisU = hcat(_bx * _crot - _by * _srot, _bx * _srot + _by * _crot)\n_axisV = (flipSide > 0 ? -1 : 1) * perp(_axisU)\n_ux = sub(_axisU, 0, 0, 1, 1)\n_uy = sub(_axisU, 0, 1, 1, 1)\n_vx = sub(_axisV, 0, 0, 1, 1)\n_vy = sub(_axisV, 0, 1, 1, 1)\n_Qu = col(P, 0) * _ux + col(P, 1) * _uy\n_Qv = col(P, 0) * _vx + col(P, 1) * _vy\n_hu0 = _np > 0 ? min(_Qu) : 0\n_hu1 = _np > 0 ? max(_Qu) : 0\n_hv0 = _np > 0 ? min(_Qv) : 0\n_hv1 = _np > 0 ? max(_Qv) : 0\n_hcu = (_hu0 + _hu1) / 2\n_hcv = (_hv0 + _hv1) / 2\n_hostL = _hu1 - _hu0\n_hostW = _hv1 - _hv0\n# Fit to host — one uniform scale, Max never enlarges\n_availL = max(0, _hostL - 2 * margin)\n_notOff = fitMode != 'Off'\n_exact = fitMode == 'Exact'\n_sRaw = _natL > 0 ? _availL / _natL : 1\n_sFit = (_notOff && _availL > 0) ? (_exact ? _sRaw : min(1, _sRaw)) : 1\nscale = max(0.15, min(5, _sFit))\n_s = scale\n_bodyL = _hostL\n_bodyW = _hostW\n# Anchor — place the footprint by any of the nine box points\n_anchorL = anchorDir == 'Top-Left' || anchorDir == 'Left-Center' || anchorDir == 'Bottom-Left'\n_anchorR = anchorDir == 'Top-Right' || anchorDir == 'Right-Center' || anchorDir == 'Bottom-Right'\n_anchorT = anchorDir == 'Top-Left' || anchorDir == 'Top-Center' || anchorDir == 'Top-Right'\n_anchorB = anchorDir == 'Bottom-Left' || anchorDir == 'Bottom-Center' || anchorDir == 'Bottom-Right'\n_ax = _anchorR - _anchorL\n_ay = _anchorB - _anchorT\n_hau = _hcu + _ax * max(0, _hostL / 2 - margin)\n_hav = _hcv + _ay * max(0, _hostW / 2 - margin)\n_cu = _hau - _ax * _bodyL / 2\n_cv = _hav - _ay * _bodyW / 2\nsvIn = inset + margin\nsvL = max(0.1, _hostL - 2 * svIn)\nsvW = max(0.1, _hostW - 2 * svIn)\nsvU0 = 0 - svL / 2\nsvU1 = svL / 2\n# Oval ducts — every facet of every duct in one table; the cross-section lives in (v, z)\nsvNd = max(1, round(ductCount))\nsvOnD = ductCount >= 1\nsvN = ductShape == 'Oval' ? max(8, round(ductFacets)) : 4\nsvRot = ductShape == 'Oval' ? 0 : PI / 4\nsvK = ductShape == 'Oval' ? 1 : sqrt(2)\nsvI = arange(svNd * svN)\nsvD = floor(svI / svN)\nsvKk = svI - svD * svN\nsvVc = (svD - (svNd - 1) / 2) * ductSpacing + ductOffset\nsvZc = slabHeight - ductDrop - ductHeight / 2\nsvA0 = 2 * PI * svKk / svN + svRot\nsvA1 = svA0 + 2 * PI / svN\nsvV0 = svVc + svK * ductWidth / 2 * cos(svA0)\nsvZ0 = svZc + svK * ductHeight / 2 * sin(svA0)\nsvV1 = svVc + svK * ductWidth / 2 * cos(svA1)\nsvZ1 = svZc + svK * ductHeight / 2 * sin(svA1)\nsvM = rows(svI)\nsvUa = fill(svM, 1, svU0)\nsvUb = fill(svM, 1, svU1)\nsvSide = reshape(hcat(svUa, svV0, svZ0, svUb, svV0, svZ0, svUb, svV1, svZ1, svUa, svV1, svZ1), 4 * svM, 3)\nsvSideF = kron(svI, ones(4, 1))\nsvCapA = hcat(svUa, svV0, svZ0, svNd * svN + 2 * svD)\nsvCapB = hcat(svUb, svV0, svZ0, svNd * svN + 2 * svD + 1)\nsvLoc = vcat(hcat(svSide, svSideF), svCapA, svCapB)\nsvLu = _cu + col(svLoc, 0)\nsvLv = _cv + col(svLoc, 1)\nsvDucts = hcat(svLu * _ux + svLv * _vx, svLu * _uy + svLv * _vy, col(svLoc, 2), col(svLoc, 3))\nDucts3D = compress(svDucts, fill(rows(svDucts), 1, svOnD))\n# Soffit plate, cable tray (base + two lips) and the ducts' plan footprints — quad prisms\nsvSg = soffitOn ? 1 : 0\nsvTg = trayOn ? 2 : 0\nsvTz1 = slabHeight - trayDrop\nsvTz0 = svTz1 - trayDepth\nsvTv0 = trayOffset - trayWidth / 2\nsvTv1 = trayOffset + trayWidth / 2\nsvSoffit = hcat(svU0, 0 - svW / 2, svU1, 0 - svW / 2, svU1, svW / 2, svU0, svW / 2, slabHeight - soffitThk, slabHeight, svSg)\nsvTray = vcat(hcat(svU0, svTv0, svU1, svTv0, svU1, svTv1, svU0, svTv1, svTz0, svTz0 + 0.003, svTg), hcat(svU0, svTv0, svU1, svTv0, svU1, svTv0 + 0.003, svU0, svTv0 + 0.003, svTz0, svTz1, svTg), hcat(svU0, svTv1 - 0.003, svU1, svTv1 - 0.003, svU1, svTv1, svU0, svTv1, svTz0, svTz1, svTg))\nsvPd = arange(svNd)\nsvPv = (svPd - (svNd - 1) / 2) * ductSpacing + ductOffset\nsvPn = rows(svPd)\nsvPg = svOnD ? 4 : 0\nsvDp = hcat(fill(svPn, 1, svU0), svPv - ductWidth / 2, fill(svPn, 1, svU1), svPv - ductWidth / 2, fill(svPn, 1, svU1), svPv + ductWidth / 2, fill(svPn, 1, svU0), svPv + ductWidth / 2, fill(svPn, 1, 0), fill(svPn, 1, 0.001), fill(svPn, 1, svPg))\nQ = vcat(svSoffit, svTray, svDp)\n# Quad prism — every part is a quad swept from z0 to z1 (6 faces)\n_nq = rows(Q)\n_r4 = ones(4,1)\n_a1 = col(Q,0)\n_b1 = col(Q,1)\n_a2 = col(Q,2)\n_b2 = col(Q,3)\n_a3 = col(Q,4)\n_b3 = col(Q,5)\n_a4 = col(Q,6)\n_b4 = col(Q,7)\n_qz0 = col(Q,8)\n_qz1 = col(Q,9)\n_gq = kron(col(Q,10), _r4)\n_fq = kron(arange(_nq), _r4) * 6\n_q0 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a3,_b3,_qz0,_a4,_b4,_qz0), 4*_nq, 3), _fq + 0, _gq)\n_q1 = hcat(reshape(hcat(_a1,_b1,_qz1,_a2,_b2,_qz1,_a3,_b3,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 1, _gq)\n_q2 = hcat(reshape(hcat(_a1,_b1,_qz0,_a2,_b2,_qz0,_a2,_b2,_qz1,_a1,_b1,_qz1), 4*_nq, 3), _fq + 2, _gq)\n_q3 = hcat(reshape(hcat(_a2,_b2,_qz0,_a3,_b3,_qz0,_a3,_b3,_qz1,_a2,_b2,_qz1), 4*_nq, 3), _fq + 3, _gq)\n_q4 = hcat(reshape(hcat(_a3,_b3,_qz0,_a4,_b4,_qz0,_a4,_b4,_qz1,_a3,_b3,_qz1), 4*_nq, 3), _fq + 4, _gq)\n_q5 = hcat(reshape(hcat(_a4,_b4,_qz0,_a1,_b1,_qz0,_a1,_b1,_qz1,_a4,_b4,_qz1), 4*_nq, 3), _fq + 5, _gq)\n_FL = vcat(_q0,_q1,_q2,_q3,_q4,_q5)\n_PL = hcat(reshape(hcat(_a1,_b1,_a2,_b2,_a3,_b3,_a4,_b4), 4*_nq, 2), kron(arange(_nq), _r4), _gq)\n# Local (u,v,z) -> world, once, for every part at the same time\n_U = _cu + col(_FL,0)\n_V = _cv + col(_FL,1)\n_W = hcat(_U * _ux + _V * _vx, _U * _uy + _V * _vy, col(_FL,2), col(_FL,3), col(_FL,4))\n_nw = rows(_W)\n_PU = _cu + col(_PL,0)\n_PV = _cv + col(_PL,1)\n_WP = hcat(_PU * _ux + _PV * _vx, _PU * _uy + _PV * _vy, col(_PL,2), col(_PL,3))\n_nwp = rows(_WP)\nSoffit3D = sub(compress(_W, eq(col(_W,4), 1)), 0, 0, _nw, 4)\nTray3D = sub(compress(_W, eq(col(_W,4), 2)), 0, 0, _nw, 4)\nTrayPlan = sub(compress(_WP, eq(col(_WP,3), 2)), 0, 0, _nwp, 3)\nDuctPlan = sub(compress(_WP, eq(col(_WP,3), 4)), 0, 0, _nwp, 3)\n# Pipes — axis segments, one Tube row\nsvNp = max(1, round(pipeCount))\nsvPi = arange(svNp)\nsvPpv = pipeOffset + (svPi - (svNp - 1) / 2) * max(0.15, 3 * pipeDia)\nsvPz = fill(svNp, 1, slabHeight - pipeDrop)\nsvPIPE = hcat(fill(svNp, 1, svU0), svPpv, svPz, fill(svNp, 1, svU1), svPpv, svPz, fill(svNp, 1, pipeDia / 2))\n_t1u = _cu + col(svPIPE,0)\n_t1v = _cv + col(svPIPE,1)\n_t2u = _cu + col(svPIPE,3)\n_t2v = _cv + col(svPIPE,4)\nsvPipesAll = hcat(_t1u * _ux + _t1v * _vx, _t1u * _uy + _t1v * _vy, col(svPIPE,2), _t2u * _ux + _t2v * _vx, _t2u * _uy + _t2v * _vy, col(svPIPE,5), col(svPIPE,6))\nPipes3D = compress(svPipesAll, fill(rows(svPipesAll), 1, pipeCount >= 1))\n# Metrics\nductRun = svOnD ? svNd * svL : 0\nductUnderside = svZc - ductHeight / 2\ntrayLevel = svTz0\npipeRun = pipeCount >= 1 ? svNp * svL : 0\nsoffitLevel = slabHeight\nserviceZoneDepth = slabHeight - min(svZc - ductHeight / 2, min(svTz0, slabHeight - pipeDrop - pipeDia / 2))"
+    }
+   }
+  },
+  {
+   "id": "out",
+   "position": {
+    "x": 240,
+    "y": 60
+   },
+   "data": {
+    "tool": "output",
+    "params": {
+     "slots": [
+      {
+       "id": "s1",
+       "label": "Ducts — solid"
+      },
+      {
+       "id": "s2",
+       "label": "Soffit — solid"
+      },
+      {
+       "id": "s3",
+       "label": "Cable tray — solid"
+      },
+      {
+       "id": "s4",
+       "label": "Pipes — tube"
+      },
+      {
+       "id": "s5",
+       "label": "Ducts — plan"
+      },
+      {
+       "id": "s6",
+       "label": "Cable tray — plan"
+      },
+      {
+       "id": "s7",
+       "label": "Duct run (m)"
+      },
+      {
+       "id": "s8",
+       "label": "Duct underside (m)"
+      },
+      {
+       "id": "s9",
+       "label": "Tray underside (m)"
+      },
+      {
+       "id": "s10",
+       "label": "Pipe run (m)"
+      },
+      {
+       "id": "s11",
+       "label": "Soffit (m)"
+      },
+      {
+       "id": "s12",
+       "label": "Service zone depth (m)"
+      },
+      {
+       "id": "s13",
+       "label": "Fit scale"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r2d",
+   "position": {
+    "x": 620,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-2d",
+    "params": {
+     "prims": [
+      {
+       "id": "p2_duct",
+       "kind": "polygon",
+       "name": "Ducts",
+       "color": "#94a3b8",
+       "layer": "Services",
+       "show": true
+      },
+      {
+       "id": "p2_tray",
+       "kind": "polygon",
+       "name": "Cable tray",
+       "color": "#64748b",
+       "layer": "Services",
+       "show": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "r3d",
+   "position": {
+    "x": 900,
+    "y": -80
+   },
+   "data": {
+    "tool": "render-3d",
+    "params": {
+     "prims": [
+      {
+       "id": "p3_duct",
+       "kind": "polyhedron",
+       "name": "Ducts",
+       "color": "#F4F4F2",
+       "layer": "Services",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_soffit",
+       "kind": "polyhedron",
+       "name": "Soffit",
+       "color": "#F7F7F5",
+       "layer": "Services",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_tray",
+       "kind": "polyhedron",
+       "name": "Cable tray",
+       "color": "#EDEDEA",
+       "layer": "Services",
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      },
+      {
+       "id": "p3_pipe",
+       "kind": "tube",
+       "name": "Pipes",
+       "color": "#EDEDEA",
+       "layer": "Services",
+       "radius": 0.025,
+       "x": 0,
+       "y": 0,
+       "z": 0,
+       "show": true
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e_geo_props",
+   "source": "geo",
+   "target": "props",
+   "sourceHandle": "val-points",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e_props_math_P",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-P",
+   "targetHandle": "valin-P"
+  },
+  {
+   "id": "e_props_math_slabHeight",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-slabHeight",
+   "targetHandle": "valin-slabHeight"
+  },
+  {
+   "id": "e_props_math_soffitOn",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-soffitOn",
+   "targetHandle": "valin-soffitOn"
+  },
+  {
+   "id": "e_props_math_soffitThk",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-soffitThk",
+   "targetHandle": "valin-soffitThk"
+  },
+  {
+   "id": "e_props_math_ductShape",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductShape",
+   "targetHandle": "valin-ductShape"
+  },
+  {
+   "id": "e_props_math_ductCount",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductCount",
+   "targetHandle": "valin-ductCount"
+  },
+  {
+   "id": "e_props_math_ductWidth",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductWidth",
+   "targetHandle": "valin-ductWidth"
+  },
+  {
+   "id": "e_props_math_ductHeight",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductHeight",
+   "targetHandle": "valin-ductHeight"
+  },
+  {
+   "id": "e_props_math_ductDrop",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductDrop",
+   "targetHandle": "valin-ductDrop"
+  },
+  {
+   "id": "e_props_math_ductSpacing",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductSpacing",
+   "targetHandle": "valin-ductSpacing"
+  },
+  {
+   "id": "e_props_math_ductOffset",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductOffset",
+   "targetHandle": "valin-ductOffset"
+  },
+  {
+   "id": "e_props_math_ductFacets",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-ductFacets",
+   "targetHandle": "valin-ductFacets"
+  },
+  {
+   "id": "e_props_math_trayOn",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-trayOn",
+   "targetHandle": "valin-trayOn"
+  },
+  {
+   "id": "e_props_math_trayWidth",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-trayWidth",
+   "targetHandle": "valin-trayWidth"
+  },
+  {
+   "id": "e_props_math_trayDepth",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-trayDepth",
+   "targetHandle": "valin-trayDepth"
+  },
+  {
+   "id": "e_props_math_trayDrop",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-trayDrop",
+   "targetHandle": "valin-trayDrop"
+  },
+  {
+   "id": "e_props_math_trayOffset",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-trayOffset",
+   "targetHandle": "valin-trayOffset"
+  },
+  {
+   "id": "e_props_math_pipeCount",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-pipeCount",
+   "targetHandle": "valin-pipeCount"
+  },
+  {
+   "id": "e_props_math_pipeDia",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-pipeDia",
+   "targetHandle": "valin-pipeDia"
+  },
+  {
+   "id": "e_props_math_pipeDrop",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-pipeDrop",
+   "targetHandle": "valin-pipeDrop"
+  },
+  {
+   "id": "e_props_math_pipeOffset",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-pipeOffset",
+   "targetHandle": "valin-pipeOffset"
+  },
+  {
+   "id": "e_props_math_inset",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-inset",
+   "targetHandle": "valin-inset"
+  },
+  {
+   "id": "e_props_math_rotation",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-rotation",
+   "targetHandle": "valin-rotation"
+  },
+  {
+   "id": "e_props_math_anchorDir",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-anchorDir",
+   "targetHandle": "valin-anchorDir"
+  },
+  {
+   "id": "e_props_math_fitMode",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-fitMode",
+   "targetHandle": "valin-fitMode"
+  },
+  {
+   "id": "e_props_math_margin",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-margin",
+   "targetHandle": "valin-margin"
+  },
+  {
+   "id": "e_props_math_flipSide",
+   "source": "props",
+   "target": "math",
+   "sourceHandle": "val-flipSide",
+   "targetHandle": "valin-flipSide"
+  },
+  {
+   "id": "e_math_out_s1",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Ducts3D",
+   "targetHandle": "valin-s1"
+  },
+  {
+   "id": "e_math_out_s2",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Soffit3D",
+   "targetHandle": "valin-s2"
+  },
+  {
+   "id": "e_math_out_s3",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Tray3D",
+   "targetHandle": "valin-s3"
+  },
+  {
+   "id": "e_math_out_s4",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-Pipes3D",
+   "targetHandle": "valin-s4"
+  },
+  {
+   "id": "e_math_out_s5",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-DuctPlan",
+   "targetHandle": "valin-s5"
+  },
+  {
+   "id": "e_math_out_s6",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-TrayPlan",
+   "targetHandle": "valin-s6"
+  },
+  {
+   "id": "e_math_out_s7",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-ductRun",
+   "targetHandle": "valin-s7"
+  },
+  {
+   "id": "e_math_out_s8",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-ductUnderside",
+   "targetHandle": "valin-s8"
+  },
+  {
+   "id": "e_math_out_s9",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-trayLevel",
+   "targetHandle": "valin-s9"
+  },
+  {
+   "id": "e_math_out_s10",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-pipeRun",
+   "targetHandle": "valin-s10"
+  },
+  {
+   "id": "e_math_out_s11",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-soffitLevel",
+   "targetHandle": "valin-s11"
+  },
+  {
+   "id": "e_math_out_s12",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-serviceZoneDepth",
+   "targetHandle": "valin-s12"
+  },
+  {
+   "id": "e_math_out_s13",
+   "source": "math",
+   "target": "out",
+   "sourceHandle": "val-scale",
+   "targetHandle": "valin-s13"
+  },
+  {
+   "id": "e_out_r2d_p2_duct",
+   "source": "out",
+   "target": "r2d",
+   "sourceHandle": "val-s5",
+   "targetHandle": "valin-p2_duct"
+  },
+  {
+   "id": "e_out_r2d_p2_tray",
+   "source": "out",
+   "target": "r2d",
+   "sourceHandle": "val-s6",
+   "targetHandle": "valin-p2_tray"
+  },
+  {
+   "id": "e_out_r3d_p3_duct",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s1",
+   "targetHandle": "valin-p3_duct"
+  },
+  {
+   "id": "e_out_r3d_p3_soffit",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s2",
+   "targetHandle": "valin-p3_soffit"
+  },
+  {
+   "id": "e_out_r3d_p3_tray",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s3",
+   "targetHandle": "valin-p3_tray"
+  },
+  {
+   "id": "e_out_r3d_p3_pipe",
+   "source": "out",
+   "target": "r3d",
+   "sourceHandle": "val-s4",
+   "targetHandle": "valin-p3_pipe"
+  }
+ ]
+}
